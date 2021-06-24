@@ -18,6 +18,7 @@ import contextlib
 import glob
 import json
 import os.path
+import random
 import re
 import shutil
 import subprocess
@@ -38,7 +39,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
     GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
-    ExtensionErrorCodes, ExtensionError
+    ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
     ExtensionStatus
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
@@ -46,11 +47,11 @@ from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, migrate_handler_state, \
     get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
-    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState
+    ValidHandlerStatus, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, ExtensionRequestedState, GoalStateStatus
 
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE
+from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
@@ -101,7 +102,8 @@ class TestExtensionCleanup(AgentTestCase):
     def _is_extension_dir(path):
         return re.match(HANDLER_COMPLETE_NAME_PATTERN, os.path.basename(path)) is not None
 
-    def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0):
+    def _assert_ext_handler_status(self, aggregate_status, expected_status, version, expected_ext_handler_count=0,
+                                   verify_ext_reported=True):
         self.assertIsNotNone(aggregate_status, "Aggregate status should not be None")
         handler_statuses = aggregate_status['aggregateStatus']['handlerAggregateStatus']
         self.assertEqual(expected_ext_handler_count, len(handler_statuses),
@@ -110,17 +112,20 @@ class TestExtensionCleanup(AgentTestCase):
             debug_info = "ExtensionHandler: {0}".format(ext_handler_status)
             self.assertEqual(expected_status, ext_handler_status['status'], debug_info)
             self.assertEqual(version, ext_handler_status['handlerVersion'], debug_info)
+            if verify_ext_reported:
+                self.assertIn("runtimeSettingsStatus", ext_handler_status, debug_info)
         return
 
     @contextlib.contextmanager
     def _setup_test_env(self, test_data):
         with mock_wire_protocol(test_data) as protocol:
 
-            def mock_http_put(url, *args, **kwargs):  # pylint: disable=unused-argument,inconsistent-return-statements
+            def mock_http_put(url, *args, **_):
                 if HttpRequestPredicates.is_host_plugin_status_request(url):
                     # Skip reading the HostGA request data as its encoded
-                    return None
+                    return MockHttpResponse(status=500)
                 protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
 
             protocol.aggregate_status = None
             protocol.set_http_handlers(http_put_handler=mock_http_put)
@@ -189,7 +194,7 @@ class TestExtensionCleanup(AgentTestCase):
                 exthandlers_handler.run()
                 self._assert_ext_handler_status(protocol.aggregate_status, "NotReady",
                                                 expected_ext_handler_count=no_of_exts,
-                                                version="1.0.0")
+                                                version="1.0.0", verify_ext_reported=False)
                 self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
                                  "There should still be 1 extension directory in FS")
 
@@ -205,6 +210,78 @@ class TestExtensionCleanup(AgentTestCase):
                              "All extension directories should be removed")
             self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=0,
                                             version="1.0.0")
+
+    def test_it_should_report_and_cleanup_only_if_gs_supported(self):
+
+        def assert_gs_aggregate_status(seq_no, status, code):
+            gs_status = protocol.aggregate_status['aggregateStatus']['vmArtifactsAggregateStatus']['goalStateAggregateStatus']
+            self.assertEqual(gs_status['inSvdSeqNo'], seq_no, "Seq number not matching")
+            self.assertEqual(gs_status['code'], code, "The error code not matching")
+            self.assertEqual(gs_status['status'], status, "The status not matching")
+
+        def assert_extension_seq_no(expected_seq_no):
+            for handler_status in protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']:
+                self.assertEqual(expected_seq_no, handler_status['runtimeSettingsStatus']['sequenceNumber'],
+                                 "Sequence number mismatch")
+
+        with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, orig_no_of_exts):
+            # Run 1 - GS has no required features and contains 5 extensions
+            exthandlers_handler.run()
+            self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_packages(),
+                             "No of extensions in config doesn't match the packages")
+            self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_extension_directories(),
+                             "No of extension directories doesnt match the no of extensions in GS")
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=orig_no_of_exts,
+                                            version="1.0.0")
+            assert_gs_aggregate_status(seq_no='1', status=GoalStateStatus.Success,
+                                       code=GoalStateAggregateStatusCodes.Success)
+            assert_extension_seq_no(expected_seq_no=0)
+
+            # Run 2 - Change the GS to one with Required features not supported by the agent
+            # This ExtensionConfig has 1 extension - ExampleHandlerLinuxWithRequiredFeatures
+            protocol.mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.mock_wire_data.set_extensions_config_sequence_number(random.randint(10, 100))
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
+            self.assertGreater(orig_no_of_exts, 1, "No of extensions to check should be > 1")
+            self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_packages(),
+                             "No of extensions should not be changed")
+            self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_extension_directories(),
+                             "No of extension directories should not be changed")
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=orig_no_of_exts,
+                                            version="1.0.0")
+            assert_gs_aggregate_status(seq_no='2', status=GoalStateStatus.Failed,
+                                       code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures)
+            # Since its an unsupported GS, we should report the last state of extensions
+            assert_extension_seq_no(0)
+            # assert the extension in the new Config was not reported as that GS was not executed
+            self.assertTrue(any('ExampleHandlerLinuxWithRequiredFeatures' not in ext_handler_status['handlerName'] for
+                                ext_handler_status in
+                                protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                            "Unwanted handler found in status reporting")
+
+            # Run 3 - Run a GS with no Required Features and ensure we execute all extensions properly
+            # This ExtensionConfig has 1 extension - OSTCExtensions.ExampleHandlerLinux
+            protocol.mock_wire_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+            protocol.mock_wire_data.set_incarnation(3)
+            extension_seq_no = random.randint(10, 100)
+            protocol.mock_wire_data.set_extensions_config_sequence_number(extension_seq_no)
+            protocol.client.update_goal_state()
+            exthandlers_handler.run()
+            self.assertEqual(1, TestExtensionCleanup._count_packages(),
+                             "No of extensions should not be changed")
+            self.assertEqual(1, TestExtensionCleanup._count_extension_directories(),
+                             "No of extension directories should not be changed")
+            self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=1,
+                                            version="1.0.0")
+            assert_gs_aggregate_status(seq_no='3', status=GoalStateStatus.Success,
+                                       code=GoalStateAggregateStatusCodes.Success)
+            assert_extension_seq_no(expected_seq_no=extension_seq_no)
+            # Only OSTCExtensions.ExampleHandlerLinux extension should be reported
+            self.assertEqual('OSTCExtensions.ExampleHandlerLinux',
+                             protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus'][0]['handlerName'],
+                             "Expected handler not found in status reporting")
 
 
 class TestHandlerStateMigration(AgentTestCase):
@@ -346,24 +423,10 @@ class TestHandlerStateMigration(AgentTestCase):
         return
 
 
-class ExtensionTestCase(AgentTestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
-        CGroupConfigurator.get_instance().disable()
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.cgroups_enabled:
-            CGroupConfigurator.get_instance().enable()
-        else:
-            CGroupConfigurator.get_instance().disable()
-
-
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestExtension(ExtensionTestCase):
+class TestExtension(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -1185,7 +1248,7 @@ class TestExtension(ExtensionTestCase):
             event_occurrences = [kw for _, kw in mock_add_event.call_args_list if
                           "Failed to download artifacts: [ExtensionDownloadError] {0}".format(err_msg_guid) in kw['message']]
             self.assertEqual(expected_download_failed_event_count, len(event_occurrences), "Call count do not match")
-            self.assertFalse(any([kw['is_success'] for kw in event_occurrences]), "The events should have failed")
+            self.assertFalse(any(kw['is_success'] for kw in event_occurrences), "The events should have failed")
             self.assertEqual(expected_download_failed_event_count, len([kw['op'] for kw in event_occurrences]),
                              "Incorrect Operation, all events should be a download errors")
 
@@ -1284,13 +1347,13 @@ class TestExtension(ExtensionTestCase):
         protocol.get_artifacts_profile = MagicMock()
 
         # Disable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=False)  # pylint: disable=protected-access
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=False)
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(0, patch_handle_ext_handlers.call_count)
 
         # enable extension handling blocking
-        exthandlers_handler._extension_processing_allowed = Mock(return_value=True)  # pylint: disable=protected-access
+        exthandlers_handler._extension_processing_allowed = Mock(return_value=True)
         with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
             exthandlers_handler.run()
             self.assertEqual(1, patch_handle_ext_handlers.call_count)
@@ -2333,6 +2396,66 @@ class TestExtension(ExtensionTestCase):
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), install_kwargs['message'])
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), enable_kwargs['message'])
 
+    def test_it_should_persist_goal_state_aggregate_status_until_new_incarnation(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        args, _ = protocol.report_vm_status.call_args
+        gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
+        self.assertIsNotNone(gs_aggregate_status, "Goal State Aggregate status not reported")
+        self.assertEqual(gs_aggregate_status.status, GoalStateStatus.Success, "Wrong status reported")
+        self.assertEqual(gs_aggregate_status.in_svd_seq_no, "1", "Incorrect seq no")
+
+        # Running handler again without incarnation change should report the same gs_aggregate_status
+        for _ in range(5):
+            exthandlers_handler.run()
+            args, _ = protocol.report_vm_status.call_args
+            self.assertEqual(gs_aggregate_status,
+                             args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status,
+                             "Aggregate status different")
+
+        # Update incarnation and ensure the gs_aggregate_status is modified too
+        test_data.set_incarnation(2)
+        protocol.client.update_goal_state()
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        args, _ = protocol.report_vm_status.call_args
+        new_gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
+        self.assertIsNotNone(new_gs_aggregate_status, "New Goal State Aggregate status not reported")
+        self.assertNotEqual(gs_aggregate_status, new_gs_aggregate_status, "The gs_aggregate_status should be different")
+        self.assertEqual(new_gs_aggregate_status.status, GoalStateStatus.Success, "Wrong status reported")
+        self.assertEqual(new_gs_aggregate_status.in_svd_seq_no, "2", "Incorrect seq no")
+
+    def test_it_should_parse_required_features_properly(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
+        _, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        required_features = protocol.get_required_features()
+        self.assertEqual(3, len(required_features), "Incorrect features parsed")
+        for i, feature in enumerate(required_features):
+            self.assertEqual(feature.name, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
+            if i < 2:
+                self.assertIsNone(feature.value, "Value not present")
+            else:
+                self.assertEqual(feature.value, "3.0", "Value mismatch")
+
+    def test_it_should_fail_goal_state_if_required_features_not_supported(self, mock_get, mock_crypt_util, *args):
+        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
+
+        exthandlers_handler.run()
+        args, _ = protocol.report_vm_status.call_args
+        gs_aggregate_status = args[0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status
+        self.assertEqual(0, len(args[0].vmAgent.extensionHandlers), "No extensions should be reported")
+        self.assertIsNotNone(gs_aggregate_status, "GS Aggregagte status should be reported")
+        self.assertEqual(gs_aggregate_status.status, GoalStateStatus.Failed, "GS should be failed")
+        self.assertEqual(gs_aggregate_status.code, GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
+                         "Incorrect error code set properly for GS failure")
+        self.assertEqual(gs_aggregate_status.in_svd_seq_no, "1", "Sequence Number is wrong")
+
+
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionSequencing(AgentTestCase):
@@ -2542,7 +2665,7 @@ class TestInVMArtifactsProfile(AgentTestCase):
         self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
 
 
-class TestExtensionUpdateOnFailure(ExtensionTestCase):
+class TestExtensionUpdateOnFailure(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -2866,9 +2989,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
 
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-class TestCollectExtensionStatus(ExtensionTestCase):
+class TestCollectExtensionStatus(AgentTestCase):
     def setUp(self):
-        ExtensionTestCase.setUp(self)
+        AgentTestCase.setUp(self)
         self.lib_dir = tempfile.mkdtemp()
 
     def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file, *args):  # pylint: disable=unused-argument
@@ -3057,20 +3180,105 @@ class TestCollectExtensionStatus(ExtensionTestCase):
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
 
+class TestAdditionalLocationsExtensions(AgentTestCase):
 
-class TestMultiConfigExtensions(ExtensionTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.test_data = DATA_FILE_EXT_ADDITIONAL_LOCATIONS.copy()
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+
+    def test_additional_locations_node_is_consumed(self):
+
+        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
+            .format(r'(location)|(failoverlocation)|(additionalLocation)')
+        location_uri_regex = re.compile(location_uri_pattern)
+
+        manifests_used = [ ('location', '1'), ('failoverlocation', '2'), 
+            ('additionalLocation', '3'), ('additionalLocation', '4') ]
+
+        def manifest_location_handler(url, **kwargs):
+            url_match = location_uri_regex.match(url)
+
+            if not url_match:
+                if "extensionArtifact" in url:
+                    wrapped_url = kwargs.get("headers", {}).get("x-ms-artifact-location")
+
+                    if wrapped_url and location_uri_regex.match(wrapped_url):
+                        return Exception("Ignoring host plugin requests for testing purposes.")
+                
+                return None
+
+            location_type, manifest_num = url_match.group("location_type", "manifest_num")
+
+            try:
+                manifests_used.remove((location_type, manifest_num))
+            except ValueError:
+                raise AssertionError("URI '{0}' used multiple times".format(url))
+
+            if manifests_used:
+                # Still locations to try in the list; throw a fake
+                # error to make sure all of the locations get called.
+                return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
+                    .format(url))
+
+            return None
+
+        
+        with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            exthandlers_handler.run()
+
+    def test_fetch_manifest_timeout_is_respected(self):
+        
+        location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
+            .format(r'(location)|(failoverlocation)|(additionalLocation)')
+        location_uri_regex = re.compile(location_uri_pattern)
+
+        def manifest_location_handler(url, **kwargs):
+            url_match = location_uri_regex.match(url)
+
+            if not url_match:
+                if "extensionArtifact" in url:
+                    wrapped_url = kwargs.get("headers", {}).get("x-ms-artifact-location")
+
+                    if wrapped_url and location_uri_regex.match(wrapped_url):
+                        return Exception("Ignoring host plugin requests for testing purposes.")
+                
+                return None
+            
+            if manifest_location_handler.num_times_called == 0:
+                time.sleep(.3)
+                manifest_location_handler.num_times_called += 1
+                return Exception("Failing manifest fetch from uri '{0}' for testing purposes."\
+                    .format(url))
+        
+            return None
+        
+        manifest_location_handler.num_times_called = 0
+
+
+        with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
+            ext_handlers, _ = protocol.get_ext_handlers()
+
+            with self.assertRaises(ExtensionDownloadError):
+                protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
+                    timeout_in_minutes=0, timeout_in_ms=200)
+
+class TestMultiConfigExtensions(AgentTestCase):
 
     _MULTI_CONFIG_TEST_DATA = os.path.join("wire", "multi-config")
 
     def setUp(self):
-        ExtensionTestCase.setUp(self)
+        AgentTestCase.setUp(self)
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.0001))
         self.mock_sleep.start()
         self.test_data = DATA_FILE.copy()
 
     def tearDown(self):
         self.mock_sleep.stop()
-        ExtensionTestCase.tearDown(self)
+        AgentTestCase.tearDown(self)
 
     class _TestExtHandlerObject:
         def __init__(self, name, version, state="enabled"):

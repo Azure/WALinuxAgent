@@ -39,7 +39,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
-from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEventsPeriodicOperation
+from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
@@ -99,7 +99,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         event_list = []
         send_telemetry_events = MagicMock()
         send_telemetry_events.enqueue_event = MagicMock(wraps=event_list.append)
-        event_collector = _CollectAndEnqueueEventsPeriodicOperation(send_telemetry_events)
+        event_collector = _CollectAndEnqueueEvents(send_telemetry_events)
         event_collector.process_events()
         return event_list
 
@@ -810,48 +810,48 @@ class TestMetrics(AgentTestCase):
     def test_cleanup_message(self):
         ev_logger = event.EventLogger()
 
-        self.assertEqual(None, ev_logger._clean_up_message(None))  # pylint: disable=protected-access
-        self.assertEqual("", ev_logger._clean_up_message(""))  # pylint: disable=protected-access
-        self.assertEqual("Daemon Activate resource disk failure", ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual(None, ev_logger._clean_up_message(None))
+        self.assertEqual("", ev_logger._clean_up_message(""))
+        self.assertEqual("Daemon Activate resource disk failure", ev_logger._clean_up_message(
             "Daemon Activate resource disk failure"))
-        self.assertEqual("[M.A.E.CS-2.0.7] Target handler state", ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual("[M.A.E.CS-2.0.7] Target handler state", ev_logger._clean_up_message(
             '2019/10/07 21:54:16.629444 INFO [M.A.E.CS-2.0.7] Target handler state'))
-        self.assertEqual("[M.A.E.CS-2.0.7] Initializing extension M.A.E.CS-2.0.7", ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual("[M.A.E.CS-2.0.7] Initializing extension M.A.E.CS-2.0.7", ev_logger._clean_up_message(
             '2019/10/07 21:54:17.284385 INFO [M.A.E.CS-2.0.7] Initializing extension M.A.E.CS-2.0.7'))
-        self.assertEqual("ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]", ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual("ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]", ev_logger._clean_up_message(
             "2019/10/07 21:55:38.474861 INFO ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]"))
-        self.assertEqual("Daemon Azure Linux Agent Version:2.2.43", ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual("Daemon Azure Linux Agent Version:2.2.43", ev_logger._clean_up_message(
             "2019/10/07 21:52:28.615720 INFO Daemon Azure Linux Agent Version:2.2.43"))
         self.assertEqual('Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for the VM Agent;'
                          ' resource usage will not be tracked',
-                         ev_logger._clean_up_message('Daemon Cgroup controller "memory" is not mounted. Failed to '  # pylint: disable=protected-access
+                         ev_logger._clean_up_message('Daemon Cgroup controller "memory" is not mounted. Failed to '
                                                      'create a cgroup for the VM Agent; resource usage will not be '
                                                      'tracked'))
         self.assertEqual('ExtHandler Root directory /sys/fs/cgroup/memory/walinuxagent.extensions does not exist.',
-                         ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING ExtHandler Root directory "  # pylint: disable=protected-access
+                         ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING ExtHandler Root directory "
                                                      "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
         self.assertEqual("LinuxAzureDiagnostic started to handle.",
-                         ev_logger._clean_up_message("2019/10/07 22:02:40 LinuxAzureDiagnostic started to handle."))  # pylint: disable=protected-access
+                         ev_logger._clean_up_message("2019/10/07 22:02:40 LinuxAzureDiagnostic started to handle."))
         self.assertEqual("VMAccess started to handle.",
-                         ev_logger._clean_up_message("2019/10/07 21:56:58 VMAccess started to handle."))  # pylint: disable=protected-access
+                         ev_logger._clean_up_message("2019/10/07 21:56:58 VMAccess started to handle."))
         self.assertEqual(
             '[PERIODIC] ExtHandler Root directory /sys/fs/cgroup/memory/walinuxagent.extensions does not exist.',
-            ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING [PERIODIC] ExtHandler Root directory "  # pylint: disable=protected-access
+            ev_logger._clean_up_message("2019/10/08 23:45:05.691037 WARNING [PERIODIC] ExtHandler Root directory "
                                         "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
-        self.assertEqual("[PERIODIC] LinuxAzureDiagnostic started to handle.", ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual("[PERIODIC] LinuxAzureDiagnostic started to handle.", ev_logger._clean_up_message(
             "2019/10/07 22:02:40 [PERIODIC] LinuxAzureDiagnostic started to handle."))
         self.assertEqual("[PERIODIC] VMAccess started to handle.",
-                         ev_logger._clean_up_message("2019/10/07 21:56:58 [PERIODIC] VMAccess started to handle."))  # pylint: disable=protected-access
+                         ev_logger._clean_up_message("2019/10/07 21:56:58 [PERIODIC] VMAccess started to handle."))
         self.assertEqual('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup for '
                          'the VM Agent; resource usage will not be tracked',
-                         ev_logger._clean_up_message('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. '  # pylint: disable=protected-access
+                         ev_logger._clean_up_message('[PERIODIC] Daemon Cgroup controller "memory" is not mounted. '
                                                      'Failed to create a cgroup for the VM Agent; resource usage will '
                                                      'not be tracked'))
-        self.assertEqual('The time should be in UTC', ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual('The time should be in UTC', ev_logger._clean_up_message(
             '2019-11-26T18:15:06.866746Z INFO The time should be in UTC'))
-        self.assertEqual('The time should be in UTC', ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual('The time should be in UTC', ev_logger._clean_up_message(
             '2019-11-26T18:15:06.866746Z The time should be in UTC'))
-        self.assertEqual('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(
             '2019-11-26T18:15:06.866746Z INFO [PERIODIC] The time should be in UTC'))
-        self.assertEqual('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(  # pylint: disable=protected-access
+        self.assertEqual('[PERIODIC] The time should be in UTC', ev_logger._clean_up_message(
             '2019-11-26T18:15:06.866746Z [PERIODIC] The time should be in UTC'))

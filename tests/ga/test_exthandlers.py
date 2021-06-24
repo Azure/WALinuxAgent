@@ -22,7 +22,6 @@ import time
 import uuid
 
 from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
@@ -337,15 +336,7 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
         self.mock_sleep.start()
 
-        self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
-        CGroupConfigurator.get_instance().disable()
-
     def tearDown(self):
-        if self.cgroups_enabled:
-            CGroupConfigurator.get_instance().enable()
-        else:
-            CGroupConfigurator.get_instance().disable()
-
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
         self.mock_sleep.stop()
@@ -771,8 +762,8 @@ print("Found Feature %s: %s" % ("{1}", found))
 
         # It should include all supported features and pass it as Environment Variable to extensions
         test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=True)}
-        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
-                   return_value=test_supported_features):
+        with patch("azurelinuxagent.common.agent_supported_feature.__EXTENSION_ADVERTISED_FEATURES",
+                   test_supported_features):
             output = self.ext_handler_instance.launch_command(command)
 
             self.assertIn("[stdout]\nFound Feature {0}: True".format(test_name), output, "Feature not found")
@@ -782,16 +773,16 @@ print("Found Feature %s: %s" % ("{1}", found))
             test_name: TestFeature(name=test_name, version=test_version, supported=False),
             "testFeature": TestFeature(name="testFeature", version="1.2.1", supported=True)
         }
-        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
-                   return_value=test_supported_features):
+        with patch("azurelinuxagent.common.agent_supported_feature.__EXTENSION_ADVERTISED_FEATURES",
+                   test_supported_features):
             output = self.ext_handler_instance.launch_command(command)
 
             self.assertIn("[stdout]\nFound Feature {0}: False".format(test_name), output, "Feature wrongfully found")
 
         # It should not include the SupportedFeatures Key in Environment variables if no features supported
         test_supported_features = {test_name: TestFeature(name=test_name, version=test_version, supported=False)}
-        with patch("azurelinuxagent.ga.exthandlers.get_agent_supported_features_list_for_extensions",
-                   return_value=test_supported_features):
+        with patch("azurelinuxagent.common.agent_supported_feature.__EXTENSION_ADVERTISED_FEATURES",
+                   test_supported_features):
             output = self.ext_handler_instance.launch_command(command)
 
             self.assertIn(

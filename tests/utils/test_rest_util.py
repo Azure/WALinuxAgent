@@ -83,37 +83,56 @@ class TestIOErrorCounter(AgentTestCase):
         self.assertEqual(2, counts.get("other"))
         self.assertEqual(
            {"hostplugin":0, "protocol":0, "other":0},
-            restutil.IOErrorCounter._counts)  # pylint: disable=protected-access
+            restutil.IOErrorCounter._counts)
 
 
 class TestHttpOperations(AgentTestCase):
     def test_parse_url(self):
         test_uri = "http://abc.def/ghi#hash?jkl=mn"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=unused-variable,protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=unused-variable
         self.assertEqual("abc.def", host) 
         self.assertEqual("/ghi#hash?jkl=mn", rel_uri) 
 
         test_uri = "http://abc.def/"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)
         self.assertEqual("abc.def", host) 
         self.assertEqual("/", rel_uri) 
         self.assertEqual(False, secure) 
 
         test_uri = "https://abc.def/ghi?jkl=mn"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)
         self.assertEqual(True, secure) 
 
         test_uri = "http://abc.def:80/"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)
         self.assertEqual("abc.def", host) 
 
-        host, port, secure, rel_uri = restutil._parse_url("")  # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url("")
         self.assertEqual(None, host) 
         self.assertEqual(rel_uri, "") 
 
-        host, port, secure, rel_uri = restutil._parse_url("None")  # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url("None")
         self.assertEqual(None, host) 
         self.assertEqual(rel_uri, "None") 
+
+    def test_trim_url_parameters(self):
+        test_uri = "http://abc.def/ghi#hash?jkl=mn"
+        rel_uri = restutil._trim_url_parameters(test_uri)
+        self.assertEqual("http://abc.def/ghi", rel_uri)
+
+        test_uri = "https://abc.def/ghi?jkl=mn"
+        rel_uri = restutil._trim_url_parameters(test_uri)
+        self.assertEqual("https://abc.def/ghi", rel_uri)
+
+        test_uri = "https://abc.def:8443/ghi?jkl=mn"
+        rel_uri = restutil._trim_url_parameters(test_uri)
+        self.assertEqual("https://abc.def:8443/ghi", rel_uri) 
+
+        rel_uri = restutil._trim_url_parameters("")
+        self.assertEqual(rel_uri, "")
+
+        rel_uri = restutil._trim_url_parameters("None")
+        self.assertEqual(rel_uri, "None")
 
     def test_cleanup_sas_tokens_from_urls_for_normal_cases(self):
         test_url = "http://abc.def/ghi#hash?jkl=mn"
@@ -182,7 +201,7 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_none_is_default(self, mock_host, mock_port):
         mock_host.return_value = None
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
+        h, p = restutil._get_http_proxy()
         self.assertEqual(None, h)
         self.assertEqual(None, p)
 
@@ -191,7 +210,7 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_configuration_overrides_env(self, mock_host, mock_port):
         mock_host.return_value = "host"
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
+        h, p = restutil._get_http_proxy()
         self.assertEqual("host", h)
         self.assertEqual(None, p)
         self.assertEqual(1, mock_host.call_count)
@@ -202,7 +221,7 @@ class TestHttpOperations(AgentTestCase):
     def test_get_http_proxy_configuration_requires_host(self, mock_host, mock_port):
         mock_host.return_value = None
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
+        h, p = restutil._get_http_proxy()
         self.assertEqual(None, h)
         self.assertEqual(None, p)
         self.assertEqual(1, mock_host.call_count)
@@ -215,7 +234,7 @@ class TestHttpOperations(AgentTestCase):
                                     'http_proxy' : 'http://foo.com:80',
                                     'https_proxy' : 'https://bar.com:443'
                                 }):
-            h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
+            h, p = restutil._get_http_proxy()
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
@@ -226,7 +245,7 @@ class TestHttpOperations(AgentTestCase):
                                     'http_proxy' : 'http://foo.com:80',
                                     'https_proxy' : 'https://bar.com:443'
                                 }):
-            h, p = restutil._get_http_proxy(secure=True)  # pylint: disable=protected-access
+            h, p = restutil._get_http_proxy(secure=True)
             self.assertEqual("bar.com", h)
             self.assertEqual(443, p)
 
@@ -236,7 +255,7 @@ class TestHttpOperations(AgentTestCase):
         with patch.dict(os.environ, {
                                     'http_proxy' : 'http://user:pw@foo.com:80'
                                 }):
-            h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
+            h, p = restutil._get_http_proxy()
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
@@ -333,7 +352,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar")  # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar")
 
         HTTPConnection.assert_has_calls([
             call("foo", 80, timeout=10)
@@ -356,7 +375,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar", secure=True)  # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar", secure=True)
 
         HTTPConnection.assert_not_called()
         HTTPSConnection.assert_has_calls([
@@ -379,7 +398,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar",  # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar",
                             proxy_host="foo.bar", proxy_port=23333)
 
         HTTPConnection.assert_has_calls([
@@ -511,7 +530,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar",  # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar",
                             proxy_host="foo.bar", proxy_port=23333,
                             secure=True)
 
@@ -596,7 +615,7 @@ class TestHttpOperations(AgentTestCase):
         self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
         self.assertEqual(
             [
-                call(restutil._compute_delay(i+1, restutil.DELAY_IN_SECONDS))  # pylint: disable=protected-access
+                call(restutil._compute_delay(i+1, restutil.DELAY_IN_SECONDS))
                     for i in range(restutil.DEFAULT_RETRIES)],
             _sleep.call_args_list)
 

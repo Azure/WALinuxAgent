@@ -33,9 +33,8 @@ class PeriodicOperation(object):
     # To prevent flooding the log with error messages we report failures at most every hour
     _LOG_WARNING_PERIOD = datetime.timedelta(minutes=60)
 
-    def __init__(self, name, operation, period):
-        self._name = name
-        self._operation = operation
+    def __init__(self, period):
+        self._name = self.__class__.__name__
         self._period = period if isinstance(period, datetime.timedelta) else datetime.timedelta(seconds=period)
         self._next_run_time = datetime.datetime.utcnow()
         self._last_warning = None
@@ -45,11 +44,12 @@ class PeriodicOperation(object):
         try:
             if self._next_run_time <= datetime.datetime.utcnow():
                 try:
+                    logger.verbose("Executing {0}...", self._name)
                     self._operation()
                 finally:
                     self._next_run_time = datetime.datetime.utcnow() + self._period
         except Exception as e:
-            warning = "Failed to {0}: {1} --- [NOTE: Will not log the same error for the next hour]".format(self._name, ustr(e))
+            warning = "Error in {0}: {1} --- [NOTE: Will not log the same error for the next hour]".format(self._name, ustr(e))
             if warning != self._last_warning or self._last_warning_time is None or datetime.datetime.utcnow() >= self._last_warning_time + self._LOG_WARNING_PERIOD:
                 logger.warn(warning)
                 self._last_warning_time = datetime.datetime.utcnow()
@@ -57,6 +57,12 @@ class PeriodicOperation(object):
 
     def next_run_time(self):
         return self._next_run_time
+
+    def _operation(self):
+        """
+        Derived classes must override this with the definition of the operation they need to perform
+        """
+        raise NotImplementedError()
 
     @staticmethod
     def sleep_until_next_operation(operations):

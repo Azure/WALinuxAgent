@@ -172,6 +172,19 @@ def _parse_url(url):
         secure = True
     return o.hostname, o.port, secure, rel_uri
 
+def _trim_url_parameters(url):
+    """
+    Parse URL and return scheme://hostname:port/path
+    """
+    o = urlparse(url)
+
+    if o.hostname:
+        if o.port:
+            return "{0}://{1}:{2}{3}".format(o.scheme, o.hostname, o.port, o.path)
+        else:
+            return "{0}://{1}{2}".format(o.scheme, o.hostname, o.path)
+
+    return url
 
 def is_valid_cidr(string_network):
     """
@@ -338,11 +351,13 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
 def http_request(method,
                  url, data, headers=None,
                  use_proxy=False,
-                 max_retry=DEFAULT_RETRIES,
+                 max_retry=None,
                  retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
                  redact_data=False):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     global SECURE_WARNING_EMITTED  # pylint: disable=W0603
@@ -450,7 +465,7 @@ def http_request(method,
             return resp
 
         except httpclient.HTTPException as e:
-            clean_url = redact_sas_tokens_in_urls(url)
+            clean_url = _trim_url_parameters(url)
             msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
@@ -458,7 +473,7 @@ def http_request(method,
 
         except IOError as e:
             IOErrorCounter.increment(host=host, port=port)
-            clean_url = redact_sas_tokens_in_urls(url)
+            clean_url = _trim_url_parameters(url)
             msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
             continue
 
@@ -468,10 +483,12 @@ def http_request(method,
 def http_get(url,
              headers=None,
              use_proxy=False,
-             max_retry=DEFAULT_RETRIES,
+             max_retry=None,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("GET",
@@ -485,10 +502,12 @@ def http_get(url,
 def http_head(url,
               headers=None,
               use_proxy=False,
-              max_retry=DEFAULT_RETRIES,
+              max_retry=None,
               retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("HEAD",
@@ -503,10 +522,12 @@ def http_post(url,
               data,
               headers=None,
               use_proxy=False,
-              max_retry=DEFAULT_RETRIES,
+              max_retry=None,
               retry_codes=None,
               retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("POST",
@@ -521,11 +542,13 @@ def http_put(url,
              data,
              headers=None,
              use_proxy=False,
-             max_retry=DEFAULT_RETRIES,
+             max_retry=None,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
              redact_data=False):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("PUT",
@@ -540,10 +563,12 @@ def http_put(url,
 def http_delete(url,
                 headers=None,
                 use_proxy=False,
-                max_retry=DEFAULT_RETRIES,
+                max_retry=None,
                 retry_codes=None,
                 retry_delay=DELAY_IN_SECONDS):
 
+    if max_retry is None:
+        max_retry = DEFAULT_RETRIES
     if retry_codes is None:
         retry_codes = RETRY_CODES
     return http_request("DELETE",

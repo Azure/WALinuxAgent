@@ -5,6 +5,7 @@ on:
     branches: [ "*" ]
   pull_request:
     branches: [ "*" ]
+  workflow_dispatch:
 
 jobs:
   test-legacy-python-versions:
@@ -21,26 +22,14 @@ jobs:
 
     - name: Install Python 2.6
       run: |
-        sudo add-apt-repository ppa:deadsnakes/ppa -y
-        sudo apt-get update -y
-        sudo apt-get install python2.6 python2.6-dev -y
-        sudo ln -sf /usr/bin/python2.6 /usr/bin/python
-        PATH="/usr/bin/${PATH:+:${PATH}}"
-        echo $PATH
-        echo "Installed python2.6"
-        python -V
-        curl https://bootstrap.pypa.io/2.6/get-pip.py -o get-pip.py
-        sudo env "PATH=$PATH" python get-pip.py
+        curl https://dcrdata.blob.core.windows.net/python/python-2.6.tar.bz2 -o python-2.6.tar.bz2
+        sudo tar xjvf python-2.6.tar.bz2 --directory /
 
     - uses: actions/checkout@v2
 
-    - name: Install dependencies
-      run: |
-        sudo env "PATH=$PATH" pip install -r requirements.txt
-        sudo env "PATH=$PATH" pip install -r test-requirements.txt
-    
     - name: Test with nosetests
       run: |
+        source /home/waagent/virtualenv/python2.6.9/bin/activate
         ./ci/nosetests.sh
         exit $?
 

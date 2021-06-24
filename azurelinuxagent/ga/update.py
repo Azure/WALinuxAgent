@@ -40,14 +40,13 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -274,7 +273,7 @@ class UpdateHandler(object):
                     util_name=type(self.osutil).__name__,
                     service_name=self.osutil.service_name,
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
-                    py_micro=PY_VERSION_MICRO, systemd=CGroupsApi.is_systemd(),
+                    py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
             )
 
@@ -448,26 +447,28 @@ class UpdateHandler(object):
     @staticmethod
     def _emit_changes_in_default_configuration():
         try:
+            def log_event(msg):
+                logger.info(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+
             def log_if_int_changed_from_default(name, current):
                 default = conf.get_int_default_value(name)
                 if default != current:
-                    msg = "{0} changed from its default; new value: {1}".format(name, current)
-                    logger.info(msg)
-                    add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
+                    log_event("{0} changed from its default: {1}. New value: {2}".format(name, default, current))
+
+            def log_if_op_disabled(name, value):
+                if not value:
+                    log_event("{0} is set to False, not processing the operation".format(name))
 
             log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
+            log_if_op_disabled("OS.EnableFirewall", conf.enable_firewall())
+            log_if_op_disabled("Extensions.Enabled", conf.get_extensions_enabled())
 
-            if not conf.enable_firewall():
-                message = "OS.EnableFirewall is False"
-                logger.info(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
-            else:
+            if conf.enable_firewall():
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
-                message = "lib dir is in an unexpected location: {0}".format(conf.get_lib_dir())
-                logger.info(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=message)
+                log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
 
         except Exception as e:
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
@@ -526,7 +527,6 @@ class UpdateHandler(object):
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.initialize()
-        configurator.create_slices()
 
     def _evaluate_agent_health(self, latest_agent):
         """
@@ -1029,7 +1029,7 @@ class GuestAgent(object):
         try:
             is_healthy = True
             error_response = ''
-            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers)
+            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers, max_retry=1)
             if restutil.request_succeeded(resp):
                 package = resp.read()
                 fileutil.write_file(self.get_agent_pkg_path(),

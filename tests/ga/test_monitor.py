@@ -21,14 +21,15 @@ import random
 import string
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.cgroup import CGroup, CpuCgroup, MemoryCgroup, MetricValue
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, \
-    ResetPeriodicLogMessagesOperation, SendHostPluginHeartbeatOperation, PollResourceUsageOperation
+from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, SendImdsHeartbeat, \
+    ResetPeriodicLogMessages, SendHostPluginHeartbeat, PollResourceUsage, \
+    ReportNetworkErrors, ReportNetworkConfigurationChanges
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
@@ -54,8 +55,7 @@ def _mock_wire_protocol():
 class MonitorHandlerTestCase(AgentTestCase):
     def test_it_should_invoke_all_periodic_operations(self):
         def periodic_operation_run(self):
-            invoked_operations.append(self._name)
-        invoked_operations = []
+            invoked_operations.append(self.__class__.__name__)
 
         with _mock_wire_protocol():
             with patch("azurelinuxagent.ga.monitor.MonitorHandler.stopped", side_effect=[False, True, False, True]):
@@ -72,15 +72,15 @@ class MonitorHandlerTestCase(AgentTestCase):
                                 monitor_handler.join()
 
                                 expected_operations = [
-                                    'poll resource usage',
-                                    'report network errors',
-                                    'reset periodic log messages',
-                                    'send_host_plugin_heartbeat',
-                                    'send_imds_heartbeat'
+                                    PollResourceUsage.__name__,
+                                    ReportNetworkErrors.__name__,
+                                    ResetPeriodicLogMessages.__name__,
+                                    SendHostPluginHeartbeat.__name__,
+                                    SendImdsHeartbeat.__name__,
                                 ]
 
                                 if network_changes:
-                                    expected_operations.append('report network configuration changes')
+                                    expected_operations.append(ReportNetworkConfigurationChanges.__name__)
 
                                 invoked_operations.sort()
                                 expected_operations.sort()
@@ -101,7 +101,7 @@ class SendHostPluginHeartbeatOperationTestCase(AgentTestCase, HttpRequestPredica
 
             health_service = HealthService(protocol.get_endpoint())
 
-            SendHostPluginHeartbeatOperation(protocol, health_service).run()
+            SendHostPluginHeartbeat(protocol, health_service).run()
 
             self.assertTrue(http_post_handler.health_service_posted, "The monitor thread did not report host ga plugin health")
 
@@ -118,7 +118,7 @@ class SendHostPluginHeartbeatOperationTestCase(AgentTestCase, HttpRequestPredica
 
                     health_service = HealthService(protocol.get_endpoint())
 
-                    SendHostPluginHeartbeatOperation(protocol, health_service).run()
+                    SendHostPluginHeartbeat(protocol, health_service).run()
 
                     heartbeat_events = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == 'HostPluginHeartbeatExtended']
                     self.assertTrue(len(heartbeat_events) == 1, "The monitor thread should have reported exactly 1 telemetry event for an unhealthy host ga plugin")
@@ -145,7 +145,7 @@ class SendHostPluginHeartbeatOperationTestCase(AgentTestCase, HttpRequestPredica
 
                 health_service = HealthService(protocol.get_endpoint())
 
-                SendHostPluginHeartbeatOperation(protocol, health_service).run()
+                SendHostPluginHeartbeat(protocol, health_service).run()
 
                 self.assertEqual(0, len(health_service_post_requests), "No health signals should have been posted: {0}".format(health_service_post_requests))
 
@@ -169,7 +169,7 @@ class ResetPeriodicLogMessagesOperationTestCase(AgentTestCase, HttpRequestPredic
         if actual != expected:
             raise Exception('Test setup error: the periodic messages were not added. Got: {0} Expected: {1}'.format(actual, expected))
 
-        ResetPeriodicLogMessagesOperation().run()
+        ResetPeriodicLogMessages().run()
 
         self.assertEqual(0, len(logger.DEFAULT_LOGGER.periodic_messages), "The monitor thread did not reset the periodic log messages")
 
@@ -204,7 +204,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                                                MetricValue("Memory", "Total Memory Usage", 1, 1),
                                                MetricValue("Memory", "Max Memory Usage", 1, 1)]
 
-        PollResourceUsageOperation().run()
+        PollResourceUsage().run()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
         self.assertEqual(3, patch_add_metric.call_count)  # Three metrics being sent.
 
@@ -214,7 +214,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
                                                                patch_add_metric,*args):
         patch_poll_all_tracked.return_value = []
 
-        PollResourceUsageOperation().run()
+        PollResourceUsage().run()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
         self.assertEqual(0, patch_add_metric.call_count)
 
@@ -228,9 +228,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))  # pylint: disable=protected-access
+        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))
 
-        PollResourceUsageOperation().run()
+        PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
@@ -244,19 +244,10 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))  # pylint: disable=protected-access
+        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))
 
-        PollResourceUsageOperation().run()
+        PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
-        self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
-
-    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args):  # pylint: disable=unused-argument
-        CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))  # pylint: disable=protected-access
-
-        PollResourceUsageOperation().run()
-        self.assertEqual(1, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
     def test_generate_extension_metrics_telemetry_dictionary(self, *args):  # pylint: disable=unused-argument
@@ -272,14 +263,13 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         # no need to initialize the CPU usage, since we mock get_cpu_usage() below
         with patch("azurelinuxagent.common.cgroup.CpuCgroup.initialize_cpu_usage"):
             for i in range(num_extensions):
-                dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+                dummy_cpu_cgroup = CpuCgroup("dummy_extension_{0}".format(i), "dummy_cpu_path_{0}".format(i))
                 CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-                dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
-                                                    "dummy_extension_{0}".format(i))
+                dummy_memory_cgroup = MemoryCgroup("dummy_extension_{0}".format(i), "dummy_memory_path_{0}".format(i))
                 CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
-        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))  # pylint: disable=protected-access
+        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:

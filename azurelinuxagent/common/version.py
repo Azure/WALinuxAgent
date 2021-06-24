@@ -196,7 +196,9 @@ def has_logrotate():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.54.2'
+# Setting the version to 9.9.9.9 to ensure DCR always uses this version and never auto-updates.
+# Replace this with the actual agent version on release.
+AGENT_VERSION = '2.3.0.2'  # (current agent version = 2.3.0.2)
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
