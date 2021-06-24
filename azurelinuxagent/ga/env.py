@@ -36,9 +36,9 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE), # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE), # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE) # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),  # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),  # pylint: disable=W1401
+    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)  # pylint: disable=W1401
 ]
 
 MAXIMUM_CACHED_FILES = 50
@@ -48,7 +48,7 @@ def get_env_handler():
     return EnvHandler()
 
 
-class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
+class EnvHandler(ThreadHandlerInterface):
     """
     Monitor changes to dhcp and hostname.
     If dhcp client process re-start has occurred, reset routes, dhcp with fabric.
@@ -74,7 +74,7 @@ class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
         self.server_thread = None
         self.dhcp_warning_enabled = True
         self.archiver = StateArchiver(conf.get_lib_dir())
-        self._reset_firewall_rules = False
+        self._try_remove_legacy_firewall_rule = False
 
         self._periodic_operations = [
             PeriodicOperation("_remove_persistent_net_rules", self._remove_persistent_net_rules_period, conf.get_remove_persistent_net_rules_period()),
@@ -118,13 +118,13 @@ class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
             self._protocol = self.protocol_util.get_protocol()
             while not self.stopped:
                 try:
-                    for op in self._periodic_operations: # pylint: disable=C0103
+                    for op in self._periodic_operations:
                         op.run()
-                except Exception as e: # pylint: disable=C0103
+                except Exception as e:
                     logger.error("An error occurred in the environment thread main loop; will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             logger.error("An error occurred in the environment thread; will exit the thread.\n{0}", ustr(e))
 
     def _remove_persistent_net_rules_period(self):
@@ -135,10 +135,12 @@ class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
         #
         # There was a rule change at 2.2.26, which started dropping non-root traffic
         # to WireServer.  The previous rules allowed traffic.  Having both rules in
-        # place negated the fix in 2.2.26.
-        if not self._reset_firewall_rules:
-            self.osutil.remove_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
-            self._reset_firewall_rules = True
+        # place negated the fix in 2.2.26. Removing only the legacy rule and keeping other rules intact.
+        #
+        # We only try to remove the legacy firewall rule once on service start (irrespective of its exit code).
+        if not self._try_remove_legacy_firewall_rule:
+            self.osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
+            self._try_remove_legacy_firewall_rule = True
 
         success = self.osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
 
@@ -171,7 +173,7 @@ class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
             # the new value and the comparison should not be affected by the order of the items in the list
             pid = sorted(self.osutil.get_dhcp_pid())
 
-            if len(pid) == 0 and self.dhcp_warning_enabled: # pylint: disable=len-as-condition
+            if len(pid) == 0 and self.dhcp_warning_enabled:
                 logger.warn("Dhcp client is not running.")
         except Exception as exception:
             if self.dhcp_warning_enabled:
@@ -185,7 +187,7 @@ class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
         self.handle_dhclient_restart()
 
     def handle_dhclient_restart(self):
-        if len(self.dhcp_id_list) == 0: # pylint: disable=len-as-condition
+        if len(self.dhcp_id_list) == 0:
             self.dhcp_id_list = self.get_dhcp_client_pid()
             return
 
@@ -193,7 +195,7 @@ class EnvHandler(ThreadHandlerInterface): # pylint: disable=R0902
             return
 
         new_pid = self.get_dhcp_client_pid()
-        if len(new_pid) != 0 and new_pid != self.dhcp_id_list: # pylint: disable=len-as-condition
+        if len(new_pid) != 0 and new_pid != self.dhcp_id_list:
             logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
             self.dhcp_handler.conf_routes()
             self.dhcp_id_list = new_pid

@@ -1,4 +1,4 @@
-# -*- encoding: utf-8 -*- # pylint: disable=too-many-lines
+# -*- encoding: utf-8 -*-
 # Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,31 +27,35 @@ import uuid
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.exception import InvalidContainerError, ResourceGoneError, ProtocolError, \
+from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames, get_supported_feature_by_name, \
+    get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    InVMArtifactsProfile, StatusBlob, VMStatus
+    InVMArtifactsProfile, StatusBlob, VMStatus, EXT_CONF_FILE_NAME
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE_NO_EXT
+from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
 from tests.tools import Mock, patch, AgentTestCase
 
-data_with_bom = b'\xef\xbb\xbfhehe' # pylint: disable=invalid-name
-testurl = 'http://foo' # pylint: disable=invalid-name
-testtype = 'BlockBlob' # pylint: disable=invalid-name
+data_with_bom = b'\xef\xbb\xbfhehe'
+testurl = 'http://foo'
+testtype = 'BlockBlob'
 WIRESERVER_URL = '168.63.129.16'
 
 
-def get_event(message, duration=30000, evt_type="", is_internal=False, is_success=True, # pylint: disable=invalid-name,too-many-arguments
+def get_event(message, duration=30000, evt_type="", is_internal=False, is_success=True,
               name="", op="Unknown", version=CURRENT_VERSION, eventId=1):
     event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
     event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
@@ -74,12 +78,11 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
         ext_conf.artifacts_profile_blob = artifacts_profile_blob
         ext_conf.status_upload_blob = status_upload_blob
         ext_conf.status_upload_blob_type = status_upload_blob_type
-        protocol.client._goal_state.ext_conf = ext_conf # pylint: disable=protected-access
+        protocol.client._goal_state.ext_conf = ext_conf  # pylint: disable=protected-access
 
         yield protocol
 
 
-# pylint: disable=too-many-public-methods
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
@@ -87,9 +90,9 @@ class TestWireProtocol(AgentTestCase):
 
     def setUp(self):
         super(TestWireProtocol, self).setUp()
-        HostPluginProtocol.set_default_channel(False)
+        HostPluginProtocol.is_default_channel = False
 
-    def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _): # pylint: disable=invalid-name
+    def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
@@ -97,7 +100,7 @@ class TestWireProtocol(AgentTestCase):
             protocol.detect()
             protocol.get_vminfo()
             protocol.get_certs()
-            ext_handlers, etag = protocol.get_ext_handlers() # pylint: disable=unused-variable
+            ext_handlers, etag = protocol.get_ext_handlers()  # pylint: disable=unused-variable
             for ext_handler in ext_handlers.extHandlers:
                 protocol.get_ext_handler_pkgs(ext_handler)
 
@@ -171,7 +174,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(1, test_data.call_counts["hostingenvuri"])
         self.assertEqual(1, patch_report.call_count)
 
-    def test_call_storage_kwargs(self, *args): # pylint: disable=unused-argument
+    def test_call_storage_kwargs(self, *args):  # pylint: disable=unused-argument
         with patch.object(restutil, 'http_get') as http_patch:
             http_req = restutil.http_get
             url = testurl
@@ -205,10 +208,10 @@ class TestWireProtocol(AgentTestCase):
             # assert
             self.assertTrue(http_patch.call_count == 5)
             for i in range(0, 5):
-                c = http_patch.call_args_list[i][-1]['use_proxy'] # pylint: disable=invalid-name
-                self.assertTrue(c == (True if i != 3 else False)) # pylint: disable=simplifiable-if-expression
+                c = http_patch.call_args_list[i][-1]['use_proxy']
+                self.assertTrue(c == (True if i != 3 else False))
 
-    def test_status_blob_parsing(self, *args): # pylint: disable=unused-argument
+    def test_status_blob_parsing(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             self.assertEqual(protocol.client.get_ext_conf().status_upload_blob,
                              'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
@@ -216,7 +219,7 @@ class TestWireProtocol(AgentTestCase):
                              'sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo')
             self.assertEqual(protocol.client.get_ext_conf().status_upload_blob_type, u'BlockBlob')
 
-    def test_get_host_ga_plugin(self, *args): # pylint: disable=unused-argument
+    def test_get_host_ga_plugin(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             host_plugin = protocol.client.get_host_plugin()
             goal_state = protocol.client.get_goal_state()
@@ -224,12 +227,12 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
 
     def test_upload_status_blob_should_use_the_host_channel_by_default(self, *_):
-        def http_put_handler(url, *_, **__): # pylint: disable=inconsistent-return-statements
+        def http_put_handler(url, *_, **__):  # pylint: disable=inconsistent-return-statements
             if protocol.get_endpoint() in url and url.endswith('/status'):
                 return MockResponse(body=b'', status_code=200)
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=http_put_handler) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
             protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
 
             protocol.client.upload_status_blob()
@@ -244,11 +247,11 @@ class TestWireProtocol(AgentTestCase):
             with patch.object(HostPluginProtocol, "ensure_initialized", return_value=True):
                 with patch.object(StatusBlob, "upload", return_value=False) as patch_default_upload:
                     with patch.object(HostPluginProtocol, "_put_block_blob_status") as patch_http:
-                        HostPluginProtocol.set_default_channel(False)
+                        HostPluginProtocol.is_default_channel = False
                         protocol.client.upload_status_blob()
                         patch_default_upload.assert_not_called()
                         patch_http.assert_called_once_with(testurl, protocol.client.status_blob)
-                        self.assertFalse(HostPluginProtocol.is_default_channel())
+                        self.assertFalse(HostPluginProtocol.is_default_channel)
 
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized")
     def test_upload_status_blob_unknown_type_assumes_block(self, *_):
@@ -257,7 +260,7 @@ class TestWireProtocol(AgentTestCase):
 
             with patch.object(StatusBlob, "prepare") as patch_prepare:
                 with patch.object(StatusBlob, "upload") as patch_default_upload:
-                    HostPluginProtocol.set_default_channel(False)
+                    HostPluginProtocol.is_default_channel = False
                     protocol.client.upload_status_blob()
 
                     patch_prepare.assert_called_once_with("BlockBlob")
@@ -274,7 +277,7 @@ class TestWireProtocol(AgentTestCase):
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *_):
         # Test when artifacts_profile_blob is null/None
         with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-            protocol.client._goal_state.ext_conf = ExtensionsConfig(None) # pylint: disable=protected-access
+            protocol.client._goal_state.ext_conf = ExtensionsConfig(None)  # pylint: disable=protected-access
 
             self.assertEqual(None, protocol.client.get_artifacts_profile())
 
@@ -305,7 +308,7 @@ class TestWireProtocol(AgentTestCase):
                 host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
 
     @patch("azurelinuxagent.common.event.add_event")
-    def test_artifacts_profile_json_parsing(self, patch_event, *args): # pylint: disable=unused-argument
+    def test_artifacts_profile_json_parsing(self, patch_event, *args):  # pylint: disable=unused-argument
         with create_mock_protocol(artifacts_profile_blob=testurl) as protocol:
             # response is invalid json
             protocol.client.call_storage_service = Mock(return_value=MockResponse("invalid json".encode('utf-8'), 200))
@@ -320,7 +323,7 @@ class TestWireProtocol(AgentTestCase):
             self.assertTrue('invalid json' in patch_event.call_args[1]['message'])
             self.assertEqual('ArtifactsProfileBlob', patch_event.call_args[1]['op'])
 
-    def test_get_in_vm_artifacts_profile_default(self, *args): # pylint: disable=unused-argument
+    def test_get_in_vm_artifacts_profile_default(self, *args):  # pylint: disable=unused-argument
         with create_mock_protocol(artifacts_profile_blob=testurl) as protocol:
             protocol.client.call_storage_service = Mock(return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
             in_vm_artifacts_profile = protocol.client.get_artifacts_profile()
@@ -329,7 +332,7 @@ class TestWireProtocol(AgentTestCase):
 
     @patch("socket.gethostname", return_value="hostname")
     @patch("time.gmtime", return_value=time.localtime(1485543256))
-    def test_report_vm_status(self, *args): # pylint: disable=unused-argument
+    def test_report_vm_status(self, *args):  # pylint: disable=unused-argument
         status = 'status'
         message = 'message'
 
@@ -365,6 +368,51 @@ class TestWireProtocol(AgentTestCase):
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
 
+    def test_it_should_report_supported_features_in_status_blob_if_supported(self, *_):
+        with mock_wire_protocol(DATA_FILE) as protocol:
+
+            def mock_http_put(url, *args, **__):
+                if not HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    protocol.aggregate_status = json.loads(args[0])
+
+            protocol.aggregate_status = {}
+            protocol.set_http_handlers(http_put_handler=mock_http_put)
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", True):
+                exthandlers_handler.run()
+                self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
+                self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
+                multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
+                found = False
+                for feature in protocol.aggregate_status['supportedFeatures']:
+                    if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
+                        found = True
+                        break
+                self.assertTrue(found, "Multi-config name should be present in supportedFeatures")
+
+            # Feature should not be reported if not present
+            with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", False):
+                exthandlers_handler.run()
+                self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
+                if "supportedFeatures" not in protocol.aggregate_status:
+                    # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
+                    # reported in the status blob as its not supported as of now.
+                    # Asserting no other feature was available to report back to crp
+                    self.assertEqual(1, len(get_agent_supported_features_list_for_crp()),
+                                     "supportedFeatures should be available if there are more features")
+                    return
+
+                # If there are other features available, confirm MultiConfig was not reported
+                multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
+                found = False
+                for feature in protocol.aggregate_status['supportedFeatures']:
+                    if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
+                        found = True
+                        break
+                self.assertFalse(found, "Multi-config name should be present in supportedFeatures")
+
     @patch("azurelinuxagent.common.utils.restutil.http_request")
     def test_send_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
@@ -375,7 +423,7 @@ class TestWireProtocol(AgentTestCase):
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
-        method, url, body_received = args # pylint: disable=unused-variable
+        method, url, body_received = args  # pylint: disable=unused-variable
         headers = kwargs['headers']
 
         # the headers should include utf-8 encoding...
@@ -384,7 +432,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertIn(event_str, body_received)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    def test_report_event_small_event(self, patch_send_event, *args): # pylint: disable=unused-argument
+    def test_report_event_small_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
 
@@ -406,7 +454,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(patch_send_event.call_count, 1)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args): # pylint: disable=unused-argument
+    def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
 
@@ -420,7 +468,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(patch_send_event.call_count, 2)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
-    def test_report_event_large_event(self, patch_send_event, *args): # pylint: disable=unused-argument
+    def test_report_event_large_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         event_str = random_generator(2 ** 18)
         event_list.append(get_event(message=event_str))
@@ -431,7 +479,7 @@ class TestWireProtocol(AgentTestCase):
 
 
 class TestWireClient(HttpRequestPredicates, AgentTestCase):
-    def test_get_ext_conf_without_extensions_should_retrieve_vmagent_manifests_info(self, *args): # pylint: disable=unused-argument
+    def test_get_ext_conf_without_extensions_should_retrieve_vmagent_manifests_info(self, *args):  # pylint: disable=unused-argument
         # Basic test for get_ext_conf() when extensions are not present in the config. The test verifies that
         # get_ext_conf() fetches the correct data by comparing the returned data with the test data provided the
         # mock_wire_protocol.
@@ -484,16 +532,16 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEqual(success, True, 'The download should have succeeded')
+            self.assertTrue(success, "The download should have succeeded")
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], extension_url, "The extension should have been downloaded over the direct channel")
-            self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
-            self.assertEqual(HostPluginProtocol.is_default_channel(), False, "The host channel should not have been set as the default")
+            self.assertTrue(os.path.exists(target_file), "The extension package was not downloaded")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host channel should not have been set as the default")
 
     def test_download_ext_handler_pkg_should_use_host_channel_when_direct_channel_fails_and_set_host_as_default(self):
         extension_url = 'https://fake_host/fake_extension.zip'
@@ -507,23 +555,23 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEqual(success, True, 'The download should have succeeded')
+            self.assertTrue(success, "The download should have succeeded")
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The retry attempt should have been over the host channel")
             self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
-            self.assertEqual(HostPluginProtocol.is_default_channel(), True, "The host channel should have been set as the default")
+            self.assertTrue(HostPluginProtocol.is_default_channel, "The host channel should have been set as the default")
 
     def test_download_ext_handler_pkg_should_retry_the_host_channel_after_refreshing_host_plugin(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
 
-        def http_get_handler(url, *args, **kwargs): # pylint: disable=unused-argument
+        def http_get_handler(url, *_, **kwargs):
             if url == extension_url:
                 return HttpError("Exception to fake an error on the direct channel")
             if self.is_host_plugin_extension_request(url, kwargs, extension_url):
@@ -538,7 +586,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         http_get_handler.goal_state_requests = 0
 
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             try:
                 # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
@@ -549,47 +597,45 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
                 urls = protocol.get_tracked_urls()
-                self.assertEqual(success, True, 'The download should have succeeded')
+                self.assertTrue(success, "The download should have succeeded")
                 self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
                 self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
                 self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
                 self.assertTrue(os.path.exists(target_file), 'The extension package was not downloaded')
-                self.assertEqual(HostPluginProtocol.is_default_channel(), True, "The host channel should have been set as the default")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The host channel should have been set as the default")
             finally:
-                HostPluginProtocol.set_default_channel(False)
+                HostPluginProtocol.is_default_channel = False
 
     def test_download_ext_handler_pkg_should_not_change_default_channel_when_all_channels_fail(self):
         extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, "fake_extension.zip")
 
         def http_get_handler(url, *_, **kwargs):
-            if url == extension_url:
-                return HttpError("Exception to fake error on direct channel")
-            if self.is_host_plugin_extension_request(url, kwargs, extension_url):
-                return ResourceGoneError("Exception to fake error on host channel")
+            if url == extension_url or self.is_host_plugin_extension_request(url, kwargs, extension_url):
+                return MockResponse(body=b"content not found", status_code=404, reason="Not Found")
             if self.is_goal_state_request(url):
                 protocol.track_url(url)  # keep track of goal state requests
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
             protocol.client.get_host_plugin()
 
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-            success = protocol.download_ext_handler_pkg(extension_url, "/an-invalid-directory/an-invalid-file.zip")
+            success = protocol.download_ext_handler_pkg(extension_url, target_file)
 
             urls = protocol.get_tracked_urls()
-            self.assertEqual(success, False, "The download should have failed")
-            self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
+            self.assertFalse(success, "The download should have failed")
+            self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], extension_url, "The first attempt should have been over the direct channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
-            self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
-            self.assertEqual(HostPluginProtocol.is_default_channel(), False, "The host channel should not have been set as the default")
+            self.assertFalse(os.path.exists(target_file), "The extension package was downloaded and it shouldn't have")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host channel should not have been set as the default")
 
     def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
@@ -603,7 +649,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
 
@@ -611,7 +657,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], manifest_url, "The manifest should have been downloaded over the direct channel")
-            self.assertEqual(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The default channel should not have changed")
 
     def test_fetch_manifest_should_use_host_channel_when_direct_channel_fails_and_set_it_to_default(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
@@ -625,7 +671,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             try:
                 manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
@@ -635,9 +681,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
                 self.assertEqual(urls[0], manifest_url, "The first attempt should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The retry should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel(), True, "The host should have been set as the default channel")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The host should have been set as the default channel")
             finally:
-                HostPluginProtocol.set_default_channel(False)  # Reset default channel
+                HostPluginProtocol.is_default_channel = False  # Reset default channel
 
     def test_fetch_manifest_should_retry_the_host_channel_after_refreshing_the_host_plugin_and_set_the_host_as_default(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
@@ -646,7 +692,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         def http_get_handler(url, *_, **kwargs):
             if url == manifest_url:
                 return HttpError("Exception to fake an error on the direct channel")
-            if self.is_host_plugin_extension_request(url, kwargs, manifest_url): # pylint: disable=no-else-return
+            if self.is_host_plugin_extension_request(url, kwargs, manifest_url):
                 # fake a stale goal state then succeed once the goal state has been refreshed
                 if http_get_handler.goal_state_requests == 0:
                     http_get_handler.goal_state_requests += 1
@@ -658,7 +704,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         http_get_handler.goal_state_requests = 0
 
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             try:
                 # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
@@ -674,15 +720,15 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
                 self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel(), True, "The host should have been set as the default channel")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The host should have been set as the default channel")
             finally:
-                HostPluginProtocol.set_default_channel(False)  # Reset default channel
+                HostPluginProtocol.is_default_channel = False  # Reset default channel
 
     def test_fetch_manifest_should_update_goal_state_and_not_change_default_channel_if_host_fails(self):
         manifest_url = 'https://fake_host/fake_manifest.xml'
 
         def http_get_handler(url, *_, **kwargs):
-            if url == manifest_url or self.is_host_plugin_extension_request(url, kwargs, manifest_url): # pylint: disable=no-else-return
+            if url == manifest_url or self.is_host_plugin_extension_request(url, kwargs, manifest_url):
                 return ResourceGoneError("Exception to fake an error on either channel")
             elif self.is_goal_state_request(url):
                 protocol.track_url(url)  # keep track of goal state requests
@@ -690,7 +736,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
         # Everything fails. Goal state should have been updated and host channel should not have been set as default.
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             # initialization of the host plugin triggers a request for the goal state; do it here before we start
             # tracking those requests.
@@ -704,32 +750,28 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
             self.assertEqual(urls[0], manifest_url, "The first attempt should have been over the direct channel")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]),
-                            "The second attempt should have been over the host channel")
-            self.assertTrue(self.is_goal_state_request(urls[2]),
-                            "The host channel should have been refreshed the goal state")
-            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]),
-                            "The third attempt should have been over the host channel")
-            self.assertEqual(HostPluginProtocol.is_default_channel(), False,
-                              "The host should not have been set as the default channel")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second attempt should have been over the host channel")
+            self.assertTrue(self.is_goal_state_request(urls[2]), "The host channel should have been refreshed the goal state")
+            self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The third attempt should have been over the host channel")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host should not have been set as the default channel")
 
-            self.assertEqual(HostPluginProtocol.is_default_channel(), False)
+            self.assertEqual(HostPluginProtocol.is_default_channel, False)
 
     def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
-        def http_get_handler(url, *_, **__): # pylint: disable=useless-return
+        def http_get_handler(url, *_, **__):
             if self.is_in_vm_artifacts_profile_request(url):
                 protocol.track_url(url)
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE, http_get_handler=http_get_handler) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             return_value = protocol.client.get_artifacts_profile()
 
             self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 1, "Unexpected HTTP requests: [{0}]".format(urls))
-            self.assertEqual(HostPluginProtocol.is_default_channel(), False)
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The host should not have been set as the default channel")
 
     def test_get_artifacts_profile_should_use_host_channel_when_direct_channel_fails(self):
         def http_get_handler(url, *_, **kwargs):
@@ -740,7 +782,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             try:
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
@@ -749,14 +791,14 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 self.assertIsNotNone(return_value, "The artifacts profile request should have succeeded")
                 self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
-                self.assertTrue(return_value.onHold, 'The OnHold property should be True') # pylint: disable=no-member
+                self.assertTrue(return_value.onHold, 'The OnHold property should be True')  # pylint: disable=no-member
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
                 self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel(), True, "The default channel should have changed to the host")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The default channel should have changed to the host")
             finally:
-                HostPluginProtocol.set_default_channel(False)
+                HostPluginProtocol.is_default_channel = False
 
     def test_get_artifacts_profile_should_retry_the_host_channel_after_refreshing_the_host_plugin(self):
         def http_get_handler(url, *_, **kwargs):
@@ -773,7 +815,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         http_get_handler.host_plugin_calls = 0
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             try:
                 # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
@@ -785,16 +827,16 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 self.assertIsNotNone(return_value, "The artifacts profile request should have succeeded")
                 self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
-                self.assertTrue(return_value.onHold, 'The OnHold property should be True') # pylint: disable=no-member
+                self.assertTrue(return_value.onHold, 'The OnHold property should be True')  # pylint: disable=no-member
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
                 self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
                 self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
-                self.assertEqual(HostPluginProtocol.is_default_channel(), True, "The default channel should have changed to the host")
+                self.assertTrue(HostPluginProtocol.is_default_channel, "The default channel should have changed to the host")
             finally:
-                HostPluginProtocol.set_default_channel(False)
+                HostPluginProtocol.is_default_channel = False
 
     def test_get_artifacts_profile_should_refresh_the_host_plugin_and_not_change_default_channel_if_host_plugin_fails(self):
         def http_get_handler(url, *_, **kwargs):
@@ -807,7 +849,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
-            HostPluginProtocol.set_default_channel(False)
+            HostPluginProtocol.is_default_channel = False
 
             # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
             protocol.client.get_host_plugin()
@@ -823,10 +865,10 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
             self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
             self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[3]), "The retry request should have been over the host channel")
-            self.assertEqual(HostPluginProtocol.is_default_channel(), False, "The default channel should not have changed")
+            self.assertFalse(HostPluginProtocol.is_default_channel, "The default channel should not have changed")
 
     def test_upload_logs_should_not_refresh_plugin_when_first_attempt_succeeds(self):
-        def http_put_handler(url, *_, **__): # pylint: disable=inconsistent-return-statements
+        def http_put_handler(url, *_, **__):  # pylint: disable=inconsistent-return-statements
             if self.is_host_plugin_put_logs_request(url):
                 return MockResponse(body=b'', status_code=200)
 
@@ -854,104 +896,122 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
-            self.assertTrue(self.is_host_plugin_put_logs_request(urls[0]),
-                            "The first request should have been over the host channel")
-            self.assertTrue(self.is_host_plugin_put_logs_request(urls[1]),
-                            "The second request should have been over the host channel")
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[0]), "The first request should have been over the host channel")
+            self.assertTrue(self.is_host_plugin_put_logs_request(urls[1]), "The second request should have been over the host channel")
 
-    def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.client.get_host_plugin().set_default_channel(False)
-
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                return 42
-
-            def host_func(*args): # pylint: disable=useless-return,unused-argument
-                host_func.counter += 1
+    @staticmethod
+    def _set_and_fail_helper_channel_functions(fail_direct=False, fail_host=False):
+        def direct_func(*_):
+            direct_func.counter += 1
+            if direct_func.fail:
                 return None
+            return "direct"
 
-            direct_func.counter = 0
-            host_func.counter = 0
+        def host_func(*_):
+            host_func.counter += 1
+            if host_func.fail:
+                return None
+            return "host"
 
-            # Assert we've only called the direct channel functions and that it succeeded.
-            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(42, ret)
-            self.assertEqual(1, direct_func.counter)
-            self.assertEqual(0, host_func.counter)
+        direct_func.counter = 0
+        direct_func.fail = fail_direct
 
-    def test_send_request_using_appropriate_channel_should_not_use_direct_channel_when_host_channel_is_default(self):
+        host_func.counter = 0
+        host_func.fail = fail_host
+
+        return direct_func, host_func
+
+    def test_send_request_using_appropriate_channel_should_not_invoke_secondary_when_primary_channel_succeeds(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.client.get_host_plugin().set_default_channel(True)
+            # Scenario #1: Direct channel default
+            HostPluginProtocol.is_default_channel = False
 
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                return 42
-
-            def host_func(*args): # pylint: disable=unused-argument
-                host_func.counter += 1
-                return 43
-
-            direct_func.counter = 0
-            host_func.counter = 0
-
-            # Assert we've only called the host channel function since it's the default channel
-            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(43, ret)
-            self.assertEqual(0, direct_func.counter)
-            self.assertEqual(1, host_func.counter)
-
-    def test_send_request_using_appropriate_channel_should_use_host_channel_when_direct_channel_fails(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            host = protocol.client.get_host_plugin()
-            host.set_default_channel(False)
-
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                raise InvalidContainerError()
-
-            def host_func(*args): # pylint: disable=unused-argument
-                host_func.counter += 1
-                return 42
-
-            direct_func.counter = 0
-            host_func.counter = 0
-
-            # Assert we've called both the direct channel function and the host channel function, which succeeded.
-            # After the host channel succeeds, the host plugin should have been set as the default channel.
-            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEqual(42, ret)
-            self.assertEqual(1, direct_func.counter)
-            self.assertEqual(1, host_func.counter)
-            self.assertEqual(True, host.is_default_channel())
-
-    def test_send_request_using_appropriate_channel_should_retry_the_host_channel_after_reloading_goal_state(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.client.get_host_plugin().set_default_channel(False)
-
-            def direct_func(*args): # pylint: disable=unused-argument
-                direct_func.counter += 1
-                raise InvalidContainerError()
-
-            def host_func(*args): # pylint: disable=unused-argument
-                host_func.counter += 1
-                if host_func.counter == 1:
-                    raise ResourceGoneError("Resource is gone")
-                return 42
-
-            direct_func.counter = 0
-            host_func.counter = 0
-
-            # Assert we've called both the direct channel function (once) and the host channel function (twice).
-            # After the host channel succeeds, the host plugin should have been set as the default channel.
-            with patch(
-                    'azurelinuxagent.common.protocol.wire.WireClient.update_host_plugin_from_goal_state') as mock_update_host_plugin_from_goal_state:
+            direct_func, host_func = self._set_and_fail_helper_channel_functions()
+            # Assert we're only calling the primary channel (direct) and that it succeeds.
+            for iteration in range(5):
                 ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
-                self.assertEqual(42, ret)
+                self.assertEqual("direct", ret)
+                self.assertEqual(iteration + 1, direct_func.counter)
+                self.assertEqual(0, host_func.counter)
+                self.assertFalse(HostPluginProtocol.is_default_channel)
+
+            # Scenario #2: Host channel default
+            HostPluginProtocol.is_default_channel = True
+            direct_func, host_func = self._set_and_fail_helper_channel_functions()
+
+            # Assert we're only calling the primary channel (host) and that it succeeds.
+            for iteration in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual("host", ret)
+                self.assertEqual(0, direct_func.counter)
+                self.assertEqual(iteration + 1, host_func.counter)
+                self.assertTrue(HostPluginProtocol.is_default_channel)
+
+    def test_send_request_using_appropriate_channel_should_not_change_default_channel_if_none_succeeds(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            # Scenario #1: Direct channel is default
+            HostPluginProtocol.is_default_channel = False
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=True)
+
+            # Assert we keep trying both channels, but the default channel doesn't change
+            for iteration in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual(None, ret)
+                self.assertEqual(iteration + 1, direct_func.counter)
+                self.assertEqual(iteration + 1, host_func.counter)
+                self.assertFalse(HostPluginProtocol.is_default_channel)
+
+            # Scenario #2: Host channel is default
+            HostPluginProtocol.is_default_channel = True
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=True)
+
+            # Assert we keep trying both channels, but the default channel doesn't change
+            for iteration in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual(None, ret)
+                self.assertEqual(iteration + 1, direct_func.counter)
+                self.assertEqual(iteration + 1, host_func.counter)
+                self.assertTrue(HostPluginProtocol.is_default_channel)
+
+    def test_send_request_using_appropriate_channel_should_change_default_channel_when_secondary_succeeds(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            # Scenario #1: Direct channel is default
+            HostPluginProtocol.is_default_channel = False
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=False)
+
+            # Assert we've called both channels and the default channel changed
+            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+            self.assertEqual("host", ret)
+            self.assertEqual(1, direct_func.counter)
+            self.assertEqual(1, host_func.counter)
+            self.assertTrue(HostPluginProtocol.is_default_channel)
+
+            # If host keeps succeeding, assert we keep calling only that channel and not changing the default.
+            for iteration in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual("host", ret)
                 self.assertEqual(1, direct_func.counter)
-                self.assertEqual(2, host_func.counter)
-                self.assertEqual(1, mock_update_host_plugin_from_goal_state.call_count)
-                self.assertEqual(True, protocol.client.get_host_plugin().is_default_channel())
+                self.assertEqual(1 + iteration + 1, host_func.counter)
+                self.assertTrue(HostPluginProtocol.is_default_channel)
+
+            # Scenario #2: Host channel is default
+            HostPluginProtocol.is_default_channel = True
+            direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=False, fail_host=True)
+
+            # Assert we've called both channels and the default channel changed
+            ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+            self.assertEqual("direct", ret)
+            self.assertEqual(1, direct_func.counter)
+            self.assertEqual(1, host_func.counter)
+            self.assertFalse(HostPluginProtocol.is_default_channel)
+
+            # If direct keeps succeeding, assert we keep calling only that channel and not changing the default.
+            for iteration in range(5):
+                ret = protocol.client.send_request_using_appropriate_channel(direct_func, host_func)
+                self.assertEqual("direct", ret)
+                self.assertEqual(1 + iteration + 1, direct_func.counter)
+                self.assertEqual(1, host_func.counter)
+                self.assertFalse(HostPluginProtocol.is_default_channel)
 
 
 class UpdateGoalStateTestCase(AgentTestCase):
@@ -1100,7 +1160,34 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 self.assertEqual(len(archives), 2, "Two goal states should have been archived")
                 self.assertEqual(archives[1], second_archive_name, "The name of goal state archive should match the second goal state timestamp and incarnation")
 
-# pylint: enable=too-many-public-methods
+    def test_update_goal_state_should_not_persist_the_protected_settings(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_MULTIPLE_EXT) as protocol:
+            # instantiating the protocol fetches the goal state, so there is no need to do another call to update_goal_state()
+            goal_state = protocol.client.get_goal_state()
+
+            protected_settings = []
+            for ext_handler in goal_state.ext_conf.ext_handlers.extHandlers:
+                for extension in ext_handler.properties.extensions:
+                    if extension.protectedSettings is not None:
+                        protected_settings.append(extension.protectedSettings)
+            if len(protected_settings) == 0:
+                raise Exception("The test goal state does not include any protected settings")
+
+            extensions_config_file = os.path.join(conf.get_lib_dir(), EXT_CONF_FILE_NAME.format(goal_state.incarnation))
+            if not os.path.exists(extensions_config_file):
+                raise Exception("Cannot find {0}".format(extensions_config_file))
+
+            with open(extensions_config_file, "r") as stream:
+                extensions_config = stream.read()
+
+                for settings in protected_settings:
+                    self.assertNotIn(settings, extensions_config, "The protectedSettings should not have been saved to {0}".format(extensions_config_file))
+
+                matches = re.findall(r'"protectedSettings"\s*:\s*"\*\*\* REDACTED \*\*\*"', extensions_config)
+                self.assertEqual(
+                    len(matches),
+                    len(protected_settings),
+                    "Could not find the expected number of redacted settings. Expected {0}.\n{1}".format(len(protected_settings), extensions_config))
 
 
 class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
@@ -1110,6 +1197,18 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_it_should_return_true_on_success(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
+
+    def test_incomplete_gs_should_fail(self):
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            GoalState.fetch_full_goal_state(protocol.client)
+
+            protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
+            protocol.mock_wire_data.reload()
+            protocol.mock_wire_data.set_incarnation(2)
+
+            with self.assertRaises(IncompleteGoalStateError):
+                GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
 
     def test_it_should_return_false_on_failure(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1140,11 +1239,11 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             calls_to_strings = lambda calls: (str(c) for c in calls)
             filter_calls = lambda calls, regex=None: (c for c in calls_to_strings(calls) if regex is None or re.match(regex, c))
-            logger_calls = lambda regex=None: [m for m in filter_calls(logger.method_calls, regex)] # pylint: disable=used-before-assignment,unnecessary-comprehension
+            logger_calls = lambda regex=None: [m for m in filter_calls(logger.method_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
             warnings = lambda: logger_calls(r'call.warn\(.*An error occurred while retrieving the goal state.*')
             periodic_warnings = lambda: logger_calls(r'call.periodic_warn\(.*Attempts to retrieve the goal state are failing.*')
             success_messages = lambda: logger_calls(r'call.info\(.*Retrieving the goal state recovered from previous errors.*')
-            telemetry_calls = lambda regex=None: [m for m in filter_calls(add_event.mock_calls, regex)] # pylint: disable=used-before-assignment,unnecessary-comprehension
+            telemetry_calls = lambda regex=None: [m for m in filter_calls(add_event.mock_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
             goal_state_events = lambda: telemetry_calls(r".*op='FetchGoalState'.*")
 
             #
@@ -1154,10 +1253,10 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (logger, add_event):
                 protocol.client.try_update_goal_state()
 
-                lc = logger_calls() # pylint: disable=invalid-name
+                lc = logger_calls()
                 self.assertTrue(len(lc) == 0, "A successful call should not produce any log messages: [{0}]".format(lc))
 
-                tc = telemetry_calls() # pylint: disable=invalid-name
+                tc = telemetry_calls()
                 self.assertTrue(len(tc) == 0, "A successful call should not produce any telemetry events: [{0}]".format(tc))
 
             #
@@ -1167,12 +1266,12 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (logger, add_event):
                 protocol.client.try_update_goal_state()
 
-                w = warnings() # pylint: disable=invalid-name
-                pw = periodic_warnings() # pylint: disable=invalid-name
+                w = warnings()
+                pw = periodic_warnings()
                 self.assertEqual(len(w), 1, "A failure should have produced a warning: [{0}]".format(w))
                 self.assertEqual(len(pw), 1, "A failure should have produced a periodic warning: [{0}]".format(pw))
 
-                gs = goal_state_events() # pylint: disable=invalid-name
+                gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
 
             #
@@ -1183,12 +1282,12 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 protocol.client.try_update_goal_state()
                 protocol.client.try_update_goal_state()
 
-                w = warnings() # pylint: disable=invalid-name
-                pw = periodic_warnings() # pylint: disable=invalid-name
+                w = warnings()
+                pw = periodic_warnings()
                 self.assertTrue(len(w) == 0, "Subsequent failures should not produce warnings: [{0}]".format(w))
                 self.assertEqual(len(pw), 3, "Subsequent failures should produce periodic warnings: [{0}]".format(pw))
 
-                tc = telemetry_calls() # pylint: disable=invalid-name
+                tc = telemetry_calls()
                 self.assertTrue(len(tc) == 0, "Subsequent failures should not produce any telemetry events: [{0}]".format(tc))
 
             #
@@ -1198,13 +1297,13 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (logger, add_event):
                 protocol.client.try_update_goal_state()
 
-                s = success_messages() # pylint: disable=invalid-name
-                w = warnings() # pylint: disable=invalid-name
-                pw = periodic_warnings() # pylint: disable=invalid-name
+                s = success_messages()
+                w = warnings()
+                pw = periodic_warnings()
                 self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(s))
                 self.assertTrue(len(w) == 0 and len(pw) == 0, "Recovering after failures should have not produced any warnings: [{0}] [{1}]".format(w, pw))
 
-                gs = goal_state_events() # pylint: disable=invalid-name
+                gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
 
 
@@ -1245,10 +1344,11 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
                 self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf_xml_text)
 
 
-class MockResponse: # pylint: disable=too-few-public-methods
-    def __init__(self, body, status_code):
+class MockResponse:
+    def __init__(self, body, status_code, reason=None):
         self.body = body
         self.status = status_code
+        self.reason = reason
 
     def read(self, *_):
         return self.body

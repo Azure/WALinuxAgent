@@ -17,15 +17,26 @@
 
 from __future__ import print_function
 
+import os
+import random
 import re
 import subprocess
+import tempfile
+import time
+import threading
+
+from nose.plugins.attrib import attr
 
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils import shellutil
 from tests.common.mock_cgroup_commands import mock_cgroup_commands
-from tests.tools import AgentTestCase, patch, mock_sleep
+from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root
+from tests.utils.miscellaneous_tools import format_processes, wait_for
 
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):
@@ -167,9 +178,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         # List of operations to test, and the functions to mock used in order to do verifications
         operations = [
-            [configurator.create_extension_cgroups_root,                     "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"],
-            [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups"],
-            [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.remove_extension_cgroups"]
+            [configurator.create_extensions_slice, "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extensions_slice"],
         ]
 
         for operation in operations:
@@ -185,9 +194,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         with patch.object(configurator, "disable"):
             # List of operations to test, and the functions to mock in order to raise exceptions
             operations = [
-                [configurator.create_extension_cgroups_root,                     "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups_root"],
-                [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extension_cgroups"],
-                [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.remove_extension_cgroups"]
+                [configurator.create_extensions_slice, "azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_extensions_slice"],
             ]
 
             def raise_exception(*_):
@@ -203,21 +210,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     args, _ = mock_logger_warn.call_args
                     message = args[0]
                     self.assertIn("A TEST EXCEPTION", message)
-
-    def test_get_processes_in_agent_cgroup_should_return_the_processes_within_the_agent_cgroup(self):
-        with mock_cgroup_commands():
-            configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
-
-            processes = configurator.get_processes_in_agent_cgroup()
-
-            self.assertTrue(len(processes) >= 2,
-                "The cgroup should contain at least 2 procceses (daemon and extension handler): [{0}]".format(processes))
-
-            daemon_present = any("waagent -daemon" in command for (pid, command) in processes)
-            self.assertTrue(daemon_present, "Could not find the daemon in the cgroup: [{0}]".format(processes))
-
-            extension_handler_present = any(re.search(r"(WALinuxAgent-.+\.egg|waagent) -run-exthandlers", command) for (pid, command) in processes)
-            self.assertTrue(extension_handler_present, "Could not find the extension handler in the cgroup: [{0}]".format(processes))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
@@ -307,4 +299,388 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     stderr=subprocess.PIPE)
 
                 self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        original_popen = subprocess.Popen
+
+        def mock_popen(command, *args, **kwargs):
+            if command.startswith('systemd-run'):
+                # Inject a syntax error to the call
+                command = command.replace('systemd-run', 'systemd-run syntax_error')
+            return original_popen(command, *args, **kwargs)
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
+            with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as mock_add_event:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:
+                    CGroupsTelemetry.reset()
+
+                    command = "echo TEST_OUTPUT"
+
+                    command_output = configurator.start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command=command,
+                        timeout=300,
+                        shell=True,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=output_file,
+                        stderr=output_file)
+
+                    self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
+
+                    args, kwargs = mock_add_event.call_args
+                    self.assertIn("Failed to start extension Microsoft.Compute.TestExtension-1.2.3 using systemd-run.",
+                                  kwargs['message'])
+                    self.assertIn("Failed to find executable syntax_error: No such file or directory",
+                                  kwargs['message'])
+                    self.assertEqual(False, kwargs['is_success'])
+                    self.assertEqual(WALAEventOperation.CGroupsDisabled, kwargs['op'])
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
+
+                    self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                  "The first call to the extension should have used systemd")
+                    self.assertEqual(command, extension_calls[1],
+                                      "The second call to the extension should not have used systemd")
+
+                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")  # pylint: disable=protected-access
+
+                    self.assertIn("TEST_OUTPUT\n", command_output, "The test output was not captured")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_times_out(self, _):
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
+        # When systemd times out, it will write a message to stderr and exit with exit code 1.
+        # In that case, we will internally recognize the failure due to the non-zero exit code, not as a timeout.
+        original_popen = subprocess.Popen
+        systemd_timeout_command = "echo 'Failed to start transient scope unit: Connection timed out' >&2 && exit 1"
+
+        def mock_popen(*args, **kwargs):
+            # If trying to invoke systemd, mock what would happen if systemd timed out internally:
+            # write failure to stderr and exit with exit code 1.
+            new_args = args
+            if "systemd-run" in args[0]:
+                new_args = (systemd_timeout_command,)
+
+            return original_popen(new_args, **kwargs)
+        mock_popen.extension_calls = []
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:
+                    CGroupsTelemetry.reset()
+
+                    configurator.start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="echo 'success'",
+                        timeout=300,
+                        shell=True,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=stdout,
+                        stderr=stderr)
+
+                    self.assertFalse(configurator.enabled(), "Cgroups should have been disabled")
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "echo 'success'" in args[0]]
+                    self.assertEqual(2, len(extension_calls), "The extension should have been called twice. Got: {0}".format(extension_calls))
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The first call to the extension should have used systemd")
+                    self.assertNotIn("systemd-run", extension_calls[1], "The second call to the extension should not have used systemd")
+
+                    self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")  # pylint: disable=protected-access
+
+    @attr('requires_sudo')
+    @patch("azurelinuxagent.common.cgroupapi.add_event")
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        command = "ls folder_does_not_exist"
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command=command,
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
+
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                  "The first call to the extension should have used systemd")
+
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                    # The scope name should appear in the process output since systemd-run was invoked and stderr
+                    # wasn't truncated.
+                    self.assertIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+
+    @attr('requires_sudo')
+    @patch("azurelinuxagent.common.cgroupapi.add_event")
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    @patch("azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails_with_long_output(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        long_output = "a"*20  # large enough to ensure both stdout and stderr are truncated
+        long_stdout_stderr_command = "echo {0} && echo {0} >&2 && ls folder_does_not_exist".format(long_output)
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command=long_stdout_stderr_command,
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if long_stdout_stderr_command in args[0]]
+
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
+                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                                  "The first call to the extension should have used systemd")
+
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                    # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
+                    # even though systemd-run ran
+                    self.assertNotIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+
+    @attr('requires_sudo')
+    @patch("azurelinuxagent.common.cgroupapi.add_event")
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args):  # pylint: disable=unused-argument
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.utils.extensionprocessutil.wait_for_process_completion_or_timeout",
+                           return_value=[True, None]):
+                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
+                               return_value=False):
+                        with self.assertRaises(ExtensionError) as context_manager:
+                            configurator.start_extension_command(
+                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                                command="date",
+                                timeout=300,
+                                shell=True,
+                                cwd=self.tmp_dir,
+                                env={},
+                                stdout=stdout,
+                                stderr=stderr)
+
+                        self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                        self.assertIn("Timeout", ustr(context_manager.exception))
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_capture_only_the_last_subprocess_output(self, _):
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        original_popen = subprocess.Popen
+
+        def mock_popen(*args, **kwargs):
+            # Inject a syntax error to the call
+            systemd_command = args[0].replace('systemd-run', 'systemd-run syntax_error')
+            new_args = (systemd_command,)
+            return original_popen(new_args, **kwargs)
+
+        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.add_event"):
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                        # We expect this call to fail because of the syntax error
+                        process_output = configurator.start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="echo 'very specific test message'",
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                        self.assertEqual(expected_output.format("very specific test message"), process_output)
+
+    def test_check_processes_in_agent_cgroup_should_disable_cgroups_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
+        configurator = CGroupConfiguratorSystemdTestCase._get_new_cgroup_configurator_instance()
+
+        # The test script recursively creates a given number of descendant processes, then it blocks until the
+        # 'stop_file' exists. It produces an output file containing the PID of each descendant process.
+        test_script = os.path.join(self.tmp_dir, "create_processes.sh")
+        stop_file = os.path.join(self.tmp_dir, "create_processes.stop")
+        AgentTestCase.create_script(test_script, """
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# != 2 ]]; then
+    echo "Usage: $0 <output_file> <count>"
+    exit 1
+fi
+
+echo $$ >> $1
+
+if [[ $2 > 1 ]]; then
+    $0 $1 $(($2 - 1))
+else
+    timeout 30s /usr/bin/env bash -c "while ! [[ -f {0} ]]; do sleep 0.25s; done"
+fi
+
+exit 0
+""".format(stop_file))
+
+        number_of_descendants = 3
+
+        def wait_for_processes(processes_file):
+            def _all_present():
+                if os.path.exists(processes_file):
+                    with open(processes_file, "r") as file_stream:
+                        _all_present.processes = [int(process) for process in file_stream.read().split()]
+                return len(_all_present.processes) >= number_of_descendants
+            _all_present.processes = []
+
+            if not wait_for(_all_present):
+                raise Exception("Timeout waiting for processes. Expected {0}; got: {1}".format(
+                    number_of_descendants, format_processes(_all_present.processes)))
+
+            return _all_present.processes
+
+        threads = []
+
+        try:
+            #
+            # Start the processes that will be used by the test. We use two sets of processes: the first set simulates a command executed by the agent
+            # (e.g. iptables) and its child processes, if any. The second set of processes simulates an extension.
+            #
+            agent_command_output = os.path.join(self.tmp_dir, "agent_command.pids")
+            agent_command = threading.Thread(target=lambda: shellutil.run_command([test_script, agent_command_output, str(number_of_descendants)]))
+            agent_command.start()
+            threads.append(agent_command)
+            agent_command_processes = wait_for_processes(agent_command_output)
+
+            extension_output = os.path.join(self.tmp_dir, "extension.pids")
+
+            def start_extension():
+                original_sleep = time.sleep
+                original_popen = subprocess.Popen
+
+                # Extensions are stated using systemd-run; mock Popen to remove the call to systemd-run; the test script creates a couple of
+                # child processes, which would simulate the extension's processes.
+                def mock_popen(command, *args, **kwargs):
+                    match = re.match(r"^systemd-run --unit=[^\s]+ --scope (.+)", command)
+                    is_systemd_run = match is not None
+                    if is_systemd_run:
+                        command = match.group(1)
+                    process = original_popen(command, *args, **kwargs)
+                    if is_systemd_run:
+                        start_extension.systemd_run_pid = process.pid
+                    return process
+
+                with patch('time.sleep', side_effect=lambda _: original_sleep(0.1)):  # start_extension_command has a small delay; skip it
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+                            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                                configurator.start_extension_command(
+                                    extension_name="TestExtension",
+                                    command="{0} {1} {2}".format(test_script, extension_output, number_of_descendants),
+                                    timeout=30,
+                                    shell=True,
+                                    cwd=self.tmp_dir,
+                                    env={},
+                                    stdout=stdout,
+                                    stderr=stderr)
+            start_extension.systemd_run_pid = None
+
+            extension = threading.Thread(target=start_extension)
+            extension.start()
+            threads.append(extension)
+            extension_processes = wait_for_processes(extension_output)
+
+            #
+            # check_processes_in_agent_cgroup uses shellutil and the cgroups api to get the commands that are currently running;
+            # wait for all the processes to show up
+            #
+            # protected-access: Access to a protected member _cgroups_api of a client class - Disabled: OK to access protected member in this unit test
+            if not wait_for(lambda: len(shellutil.get_running_commands()) > 0 and len(configurator._cgroups_api.get_systemd_run_commands()) > 0):  # pylint:disable=protected-access
+                raise Exception("Timeout while attempting to track the child commands")
+
+            #
+            # Verify that check_processes_in_agent_cgroup raises when there are unexpected processes in the agent's cgroup.
+            #
+            # For the agent's processes, we use the current process and its parent (in the actual agent these would be the daemon and the extension
+            # handler), and the commands started by the agent.
+            #
+            # For other processes, we use process 1, a process that already completed, and an extension. Note that extensions are started using
+            # systemd-run and the process for that commands belongs to the agent's cgroup but the processes for the extension should be in a
+            # different cgroup
+            #
+            def get_completed_process():
+                random.seed()
+                completed = random.randint(1000, 10000)
+                while os.path.exists("/proc/{0}".format(completed)):  # ensure we do not use an existing process
+                    completed = random.randint(1000, 10000)
+                return completed
+
+            def get_telemetry_event_messages():
+                return [kwargs["message"] for (_, kwargs) in add_event_patcher.call_args_list if "The agent's cgroup includes unexpected processes" in kwargs["message"]]
+
+            agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
+            other_processes = [1, get_completed_process()] + extension_processes
+
+            with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
+                with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as add_event_patcher:
+                    cgroup_configurator = CGroupConfigurator.get_instance()
+
+                    return_value = cgroup_configurator.check_processes_in_agent_cgroup()
+
+                    self.assertFalse(return_value, "check_processes_in_agent_cgroup() should have failed")
+                    self.assertFalse(cgroup_configurator.enabled(), "Cgroups should have been disabled")
+
+                    messages = get_telemetry_event_messages()
+
+                    self.assertEqual(1, len(messages), "Exactly 1 telemetry event should have been reported. Events: {0}".format(messages))
+
+                    # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
+                    search = re.search(r'\[(?P<processes>.+)\]', messages[0])
+                    self.assertIsNotNone(search, "The event message is not in the expected format: {0}".format(messages[0]))
+                    reported = search.group('processes').split(',')
+
+                    self.assertEqual(
+                        len(other_processes), len(reported),
+                        "An incorrect number of processes was reported. Expected: {0} Got: {1}".format(format_processes(other_processes), reported))
+                    for pid in other_processes:
+                        self.assertTrue(
+                            any("[PID: {0}]".format(pid) in reported_process for reported_process in reported),
+                            "Process {0} was not reported. Got: {1}".format(format_processes([pid]), reported))
+
+        finally:
+            # create the file that stops the test process and wait for them to complete
+            open(stop_file, "w").close()
+            for thread in threads:
+                thread.join(timeout=5)
 

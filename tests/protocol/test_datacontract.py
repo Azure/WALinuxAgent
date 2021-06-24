@@ -20,10 +20,10 @@ import unittest
 from azurelinuxagent.common.datacontract import get_properties, set_properties, DataContract, DataContractList
 
 
-class SampleDataContract(DataContract): # pylint: disable=too-few-public-methods
+class SampleDataContract(DataContract):
     def __init__(self):
-        self.foo = None # pylint: disable=blacklisted-name
-        self.bar = DataContractList(int) # pylint: disable=blacklisted-name
+        self.foo = None
+        self.bar = DataContractList(int)
 
 
 class TestDataContract(unittest.TestCase):

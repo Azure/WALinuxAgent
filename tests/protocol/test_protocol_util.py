@@ -48,7 +48,7 @@ class TestProtocolUtil(AgentTestCase):
 
     # Cleanup certificate files, protocol file, and endpoint files
     def tearDown(self):
-        dir = tempfile.gettempdir() # pylint: disable=redefined-builtin
+        dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         for path in [os.path.join(dir, mds_cert) for mds_cert in TestProtocolUtil.MDS_CERTIFICATES]:
             if os.path.exists(path):
                 os.remove(path)
@@ -75,11 +75,11 @@ class TestProtocolUtil(AgentTestCase):
         def get_protocol_util_instance():
             try:
                 protocol_util_instances.append(get_protocol_util())
-            except Exception as e: # pylint: disable=invalid-name
+            except Exception as e:
                 errors.append(e)
 
-        t1 = Thread(target=get_protocol_util_instance) # pylint: disable=invalid-name
-        t2 = Thread(target=get_protocol_util_instance) # pylint: disable=invalid-name
+        t1 = Thread(target=get_protocol_util_instance)
+        t2 = Thread(target=get_protocol_util_instance)
         t1.start()
         t2.start()
         t1.join()
@@ -89,7 +89,7 @@ class TestProtocolUtil(AgentTestCase):
         self.assertNotEqual(protocol_util_instances[0], protocol_util_instances[1], "The instances created by different threads should be different")
     
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol(self, WireProtocol, _): # pylint: disable=invalid-name
+    def test_detect_protocol(self, WireProtocol, _):
         WireProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
@@ -109,7 +109,7 @@ class TestProtocolUtil(AgentTestCase):
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_detect_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _): # pylint: disable=invalid-name
+    def test_detect_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
         WireProtocol.return_value.detect = Mock()
         mock_get_lib_dir.return_value = self.tmp_dir
 
@@ -122,26 +122,26 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler.endpoint = None
         protocol_util.dhcp_handler.run = Mock()
 
-        endpoint_file = protocol_util._get_wireserver_endpoint_file_path() # pylint: disable=unused-variable,protected-access
+        endpoint_file = protocol_util._get_wireserver_endpoint_file_path()  # pylint: disable=unused-variable,protected-access
 
         # Test wire protocol when no endpoint file has been written
-        protocol_util._detect_protocol() # pylint: disable=protected-access
+        protocol_util._detect_protocol()  # pylint: disable=protected-access
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
 
         # Test wire protocol on dhcp failure
         protocol_util.osutil.is_dhcp_available.return_value = True
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
-        self.assertRaises(ProtocolError, protocol_util._detect_protocol) # pylint: disable=protected-access
+        self.assertRaises(ProtocolError, protocol_util._detect_protocol)  # pylint: disable=protected-access
 
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
-    def test_get_protocol(self, WireProtocol, _): # pylint: disable=invalid-name
+    def test_get_protocol(self, WireProtocol, _):
         WireProtocol.return_value = MagicMock()
 
         protocol_util = get_protocol_util()
         protocol_util.get_wireserver_endpoint = Mock()
-        protocol_util._detect_protocol = MagicMock() # pylint: disable=protected-access
-        protocol_util._save_protocol("WireProtocol") # pylint: disable=protected-access
+        protocol_util._detect_protocol = MagicMock()  # pylint: disable=protected-access
+        protocol_util._save_protocol("WireProtocol")  # pylint: disable=protected-access
 
         protocol = protocol_util.get_protocol()
 
@@ -159,9 +159,9 @@ class TestProtocolUtil(AgentTestCase):
         because we already expect them to be created since we are updating from a WireServer agent.
         """
         # Setup Protocol file with WireProtocol
-        dir = tempfile.gettempdir() # pylint: disable=redefined-builtin
+        dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         filename = os.path.join(dir, PROTOCOL_FILE_NAME)
-        with open(filename, "w") as f: # pylint: disable=invalid-name
+        with open(filename, "w") as f:
             f.write(WIRE_PROTOCOL_NAME)
 
         # Setup MDS Certificates
@@ -198,9 +198,9 @@ class TestProtocolUtil(AgentTestCase):
         WireServer certificates are present, and protocol/endpoint files are written to appropriately.
         """
         # Setup Protocol file with MetadataProtocol
-        dir = tempfile.gettempdir() # pylint: disable=redefined-builtin
+        dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         protocol_filename = os.path.join(dir, PROTOCOL_FILE_NAME)
-        with open(protocol_filename, "w") as f: # pylint: disable=invalid-name
+        with open(protocol_filename, "w") as f:
             f.write(_METADATA_PROTOCOL_NAME)
 
         # Setup MDS Certificates
@@ -234,11 +234,11 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.osutil.enable_firewall.assert_called_once()
 
         # Check Protocol File is updated to WireProtocol
-        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f: # pylint: disable=invalid-name
+        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
             self.assertEqual(f.read(), WIRE_PROTOCOL_NAME)
         
         # Check Endpoint file is updated to WireServer IP
-        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f: # pylint: disable=invalid-name
+        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEqual(f.read(), KNOWN_WIRESERVER_IP)
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
@@ -250,7 +250,7 @@ class TestProtocolUtil(AgentTestCase):
         protocol file, and endpoint file.
         """
         # Setup mocks
-        dir = tempfile.gettempdir() # pylint: disable=redefined-builtin
+        dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         mock_get_lib_dir.return_value = dir
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
@@ -272,11 +272,11 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.osutil.enable_firewall.assert_not_called()
 
         # Check Protocol File is updated to WireProtocol
-        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f: # pylint: disable=invalid-name
+        with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
             self.assertEqual(f.read(), WIRE_PROTOCOL_NAME)
         
         # Check Endpoint file is updated to WireServer IP
-        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f: # pylint: disable=invalid-name
+        with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEqual(f.read(), KNOWN_WIRESERVER_IP)
 
     @patch("azurelinuxagent.common.protocol.util.fileutil")
@@ -285,52 +285,52 @@ class TestProtocolUtil(AgentTestCase):
         mock_get_lib_dir.return_value = self.tmp_dir
 
         protocol_util = get_protocol_util()
-        endpoint_file = protocol_util._get_wireserver_endpoint_file_path() # pylint: disable=protected-access
+        endpoint_file = protocol_util._get_wireserver_endpoint_file_path()  # pylint: disable=protected-access
 
         # Test get endpoint for io error
         mock_fileutil.read_file.side_effect = IOError()
 
-        ep = protocol_util.get_wireserver_endpoint() # pylint: disable=invalid-name
+        ep = protocol_util.get_wireserver_endpoint()
         self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint when file not found
         mock_fileutil.read_file.side_effect = IOError(ENOENT, 'File not found')
 
-        ep = protocol_util.get_wireserver_endpoint() # pylint: disable=invalid-name
+        ep = protocol_util.get_wireserver_endpoint()
         self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test get endpoint for empty file
         mock_fileutil.read_file.return_value = ""
 
-        ep = protocol_util.get_wireserver_endpoint() # pylint: disable=invalid-name
+        ep = protocol_util.get_wireserver_endpoint()
         self.assertEqual(ep, KNOWN_WIRESERVER_IP)
 
         # Test set endpoint for io error
         mock_fileutil.write_file.side_effect = IOError()
 
-        ep = protocol_util.get_wireserver_endpoint() # pylint: disable=invalid-name
-        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint, 'abc') # pylint: disable=protected-access
+        ep = protocol_util.get_wireserver_endpoint()
+        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint, 'abc')  # pylint: disable=protected-access
 
         # Test clear endpoint for io error
         with open(endpoint_file, "w+") as ep_fd:
             ep_fd.write("")
 
         with patch('os.remove') as mock_remove:
-            protocol_util._clear_wireserver_endpoint() # pylint: disable=protected-access
+            protocol_util._clear_wireserver_endpoint()  # pylint: disable=protected-access
             self.assertEqual(1, mock_remove.call_count)
             self.assertEqual(endpoint_file, mock_remove.call_args_list[0][0][0])
 
         # Test clear endpoint when file not found
         with patch('os.remove') as mock_remove:
             mock_remove = Mock(side_effect=IOError(ENOENT, 'File not found'))
-            protocol_util._clear_wireserver_endpoint() # pylint: disable=protected-access
+            protocol_util._clear_wireserver_endpoint()  # pylint: disable=protected-access
             mock_remove.assert_not_called()
 
     def test_protocol_file_states(self, _):
         protocol_util = get_protocol_util()
-        protocol_util._clear_wireserver_endpoint = Mock() # pylint: disable=protected-access
+        protocol_util._clear_wireserver_endpoint = Mock()  # pylint: disable=protected-access
 
-        protocol_file = protocol_util._get_protocol_file_path() # pylint: disable=protected-access
+        protocol_file = protocol_util._get_protocol_file_path()  # pylint: disable=protected-access
 
         # Test clear protocol for io error
         with open(protocol_file, "w+") as proto_fd:
@@ -338,16 +338,16 @@ class TestProtocolUtil(AgentTestCase):
 
         with patch('os.remove') as mock_remove:
             protocol_util.clear_protocol()
-            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count) # pylint: disable=protected-access
+            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)  # pylint: disable=protected-access
             self.assertEqual(1, mock_remove.call_count)
             self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
 
         # Test clear protocol when file not found
-        protocol_util._clear_wireserver_endpoint.reset_mock() # pylint: disable=protected-access
+        protocol_util._clear_wireserver_endpoint.reset_mock()  # pylint: disable=protected-access
 
         with patch('os.remove') as mock_remove:
             protocol_util.clear_protocol()
-            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count) # pylint: disable=protected-access
+            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)  # pylint: disable=protected-access
             self.assertEqual(1, mock_remove.call_count)
             self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
 

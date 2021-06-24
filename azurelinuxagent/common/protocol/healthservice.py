@@ -26,7 +26,7 @@ from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
-class Observation(object): # pylint: disable=R0903
+class Observation(object):
     def __init__(self, name, is_healthy, description='', value=''):
         if name is None:
             raise ValueError("Observation name must be provided")
@@ -154,7 +154,7 @@ class HealthService(object):
         try:
             restutil.http_post(self.endpoint, self.as_json, headers={'Content-Type': 'application/json'})
             logger.verbose('HealthService: Reported observations to {0}: {1}', self.endpoint, self.as_json)
-        except HttpError as e: # pylint: disable=C0103
+        except HttpError as e:
             logger.warn("HealthService: could not report observations: {0}", ustr(e))
         finally:
             # report any failures via telemetry
@@ -166,12 +166,12 @@ class HealthService(object):
         try:
             logger.verbose("HealthService: report failures as telemetry")
             from azurelinuxagent.common.event import add_event, WALAEventOperation
-            for o in self.observations: # pylint: disable=C0103
+            for o in self.observations:
                 if not o.is_healthy:
                     add_event(AGENT_NAME,
                               version=CURRENT_VERSION,
                               op=WALAEventOperation.HealthObservation,
                               is_success=False,
                               message=json.dumps(o.as_obj))
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             logger.verbose("HealthService: could not report failures: {0}".format(ustr(e)))

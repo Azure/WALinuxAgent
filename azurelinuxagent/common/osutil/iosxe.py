@@ -23,7 +23,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, PRODUCT_ID_FILE, DMIDECODE_CMD, UUID_PATTERN
-from azurelinuxagent.common.utils import textutil, fileutil # pylint: disable=W0611
+from azurelinuxagent.common.utils import textutil, fileutil  # pylint: disable=W0611
 
 # pylint: disable=W0105
 '''
@@ -38,8 +38,12 @@ the waagent environment:
 # pylint: enable=W0105
 
 class IosxeOSUtil(DefaultOSUtil):
-    def __init__(self): # pylint: disable=W0235
+    def __init__(self):  # pylint: disable=W0235
         super(IosxeOSUtil, self).__init__()
+
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
 
     def set_hostname(self, hostname):
         """
@@ -50,7 +54,7 @@ class IosxeOSUtil(DefaultOSUtil):
         hostnamectl_cmd = ["hostnamectl", "set-hostname", hostname, "--static"]
         try:
             shellutil.run_command(hostnamectl_cmd)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             logger.warn("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
             DefaultOSUtil.set_hostname(self, hostname)
 
@@ -82,11 +86,11 @@ class IosxeOSUtil(DefaultOSUtil):
         '''
         if os.path.isfile(PRODUCT_ID_FILE):
             try:
-                s = fileutil.read_file(PRODUCT_ID_FILE).strip() # pylint: disable=C0103
+                s = fileutil.read_file(PRODUCT_ID_FILE).strip()
                 return self._correct_instance_id(s.strip())
             except IOError:
                 pass
-        rc, s = shellutil.run_get_output(DMIDECODE_CMD) # pylint: disable=C0103
+        rc, s = shellutil.run_get_output(DMIDECODE_CMD)
         if rc != 0 or UUID_PATTERN.match(s) is None:
             return ""
         return self._correct_instance_id(s.strip())

@@ -66,12 +66,6 @@ Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
 '''),
 
-    (r"^systemd-cgls.+/walinuxagent.service$",
-'''
-Directory /sys/fs/cgroup/cpu/system.slice/walinuxagent.service:
-├─27519 /usr/bin/python3 -u /usr/sbin/waagent -daemon
-└─27547 python3 -u bin/WALinuxAgent-2.2.48.1-py2.7.egg -run-exthandlers
-'''),
 ]
 
 __DEFAULT_FILES = [
@@ -80,10 +74,12 @@ __DEFAULT_FILES = [
     (r"^/sys/fs/cgroup/unified/cgroup.controllers$", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers')),
 ]
 
+
 @contextlib.contextmanager
 def mock_cgroup_commands():
     original_popen = subprocess.Popen
     original_read_file = fileutil.read_file
+    original_write_file = fileutil.write_file
     original_path_exists = os.path.exists
 
     def add_file(pattern, file_path):
@@ -113,6 +109,13 @@ def mock_cgroup_commands():
                 filepath = item[1]
         return original_read_file(filepath, **kwargs)
 
+    def mock_write_file(filepath, content, **kwargs):
+        for item in patcher.files:
+            match = re.match(item[0], filepath)
+            if match is not None:
+                filepath = item[1]
+        return original_write_file(filepath, content, **kwargs)
+
     def mock_path_exists(path):
         for item in patcher.files:
             match = re.match(item[0], path)
@@ -123,11 +126,12 @@ def mock_cgroup_commands():
     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patcher:
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", side_effect=mock_path_exists):
             with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", side_effect=mock_read_file):
-                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
-                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
-                        patcher.commands = __DEFAULT_COMMANDS[:]
-                        patcher.files = __DEFAULT_FILES[:]
-                        patcher.add_file = add_file
-                        patcher.add_command = add_command
-                        yield patcher
+                with patch("azurelinuxagent.common.cgroupapi.fileutil.write_file", side_effect=mock_write_file):
+                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+                        with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.is_systemd', return_value=True):
+                            patcher.commands = __DEFAULT_COMMANDS[:]
+                            patcher.files = __DEFAULT_FILES[:]
+                            patcher.add_file = add_file
+                            patcher.add_command = add_command
+                            yield patcher
 

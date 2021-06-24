@@ -28,6 +28,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
@@ -67,7 +68,7 @@ def is_log_collection_allowed():
     return is_allowed
 
 
-class CollectLogsHandler(object):
+class CollectLogsHandler(ThreadHandlerInterface):
     """
     Periodically collects and uploads logs from the VM to the host.
     """
@@ -90,13 +91,13 @@ class CollectLogsHandler(object):
         ]
 
     def run(self):
-        self.start(init_data=True)
+        self.start()
 
     def is_alive(self):
         return self.event_thread.is_alive()
 
-    def start(self, init_data=False):
-        self.event_thread = threading.Thread(target=self.daemon, args=(init_data,))
+    def start(self):
+        self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
         self.event_thread.setName(self.get_thread_name())
         self.event_thread.start()
@@ -119,21 +120,21 @@ class CollectLogsHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = self.protocol_util.get_protocol()
 
-    def daemon(self, init_data=False):
+    def daemon(self):
         try:
-            if init_data:
+            if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
 
             while not self.stopped():
                 try:
-                    for op in self._periodic_operations: # pylint: disable=C0103
+                    for op in self._periodic_operations:
                         op.run()
-                except Exception as e: # pylint: disable=C0103
+                except Exception as e:
                     logger.error("An error occurred in the log collection thread main loop; "
                                  "will skip the current iteration.\n{0}", ustr(e))
                 finally:
                     PeriodicOperation.sleep_until_next_operation(self._periodic_operations)
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
 
     def collect_and_send_logs(self):
@@ -169,7 +170,8 @@ class CollectLogsHandler(object):
         success = False
         msg = None
         try:
-            shellutil.run_command(final_command, log_error=True)
+            # TODO: Remove track_process (and its implementation) when the log collector is moved to the agent's cgroup
+            shellutil.run_command(final_command, log_error=True, track_process=False)
             duration = elapsed_milliseconds(start_time)
             archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
 
@@ -179,11 +181,11 @@ class CollectLogsHandler(object):
             success = True
 
             return True
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             duration = elapsed_milliseconds(start_time)
 
             if isinstance(e, CommandError):
-                exception_message = ustr("[stderr] %s", e.stderr) # pylint: disable=no-member
+                exception_message = ustr("[stderr] %s", e.stderr)  # pylint: disable=no-member
             else:
                 exception_message = ustr(e)
 
@@ -204,14 +206,14 @@ class CollectLogsHandler(object):
         msg = None
         success = False
         try:
-            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh: # pylint: disable=C0103
+            with open(COMPRESSED_ARCHIVE_PATH, "rb") as fh:
                 archive_content = fh.read()
                 self.protocol.upload_logs(archive_content)
                 msg = "Successfully uploaded logs."
                 logger.info(msg)
 
             success = True
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             msg = "Failed to upload logs. Error: {0}".format(ustr(e))
             logger.warn(msg)
         finally:

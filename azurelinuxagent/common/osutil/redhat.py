@@ -16,23 +16,23 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os # pylint: disable=W0611
-import re # pylint: disable=W0611
-import pwd # pylint: disable=W0611
-import shutil # pylint: disable=W0611
-import socket # pylint: disable=W0611
-import array # pylint: disable=W0611
-import struct # pylint: disable=W0611
-import fcntl # pylint: disable=W0611
-import time # pylint: disable=W0611
-import base64 # pylint: disable=W0611
+import os  # pylint: disable=W0611
+import re  # pylint: disable=W0611
+import pwd  # pylint: disable=W0611
+import shutil  # pylint: disable=W0611
+import socket  # pylint: disable=W0611
+import array  # pylint: disable=W0611
+import struct  # pylint: disable=W0611
+import fcntl  # pylint: disable=W0611
+import time  # pylint: disable=W0611
+import base64  # pylint: disable=W0611
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.future import ustr, bytebuffer # pylint: disable=W0611
+from azurelinuxagent.common.future import ustr, bytebuffer  # pylint: disable=W0611
 from azurelinuxagent.common.exception import OSUtilError, CryptError
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil # pylint: disable=W0611
+import azurelinuxagent.common.utils.textutil as textutil  # pylint: disable=W0611
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
@@ -66,7 +66,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
         try:
             cryptutil = CryptUtil(conf.get_openssl_cmd())
             ssh_rsa_pubkey = cryptutil.asn1_to_ssh(pubkey)
-        except CryptError as e: # pylint: disable=C0103
+        except CryptError as e:
             raise OSUtilError(ustr(e))
         fileutil.append_file(output_file, ssh_rsa_pubkey)
 
@@ -99,6 +99,10 @@ class RedhatOSUtil(Redhat6xOSUtil):
         super(RedhatOSUtil, self).__init__()
         self.service_name = self.get_service_name()
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
     def set_hostname(self, hostname):
         """
         Unlike redhat 6.x, redhat 7.x will set hostname via hostnamectl
@@ -106,7 +110,10 @@ class RedhatOSUtil(Redhat6xOSUtil):
         to hostname.
         """
         hostnamectl_cmd = ['hostnamectl', 'set-hostname', hostname, '--static']
-        if self._run_command_without_raising(hostnamectl_cmd, log_error=False) != 0:
+
+        try:
+            shellutil.run_command(hostnamectl_cmd, log_error=False)
+        except shellutil.CommandError:
             logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 

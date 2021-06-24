@@ -37,14 +37,14 @@ class TestSCVMM(AgentTestCase):
         scvmm_file = os.path.join(self.tmp_dir, scvmm.VMM_CONF_FILE_NAME)
         fileutil.write_file(scvmm_file, "")
 
-        with patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent') as po: # pylint: disable=invalid-name
+        with patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent') as po:
             with patch('os.listdir', return_value=["sr0", "sr1", "sr2"]):
                 with patch('time.sleep', return_value=0):
                     # execute
                     failed = False
                     try:
                         scvmm.get_scvmm_handler().run()
-                    except: # pylint: disable=bare-except
+                    except:  # pylint: disable=bare-except
                         failed = True
                     # assert
                     self.assertTrue(failed)

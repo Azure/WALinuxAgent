@@ -52,12 +52,12 @@ class Logger(object):
     def set_prefix(self, prefix):
         self.prefix = prefix
 
-    def _is_period_elapsed(self, delta, h): # pylint: disable=C0103
+    def _is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
             (self.logger.periodic_messages[h] + delta) <= datetime.now()
 
     def _periodic(self, delta, log_level_op, msg_format, *args):
-        h = hash(msg_format) # pylint: disable=C0103
+        h = hash(msg_format)
         if self._is_period_elapsed(delta, h):
             log_level_op(msg_format, *args)
             self.logger.periodic_messages[h] = datetime.now()
@@ -87,7 +87,7 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        def write_log(log_appender): # pylint: disable=W0612
+        def write_log(log_appender):  # pylint: disable=W0612
             """
             The appender_lock flag is used to signal if the logger is currently in use. This prevents a subsequent log
             coming in due to writing of a log statement to be not written.
@@ -125,9 +125,9 @@ class Logger(object):
                     log_appender.appender_lock = False
 
         # if msg_format is not unicode convert it to unicode
-        if type(msg_format) is not ustr: # pylint: disable=C0123
+        if type(msg_format) is not ustr:
             msg_format = ustr(msg_format, errors="backslashreplace")
-        if len(args) > 0: # pylint: disable=len-as-condition
+        if len(args) > 0:
             msg = msg_format.format(*args)
         else:
             msg = msg_format
@@ -178,7 +178,7 @@ class Logger(object):
         self.appenders = [appender for appender in self.appenders if not isinstance(appender, ConsoleAppender)]
 
 
-class Appender(object): # pylint: disable=R0903
+class Appender(object):
     def __init__(self, level):
         self.appender_lock = False
         self.level = level
@@ -187,7 +187,7 @@ class Appender(object): # pylint: disable=R0903
         pass
 
 
-class ConsoleAppender(Appender): # pylint: disable=R0903
+class ConsoleAppender(Appender):
     def __init__(self, level, path):
         super(ConsoleAppender, self).__init__(level)
         self.path = path
@@ -201,7 +201,7 @@ class ConsoleAppender(Appender): # pylint: disable=R0903
                 pass
 
 
-class FileAppender(Appender): # pylint: disable=R0903
+class FileAppender(Appender):
     def __init__(self, level, path):
         super(FileAppender, self).__init__(level)
         self.path = path
@@ -215,8 +215,8 @@ class FileAppender(Appender): # pylint: disable=R0903
                 pass
 
 
-class StdoutAppender(Appender): # pylint: disable=R0903
-    def __init__(self, level): # pylint: disable=W0235
+class StdoutAppender(Appender):
+    def __init__(self, level):  # pylint: disable=W0235
         super(StdoutAppender, self).__init__(level)
 
     def write(self, level, msg):
@@ -227,7 +227,7 @@ class StdoutAppender(Appender): # pylint: disable=R0903
                 pass
 
 
-class TelemetryAppender(Appender): # pylint: disable=R0903
+class TelemetryAppender(Appender):
     def __init__(self, level, event_func):
         super(TelemetryAppender, self).__init__(level)
         self.event_func = event_func
@@ -244,7 +244,7 @@ class TelemetryAppender(Appender): # pylint: disable=R0903
 DEFAULT_LOGGER = Logger()
 
 
-class LogLevel(object): # pylint: disable=R0903
+class LogLevel(object):
     VERBOSE = 0
     INFO = 1
     WARNING = 2
@@ -257,7 +257,7 @@ class LogLevel(object): # pylint: disable=R0903
     ]
 
 
-class AppenderType(object): # pylint: disable=R0903
+class AppenderType(object):
     FILE = 0
     CONSOLE = 1
     STDOUT = 2
@@ -337,7 +337,7 @@ def log(level, msg_format, *args):
 
 
 def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
-    if appender_type == AppenderType.CONSOLE: # pylint: disable=R1705
+    if appender_type == AppenderType.CONSOLE:
         return ConsoleAppender(level, path)
     elif appender_type == AppenderType.FILE:
         return FileAppender(level, path)

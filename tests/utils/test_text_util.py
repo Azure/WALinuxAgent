@@ -137,7 +137,7 @@ class TestTextUtil(AgentTestCase):
             ['aBcdEf12', 4, 'Ef12aBcd']
         ]
 
-        for t in data: # pylint: disable=invalid-name
+        for t in data:
             self.assertEqual(t[2], textutil.swap_hexstring(t[0], width=t[1]))
 
     def test_compress(self):

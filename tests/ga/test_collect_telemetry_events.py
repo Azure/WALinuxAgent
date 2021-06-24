@@ -80,7 +80,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             raise OSError("Test Events file {0} not found".format(test_events_file_path))
 
         try:
-            with open(test_events_file_path, "rb") as fd: # pylint: disable=invalid-name
+            with open(test_events_file_path, "rb") as fd:
                 event_data = fd.read().decode("utf-8")
 
             # Parse the string and get the list of events
@@ -89,7 +89,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             if not isinstance(events, list):
                 events = [events]
 
-        except Exception as e: # pylint: disable=invalid-name
+        except Exception as e:
             print("Error parsing json file: {0}".format(e))
             return 0
 
@@ -105,7 +105,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
             test_events_paths = [events_path]
 
         extension_names = {}
-        for i in range(no_of_extensions): # pylint: disable=unused-variable
+        for i in range(no_of_extensions):  # pylint: disable=unused-variable
             ext_name = "Microsoft.OSTCExtensions.{0}".format(''.join(random.sample(string.ascii_letters, no_of_chars)))
             no_of_good_events = 0
 
@@ -128,12 +128,12 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     @staticmethod
     def _replace_in_file(file_path, replace_from, replace_to):
 
-        with open(file_path, 'r') as f: # pylint: disable=invalid-name
+        with open(file_path, 'r') as f:
             content = f.read()
 
         content = content.replace(replace_from, replace_to)
 
-        with open(file_path, 'w') as f: # pylint: disable=invalid-name
+        with open(file_path, 'w') as f:
             f.write(content)
 
     @staticmethod
@@ -355,7 +355,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
         max_len = 100
         no_of_extensions = 2
         with patch("azurelinuxagent.ga.collect_telemetry_events._ProcessExtensionEventsPeriodicOperation._EXTENSION_EVENT_MAX_MSG_LEN", max_len):
-            handler_name_with_count, event_list = self._setup_and_assert_tests_for_max_sizes() # pylint: disable=unused-variable
+            handler_name_with_count, event_list = self._setup_and_assert_tests_for_max_sizes()  # pylint: disable=unused-variable
             context1_vals = self._get_param_value_from_event_body_if_exists(event_list,
                                                                             GuestAgentGenericLogsSchema.Context1)
             self.assertEqual(no_of_extensions, len(context1_vals),
@@ -500,7 +500,7 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
                             ExtensionEventSchema.Message.lower(): 2,
                             ExtensionEventSchema.Version.lower(): 3
                         }
-                        for m in msg: # pylint: disable=invalid-name
+                        for m in msg:
                             match = re.search(patt, m)
                             self.assertIsNotNone(match, "No InvalidExtensionEventError errors reported")
                             self.assertEqual(match.group("reason").strip(), InvalidExtensionEventError.MissingKeyError,

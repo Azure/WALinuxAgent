@@ -72,7 +72,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     #
     original_http_request = restutil.http_request
 
-    def http_request(method, url, data, **kwargs): # pylint: disable=too-many-branches
+    def http_request(method, url, data, **kwargs):
         # if there is a handler for the request, use it
         handler = None
         if method == 'GET':
@@ -134,7 +134,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     protocol.mock_wire_data = mockwiredata.WireProtocolData(mock_wire_data_file)
     protocol.start = start
     protocol.stop = stop
-    protocol.track_url = lambda url: tracked_urls.append(url) # pylint: disable=unnecessary-lambda
+    protocol.track_url = lambda url: tracked_urls.append(url)  # pylint: disable=unnecessary-lambda
     protocol.get_tracked_urls = lambda: tracked_urls
     protocol.set_http_handlers = lambda http_get_handler=None, http_post_handler=None, http_put_handler=None:\
         http_handlers(get=http_get_handler, post=http_post_handler, put=http_put_handler)
@@ -209,7 +209,7 @@ class HttpRequestPredicates(object):
                                                                  restutil.HOST_PLUGIN_PORT)
 
 
-class MockHttpResponse: # pylint: disable=too-few-public-methods
+class MockHttpResponse:
     def __init__(self, status, body=''):
         self.body = body
         self.status = status

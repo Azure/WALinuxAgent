@@ -28,7 +28,7 @@ from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_REMOTE_ACCESS
 
 
 class MockOSUtil(DefaultOSUtil):
-    def __init__(self): # pylint: disable=super-init-not-called
+    def __init__(self):  # pylint: disable=super-init-not-called
         self.all_users = {}
         self.sudo_users = set()
         self.jit_enabled = True
@@ -70,11 +70,11 @@ def get_user_dictionary(users):
     return user_dictionary
 
 
-def mock_add_event(name, op, is_success, version, message): # pylint: disable=invalid-name
+def mock_add_event(name, op, is_success, version, message):
     TestRemoteAccessHandler.eventing_data = (name, op, is_success, version, message)
 
 
-class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-methods
+class TestRemoteAccessHandler(AgentTestCase):
     eventing_data = [()]
 
     def setUp(self):
@@ -94,8 +94,8 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             tstuser = "foobar"
             expiration_date = datetime.utcnow() + timedelta(days=1)
             pwd = tstpassword
-            rah._add_user(tstuser, pwd, expiration_date) # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._add_user(tstuser, pwd, expiration_date)  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
             actual_user = users[tstuser]
             expected_expiration = (expiration_date + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -111,8 +111,8 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             expiration = datetime.utcnow() + timedelta(days=1)
             pwd = tstpassword
             error = "test exception for bad username"
-            self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration) # pylint: disable=protected-access
-            self.assertEqual(0, len(rah._os_util.get_users())) # pylint: disable=protected-access
+            self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)  # pylint: disable=protected-access
+            self.assertEqual(0, len(rah._os_util.get_users()))  # pylint: disable=protected-access
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="")
     def test_add_user_bad_password_data(self, *_):
@@ -123,8 +123,8 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             expiration = datetime.utcnow() + timedelta(days=1)
             pwd = tstpassword
             error = "test exception for bad password"
-            self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration) # pylint: disable=protected-access
-            self.assertEqual(0, len(rah._os_util.get_users())) # pylint: disable=protected-access
+            self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)  # pylint: disable=protected-access
+            self.assertEqual(0, len(rah._os_util.get_users()))  # pylint: disable=protected-access
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
     def test_add_user_already_existing(self, _):
@@ -134,8 +134,8 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             tstuser = "foobar"
             expiration_date = datetime.utcnow() + timedelta(days=1)
             pwd = tstpassword
-            rah._add_user(tstuser, pwd, expiration_date) # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._add_user(tstuser, pwd, expiration_date)  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
             self.assertEqual(1, len(users.keys()))
             actual_user = users[tstuser]
@@ -144,9 +144,9 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             # this does not test the user add function as that's mocked, it tests processing skips the remaining
             # calls after the initial failure
             new_user_expiration = datetime.utcnow() + timedelta(days=5)
-            self.assertRaises(Exception, rah._add_user, tstuser, pwd, new_user_expiration) # pylint: disable=protected-access
+            self.assertRaises(Exception, rah._add_user, tstuser, pwd, new_user_expiration)  # pylint: disable=protected-access
             # refresh users
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users after dup user attempted".format(tstuser))
             self.assertEqual(1, len(users.keys()))
             actual_user = users[tstuser]
@@ -160,14 +160,14 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             tstpassword = "]aPPEv}uNg1FPnl?"
             tstuser = "foobar"
             expiration_date = datetime.utcnow() + timedelta(days=1)
-            expected_expiration = (expiration_date + timedelta(days=1)).strftime("%Y-%m-%d") # pylint: disable=unused-variable
+            expected_expiration = (expiration_date + timedelta(days=1)).strftime("%Y-%m-%d")  # pylint: disable=unused-variable
             pwd = tstpassword
-            rah._add_user(tstuser, pwd, expiration_date) # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._add_user(tstuser, pwd, expiration_date)  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
-            rah._remove_user(tstuser) # pylint: disable=protected-access
+            rah._remove_user(tstuser)  # pylint: disable=protected-access
             # refresh users
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertFalse(tstuser in users)
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -180,9 +180,9 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             expiration_date = datetime.utcnow() + timedelta(days=1)
             expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             remote_access.user_list.users[0].expiration = expiration
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
             actual_user = users[tstuser]
             expected_expiration = (expiration_date + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -196,9 +196,9 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             remote_access = RemoteAccess(data_str)
             expiration = (datetime.utcnow() - timedelta(days=2)).strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             remote_access.user_list.users[0].expiration = expiration
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertFalse("testAccount" in users)
 
     def test_error_add_user(self):
@@ -208,8 +208,8 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             expiration = datetime.utcnow() + timedelta(days=1)
             pwd = "bad password"
             error = r"\[CryptError\] Error decoding secret\nInner error: Incorrect padding"
-            self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration) # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            self.assertRaisesRegex(Exception, error, rah._add_user, tstuser, pwd, expiration)  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertEqual(0, len(users))
 
     def test_handle_remote_access_no_users(self):
@@ -217,15 +217,15 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             rah = RemoteAccessHandler(Mock())
             data_str = load_data('wire/remote_access_no_accounts.xml')
             remote_access = RemoteAccess(data_str)
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertEqual(0, len(users.keys()))
 
     def test_handle_remote_access_validate_jit_user_valid(self):
         rah = RemoteAccessHandler(Mock())
         comment = "JIT_Account"
-        result = rah._is_jit_user(comment) # pylint: disable=protected-access
+        result = rah._is_jit_user(comment)  # pylint: disable=protected-access
         self.assertTrue(result, "Did not identify '{0}' as a JIT_Account".format(comment))
 
     def test_handle_remote_access_validate_jit_user_invalid(self):
@@ -233,9 +233,9 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
         test_users = ["John Doe", None, "", " "]
         failed_results = ""
         for user in test_users:
-            if rah._is_jit_user(user): # pylint: disable=protected-access
+            if rah._is_jit_user(user):  # pylint: disable=protected-access
                 failed_results += "incorrectly identified '{0} as a JIT_Account'.  ".format(user)
-        if len(failed_results) > 0: # pylint: disable=len-as-condition
+        if len(failed_results) > 0:
             self.fail(failed_results)
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -253,9 +253,9 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                 remote_access.user_list.users[count].expiration = expiration
                 testusers.append(user)
                 count += 1
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(testusers[0] in users, "{0} missing from users".format(testusers[0]))
             self.assertTrue(testusers[1] in users, "{0} missing from users".format(testusers[1]))
 
@@ -272,9 +272,9 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                 user.name = "tstuser{0}".format(count)
                 expiration_date = datetime.utcnow() + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertEqual(10, len(users.keys()))
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -289,11 +289,11 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                 user.name = "tstuser{0}".format(count)
                 expiration_date = datetime.utcnow() + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertEqual(10, len(users.keys()))
-            del rah._remote_access.user_list.users[:] # pylint: disable=protected-access
+            del rah._remote_access.user_list.users[:]  # pylint: disable=protected-access
             self.assertEqual(10, len(users.keys()))
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -310,9 +310,9 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                     user.name = ""
                 expiration_date = datetime.utcnow() + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertEqual(9, len(users.keys()))
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -325,19 +325,19 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             expiration_date = datetime.utcnow() + timedelta(days=1)
             expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
             remote_access.user_list.users[0].expiration = expiration
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
-            os_util = rah._os_util # pylint: disable=protected-access
+            os_util = rah._os_util  # pylint: disable=protected-access
             os_util.__class__ = MockOSUtil
-            os_util.all_users.clear() # pylint: disable=no-member
+            os_util.all_users.clear()  # pylint: disable=no-member
             # refresh users
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser not in users)
-            rah._handle_remote_access() # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
             # refresh users
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -352,8 +352,8 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
             tstuser = "foobar"
             expiration_date = datetime.utcnow() + timedelta(days=1)
             pwd = tstpassword
-            rah._add_user(tstuser, pwd, expiration_date) # pylint: disable=protected-access
-            users = get_user_dictionary(rah._os_util.get_users()) # pylint: disable=protected-access
+            rah._add_user(tstuser, pwd, expiration_date)  # pylint: disable=protected-access
+            users = get_user_dictionary(rah._os_util.get_users())  # pylint: disable=protected-access
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
             rah.run()
             self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
@@ -370,15 +370,15 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                 user.name = "tstuser{0}".format(count)
                 expiration_date = datetime.utcnow() + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertEqual(10, len(users))
             # now remove the user from RemoteAccess
-            deleted_user = rah._remote_access.user_list.users[3] # pylint: disable=protected-access
-            del rah._remote_access.user_list.users[3] # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            deleted_user = rah._remote_access.user_list.users[3]  # pylint: disable=protected-access
+            del rah._remote_access.user_list.users[3]  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertTrue(deleted_user not in users, "{0} still in users".format(deleted_user))
             self.assertEqual(9, len(users))
 
@@ -394,14 +394,14 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                 user.name = "tstuser{0}".format(count)
                 expiration_date = datetime.utcnow() + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertEqual(10, len(users))
             # now remove the user from RemoteAccess
-            rah._remote_access = None # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            rah._remote_access = None  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertEqual(0, len(users))
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
@@ -416,28 +416,28 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                 user.name = "tstuser{0}".format(count)
                 expiration_date = datetime.utcnow() + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertEqual(10, len(users))
             # now remove the user from RemoteAccess
-            rah._remote_access = None # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            rah._remote_access = None  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertEqual(0, len(users))
 
     def test_remove_user_error(self):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             rah = RemoteAccessHandler(Mock())
             error = "test exception, bad data"
-            self.assertRaisesRegex(Exception, error, rah._remove_user, "") # pylint: disable=protected-access
+            self.assertRaisesRegex(Exception, error, rah._remove_user, "")  # pylint: disable=protected-access
 
     def test_remove_user_not_exists(self):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             rah = RemoteAccessHandler(Mock())
             user = "bob"
             error = "test exception, user does not exist to delete"
-            self.assertRaisesRegex(Exception, error, rah._remove_user, user) # pylint: disable=protected-access
+            self.assertRaisesRegex(Exception, error, rah._remove_user, user)  # pylint: disable=protected-access
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
     def test_handle_remote_access_remove_and_add(self, _):
@@ -451,16 +451,16 @@ class TestRemoteAccessHandler(AgentTestCase): # pylint: disable=too-many-public-
                 user.name = "tstuser{0}".format(count)
                 expiration_date = datetime.utcnow() + timedelta(days=count)
                 user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
-            rah._remote_access = remote_access # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            rah._remote_access = remote_access  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertEqual(10, len(users))
             # now remove the user from RemoteAccess
             new_user = "tstuser11"
-            deleted_user = rah._remote_access.user_list.users[3] # pylint: disable=protected-access
-            rah._remote_access.user_list.users[3].name = new_user # pylint: disable=protected-access
-            rah._handle_remote_access() # pylint: disable=protected-access
-            users = rah._os_util.get_users() # pylint: disable=protected-access
+            deleted_user = rah._remote_access.user_list.users[3]  # pylint: disable=protected-access
+            rah._remote_access.user_list.users[3].name = new_user  # pylint: disable=protected-access
+            rah._handle_remote_access()  # pylint: disable=protected-access
+            users = rah._os_util.get_users()  # pylint: disable=protected-access
             self.assertTrue(deleted_user not in users, "{0} still in users".format(deleted_user))
             self.assertTrue(new_user in [u[0] for u in users], "user {0} not in users".format(new_user))
             self.assertEqual(10, len(users))

@@ -48,7 +48,7 @@ class PeriodicOperation(object):
                     self._operation()
                 finally:
                     self._next_run_time = datetime.datetime.utcnow() + self._period
-        except Exception as e: # pylint: disable=C0103
+        except Exception as e:
             warning = "Failed to {0}: {1} --- [NOTE: Will not log the same error for the next hour]".format(self._name, ustr(e))
             if warning != self._last_warning or self._last_warning_time is None or datetime.datetime.utcnow() >= self._last_warning_time + self._LOG_WARNING_PERIOD:
                 logger.warn(warning)

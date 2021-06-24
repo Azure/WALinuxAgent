@@ -19,9 +19,9 @@ import re
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError # pylint: disable=ungrouped-imports
-from azurelinuxagent.common.future import httpclient # pylint: disable=ungrouped-imports
-from azurelinuxagent.common.utils.cryptutil import CryptUtil # pylint: disable=ungrouped-imports
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
+from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 DATA_FILE = {
         "version_info": "wire/version_info.xml",
@@ -43,9 +43,19 @@ DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE["ext_conf"] = "wire/ext_conf_in_vm_artifacts_profile.xml"
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE["in_vm_artifacts_profile"] = "wire/in_vm_artifacts_profile.json"
 
+DATA_FILE_IN_VM_META_DATA = DATA_FILE.copy()
+DATA_FILE_IN_VM_META_DATA["ext_conf"] = "wire/ext_conf_in_vm_metadata.xml"
+
+DATA_FILE_INVALID_VM_META_DATA = DATA_FILE.copy()
+DATA_FILE_INVALID_VM_META_DATA["ext_conf"] = "wire/ext_conf_invalid_vm_metadata.xml"
+
 DATA_FILE_NO_EXT = DATA_FILE.copy()
 DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
 DATA_FILE_NO_EXT["ext_conf"] = None
+
+DATA_FILE_NOOP_GS = DATA_FILE.copy()
+DATA_FILE_NOOP_GS["goal_state"] = "wire/goal_state_noop.xml"
+DATA_FILE_NOOP_GS["ext_conf"] = None
 
 DATA_FILE_EXT_NO_SETTINGS = DATA_FILE.copy()
 DATA_FILE_EXT_NO_SETTINGS["ext_conf"] = "wire/ext_conf_no_settings.xml"
@@ -91,11 +101,13 @@ DATA_FILE_REMOTE_ACCESS["goal_state"] = "wire/goal_state_remote_access.xml"
 DATA_FILE_REMOTE_ACCESS["remote_access"] = "wire/remote_access_single_account.xml"
 
 DATA_FILE_PLUGIN_SETTINGS_MISMATCH = DATA_FILE.copy()
-DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/ext_conf_plugin_settings_version_mismatch.xml"
+DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_plugin_settings_version_mismatch.xml"
 
 
-class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
-    def __init__(self, data_files=DATA_FILE): # pylint: disable=dangerous-default-value
+class WireProtocolData(object):
+    def __init__(self, data_files=None):
+        if data_files is None:
+            data_files = DATA_FILE
         self.emulate_stale_goal_state = False
         self.call_counts = {
             "comp=versions": 0,
@@ -155,7 +167,7 @@ class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
-    def mock_http_get(self, url, *args, **kwargs): # pylint: disable=unused-argument,too-many-branches
+    def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -196,7 +208,7 @@ class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
             # A stale GoalState results in a 400 from the HostPlugin
             # for which the HTTP handler in restutil raises ResourceGoneError
             if self.emulate_stale_goal_state:
-                if "extensionArtifact" in url: # pylint: disable=no-else-raise
+                if "extensionArtifact" in url:
                     self.emulate_stale_goal_state = False
                     self.call_counts["extensionArtifact"] += 1
                     raise ResourceGoneError()
@@ -208,9 +220,9 @@ class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
             if "extensionArtifact" in url:
                 self.call_counts["extensionArtifact"] += 1
                 if "headers" not in kwargs:
-                    raise ValueError("HostPlugin request is missing the HTTP headers: {0}", kwargs) # pylint: disable=raising-format-tuple
+                    raise ValueError("HostPlugin request is missing the HTTP headers: {0}", kwargs)  # pylint: disable=raising-format-tuple
                 if "x-ms-artifact-location" not in kwargs["headers"]:
-                    raise ValueError("HostPlugin request is missing the x-ms-artifact-location header: {0}", kwargs) # pylint: disable=raising-format-tuple
+                    raise ValueError("HostPlugin request is missing the x-ms-artifact-location header: {0}", kwargs)  # pylint: disable=raising-format-tuple
                 url = kwargs["headers"]["x-ms-artifact-location"]
 
             if "manifest.xml" in url:
@@ -233,7 +245,7 @@ class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
-    def mock_http_post(self, url, *args, **kwargs): # pylint: disable=unused-argument
+    def mock_http_post(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -248,7 +260,7 @@ class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
-    def mock_http_put(self, url, *args, **kwargs): # pylint: disable=unused-argument
+    def mock_http_put(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -298,7 +310,7 @@ class WireProtocolData(object): # pylint: disable=too-many-instance-attributes
     def replace_xml_element_value(xml_document, element_name, element_value):
         new_xml_document = re.sub(r'(?<=<{0}>).+(?=</{0}>)'.format(element_name), element_value, xml_document)
         if new_xml_document == xml_document:
-            raise Exception("Could not match element '{0}'", element_name) # pylint: disable=raising-format-tuple
+            raise Exception("Could not match element '{0}'", element_name)  # pylint: disable=raising-format-tuple
         return new_xml_document
 
     @staticmethod

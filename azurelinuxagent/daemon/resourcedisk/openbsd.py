@@ -46,7 +46,7 @@ class OpenBSDResourceDiskHandler(ResourceDiskHandler):
                 logger.error("Failed to enable swap, error {0}", output)
 
     def mount_resource_disk(self, mount_point):
-        fs = self.fs # pylint: disable=C0103
+        fs = self.fs
         if fs != 'ffs':
             raise ResourceDiskError("Unsupported filesystem type: {0}, only "
                                     "ufs/ffs is supported.".format(fs))

@@ -83,35 +83,35 @@ class TestIOErrorCounter(AgentTestCase):
         self.assertEqual(2, counts.get("other"))
         self.assertEqual(
            {"hostplugin":0, "protocol":0, "other":0},
-            restutil.IOErrorCounter._counts) # pylint: disable=protected-access
+            restutil.IOErrorCounter._counts)  # pylint: disable=protected-access
 
 
-class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-methods
+class TestHttpOperations(AgentTestCase):
     def test_parse_url(self):
         test_uri = "http://abc.def/ghi#hash?jkl=mn"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=unused-variable,protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=unused-variable,protected-access
         self.assertEqual("abc.def", host) 
         self.assertEqual("/ghi#hash?jkl=mn", rel_uri) 
 
         test_uri = "http://abc.def/"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=protected-access
         self.assertEqual("abc.def", host) 
         self.assertEqual("/", rel_uri) 
         self.assertEqual(False, secure) 
 
         test_uri = "https://abc.def/ghi?jkl=mn"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=protected-access
         self.assertEqual(True, secure) 
 
         test_uri = "http://abc.def:80/"
-        host, port, secure, rel_uri = restutil._parse_url(test_uri) # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url(test_uri)  # pylint: disable=protected-access
         self.assertEqual("abc.def", host) 
 
-        host, port, secure, rel_uri = restutil._parse_url("") # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url("")  # pylint: disable=protected-access
         self.assertEqual(None, host) 
         self.assertEqual(rel_uri, "") 
 
-        host, port, secure, rel_uri = restutil._parse_url("None") # pylint: disable=protected-access
+        host, port, secure, rel_uri = restutil._parse_url("None")  # pylint: disable=protected-access
         self.assertEqual(None, host) 
         self.assertEqual(rel_uri, "None") 
 
@@ -174,7 +174,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
                         "=" + restutil.REDACTED_TEXT)
                        ]
 
-        for x in urls_tuples: # pylint: disable=invalid-name
+        for x in urls_tuples:
             self.assertEqual(restutil.redact_sas_tokens_in_urls(x[0]), x[1]) 
 
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
@@ -182,7 +182,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_get_http_proxy_none_is_default(self, mock_host, mock_port):
         mock_host.return_value = None
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
+        h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
         self.assertEqual(None, h)
         self.assertEqual(None, p)
 
@@ -191,7 +191,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_get_http_proxy_configuration_overrides_env(self, mock_host, mock_port):
         mock_host.return_value = "host"
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
+        h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
         self.assertEqual("host", h)
         self.assertEqual(None, p)
         self.assertEqual(1, mock_host.call_count)
@@ -202,7 +202,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     def test_get_http_proxy_configuration_requires_host(self, mock_host, mock_port):
         mock_host.return_value = None
         mock_port.return_value = None
-        h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
+        h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
         self.assertEqual(None, h)
         self.assertEqual(None, p)
         self.assertEqual(1, mock_host.call_count)
@@ -215,7 +215,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
                                     'http_proxy' : 'http://foo.com:80',
                                     'https_proxy' : 'https://bar.com:443'
                                 }):
-            h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
+            h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
@@ -226,7 +226,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
                                     'http_proxy' : 'http://foo.com:80',
                                     'https_proxy' : 'https://bar.com:443'
                                 }):
-            h, p = restutil._get_http_proxy(secure=True) # pylint: disable=protected-access,invalid-name
+            h, p = restutil._get_http_proxy(secure=True)  # pylint: disable=protected-access
             self.assertEqual("bar.com", h)
             self.assertEqual(443, p)
 
@@ -236,7 +236,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         with patch.dict(os.environ, {
                                     'http_proxy' : 'http://user:pw@foo.com:80'
                                 }):
-            h, p = restutil._get_http_proxy() # pylint: disable=protected-access,invalid-name
+            h, p = restutil._get_http_proxy()  # pylint: disable=protected-access
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
@@ -325,7 +325,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_direct(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
+    def test_http_request_direct(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -333,7 +333,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar") # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar")  # pylint: disable=protected-access
 
         HTTPConnection.assert_has_calls([
             call("foo", 80, timeout=10)
@@ -348,7 +348,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_direct_secure(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
+    def test_http_request_direct_secure(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -356,7 +356,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar", secure=True) # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar", secure=True)  # pylint: disable=protected-access
 
         HTTPConnection.assert_not_called()
         HTTPSConnection.assert_has_calls([
@@ -371,7 +371,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_proxy(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
+    def test_http_request_proxy(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -379,7 +379,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar", # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar",  # pylint: disable=protected-access
                             proxy_host="foo.bar", proxy_port=23333)
 
         HTTPConnection.assert_has_calls([
@@ -396,7 +396,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
     @patch("azurelinuxagent.common.utils.restutil._get_http_proxy")
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_proxy_with_no_proxy_check(self, _http_request, sleep, mock_get_http_proxy): # pylint: disable=unused-argument
+    def test_http_request_proxy_with_no_proxy_check(self, _http_request, sleep, mock_get_http_proxy):  # pylint: disable=unused-argument
         mock_http_resp = MagicMock()
         mock_http_resp.read = Mock(return_value="hehe")
         _http_request.return_value = mock_http_resp
@@ -503,7 +503,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request_proxy_secure(self, HTTPConnection, HTTPSConnection): # pylint: disable=invalid-name
+    def test_http_request_proxy_secure(self, HTTPConnection, HTTPSConnection):
         mock_conn = \
             MagicMock(getresponse=\
                 Mock(return_value=\
@@ -511,7 +511,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar", # pylint: disable=protected-access
+        resp = restutil._http_request("GET", "foo", "/bar",  # pylint: disable=protected-access
                             proxy_host="foo.bar", proxy_port=23333,
                             secure=True)
 
@@ -528,7 +528,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_with_retry(self, _http_request, sleep): # pylint: disable=unused-argument
+    def test_http_request_with_retry(self, _http_request, sleep):  # pylint: disable=unused-argument
         mock_http_resp = MagicMock()
         mock_http_resp.read = Mock(return_value="hehe")
         _http_request.return_value = mock_http_resp
@@ -608,7 +608,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         _http_request.side_effect = [
                 Mock(status=httpclient.SERVICE_UNAVAILABLE)
-                    for i in range(restutil.DEFAULT_RETRIES) # pylint: disable=unused-variable
+                    for i in range(restutil.DEFAULT_RETRIES)  # pylint: disable=unused-variable
             ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
@@ -628,7 +628,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
 
         _http_request.side_effect = [
                 Mock(status=httpclient.SERVICE_UNAVAILABLE)
-                    for i in range(restutil.THROTTLE_RETRIES-1) # pylint: disable=unused-variable
+                    for i in range(restutil.THROTTLE_RETRIES-1)  # pylint: disable=unused-variable
             ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
@@ -754,7 +754,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
         response.status = 'status'
         response.reason = 'reason'
         with patch.object(response, 'read') as patch_response:
-            for s in responses: # pylint: disable=invalid-name
+            for s in responses:
                 patch_response.return_value = s
                 result = restutil.read_response_error(response)
                 print("RESPONSE: {0}".format(s))
@@ -800,7 +800,7 @@ class TestHttpOperations(AgentTestCase): # pylint: disable=too-many-public-metho
             self.assertEqual(result, expected_response)
             try:
                 raise HttpError("{0}".format(result))
-            except HttpError as e: # pylint: disable=invalid-name
+            except HttpError as e:
                 self.assertTrue(result in ustr(e))
 
 

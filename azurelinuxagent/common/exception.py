@@ -84,20 +84,20 @@ class ExtensionOperationError(ExtensionError):
 
 class ExtensionUpdateError(ExtensionError):
     """
-    When failed to update an extension
+    Error raised when failed to update an extension
     """
-
-    def __init__(self, msg=None, inner=None, code=-1): # pylint: disable=W0235
-        super(ExtensionUpdateError, self).__init__(msg, inner, code)
 
 
 class ExtensionDownloadError(ExtensionError):
     """
-    When failed to download and setup an extension
+    Error raised when failed to download and setup an extension
     """
 
-    def __init__(self, msg=None, inner=None, code=-1): # pylint: disable=W0235
-        super(ExtensionDownloadError, self).__init__(msg, inner, code)
+
+class ExtensionConfigError(ExtensionError):
+    """
+    Error raised when extension config file is malformed
+    """
 
 
 class ProvisionError(AgentError):
@@ -147,11 +147,14 @@ class ProtocolError(AgentError):
 
 class ProtocolNotFoundError(ProtocolError):
     """
-    Azure protocol endpoint not found
+    Error raised when Azure protocol endpoint not found
     """
 
-    def __init__(self, msg=None, inner=None): # pylint: disable=W0235
-        super(ProtocolNotFoundError, self).__init__(msg, inner)
+
+class IncompleteGoalStateError(ProtocolError):
+    """
+    Goal state is returned incomplete.
+    """
 
 
 class HttpError(AgentError):
@@ -165,11 +168,8 @@ class HttpError(AgentError):
 
 class InvalidContainerError(HttpError):
     """
-    Container id sent in the header is invalid
+    Error raised when Container id sent in the header is invalid
     """
-
-    def __init__(self, msg=None, inner=None): # pylint: disable=W0235
-        super(InvalidContainerError, self).__init__(msg, inner)
 
 
 class EventError(AgentError):
@@ -231,7 +231,7 @@ class ServiceStoppedError(AgentError):
         super(ServiceStoppedError, self).__init__(msg, inner)
 
 
-class ExtensionErrorCodes(object): # pylint: disable=R0903
+class ExtensionErrorCodes(object):
     """
     Common Error codes used across by Compute RP for better understanding
     the cause and clarify common occurring errors

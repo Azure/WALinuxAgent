@@ -62,10 +62,10 @@ def get_f5_platform():
     the version and product information is contained in the /VERSION file.
     """
     result = [None, None, None, None]
-    f5_version = re.compile("^Version: (\d+\.\d+\.\d+)") # pylint: disable=W1401
-    f5_product = re.compile("^Product: ([\w-]+)") # pylint: disable=W1401
+    f5_version = re.compile("^Version: (\d+\.\d+\.\d+)")  # pylint: disable=W1401
+    f5_product = re.compile("^Product: ([\w-]+)")  # pylint: disable=W1401
 
-    with open('/VERSION', 'r') as fh: # pylint: disable=C0103
+    with open('/VERSION', 'r') as fh:
         content = fh.readlines()
         for line in content:
             version_matches = f5_version.match(line)
@@ -89,10 +89,10 @@ def get_f5_platform():
 def get_checkpoint_platform():
     take = build = release = ""
     full_name = open("/etc/cp-release").read().strip()
-    with open("/etc/cloud-version") as f: # pylint: disable=C0103
+    with open("/etc/cloud-version") as f:
         for line in f:
-            k, _, v = line.partition(": ") # pylint: disable=C0103
-            v = v.strip() # pylint: disable=C0103
+            k, _, v = line.partition(": ")
+            v = v.strip()
             if k == "release":
                 release = v
             elif k == "take":
@@ -104,20 +104,20 @@ def get_checkpoint_platform():
 
 def get_distro():
     if 'FreeBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release())) # pylint: disable=W1401
+        release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
         osinfo = ['freebsd', release, '', 'freebsd']
     elif 'OpenBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release())) # pylint: disable=W1401
+        release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
         osinfo = ['openbsd', release, '', 'openbsd']
     elif 'Linux' in platform.system():
         osinfo = get_linux_distribution(0, 'alpine')
     elif 'NS-BSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release())) # pylint: disable=W1401
+        release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
         osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
             # dist() removed in Python 3.8
-            osinfo = list(platform.dist()) + [''] # pylint: disable=W1505,E1101
+            osinfo = list(platform.dist()) + ['']  # pylint: disable=W1505,E1101
         except Exception:
             osinfo = ['UNKNOWN', 'FFFF', '', '']
 
@@ -129,6 +129,9 @@ def get_distro():
 
     if os.path.exists("/etc/euleros-release"):
         osinfo[0] = "euleros"
+
+    if os.path.exists("/etc/mariner-release"):
+        osinfo[0] = "mariner"
 
     # The platform.py lib has issue with detecting BIG-IP linux distribution.
     # Merge the following patch provided by F5.
@@ -145,8 +148,8 @@ def get_distro():
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
-COMMAND_ABSENT = "Absent"
-COMMAND_FAILED = "Failed"
+COMMAND_ABSENT = ustr("Absent")
+COMMAND_FAILED = ustr("Failed")
 
 
 def get_lis_version():
@@ -193,7 +196,7 @@ def has_logrotate():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.53.1'
+AGENT_VERSION = '2.2.54.2'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -206,13 +209,13 @@ AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
 
 AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
-AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip") # pylint: disable=W1401
+AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")  # pylint: disable=W1401
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
 # The execution mode of the VM - IAAS or PAAS. Linux VMs are only executed in IAAS mode.
 AGENT_EXECUTION_MODE = "IAAS"
 
-EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers" # pylint: disable=W1401
+EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"  # pylint: disable=W1401
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
 
 __distro__ = get_distro()

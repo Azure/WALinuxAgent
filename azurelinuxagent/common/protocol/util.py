@@ -79,14 +79,14 @@ class ProtocolUtil(SingletonPerThread):
 
         try:
             self.osutil.mount_dvd()
-        except OSUtilError as e: # pylint: disable=C0103
+        except OSUtilError as e:
             raise ProtocolError("[CopyOvfEnv] Error mounting dvd: "
                                 "{0}".format(ustr(e)))
 
         try:
             ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
             ovfenv = OvfEnv(ovfxml)
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error reading file "
                                 "{0}: {1}".format(ovf_file_path_on_dvd,
                                                   ustr(e)))
@@ -96,7 +96,7 @@ class ProtocolUtil(SingletonPerThread):
                             PASSWORD_REPLACEMENT,
                             ovfxml)
             fileutil.write_file(ovf_file_path, ovfxml)
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error writing file "
                                 "{0}: {1}".format(ovf_file_path,
                                                   ustr(e)))
@@ -109,7 +109,7 @@ class ProtocolUtil(SingletonPerThread):
         try:
             self.osutil.umount_dvd()
             self.osutil.eject_dvd()
-        except OSUtilError as e: # pylint: disable=C0103
+        except OSUtilError as e:
             logger.warn(ustr(e))
 
     def get_ovf_env(self):
@@ -117,7 +117,7 @@ class ProtocolUtil(SingletonPerThread):
         Load saved ovf-env.xml
         """
         ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
-        if os.path.isfile(ovf_file_path): # pylint: disable=R1705
+        if os.path.isfile(ovf_file_path):
             xml_text = fileutil.read_file(ovf_file_path)
             return OvfEnv(xml_text)
         else:
@@ -150,7 +150,7 @@ class ProtocolUtil(SingletonPerThread):
                         return self.endpoint
 
                     logger.error("[GetWireserverEndpoint] Unexpected empty file {0}", file_path)
-                except (IOError, OSError) as e: # pylint: disable=C0103
+                except (IOError, OSError) as e:
                     logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
             else:
                 logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
@@ -167,7 +167,7 @@ class ProtocolUtil(SingletonPerThread):
             self.endpoint = endpoint
             file_path = self._get_wireserver_endpoint_file_path()
             fileutil.write_file(file_path, endpoint)
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:
             raise OSUtilError(ustr(e))
 
     def _clear_wireserver_endpoint(self):
@@ -182,7 +182,7 @@ class ProtocolUtil(SingletonPerThread):
 
         try:
             os.remove(endpoint_file_path)
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:
             # Ignore file-not-found errors (since the file is being removed)
             if e.errno == errno.ENOENT:
                 return
@@ -208,7 +208,7 @@ class ProtocolUtil(SingletonPerThread):
                         logger.info("WireServer endpoint is not found. Rerun dhcp handler")
                         try:
                             self.dhcp_handler.run()
-                        except DhcpError as e: # pylint: disable=C0103
+                        except DhcpError as e:
                             raise ProtocolError(ustr(e))
                         endpoint = self.dhcp_handler.endpoint
                     else:
@@ -221,13 +221,13 @@ class ProtocolUtil(SingletonPerThread):
                     self._set_wireserver_endpoint(endpoint)
                     return protocol
 
-                except ProtocolError as e: # pylint: disable=C0103
+                except ProtocolError as e:
                     logger.info("WireServer is not responding. Reset dhcp endpoint")
                     self.dhcp_handler.endpoint = None
                     self.dhcp_handler.skip_cache = True
                     raise e
     
-            except ProtocolError as e: # pylint: disable=C0103
+            except ProtocolError as e:
                 logger.info("Protocol endpoint not found: {0}", e)
 
             if retry < MAX_RETRY - 1:
@@ -242,7 +242,7 @@ class ProtocolUtil(SingletonPerThread):
         protocol_file_path = self._get_protocol_file_path()
         try:
             fileutil.write_file(protocol_file_path, protocol_name)
-        except (IOError, OSError) as e: # pylint: disable=C0103
+        except (IOError, OSError) as e:
             logger.error("Failed to save protocol endpoint: {0}", e)
 
     def clear_protocol(self):
@@ -260,7 +260,7 @@ class ProtocolUtil(SingletonPerThread):
 
             try:
                 os.remove(protocol_file_path)
-            except (IOError, OSError) as e: # pylint: disable=C0103
+            except (IOError, OSError) as e:
                 # Ignore file-not-found errors (since the file is being removed)
                 if e.errno == errno.ENOENT:
                     return

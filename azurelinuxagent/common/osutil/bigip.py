@@ -24,6 +24,8 @@ import socket
 import struct
 import time
 
+from azurelinuxagent.common.future import array_to_bytes
+
 try:
     # WAAgent > 2.1.3
     import azurelinuxagent.common.logger as logger
@@ -42,7 +44,7 @@ except ImportError:
 
 class BigIpOSUtil(DefaultOSUtil):
 
-    def __init__(self): # pylint: disable=W0235
+    def __init__(self):  # pylint: disable=W0235
         super(BigIpOSUtil, self).__init__()
 
     def _wait_until_mcpd_is_initialized(self):
@@ -58,10 +60,10 @@ class BigIpOSUtil(DefaultOSUtil):
         :raises OSUtilError: Raises exception if mcpd does not come up within
                              roughly 50 minutes (100 * 30 seconds)
         """
-        for retries in range(1, 100): # pylint: disable=W0612
+        for retries in range(1, 100):  # pylint: disable=W0612
             # Retry until mcpd completes startup:
             logger.info("Checking to see if mcpd is up")
-            rc = shellutil.run("/usr/bin/tmsh -a show sys mcp-state field-fmt 2>/dev/null | grep phase | grep running", chk_err=False) # pylint: disable=C0103
+            rc = shellutil.run("/usr/bin/tmsh -a show sys mcp-state field-fmt 2>/dev/null | grep phase | grep running", chk_err=False)
             if rc == 0:
                 logger.info("mcpd is up!")
                 break
@@ -76,7 +78,7 @@ class BigIpOSUtil(DefaultOSUtil):
 
     def _save_sys_config(self):
         cmd = "/usr/bin/tmsh save sys config"
-        rc = shellutil.run(cmd) # pylint: disable=C0103
+        rc = shellutil.run(cmd)
         if rc != 0:
             logger.error("WARNING: Cannot save sys config on 1st boot.")
         return rc
@@ -230,7 +232,7 @@ class BigIpOSUtil(DefaultOSUtil):
     # option _not_ accepted by the original). Additionally, this method allows us
     # to keep the defaults for mount_dvd in one place (the original function) instead
     # of having to duplicate it here as well. 
-    def mount_dvd(self, **kwargs): # pylint: disable=W0221
+    def mount_dvd(self, **kwargs):  # pylint: disable=W0221
         """Mount the DVD containing the provisioningiso.iso file
 
         This is the _first_ hook that WAAgent provides for us, so this is the
@@ -287,16 +289,17 @@ class BigIpOSUtil(DefaultOSUtil):
         if retsize == (expected * struct_size):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
-        sock = buff.tostring()
+
+        sock = array_to_bytes(buff)
         for i in range(0, struct_size * expected, struct_size):
             iface = self._format_single_interface_name(sock, i)
 
             # Azure public was returning "lo:1" when deploying WAF
-            if b'lo' in iface: # pylint: disable=R1724
+            if b'lo' in iface:
                 continue
             else:
                 break
-        return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24]) # pylint: disable=undefined-loop-variable
+        return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])  # pylint: disable=undefined-loop-variable
 
     def _format_single_interface_name(self, sock, offset):
         return sock[offset:offset+16].split(b'\0', 1)[0]
@@ -322,9 +325,9 @@ class BigIpOSUtil(DefaultOSUtil):
         :param port_id:
         :return:
         """
-        for retries in range(1, 100): # pylint: disable=W0612
+        for retries in range(1, 100):  # pylint: disable=W0612
             # Retry until devices are ready
-            if os.path.exists("/sys/bus/vmbus/devices/"): # pylint: disable=R1723
+            if os.path.exists("/sys/bus/vmbus/devices/"):
                 break
             else:
                 time.sleep(10)

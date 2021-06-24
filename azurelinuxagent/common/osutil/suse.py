@@ -17,9 +17,9 @@
 #
 
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil # pylint: disable=W0611
-from azurelinuxagent.common.exception import OSUtilError # pylint: disable=W0611
-from azurelinuxagent.common.future import ustr # pylint: disable=W0611
+import azurelinuxagent.common.utils.shellutil as shellutil  # pylint: disable=W0611
+from azurelinuxagent.common.exception import OSUtilError  # pylint: disable=W0611
+from azurelinuxagent.common.future import ustr  # pylint: disable=W0611
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
@@ -69,6 +69,10 @@ class SUSEOSUtil(SUSE11OSUtil):
         super(SUSEOSUtil, self).__init__()
         self.dhclient_name = 'wickedd-dhcp4'
 
+    @staticmethod
+    def get_systemd_unit_file_install_path():
+        return "/usr/lib/systemd/system"
+
     def set_hostname(self, hostname):
         self._run_command_without_raising(["hostnamectl", "set-hostname", hostname], log_error=False)
 
@@ -80,7 +84,7 @@ class SUSEOSUtil(SUSE11OSUtil):
         self._run_command_without_raising(["systemctl", "start", "{}.service".format(self.dhclient_name)],
                                           log_error=False)
 
-    def start_network(self) :
+    def start_network(self):
         self._run_command_without_raising(["systemctl", "start", "network.service"], log_error=False)
 
     def restart_ssh_service(self):

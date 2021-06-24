@@ -133,7 +133,7 @@ class TestLogCollector(AgentTestCase):
         binary_descriptor = "b" if binary else ""
         data = b'0' if binary else '0'
 
-        with open(file_path, "w{0}".format(binary_descriptor)) as fh: # pylint: disable=bad-open-mode,invalid-name
+        with open(file_path, "w{0}".format(binary_descriptor)) as fh:  # pylint: disable=bad-open-mode
             fh.seek(file_size - 1)
             fh.write(data)
 
@@ -145,7 +145,7 @@ class TestLogCollector(AgentTestCase):
         with zipfile.ZipFile(self.compressed_archive_path, "r") as archive:
             archive_files = archive.namelist()
 
-            for file in expected_files: # pylint: disable=redefined-builtin
+            for file in expected_files:  # pylint: disable=redefined-builtin
                 if file.lstrip(os.path.sep) not in archive_files:
                     self.fail("File {0} was supposed to be collected, but is not present in the archive!".format(file))
 
@@ -153,24 +153,24 @@ class TestLogCollector(AgentTestCase):
             if "results.txt" not in archive_files:
                 self.fail("File results.txt was supposed to be collected, but is not present in the archive!")
 
-        self.assertTrue(True) # pylint: disable=redundant-unittest-assert
+        self.assertTrue(True)  # pylint: disable=redundant-unittest-assert
 
     def _assert_files_are_not_in_archive(self, unexpected_files):
         with zipfile.ZipFile(self.compressed_archive_path, "r") as archive:
             archive_files = archive.namelist()
 
-            for file in unexpected_files: # pylint: disable=redefined-builtin
+            for file in unexpected_files:  # pylint: disable=redefined-builtin
                 if file.lstrip(os.path.sep) in archive_files:
                     self.fail("File {0} wasn't supposed to be collected, but is present in the archive!".format(file))
 
-        self.assertTrue(True) # pylint: disable=redundant-unittest-assert
+        self.assertTrue(True)  # pylint: disable=redundant-unittest-assert
 
     def _assert_archive_created(self, archive):
         with open(self.output_results_file_path, "r") as out:
             error_message = out.readlines()[-1]
             self.assertTrue(archive, "Failed to collect logs, error message: {0}".format(error_message))
 
-    def _get_uncompressed_file_size(self, file): # pylint: disable=redefined-builtin
+    def _get_uncompressed_file_size(self, file):  # pylint: disable=redefined-builtin
         with zipfile.ZipFile(self.compressed_archive_path, "r") as archive:
             return archive.getinfo(file.lstrip(os.path.sep)).file_size
 
@@ -195,7 +195,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
             log_collector = LogCollector()
             archive = log_collector.collect_logs_and_get_archive()
 
-        with open(self.output_results_file_path, "r") as fh: # pylint: disable=invalid-name
+        with open(self.output_results_file_path, "r") as fh:
             results = fh.readlines()
 
         # Assert echo was parsed
@@ -384,7 +384,7 @@ copy,{0}
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
 
-        file = os.path.join(self.root_collect_dir, "waagent.log") # pylint: disable=redefined-builtin
+        file = os.path.join(self.root_collect_dir, "waagent.log")  # pylint: disable=redefined-builtin
         new_file_size = self._get_uncompressed_file_size(file)
         self.assertEqual(LARGE_FILE_SIZE, new_file_size, "File {0} hasn't been updated! Size in archive is {1}, but "
                                                           "should be {2}.".format(file, new_file_size, LARGE_FILE_SIZE))

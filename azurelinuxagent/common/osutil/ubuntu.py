@@ -63,7 +63,7 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
-    def __init__(self): # pylint: disable=W0235
+    def __init__(self):  # pylint: disable=W0235
         super(Ubuntu12OSUtil, self).__init__()
 
     # Override
@@ -94,6 +94,23 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
         super(Ubuntu18OSUtil, self).__init__()
         self.service_name = self.get_service_name()
 
+    def restart_if(self, ifname, retries=3, wait=5):
+        """
+        Restart systemd-networkd
+        """
+        retry_limit=retries+1
+        for attempt in range(1, retry_limit):
+            try:
+                shellutil.run_command(["systemctl", "restart", "systemd-networkd"])
+
+            except shellutil.CommandError as cmd_err:
+                logger.warn("failed to restart systemd-networkd: return code {1}".format(cmd_err.returncode))
+                if attempt < retry_limit:
+                    logger.info("retrying in {0} seconds".format(wait))
+                    time.sleep(wait)
+                else:
+                    logger.warn("exceeded restart retries")
+
     def get_dhcp_pid(self):
         return self._get_dhcp_pid(["pidof", "systemd-networkd"])
 
@@ -117,7 +134,7 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
 
 
 class UbuntuOSUtil(Ubuntu16OSUtil):
-    def __init__(self): # pylint: disable=W0235
+    def __init__(self):  # pylint: disable=W0235
         super(UbuntuOSUtil, self).__init__()
 
     def restart_if(self, ifname, retries=3, wait=5):
