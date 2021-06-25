@@ -994,6 +994,38 @@ class TestExtension_Deprecated(AgentTestCase):
                 (dep_ext_level_5, ExtensionCommandNames.UNINSTALL)
             )
 
+    def test_it_should_process_sequencing_properly_even_if_no_settings_for_dependent_extension(
+            self, mock_get, mock_crypt, *args):
+        test_data_file = DATA_FILE.copy()
+        test_data_file["ext_conf"] = "wire/ext_conf_dependencies_with_empty_settings.xml"
+        test_data = mockwiredata.WireProtocolData(test_data_file)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        ext_1 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+        ext_2 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
+
+        with enable_invocations(ext_1, ext_2) as invocation_record:
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Ensure no extension status was reported for OtherExampleHandlerLinux as no settings provided for it
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+
+            # Ensure correct status reported back for the other extension with settings
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
+            self._assert_ext_status(protocol.report_vm_status, "success", 0,
+                                    expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
+
+            # Ensure the invocation order follows the dependency levels
+            invocation_record.compare(
+                (ext_2, ExtensionCommandNames.INSTALL),
+                (ext_2, ExtensionCommandNames.ENABLE),
+                (ext_1, ExtensionCommandNames.INSTALL),
+                (ext_1, ExtensionCommandNames.ENABLE)
+            )
+
     def test_ext_handler_sequencing_should_fail_if_handler_failed(self, mock_get, mock_crypt, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
         exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
