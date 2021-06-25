@@ -1656,7 +1656,9 @@ class ExtHandlerInstance(object):
     def collect_ext_status(self, ext):
         self.logger.verbose("Collect extension status for {0}".format(self.get_extension_full_name(ext)))
         seq_no, ext_status_file = self.get_status_file_path(ext)
-        if seq_no == -1:
+
+        # We should never try to read any status from status file if the handler has no settings, returning None in that case
+        if seq_no == -1 or ext is None:
             return None
 
         data = None
@@ -1728,7 +1730,7 @@ class ExtHandlerInstance(object):
         seq_no, ext_status_file = self.get_status_file_path(ext)
 
         # This is legacy scenario for cases when no extension settings is available
-        if seq_no < 0 or ext_status_file is None:
+        if seq_no < 0 or ext_status_file is None or ext is None:
             return None
 
         # Missing status file is considered a non-terminal state here
