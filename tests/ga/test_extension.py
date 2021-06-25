@@ -995,7 +995,7 @@ class TestExtension(AgentTestCase):
     def test_it_should_process_sequencing_properly_even_if_no_settings_for_dependent_extension(
             self, mock_get, mock_crypt, *args):
         test_data_file = DATA_FILE.copy()
-        test_data_file["ext_conf"] = "wire/ext_conf_multiple_depends_on_for_single_handler.xml"
+        test_data_file["ext_conf"] = "wire/ext_conf_dependencies_with_empty_settings.xml"
         test_data = mockwiredata.WireProtocolData(test_data_file)
         exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
 
@@ -1006,26 +1006,22 @@ class TestExtension(AgentTestCase):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
-            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+            # Ensure no extension status was reported for OtherExampleHandlerLinux as no settings provided for it
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0",
                                         expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-            self._assert_ext_status(protocol.report_vm_status, "success", 0,
-                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
-            # check handler list and dependency levels
-            self.assertTrue(exthandlers_handler.ext_handlers is not None)
-            self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
-            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
-                                     handler.name == ext_2.name).properties.extensions[0].dependencyLevel)
-            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
-                                     handler.name == ext_1.name).properties.extensions[0].dependencyLevel)
+            # Ensure correct status reported back for the other extension with settings
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
+            self._assert_ext_status(protocol.report_vm_status, "success", 0,
+                                    expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
 
             # Ensure the invocation order follows the dependency levels
             invocation_record.compare(
-                (ext_1, ExtensionCommandNames.INSTALL),
-                (ext_1, ExtensionCommandNames.ENABLE),
                 (ext_2, ExtensionCommandNames.INSTALL),
-                (ext_2, ExtensionCommandNames.ENABLE)
+                (ext_2, ExtensionCommandNames.ENABLE),
+                (ext_1, ExtensionCommandNames.INSTALL),
+                (ext_1, ExtensionCommandNames.ENABLE)
             )
 
     def test_ext_handler_sequencing_should_fail_if_handler_failed(self, mock_get, mock_crypt, *args):

@@ -574,8 +574,12 @@ class ExtHandlersHandler(object):
         Check the status of the extension being handled. Wait until it has a terminal state or times out.
         :raises: Exception if it is not handled successfully.
         """
-
         extension_name = handler_i.get_extension_full_name(extension)
+
+        # If the handler had no settings, we should not wait at all for handler to report status.
+        if extension is None:
+            logger.info("No settings found for {}, not waiting for it's status".format(extension_name))
+            return
 
         try:
             ext_completed, status = False, None
@@ -1657,7 +1661,7 @@ class ExtHandlerInstance(object):
         self.logger.verbose("Collect extension status for {0}".format(self.get_extension_full_name(ext)))
         seq_no, ext_status_file = self.get_status_file_path(ext)
 
-        # We should never try to read any status from status file if the handler has no settings, returning None in that case
+        # We should never try to read any status file if the handler has no settings, returning None in that case
         if seq_no == -1 or ext is None:
             return None
 
@@ -1730,7 +1734,7 @@ class ExtHandlerInstance(object):
         seq_no, ext_status_file = self.get_status_file_path(ext)
 
         # This is legacy scenario for cases when no extension settings is available
-        if seq_no < 0 or ext_status_file is None or ext is None:
+        if seq_no < 0 or ext_status_file is None:
             return None
 
         # Missing status file is considered a non-terminal state here
