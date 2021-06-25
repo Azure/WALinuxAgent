@@ -578,7 +578,7 @@ class ExtHandlersHandler(object):
 
         # If the handler had no settings, we should not wait at all for handler to report status.
         if extension is None:
-            logger.info("No settings found for {}, not waiting for it's status".format(extension_name))
+            logger.info("No settings found for {0}, not waiting for it's status".format(extension_name))
             return
 
         try:
