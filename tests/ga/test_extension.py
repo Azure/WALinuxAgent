@@ -27,8 +27,7 @@ import time
 import unittest
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, \
-    get_agent_supported_features_list_for_extensions
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
@@ -3422,11 +3421,11 @@ class TestExtensionWithMockHTTP(AgentTestCase):
             protocol.set_http_handlers(http_put_handler=mock_http_put)
             no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
             exthandlers_handler = get_exthandlers_handler(protocol)
-            yield exthandlers_handler, protocol, no_of_extensions
+            yield exthandlers_handler
 
     @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
     def test_ext_handler_reporting_status_file(self):
-        with self._setup_test_env(mockwiredata.DATA_FILE) as (exthandlers_handler, protocol, no_of_exts):
+        with self._setup_test_env(mockwiredata.DATA_FILE) as (exthandlers_handler):
 
             expected_status = {
                 "version": "1.1",
