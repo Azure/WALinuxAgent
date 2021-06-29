@@ -3419,7 +3419,6 @@ class TestExtensionWithMockHTTP(AgentTestCase):
 
             protocol.aggregate_status = None
             protocol.set_http_handlers(http_put_handler=mock_http_put)
-            no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
             exthandlers_handler = get_exthandlers_handler(protocol)
             yield exthandlers_handler
 
