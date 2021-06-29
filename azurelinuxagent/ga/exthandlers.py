@@ -979,67 +979,41 @@ class ExtHandlersHandler(object):
                       message=msg)
 
     def write_ext_handlers_status_to_info_file(self, vm_status):
-
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.protocol.get_incarnation()))
+        status_blob_data = self.protocol.get_status_blob_data()
+        data = dict()
+        if status_blob_data is not None:
+            data = json.loads(status_blob_data)
 
-        agent_details = {
-            "agent_name": AGENT_NAME,
-            "daemon_version": str(version.get_daemon_version()),
-            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
-            "extension_supported_features": [name for name, _ in
-                                             get_agent_supported_features_list_for_extensions().items()],
-            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
+        # Populating the fields that does not come from vm_status or status_blob_data
+        data["agentName"] = AGENT_NAME
+        data["daemonVersion"] = str(version.get_daemon_version())
+        data["pythonVersion"] = "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
+        data["extensionSupportedFeatures"] = [name for name, _ in
+                                         get_agent_supported_features_list_for_extensions().items()]
 
+        # Consuming supports_multi_config info from vm_status. creating a dict out of it for easy lookup in the next step.
+        support_multi_config = dict()
         if vm_status is not None:
             # Convert VMStatus class to Dict.
-            data = get_properties(vm_status)
+            vm_status_data = get_properties(vm_status)
+            vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
+            for handler_status in vm_handler_statuses:
+                if handler_status.get('name') is not None:
+                    support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
 
-            # .get handles the keyError and accepts a default value as 2nd parameter. If no second parameter is
-            # provided it uses None. Using dict() in the case of 'vmAgent' or any other key is not available
+        handler_aggregate_status = data.get('aggregateStatus', dict()).get('handlerAggregateStatus', dict())
 
-            agent_details["goal_state_version"] = data.get('vmAgent', dict()).get('version')
-            agent_details["distro_details"] = "{0}:{1}".format(data.get('vmAgent', dict()).get('osname'),
-                                                               data.get('vmAgent', dict()).get('osversion'))
-            agent_details["agent_status"] = data.get('vmAgent', dict()).get('status')
-            agent_details["agent_message"] = data.get('vmAgent', dict()).get('message')
-            agent_details["agent_hostname"] = data.get('vmAgent', dict()).get('hostname')
+        for handler_status in handler_aggregate_status:
+            handler_status['supportsMultiConfig'] = support_multi_config.get(handler_status.get('handlerName'))
+            status = handler_status.get('runtimeSettingsStatus', dict()).get('settingsStatus', dict()).get('status', dict())
+            status.pop('formattedMessage', None)
+            status.pop('substatus', None)
 
-            goal_state_status = data.get('vmAgent', dict()).get('vm_artifacts_aggregate_status',
-                                                                dict()).get('goal_state_aggregate_status', dict())
-            goal_state_aggregate_status = {
-                "message": goal_state_status.get('message'),
-                "in_svd_seq_no": goal_state_status.get('in_svd_seq_no'),
-                "status": goal_state_status.get('status'),
-                "code": str(goal_state_status.get('code'))
-            }
+        # renaming supportedFeatures to crpSupportedFeatures
+        data["crpSupportedFeatures"] = data.pop("supportedFeatures", None)
 
-            processed_time = time.gmtime(0) # '1970-01-01T00:00:00Z' is set as default
-
-            try:
-                processed_time = vm_status.vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.processed_time
-            except AttributeError:
-                pass
-
-            goal_state_aggregate_status["processed_time"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", processed_time)
-
-            agent_details["goal_state_aggregate_status"] = goal_state_aggregate_status
-
-            # The above class contains vmAgent.extensionHandlers
-            # (more info: azurelinuxagent.common.protocol.restapi.VMAgentStatus)
-            handler_statuses = data.get('vmAgent', dict()).get('extensionHandlers')
-            for handler_status in handler_statuses:
-                try:
-                    handler_status.get('extension_status', dict()).pop('message', None)
-                    handler_status.get('extension_status', dict()).pop('substatusList', None)
-                except KeyError:
-                    pass
-
-            agent_details['extensions_status'] = handler_statuses
-
-        agent_details_json = json.dumps(agent_details)
-        fileutil.write_file(status_path, agent_details_json)
+        fileutil.write_file(status_path, json.dumps(data))
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

@@ -1138,125 +1138,6 @@ class TestExtension(AgentTestCase):
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
 
-    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
-    def test_ext_handler_reporting_status_file(self, *args):
-
-        expected_status = {
-            "agent_name": AGENT_NAME,
-            "daemon_version": "0.0.0.0",
-            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
-            "extension_supported_features": [name for name, _ in
-                                             get_agent_supported_features_list_for_extensions().items()],
-            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "goal_state_version": "9.9.9.9",
-            "agent_status": "Ready",
-            "agent_message": "Guest Agent is running",
-            "goal_state_aggregate_status": {
-                "processed_time": "1970-01-01T00:00:00Z",
-                "message": "GoalState executed successfully",
-                "in_svd_seq_no": "1",
-                "status": "Success",
-                "code": "0"
-            },
-            "extensions_status": [
-                {
-                    "name": "OSTCExtensions.ExampleHandlerLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "code": 0,
-                    "message": "Plugin enabled",
-                    "supports_multi_config": False,
-                    "extension_status": {
-                        "name": "OSTCExtensions.ExampleHandlerLinux",
-                        "configurationAppliedTime": None,
-                        "operation": None,
-                        "status": "success",
-                        "sequenceNumber": 0,
-                        "code": 0
-                    }
-                },
-                {
-                    "name": "Microsoft.Powershell.ExampleExtension",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "code": 0,
-                    "message": "Plugin enabled",
-                    "supports_multi_config": False,
-                    "extension_status": {
-                        "name": "Microsoft.Powershell.ExampleExtension",
-                        "configurationAppliedTime": None,
-                        "operation": None,
-                        "status": "success",
-                        "sequenceNumber": 0,
-                        "code": 0
-                    }
-                },
-                {
-                    "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "code": 0,
-                    "message": "Plugin enabled",
-                    "supports_multi_config": False,
-                    "extension_status": {
-                        "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
-                        "configurationAppliedTime": None,
-                        "operation": None,
-                        "status": "success",
-                        "sequenceNumber": 0,
-                        "code": 0
-                    }
-                },
-                {
-                    "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "code": 0,
-                    "message": "Plugin enabled",
-                    "supports_multi_config": False,
-                    "extension_status": {
-                        "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
-                        "configurationAppliedTime": None,
-                        "operation": None,
-                        "status": "success",
-                        "sequenceNumber": 0,
-                        "code": 0
-                    }
-                },
-                {
-                    "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "code": 0,
-                    "message": "Plugin enabled",
-                    "supports_multi_config": False,
-                    "extension_status": {
-                        "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
-                        "configurationAppliedTime": None,
-                        "operation": None,
-                        "status": "success",
-                        "sequenceNumber": 0,
-                        "code": 0
-                    }
-                }
-            ]
-        }
-
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
-        actual_status_json = json.loads(fileutil.read_file(status_path))
-
-        # popping few attributes since it is based on run time
-        actual_status_json.pop('agent_hostname', None)
-        actual_status_json.pop('distro_details', None)
-        self.assertEqual(expected_status, actual_status_json)
-
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_ROLLINGUPGRADE)
@@ -3518,6 +3399,112 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
                 protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
                     timeout_in_minutes=0, timeout_in_ms=200)
 
+class TestExtensionWithMockHTTP(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+
+    @contextlib.contextmanager
+    def _setup_test_env(self, test_data):
+        with mock_wire_protocol(test_data) as protocol:
+
+            def mock_http_put(url, *args, **_):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
+
+            protocol.aggregate_status = None
+            protocol.set_http_handlers(http_put_handler=mock_http_put)
+            no_of_extensions = protocol.mock_wire_data.get_no_of_plugins_in_extension_config()
+            exthandlers_handler = get_exthandlers_handler(protocol)
+            yield exthandlers_handler, protocol, no_of_extensions
+
+    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
+    def test_ext_handler_reporting_status_file(self):
+        with self._setup_test_env(mockwiredata.DATA_FILE) as (exthandlers_handler, protocol, no_of_exts):
+
+            expected_status = {
+                "version": "1.1",
+                "timestampUTC": "1970-01-01T00:00:00Z",
+                "aggregateStatus": {
+                    "guestAgentStatus": {
+                        "version": "9.9.9.9",
+                        "status": "Ready",
+                        "formattedMessage": {
+                            "lang": "en-US",
+                            "message": "Guest Agent is running"
+                        }
+                    },
+                    "handlerAggregateStatus": [
+                        {
+                            "handlerVersion": "1.0.0",
+                            "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                            "status": "Ready",
+                            "code": 0,
+                            "useExactVersion": True,
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "Plugin enabled"
+                            },
+                            "runtimeSettingsStatus": {
+                                "settingsStatus": {
+                                    "status": {
+                                        "name": "OSTCExtensions.ExampleHandlerLinux",
+                                        "configurationAppliedTime": None,
+                                        "operation": None,
+                                        "status": "success",
+                                        "code": 0
+                                    },
+                                    "version": 1,
+                                    "timestampUTC": "1970-01-01T00:00:00Z"
+                                },
+                                "sequenceNumber": 0
+                            },
+                            "supportsMultiConfig": False
+                        }
+                    ],
+                    "vmArtifactsAggregateStatus": {
+                        "goalStateAggregateStatus": {
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "GoalState executed successfully"
+                            },
+                            "timestampUTC": "1970-01-01T00:00:00Z",
+                            "inSvdSeqNo": "1",
+                            "status": "Success",
+                            "code": 0
+                        }
+                    }
+                },
+                "agentName": AGENT_NAME,
+                "daemonVersion": "0.0.0.0",
+                "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+                "extensionSupportedFeatures": [name for name, _ in
+                                             get_agent_supported_features_list_for_extensions().items()],
+                "crpSupportedFeatures": [
+                    {
+                        "Key": "MultipleExtensionsPerHandler",
+                        "Value": "1.0"
+                    }
+                ]
+
+            }
+
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
+            actual_status_json = json.loads(fileutil.read_file(status_path))
+
+            # Popping run time attributes
+            actual_status_json.pop('guestOSInfo', None)
+
+            self.assertEqual(expected_status, actual_status_json)
 
 if __name__ == '__main__':
     unittest.main()
