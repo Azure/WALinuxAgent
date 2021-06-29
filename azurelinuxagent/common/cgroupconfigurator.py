@@ -500,9 +500,12 @@ class CGroupConfigurator(object):
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
                 for process in agent_cgroup:
-                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
+                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't.
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
                         continue
+                    # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
+                     if self._get_parent(process) in systemd_run_commands and self._get_command(process) == 'systemd-run':
+                         continue
                     # check if the process is a command started by the agent or a descendant of one of those commands
                     current = process
                     while current != 0 and current not in agent_commands:
@@ -516,6 +519,17 @@ class CGroupConfigurator(object):
 
             if len(unexpected) > 0:
                 raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(self.__format_processes(unexpected)))
+
+        @staticmethod
+        def _get_command(pid):
+            try:
+                with open('/proc/{0}/cmdline'.format(pid), "r") as file_:
+                    comm = file_.read()
+                    if comm and comm[-1] == '\x00':  # if null-terminated, remove the null
+                        comm = comm[:-1]
+                    return comm
+            except Exception:
+                return "UNKNOWN".format(pid)
 
         @staticmethod
         def __format_processes(pid_list):
