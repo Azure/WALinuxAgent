@@ -504,7 +504,7 @@ class CGroupConfigurator(object):
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
                         continue
                     # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
-                     if self._get_parent(process) in systemd_run_commands and self._get_command(process) == 'systemd-run':
+                    if self._get_parent(process) in systemd_run_commands and self._get_command(process) == 'systemd-run':
                          continue
                     # check if the process is a command started by the agent or a descendant of one of those commands
                     current = process
