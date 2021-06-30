@@ -80,8 +80,13 @@ class CollectLogsHandler(ThreadHandlerInterface):
         return CollectLogsHandler._THREAD_NAME
 
     @staticmethod
-    def __set_cgroups_env_flag():
+    def enable_cgroups_validation():
         os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE] = "1"
+
+    @staticmethod
+    def disable_cgroups_validation():
+        if CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE in os.environ:
+            del os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE]
 
     @staticmethod
     def should_validate_cgroups():
@@ -104,7 +109,6 @@ class CollectLogsHandler(ThreadHandlerInterface):
         return self.event_thread.is_alive()
 
     def start(self):
-        CollectLogsHandler.__set_cgroups_env_flag()
         self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
         self.event_thread.setName(self.get_thread_name())
@@ -130,6 +134,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
     def daemon(self):
         try:
+            CollectLogsHandler.enable_cgroups_validation()
             if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
 
@@ -143,6 +148,8 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     time.sleep(self.period)
         except Exception as e:
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
+        finally:
+            CollectLogsHandler.disable_cgroups_validation()
 
     def collect_and_send_logs(self):
         if self._collect_logs():
