@@ -29,6 +29,8 @@ import subprocess
 import sys
 import threading
 import traceback
+from azurelinuxagent.common import logcollector
+from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -44,6 +46,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION, \
     get_daemon_version, set_daemon_version
+from azurelinuxagent.ga.collect_logs import CollectLogsHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 
@@ -198,6 +201,26 @@ class Agent(object):
             print("Running log collector mode full")
         else:
             print("Running log collector mode normal")
+
+        # Check the cgroups unit
+        if CollectLogsHandler.should_validate_cgroups():
+            cgroup_path_regex = re.compile(r'^(?P<slice>.*)/(?P<unit>.*)$')
+
+            cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
+
+            cpu_regex_match = cgroup_path_regex.fullmatch(cpu_cgroup_path)
+            memory_regex_match = cgroup_path_regex.fullmatch(memory_cgroup_path)
+            
+            cpu_slice, cpu_unit = cpu_regex_match.group("slice", "unit") if cpu_regex_match else (None, None)
+            memory_slice, memory_unit = memory_regex_match.group("slice", "unit") if memory_regex_match else (None, None)
+
+            if cpu_slice != logcollector.CGROUPS_SLICE or memory_slice != logcollector.CGROUPS_SLICE:
+                print("Log Collector not in the expected slice, skipping execution.")
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
+            
+            if cpu_unit != logcollector.CGROUPS_UNIT or memory_unit != logcollector.CGROUPS_UNIT:
+                print("Log Collector does not have the expected unit name, skipping execution.")
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
         try:
             log_collector = LogCollector(is_full_mode)
