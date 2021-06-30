@@ -605,7 +605,7 @@ class TestExtension(AgentTestCase):
 
         self._assert_no_handler_status(protocol.report_vm_status)
 
-    def test_it_should_zip_waagent_status_when_incarnation_changes(self, *args):
+    def test_it_should_zip_waagent_status_when_incarnation_changes(self, mock_get, mock_crypt_util, *args):
         """
         This test checks when the incarnation changes the waagent_status file for the previous incarnation
         is added into the history folder for the previous incarnation and gets zipped
@@ -618,7 +618,7 @@ class TestExtension(AgentTestCase):
         ]
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
