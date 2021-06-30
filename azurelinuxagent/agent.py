@@ -208,8 +208,8 @@ class Agent(object):
 
             cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
 
-            cpu_regex_match = cgroup_path_regex.fullmatch(cpu_cgroup_path)
-            memory_regex_match = cgroup_path_regex.fullmatch(memory_cgroup_path)
+            cpu_regex_match = cgroup_path_regex.match(cpu_cgroup_path)
+            memory_regex_match = cgroup_path_regex.match(memory_cgroup_path)
             
             cpu_slice, cpu_unit = cpu_regex_match.group("slice", "unit") if cpu_regex_match else (None, None)
             memory_slice, memory_unit = memory_regex_match.group("slice", "unit") if memory_regex_match else (None, None)

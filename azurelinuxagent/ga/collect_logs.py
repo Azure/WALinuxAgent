@@ -97,8 +97,6 @@ class CollectLogsHandler(ThreadHandlerInterface):
         self.last_state = None
         self.period = conf.get_collect_logs_period()
 
-        CollectLogsHandler.__set_cgroups_env_flag()
-
     def run(self):
         self.start()
 
@@ -106,6 +104,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
         return self.event_thread.is_alive()
 
     def start(self):
+        CollectLogsHandler.__set_cgroups_env_flag()
         self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
         self.event_thread.setName(self.get_thread_name())
