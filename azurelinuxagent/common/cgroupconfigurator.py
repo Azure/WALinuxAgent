@@ -523,7 +523,7 @@ class CGroupConfigurator(object):
         @staticmethod
         def _get_command(pid):
             try:
-                with open('/proc/{0}/cmdline'.format(pid), "r") as file_:
+                with open('/proc/{0}/comm'.format(pid), "r") as file_:
                     comm = file_.read()
                     if comm and comm[-1] == '\x00':  # if null-terminated, remove the null
                         comm = comm[:-1]
