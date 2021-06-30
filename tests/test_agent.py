@@ -226,7 +226,7 @@ class TestAgent(AgentTestCase):
                     return (relative_path, relative_path)
                 return SystemdCgroupsApi.get_process_cgroup_paths(*args, **kwargs)
 
-            with patch.object(SystemdCgroupsApi, "get_process_cgroup_relative_paths", mock_cgroup_paths):
+            with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.get_process_cgroup_relative_paths", mock_cgroup_paths):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                 agent.collect_logs(is_full_mode=True)
 
