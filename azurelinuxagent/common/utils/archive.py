@@ -44,7 +44,7 @@ _CACHE_PATTERNS = [
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
-    re.compile(r"^(.*)waagent_status\.(\d+)\.json$")
+    re.compile(r"waagent_status\.(\d+)\.json$")
 ]
 
 _GOAL_STATE_PATTERN = re.compile(r"^(.*)/GoalState\.(\d+)\.xml$", re.IGNORECASE)

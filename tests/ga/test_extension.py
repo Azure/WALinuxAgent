@@ -607,7 +607,7 @@ class TestExtension(AgentTestCase):
 
     def test_it_should_zip_waagent_status_when_incarnation_changes(self, *args):
         """
-        This test checks when the incarnation changes the waagnet_status file for the previous incarnation
+        This test checks when the incarnation changes the waagent_status file for the previous incarnation
         is added into the history folder for the previous incarnation and gets zipped
         """
         temp_files = [
@@ -618,7 +618,7 @@ class TestExtension(AgentTestCase):
         ]
 
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -632,7 +632,8 @@ class TestExtension(AgentTestCase):
         test_subject.archive()
 
         timestamp_zips = os.listdir(os.path.join(self.tmp_dir, "history"))
-        self.assertEqual(1, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
+        self.assertEqual(1, len(timestamp_zips), "Expected number of zips in history is 1 for"
+                                                 " incarnation 1(previous incarnation)")
 
         zip_fn = timestamp_zips[0]
         zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
@@ -646,8 +647,6 @@ class TestExtension(AgentTestCase):
         protocol.update_goal_state()
         test_subject.archive()
         self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
-
-        exthandlers_handler.run()
 
     def test_it_should_only_download_extension_manifest_once_per_goal_state(self, *args):
 
