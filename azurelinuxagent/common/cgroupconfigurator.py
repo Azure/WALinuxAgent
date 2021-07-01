@@ -511,14 +511,18 @@ class CGroupConfigurator(object):
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
                     if current == 0:
-                        unexpected.append(process)
+                        formatted_process = self.__format_process(process)
+                        if 'systemd-run' in formatted_process:
+                            logger.info("Found unexpected systemd-run. PID: {0} PPID: {1} systemd-run PIDs: {2} comm: {3}\n{4}",
+                                    process, self._get_parent(process), systemd_run_commands, self._get_command(process), formatted_process)
+                        unexpected.append(formatted_process)
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
             except Exception as exception:
                 _log_cgroup_warning("Error checking the processes in the agent's cgroup: {0}".format(ustr(exception)))
 
             if len(unexpected) > 0:
-                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(self.__format_processes(unexpected)))
+                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(unexpected))
 
         @staticmethod
         def _get_command(pid):
@@ -532,21 +536,18 @@ class CGroupConfigurator(object):
                 return "UNKNOWN"
 
         @staticmethod
-        def __format_processes(pid_list):
+        def __format_process(pid):
             """
-            Formats the given PIDs as a sequence of strings containing the PIDs and their corresponding command line (truncated to 40 chars)
+            Formats the given PID as a string containing the PID and the corresponding command line truncated to 64 chars
             """
-            def get_command_line(pid):
-                try:
-                    cmdline = '/proc/{0}/cmdline'.format(pid)
-                    if os.path.exists(cmdline):
-                        with open(cmdline, "r") as cmdline_file:
-                            return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
-                except Exception:
-                    pass
-                return "[PID: {0}] UNKNOWN".format(pid)
-
-            return [get_command_line(pid) for pid in pid_list]
+            try:
+                cmdline = '/proc/{0}/cmdline'.format(pid)
+                if os.path.exists(cmdline):
+                    with open(cmdline, "r") as cmdline_file:
+                        return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
+            except Exception:
+                pass
+            return "[PID: {0}] UNKNOWN".format(pid)
 
         @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
