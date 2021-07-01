@@ -213,10 +213,10 @@ class Agent(object):
                 if regex_match is None:
                     return False, False
                 
-                slice, unit = regex_match.group("slice", "unit")
+                slice_group, unit_group = regex_match.group("slice", "unit")
 
-                slice_matches = (slice == logcollector.CGROUPS_SLICE)
-                unit_matches = (unit == logcollector.CGROUPS_UNIT)
+                slice_matches = (slice_group == logcollector.CGROUPS_SLICE)
+                unit_matches = (unit_group == logcollector.CGROUPS_UNIT)
 
                 return slice_matches, unit_matches
 
