@@ -3405,9 +3405,9 @@ class TestExtensionWithMockHTTP(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    @contextlib.contextmanager
-    def _setup_test_env(self, test_data):
-        with mock_wire_protocol(test_data) as protocol:
+    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
+    def test_ext_handler_reporting_status_file(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
 
             def mock_http_put(url, *args, **_):
                 if HttpRequestPredicates.is_host_plugin_status_request(url):
@@ -3419,11 +3419,6 @@ class TestExtensionWithMockHTTP(AgentTestCase):
             protocol.aggregate_status = None
             protocol.set_http_handlers(http_put_handler=mock_http_put)
             exthandlers_handler = get_exthandlers_handler(protocol)
-            yield exthandlers_handler
-
-    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
-    def test_ext_handler_reporting_status_file(self):
-        with self._setup_test_env(mockwiredata.DATA_FILE) as (exthandlers_handler):
 
             expected_status = {
                 "version": "1.1",
