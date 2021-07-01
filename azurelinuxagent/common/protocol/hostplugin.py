@@ -36,6 +36,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, PY_VERSION
 HOST_PLUGIN_PORT = 32526
 
 URI_FORMAT_GET_API_VERSIONS = "http://{0}:{1}/versions"
+URI_FORMAT_VM_SETTINGS = "http://{0}:{1}/vmSettings"
 URI_FORMAT_GET_EXTENSION_ARTIFACT = "http://{0}:{1}/extensionArtifact"
 URI_FORMAT_PUT_VM_STATUS = "http://{0}:{1}/status"
 URI_FORMAT_PUT_LOG = "http://{0}:{1}/vmAgentLog"
@@ -139,6 +140,21 @@ class HostPluginProtocol(object):
         self.health_service.report_host_plugin_versions(is_healthy=is_healthy, response=error_response)
 
         return return_val
+
+    def get_vm_settings_request(self):
+        if not self.ensure_initialized():
+            raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
+
+        url = URI_FORMAT_VM_SETTINGS.format(self.endpoint, HOST_PLUGIN_PORT)
+
+        headers = {
+            _HEADER_VERSION: API_VERSION,
+           _HEADER_CONTAINER_ID: self.container_id,
+           _HEADER_HOST_CONFIG_NAME: self.role_config_name,
+           _HEADER_CORRELATION_ID: str(uuid.uuid4())  # TODO: persist correlation ID
+        }
+
+        return url, headers
 
     def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
         if not self.ensure_initialized():
