@@ -246,6 +246,8 @@ class SystemdCgroupsApi(CGroupsApi):
                 stderr=stderr,
                 env=env,
                 preexec_fn=os.setsid)
+
+            # We start systemd-run with shell == True so process.pid is the shell's pid, not the pid for systemd-run
             self._systemd_run_commands.append(process.pid)
 
         scope_name = scope + '.scope'
