@@ -169,7 +169,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
         systemd_cmd = [
             "systemd-run", "--unit={0}".format(logcollector.CGROUPS_UNIT),
-            "--slice={0}".format(logcollector.CGROUPS_SLICE),  "--scope"
+            "--slice={0}".format(logcollector.CGROUPS_SLICE)
         ]
 
         # More info on resource limits properties in systemd here:

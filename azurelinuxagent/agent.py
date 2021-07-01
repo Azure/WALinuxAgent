@@ -204,22 +204,38 @@ class Agent(object):
 
         # Check the cgroups unit
         if CollectLogsHandler.should_validate_cgroups():
-            cgroup_path_regex = re.compile(r'^(?P<slice>.*)/(?P<unit>.*)$')
+
+            def validate_cgroup_path(path):
+                if path is None:
+                    return False, False
+
+                regex_match = re.match(r'^(?P<slice>.*)/(?P<unit>.*)$', path)
+                if regex_match is None:
+                    return False, False
+                
+                slice, unit = regex_match.group("slice", "unit")
+
+                slice_matches = (slice == logcollector.CGROUPS_SLICE)
+                unit_matches = (unit == logcollector.CGROUPS_UNIT)
+
+                return slice_matches, unit_matches
 
             cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
 
-            cpu_regex_match = cgroup_path_regex.match(cpu_cgroup_path)
-            memory_regex_match = cgroup_path_regex.match(memory_cgroup_path)
-            
-            cpu_slice, cpu_unit = cpu_regex_match.group("slice", "unit") if cpu_regex_match else (None, None)
-            memory_slice, memory_unit = memory_regex_match.group("slice", "unit") if memory_regex_match else (None, None)
+            cpu_slice_matches, cpu_unit_matches = validate_cgroup_path(cpu_cgroup_path)
+            memory_slice_matches, memory_unit_matches = validate_cgroup_path(memory_cgroup_path)
 
-            if cpu_slice != logcollector.CGROUPS_SLICE or memory_slice != logcollector.CGROUPS_SLICE:
-                print("Log Collector not in the expected slice, skipping execution.")
-                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
-            
-            if cpu_unit != logcollector.CGROUPS_UNIT or memory_unit != logcollector.CGROUPS_UNIT:
-                print("Log Collector does not have the expected unit name, skipping execution.")
+            if not all([cpu_slice_matches, cpu_unit_matches, memory_slice_matches, memory_unit_matches]):
+                print("The Log Collector process is not in the proper cgroups:")
+                if not cpu_slice_matches:
+                    print("\tunexpected cpu slice")
+                if not cpu_unit_matches:
+                    print("\tunexpected cpu unit")
+                if not memory_slice_matches:
+                    print("\tunexpected memory slice")
+                if not memory_unit_matches:
+                    print("\tunexpected memory unit")
+
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
         try:
