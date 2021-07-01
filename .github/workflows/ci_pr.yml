@@ -11,7 +11,7 @@ jobs:
   test-legacy-python-versions:
     
     name: "Python 2.6 Unit Tests"
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -60,7 +60,7 @@ jobs:
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
     
     name: "Python ${{ matrix.python-version }} Unit Tests"
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
 
     env:
       PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
