@@ -36,7 +36,8 @@ DATA_FILE = {
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip",
         "remote_access": None,
-        "in_vm_artifacts_profile": None
+        "in_vm_artifacts_profile": None,
+        "vm_settings": "hostgaplugin/vm_settings.json"
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -131,7 +132,8 @@ class WireProtocolData(object):
             "manifest.xml": 0,
             "manifest_of_ga.xml": 0,
             "ExampleHandlerLinux": 0,
-            "in_vm_artifacts_profile": 0
+            "in_vm_artifacts_profile": 0,
+            "vm_settings": 0
         }
         self.data_files = data_files
         self.version_info = None
@@ -147,6 +149,7 @@ class WireProtocolData(object):
         self.ext = None
         self.remote_access = None
         self.in_vm_artifacts_profile = None
+        self.vm_settings = None
 
         self.reload()
 
@@ -164,6 +167,7 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
+        self.vm_settings = load_data(self.data_files.get("vm_settings"))
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
@@ -209,6 +213,9 @@ class WireProtocolData(object):
         elif ".vmSettings" in url or ".settings" in url:
             content = self.in_vm_artifacts_profile
             self.call_counts["in_vm_artifacts_profile"] += 1
+        elif "/vmSettings" in url:
+            content = self.vm_settings
+            self.call_counts["vm_settings"] += 1
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin

@@ -116,6 +116,7 @@ class UpdateHandler(object):
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
         self._heartbeat_update_goal_state_error_count = 0
+        self._last_try_update_goal_state_failed = False
 
         self.last_incarnation = None
 
@@ -352,8 +353,33 @@ class UpdateHandler(object):
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 
+    def _try_update_goal_state(self, protocol):
+        """
+        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
+        """
+        try:
+            protocol.update_goal_state()
+            protocol.update_extension_goal_state()
+
+            if self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = False
+                message = u"Retrieving the goal state recovered from previous errors"
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
+                logger.info(message)
+        except Exception as e:
+            if not self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = True
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
+                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(traceback.format_exc()))
+                logger.warn(message)
+            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            return False
+        return True
+
     def _process_goal_state(self, protocol, exthandlers_handler, remote_access_handler):
-        if not protocol.try_update_goal_state():
+        if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
             return
 
