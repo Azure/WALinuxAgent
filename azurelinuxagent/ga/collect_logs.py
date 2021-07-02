@@ -22,7 +22,7 @@ import os
 import sys
 import threading
 import time
-from azurelinuxagent.common import logcollector
+from azurelinuxagent.common import cgroupconfigurator, logcollector
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
@@ -169,7 +169,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
         systemd_cmd = [
             "systemd-run", "--unit={0}".format(logcollector.CGROUPS_UNIT),
-            "--slice={0}".format(logcollector.CGROUPS_SLICE)
+            "--slice={0}".format(cgroupconfigurator.AZURE_SLICE)
         ]
 
         # More info on resource limits properties in systemd here:

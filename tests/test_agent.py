@@ -18,7 +18,7 @@
 import os.path
 
 from azurelinuxagent.agent import parse_args, Agent, usage, AgentCommands
-from azurelinuxagent.common import conf, logcollector
+from azurelinuxagent.common import cgroupconfigurator, conf, logcollector
 from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
@@ -223,7 +223,7 @@ class TestAgent(AgentTestCase):
             @staticmethod
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
-                    relative_path = "{0}/{1}".format(logcollector.CGROUPS_SLICE, logcollector.CGROUPS_UNIT)
+                    relative_path = "{0}/{1}".format(cgroupconfigurator.AZURE_SLICE, logcollector.CGROUPS_UNIT)
                     return (relative_path, relative_path)
                 return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
 

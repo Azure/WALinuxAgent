@@ -29,7 +29,7 @@ import subprocess
 import sys
 import threading
 import traceback
-from azurelinuxagent.common import logcollector
+from azurelinuxagent.common import cgroupconfigurator, logcollector
 from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 
 import azurelinuxagent.common.conf as conf
@@ -215,7 +215,7 @@ class Agent(object):
                 
                 slice_group, unit_group = regex_match.group("slice", "unit")
 
-                slice_matches = (slice_group == logcollector.CGROUPS_SLICE)
+                slice_matches = (slice_group == cgroupconfigurator.AZURE_SLICE)
                 unit_matches = (unit_group == logcollector.CGROUPS_UNIT)
 
                 return slice_matches, unit_matches
