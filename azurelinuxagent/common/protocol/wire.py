@@ -714,6 +714,8 @@ class WireClient(object):
     def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None):
         """
         max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+
+        Returns a tuple with the content and headers of the response. The headers are a list of (name, value) tuples.
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
