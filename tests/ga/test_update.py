@@ -1919,11 +1919,24 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         update_handler = get_update_handler()
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.set_incarnation(12345)
+            protocol.mock_wire_data.set_etag('54321')
 
+            # the first goal state should produce an update
             update_handler._try_update_goal_state(protocol)
-
             self.assertEqual(protocol.get_incarnation(), '12345', "The goal state was not updated (received unexpected incarnation)")
-            self.assertIsNotNone(protocol.client._extensions_goal_state, "The extensions goal state was not updated")  # this is just a dummy test for now
+            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state was not updated (received unexpected ETag)")
+
+            # no changes in the goal state should not produce an update
+            update_handler._try_update_goal_state(protocol)
+            self.assertEqual(protocol.get_incarnation(), '12345', "The goal state should not be updated (received unexpected incarnation)")
+            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state should not be updated (received unexpected ETag)")
+
+            # a new  goal state should produce an update
+            protocol.mock_wire_data.set_incarnation(6789)
+            protocol.mock_wire_data.set_etag('9876')
+            update_handler._try_update_goal_state(protocol)
+            self.assertEqual(protocol.get_incarnation(), '6789', "The goal state was not updated (received unexpected incarnation)")
+            self.assertEqual(protocol.get_etag(), '9876', "The extensions goal state was not updated (received unexpected ETag)")
 
     def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:

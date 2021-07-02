@@ -1250,6 +1250,8 @@ class MockResponse:
     def read(self, *_):
         return self.body
 
+    def getheaders(self):
+        return []
 
 if __name__ == '__main__':
     unittest.main()
