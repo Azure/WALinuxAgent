@@ -43,7 +43,7 @@ def get_collect_logs_handler():
 def is_log_collection_allowed():
     # There are three conditions that need to be met in order to allow periodic log collection:
     # 1) It should be enabled in the configuration.
-    # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
+    # 2) The system must be using cgroups to manage services. Needed for resource limiting of the log collection.
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
     cgroups_enabled = CGroupConfigurator.get_instance().enabled()

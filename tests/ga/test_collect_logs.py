@@ -18,6 +18,7 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
@@ -28,7 +29,7 @@ from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_i
 
 
 @contextlib.contextmanager
-def _create_collect_logs_handler(iterations=1, systemd_present=True):
+def _create_collect_logs_handler(iterations=1, cgroups_enabled=True, collect_logs_conf=True):
     """
     Creates an instance of CollectLogsHandler that
         * Uses a mock_wire_protocol for network requests,
@@ -46,8 +47,11 @@ def _create_collect_logs_handler(iterations=1, systemd_present=True):
         with patch("azurelinuxagent.ga.collect_logs.get_protocol_util", return_value=protocol_util):
             with patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.stopped", side_effect=[False] * iterations + [True]):
                 with patch("time.sleep"):
-                    with patch("azurelinuxagent.common.osutil.systemd.is_systemd", return_value=systemd_present):
-                        with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
+
+                    # Grab the singleton to patch it
+                    cgroups_configurator_singleton = CGroupConfigurator.get_instance()
+                    with patch.object(cgroups_configurator_singleton, "enabled", return_value=cgroups_enabled):
+                        with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=collect_logs_conf):
                             def run_and_wait():
                                 collect_logs_handler.run()
                                 collect_logs_handler.join()
@@ -93,26 +97,23 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
     def test_it_should_only_collect_logs_if_conditions_are_met(self):
         # In order to collect logs, three conditions have to be met:
         # 1) the flag must be set to true in the conf file
-        # 2) systemd must be managing services
+        # 2) cgroups must be managing services
         # 3) python version 2.7+ which is automatically true for these tests since they are disabled on py2.6
 
-        # systemd not present, config flag false
-        with _create_collect_logs_handler(systemd_present=False):
-            with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
-                self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
+        # cgroups not enabled, config flag false
+        with _create_collect_logs_handler(cgroups_enabled=False, collect_logs_conf=False):
+            self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
 
-        # systemd present, config flag false
-        with _create_collect_logs_handler():
-            with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=False):
-                self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
+        # cgroups enabled, config flag false
+        with _create_collect_logs_handler(cgroups_enabled=True, collect_logs_conf=False):
+            self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
 
-        # systemd not present, config flag true
-        with _create_collect_logs_handler(systemd_present=False):
-            with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=True):
-                self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
+        # cgroups not enabled, config flag true
+        with _create_collect_logs_handler(cgroups_enabled=False, collect_logs_conf=True):
+            self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
 
-        # systemd present, config flag true
-        with _create_collect_logs_handler():
+        # cgroups enabled, config flag true
+        with _create_collect_logs_handler(cgroups_enabled=True, collect_logs_conf=True):
             self.assertEqual(True, is_log_collection_allowed(), "Log collection should have been enabled")
 
     def test_log_collection_is_invoked_with_resource_limits(self):
