@@ -359,7 +359,7 @@ class UpdateHandler(object):
         """
         try:
             protocol.update_goal_state()
-            protocol.update_extension_goal_state()
+            protocol.update_extensions_goal_state()
 
             if self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = False
@@ -394,8 +394,8 @@ class UpdateHandler(object):
         incarnation = protocol.get_incarnation()
 
         try:
-            if incarnation != self.last_incarnation:
-                exthandlers_handler.run()
+            if incarnation != self.last_incarnation:  # TODO: This check should be based in the etag for the extensions goal state
+                exthandlers_handler.run()  # TODO: The info for the extensions within run() should be based on the extensions goal state
 
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time

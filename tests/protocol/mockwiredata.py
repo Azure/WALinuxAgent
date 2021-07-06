@@ -37,7 +37,8 @@ DATA_FILE = {
         "test_ext": "ext/sample_ext-1.3.0.zip",
         "remote_access": None,
         "in_vm_artifacts_profile": None,
-        "vm_settings": "hostgaplugin/vm_settings.json"
+        "vm_settings": "hostgaplugin/vm_settings.json",
+        "ETag": "1"
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -150,6 +151,7 @@ class WireProtocolData(object):
         self.remote_access = None
         self.in_vm_artifacts_profile = None
         self.vm_settings = None
+        self.etag = None
 
         self.reload()
 
@@ -168,6 +170,7 @@ class WireProtocolData(object):
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
         self.vm_settings = load_data(self.data_files.get("vm_settings"))
+        self.etag = self.data_files.get("ETag")
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
@@ -179,6 +182,7 @@ class WireProtocolData(object):
 
     def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument
         content = None
+        response_headers = []
 
         resp = MagicMock()
         resp.status = httpclient.OK
@@ -215,6 +219,7 @@ class WireProtocolData(object):
             self.call_counts["in_vm_artifacts_profile"] += 1
         elif "/vmSettings" in url:
             content = self.vm_settings
+            response_headers = [('ETag', self.etag)]
             self.call_counts["vm_settings"] += 1
 
         else:
@@ -256,6 +261,7 @@ class WireProtocolData(object):
                 raise Exception("Bad url {0}".format(url))
 
         resp.read = Mock(return_value=content.encode("utf-8"))
+        resp.getheaders = Mock(return_value=response_headers)
         return resp
 
     def mock_http_post(self, url, *args, **kwargs):  # pylint: disable=unused-argument
@@ -340,6 +346,12 @@ class WireProtocolData(object):
         if new_xml_document == xml_document:
             raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
         return new_xml_document
+
+    def set_etag(self, etag):
+        '''
+        Sets the ETag for the mock response
+        '''
+        self.etag = etag
 
     def set_incarnation(self, incarnation):
         '''
