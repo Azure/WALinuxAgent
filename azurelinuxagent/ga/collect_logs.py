@@ -30,7 +30,7 @@ from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEv
 from azurelinuxagent.common.future import subprocess_dev_null, ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
-from azurelinuxagent.common.osutil import systemd
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -46,14 +46,14 @@ def is_log_collection_allowed():
     # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
-    systemd_present = systemd.is_systemd()
+    cgroups_enabled = CGroupConfigurator.get_instance().enabled()
     supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
-    is_allowed = conf_enabled and systemd_present and supported_python
+    is_allowed = conf_enabled and cgroups_enabled and supported_python
 
     msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
-          "configuration enabled [{1}], systemd present [{2}], python supported: [{3}]".format(is_allowed,
+          "configuration enabled [{1}], cgroups enabled [{2}], python supported: [{3}]".format(is_allowed,
                                                                                                conf_enabled,
-                                                                                               systemd_present,
+                                                                                               cgroups_enabled,
                                                                                                supported_python)
     logger.info(msg)
     add_event(
