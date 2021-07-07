@@ -797,7 +797,9 @@ class WireClient(object):
     def update_extensions_goal_state(self):
         try:
             url, headers = self.get_host_plugin().get_vm_settings_request()
-            headers['ETag'] = self.get_etag()
+            etag = self.get_etag()
+            if etag is not None:
+                headers['If-None-Match'] = etag
 
             vm_settings, response_headers = self.fetch(url, headers)
 
@@ -849,8 +851,11 @@ class WireClient(object):
         self._host_plugin = new_host_plugin
 
     def get_etag(self):
+        """
+        Returns the Etag of the current ExtensionsGoalState, or None, if the goal state has not been retrieved.
+        """
         if self._extensions_goal_state is None:
-            return "0000000000"
+            return None
         return self._extensions_goal_state.etag
 
     def get_extensions_goal_state(self):
