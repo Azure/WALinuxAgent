@@ -205,25 +205,36 @@ class Agent(object):
         # Check the cgroups unit
         if CollectLogsHandler.should_validate_cgroups():
 
-            def validate_cgroup_path(path):
+            def validate_cgroup_path(path, expected_slice, expected_unit):
                 if path is None:
                     return False, False
 
-                regex_match = re.match(r'^(?P<slice>.*)/(?P<unit>.*)$', path)
+                # '(.*/)?': process slice may be nested in other, heirarchical slices.
+                # '[^\s./]*': process slice can't contain spaces, periods, or slashes.
+                slice_regex = r'(.*/)?(?P<slice>[^\s./]*.slice)'
+                # '[^\s./]*': process unit can't contain spaces, periods, or slashes.
+                unit_regex = r'(?P<unit>[^\s./]*.scope)'
+                # '(/{unit_regex})?': unit may not exist (i.e. in the case of cpu cgroups path)
+                path_regex = r'^{slice_regex}(/{unit_regex})?$'\
+                    .format(slice_regex=slice_regex, unit_regex=unit_regex)
+
+                regex_match = re.match(path_regex, path)
                 if regex_match is None:
                     return False, False
                 
                 slice_group, unit_group = regex_match.group("slice", "unit")
 
-                slice_matches = (slice_group == cgroupconfigurator.AZURE_SLICE)
-                unit_matches = (unit_group == logcollector.CGROUPS_UNIT)
+                slice_matches = (slice_group == expected_slice)
+                unit_matches = (unit_group == expected_unit)
 
                 return slice_matches, unit_matches
 
             cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
 
-            cpu_slice_matches, cpu_unit_matches = validate_cgroup_path(cpu_cgroup_path)
-            memory_slice_matches, memory_unit_matches = validate_cgroup_path(memory_cgroup_path)
+            cpu_slice_matches, cpu_unit_matches = validate_cgroup_path(cpu_cgroup_path,
+                cgroupconfigurator.LOGCOLLECTOR_SLICE, None)
+            memory_slice_matches, memory_unit_matches = validate_cgroup_path(memory_cgroup_path,
+                cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
 
             if not all([cpu_slice_matches, cpu_unit_matches, memory_slice_matches, memory_unit_matches]):
                 print("The Log Collector process is not in the proper cgroups:")

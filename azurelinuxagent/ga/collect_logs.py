@@ -156,7 +156,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
             self._send_logs()
 
     @staticmethod
-    def _get_resource_limits():
+    def get_resource_limits():
         # Define CPU limit (as percentage of CPU time) and memory limit (absolute value in megabytes).
         cpu_limit = "5%"
         memory_limit = "30M"  # K for kb, M for mb
@@ -169,18 +169,12 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
         systemd_cmd = [
             "systemd-run", "--unit={0}".format(logcollector.CGROUPS_UNIT),
-            "--slice={0}".format(cgroupconfigurator.AZURE_SLICE)
+            "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
         ]
-
-        # More info on resource limits properties in systemd here:
-        # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
-        cpu_limit, memory_limit = CollectLogsHandler._get_resource_limits()
-        resource_limits = ["--property=CPUAccounting=1", "--property=CPUQuota={0}".format(cpu_limit),
-                           "--property=MemoryAccounting=1", "--property=MemoryLimit={0}".format(memory_limit)]
 
         # The log tool is invoked from the current agent's egg with the command line option
         collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
-        final_command = systemd_cmd + resource_limits + collect_logs_cmd
+        final_command = systemd_cmd + collect_logs_cmd
 
         def exec_command(output_file):
             start_time = datetime.datetime.utcnow()
