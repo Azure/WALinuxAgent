@@ -511,11 +511,7 @@ class CGroupConfigurator(object):
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
                     if current == 0:
-                        formatted_process = self.__format_process(process)
-                        if 'systemd-run' in formatted_process:
-                            logger.info("Found unexpected systemd-run. PID: {0} PPID: {1} systemd-run PIDs: {2} comm: {3}\n{4}",
-                                    process, self._get_parent(process), systemd_run_commands, self._get_command(process), formatted_process)
-                        unexpected.append(formatted_process)
+                        unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
             except Exception as exception:
@@ -531,7 +527,7 @@ class CGroupConfigurator(object):
                     comm = file_.read()
                     if comm and comm[-1] == '\x00':  # if null-terminated, remove the null
                         comm = comm[:-1]
-                    return comm
+                    return comm.rstrip()
             except Exception:
                 return "UNKNOWN"
 
