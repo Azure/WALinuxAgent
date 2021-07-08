@@ -3459,8 +3459,8 @@ class TestExtension(AgentTestCase):
     def test_it_should_zip_waagent_status_when_incarnation_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
 
-            """This test checks when the incarnation changes the waagent_status file for the previous incarnation
-            is added into the history folder for the previous incarnation and gets zipped"""
+            # This test checks when the incarnation changes the waagent_status file for the previous incarnation
+            # is added into the history folder for the previous incarnation and gets zipped
 
             exthandlers_handler = get_exthandlers_handler(protocol)
 
