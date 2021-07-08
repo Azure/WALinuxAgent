@@ -3354,7 +3354,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
                 protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
                     timeout_in_minutes=0, timeout_in_ms=200)
 
-#New test cases should be added here>This class uses mock_wire_protocol
+# New test cases should be added here.This class uses mock_wire_protocol
 class TestExtension(AgentTestCase):
 
     def setUp(self):
@@ -3470,15 +3470,12 @@ class TestExtension(AgentTestCase):
                 'waagent_status.1.json'
             ]
 
-            test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-            # exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
-
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
             # Updating incarnation to 2 , hence the history folder should have waaagent_status.1.json added under
             # incarnation 1
-            test_data.set_incarnation(2)
+            protocol.mock_wire_data.set_incarnation(2)
             protocol.update_goal_state()
 
             test_subject = StateArchiver(self.tmp_dir)
@@ -3496,7 +3493,7 @@ class TestExtension(AgentTestCase):
 
             # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation
             # 1 and 2
-            test_data.set_incarnation(3)
+            protocol.mock_wire_data.set_incarnation(3)
             protocol.update_goal_state()
             test_subject.archive()
             self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
