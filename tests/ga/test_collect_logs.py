@@ -116,18 +116,6 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         with _create_collect_logs_handler(cgroups_enabled=True, collect_logs_conf=True):
             self.assertEqual(True, is_log_collection_allowed(), "Log collection should have been enabled")
 
-    def test_log_collection_is_invoked_with_resource_limits(self):
-        with _create_collect_logs_handler() as collect_logs_handler:
-            with patch("azurelinuxagent.ga.collect_logs.shellutil.run_command") as patch_run_command:
-                collect_logs_handler.run_and_wait()
-
-        args, _ = patch_run_command.call_args
-        self.assertIn("systemd-run", args[0], "The log collector should have been invoked with systemd-run")
-        self.assertIn("--property=CPUAccounting=1", args[0], "The log collector should have been invoked with CPUAccounting turned on")
-        self.assertIn("--property=MemoryAccounting=1", args[0], "The log collector should have been invoked with MemoryAccounting turned on")
-        self.assertIn("--property=CPUQuota=5%", args[0], "The log collector should have been invoked with a CPU limit")
-        self.assertIn("--property=MemoryLimit=30M", args[0], "The log collector should have been invoked with a memory limit")
-
     def test_it_uploads_logs_when_collection_is_successful(self):
         archive_size = 42
 
