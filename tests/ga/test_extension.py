@@ -27,16 +27,15 @@ import time
 import unittest
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, \
-    get_agent_supported_features_list_for_extensions
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
-    GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
@@ -54,6 +53,7 @@ from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCA
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
+from tests.utils.test_archive import TestArchive
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -433,11 +433,11 @@ class TestHandlerStateMigration(AgentTestCase):
             self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))  # pylint: disable=redundant-unittest-assert
         return
 
-
+# Deprecated. New tests should be added to the TestExtension class
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestExtension(AgentTestCase):
+class TestExtension_Deprecated(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -1092,63 +1092,6 @@ class TestExtension(AgentTestCase):
 
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
-
-    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
-    def test_ext_handler_reporting_status_file(self, *args):
-
-        expected_status = {
-            "agent_name": AGENT_NAME,
-            "current_version": str(CURRENT_VERSION),
-            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
-            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
-            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
-            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
-            "extensions_status": [
-                {
-                    "name": "OSTCExtensions.ExampleHandlerLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.Powershell.ExampleExtension",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                }
-            ]
-        }
-
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
-        actual_status_json = json.loads(fileutil.read_file(status_path))
-
-        self.assertEqual(expected_status, actual_status_json)
 
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
@@ -3411,6 +3354,150 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
                 protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
                     timeout_in_minutes=0, timeout_in_ms=200)
 
+# New test cases should be added here.This class uses mock_wire_protocol
+class TestExtension(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+
+    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
+    def test_ext_handler_reporting_status_file(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+
+            def mock_http_put(url, *args, **_):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
+
+            protocol.aggregate_status = None
+            protocol.set_http_handlers(http_put_handler=mock_http_put)
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            expected_status = {
+                "version": "1.1",
+                "timestampUTC": "1970-01-01T00:00:00Z",
+                "aggregateStatus": {
+                    "guestAgentStatus": {
+                        "version": "9.9.9.9",
+                        "status": "Ready",
+                        "formattedMessage": {
+                            "lang": "en-US",
+                            "message": "Guest Agent is running"
+                        }
+                    },
+                    "handlerAggregateStatus": [
+                        {
+                            "handlerVersion": "1.0.0",
+                            "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                            "status": "Ready",
+                            "code": 0,
+                            "useExactVersion": True,
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "Plugin enabled"
+                            },
+                            "runtimeSettingsStatus": {
+                                "settingsStatus": {
+                                    "status": {
+                                        "name": "OSTCExtensions.ExampleHandlerLinux",
+                                        "configurationAppliedTime": None,
+                                        "operation": None,
+                                        "status": "success",
+                                        "code": 0
+                                    },
+                                    "version": 1,
+                                    "timestampUTC": "1970-01-01T00:00:00Z"
+                                },
+                                "sequenceNumber": 0
+                            },
+                            "supportsMultiConfig": False
+                        }
+                    ],
+                    "vmArtifactsAggregateStatus": {
+                        "goalStateAggregateStatus": {
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "GoalState executed successfully"
+                            },
+                            "timestampUTC": "1970-01-01T00:00:00Z",
+                            "inSvdSeqNo": "1",
+                            "status": "Success",
+                            "code": 0
+                        }
+                    }
+                },
+                "agentName": AGENT_NAME,
+                "daemonVersion": "0.0.0.0",
+                "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+                "extensionSupportedFeatures": [name for name, _ in
+                                             get_agent_supported_features_list_for_extensions().items()],
+                "crpSupportedFeatures": [
+                    {
+                        "Key": "MultipleExtensionsPerHandler",
+                        "Value": "1.0"
+                    }
+                ]
+
+            }
+
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
+            actual_status_json = json.loads(fileutil.read_file(status_path))
+
+            # Popping run time attributes
+            actual_status_json.pop('guestOSInfo', None)
+
+            self.assertEqual(expected_status, actual_status_json)
+
+    def test_it_should_zip_waagent_status_when_incarnation_changes(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+
+            # This test checks when the incarnation changes the waagent_status file for the previous incarnation
+            # is added into the history folder for the previous incarnation and gets zipped
+
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            temp_files = [
+                'ExtensionsConfig.1.xml',
+                'GoalState.1.xml',
+                'OSTCExtensions.ExampleHandlerLinux.1.manifest.xml',
+                'waagent_status.1.json'
+            ]
+
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Updating incarnation to 2 , hence the history folder should have waaagent_status.1.json added under
+            # incarnation 1
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.update_goal_state()
+
+            test_subject = StateArchiver(self.tmp_dir)
+            test_subject.archive()
+
+            timestamp_zips = os.listdir(os.path.join(self.tmp_dir, "history"))
+            self.assertEqual(1, len(timestamp_zips), "Expected number of zips in history is 1 for"
+                                                     " incarnation 1(previous incarnation)")
+
+            zip_fn = timestamp_zips[0]
+            zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
+            self.assertEqual(TestArchive.assert_zip_contains(zip_fullname, temp_files), None)
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation
+            # 1 and 2
+            protocol.mock_wire_data.set_incarnation(3)
+            protocol.update_goal_state()
+            test_subject.archive()
+            self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
 
 if __name__ == '__main__':
     unittest.main()
