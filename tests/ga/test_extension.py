@@ -53,7 +53,7 @@ from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, Mock
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
-    enable_invocations, generate_put_handler, extract_extension_info_from_command
+    enable_invocations, generate_put_handler
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
