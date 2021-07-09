@@ -1407,7 +1407,7 @@ class ExtHandlerInstance(object):
         For all other extensions, we should create a
         """
 
-        ignore_extension_regex = "Microsoft\\.AKS\\.Compute\\.AKS\\S*"
+        ignore_extension_regex = r"Microsoft.AKS.Compute.AKS\S*"
         return re.match(ignore_extension_regex, self.get_extension_full_name(extension)) is None
 
     def create_placeholder_status_file(self, extension=None, status=ValidHandlerStatus.transitioning, code=0,
