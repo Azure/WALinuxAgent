@@ -1669,10 +1669,9 @@ class TestExtension(AgentTestCase):
 
         def mock_popen(cmd, *_, **kwargs):
             if 'env' in kwargs:
-                handler_name, handler_version, command_name = extract_extension_info_from_command(cmd)
-                if command_name != ExtensionCommandNames.ENABLE:
+                if ExtensionCommandNames.ENABLE not in cmd:
                     # To force the test extension to not create a status file on Install, changing command
-                    return original_popen("echo not-enable", *_, **kwargs)
+                    return original_popen(["echo", "not-enable"], *_, **kwargs)
 
                 seq_no = kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]
                 ext_path = kwargs['env'][ExtCommandEnvVariable.ExtensionPath]
