@@ -32,7 +32,7 @@ from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
-_AZURE_SLICE = "azure.slice"
+AZURE_SLICE = "azure.slice"
 _AZURE_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Agent and Extensions
@@ -129,7 +129,7 @@ class CGroupConfigurator(object):
 
                 agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
-                if agent_slice not in (_AZURE_SLICE, "system.slice"):
+                if agent_slice not in (AZURE_SLICE, "system.slice"):
                     _log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
                     return
 
@@ -275,7 +275,7 @@ class CGroupConfigurator(object):
             CGroupConfigurator._Impl.__cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
             unit_file_install_path = systemd.get_unit_file_install_path()
-            azure_slice = os.path.join(unit_file_install_path, _AZURE_SLICE)
+            azure_slice = os.path.join(unit_file_install_path, AZURE_SLICE)
             vmextensions_slice = os.path.join(unit_file_install_path, _VMEXTENSIONS_SLICE)
             agent_unit_file = systemd.get_agent_unit_file()
             agent_drop_in_path = systemd.get_agent_drop_in_path()
@@ -500,39 +500,50 @@ class CGroupConfigurator(object):
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
                 for process in agent_cgroup:
-                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
+                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't.
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
+                        continue
+                    # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
+                    if self._get_parent(process) in systemd_run_commands and self._get_command(process) == 'systemd-run':
                         continue
                     # check if the process is a command started by the agent or a descendant of one of those commands
                     current = process
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
                     if current == 0:
-                        unexpected.append(process)
+                        unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
             except Exception as exception:
                 _log_cgroup_warning("Error checking the processes in the agent's cgroup: {0}".format(ustr(exception)))
 
             if len(unexpected) > 0:
-                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(self.__format_processes(unexpected)))
+                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(unexpected))
 
         @staticmethod
-        def __format_processes(pid_list):
-            """
-            Formats the given PIDs as a sequence of strings containing the PIDs and their corresponding command line (truncated to 40 chars)
-            """
-            def get_command_line(pid):
-                try:
-                    cmdline = '/proc/{0}/cmdline'.format(pid)
-                    if os.path.exists(cmdline):
-                        with open(cmdline, "r") as cmdline_file:
-                            return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
-                except Exception:
-                    pass
-                return "[PID: {0}] UNKNOWN".format(pid)
+        def _get_command(pid):
+            try:
+                with open('/proc/{0}/comm'.format(pid), "r") as file_:
+                    comm = file_.read()
+                    if comm and comm[-1] == '\x00':  # if null-terminated, remove the null
+                        comm = comm[:-1]
+                    return comm.rstrip()
+            except Exception:
+                return "UNKNOWN"
 
-            return [get_command_line(pid) for pid in pid_list]
+        @staticmethod
+        def __format_process(pid):
+            """
+            Formats the given PID as a string containing the PID and the corresponding command line truncated to 64 chars
+            """
+            try:
+                cmdline = '/proc/{0}/cmdline'.format(pid)
+                if os.path.exists(cmdline):
+                    with open(cmdline, "r") as cmdline_file:
+                        return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
+            except Exception:
+                pass
+            return "[PID: {0}] UNKNOWN".format(pid)
 
         @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
