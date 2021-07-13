@@ -43,6 +43,10 @@ _TRUNCATED_FILES_DIR = os.path.join(_LOG_COLLECTOR_DIR, "truncated")
 OUTPUT_RESULTS_FILE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "results.txt")
 COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
+CGROUPS_UNIT = "collect-logs.scope"
+
+INVALID_CGROUPS_ERRCODE = 2
+
 _MUST_COLLECT_FILES = [
     _AGENT_LOG,
     os.path.join(_AGENT_LIB_DIR, "GoalState.*.xml"),
