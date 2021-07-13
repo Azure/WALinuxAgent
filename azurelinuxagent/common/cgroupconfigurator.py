@@ -48,7 +48,7 @@ Before=slices.target
 [Slice]
 CPUAccounting=yes
 """
-LOGCOLLECTOR_SLICE = "azure-walinuxagent-periodic_logcollector.slice"
+LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
 # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
 _LOGCOLLECTOR_SLICE_CONTENTS_FMT = """

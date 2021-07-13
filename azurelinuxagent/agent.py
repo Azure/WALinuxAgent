@@ -37,7 +37,7 @@ import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
-from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
@@ -205,11 +205,13 @@ class Agent(object):
         # Check the cgroups unit
         if CollectLogsHandler.should_validate_cgroups():
 
-            def validate_cgroup_path(path, expected_slice, expected_unit):
+            def validate_cgroup_path(path, id):
                 if path is None:
-                    return False, False
+                    return False
 
-                # '(.*/)?': process slice may be nested in other, heirarchical slices.
+                expected_slice, expected_unit = cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT
+
+                # '(.*/)?': process slice may be nested in other, hierarchical slices.
                 # '[^\s./]*': process slice can't contain spaces, periods, or slashes.
                 slice_regex = r'(.*/)?(?P<slice>[^\s./]*.slice)'
                 # '[^\s./]*': process unit can't contain spaces, periods, or slashes.
@@ -220,32 +222,32 @@ class Agent(object):
 
                 regex_match = re.match(path_regex, path)
                 if regex_match is None:
-                    return False, False
+                    return False
                 
                 slice_group, unit_group = regex_match.group("slice", "unit")
 
-                slice_matches = (slice_group == expected_slice)
-                unit_matches = (unit_group == expected_unit)
+                if unit_group != expected_unit:
+                    # different systemd versions write different values to the /proc/self/cgroup
+                    # file, which makes it hard to match the unit. emit telemetry for a mismatch
+                    msg = "{0}: Unexpected id={1} unit name for log collector process: actual='{2}' vs. expected='{3}'"\
+                        .format(systemd.get_version(), id, unit_group, expected_unit)
 
-                return slice_matches, unit_matches
+                    print(msg)
+                    event.add_event(op=event.WALAEventOperation.LogCollection, message=msg)
+
+                return (slice_group == expected_slice)
 
             cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
 
-            cpu_slice_matches, cpu_unit_matches = validate_cgroup_path(cpu_cgroup_path,
-                cgroupconfigurator.LOGCOLLECTOR_SLICE, None)
-            memory_slice_matches, memory_unit_matches = validate_cgroup_path(memory_cgroup_path,
-                cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
+            cpu_slice_matches = validate_cgroup_path(cpu_cgroup_path, "CPU")
+            memory_slice_matches = validate_cgroup_path(memory_cgroup_path, "MEMORY")
 
-            if not all([cpu_slice_matches, cpu_unit_matches, memory_slice_matches, memory_unit_matches]):
+            if not cpu_slice_matches or not memory_slice_matches:
                 print("The Log Collector process is not in the proper cgroups:")
                 if not cpu_slice_matches:
                     print("\tunexpected cpu slice")
-                if not cpu_unit_matches:
-                    print("\tunexpected cpu unit")
                 if not memory_slice_matches:
                     print("\tunexpected memory slice")
-                if not memory_unit_matches:
-                    print("\tunexpected memory unit")
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
