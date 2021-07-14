@@ -797,20 +797,23 @@ class WireClient(object):
     def update_extensions_goal_state(self):
         try:
             url, headers = self.get_host_plugin().get_vm_settings_request()
-            headers['ETag'] = self.get_etag()
+            etag = self.get_etag()
+            if etag is not None:
+                headers['if-none-match'] = etag
 
             vm_settings, response_headers = self.fetch(url, headers)
 
+            # The response includes an etag if and only if the VM settings change.
+            response_etag = None
             for h in response_headers:
                 if h[0].lower() == 'etag':
-                    etag = h[1]
+                    response_etag = h[1]
                     break
-            else:
-                raise Exception("The response for vmSettings does not include an ETag. Headers: {0}".format(response_headers))
+            if response_etag is None:
+                return
 
-            if self.get_etag() != etag:
-                # TODO - We need to archive the ExtensionsGoalState to the history folder (as well as save the current value to /var/lib/waagent)
-                self._extensions_goal_state = ExtensionsGoalState(etag, vm_settings)
+            # TODO - We need to archive the ExtensionsGoalState to the history folder (as well as save the current value to /var/lib/waagent)
+            self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
 
         except Exception as exception:
             raise ProtocolError("Error processing extension goal state: {0}".format(ustr(exception)))
@@ -849,8 +852,11 @@ class WireClient(object):
         self._host_plugin = new_host_plugin
 
     def get_etag(self):
+        """
+        Returns the Etag of the current ExtensionsGoalState, or None, if the goal state has not been retrieved.
+        """
         if self._extensions_goal_state is None:
-            return "0000000000"
+            return None
         return self._extensions_goal_state.etag
 
     def get_extensions_goal_state(self):
