@@ -16,7 +16,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
 import datetime
 import glob
 import json
@@ -52,8 +51,8 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSu
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, Extension
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
-    GOAL_STATE_AGENT_VERSION, PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
+    PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -67,7 +66,7 @@ HANDLER_NAME_PATTERN = re.compile(_HANDLER_NAME_PATTERN, re.IGNORECASE)
 HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 
-AGENT_STATUS_FILE = "waagent_status.json"
+AGENT_STATUS_FILE = "waagent_status.{0}.json"
 NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
@@ -88,7 +87,6 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
-
 
 class ValidHandlerStatus(object):
     transitioning = "transitioning"
@@ -307,9 +305,9 @@ class ExtHandlersHandler(object):
                 # trying to retrieve is debug only on linux.
                 error_msg = u"Couldn't parse debug metadata value: {0}".format(e)
                 logger.verbose(error_msg)
-            
+
             return "NA"
-        
+
         to_utc = lambda time: time.strftime(logger.Logger.LogTimeFormatInUTC)
         identity = lambda value: value
 
@@ -979,39 +977,42 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=msg)
 
-    @staticmethod
-    def write_ext_handlers_status_to_info_file(vm_status):
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
+    def write_ext_handlers_status_to_info_file(self, vm_status):
+        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.protocol.get_incarnation()))
+        status_blob_data = self.protocol.get_status_blob_data()
+        data = dict()
+        if status_blob_data is not None:
+            data = json.loads(status_blob_data)
 
-        agent_details = {
-            "agent_name": AGENT_NAME,
-            "current_version": str(CURRENT_VERSION),
-            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
-            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
-            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
-            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
-        }
+        # Populating the fields that does not come from vm_status or status_blob_data
+        data["agentName"] = AGENT_NAME
+        data["daemonVersion"] = str(version.get_daemon_version())
+        data["pythonVersion"] = "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
+        data["extensionSupportedFeatures"] = [name for name, _ in
+                                         get_agent_supported_features_list_for_extensions().items()]
 
-        # Convert VMStatus class to Dict.
-        data = get_properties(vm_status)
+        # Consuming supports_multi_config info from vm_status. creating a dict out of it for easy lookup in the next step.
+        support_multi_config = dict()
+        if vm_status is not None:
+            # Convert VMStatus class to Dict.
+            vm_status_data = get_properties(vm_status)
+            vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
+            for handler_status in vm_handler_statuses:
+                if handler_status.get('name') is not None:
+                    support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
 
-        # The above class contains vmAgent.extensionHandlers
-        # (more info: azurelinuxagent.common.protocol.restapi.VMAgentStatus)
-        handler_statuses = data['vmAgent']['extensionHandlers']
-        for handler_status in handler_statuses:
-            try:
-                handler_status.pop('code', None)
-                handler_status.pop('message', None)
-                handler_status.pop('extension_status', None)
-            except KeyError:
-                pass
+        handler_aggregate_status = data.get('aggregateStatus', dict()).get('handlerAggregateStatus', dict())
 
-        agent_details['extensions_status'] = handler_statuses
-        agent_details_json = json.dumps(agent_details)
+        for handler_status in handler_aggregate_status:
+            handler_status['supportsMultiConfig'] = support_multi_config.get(handler_status.get('handlerName'))
+            status = handler_status.get('runtimeSettingsStatus', dict()).get('settingsStatus', dict()).get('status', dict())
+            status.pop('formattedMessage', None)
+            status.pop('substatus', None)
 
-        fileutil.write_file(status_path, agent_details_json)
+        # renaming supportedFeatures to crpSupportedFeatures
+        data["crpSupportedFeatures"] = data.pop("supportedFeatures", None)
+
+        fileutil.write_file(status_path, json.dumps(data))
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
@@ -1982,10 +1983,10 @@ class ExtHandlerInstance(object):
 
     def create_handler_env(self):
         handler_env = {
-                HandlerEnvironment.logFolder: self.get_log_dir(), 
-                HandlerEnvironment.configFolder: self.get_conf_dir(), 
-                HandlerEnvironment.statusFolder: self.get_status_dir(), 
-                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file() 
+                HandlerEnvironment.logFolder: self.get_log_dir(),
+                HandlerEnvironment.configFolder: self.get_conf_dir(),
+                HandlerEnvironment.statusFolder: self.get_status_dir(),
+                HandlerEnvironment.heartbeatFile: self.get_heartbeat_file()
             }
 
         if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:

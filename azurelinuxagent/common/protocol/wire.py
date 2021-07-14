@@ -202,6 +202,9 @@ class WireProtocol(DataContract):
     def upload_logs(self, logs):
         self.client.upload_logs(logs)
 
+    def get_status_blob_data(self):
+        return self.client.status_blob.data
+
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
     xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"

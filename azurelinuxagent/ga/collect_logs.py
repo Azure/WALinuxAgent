@@ -22,6 +22,7 @@ import os
 import sys
 import threading
 import time
+from azurelinuxagent.common import cgroupconfigurator, logcollector
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
@@ -34,7 +35,6 @@ from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
-
 
 def get_collect_logs_handler():
     return CollectLogsHandler()
@@ -73,10 +73,26 @@ class CollectLogsHandler(ThreadHandlerInterface):
     """
 
     _THREAD_NAME = "CollectLogsHandler"
+    __CGROUPS_FLAG_ENV_VARIABLE = "_AZURE_GUEST_AGENT_LOG_COLLECTOR_MONITOR_CGROUPS_"
 
     @staticmethod
     def get_thread_name():
         return CollectLogsHandler._THREAD_NAME
+
+    @staticmethod
+    def enable_cgroups_validation():
+        os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE] = "1"
+
+    @staticmethod
+    def disable_cgroups_validation():
+        if CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE in os.environ:
+            del os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE]
+
+    @staticmethod
+    def should_validate_cgroups():
+        if CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE in os.environ:
+            return os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE] == "1"
+        return False
 
     def __init__(self):
         self.protocol = None
@@ -118,6 +134,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
     def daemon(self):
         try:
+            CollectLogsHandler.enable_cgroups_validation()
             if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
 
@@ -131,6 +148,8 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     time.sleep(self.period)
         except Exception as e:
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
+        finally:
+            CollectLogsHandler.disable_cgroups_validation()
 
     def collect_and_send_logs(self):
         if self._collect_logs():
@@ -143,13 +162,15 @@ class CollectLogsHandler(ThreadHandlerInterface):
         memory_limit = "30M"  # K for kb, M for mb
         return cpu_limit, memory_limit
 
-    @staticmethod
-    def _collect_logs():
+    def _collect_logs(self):
         logger.info("Starting log collection...")
 
         # Invoke the command line tool in the agent to collect logs, with resource limits on CPU and memory (RAM).
-        scope_name = "collect-logs-{0}.scope".format(ustr(int(time.time() * 1000000)))
-        systemd_cmd = ["systemd-run", "--unit={0}".format(scope_name), "--scope"]
+
+        systemd_cmd = [
+            "systemd-run", "--unit={0}".format(logcollector.CGROUPS_UNIT),
+            "--slice={0}".format(cgroupconfigurator.AZURE_SLICE)
+        ]
 
         # More info on resource limits properties in systemd here:
         # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
@@ -180,14 +201,20 @@ class CollectLogsHandler(ThreadHandlerInterface):
                 return True
             except Exception as e:
                 duration = elapsed_milliseconds(start_time)
+                err_msg = ustr(e)
 
                 if isinstance(e, CommandError):
-                    exception_message = ustr("[stderr] %s", e.stderr)  # pylint: disable=no-member
-                else:
-                    exception_message = ustr(e)
+                    # pylint has limited (i.e. no) awareness of control flow w.r.t. typing. we disable=no-member
+                    # here because we know e must be a CommandError but pylint still considers the case where
+                    # e is a different type of exception.
+                    err_msg = ustr("[stderr] %s", e.stderr) # pylint: disable=no-member
 
-                msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, exception_message)
-                # No need to log to the local log since we ran run_command with logging errors as enabled
+                    if e.returncode == 2: # pylint: disable=no-member
+                        logger.info("Disabling periodic log collection until service restart due to process error.")
+                        self.stop()
+
+                msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, err_msg)
+                # No need to log to the local log since we logged stdout, stderr from the process.
 
                 return False
             finally:

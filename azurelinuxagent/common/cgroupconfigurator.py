@@ -32,7 +32,7 @@ from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
-_AZURE_SLICE = "azure.slice"
+AZURE_SLICE = "azure.slice"
 _AZURE_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Agent and Extensions
@@ -129,7 +129,7 @@ class CGroupConfigurator(object):
 
                 agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
-                if agent_slice not in (_AZURE_SLICE, "system.slice"):
+                if agent_slice not in (AZURE_SLICE, "system.slice"):
                     _log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
                     return
 
@@ -275,7 +275,7 @@ class CGroupConfigurator(object):
             CGroupConfigurator._Impl.__cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
             unit_file_install_path = systemd.get_unit_file_install_path()
-            azure_slice = os.path.join(unit_file_install_path, _AZURE_SLICE)
+            azure_slice = os.path.join(unit_file_install_path, AZURE_SLICE)
             vmextensions_slice = os.path.join(unit_file_install_path, _VMEXTENSIONS_SLICE)
             agent_unit_file = systemd.get_agent_unit_file()
             agent_drop_in_path = systemd.get_agent_drop_in_path()
@@ -511,11 +511,7 @@ class CGroupConfigurator(object):
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
                     if current == 0:
-                        formatted_process = self.__format_process(process)
-                        if 'systemd-run' in formatted_process:
-                            logger.info("Found unexpected systemd-run. PID: {0} PPID: {1} systemd-run PIDs: {2} comm: {3}\n{4}",
-                                    process, self._get_parent(process), systemd_run_commands, self._get_command(process), formatted_process)
-                        unexpected.append(formatted_process)
+                        unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
             except Exception as exception:
@@ -531,7 +527,7 @@ class CGroupConfigurator(object):
                     comm = file_.read()
                     if comm and comm[-1] == '\x00':  # if null-terminated, remove the null
                         comm = comm[:-1]
-                    return comm
+                    return comm.rstrip()
             except Exception:
                 return "UNKNOWN"
 
