@@ -1,3 +1,4 @@
+import contextlib
 import platform
 import sys
 import os
@@ -34,6 +35,10 @@ if sys.version_info[0] == 3:
     from builtins import int, range  # pylint: disable=unused-import,import-error
     from collections import OrderedDict  # pylint: disable=W0611
     from queue import Queue, Empty  # pylint: disable=W0611,import-error
+
+    # unused-import<W0611> Disabled: python2.7 doesn't have subprocess.DEVNULL
+    # so this import is only used by python3.
+    import subprocess   # pylint: disable=unused-import
 
 elif sys.version_info[0] == 2:
     import httplib as httpclient  # pylint: disable=E0401,W0611
@@ -142,6 +147,22 @@ def is_file_not_found_error(exception):
         return isinstance(exception, FileNotFoundError)
     
     return isinstance(exception, FileNotFoundError)
+
+@contextlib.contextmanager
+def subprocess_dev_null():
+
+    if sys.version_info[0] == 3:
+        # Suppress no-member errors on python2.7
+        yield subprocess.DEVNULL # pylint: disable=no-member
+    else:
+        try:
+            devnull = open(os.devnull, "a+")
+            yield devnull
+        except Exception:
+            yield None
+        finally:
+            if devnull is not None:
+                devnull.close()
 
 def array_to_bytes(buff):
     # Python 3.9 removed the tostring() method on arrays, the new alias is tobytes()

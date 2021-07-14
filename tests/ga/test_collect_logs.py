@@ -17,7 +17,7 @@
 import contextlib
 import os
 
-from azurelinuxagent.common import logger
+from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
@@ -69,6 +69,10 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         self.mock_archive_path = patch("azurelinuxagent.ga.collect_logs.COMPRESSED_ARCHIVE_PATH", self.archive_path)
         self.mock_archive_path.start()
 
+        self.logger_path = os.path.join(self.tmp_dir, "waagent.log")
+        self.mock_logger_path = patch.object(conf, "get_agent_log_file", return_value=self.logger_path)
+        self.mock_logger_path.start()
+
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
         # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
@@ -77,6 +81,9 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         if os.path.exists(self.archive_path):
             os.remove(self.archive_path)
         self.mock_archive_path.stop()
+        if os.path.exists(self.logger_path):
+            os.remove(self.logger_path)
+        self.mock_logger_path.stop()
         AgentTestCase.tearDown(self)
 
     def _create_dummy_archive(self, size=1024):

@@ -51,7 +51,7 @@ class _MultiConfigFeature(AgentSupportedFeature):
 
     __NAME = SupportedFeatureNames.MultiConfig
     __VERSION = "1.0"
-    __SUPPORTED = False
+    __SUPPORTED = True
 
     def __init__(self):
         super(_MultiConfigFeature, self).__init__(name=_MultiConfigFeature.__NAME,

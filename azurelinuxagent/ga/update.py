@@ -43,8 +43,8 @@ from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHa
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
-    elapsed_milliseconds, WALAEventOperation, EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import ResourceGoneError, UpdateError
+    WALAEventOperation, EVENTS_DIRECTORY
+from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -100,7 +100,7 @@ class UpdateHandler(object):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
 
-        self.running = True
+        self._is_running = True
         self.last_attempt_time = None
 
         self.agents = []
@@ -116,6 +116,8 @@ class UpdateHandler(object):
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
         self._heartbeat_update_goal_state_error_count = 0
+
+        self.last_incarnation = None
 
     def run_latest(self, child_args=None):
         """
@@ -225,7 +227,7 @@ class UpdateHandler(object):
 
         except Exception as e:
             # Ignore child errors during termination
-            if self.running:
+            if self.is_running:
                 msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
                     agent_name,
                     agent_cmd,
@@ -317,64 +319,15 @@ class UpdateHandler(object):
 
             goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
 
-            while self.running:
-                #
-                # Check that the parent process (the agent's daemon) is still running
-                #
-                if not debug and self._is_orphaned:
-                    logger.info("Agent {0} is an orphan -- exiting", CURRENT_AGENT)
-                    break
-
-                #
-                # Check that all the threads are still running
-                #
-                for thread_handler in all_thread_handlers:
-                    if not thread_handler.is_alive():
-                        logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
-                        thread_handler.start()
-
-                #
-                # Process the goal state
-                #
-                if not protocol.try_update_goal_state():
-                    self._heartbeat_update_goal_state_error_count += 1
-                else:
-                    if self._upgrade_available(protocol):
-                        available_agent = self.get_latest_agent()
-                        if available_agent is None:
-                            logger.info(
-                                "Agent {0} is reverting to the installed agent -- exiting",
-                                CURRENT_AGENT)
-                        else:
-                            logger.info(
-                                u"Agent {0} discovered update {1} -- exiting",
-                                CURRENT_AGENT,
-                                available_agent.name)
-                        break
-
-                    utc_start = datetime.utcnow()
-
-                    last_etag = exthandlers_handler.last_etag
-                    exthandlers_handler.run()
-
-                    remote_access_handler.run()
-
-                    if last_etag != exthandlers_handler.last_etag:
-                        self._ensure_readonly_files()
-                        duration = elapsed_milliseconds(utc_start)
-                        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
-                        msg = 'ProcessGoalState completed [Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]'.format(
-                            exthandlers_handler.last_etag, duration, activity_id, correlation_id, gs_creation_time)
-                        logger.info(msg)
-                        add_event(
-                            AGENT_NAME,
-                            op=WALAEventOperation.ProcessGoalState,
-                            duration=duration,
-                            message=msg)
-
+            while self.is_running:
+                self._check_daemon_running(debug)
+                self._check_threads_running(all_thread_handlers)
+                self._process_goal_state(protocol, exthandlers_handler, remote_access_handler)
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(goal_state_interval)
 
+        except ExitException as exitException:
+            logger.info(exitException.reason)
         except Exception as error:
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
@@ -386,6 +339,46 @@ class UpdateHandler(object):
 
         self._shutdown()
         sys.exit(0)
+
+    def _check_daemon_running(self, debug):
+        # Check that the parent process (the agent's daemon) is still running
+        if not debug and self._is_orphaned:
+            raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT))
+
+    def _check_threads_running(self, all_thread_handlers):
+        # Check that all the threads are still running
+        for thread_handler in all_thread_handlers:
+            if not thread_handler.is_alive():
+                logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
+                thread_handler.start()
+
+    def _process_goal_state(self, protocol, exthandlers_handler, remote_access_handler):
+        if not protocol.try_update_goal_state():
+            self._heartbeat_update_goal_state_error_count += 1
+            return
+
+        if self._upgrade_available(protocol):
+            available_agent = self.get_latest_agent()
+            if available_agent is None:
+                reason = "Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT)
+            else:
+                reason = "Agent {0} discovered update {1} -- exiting".format(CURRENT_AGENT, available_agent.name)
+            raise ExitException(reason)
+
+        incarnation = protocol.get_incarnation()
+
+        try:
+            if incarnation != self.last_incarnation:
+                exthandlers_handler.run()
+
+            # report status always, even if the goal state did not change
+            # do it before processing the remote access, since that operation can take a long time
+            exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation != self.last_incarnation)
+
+            if incarnation != self.last_incarnation:
+                remote_access_handler.run()
+        finally:
+            self.last_incarnation = incarnation
 
     def forward_signal(self, signum, frame):
         if signum == signal.SIGTERM:
@@ -587,6 +580,14 @@ class UpdateHandler(object):
         return pid_files
 
     @property
+    def is_running(self):
+        return self._is_running
+
+    @is_running.setter
+    def is_running(self, value):
+        self._is_running = value
+
+    @property
     def _is_clean_start(self):
         return not os.path.isfile(self._sentinel_file_path())
 
@@ -678,7 +679,7 @@ class UpdateHandler(object):
     def _shutdown(self):
         # Todo: Ensure all threads stopped when shutting down the main extension handler to ensure that the state of
         # all threads is clean.
-        self.running = False
+        self.is_running = False
 
         if not os.path.isfile(self._sentinel_file_path()):
             return
