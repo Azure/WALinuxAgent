@@ -24,7 +24,6 @@ import random
 import re
 import shutil
 import stat
-import sys
 import tempfile
 import time
 import zipfile
