@@ -141,7 +141,7 @@ class HostPluginProtocol(object):
 
         return return_val
 
-    def get_vm_settings_request(self):
+    def get_vm_settings_request(self, correlation_id):
         if not self.ensure_initialized():
             raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
 
@@ -151,7 +151,7 @@ class HostPluginProtocol(object):
             _HEADER_VERSION: API_VERSION,
            _HEADER_CONTAINER_ID: self.container_id,
            _HEADER_HOST_CONFIG_NAME: self.role_config_name,
-           _HEADER_CORRELATION_ID: str(uuid.uuid4())  # TODO: persist correlation ID
+           _HEADER_CORRELATION_ID: correlation_id
         }
 
         return url, headers
