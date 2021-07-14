@@ -19,13 +19,13 @@
 import datetime
 import threading
 import time
-import traceback
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ServiceStoppedError
 from azurelinuxagent.common.future import ustr, Queue, Empty
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
+from azurelinuxagent.common.utils import textutil
 
 
 def get_send_telemetry_events_handler(protocol_util):
@@ -136,7 +136,7 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
 
         except Exception as error:
             err_msg = "An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}, Stack: {2}".format(
-                self.get_thread_name(), ustr(error), traceback.format_exc())
+                self.get_thread_name(), ustr(error), textutil.format_exception())
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def _send_events_in_queue(self, first_event):
@@ -162,4 +162,4 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
                 yield event
             except Exception as error:
                 logger.error("Some exception when fetching event from queue: {0}, {1}".format(ustr(error),
-                                                                                              traceback.format_exc()))
+                                                                                              textutil.format_exception()))

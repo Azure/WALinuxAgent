@@ -320,7 +320,7 @@ class CollectOrReportEventDebugInfo(object):
     def _update_errors_and_get_count(error_count, errors, error):
         error_count += 1
         if len(errors) < CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT:
-            errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+            errors.add("{0}: {1}".format(ustr(error), textutil.format_exception()))
         return error_count
 
     def update_unicode_error(self, unicode_err):

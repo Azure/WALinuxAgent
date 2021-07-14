@@ -19,7 +19,6 @@
 
 import os
 import os.path
-import traceback
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
@@ -27,6 +26,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -57,7 +57,7 @@ class RemoteAccessHandler(object):
                 self._remote_access = self._protocol.client.get_remote_access()
                 self._handle_remote_access()
         except Exception as e:
-            msg = u"Exception processing goal state for remote access users: {0} {1}".format(ustr(e), traceback.format_exc())
+            msg = u"Exception processing goal state for remote access users: {0} {1}".format(ustr(e), textutil.format_exception())
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.RemoteAccessHandling,

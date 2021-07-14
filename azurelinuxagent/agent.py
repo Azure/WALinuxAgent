@@ -28,7 +28,6 @@ import re
 import subprocess
 import sys
 import threading
-import traceback
 from azurelinuxagent.common import cgroupconfigurator, logcollector
 from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 
@@ -38,7 +37,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
@@ -301,7 +300,7 @@ def main(args=None):
         except Exception:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
-                         traceback.format_exc())
+                         textutil.format_exception())
 
 
 def parse_args(sys_args):
