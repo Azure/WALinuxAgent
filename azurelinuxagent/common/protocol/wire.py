@@ -21,6 +21,7 @@ import os
 import random
 import time
 import traceback
+import uuid
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -795,11 +796,12 @@ class WireClient(object):
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
         except Exception as exception:
-            raise ProtocolError("Error processing goal state: {0}".format(ustr(exception)))
+            raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
     def update_extensions_goal_state(self):
         try:
-            url, headers = self.get_host_plugin().get_vm_settings_request()
+            correlation_id = str(uuid.uuid4())
+            url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
             etag = self.get_etag()
             if etag is not None:
                 headers['if-none-match'] = etag
@@ -819,7 +821,7 @@ class WireClient(object):
             self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
 
         except Exception as exception:
-            raise ProtocolError("Error processing extension goal state: {0}".format(ustr(exception)))
+            raise ProtocolError("Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception)))
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
