@@ -205,7 +205,7 @@ class Agent(object):
         # Check the cgroups unit
         if CollectLogsHandler.should_validate_cgroups():
 
-            def validate_cgroup_path(path, id):
+            def validate_cgroup_path(path, path_id):
                 if path is None:
                     return False
 
@@ -230,7 +230,7 @@ class Agent(object):
                     # different systemd versions write different values to the /proc/self/cgroup
                     # file, which makes it hard to match the unit. emit telemetry for a mismatch
                     msg = "{0}: Unexpected id={1} unit name for log collector process: actual='{2}' vs. expected='{3}'"\
-                        .format(systemd.get_version(), id, unit_group, expected_unit)
+                        .format(systemd.get_version(), path_id, unit_group, expected_unit)
 
                     print(msg)
                     event.add_event(op=event.WALAEventOperation.LogCollection, message=msg)
