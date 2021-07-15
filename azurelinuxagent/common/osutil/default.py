@@ -1163,25 +1163,15 @@ class DefaultOSUtil(object):
     def restart_if(self, ifname, retries=3, wait=5):
         retry_limit = retries + 1
         for attempt in range(1, retry_limit):
-            try:
-                shellutil.run_command(["ifdown", ifname])
-                shellutil.run_command(["ifup", ifname])
+            return_code = shellutil.run("ifdown {0} && ifup {0}".format(ifname), expected_errors=[1] if attempt < retries else [])
+            if return_code == 0:
                 return
-            except shellutil.CommandError as cmd_err:
-                
-                msg = "failed to restart {0}: returncode={1}\n[stdout]{2}\n\n[stderr]{3}\n"\
-                    .format(ifname, cmd_err.returncode, cmd_err.stdout, cmd_err.stderr)
-                
-                if cmd_err.returncode == 1:
-                    logger.info(msg)
-                else:
-                    logger.warn(msg)
-
-                if attempt < retry_limit:
-                    logger.info("retrying in {0} seconds".format(wait))
-                    time.sleep(wait)
-                else:
-                    logger.warn("exceeded restart retries")
+            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            if attempt < retry_limit:
+                logger.info("retrying in {0} seconds".format(wait))
+                time.sleep(wait)
+            else:
+                logger.warn("exceeded restart retries")
 
     def publish_hostname(self, hostname):
         self.set_dhcp_hostname(hostname)
