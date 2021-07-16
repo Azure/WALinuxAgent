@@ -1409,7 +1409,7 @@ class ExtHandlerInstance(object):
         """
 
         ignore_extensions_regex = [r"Microsoft.AKS.Compute.AKS\S*", r"Microsoft.CPlat.Core.LinuxPatchExtension\S*"]
-        return all(re.match(ext_regex, self.get_extension_full_name(extension)) is not None
+        return all(re.match(ext_regex, self.get_extension_full_name(extension)) is None
                    for ext_regex in ignore_extensions_regex)
 
     def create_placeholder_status_file(self, extension=None, status=ValidHandlerStatus.transitioning, code=0,
