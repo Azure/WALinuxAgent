@@ -199,11 +199,13 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     # pylint has limited (i.e. no) awareness of control flow w.r.t. typing. we disable=no-member
                     # here because we know e must be a CommandError but pylint still considers the case where
                     # e is a different type of exception.
-                    err_msg = ustr("[stderr] %s", e.stderr) # pylint: disable=no-member
+                    err_msg = ustr("Log Collector exited with code {0}").format(e.returncode) # pylint: disable=no-member
 
-                    if e.returncode == 2: # pylint: disable=no-member
+                    if e.returncode == logcollector.INVALID_CGROUPS_ERRCODE: # pylint: disable=no-member
                         logger.info("Disabling periodic log collection until service restart due to process error.")
                         self.stop()
+                    else:
+                        logger.info(err_msg)
 
                 msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, err_msg)
                 # No need to log to the local log since we logged stdout, stderr from the process.
