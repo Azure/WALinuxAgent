@@ -57,7 +57,7 @@ class RemoteAccessHandler(object):
                 self._remote_access = self._protocol.client.get_remote_access()
                 self._handle_remote_access()
         except Exception as e:
-            msg = u"Exception processing goal state for remote access users: {0} {1}".format(ustr(e), textutil.format_exception())
+            msg = u"Exception processing goal state for remote access users: {0} {1}".format(ustr(e), textutil.format_exception(e))
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.RemoteAccessHandling,

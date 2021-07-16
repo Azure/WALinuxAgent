@@ -274,9 +274,9 @@ if __name__ == '__main__':
             msg = "Unable to fetch service logs, Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(
                 ' '.join(cmd), error.returncode, error.stdout, error.stderr)
             logger.warn(msg)
-        except Exception:
+        except Exception as e:
             msg = "Ran into unexpected error when getting logs for {0} service. Error: {1}".format(
-                self._network_setup_service_name, textutil.format_exception())
+                self._network_setup_service_name, textutil.format_exception(e))
             logger.warn(msg)
 
         # Log service status and logs if we can fetch them from journalctl and send it to Kusto,

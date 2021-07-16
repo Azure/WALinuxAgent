@@ -232,7 +232,7 @@ class UpdateHandler(object):
                     agent_cmd,
                     ustr(e))
                 logger.warn(msg)
-                detailed_message = '{0} {1}'.format(msg, textutil.format_exception())
+                detailed_message = '{0} {1}'.format(msg, textutil.format_exception(e))
                 add_event(
                     AGENT_NAME,
                     version=agent_version,
@@ -331,7 +331,7 @@ class UpdateHandler(object):
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
             logger.warn(msg)
-            logger.warn(textutil.format_exception())
+            logger.warn(textutil.format_exception(error))
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
             return
@@ -742,7 +742,7 @@ class UpdateHandler(object):
                    or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as e:  # pylint: disable=W0612
-            msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception())
+            msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(e))
             add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False,
                       message=msg)
             return False
@@ -900,7 +900,7 @@ class GuestAgent(object):
 
             msg = u"Agent {0} install failed with exception: {1}".format(
                 self.name, ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, textutil.format_exception())
+            detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
             add_event(
                 AGENT_NAME,
                 version=self.version,

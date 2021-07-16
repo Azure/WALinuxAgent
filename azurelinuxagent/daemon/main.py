@@ -82,7 +82,7 @@ class DaemonHandler(object):
             try:
                 self.daemon(child_args)
             except Exception as e:  # pylint: disable=W0612
-                err_msg = textutil.format_exception()
+                err_msg = textutil.format_exception(e)
                 add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)
                 logger.warn("Daemon ended with exception -- Sleep 15 seconds and restart daemon")

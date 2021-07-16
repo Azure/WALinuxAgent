@@ -120,7 +120,7 @@ Destination        Gateway            Flags     Netif Expire
             try:
                 freebsdosutil.get_first_if()[0]
             except Exception as e:  # pylint: disable=unused-variable
-                print(textutil.format_exception())
+                print(textutil.format_exception(e))
                 exception = True  # pylint: disable=unused-variable
 
 if __name__ == '__main__':

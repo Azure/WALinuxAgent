@@ -625,6 +625,6 @@ def read_response_error(resp):
 
             result = textutil.replace_non_ascii(result)
 
-        except Exception:
-            logger.warn(textutil.format_exception())
+        except Exception as e:
+            logger.warn(textutil.format_exception(e))
     return result

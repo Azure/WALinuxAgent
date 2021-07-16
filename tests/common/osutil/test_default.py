@@ -290,7 +290,7 @@ class TestOSUtil(AgentTestCase):
             try:
                 osutil.DefaultOSUtil().get_first_if()[0]
             except Exception as e:  # pylint: disable=unused-variable
-                print(textutil.format_exception())
+                print(textutil.format_exception(e))
                 exception = True
             self.assertFalse(exception)
 

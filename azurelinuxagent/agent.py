@@ -297,10 +297,10 @@ def main(args=None):
                 agent.collect_logs(log_collector_full_mode)
             elif command == AgentCommands.SetupFirewall:
                 agent.setup_firewall(firewall_metadata)
-        except Exception:
+        except Exception as e:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
-                         textutil.format_exception())
+                         textutil.format_exception(e))
 
 
 def parse_args(sys_args):

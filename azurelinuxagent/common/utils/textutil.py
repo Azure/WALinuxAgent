@@ -433,6 +433,18 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
     return ustr(s, encoding=encoding)
 
 
-def format_exception():
+def format_exception(exception):
     # Placeholder function to format exception message
-    return ustr(traceback.format_exc())
+    msg = ''.join(traceback.format_exception(etype=type(exception), value=exception, tb=get_traceback(exception)))
+    if sys.version_info[0] == 2:
+        msg = "{0}{1}".format("Traceback might not work as expected because the agent is running on Python 2\n", msg)
+    return ustr(msg)
+
+
+def get_traceback(e):  # pylint: disable=R1710
+    if sys.version_info[0] == 3:  # pylint: disable=R1705
+        return e.__traceback__
+    elif sys.version_info[0] == 2:
+        ex_type, ex, tb = sys.exc_info()  # pylint: disable=W0612
+        return tb
+
