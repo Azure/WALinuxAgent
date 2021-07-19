@@ -379,7 +379,7 @@ class ExtHandlersHandler(object):
                                                                       code=GoalStateAggregateStatusCodes.Success,
                                                                       message="GoalState executed successfully")
         except Exception as error:
-            msg = "Unexpected error when processing goal state: \n {0}".format(textutil.format_exception(error))
+            msg = "Unexpected error when processing goal state:{0}".format(textutil.format_exception(error))
             self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
                                                                   code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
@@ -960,7 +960,7 @@ class ExtHandlersHandler(object):
             self.write_ext_handlers_status_to_info_file(vm_status)
 
         except Exception as error:
-            msg = u"Failed to report status: \n {0}".format(textutil.format_exception(error))
+            msg = u"Failed to report status: {0}".format(textutil.format_exception(error))
             logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,

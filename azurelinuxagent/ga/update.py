@@ -897,7 +897,7 @@ class GuestAgent(object):
             #   is corrupt (e.g., missing the HandlerManifest.json file)
             self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
-            msg = u"Agent {0} install failed with exception: \n".format(
+            msg = u"Agent {0} install failed with exception:".format(
                 self.name)
             detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
             add_event(
