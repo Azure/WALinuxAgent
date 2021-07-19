@@ -322,7 +322,7 @@ class ExtHandlersHandler(object):
 
             activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
         except Exception as error:
-            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers: {0}\n{1}".format(ustr(error), textutil.format_exception(error))
+            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:\n{0}".format(textutil.format_exception(error))
             logger.warn(msg)
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
             return
@@ -342,7 +342,7 @@ class ExtHandlersHandler(object):
             self.__process_and_handle_extensions(etag)
             self._cleanup_outdated_handlers()
         except Exception as error:
-            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers: {0}\n{1}".format(ustr(error), textutil.format_exception(error))
+            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers:\n {0}".format(textutil.format_exception(error))
         finally:
             duration = elapsed_milliseconds(utc_start)
             if error is None:
@@ -379,7 +379,7 @@ class ExtHandlersHandler(object):
                                                                       code=GoalStateAggregateStatusCodes.Success,
                                                                       message="GoalState executed successfully")
         except Exception as error:
-            msg = "Unexpected error when processing goal state: {0}; {1}".format(ustr(error), textutil.format_exception(error))
+            msg = "Unexpected error when processing goal state: \n {0}".format(textutil.format_exception(error))
             self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
                                                                   code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
@@ -960,7 +960,7 @@ class ExtHandlersHandler(object):
             self.write_ext_handlers_status_to_info_file(vm_status)
 
         except Exception as error:
-            msg = u"Failed to report status: {0}\n{1}".format(ustr(error), textutil.format_exception(error))
+            msg = u"Failed to report status: \n {0}".format(textutil.format_exception(error))
             logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
@@ -1779,8 +1779,8 @@ class ExtHandlerInstance(object):
                 ext_handler_status = ExtHandlerStatus()
                 set_properties("ExtHandlerStatus", ext_handler_status, get_properties(handler_status))
             except Exception as error:
-                msg = "Something went wrong when trying to get a copy of the Handler status for {0}: {1}".format(
-                    self.get_extension_full_name(), ustr(error))
+                msg = "Something went wrong when trying to get a copy of the Handler status for {0}".format(
+                    self.get_extension_full_name())
                 self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
                                                         log_msg="{0}.\nStack Trace: {1}".format(
                                                                                      msg, textutil.format_exception(error)))
@@ -1797,8 +1797,8 @@ class ExtHandlerInstance(object):
                 ext_handler_statuses.append(ext_handler_status)
             except ExtensionError as error:
 
-                msg = "Unknown error when trying to fetch status from extension {0}: {1}".format(
-                    self.get_extension_full_name(ext), ustr(error))
+                msg = "Unknown error when trying to fetch status from extension {0}".format(
+                    self.get_extension_full_name(ext))
                 self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
                                                         log_msg="{0}.\nStack Trace: {1}".format(
                                                                                      msg, textutil.format_exception(error)),
@@ -2076,7 +2076,7 @@ class ExtHandlerInstance(object):
                     self.ext_handler.name, self.ext_handler.properties.version))
         except (IOError, ValueError, ProtocolError) as error:
             fileutil.clean_ioerror(error, paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}, {1}", ustr(error), textutil.format_exception(error))
+            self.logger.error("Failed to save handler status: {0}", textutil.format_exception(error))
 
     def get_handler_status(self):
         state_dir = self.get_conf_dir()

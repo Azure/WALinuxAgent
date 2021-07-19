@@ -135,8 +135,8 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
                     self._send_events_in_queue(first_event)
 
         except Exception as error:
-            err_msg = "An unknown error occurred in the {0} thread main loop, stopping thread. Error: {1}, Stack: {2}".format(
-                self.get_thread_name(), ustr(error), textutil.format_exception(error))
+            err_msg = "An unknown error occurred in the {0} thread main loop, stopping thread.\n {1}".format(
+                self.get_thread_name(), textutil.format_exception(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
     def _send_events_in_queue(self, first_event):
@@ -161,5 +161,4 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
                 self._queue.task_done()
                 yield event
             except Exception as error:
-                logger.error("Some exception when fetching event from queue: {0}, {1}".format(ustr(error),
-                                                                                              textutil.format_exception(error)))
+                logger.error("Some exception when fetching event from queue: {0}".format(textutil.format_exception(error)))

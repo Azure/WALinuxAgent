@@ -807,7 +807,7 @@ class WireClient(object):
                 self._last_try_update_goal_state_failed = True
                 message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
-                message = u"An error occurred while retrieving the goal state: {0}".format(textutil.format_exception(e))
+                message = u"An error occurred while retrieving the goal state:\n {0}".format(textutil.format_exception(e))
                 logger.warn(message)
             message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
             logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
@@ -1206,7 +1206,7 @@ class WireClient(object):
                 events_per_provider[event.providerId] += 1
 
             except Exception as error:
-                logger.warn("Unexpected error when generating Events: {0}, {1}", ustr(error), textutil.format_exception(error))
+                logger.warn("Unexpected error when generating Events:\n {0}", textutil.format_exception(error))
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):

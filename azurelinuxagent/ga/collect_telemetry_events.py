@@ -116,8 +116,8 @@ class _ProcessExtensionEvents(PeriodicOperation):
             # the telemetry service comes back up
             delete_all_event_files = False
         except Exception as error:
-            msg = "Unknown error occurred when trying to collect extension events. Error: {0}, Stack: {1}".format(
-                ustr(error), textutil.format_exception(error))
+            msg = "Unknown error occurred when trying to collect extension events.:\n{0}".format(
+                textutil.format_exception(error))
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
             # Always ensure that the events directory are being deleted each run except when Telemetry Service is stopped,

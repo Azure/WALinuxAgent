@@ -227,10 +227,9 @@ class UpdateHandler(object):
         except Exception as e:
             # Ignore child errors during termination
             if self.is_running:
-                msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
+                msg = u"Agent {0} launched with command '{1}' failed with exception: \n".format(
                     agent_name,
-                    agent_cmd,
-                    ustr(e))
+                    agent_cmd)
                 logger.warn(msg)
                 detailed_message = '{0} {1}'.format(msg, textutil.format_exception(e))
                 add_event(
@@ -898,8 +897,8 @@ class GuestAgent(object):
             #   is corrupt (e.g., missing the HandlerManifest.json file)
             self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
-            msg = u"Agent {0} install failed with exception: {1}".format(
-                self.name, ustr(e))
+            msg = u"Agent {0} install failed with exception: \n".format(
+                self.name)
             detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
             add_event(
                 AGENT_NAME,
