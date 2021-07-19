@@ -491,6 +491,7 @@ class EventLogger(object):
         self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
+
         try:
             self.save_event(json.dumps(data))
         except EventError as e:

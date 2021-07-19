@@ -20,7 +20,6 @@ import os
 import socket
 import subprocess
 import tempfile
-import traceback
 import unittest
 
 import mock
@@ -291,7 +290,7 @@ class TestOSUtil(AgentTestCase):
             try:
                 osutil.DefaultOSUtil().get_first_if()[0]
             except Exception as e:  # pylint: disable=unused-variable
-                print(traceback.format_exc())
+                print(textutil.format_exception(e))
                 exception = True
             self.assertFalse(exception)
 
