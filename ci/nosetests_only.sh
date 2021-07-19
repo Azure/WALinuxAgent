@@ -8,11 +8,11 @@ echo
 echo "========================================="
 echo "nosetests -a '!requires_sudo' output"
 echo "========================================="
-nosetests -a '!requires_sudo' tests || EXIT_CODE=$(($EXIT_CODE || $?))
+nosetests -a '!requires_sudo' tests || EXIT_CODE=$(($EXIT_CODE || $?)) --with-xunit
 
 echo "========================================="
 echo "nosetests -a 'requires_sudo' output"
 echo "========================================="
-sudo env "PATH=$PATH" nosetests -a 'requires_sudo' tests || EXIT_CODE=$(($EXIT_CODE || $?))
+sudo env "PATH=$PATH" nosetests -a 'requires_sudo' tests || EXIT_CODE=$(($EXIT_CODE || $?)) --with-xunit
 
 exit "$EXIT_CODE"
