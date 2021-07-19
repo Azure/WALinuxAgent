@@ -322,7 +322,7 @@ class ExtHandlersHandler(object):
 
             activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
         except Exception as error:
-            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:\n{0}".format(textutil.format_exception(error))
+            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
             logger.warn(msg)
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
             return
@@ -342,7 +342,7 @@ class ExtHandlersHandler(object):
             self.__process_and_handle_extensions(etag)
             self._cleanup_outdated_handlers()
         except Exception as error:
-            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers:\n {0}".format(textutil.format_exception(error))
+            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
         finally:
             duration = elapsed_milliseconds(utc_start)
             if error is None:

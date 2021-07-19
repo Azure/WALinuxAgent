@@ -116,7 +116,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
             # the telemetry service comes back up
             delete_all_event_files = False
         except Exception as error:
-            msg = "Unknown error occurred when trying to collect extension events.:\n{0}".format(
+            msg = "Unknown error occurred when trying to collect extension events:{0}".format(
                 textutil.format_exception(error))
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
@@ -204,7 +204,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
                     # This is a trade-off between data replication vs data loss.
                     raise
                 except Exception as error:
-                    msg = "Failed to process event file {0}: \n, {1}".format(event_file,
+                    msg = "Failed to process event file {0}:{1}".format(event_file,
                                                                               textutil.format_exception(error))
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)

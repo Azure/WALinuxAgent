@@ -434,7 +434,7 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
 
 
 def format_exception(exception):
-    # Placeholder function to format exception message
+    # Function to format exception message
     e = None
     if sys.version_info[0] == 2:
         _, e, tb = sys.exc_info()

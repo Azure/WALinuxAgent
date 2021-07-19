@@ -135,7 +135,7 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
                     self._send_events_in_queue(first_event)
 
         except Exception as error:
-            err_msg = "An unknown error occurred in the {0} thread main loop, stopping thread.\n {1}".format(
+            err_msg = "An unknown error occurred in the {0} thread main loop, stopping thread.{1}".format(
                 self.get_thread_name(), textutil.format_exception(error))
             add_event(op=WALAEventOperation.UnhandledError, message=err_msg, is_success=False)
 
