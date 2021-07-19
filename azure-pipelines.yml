@@ -34,3 +34,9 @@ steps:
 - script: |
     ./ci/nosetests_only.sh
   displayName: 'nosetest'
+  
+- task: PublishTestResults@2
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFiles: '**/test-*.xml'
+    testRunTitle: 'Publish test results for Python $(python.version)'
