@@ -37,7 +37,7 @@ import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
-from azurelinuxagent.common.osutil import get_osutil, systemd
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
