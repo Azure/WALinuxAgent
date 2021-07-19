@@ -155,13 +155,6 @@ class CollectLogsHandler(ThreadHandlerInterface):
         if self._collect_logs():
             self._send_logs()
 
-    @staticmethod
-    def get_resource_limits():
-        # Define CPU limit (as percentage of CPU time) and memory limit (absolute value in megabytes).
-        cpu_limit = "5%"
-        memory_limit = "30M"  # K for kb, M for mb
-        return cpu_limit, memory_limit
-
     def _collect_logs(self):
         logger.info("Starting log collection...")
 

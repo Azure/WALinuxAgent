@@ -62,6 +62,9 @@ CPUQuota={cpu_quota}
 MemoryAccounting=yes
 MemoryLimit={memory_limit}
 """
+_LOGCOLLECTOR_CPU_QUOTA = "5%"
+_LOGCOLLECTOR_MEMORY_LIMIT = "30M"  # K for kb, M for mb
+
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
 # This drop-in unit file was created by the Azure VM Agent.
@@ -160,6 +163,7 @@ class CGroupConfigurator(object):
                 _log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
 
             except Exception as exception:
+                import traceback
                 _log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
             finally:
                 self._initialized = True
@@ -306,9 +310,9 @@ class CGroupConfigurator(object):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if not os.path.exists(logcollector_slice):
-                from azurelinuxagent.ga.collect_logs import CollectLogsHandler
-                cpu_quota, memory_limit = CollectLogsHandler.get_resource_limits()
-                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=cpu_quota, memory_limit=memory_limit)
+                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA,
+                    memory_limit=_LOGCOLLECTOR_MEMORY_LIMIT)
+
                 files_to_create.append((logcollector_slice, slice_contents))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
