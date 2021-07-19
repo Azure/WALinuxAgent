@@ -163,7 +163,6 @@ class CGroupConfigurator(object):
                 _log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
 
             except Exception as exception:
-                import traceback
                 _log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
             finally:
                 self._initialized = True
