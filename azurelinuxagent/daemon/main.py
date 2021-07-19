@@ -20,7 +20,6 @@
 import os
 import sys
 import time
-import traceback
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -32,6 +31,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.rdma import setup_rdma_device
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
     AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -82,7 +82,7 @@ class DaemonHandler(object):
             try:
                 self.daemon(child_args)
             except Exception as e:  # pylint: disable=W0612
-                err_msg = traceback.format_exc()
+                err_msg = textutil.format_exception(e)
                 add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)
                 logger.warn("Daemon ended with exception -- Sleep 15 seconds and restart daemon")

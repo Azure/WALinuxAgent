@@ -24,10 +24,8 @@ import random
 import re
 import shutil
 import stat
-import sys
 import tempfile
 import time
-import traceback
 import zipfile
 from collections import defaultdict
 from functools import partial
@@ -49,6 +47,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, Extension
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
@@ -111,14 +110,6 @@ class ExtCommandEnvVariable(object):
     UpdatingFromVersion = "{0}_UPDATING_FROM_VERSION".format(Prefix)
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
     ExtensionSupportedFeatures = "{0}_EXTENSION_SUPPORTED_FEATURES".format(Prefix)
-
-
-def get_traceback(e):  # pylint: disable=R1710
-    if sys.version_info[0] == 3:  # pylint: disable=R1705
-        return e.__traceback__
-    elif sys.version_info[0] == 2:
-        ex_type, ex, tb = sys.exc_info()  # pylint: disable=W0612
-        return tb
 
 
 def validate_has_key(obj, key, full_key_path):
@@ -331,7 +322,7 @@ class ExtHandlersHandler(object):
 
             activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
         except Exception as error:
-            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers: {0}\n{1}".format(ustr(error), traceback.extract_tb(get_traceback(error)))
+            msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
             logger.warn(msg)
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
             return
@@ -351,7 +342,7 @@ class ExtHandlersHandler(object):
             self.__process_and_handle_extensions(etag)
             self._cleanup_outdated_handlers()
         except Exception as error:
-            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers: {0}\n{1}".format(ustr(error), traceback.extract_tb(get_traceback(error)))
+            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
         finally:
             duration = elapsed_milliseconds(utc_start)
             if error is None:
@@ -388,7 +379,7 @@ class ExtHandlersHandler(object):
                                                                       code=GoalStateAggregateStatusCodes.Success,
                                                                       message="GoalState executed successfully")
         except Exception as error:
-            msg = "Unexpected error when processing goal state: {0}; {1}".format(ustr(error), traceback.format_exc())
+            msg = "Unexpected error when processing goal state:{0}".format(textutil.format_exception(error))
             self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
                                                                   code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
@@ -585,9 +576,9 @@ class ExtHandlersHandler(object):
                     break
                 time.sleep(5)
 
-        except Exception:
+        except Exception as e:
             msg = "Failed to wait for Handler completion due to unknown error. Marking the dependent extension as failed: {0}, {1}".format(
-                extension_name, traceback.format_exc())
+                extension_name, textutil.format_exception(e))
             raise Exception(msg)
 
         # In case of timeout or terminal error state, we log it and raise
@@ -969,7 +960,7 @@ class ExtHandlersHandler(object):
             self.write_ext_handlers_status_to_info_file(vm_status)
 
         except Exception as error:
-            msg = u"Failed to report status: {0}\n{1}".format(ustr(error), traceback.extract_tb(get_traceback(error)))
+            msg = u"Failed to report status: {0}".format(textutil.format_exception(error))
             logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
@@ -1788,11 +1779,11 @@ class ExtHandlerInstance(object):
                 ext_handler_status = ExtHandlerStatus()
                 set_properties("ExtHandlerStatus", ext_handler_status, get_properties(handler_status))
             except Exception as error:
-                msg = "Something went wrong when trying to get a copy of the Handler status for {0}: {1}".format(
-                    self.get_extension_full_name(), ustr(error))
+                msg = "Something went wrong when trying to get a copy of the Handler status for {0}".format(
+                    self.get_extension_full_name())
                 self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
                                                         log_msg="{0}.\nStack Trace: {1}".format(
-                                                                                     msg, traceback.format_exc()))
+                                                                                     msg, textutil.format_exception(error)))
                 # Since this is a Handler level error and we need to do it per extension, breaking here and logging
                 # error since we wont be able to report error anyways and saving it as a handler status (legacy behavior)
                 self.set_handler_status(message=msg, code=-1)
@@ -1806,11 +1797,11 @@ class ExtHandlerInstance(object):
                 ext_handler_statuses.append(ext_handler_status)
             except ExtensionError as error:
 
-                msg = "Unknown error when trying to fetch status from extension {0}: {1}".format(
-                    self.get_extension_full_name(ext), ustr(error))
+                msg = "Unknown error when trying to fetch status from extension {0}".format(
+                    self.get_extension_full_name(ext))
                 self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
                                                         log_msg="{0}.\nStack Trace: {1}".format(
-                                                                                     msg, traceback.format_exc()),
+                                                                                     msg, textutil.format_exception(error)),
                                                         extension=ext)
 
                 # Unexpected error, for single config, keep the behavior as is
@@ -2085,7 +2076,7 @@ class ExtHandlerInstance(object):
                     self.ext_handler.name, self.ext_handler.properties.version))
         except (IOError, ValueError, ProtocolError) as error:
             fileutil.clean_ioerror(error, paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}, {1}", ustr(error), traceback.format_exc())
+            self.logger.error("Failed to save handler status: {0}", textutil.format_exception(error))
 
     def get_handler_status(self):
         state_dir = self.get_conf_dir()
