@@ -204,7 +204,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
                     # This is a trade-off between data replication vs data loss.
                     raise
                 except Exception as error:
-                    msg = "Failed to process event file {0}: {1}, {2}".format(event_file, ustr(error),
+                    msg = "Failed to process event file {0}: \n, {1}".format(event_file,
                                                                               textutil.format_exception(error))
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
