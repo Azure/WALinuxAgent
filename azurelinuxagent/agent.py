@@ -203,37 +203,17 @@ class Agent(object):
 
         # Check the cgroups unit
         if CollectLogsHandler.should_validate_cgroups():
-
-            def validate_cgroup_path(path):
-                if path is None:
-                    return False, False
-
-                regex_match = re.match(r'^(?P<slice>.*)/(?P<unit>.*)$', path)
-                if regex_match is None:
-                    return False, False
-                
-                slice_group, unit_group = regex_match.group("slice", "unit")
-
-                slice_matches = (slice_group == cgroupconfigurator.AZURE_SLICE)
-                unit_matches = (unit_group == logcollector.CGROUPS_UNIT)
-
-                return slice_matches, unit_matches
-
             cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
 
-            cpu_slice_matches, cpu_unit_matches = validate_cgroup_path(cpu_cgroup_path)
-            memory_slice_matches, memory_unit_matches = validate_cgroup_path(memory_cgroup_path)
+            cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
+            memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
 
-            if not all([cpu_slice_matches, cpu_unit_matches, memory_slice_matches, memory_unit_matches]):
+            if not cpu_slice_matches or not memory_slice_matches:
                 print("The Log Collector process is not in the proper cgroups:")
                 if not cpu_slice_matches:
                     print("\tunexpected cpu slice")
-                if not cpu_unit_matches:
-                    print("\tunexpected cpu unit")
                 if not memory_slice_matches:
                     print("\tunexpected memory slice")
-                if not memory_unit_matches:
-                    print("\tunexpected memory unit")
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
