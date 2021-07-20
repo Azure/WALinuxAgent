@@ -41,7 +41,7 @@ steps:
     csmFileLink: 'https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.compute/vm-simple-linux/azuredeploy.json'
     csmParametersFileLink: 'https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.compute/vm-simple-linux/azuredeploy.parameters.json'
     overrideParameters: '-adminUsername "larohra" -adminPasswordOrKey "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCuc/MSnyIR63/poTVz3rOudHb52UPuxtxDkK54GkzLHjQgx2D1OvgNcLdXBRIuFgBhhwe2erj+zrECW2r+8K/c/8L191vScMNs2C5U10VECqBL5LL1JnnvmGlimOsGJP3yGecfSwidWiOD96pvrqIq2y3uw3Ea9Hx3DWRs2P/BYpilkPw2ngSnCdtbxQFR1Wk2dXdcE8fXhHkSAiHWnapg3nl6LfLFQo3XHMs9qXhsIkIYrFvlhqLTOLUAqgueNhsHYIuLLbCu409FlAP2S6Ri3yim8HVlxMRFL8Ecxkhzk8WmXwCWiMq6dvi78UtuEi9mjA9E4YYM+TeKBsqClFvl" -dnsLabelPrefix "dcrv2test"'
-    deploymentMode: 'Incremental'
+    deploymentMode: 'Validation'
 
 - task: PublishTestResults@2
   condition: succeededOrFailed()
@@ -55,3 +55,10 @@ steps:
     scriptType: 'bash'
     scriptLocation: 'inlineScript'
     inlineScript: 'az account show'
+
+- task: PublishPipelineMetadata@0
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: '$(Pipeline.Workspace)'
+    publishLocation: 'pipeline'
