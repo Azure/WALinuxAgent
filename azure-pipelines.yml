@@ -61,5 +61,5 @@ steps:
 - task: PublishPipelineArtifact@1
   condition: succeededOrFailed()
   inputs:
-    targetPath: '$(Pipeline.Workspace)/nosetests.xml'
+    targetPath: 'nosetests.xml'
     publishLocation: 'pipeline'
