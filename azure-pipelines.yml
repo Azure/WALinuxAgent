@@ -28,6 +28,11 @@ steps:
 - script: |
     ./ci/nosetests_only.sh
   displayName: 'nosetest'
+
+- script: |
+    ip a
+    ip r
+  displayName: 'IP'
   
 # - task: AzureResourceManagerTemplateDeployment@3
 #   inputs:
