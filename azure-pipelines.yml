@@ -19,39 +19,39 @@ steps:
     versionSpec: '$(python.version)'
   displayName: 'Use Python $(python.version)'
 
-- script: |
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-    pip install -r test-requirements.txt
-  displayName: 'Install dependencies'
+# - script: |
+#     python -m pip install --upgrade pip
+#     pip install -r requirements.txt
+#     pip install -r test-requirements.txt
+#   displayName: 'Install dependencies'
 
-- script: |
-    ./ci/nosetests_only.sh
-  displayName: 'nosetest'
+# - script: |
+#     ./ci/nosetests_only.sh
+#   displayName: 'nosetest'
 
 - script: |
     ip -4 -o address
   displayName: 'IP'
   
-# - task: AzureResourceManagerTemplateDeployment@3
-#   inputs:
-#     deploymentScope: 'Resource Group'
-#     azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
-#     subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
-#     action: 'Create Or Update Resource Group'
-#     resourceGroupName: 'larohra-dcr-v2-test1'
-#     location: 'East US 2'
-#     templateLocation: 'URL of the file'
-#     csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-20T19:14:25Z&se=2021-07-21T03:14:25Z&spr=https&sv=2020-08-04&sr=b&sig=A%2BhBzO1FOvNFqQ3TMUA15J4JKJFU9YMaWKWjESw5bS4%3D'
-#     csmParametersFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.parameters.json?sp=r&st=2021-07-20T19:15:56Z&se=2021-08-01T03:15:56Z&spr=https&sv=2020-08-04&sr=b&sig=ObWDGKxRWJWheGXvElJQAhcOc6oOHfWeMBtgrc%2BP4V8%3D'
-#     deploymentMode: 'Incremental'
-
-- task: PublishTestResults@2
-  condition: succeededOrFailed()
+- task: AzureResourceManagerTemplateDeployment@3
   inputs:
-    testResultsFormat: 'VSTest'
-    testResultsFiles: '**/nosetests.xml'
-    testRunTitle: 'Publish test results for Python $(python.version)'
+    deploymentScope: 'Resource Group'
+    azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+    subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
+    action: 'Create Or Update Resource Group'
+    resourceGroupName: 'larohra-dcr-v2-test2'
+    location: 'East US 2'
+    templateLocation: 'URL of the file'
+    csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-20T19:14:25Z&se=2021-07-21T03:14:25Z&spr=https&sv=2020-08-04&sr=b&sig=A%2BhBzO1FOvNFqQ3TMUA15J4JKJFU9YMaWKWjESw5bS4%3D'
+    csmParametersFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.parameters.json?sp=r&st=2021-07-20T19:15:56Z&se=2021-08-01T03:15:56Z&spr=https&sv=2020-08-04&sr=b&sig=ObWDGKxRWJWheGXvElJQAhcOc6oOHfWeMBtgrc%2BP4V8%3D'
+    deploymentMode: 'Validation'
+
+# - task: PublishTestResults@2
+#   condition: succeededOrFailed()
+#   inputs:
+#     testResultsFormat: 'VSTest'
+#     testResultsFiles: '**/nosetests.xml'
+#     testRunTitle: 'Publish test results for Python $(python.version)'
 - task: AzureCLI@2
   condition: succeededOrFailed()
   inputs:
