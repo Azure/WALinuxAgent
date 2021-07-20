@@ -8,7 +8,7 @@ echo
 echo "========================================="
 echo "nosetests -a '!requires_sudo' output"
 echo "========================================="
-nosetests -a '!requires_sudo' tests --with-xunit --xunit-prefix-with-testsuite-name || EXIT_CODE=$(($EXIT_CODE || $?))
+nosetests -a '!requires_sudo' tests --with-xunit || EXIT_CODE=$(($EXIT_CODE || $?))
 
 echo "========================================="
 echo "nosetests -a 'requires_sudo' output"
