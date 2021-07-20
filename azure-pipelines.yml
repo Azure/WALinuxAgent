@@ -51,7 +51,7 @@ steps:
 - task: AzureCLI@2
   condition: succeededOrFailed()
   inputs:
-    azureSubscription: 'Azure VM Guest Agent Team Dev(1)(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+    azureSubscription: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
     scriptType: 'bash'
     scriptLocation: 'inlineScript'
     inlineScript: 'az account show'
