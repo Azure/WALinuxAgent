@@ -30,7 +30,7 @@ steps:
   displayName: 'nosetest'
 
 - script: |
-    curl ifconfig.me
+    ip -4 -o address
   displayName: 'IP'
   
 # - task: AzureResourceManagerTemplateDeployment@3
