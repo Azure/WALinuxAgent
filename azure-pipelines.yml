@@ -39,5 +39,5 @@ steps:
   condition: succeededOrFailed()
   inputs:
     testResultsFormat: XUnit
-    testResultsFiles: '**/nosetests.xml'
+    testResultsFiles: '**/*.xml'
     testRunTitle: 'Publish test results for Python $(python.version)'
