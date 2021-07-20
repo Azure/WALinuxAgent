@@ -38,8 +38,8 @@ steps:
     resourceGroupName: 'larohra-dcr-v2-test1'
     location: 'East US 2'
     templateLocation: 'URL of the file'
-    csmFileLink: 'https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.compute/vm-simple-linux/azuredeploy.json'
-    csmParametersFileLink: 'https://github.com/Azure/azure-quickstart-templates/blob/master/quickstarts/microsoft.compute/vm-simple-linux/azuredeploy.parameters.json'
+    csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-20T19:14:25Z&se=2021-07-21T03:14:25Z&spr=https&sv=2020-08-04&sr=b&sig=A%2BhBzO1FOvNFqQ3TMUA15J4JKJFU9YMaWKWjESw5bS4%3D'
+    csmParametersFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.parameters.json?sp=r&st=2021-07-20T19:15:56Z&se=2021-08-01T03:15:56Z&spr=https&sv=2020-08-04&sr=b&sig=ObWDGKxRWJWheGXvElJQAhcOc6oOHfWeMBtgrc%2BP4V8%3D'
     deploymentMode: 'Validation'
 
 - task: PublishTestResults@2
@@ -61,5 +61,5 @@ steps:
 - task: PublishPipelineArtifact@1
   condition: succeededOrFailed()
   inputs:
-    targetPath: '$(Pipeline.Workspace)'
+    targetPath: '$(Pipeline.Workspace)/nosetests.xml'
     publishLocation: 'pipeline'
