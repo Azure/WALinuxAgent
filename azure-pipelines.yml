@@ -58,8 +58,8 @@ steps:
 
 - task: PublishPipelineMetadata@0
 
-# - task: PublishPipelineArtifact@1
-#   condition: succeededOrFailed()
-#   inputs:
-#     targetPath: 'nosetests.xml'
-#     publishLocation: 'pipeline'
+- task: PublishPipelineArtifact@1
+  condition: succeededOrFailed()
+  inputs:
+    targetPath: 'nosetests.xml'
+    publishLocation: 'pipeline'
