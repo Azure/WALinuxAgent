@@ -29,23 +29,23 @@ steps:
     ./ci/nosetests_only.sh
   displayName: 'nosetest'
   
-- task: AzureResourceManagerTemplateDeployment@3
-  inputs:
-    deploymentScope: 'Resource Group'
-    azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
-    subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
-    action: 'Create Or Update Resource Group'
-    resourceGroupName: 'larohra-dcr-v2-test1'
-    location: 'East US 2'
-    templateLocation: 'URL of the file'
-    csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-20T19:14:25Z&se=2021-07-21T03:14:25Z&spr=https&sv=2020-08-04&sr=b&sig=A%2BhBzO1FOvNFqQ3TMUA15J4JKJFU9YMaWKWjESw5bS4%3D'
-    csmParametersFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.parameters.json?sp=r&st=2021-07-20T19:15:56Z&se=2021-08-01T03:15:56Z&spr=https&sv=2020-08-04&sr=b&sig=ObWDGKxRWJWheGXvElJQAhcOc6oOHfWeMBtgrc%2BP4V8%3D'
-    deploymentMode: 'Incremental'
+# - task: AzureResourceManagerTemplateDeployment@3
+#   inputs:
+#     deploymentScope: 'Resource Group'
+#     azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+#     subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
+#     action: 'Create Or Update Resource Group'
+#     resourceGroupName: 'larohra-dcr-v2-test1'
+#     location: 'East US 2'
+#     templateLocation: 'URL of the file'
+#     csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-20T19:14:25Z&se=2021-07-21T03:14:25Z&spr=https&sv=2020-08-04&sr=b&sig=A%2BhBzO1FOvNFqQ3TMUA15J4JKJFU9YMaWKWjESw5bS4%3D'
+#     csmParametersFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.parameters.json?sp=r&st=2021-07-20T19:15:56Z&se=2021-08-01T03:15:56Z&spr=https&sv=2020-08-04&sr=b&sig=ObWDGKxRWJWheGXvElJQAhcOc6oOHfWeMBtgrc%2BP4V8%3D'
+#     deploymentMode: 'Incremental'
 
 - task: PublishTestResults@2
   condition: succeededOrFailed()
   inputs:
-    testResultsFormat: 'XUnit'
+    testResultsFormat: 'VSTest'
     testResultsFiles: '**/nosetests.xml'
     testRunTitle: 'Publish test results for Python $(python.version)'
 - task: AzureCLI@2
@@ -56,10 +56,10 @@ steps:
     scriptLocation: 'inlineScript'
     inlineScript: 'az account show'
 
-- task: PublishPipelineMetadata@0
+# - task: PublishPipelineMetadata@0
 
-- task: PublishPipelineArtifact@1
-  condition: succeededOrFailed()
-  inputs:
-    targetPath: 'nosetests.xml'
-    publishLocation: 'pipeline'
+# - task: PublishPipelineArtifact@1
+#   condition: succeededOrFailed()
+#   inputs:
+#     targetPath: 'nosetests.xml'
+#     publishLocation: 'pipeline'
