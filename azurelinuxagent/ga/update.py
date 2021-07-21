@@ -359,13 +359,13 @@ class UpdateHandler(object):
         """
         try:
             protocol.update_goal_state()
-            protocol.update_extensions_goal_state()
 
             if self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = False
                 message = u"Retrieving the goal state recovered from previous errors"
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
+
         except Exception as e:
             if not self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = True

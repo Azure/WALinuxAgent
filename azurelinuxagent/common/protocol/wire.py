@@ -57,6 +57,7 @@ TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
 INCARNATION_FILE_NAME = "Incarnation"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
+VM_SETTINGS_FILE_NAME = "VmSettings.{0}.json"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
@@ -715,7 +716,7 @@ class WireClient(object):
 
         return success
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None, ok_codes=None):
         """
         max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
 
@@ -723,13 +724,13 @@ class WireClient(object):
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
-        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry)
+        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, ok_codes=ok_codes)
         if response is not None and not restutil.request_failed(response):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
         return content, response.getheaders()
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None):
+    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None, ok_codes=None):
         """
         max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
         """
@@ -744,7 +745,7 @@ class WireClient(object):
 
             host_plugin = self.get_host_plugin()
 
-            if restutil.request_failed(resp):
+            if restutil.request_failed(resp, ok_codes=ok_codes):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
@@ -792,6 +793,8 @@ class WireClient(object):
 
             if new_goal_state is not None:
                 self._goal_state = new_goal_state
+                if conf.get_fetch_vm_settings():
+                    self.update_extensions_goal_state()
                 self._save_goal_state()
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
@@ -806,7 +809,7 @@ class WireClient(object):
             if etag is not None:
                 headers['if-none-match'] = etag
 
-            vm_settings, response_headers = self.fetch(url, headers)
+            vm_settings, response_headers = self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
 
             # The response includes an etag if and only if the VM settings change.
             response_etag = None
@@ -817,11 +820,12 @@ class WireClient(object):
             if response_etag is None:
                 return
 
-            # TODO - We need to archive the ExtensionsGoalState to the history folder (as well as save the current value to /var/lib/waagent)
             self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
 
         except Exception as exception:
-            raise ProtocolError("Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception)))
+            # TODO: report HostGAPlugin failure
+            # TODO: raise ProtocolError instead of logging a warning
+            logger.warn("Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception)))
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
@@ -847,6 +851,9 @@ class WireClient(object):
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
             if self._goal_state.ext_conf is not None and self._goal_state.ext_conf.xml_text is not None:
                 self._save_cache(self._goal_state.ext_conf.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
+
+            if self._extensions_goal_state is not None:
+                self._save_cache(self._extensions_goal_state.get_redacted_vm_settings(), VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state.etag))  # TODO: need to redact settings
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))

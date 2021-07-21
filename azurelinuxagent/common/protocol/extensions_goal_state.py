@@ -16,7 +16,14 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import re
+
+
 class ExtensionsGoalState(object):
     def __init__(self, etag, vm_settings):
         self.etag = etag
         self.vm_settings = vm_settings
+
+    def get_redacted_vm_settings(self):
+        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"***REDACTED***"', self.vm_settings, flags=re.IGNORECASE)
+
