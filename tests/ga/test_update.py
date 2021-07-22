@@ -45,7 +45,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    clear_singleton_instances, mock_sleep
+    clear_singleton_instances, mock_sleep, skip_if_predicate_true
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import HttpRequestPredicates
 
@@ -1915,6 +1915,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             update_handler = get_update_handler()
             self.assertFalse(update_handler._try_update_goal_state(protocol), "try_update_goal_state should have failed")
 
+    @skip_if_predicate_true(lambda: True, "TODO: Enable this test once we start retrieving the ExtensionsGoalState (vmSettings)")
     def test_it_should_update_the_goal_state(self):
         update_handler = get_update_handler()
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
