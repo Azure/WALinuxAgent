@@ -48,6 +48,14 @@ Before=slices.target
 [Slice]
 CPUAccounting=yes
 """
+_EXTENSION_SLICE_CONTENTS = """
+[Unit]
+Description=Slice for Azure VM Publisher Extension
+DefaultDependencies=no
+Before=slices.target
+[Slice]
+CPUAccounting=yes
+"""
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
 # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
@@ -614,6 +622,44 @@ class CGroupConfigurator(object):
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
+
+        def setup_extension_slice(self, extension_name):
+            """
+            Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
+            extensions are grouped under "azure-vmextensions.slice.
+
+            This method ensures that the extension slice is created. Setup should create
+            under /lib/systemd/system if it is not exist.
+            """
+            if self.enabled():
+                unit_file_install_path = systemd.get_unit_file_install_path()
+                extension_slice_path = os.path.join(unit_file_install_path,
+                                                     CGroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                if not os.path.exists(extension_slice_path):
+                    try:
+                        CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, _EXTENSION_SLICE_CONTENTS)
+                    except Exception as exception:
+                        _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
+                        CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+
+        def remove_extension_slice(self, extension_name):
+            """
+            This method ensures that the extension slice gets removed from /lib/systemd/system if it exist
+            Lastly stop the unit. This would ensure the cleanup the /sys/fs/cgroup controller paths
+            """
+            if self.enabled():
+                unit_file_install_path = systemd.get_unit_file_install_path()
+                extension_slice_name = CGroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
+                if os.path.exists(extension_slice_path):
+                    CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+                # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
+                try:
+                    logger.info("Executing systemctl stop {0}".format(extension_slice_name))
+                    shellutil.run_command(["systemctl", "stop", extension_slice_name])
+                except Exception as exception:
+                    _log_cgroup_warning("systemctl stop failed (remove slice): {0}", ustr(exception))
+
 
     # unique instance for the singleton
     _instance = None

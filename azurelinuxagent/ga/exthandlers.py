@@ -1386,6 +1386,9 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
+        CGroupConfigurator.get_instance().setup_extension_slice(
+            extension_name=self.get_full_name())
+
     def create_placeholder_status_file(self, extension=None, status=ValidHandlerStatus.transitioning, code=0,
                                        operation="Enabling Extension", message="Install/Enable is in progress."):
         _, status_path = self.get_status_file_path(extension)
@@ -1503,6 +1506,8 @@ class ExtHandlerInstance(object):
         uninstall_cmd = man.get_uninstall_command()
         self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
         self.launch_command(uninstall_cmd, extension=extension)
+        CGroupConfigurator.get_instance().remove_extension_slice(
+            extension_name=self.get_full_name())
 
     def remove_ext_handler(self):
         try:
@@ -2253,7 +2258,6 @@ class HandlerManifest(object):
 
     def supports_multiple_extensions(self):
         return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
-
 
 class ExtensionStatusError(ExtensionError):
     """

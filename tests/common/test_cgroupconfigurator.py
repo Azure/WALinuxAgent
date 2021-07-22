@@ -180,6 +180,24 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
 
+    def test_setup_extension_slice_should_create_unit_files(self):
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+
+            configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension")
+
+            self.assertTrue(os.path.exists(extension_slice_unit_file), "{0} was not created".format(extension_slice_unit_file))
+
+    def test_remove_extension_slice_should_remove_unit_files(self):
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+
+            configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
+
+            self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not be present".format(extension_slice_unit_file))
+
     def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
         with self._get_cgroup_configurator(enable=False) as configurator:
             with patch.object(configurator, "supported", return_value=False):
@@ -268,7 +286,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 command_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
                 self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
-                self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", command_calls[0], "The extension should have been invoked using systemd")
+                self.assertIn("systemd-run", command_calls[0], "The extension should have been invoked using systemd")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self, _):
@@ -355,7 +373,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
                         self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
-                        self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                        self.assertIn("systemd-run", extension_calls[0],
                                       "The first call to the extension should have used systemd")
                         self.assertEqual(command, extension_calls[1],
                                           "The second call to the extension should not have used systemd")
@@ -391,7 +409,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                         extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "echo 'success'" in args[0]]
                         self.assertEqual(2, len(extension_calls), "The extension should have been called twice. Got: {0}".format(extension_calls))
-                        self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The first call to the extension should have used systemd")
+                        self.assertIn("systemd-run", extension_calls[0], "The first call to the extension should have used systemd")
                         self.assertNotIn("systemd-run", extension_calls[1], "The second call to the extension should not have used systemd")
 
                         self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
@@ -423,14 +441,14 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
                     self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                    self.assertIn("systemd-run", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
                     self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # The scope name should appear in the process output since systemd-run was invoked and stderr
                     # wasn't truncated.
-                    self.assertIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+                    self.assertIn("Running scope as unit", ustr(context_manager.exception))
 
     @attr('requires_sudo')
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -461,14 +479,14 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if long_stdout_stderr_command in args[0]]
 
                     self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                    self.assertIn("systemd-run", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
                     self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
                     # even though systemd-run ran
-                    self.assertNotIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+                    self.assertNotIn("Running scope as unit", ustr(context_manager.exception))
 
     @attr('requires_sudo')
     def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args):  # pylint: disable=unused-argument

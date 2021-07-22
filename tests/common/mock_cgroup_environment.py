@@ -87,6 +87,7 @@ class UnitFilePaths:
     walinuxagent = "/lib/systemd/system/walinuxagent.service"
     azure = "/lib/systemd/system/azure.slice"
     vmextensions = "/lib/systemd/system/azure-vmextensions.slice"
+    extensionslice = "/lib/systemd/system/azure-vmextensions-Microsoft.CPlat.Extension.slice"
     slice = "/lib/systemd/system/walinuxagent.service.d/10-Slice.conf"
     cpu_accounting = "/lib/systemd/system/walinuxagent.service.d/11-CPUAccounting.conf"
     cpu_quota = "/lib/systemd/system/walinuxagent.service.d/12-CPUQuota.conf"

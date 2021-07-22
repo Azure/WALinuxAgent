@@ -67,9 +67,9 @@ class CGroupsApi(object):
                         "Error: {1}".format(cgroup.path, ustr(exception)))
 
     @staticmethod
-    def _get_extension_cgroup_name(extension_name):
+    def get_extension_cgroup_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
-        return extension_name.replace('-', '_')
+        return "azure-vmextensions-" + extension_name.replace('-', '_')
 
     @staticmethod
     def get_processes_in_cgroup(cgroup_path):
@@ -235,11 +235,11 @@ class SystemdCgroupsApi(CGroupsApi):
         return unit_not_found in stderr or scope_name not in stderr
 
     def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure): 
-        scope = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
-
+        scope = "{0}".format(uuid.uuid4())
+        extension_slice_name = self.get_extension_cgroup_name(extension_name)
         with self._systemd_run_commands_lock:
             process = subprocess.Popen(  # pylint: disable=W1509
-                "systemd-run --unit={0} --scope --slice=azure-vmextensions.slice {1}".format(scope, command),
+                "systemd-run --unit={0} --scope --slice={1}.slice {2}".format(scope, extension_slice_name, command),
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -255,8 +255,7 @@ class SystemdCgroupsApi(CGroupsApi):
         logger.info("Started extension in unit '{0}'", scope_name)
 
         try:
-            # systemd-run creates the scope under the system slice by default
-            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', scope_name)
+            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name + ".slice")
 
             cpu_cgroup_mountpoint, _ = self.get_cgroup_mount_points()
 
