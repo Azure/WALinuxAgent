@@ -6,6 +6,11 @@
 trigger:
 - develop
 
+variables:
+  vmName: 'larohra-simpleLinuxVM'
+  adminUsername: 'larohra'
+  SSH_PUBLIC: $(sshPublicKey) # set in GUI variables
+
 pool:
   vmImage: ubuntu-latest
 strategy:
@@ -17,8 +22,8 @@ steps:
 - task: InstallSSHKey@0
   displayName: 'Install SSH Key to agent'
   inputs:
-    knownHostsEntry: '$(sshPublicKey)'
-    sshPublicKey: '$(sshPublicKey)'
+    knownHostsEntry: $(SSH_PUBLIC)
+    sshPublicKey: $(SSH_PUBLIC)
     sshKeySecureFile: 'id_rsa'
 - task: UsePythonVersion@0
   inputs:
@@ -49,7 +54,7 @@ steps:
     location: 'East US 2'
     templateLocation: 'URL of the file'
     csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
-    overrideParameters: -vmName $(vmName) -adminUsername $(adminUsername) -adminPasswordOrKey $(sshPublicKey)
+    overrideParameters: -vmName $(vmName) -adminUsername $(adminUsername) -adminPasswordOrKey $(SSH_PUBLIC)
     deploymentMode: 'Complete'
     deploymentOutputs: 'armDeploymentOutput'
 
