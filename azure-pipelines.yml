@@ -15,6 +15,7 @@ strategy:
 
 steps:
 - task: InstallSSHKey@0
+  displayName: 'Install SSH Key to agent'
   inputs:
     knownHostsEntry: '$(ssh-public-key)'
     sshPublicKey: '$(ssh-public-key)'
@@ -48,9 +49,8 @@ steps:
     location: 'East US 2'
     templateLocation: 'URL of the file'
     csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
-    csmParametersFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.parameters.json?sp=r&st=2021-07-20T19:15:56Z&se=2021-08-01T03:15:56Z&spr=https&sv=2020-08-04&sr=b&sig=ObWDGKxRWJWheGXvElJQAhcOc6oOHfWeMBtgrc%2BP4V8%3D'
-    overrideParameters: '-adminPasswordOrKey $(ssh-public-key)'
-    deploymentMode: 'Incremental'
+    overrideParameters: '-vmName $(vm-name) -adminUsername $(admin-username) -adminPasswordOrKey $(ssh-public-key)'
+    deploymentMode: 'Complete'
     deploymentOutputs: 'armDeploymentOutput'
 
 - task: PowerShell@2
