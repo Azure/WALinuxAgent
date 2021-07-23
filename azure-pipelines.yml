@@ -12,104 +12,95 @@ variables:
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
   rgName: 'larohra-dcr-v2-test3'
 
-pool:
-  vmImage: ubuntu-latest
-strategy:
-  matrix:
-    Python37:
-      python.version: '3.7'
+jobs:
+- job: "SetupVM"
+  pool:
+    vmImage: ubuntu-latest
 
-steps:
-- task: InstallSSHKey@0
-  displayName: 'Install SSH Key to agent'
-  inputs:
-    knownHostsEntry: "$(SSH_PUBLIC)"
-    sshPublicKey: "$(SSH_PUBLIC)"
-    sshKeySecureFile: 'id_rsa'
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '$(python.version)'
-  displayName: 'Use Python $(python.version)'
+  steps:
+    - task: InstallSSHKey@0
+      displayName: 'Install SSH Key to agent'
+      inputs:
+        knownHostsEntry: '$(SSH_PUBLIC)'
+        sshPublicKey: '$(SSH_PUBLIC)'
+        sshKeySecureFile: 'id_rsa'
 
-# - script: |
-#     python -m pip install --upgrade pip
-#     pip install -r requirements.txt
-#     pip install -r test-requirements.txt
-#   displayName: 'Install dependencies'
+    - task: Bash@3
+      inputs:
+        targetType: 'inline'
+        script: '''ip -4 -o address'''
+      displayName: 'IP'
 
-# - script: |
-#     ./ci/nosetests_only.sh
-#   displayName: 'nosetest'
+    - task: Bash@3
+      inputs:
+        targetType: 'inline'
+        script: 'echo ''-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'''
+      displayName: "Print parameters"
+    
+    - task: AzureResourceManagerTemplateDeployment@3
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+        subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
+        action: 'Create Or Update Resource Group'
+        resourceGroupName: "$(rgName)"
+        location: 'East US 2'
+        templateLocation: 'URL of the file'
+        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
+        overrideParameters: -vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"
+        deploymentMode: 'Complete'
+        deploymentOutputs: 'armDeploymentOutput'
 
-- script: |
-    ip -4 -o address
-  displayName: 'IP'
+    - task: PowerShell@2
+      displayName: "Get deployment outputs"
+      inputs:
+        targetType: 'inline'
+        script: |
+            Write-Host "Deployment outputs - $(armDeploymentOutput)"
 
-- script: |
-    echo '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
-  displayName: "Print parameters"
-  
-- task: AzureResourceManagerTemplateDeployment@3
-  inputs:
-    deploymentScope: 'Resource Group'
-    azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
-    subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
-    action: 'Create Or Update Resource Group'
-    resourceGroupName: "$(rgName)"
-    location: 'East US 2'
-    templateLocation: 'URL of the file'
-    csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
-    overrideParameters: -vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"
-    deploymentMode: 'Complete'
-    deploymentOutputs: 'armDeploymentOutput'
+            $outputs = ConvertFrom-Json '$(armDeploymentOutput)' 
+            foreach ($output in $outputs.PSObject.Properties) {
+            Write-Host "$($output.Name) - $($output.Value.value)"
+            Write-Host "##vso[task.setvariable variable=$($output.Name);]$($output.Value.value)" 
+            Write-Host "##vso[task.setvariable variable=$($output.Name);isOutput=true]$($output.Value.value)" 
+        showWarnings: true
 
-- task: PowerShell@2
-  displayName: "Get deployment outputs"
-  inputs:
-    targetType: 'inline'
-    script: |
-        Write-Host "Deployment outputs - $(armDeploymentOutput)"
+    - task: Bash@3
+      inputs:
+        targetType: 'inline'
+        script: '$(sshCommand) ''ls -al ~'''
+      displayName: 'Run SSH command'
 
-        $outputs = ConvertFrom-Json '$(armDeploymentOutput)' 
-        foreach ($output in $outputs.PSObject.Properties) {
-        Write-Host "$($output.Name) - $($output.Value.value)"
-        Write-Host "##vso[task.setvariable variable=$($output.Name);]$($output.Value.value)" 
-        Write-Host "##vso[task.setvariable variable=$($output.Name);isOutput=true]$($output.Value.value)" 
-    showWarnings: true
+    - task: AzureCLI@2
+      condition: succeededOrFailed()
+      inputs:
+        azureSubscription: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: 'az account show'
 
-- script: |
-    $(sshCommand) 'ls -al ~'
-  displayName: 'Run SSH command'
+- job: "Wait"
+  pool: server
+  steps:
+    - task: ManualIntervention@8
+      timeoutInMinutes: 60
+      inputs:
+        instructions: 'Ok to delete?'
+        onTimeout: 'resume'
 
-# - task: PublishTestResults@2
-#   condition: succeededOrFailed()
-#   inputs:
-#     testResultsFormat: 'VSTest'
-#     testResultsFiles: '**/nosetests.xml'
-#     testRunTitle: 'Publish test results for Python $(python.version)'
-- task: AzureCLI@2
-  condition: succeededOrFailed()
-  inputs:
-    azureSubscription: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
-    scriptType: 'bash'
-    scriptLocation: 'inlineScript'
-    inlineScript: 'az account show'
-
-- task: ManualIntervention@8
-  timeoutInMinutes: 60
-  inputs:
-    instructions: 'Ok to delete?'
-    onTimeout: 'resume'
-
-- task: AzureResourceManagerTemplateDeployment@3
-  condition: succeededOrFailed()
-  displayName: "Delete test RG"
-  inputs:
-    deploymentScope: 'Resource Group'
-    azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
-    subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
-    action: 'DeleteRG'
-    resourceGroupName: '$(rgName)'
+- job: "DeleteRG"
+  pool:
+    vmImage: ubuntu-latest
+  steps:
+    - task: AzureResourceManagerTemplateDeployment@3
+      condition: succeededOrFailed()
+      displayName: "Delete test RG"
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+        subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
+        action: 'DeleteRG'
+        resourceGroupName: '$(rgName)'
 
 # - task: PublishPipelineMetadata@0
 
