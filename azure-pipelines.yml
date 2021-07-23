@@ -10,7 +10,7 @@ variables:
   vmName: 'larohra-simpleLinuxVM'
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
-  rgName: 'larohra-dcr-v2-test3'
+  rgName: 'larohra-dcr-v2-test4'
 
 pool:
   vmImage: ubuntu-latest
@@ -55,25 +55,20 @@ jobs:
         targetType: 'inline'
         script: |
             Write-Host "Deployment outputs - $(armDeploymentOutput)"
-
-            $outputs = ConvertFrom-Json '$(armDeploymentOutput)' 
-            foreach ($output in $outputs.PSObject.Properties) {
-            Write-Host "$($output.Name) - $($output.Value.value)"
-            Write-Host "##vso[task.setvariable variable=$($output.Name);]$($output.Value.value)" 
-            Write-Host "##vso[task.setvariable variable=$($output.Name);isOutput=true]$($output.Value.value)" 
         showWarnings: true
 
     - script: |
-        $(sshCommand) 'ls -al ~'
+        $(armDeploymentOutput.sshCommand.value) 'ls -al ~'
       displayName: 'Run SSH command'
 
     - task: AzureCLI@2
+      displayName: "Get instance view"
       condition: succeededOrFailed()
       inputs:
         azureSubscription: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
-        inlineScript: 'az account show'
+        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
 
 - job: "Wait"
   dependsOn: "SetupVM"
@@ -87,6 +82,7 @@ jobs:
 
 - job: "DeleteRG"
   dependsOn: "Wait"
+  condition: succeededOrFailed()
   steps:
     - task: AzureResourceManagerTemplateDeployment@3
       condition: succeededOrFailed()
