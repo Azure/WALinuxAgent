@@ -20,7 +20,6 @@ import json
 import os
 import random
 import time
-import traceback
 import uuid
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
