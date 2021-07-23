@@ -10,7 +10,7 @@ variables:
   vmName: 'larohra-simpleLinuxVM'
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
-  rgName: 'larohra-dcr-v2-test5'
+  rgName: 'larohra-dcr-v2-test6'
 
 pool:
   vmImage: ubuntu-latest
@@ -59,7 +59,7 @@ jobs:
         showWarnings: true
 
     - script: |
-        $(armDeploymentOutput.sshCommand.value) 'ls -al ~'
+        ssh $(adminUsername)@$(armDeploymentOutput.hostname.value) 'ls -al ~'
       displayName: 'Run SSH command'
 
     - task: AzureCLI@2
