@@ -43,7 +43,7 @@ Extensions.GoalStatePeriod = 6
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
-Logs.Collect = False
+Logs.Collect = True
 Logs.CollectPeriod = 3600
 Logs.Console = True
 Logs.Verbose = False
@@ -224,14 +224,14 @@ class TestAgent(AgentTestCase):
             @staticmethod
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
-                    relative_path = "{0}/{1}".format(cgroupconfigurator.AZURE_SLICE, logcollector.CGROUPS_UNIT)
-                    return (relative_path, relative_path)
+                    relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
+                    return (cgroupconfigurator.LOGCOLLECTOR_SLICE, relative_path)
                 return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
 
             with patch.object(SystemdCgroupsApi, "get_process_cgroup_relative_paths", mock_cgroup_paths):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                 agent.collect_logs(is_full_mode=True)
-
+                
                 mock_log_collector.assert_called_once()
         finally:
             CollectLogsHandler.disable_cgroups_validation()

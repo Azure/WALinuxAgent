@@ -27,7 +27,6 @@ import stat
 import subprocess
 import sys
 import time
-import traceback
 import uuid
 import zipfile
 
@@ -57,7 +56,7 @@ from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_col
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory
+from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
@@ -229,12 +228,11 @@ class UpdateHandler(object):
         except Exception as e:
             # Ignore child errors during termination
             if self.is_running:
-                msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
+                msg = u"Agent {0} launched with command '{1}' failed with exception: \n".format(
                     agent_name,
-                    agent_cmd,
-                    ustr(e))
+                    agent_cmd)
                 logger.warn(msg)
-                detailed_message = '{0} {1}'.format(msg, traceback.format_exc())
+                detailed_message = '{0} {1}'.format(msg, textutil.format_exception(e))
                 add_event(
                     AGENT_NAME,
                     version=agent_version,
@@ -333,7 +331,7 @@ class UpdateHandler(object):
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
             logger.warn(msg)
-            logger.warn(traceback.format_exc())
+            logger.warn(textutil.format_exception(error))
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
             return
@@ -769,7 +767,7 @@ class UpdateHandler(object):
                    or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as e:  # pylint: disable=W0612
-            msg = u"Exception retrieving agent manifests: {0}".format(ustr(traceback.format_exc()))
+            msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(e))
             add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False,
                       message=msg)
             return False
@@ -925,9 +923,9 @@ class GuestAgent(object):
             #   is corrupt (e.g., missing the HandlerManifest.json file)
             self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
-            msg = u"Agent {0} install failed with exception: {1}".format(
-                self.name, ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+            msg = u"Agent {0} install failed with exception:".format(
+                self.name)
+            detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
             add_event(
                 AGENT_NAME,
                 version=self.version,

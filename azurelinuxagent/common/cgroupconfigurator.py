@@ -48,6 +48,23 @@ Before=slices.target
 [Slice]
 CPUAccounting=yes
 """
+LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
+# More info on resource limits properties in systemd here:
+# https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
+_LOGCOLLECTOR_SLICE_CONTENTS_FMT = """
+[Unit]
+Description=Slice for Azure VM Agent Periodic Log Collector
+DefaultDependencies=no
+Before=slices.target
+[Slice]
+CPUAccounting=yes
+CPUQuota={cpu_quota}
+MemoryAccounting=yes
+MemoryLimit={memory_limit}
+"""
+_LOGCOLLECTOR_CPU_QUOTA = "5%"
+_LOGCOLLECTOR_MEMORY_LIMIT = "30M"  # K for kb, M for mb
+
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
 # This drop-in unit file was created by the Azure VM Agent.
@@ -277,6 +294,7 @@ class CGroupConfigurator(object):
             unit_file_install_path = systemd.get_unit_file_install_path()
             azure_slice = os.path.join(unit_file_install_path, AZURE_SLICE)
             vmextensions_slice = os.path.join(unit_file_install_path, _VMEXTENSIONS_SLICE)
+            logcollector_slice = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
             agent_unit_file = systemd.get_agent_unit_file()
             agent_drop_in_path = systemd.get_agent_drop_in_path()
             agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
@@ -289,6 +307,12 @@ class CGroupConfigurator(object):
 
             if not os.path.exists(vmextensions_slice):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
+
+            if not os.path.exists(logcollector_slice):
+                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA,
+                    memory_limit=_LOGCOLLECTOR_MEMORY_LIMIT)
+
+                files_to_create.append((logcollector_slice, slice_contents))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
                 CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_slice)

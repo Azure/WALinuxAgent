@@ -20,7 +20,6 @@ import json
 import os
 import random
 import time
-import traceback
 import uuid
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
@@ -1235,7 +1234,7 @@ class WireClient(object):
                 events_per_provider[event.providerId] += 1
 
             except Exception as error:
-                logger.warn("Unexpected error when generating Events: {0}, {1}", ustr(error), traceback.format_exc())
+                logger.warn("Unexpected error when generating Events:{0}", textutil.format_exception(error))
 
         # Send out all events left in buffer.
         for provider_id in list(buf.keys()):

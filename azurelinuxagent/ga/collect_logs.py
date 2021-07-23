@@ -30,7 +30,7 @@ from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEv
 from azurelinuxagent.common.future import subprocess_dev_null, ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
-from azurelinuxagent.common.osutil import systemd
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -43,17 +43,17 @@ def get_collect_logs_handler():
 def is_log_collection_allowed():
     # There are three conditions that need to be met in order to allow periodic log collection:
     # 1) It should be enabled in the configuration.
-    # 2) The system must be using systemd to manage services. Needed for resource limiting of the log collection.
+    # 2) The system must be using cgroups to manage services. Needed for resource limiting of the log collection.
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
-    systemd_present = systemd.is_systemd()
+    cgroups_enabled = CGroupConfigurator.get_instance().enabled()
     supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
-    is_allowed = conf_enabled and systemd_present and supported_python
+    is_allowed = conf_enabled and cgroups_enabled and supported_python
 
     msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
-          "configuration enabled [{1}], systemd present [{2}], python supported: [{3}]".format(is_allowed,
+          "configuration enabled [{1}], cgroups enabled [{2}], python supported: [{3}]".format(is_allowed,
                                                                                                conf_enabled,
-                                                                                               systemd_present,
+                                                                                               cgroups_enabled,
                                                                                                supported_python)
     logger.info(msg)
     add_event(
@@ -155,13 +155,6 @@ class CollectLogsHandler(ThreadHandlerInterface):
         if self._collect_logs():
             self._send_logs()
 
-    @staticmethod
-    def _get_resource_limits():
-        # Define CPU limit (as percentage of CPU time) and memory limit (absolute value in megabytes).
-        cpu_limit = "5%"
-        memory_limit = "30M"  # K for kb, M for mb
-        return cpu_limit, memory_limit
-
     def _collect_logs(self):
         logger.info("Starting log collection...")
 
@@ -169,27 +162,19 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
         systemd_cmd = [
             "systemd-run", "--unit={0}".format(logcollector.CGROUPS_UNIT),
-            "--slice={0}".format(cgroupconfigurator.AZURE_SLICE)
+            "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
         ]
-
-        # More info on resource limits properties in systemd here:
-        # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
-        cpu_limit, memory_limit = CollectLogsHandler._get_resource_limits()
-        resource_limits = ["--property=CPUAccounting=1", "--property=CPUQuota={0}".format(cpu_limit),
-                           "--property=MemoryAccounting=1", "--property=MemoryLimit={0}".format(memory_limit)]
 
         # The log tool is invoked from the current agent's egg with the command line option
         collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
-        final_command = systemd_cmd + resource_limits + collect_logs_cmd
+        final_command = systemd_cmd + collect_logs_cmd
 
         def exec_command(output_file):
             start_time = datetime.datetime.utcnow()
             success = False
             msg = None
             try:
-                # TODO: Remove track_process (and its implementation) when the log collector is moved to the agent's cgroup
-                shellutil.run_command(final_command, log_error=False, track_process=False,
-                    stdout=output_file, stderr=output_file)
+                shellutil.run_command(final_command, log_error=False, stdout=output_file, stderr=output_file)
                 duration = elapsed_milliseconds(start_time)
                 archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
 
@@ -207,11 +192,13 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     # pylint has limited (i.e. no) awareness of control flow w.r.t. typing. we disable=no-member
                     # here because we know e must be a CommandError but pylint still considers the case where
                     # e is a different type of exception.
-                    err_msg = ustr("[stderr] %s", e.stderr) # pylint: disable=no-member
+                    err_msg = ustr("Log Collector exited with code {0}").format(e.returncode) # pylint: disable=no-member
 
-                    if e.returncode == 2: # pylint: disable=no-member
+                    if e.returncode == logcollector.INVALID_CGROUPS_ERRCODE: # pylint: disable=no-member
                         logger.info("Disabling periodic log collection until service restart due to process error.")
                         self.stop()
+                    else:
+                        logger.info(err_msg)
 
                 msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, err_msg)
                 # No need to log to the local log since we logged stdout, stderr from the process.
