@@ -10,6 +10,7 @@ variables:
   vmName: 'larohra-simpleLinuxVM'
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
+  rgName: 'larohra-dcr-v2-test3'
 
 pool:
   vmImage: ubuntu-latest
@@ -54,7 +55,7 @@ steps:
     azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
     subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
     action: 'Create Or Update Resource Group'
-    resourceGroupName: 'larohra-dcr-v2-test2'
+    resourceGroupName: "$(rgName)"
     location: 'East US 2'
     templateLocation: 'URL of the file'
     csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
@@ -67,7 +68,9 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
-        $outputs = '$(armDeploymentOutput)' | ConvertFrom-Json
+        Write-Host "Deployment outputs - $(armDeploymentOutput)"
+
+        $outputs = ConvertFrom-Json '$(armDeploymentOutput)' 
         foreach ($output in $outputs.PSObject.Properties) {
         Write-Host "$($output.Name) - $($output.Value.value)"
         Write-Host "##vso[task.setvariable variable=$($output.Name);]$($output.Value.value)" 
@@ -91,6 +94,22 @@ steps:
     scriptType: 'bash'
     scriptLocation: 'inlineScript'
     inlineScript: 'az account show'
+
+- task: ManualIntervention@8
+  timeoutInMinutes: 60
+  inputs:
+    instructions: 'Ok to delete?'
+    onTimeout: 'resume'
+
+- task: AzureResourceManagerTemplateDeployment@3
+  condition: succeededOrFailed()
+  displayName: "Delete test RG"
+  inputs:
+    deploymentScope: 'Resource Group'
+    azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+    subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
+    action: 'DeleteRG'
+    resourceGroupName: '$(rgName)'
 
 # - task: PublishPipelineMetadata@0
 
