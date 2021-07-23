@@ -25,10 +25,8 @@ jobs:
         sshPublicKey: '$(SSH_PUBLIC)'
         sshKeySecureFile: 'id_rsa'
 
-    - task: Bash@3
-      inputs:
-        targetType: 'inline'
-        script: '''ip -4 -o address'''
+    - script: |
+        ip -4 -o address
       displayName: 'IP'
 
     - task: Bash@3
@@ -65,10 +63,8 @@ jobs:
             Write-Host "##vso[task.setvariable variable=$($output.Name);isOutput=true]$($output.Value.value)" 
         showWarnings: true
 
-    - task: Bash@3
-      inputs:
-        targetType: 'inline'
-        script: '$(sshCommand) ''ls -al ~'''
+    - script: |
+        $(sshCommand) 'ls -al ~'
       displayName: 'Run SSH command'
 
     - task: AzureCLI@2
@@ -82,10 +78,10 @@ jobs:
 - job: "Wait"
   pool: server
   steps:
-    - task: ManualIntervention@8
+    - task: ManualValidation@0
       timeoutInMinutes: 60
       inputs:
-        instructions: 'Ok to delete?'
+        notifyUsers: 'larohra'
         onTimeout: 'resume'
 
 - job: "DeleteRG"
