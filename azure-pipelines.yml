@@ -10,7 +10,7 @@ variables:
   vmName: 'larohra-simpleLinuxVM'
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
-  rgName: 'larohra-dcr-v2-test$(Agent.Id)'
+  rgName: 'larohra-dcr-v2-test$(Build.BuildId)'
 
 pool:
   vmImage: ubuntu-latest
@@ -36,6 +36,7 @@ jobs:
       displayName: "Print parameters"
     
     - task: AzureResourceManagerTemplateDeployment@3
+      name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
         azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
@@ -61,7 +62,7 @@ jobs:
 
     - task: AzureCLI@2
       displayName: "Get instance view"
-      condition: succeededOrFailed()
+      condition: succeeded("deployVM") 
       inputs:
         azureSubscription: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
         scriptType: 'bash'
