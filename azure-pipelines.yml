@@ -57,7 +57,16 @@ jobs:
       displayName: "Clear known host keys"
 
     - script: |
-        ssh -o "StrictHostKeyChecking no" $(adminUsername)@$(armDeploymentOutput.hostname.value) 'dcr/setup.sh $(Build.SourcesDirectory)'
+        command="ssh -o StrictHostKeyChecking no $(adminUsername)@$(armDeploymentOutput.hostname.value) dcr/setup.sh $(Build.SourcesDirectory)"
+        max_retry=5
+        counter=0
+        until $command
+        do
+          sleep 1
+          [[ counter -eq $max_retry ]] && echo "Failed!" && exit 1
+          echo "Trying again. Try #$counter"
+          ((counter++))
+        done
       displayName: 'Run SSH command'
 
     - task: AzureCLI@2
