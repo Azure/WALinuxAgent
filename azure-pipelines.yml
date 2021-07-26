@@ -10,7 +10,7 @@ variables:
   vmName: 'larohra-simpleLinuxVM'
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
-  rgName: 'larohra-dcr-v2-test9'
+  rgName: 'larohra-dcr-v2-test$(Agent.Id)'
 
 pool:
   vmImage: ubuntu-latest
@@ -27,8 +27,7 @@ jobs:
 
     - script: |
         ip -4 -o address
-        which ssh
-      displayName: 'IP and SSH'
+      displayName: 'IP'
 
     - task: Bash@3
       inputs:
@@ -71,6 +70,7 @@ jobs:
 
 - job: "Wait"
   dependsOn: "SetupVM"
+  condition: succeededOrFailed()
   pool: server
   steps:
     - task: ManualValidation@0
