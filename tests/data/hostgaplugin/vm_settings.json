@@ -1,7 +1,7 @@
 {
-    "activityId": "785cb703-7468-4015-b5b8-3eb060b25a81",
-    "correlationId": "38e83195-ad71-4194-91d0-def8af9c4405",
-    "extensionsLastModifiedTickCount": 637607673150222321,
+    "activityId": "b3f493e2-cab8-487d-820a-5718504f2f3f",
+    "correlationId": "4f4939fb-35e6-411f-98f1-aeaf8796ed30",
+    "extensionsLastModifiedTickCount": 637629365237217593,
     "inVMMetadata": {
         "subscriptionId": "a53f7094-a16c-47af-abe4-b05c05d0d79a",
         "resourceGroupName": "narrieta-rg",
@@ -17,11 +17,43 @@
             "version": "18.04.202104150"
         }
     },
+    "requiredFeatures": [
+        {
+            "name": "MultipleExtensionsPerHandler"
+        }
+    ],
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "version": "2.4.0.1"
+        },
+        {
+            "name": "Test",
+            "version": "2.4.0.1"
+        }
+    ],
     "extensionGoalStates": [
+        {
+            "name": "Microsoft.Azure.Extensions.customScript",
+            "version": "2.1.3",
+            "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/708cdbbfb9ad4802ac80a012992930b1/Microsoft.Azure.Extensions_CustomScript_useast2euap_manifest.xml",
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 1,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw=="
+                }
+            ]
+        },
         {
             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
             "version": "1.9.1",
-            "location": "https://zrdfepirv2cbn09pr02a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml",
+            "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml",
             "state": "enabled",
             "autoUpgrade": true,
             "runAsStartupTask": false,
@@ -30,7 +62,7 @@
             "settingsSeqNo": 0,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "C6E8BB9560A41FDF7B90894738AE82AFA3440EE8",
+                    "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
                 }
@@ -39,7 +71,7 @@
         {
             "name": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent",
             "version": "2.15.112",
-            "location": "https://zrdfepirv2cbn09pr02a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml",
+            "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml",
             "state": "enabled",
             "autoUpgrade": true,
             "runAsStartupTask": false,
@@ -48,9 +80,27 @@
             "settingsSeqNo": 0,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "C6E8BB9560A41FDF7B90894738AE82AFA3440EE8",
-                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEAqBkgNZ6L81eyQ3UmHqdWTmq4Ya4r2JCjJbHnQiKeRDd+qUw0WZRKFiQ2ki0QjZeNoVAcjL9WqmrcsU83hb7j5Y/uqIcgpBHCjJ4h7dr5ZyrioONhwtcAPH7fWW1lSi37RYxJ2JrimoGdCLJWEfiN4DjLvfHbNMLkTpUck7SrJFPvnNwxJVN337GhY9rpjaL314M9eAri0f3GLN6DFheBJe++AYH6LXqVvn6WU7DOoFU9T7Fz4oBRzUAxCwPqCDbHxmjJN7zH5Bd0Y2KAt1A2J2o2Dp8lrorVu/XXpahUTz9JcBnZbsnmJh9zjo4cAp1mlxrkrcbFndpwStqcYOudoDArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECANcY8gd0y1AgAi90+baxPAWvg==",
+                    "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
                     "publicSettings": "{\"enableGenevaUpload\":true}"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.CPlat.Core.RunCommandLinux",
+            "version": "1.0.1",
+            "location": "https://umsahsv3lrjswx2ggpxc.blob.core.windows.net/4beefb67-5a1e-aa37-7ede-3180ba34ba0d/4beefb67-5a1e-aa37-7ede-3180ba34ba0d_manifest.xml",
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 2,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
+                    "publicSettings": "{}"
                 }
             ]
         }

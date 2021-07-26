@@ -852,7 +852,7 @@ class WireClient(object):
                 self._save_cache(self._goal_state.ext_conf.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
 
             if self._extensions_goal_state is not None:
-                self._save_cache(self._extensions_goal_state.get_redacted_vm_settings(), VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state.etag))  # TODO: need to redact settings
+                self._save_cache(self._extensions_goal_state.get_redacted_vm_settings(), VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state.etag))
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))

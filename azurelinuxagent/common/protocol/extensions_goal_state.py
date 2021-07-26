@@ -25,5 +25,5 @@ class ExtensionsGoalState(object):
         self.vm_settings = vm_settings
 
     def get_redacted_vm_settings(self):
-        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"***REDACTED***"', self.vm_settings, flags=re.IGNORECASE)
+        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self.vm_settings)
 
