@@ -39,7 +39,7 @@ jobs:
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: 'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+        azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
         subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
@@ -63,7 +63,7 @@ jobs:
     - task: AzureCLI@2
       displayName: "Get instance view"
       inputs:
-        azureSubscription: 'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+        azureSubscription: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
@@ -88,7 +88,7 @@ jobs:
       displayName: "Delete test RG"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: 'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+        azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
         subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
         action: 'DeleteRG'
         resourceGroupName: '$(rgName)'
