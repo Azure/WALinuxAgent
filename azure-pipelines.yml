@@ -59,17 +59,11 @@ jobs:
     #    ssh-keygen -R $(armDeploymentOutput.hostname.value)
       displayName: "Clear known host keys"
 
+
+
     - script: |
-        # command="ssh -o StrictHostKeyChecking no $(adminUsername)@$(armDeploymentOutput.hostname.value) dcr/setup.sh $(Build.SourcesDirectory)"
-        max_retry=5
-        counter=0
-        until ssh -o StrictHostKeyChecking no $(adminUsername)@$(armDeploymentOutput.hostname.value) dcr/setup.sh $(Build.SourcesDirectory)
-        do
-          sleep 1
-          [[ counter -eq $max_retry ]] && echo "Failed!" && exit 1
-          echo "Trying again. Try #$counter"
-          ((counter++))
-        done
+        scp -o StrictHostKeyChecking=no -r dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ 
+        ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) ~/dcr/setup.sh $(Build.SourcesDirectory)
       displayName: 'Run SSH command'
 
     - task: AzureCLI@2
