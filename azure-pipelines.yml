@@ -26,13 +26,13 @@ stages:
       - task: InstallSSHKey@0
         displayName: 'Install SSH Key to agent'
         inputs:
-          knownHostsEntry: '$(SSH_PUBLIC)'
+          knownHostsEntry: 'ssh-keyscan -t rsa github.com'
           sshPublicKey: '$(SSH_PUBLIC)'
           sshKeySecureFile: 'id_rsa'
       
       - script: |
           echo "$(armDeploymentOutput)"
-          rm -rf ~/.ssh/known_hosts
+          # rm -rf ~/.ssh/known_hosts
         displayName: "Clear known host keys in Orchestrator"
 
   - job: "PrintMetadata"
@@ -98,6 +98,7 @@ stages:
   condition: succeededOrFailed()
   jobs: 
   - job: "Wait"
+    condition: succeeded('Execute.CreateVM')
     pool: server
     steps:
       - task: ManualValidation@0
