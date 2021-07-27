@@ -11,6 +11,8 @@ variables:
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
   rgName: 'larohra-dcr-v2-test$(Build.BuildId)'
+  azureConnection: 'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+  subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
 
 pool:
   vmImage: ubuntu-latest
@@ -27,6 +29,7 @@ jobs:
 
     - script: |
         ip -4 -o address
+        wget -O - -q icanhazip.com
       displayName: 'IP'
 
     - task: Bash@3
@@ -39,8 +42,8 @@ jobs:
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
-        subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
+        azureResourceManagerConnection: $(azureConnection)
+        subscriptionId: $(subId)
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
         location: 'East US 2'
@@ -72,7 +75,7 @@ jobs:
     - task: AzureCLI@2
       displayName: "Get instance view"
       inputs:
-        azureSubscription: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
+        azureSubscription: $(azureConnection)
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
@@ -97,7 +100,7 @@ jobs:
       displayName: "Delete test RG"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: 'Azure VM Guest Agent Team Dev(a53f7094-a16c-47af-abe4-b05c05d0d79a)'
-        subscriptionId: 'a53f7094-a16c-47af-abe4-b05c05d0d79a'
+        azureResourceManagerConnection: $(azureConnection)
+        subscriptionId: $(subId)
         action: 'DeleteRG'
         resourceGroupName: '$(rgName)'
