@@ -17,27 +17,48 @@ variables:
 pool:
   vmImage: ubuntu-latest
 
-jobs:
-- job: "SetupVM"
-  steps:
-    - task: InstallSSHKey@0
-      displayName: 'Install SSH Key to agent'
-      inputs:
-        knownHostsEntry: '$(SSH_PUBLIC)'
-        sshPublicKey: '$(SSH_PUBLIC)'
-        sshKeySecureFile: 'id_rsa'
+stages:
+- stage: "Setup"
 
-    - script: |
-        ip -4 -o address
-        wget -O - -q icanhazip.com
-      displayName: 'IP'
+  jobs:
+  - job: "InstallSSHKeys"
+    steps:
+      - task: InstallSSHKey@0
+        displayName: 'Install SSH Key to agent'
+        inputs:
+          knownHostsEntry: '$(SSH_PUBLIC)'
+          sshPublicKey: '$(SSH_PUBLIC)'
+          sshKeySecureFile: 'id_rsa'
+      
+      - script: |
+          echo "$(armDeploymentOutput)"
+          rm -rf ~/.ssh/known_hosts
+        displayName: "Clear known host keys in Orchestrator"
 
-    - task: Bash@3
-      inputs:
-        targetType: 'inline'
-        script: 'echo ''-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'''
-      displayName: "Print parameters"
-    
+  - job: "PrintMetadata"
+    steps:
+      - script: |
+          ip -4 -o address
+          wget -O - -q icanhazip.com
+        displayName: 'IP'
+        
+      - task: Bash@3
+        inputs:
+          targetType: 'inline'
+          script: 'echo ''-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'''
+        displayName: "Parameters"
+
+  - job: "BuildAgent" 
+    steps:
+      - script: | 
+          # Build the agent package in the container and just transfer out the zip 
+          bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
+        displayName: "Build Agent ZIP"
+
+- stage: "Execute"
+  jobs:
+  - job: "CreateVM"
+    steps:
     - task: AzureResourceManagerTemplateDeployment@3
       name: "deployVM"
       inputs:
@@ -52,52 +73,49 @@ jobs:
         overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
         deploymentMode: 'Complete'
         deploymentOutputs: 'armDeploymentOutput'
-    
-    - script: |
-       echo "$(armDeploymentOutput)"
-       rm -rf ~/.ssh/known_hosts
-    #    ssh-keygen -R $(armDeploymentOutput.hostname.value)
-      displayName: "Clear known host keys"
-    
-    - script: | 
-        # Build the agent package in the container and just transfer out the zip 
-        bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
-      displayName: "Build Agent ZIP"
 
+  - job: "SetupVM"
+    dependsOn: "CreateVM"
+    steps:
     - script: |
         scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ 
         ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)"
       displayName: 'Run SSH command'
 
-    - task: AzureCLI@2
-      displayName: "Get instance view"
-      inputs:
-        azureSubscription: $(azureConnection)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
+  - job: "VerifyVM"
+    dependsOn: "SetupVM"
+    steps:
 
-- job: "Wait"
-  dependsOn: "SetupVM"
-  condition: succeededOrFailed()
-  pool: server
-  steps:
-    - task: ManualValidation@0
-      timeoutInMinutes: 120
-      inputs:
-        notifyUsers: 'larohra'
-        onTimeout: 'resume'
+      - task: AzureCLI@2
+        displayName: "Get instance view"
+        inputs:
+          azureSubscription: $(azureConnection)
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
 
-- job: "DeleteRG"
-  dependsOn: "Wait"
+- stage: "Cleanup"
   condition: succeededOrFailed()
-  steps:
-    - task: AzureResourceManagerTemplateDeployment@3
-      condition: succeededOrFailed()
-      displayName: "Delete test RG"
-      inputs:
-        deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: $(azureConnection)
-        subscriptionId: $(subId)
-        action: 'DeleteRG'
-        resourceGroupName: '$(rgName)'
+  jobs: 
+  - job: "Wait"
+    pool: server
+    steps:
+      - task: ManualValidation@0
+        timeoutInMinutes: 120
+        inputs:
+          notifyUsers: 'larohra'
+          onTimeout: 'resume'
+
+  - job: "DeleteRG"
+    dependsOn: "Wait"
+    condition: always()
+    steps:
+      - task: AzureResourceManagerTemplateDeployment@3
+        condition: succeededOrFailed()
+        displayName: "Delete test RG"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: $(azureConnection)
+          subscriptionId: $(subId)
+          action: 'DeleteRG'
+          resourceGroupName: '$(rgName)'
