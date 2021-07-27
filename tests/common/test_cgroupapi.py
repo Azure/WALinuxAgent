@@ -139,6 +139,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                     command_output = SystemdCgroupsApi().start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="A_TEST_COMMAND",
+                        cmd_name="test",
                         shell=True,
                         timeout=300,
                         cwd=self.tmp_dir,
@@ -154,6 +155,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             SystemdCgroupsApi().start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="test command",
+                cmd_name="test",
                 shell=False,
                 timeout=300,
                 cwd=self.tmp_dir,
@@ -174,6 +176,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 SystemdCgroupsApi().start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="the-test-extension-command",
+                    cmd_name="test",
                     timeout=300,
                     shell=True,
                     cwd=self.tmp_dir,

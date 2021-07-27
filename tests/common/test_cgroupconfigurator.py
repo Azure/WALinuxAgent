@@ -257,6 +257,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="date",
+                    cmd_name="test",
                     timeout=300,
                     shell=False,
                     cwd=self.tmp_dir,
@@ -276,6 +277,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="the-test-extension-command",
+                    cmd_name="test",
                     timeout=300,
                     shell=False,
                     cwd=self.tmp_dir,
@@ -296,6 +298,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             configurator.start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="test command",
+                cmd_name="test",
                 timeout=300,
                 shell=False,
                 cwd=self.tmp_dir,
@@ -323,6 +326,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     configurator.start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="test command",
+                        cmd_name="test",
                         timeout=300,
                         shell=False,
                         cwd=self.tmp_dir,
@@ -353,6 +357,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         command_output = configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command=command,
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -398,6 +403,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command="echo 'success'",
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -431,6 +437,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command=command,
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -469,6 +476,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command=long_stdout_stderr_command,
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -505,6 +513,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                             configurator.start_extension_command(
                                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                                 command="date",
+                                cmd_name="test",
                                 timeout=300,
                                 shell=True,
                                 cwd=self.tmp_dir,
@@ -536,6 +545,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     process_output = configurator.start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="echo 'very specific test message'",
+                        cmd_name="test",
                         timeout=300,
                         shell=True,
                         cwd=self.tmp_dir,
@@ -627,6 +637,7 @@ exit 0
                                 configurator.start_extension_command(
                                     extension_name="TestExtension",
                                     command="{0} {1} {2}".format(test_script, extension_output, number_of_descendants),
+                                    cmd_name="test",
                                     timeout=30,
                                     shell=True,
                                     cwd=self.tmp_dir,

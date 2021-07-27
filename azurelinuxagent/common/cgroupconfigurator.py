@@ -50,7 +50,7 @@ CPUAccounting=yes
 """
 _EXTENSION_SLICE_CONTENTS = """
 [Unit]
-Description=Slice for Azure VM Publisher Extension
+Description=Slice for Azure VM extension {extension_name}
 DefaultDependencies=no
 Before=slices.target
 [Slice]
@@ -598,11 +598,12 @@ class CGroupConfigurator(object):
                 pass
             return 0
 
-        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
             :param command: The command to invoke
+            :param cmd_name: The type of the command(enable, install, etc.)
             :param timeout: Number of seconds to wait for command completion
             :param cwd: The working directory for the command
             :param env:  The environment to pass to the command's process
@@ -613,7 +614,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 try:
-                    return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
+                    return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
                     reason = 'Failed to start {0} using systemd-run, will try invoking the extension directly. Error: {1}'.format(extension_name, ustr(exception))
                     self.disable(reason)
@@ -634,10 +635,11 @@ class CGroupConfigurator(object):
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
-                                                     CGroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                                                     SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
                 if not os.path.exists(extension_slice_path):
                     try:
-                        CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, _EXTENSION_SLICE_CONTENTS)
+                        slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name = extension_name)
+                        CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                     except Exception as exception:
                         _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
                         CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
@@ -649,7 +651,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
-                extension_slice_name = CGroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
                 if os.path.exists(extension_slice_path):
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
