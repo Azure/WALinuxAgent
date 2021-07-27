@@ -36,7 +36,7 @@ from azurelinuxagent.common.version import get_distro
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
-_EXTENSION_SLICE_PREFIX = "azure-vmextensions-"
+EXTENSION_SLICE_PREFIX = "azure-vmextensions"
 
 class SystemdRunError(CGroupsException):
     """
@@ -232,7 +232,7 @@ class SystemdCgroupsApi(CGroupsApi):
     @staticmethod
     def get_extension_cgroup_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
-        return _EXTENSION_SLICE_PREFIX + extension_name.replace('-', '_')
+        return EXTENSION_SLICE_PREFIX + "-" + extension_name.replace('-', '_')
 
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())

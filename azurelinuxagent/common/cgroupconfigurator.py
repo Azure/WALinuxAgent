@@ -22,7 +22,7 @@ import subprocess
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
+from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -39,7 +39,7 @@ Description=Slice for Azure VM Agent and Extensions
 DefaultDependencies=no
 Before=slices.target
 """
-_VMEXTENSIONS_SLICE = "azure-vmextensions.slice"
+_VMEXTENSIONS_SLICE = EXTENSION_SLICE_PREFIX + ".slice"
 _VMEXTENSIONS_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Extensions
