@@ -54,8 +54,11 @@ stages:
           # Build the agent package in the container and just transfer out the zip 
           bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
         displayName: "Build Agent ZIP"
+        name: "agentZip"
 
 - stage: "Execute"
+  variables:
+    agentVersion: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
   jobs:
   - job: "CreateVM"
     steps:
@@ -73,17 +76,14 @@ stages:
         overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
         deploymentMode: 'Complete'
         deploymentOutputs: 'armDeploymentOutput'
-
-  - job: "SetupVM"
-    dependsOn: "CreateVM"
-    steps:
+        
     - script: |
         scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ 
         ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)"
       displayName: 'Run SSH command'
 
   - job: "VerifyVM"
-    dependsOn: "SetupVM"
+    dependsOn: "CreateVM"
     steps:
 
       - task: AzureCLI@2
@@ -96,9 +96,10 @@ stages:
 
 - stage: "Cleanup"
   condition: succeededOrFailed()
+  variables:
+    createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
   jobs: 
   - job: "Wait"
-    condition: succeeded('Execute.CreateVM')
     pool: server
     steps:
       - task: ManualValidation@0
