@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 #           $1          $2          $3            $4              $5            $6                    $7
-# Usage: <Agent Code Dir>
+# Usage:  AgentVersion
 
-#"Install latest WALinuxAgent from source"
-
-cd "$1" || exit
-version=$(grep '^AGENT_VERSION' azurelinuxagent/common/version.py |  sed "s/.*'\([^']\+\)'.*/\1/")
-sudo ./makepkg.py
-sudo cp ./eggs/WALinuxAgent-$version.zip /var/lib/waagent/
-sudo systemctl stop walinuxagent
-sudo unzip /var/lib/waagent/WALinuxAgent-$version.zip -d /var/lib/waagent/WALinuxAgent-$version
-sudo systemctl daemon-reload && sudo systemctl start walinuxagent
+# Copy agent zip file to /var/lib/waagent to force it to autoupdate
+echo "PWD: $(pwd)"
+version=$1
 
 # Required for Agent-BVT test
-grep '^AGENT_VERSION' azurelinuxagent/common/version.py > /etc/agent-release
+echo "$version" > /etc/agent-release
+
+sudo systemctl stop walinuxagent
+sudo cp ./*-$version.zip /var/lib/waagent
+sudo unzip /var/lib/waagent/WALinuxAgent-$version.zip -d /var/lib/waagent/WALinuxAgent-$version
+sudo systemctl daemon-reload && sudo systemctl start walinuxagent
