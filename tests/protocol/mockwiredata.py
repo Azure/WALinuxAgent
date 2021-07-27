@@ -111,6 +111,8 @@ DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_p
 DATA_FILE_REQUIRED_FEATURES = DATA_FILE.copy()
 DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
+DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
+DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 
 class WireProtocolData(object):
     def __init__(self, data_files=None):
