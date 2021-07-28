@@ -100,7 +100,7 @@ stages:
   #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
   jobs: 
   - job: "Wait"
-    condition: succeeded("CreateVM")
+    # condition: succeeded("CreateVM")
     pool: server
     steps:
       - task: ManualValidation@0
