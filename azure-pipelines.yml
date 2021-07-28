@@ -96,10 +96,11 @@ stages:
 
 - stage: "Cleanup"
   condition: succeededOrFailed()
-  variables:
-    createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
+  # variables:
+  #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
   jobs: 
   - job: "Wait"
+    condition: succeeded("CreateVM")
     pool: server
     steps:
       - task: ManualValidation@0
