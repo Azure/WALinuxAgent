@@ -78,7 +78,14 @@ stages:
         
     - script: |
         scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ 
-        ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)"
+        ping $(armDeploymentOutput.hostname.value)
+        n=0
+        until [ "$n" -ge 5 ]
+        do
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)" && break  # substitute your command here
+            n=$((n+1)) 
+            sleep 3
+        done
       displayName: 'Run SSH command'
 
     - task: AzureCLI@2
