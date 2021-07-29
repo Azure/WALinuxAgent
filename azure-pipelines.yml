@@ -46,13 +46,13 @@ stages:
       displayName: 'Install SSH Key to agent'
       name: "InstallKey"
       inputs:
-        knownHostsEntry: 'ssh-keyscan -t rsa github.com'
+        knownHostsEntry: ''
         sshPublicKey: '$(SSH_PUBLIC)'
         sshKeySecureFile: 'id_rsa'
       
     - script: |
         echo "$(armDeploymentOutput)"
-        # rm -rf ~/.ssh/known_hosts
+        rm -rf ~/.ssh/known_hosts
       displayName: "Clear known host keys in Orchestrator"
 
     - script: | 
@@ -75,10 +75,18 @@ stages:
         overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
         deploymentMode: 'Complete'
         deploymentOutputs: 'armDeploymentOutput'
+    
+    - script: |
+        n=0
+        until [ "$n" -ge 5 ]
+        do
+            scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && break  # substitute your command here
+            n=$((n+1)) 
+            sleep 3
+        done
+      displayName: 'SCP command'
         
     - script: |
-        scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ 
-        ping $(armDeploymentOutput.hostname.value)
         n=0
         until [ "$n" -ge 5 ]
         do
@@ -86,7 +94,7 @@ stages:
             n=$((n+1)) 
             sleep 3
         done
-      displayName: 'Run SSH command'
+      displayName: 'SSH command'
 
     - task: AzureCLI@2
     #   condition: succeeded('deployVM')
