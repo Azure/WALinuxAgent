@@ -13,7 +13,8 @@ echo "PWD: $(pwd)"
 echo "$version" > /etc/agent-release
 
 sudo systemctl stop walinuxagent
-sudo cp ./*-$version.zip /var/lib/waagent
+sudo cp ./dcr/*-$version.zip /var/lib/waagent
 sudo unzip /var/lib/waagent/WALinuxAgent-$version.zip -d /var/lib/waagent/WALinuxAgent-$version
 sudo systemctl daemon-reload && sudo systemctl start walinuxagent
+sudo systemctl status walinuxagent --no-pager
 waagent --version
