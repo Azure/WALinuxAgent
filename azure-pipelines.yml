@@ -82,7 +82,7 @@ stages:
       displayName: 'Run SSH command'
 
     - task: AzureCLI@2
-      condition: succeeded('deployVM')
+    #   condition: succeeded('deployVM')
       displayName: "Get instance view"
       inputs:
         azureSubscription: $(azureConnection)
