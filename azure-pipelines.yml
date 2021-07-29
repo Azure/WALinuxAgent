@@ -18,43 +18,22 @@ pool: larohra-dcrvmsspool
 #   vmImage: ubuntu-latest
 
 stages:
-- stage: "Setup"
+# - stage: "Setup"
 
-  jobs:
-  - job: "InstallSSHKeys"
-    steps:
-      - task: InstallSSHKey@0
-        displayName: 'Install SSH Key to agent'
-        inputs:
-          knownHostsEntry: 'ssh-keyscan -t rsa github.com'
-          sshPublicKey: '$(SSH_PUBLIC)'
-          sshKeySecureFile: 'id_rsa'
-      
-      - script: |
-          echo "$(armDeploymentOutput)"
-          # rm -rf ~/.ssh/known_hosts
-        displayName: "Clear known host keys in Orchestrator"
-
-  - job: "PrintMetadata"
-    steps:
-      - script: |
-          ip -4 -o address
-          wget -O - -q icanhazip.com
-        displayName: 'IP'
+#   jobs:
+# 
+#   - job: "PrintMetadata"
+#     steps:
+#       - script: |
+#           ip -4 -o address
+#           wget -O - -q icanhazip.com
+#         displayName: 'IP'
         
-      - task: Bash@3
-        inputs:
-          targetType: 'inline'
-          script: 'echo ''-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'''
-        displayName: "Parameters"
-
-  - job: "BuildAgent" 
-    steps:
-      - script: | 
-          # Build the agent package in the container and just transfer out the zip 
-          bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
-        displayName: "Build Agent ZIP"
-        name: "agentZip"
+#       - task: Bash@3
+#         inputs:
+#           targetType: 'inline'
+#           script: 'echo ''-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'''
+#         displayName: "Parameters"
 
 - stage: "Execute"
   variables:
@@ -62,6 +41,26 @@ stages:
   jobs:
   - job: "CreateVM"
     steps:
+    
+    - task: InstallSSHKey@0
+      displayName: 'Install SSH Key to agent'
+      name: "InstallKey"
+      inputs:
+        knownHostsEntry: 'ssh-keyscan -t rsa github.com'
+        sshPublicKey: '$(SSH_PUBLIC)'
+        sshKeySecureFile: 'id_rsa'
+      
+    - script: |
+        echo "$(armDeploymentOutput)"
+        # rm -rf ~/.ssh/known_hosts
+      displayName: "Clear known host keys in Orchestrator"
+
+    - script: | 
+          # Build the agent package in the container and just transfer out the zip 
+          bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
+      displayName: "Build Agent ZIP"
+      name: "agentZip"
+
     - task: AzureResourceManagerTemplateDeployment@3
       name: "deployVM"
       inputs:
@@ -82,17 +81,14 @@ stages:
         ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)"
       displayName: 'Run SSH command'
 
-  - job: "VerifyVM"
-    dependsOn: "CreateVM"
-    steps:
-
-      - task: AzureCLI@2
-        displayName: "Get instance view"
-        inputs:
-          azureSubscription: $(azureConnection)
-          scriptType: 'bash'
-          scriptLocation: 'inlineScript'
-          inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
+    - task: AzureCLI@2
+      condition: succeeded('deployVM')
+      displayName: "Get instance view"
+      inputs:
+        azureSubscription: $(azureConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
 
 - stage: "Cleanup"
   condition: succeededOrFailed()
