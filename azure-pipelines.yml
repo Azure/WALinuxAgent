@@ -50,10 +50,10 @@ stages:
         sshPublicKey: '$(SSH_PUBLIC)'
         sshKeySecureFile: 'id_rsa'
       
-    # - script: |
-    #     echo "$(armDeploymentOutput)"
-    #     # rm -rf ~/.ssh/known_hosts
-    #   displayName: "Clear known host keys in Orchestrator"
+    - script: |
+        echo "$(armDeploymentOutput)"
+        # rm -rf ~/.ssh/known_hosts
+      displayName: "Clear known host keys in Orchestrator"
 
     - script: | 
           # Build the agent package in the container and just transfer out the zip 
