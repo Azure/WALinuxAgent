@@ -1386,6 +1386,9 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
+        CGroupConfigurator.get_instance().setup_extension_slice(
+            extension_name=self.get_full_name())
+
     def create_placeholder_status_file(self, extension=None, status=ValidHandlerStatus.transitioning, code=0,
                                        operation="Enabling Extension", message="Install/Enable is in progress."):
         _, status_path = self.get_status_file_path(extension)
@@ -1439,7 +1442,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         enable_cmd = man.get_enable_command()
         self.logger.info("Enable extension: [{0}]".format(enable_cmd))
-        self.launch_command(enable_cmd, timeout=300,
+        self.launch_command(enable_cmd, cmd_name="enable", timeout=300,
                             extension_error_code=ExtensionErrorCodes.PluginEnableProcessingFailed, env=env,
                             extension=extension)
 
@@ -1452,7 +1455,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         disable_cmd = man.get_disable_command()
         self.logger.info("Disable extension: [{0}]".format(disable_cmd))
-        self.launch_command(disable_cmd, timeout=900,
+        self.launch_command(disable_cmd, cmd_name="disable", timeout=900,
                             extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                             extension=extension)
 
@@ -1489,7 +1492,7 @@ class ExtHandlerInstance(object):
         install_cmd = man.get_install_command()
         self.logger.info("Install extension [{0}]".format(install_cmd))
         self.set_operation(WALAEventOperation.Install)
-        self.launch_command(install_cmd, timeout=900, extension=extension,
+        self.launch_command(install_cmd, cmd_name="install", timeout=900, extension=extension,
                             extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed, env=env)
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin installed but not enabled")
@@ -1502,7 +1505,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         uninstall_cmd = man.get_uninstall_command()
         self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
-        self.launch_command(uninstall_cmd, extension=extension)
+        self.launch_command(uninstall_cmd, cmd_name="uninstall", extension=extension)
 
     def remove_ext_handler(self):
         try:
@@ -1522,6 +1525,10 @@ class ExtHandlerInstance(object):
                         raise exception
 
                 shutil.rmtree(base_dir, onerror=on_rmtree_error)
+
+            self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
+            CGroupConfigurator.get_instance().remove_extension_slice(
+                extension_name=self.get_full_name())
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
@@ -1556,7 +1563,7 @@ class ExtHandlerInstance(object):
             man = self.load_manifest()
             update_cmd = man.get_update_command()
             self.logger.info("Update extension [{0}]".format(update_cmd))
-            self.launch_command(update_cmd,
+            self.launch_command(update_cmd, cmd_name="update",
                                 timeout=900,
                                 extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
                                 env=env, extension=extension)
@@ -1854,7 +1861,7 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
+    def launch_command(self, cmd, cmd_name=None, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
                        env=None, extension=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
@@ -1904,6 +1911,7 @@ class ExtHandlerInstance(object):
                     process_output = CGroupConfigurator.get_instance().start_extension_command(
                         extension_name=self.get_full_name(extension),
                         command=command_full_path,
+                        cmd_name=cmd_name,
                         timeout=timeout,
                         shell=True,
                         cwd=base_dir,
@@ -2253,7 +2261,6 @@ class HandlerManifest(object):
 
     def supports_multiple_extensions(self):
         return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
-
 
 class ExtensionStatusError(ExtensionError):
     """

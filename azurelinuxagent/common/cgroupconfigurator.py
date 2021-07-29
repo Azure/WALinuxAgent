@@ -22,7 +22,7 @@ import subprocess
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
+from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -39,10 +39,18 @@ Description=Slice for Azure VM Agent and Extensions
 DefaultDependencies=no
 Before=slices.target
 """
-_VMEXTENSIONS_SLICE = "azure-vmextensions.slice"
+_VMEXTENSIONS_SLICE = EXTENSION_SLICE_PREFIX + ".slice"
 _VMEXTENSIONS_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Extensions
+DefaultDependencies=no
+Before=slices.target
+[Slice]
+CPUAccounting=yes
+"""
+_EXTENSION_SLICE_CONTENTS = """
+[Unit]
+Description=Slice for Azure VM extension {extension_name}
 DefaultDependencies=no
 Before=slices.target
 [Slice]
@@ -590,11 +598,12 @@ class CGroupConfigurator(object):
                 pass
             return 0
 
-        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
             :param command: The command to invoke
+            :param cmd_name: The type of the command(enable, install, etc.)
             :param timeout: Number of seconds to wait for command completion
             :param cwd: The working directory for the command
             :param env:  The environment to pass to the command's process
@@ -605,7 +614,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 try:
-                    return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
+                    return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
                     reason = 'Failed to start {0} using systemd-run, will try invoking the extension directly. Error: {1}'.format(extension_name, ustr(exception))
                     self.disable(reason)
@@ -614,6 +623,45 @@ class CGroupConfigurator(object):
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
+
+        def setup_extension_slice(self, extension_name):
+            """
+            Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
+            extensions are grouped under "azure-vmextensions.slice.
+
+            This method ensures that the extension slice is created. Setup should create
+            under /lib/systemd/system if it is not exist.
+            """
+            if self.enabled():
+                unit_file_install_path = systemd.get_unit_file_install_path()
+                extension_slice_path = os.path.join(unit_file_install_path,
+                                                     SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                if not os.path.exists(extension_slice_path):
+                    try:
+                        slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name = extension_name)
+                        CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
+                    except Exception as exception:
+                        _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
+                        CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+
+        def remove_extension_slice(self, extension_name):
+            """
+            This method ensures that the extension slice gets removed from /lib/systemd/system if it exist
+            Lastly stop the unit. This would ensure the cleanup the /sys/fs/cgroup controller paths
+            """
+            if self.enabled():
+                unit_file_install_path = systemd.get_unit_file_install_path()
+                extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
+                if os.path.exists(extension_slice_path):
+                    CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+                # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
+                try:
+                    logger.info("Executing systemctl stop {0}".format(extension_slice_name))
+                    shellutil.run_command(["systemctl", "stop", extension_slice_name])
+                except Exception as exception:
+                    _log_cgroup_warning("systemctl stop failed (remove slice): {0}", ustr(exception))
+
 
     # unique instance for the singleton
     _instance = None
