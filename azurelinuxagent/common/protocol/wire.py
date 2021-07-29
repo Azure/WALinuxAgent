@@ -20,6 +20,7 @@ import json
 import os
 import random
 import time
+import uuid
 import xml.sax.saxutils as saxutils
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -34,6 +35,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
@@ -54,6 +56,7 @@ TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
 INCARNATION_FILE_NAME = "Incarnation"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
+VM_SETTINGS_FILE_NAME = "VmSettings.{0}.json"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
@@ -92,11 +95,11 @@ class WireProtocol(DataContract):
         logger.info('Initializing goal state during protocol detection')
         self.client.update_goal_state(forced=True)
 
+    def update_extensions_goal_state(self):
+        self.client.update_extensions_goal_state()
+
     def update_goal_state(self):
         self.client.update_goal_state()
-
-    def try_update_goal_state(self):
-        return self.client.try_update_goal_state()
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -122,6 +125,9 @@ class WireProtocol(DataContract):
 
     def get_incarnation(self):
         return self.client.get_goal_state().incarnation
+
+    def get_etag(self):
+        return self.client.get_etag()
 
     def get_in_vm_gs_metadata(self):
         return self.client.get_ext_conf().in_vm_gs_metadata
@@ -574,7 +580,7 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
-        self._last_try_update_goal_state_failed = False
+        self._extensions_goal_state = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
@@ -645,7 +651,7 @@ class WireClient(object):
     def fetch_manifest_through_host(self, uri):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(uri)
-        response = self.fetch(uri, headers, use_proxy=False, max_retry=1)
+        response, _ = self.fetch(uri, headers, use_proxy=False, max_retry=1)
         return response
 
     def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_ms=0):
@@ -668,7 +674,7 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri, max_retry=1)  # pylint: disable=W0640
+            direct_func = lambda: self.fetch(version.uri, max_retry=1)[0]  # pylint: disable=W0640
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda: self.fetch_manifest_through_host(version.uri)  # pylint: disable=W0640
@@ -709,19 +715,21 @@ class WireClient(object):
 
         return success
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None, ok_codes=None):
         """
         max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+
+        Returns a tuple with the content and headers of the response. The headers are a list of (name, value) tuples.
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
-        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry)
+        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, ok_codes=ok_codes)
         if response is not None and not restutil.request_failed(response):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
-        return content
+        return content, response.getheaders()
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None):
+    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None, ok_codes=None):
         """
         max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
         """
@@ -736,7 +744,7 @@ class WireClient(object):
 
             host_plugin = self.get_host_plugin()
 
-            if restutil.request_failed(resp):
+            if restutil.request_failed(resp, ok_codes=ok_codes):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
@@ -784,35 +792,39 @@ class WireClient(object):
 
             if new_goal_state is not None:
                 self._goal_state = new_goal_state
+                if conf.get_fetch_vm_settings():
+                    self.update_extensions_goal_state()
                 self._save_goal_state()
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
         except Exception as exception:
-            raise ProtocolError("Error processing goal state: {0}".format(ustr(exception)))
+            raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
-    def try_update_goal_state(self):
-        """
-        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
-        """
+    def update_extensions_goal_state(self):
         try:
-            self.update_goal_state()
+            correlation_id = str(uuid.uuid4())
+            url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
+            etag = self.get_etag()
+            if etag is not None:
+                headers['if-none-match'] = etag
 
-            if self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = False
-                message = u"Retrieving the goal state recovered from previous errors"
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
-                logger.info(message)
-        except Exception as e:
-            if not self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = True
-                message = u"An error occurred while retrieving the goal state: {0}".format(ustr(e))
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
-                message = u"An error occurred while retrieving the goal state: {0}".format(textutil.format_exception(e))
-                logger.warn(message)
-            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
-            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
-            return False
-        return True
+            vm_settings, response_headers = self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
+
+            # The response includes an etag if and only if the VM settings change.
+            response_etag = None
+            for h in response_headers:
+                if h[0].lower() == 'etag':
+                    response_etag = h[1]
+                    break
+            if response_etag is None:
+                return
+
+            self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
+
+        except Exception as exception:
+            # TODO: report HostGAPlugin failure
+            # TODO: raise ProtocolError instead of logging a warning
+            logger.warn("Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception)))
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
@@ -839,6 +851,9 @@ class WireClient(object):
             if self._goal_state.ext_conf is not None and self._goal_state.ext_conf.xml_text is not None:
                 self._save_cache(self._goal_state.ext_conf.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
 
+            if self._extensions_goal_state is not None:
+                self._save_cache(self._extensions_goal_state.get_redacted_vm_settings(), VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state.etag))
+
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
 
@@ -846,6 +861,19 @@ class WireClient(object):
         if new_host_plugin is None:
             logger.warn("Setting empty Host Plugin object!")
         self._host_plugin = new_host_plugin
+
+    def get_etag(self):
+        """
+        Returns the Etag of the current ExtensionsGoalState, or None, if the goal state has not been retrieved.
+        """
+        if self._extensions_goal_state is None:
+            return None
+        return self._extensions_goal_state.etag
+
+    def get_extensions_goal_state(self):
+        if self._extensions_goal_state is None:
+            raise ProtocolError("Trying to fetch the extensions goal state before initialization!")
+        return self._extensions_goal_state
 
     def get_goal_state(self):
         if self._goal_state is None:
@@ -1045,7 +1073,7 @@ class WireClient(object):
 
         if ext_conf.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
-            self.update_goal_state(forced=True)
+            self.update_goal_state(forced=True)  # FT: This will come from the ExtensionsGoalState
             ext_conf = self.get_ext_conf()
 
         if ext_conf.status_upload_blob is None:
@@ -1263,7 +1291,7 @@ class WireClient(object):
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(blob)
-        profile = self.fetch(uri, headers, use_proxy=False)
+        profile, _ = self.fetch(uri, headers, use_proxy=False)
         return profile
 
     def get_artifacts_profile(self):
@@ -1271,7 +1299,7 @@ class WireClient(object):
 
         if self.has_artifacts_profile_blob():
             blob = self.get_ext_conf().artifacts_profile_blob
-            direct_func = lambda: self.fetch(blob)
+            direct_func = lambda: self.fetch(blob)[0]
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda: self.get_artifacts_profile_through_host(blob)
