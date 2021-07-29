@@ -37,7 +37,7 @@ stages:
 
 - stage: "Execute"
   variables:
-    agentVersion: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
+    agentVersion: "9.9.9.9"
   jobs:
   - job: "CreateVM"
     steps:
