@@ -96,14 +96,31 @@ stages:
         done
       displayName: 'SSH command'
 
-    - task: AzureCLI@2
-    #   condition: succeeded('deployVM')
-      displayName: "Get instance view"
+    - script: |
+        n=0
+        until [ "$n" -ge 5 ]
+        do
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/install_deps.sh" && break  # substitute your command here
+            n=$((n+1))
+            sleep 3
+        done
+      displayName: 'SSH command'
+
+    - task: PublishTestResults@2
+#      condition: succeededOrFailed()
       inputs:
-        azureSubscription: $(azureConnection)
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
+        testRunTitle: 'Publish test results for Python $(python.version)'
+
+#    - task: AzureCLI@2
+#    #   condition: succeeded('deployVM')
+#      displayName: "Get instance view"
+#      inputs:
+#        azureSubscription: $(azureConnection)
+#        scriptType: 'bash'
+#        scriptLocation: 'inlineScript'
+#        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
 
 - stage: "Cleanup"
   condition: succeededOrFailed()
