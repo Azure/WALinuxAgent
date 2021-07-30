@@ -43,9 +43,12 @@ stages:
 - stage: "Execute"
   variables:
     agentVersion: "9.9.9.9"
-    azureConnection: ''
   jobs:
   - job: "CreateVM"
+    variables:
+      azureConnection: '$(publicConn)'
+      subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+      location: 'East US 2'
     strategy:
       matrix:
         PublicCloud:
