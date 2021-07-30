@@ -14,9 +14,9 @@ variables:
   publicConn: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
   fairfaxConn: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)'
   mooncakeConn: 'Guest Agent Mooncake ( 557a8daa-8ac8-4caa-88e4-3b6f939978b9 )'
-  azureConnection: '$(mooncakeConn)'
-  subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
-  location: 'china north 2'
+#  azureConnection: '$(mooncakeConn)'
+#  subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
+#  location: 'china north 2'
   # azureConnection: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)' #'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
   # subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19' #'8e037ad4-618f-4466-8bc8-5099d41ac15b'
   # location: 'usgovarizona' # 'East US 2'
@@ -51,21 +51,21 @@ stages:
     #   azureConnection: '$(publicConn)'
     #   subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
     #   location: 'East US 2'
-    # strategy:
-    #   matrix:
-        # PublicCloud:
-        #   azureConnection: '$(publicConn)'
-        #   subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
-        #   location: 'East US 2'
-        # ChinaCloud:
-        #   azureConnection: '${{variables.mooncakeConn}}'
-        #   subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
-        #   location: 'china north 2'
-        # USGovCloud:
-        #   azureConnection: '$(fairfaxConn)'
-        #   subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
-        #   location: 'usgovarizona'
-      # maxParallel: 3
+    strategy:
+       matrix:
+         PublicCloud:
+           azureConnection: '$(publicConn)'
+           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+           location: 'East US 2'
+         ChinaCloud:
+           azureConnection: '${{variables.mooncakeConn}}'
+           subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
+           location: 'china north 2'
+         USGovCloud:
+           azureConnection: '$(fairfaxConn)'
+           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
+           location: 'usgovarizona'
+       maxParallel: 3
     
     steps:
     - task: InstallSSHKey@0
@@ -88,20 +88,26 @@ stages:
       displayName: "Build Agent ZIP"
       name: "agentZip"
 
-    - task: AzureResourceManagerTemplateDeployment@3
-      name: "deployVM"
-      inputs:
-        deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: $(azureConnection)
-        subscriptionId: '$(subId)'
-        action: 'Create Or Update Resource Group'
-        resourceGroupName: '$(rgName)'
-        location: '$(location)'
-        templateLocation: 'URL of the file'
-        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
-        overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
-        deploymentMode: 'Complete'
-        deploymentOutputs: 'armDeploymentOutput'
+    - template: dcr/templates/arm-resources.yml
+        parameters:
+          azureConnection: $(azureConnection)
+          subId: $(subId)
+          location: $(location)
+
+#    - task: AzureResourceManagerTemplateDeployment@3
+#      name: "deployVM"
+#      inputs:
+#        deploymentScope: 'Resource Group'
+#        azureResourceManagerConnection: $(azureConnection)
+#        subscriptionId: '$(subId)'
+#        action: 'Create Or Update Resource Group'
+#        resourceGroupName: '$(rgName)'
+#        location: '$(location)'
+#        templateLocation: 'URL of the file'
+#        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
+#        overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
+#        deploymentMode: 'Complete'
+#        deploymentOutputs: 'armDeploymentOutput'
 
     - script: |
         n=0
@@ -175,7 +181,7 @@ stages:
     pool: server
     steps:
       - task: ManualValidation@0
-        timeoutInMinutes: 1
+        timeoutInMinutes: 5
         inputs:
           notifyUsers: 'larohra'
           onTimeout: 'resume'
@@ -183,32 +189,36 @@ stages:
   - job: "DeleteRG"
     dependsOn: "Wait"
     condition: always()
-    # variables:
-    #   azureConnection: '$(publicConn)'
-    #   subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
-    # strategy:
-    #   matrix:
-    #     PublicCloud:
-    #       azureConnection: '$(publicConn)'
-    #       subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
-    #       location: 'East US 2'
-    #     ChinaCloud:
-    #       azureConnection: '$(mooncakeConn)'
-    #       subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
-    #       location: 'china north 2'
-    #     USGovCloud:
-    #       azureConnection: '$(faifaxConn)'
-    #       subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
-    #       location: 'usgovarizona'
-    #   maxParallel: 3
-
+    variables:
+      azureConnection: '$(publicConn)'
+      subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+    strategy:
+       matrix:
+         PublicCloud:
+           azureConnection: '$(publicConn)'
+           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+           location: 'East US 2'
+         ChinaCloud:
+           azureConnection: '$(mooncakeConn)'
+           subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
+           location: 'china north 2'
+         USGovCloud:
+           azureConnection: '$(faifaxConn)'
+           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
+           location: 'usgovarizona'
+       maxParallel: 3
     steps:
-      - task: AzureResourceManagerTemplateDeployment@3
-        condition: succeededOrFailed()
-        displayName: "Delete test RG"
-        inputs:
-          deploymentScope: 'Resource Group'
-          azureResourceManagerConnection: '${{variables.azureConnection}}' # $(azureConnection)
-          subscriptionId: $(subId)
-          action: 'DeleteRG'
-          resourceGroupName: '$(rgName)'
+      - template: dcr/templates/arm-resources.yml
+        parameters:
+          deleteRg: true
+          azureConnection: $(azureConnection)
+          subId: $(subId)
+#      - task: AzureResourceManagerTemplateDeployment@3
+#        condition: succeededOrFailed()
+#        displayName: "Delete test RG"
+#        inputs:
+#          deploymentScope: 'Resource Group'
+#          azureResourceManagerConnection: '${{variables.azureConnection}}' # $(azureConnection)
+#          subscriptionId: $(subId)
+#          action: 'DeleteRG'
+#          resourceGroupName: '$(rgName)'

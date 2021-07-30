@@ -1,0 +1,43 @@
+# Template for dealing with ARM Deployments
+
+parameters:
+  - name: deleteRg
+    type: boolean
+    default: false
+  - name: azureConnection
+    type: string
+  - name: subId
+    type: string
+#  - name: rgName
+#    type: string
+  - name: location
+    type: string
+    default: ""
+
+steps:
+  - ${{ if eq(parameters.deleteRg, true) }}:
+    - task: AzureResourceManagerTemplateDeployment@3
+        condition: succeededOrFailed()
+        displayName: "Delete test RG"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '${{ parameters.azureConnection }}'
+          subscriptionId: '${{ parameters.subId }}'
+          action: 'DeleteRG'
+          resourceGroupName: '$(rgName)'
+
+  - ${{ if eq(parameters.deleteRg, false) }}:
+    - task: AzureResourceManagerTemplateDeployment@3
+        name: "deployVM"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '${{ parameters.azureConnection }}'
+          subscriptionId: '${{ parameters.subId }}'
+          action: 'Create Or Update Resource Group'
+          resourceGroupName: '$(rgName)'
+          location: '${{ parameters.location }}'
+          templateLocation: 'URL of the file'
+          csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
+          overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
+          deploymentMode: 'Complete'
+          deploymentOutputs: 'armDeploymentOutput'
