@@ -4,7 +4,7 @@ parameters:
   - name: deleteRg
     type: boolean
     default: false
-  - name: azureConnection
+  - name: azConn
     type: string
   - name: subId
     type: string
@@ -16,7 +16,7 @@ parameters:
 
 steps:
   - script: |
-      echo "AZConn: ${{ parameters.azureConnection }}; Sub: ${{ parameters.subId }}; Location: ${{ parameters.location }}"
+      echo "AZConn: ${{ parameters.azConn }}; Sub: ${{ parameters.subId }}; Location: ${{ parameters.location }}"
 
   - ${{ if eq(parameters.deleteRg, true) }}:
     - task: AzureResourceManagerTemplateDeployment@3
@@ -24,7 +24,7 @@ steps:
       displayName: "Delete test RG"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '${{ parameters.azureConnection }}'
+        azureResourceManagerConnection: '${{ parameters.azConn }}'
         subscriptionId: '${{ parameters.subId }}'
         action: 'DeleteRG'
         resourceGroupName: '$(rgName)'
@@ -34,7 +34,7 @@ steps:
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '${{ parameters.azureConnection }}'
+        azureResourceManagerConnection: '${{ parameters.azConn }}'
         subscriptionId: '${{ parameters.subId }}'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
