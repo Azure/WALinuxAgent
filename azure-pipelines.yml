@@ -98,17 +98,18 @@ stages:
 
     - script: |
         n=0
+        ec=1
         until [ "$n" -ge 5 ]
         do
-            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh $(Build.ArtifactStagingDirectory)" && break  # substitute your command here
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh $(Build.ArtifactStagingDirectory)" && ec=0 && break 
             n=$((n+1))
             sleep 3
         done
-        [ $n -ge 5 ] && exit 1
+        exit $ec
       displayName: 'Run Pytest on VM'
 
     - task: PublishTestResults@2
-#      condition: succeededOrFailed()
+      condition: succeededOrFailed()
       inputs:
         testResultsFormat: 'JUnit'
         testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
