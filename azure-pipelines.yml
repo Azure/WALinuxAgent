@@ -90,7 +90,7 @@ stages:
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '$(azureConnection)'
+        azureResourceManagerConnection: '${{variables.azureConnection}}'  # $(azureConnection)
         subscriptionId: '$(subId)'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
