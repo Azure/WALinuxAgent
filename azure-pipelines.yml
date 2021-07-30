@@ -11,8 +11,8 @@ variables:
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
   rgName: 'larohra-dcr-v2-test$(Build.BuildId)'
-  azureConnection: 'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
-  subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+  azureConnection: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)' #'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+  subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19' #'8e037ad4-618f-4466-8bc8-5099d41ac15b'
 
 pool: larohra-dcrvmsspool
 #   vmImage: ubuntu-latest
