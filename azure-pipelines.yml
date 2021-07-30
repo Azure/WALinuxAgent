@@ -43,6 +43,7 @@ stages:
 - stage: "Execute"
   variables:
     agentVersion: "9.9.9.9"
+    azureConnection: ''
   jobs:
   - job: "CreateVM"
     strategy:
