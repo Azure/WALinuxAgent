@@ -211,7 +211,7 @@ stages:
       - template: dcr/templates/arm-resources.yml
         parameters:
           deleteRg: true
-          azureConnection: $(azureConnection)
+          azConn: $(azureConnection)
           subId: $(subId)
 #      - task: AzureResourceManagerTemplateDeployment@3
 #        condition: succeededOrFailed()
