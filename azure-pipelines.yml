@@ -100,7 +100,7 @@ stages:
         n=0
         until [ "$n" -ge 5 ]
         do
-            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/install_deps.sh $(Build.ArtifactStagingDirectory)" && break  # substitute your command here
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh $(Build.ArtifactStagingDirectory)" && break  # substitute your command here
             n=$((n+1))
             sleep 3
         done

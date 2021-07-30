@@ -17,7 +17,8 @@ sudo apt-get update && sudo apt-get install zip -y
 sudo unzip /var/lib/waagent/WALinuxAgent-$version.zip -d /var/lib/waagent/WALinuxAgent-$version
 sudo systemctl daemon-reload && sudo systemctl start walinuxagent
 
-sleep 10
+apt-get install python3-pip -y
+pip3 install -U pytest
 
 sudo systemctl status walinuxagent --no-pager
 waagent --version
