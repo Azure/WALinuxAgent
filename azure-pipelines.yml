@@ -90,9 +90,9 @@ stages:
 
     - template: dcr/templates/arm-resources.yml
       parameters:
-        azureConnection: $(azureConnection)
-        subId: $(subId)
-        location: $(location)
+        azureConnection: '$(azureConnection)'
+        subId: '$(subId)'
+        location: '$(location)'
 
 #    - task: AzureResourceManagerTemplateDeployment@3
 #      name: "deployVM"
