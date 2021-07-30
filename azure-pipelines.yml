@@ -44,7 +44,7 @@ stages:
     strategy:
       matrix:
         PublicCloud:
-          azureConnection: 'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+          azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
           location: 'East US 2'
         ChinaCloud:
@@ -67,7 +67,7 @@ stages:
         sshKeySecureFile: 'id_rsa'
 
     - script: |
-        echo "$(armDeploymentOutput)"
+        # echo "$(armDeploymentOutput)"
         rm -rf ~/.ssh/known_hosts
       displayName: "Clear known host keys in Orchestrator"
 
