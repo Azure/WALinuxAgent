@@ -97,15 +97,16 @@ stages:
       displayName: 'SSH command'
 
     - script: |
-        n=0
-        ec=1
-        until [ "$n" -ge 5 ]
-        do
-            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results/" && ec=0 && break
-            n=$((n+1))
-            sleep 3
-        done
-        exit $ec
+        ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results/"
+#        n=0
+#        ec=1
+#        until [ "$n" -ge 5 ]
+#        do
+#             && ec=0 && break
+#            n=$((n+1))
+#            sleep 3
+#        done
+#        exit $ec
       displayName: 'Run Pytest on VM'
 
     - script: |
@@ -118,6 +119,7 @@ stages:
             sleep 3
         done
         exit $ec
+      condition: succeededOrFailed()
       displayName: 'Get test-xml files'
 
     - task: PublishTestResults@2
