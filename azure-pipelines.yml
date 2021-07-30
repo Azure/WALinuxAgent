@@ -72,6 +72,7 @@ stages:
 
     - script: |
         # echo "$(armDeploymentOutput)"
+        echo "AZConn: $(azureConnection); Sub: $(subId); Location: $(location)"
         rm -rf ~/.ssh/known_hosts
       displayName: "Clear known host keys in Orchestrator"
 
