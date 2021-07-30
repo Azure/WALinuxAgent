@@ -58,7 +58,7 @@ stages:
           azureConnection: $(fairfaxConn)
           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
           location: 'usgovarizona'
-      maxParallel: 3
+      maxParallel: 1
     steps:
 
     - task: InstallSSHKey@0
@@ -189,7 +189,7 @@ stages:
           azureConnection: $(faifaxConn)
           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
           location: 'usgovarizona'
-      maxParallel: 3
+      maxParallel: 1
 
     steps:
       - task: AzureResourceManagerTemplateDeployment@3
