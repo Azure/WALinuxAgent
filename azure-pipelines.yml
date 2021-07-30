@@ -86,11 +86,11 @@ stages:
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: $(azureConnection)
-        subscriptionId: $(subId)
+        azureResourceManagerConnection: '$(azureConnection)'
+        subscriptionId: '$(subId)'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
-        location: $(location)
+        location: '$(location)'
         templateLocation: 'URL of the file'
         csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
         overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
