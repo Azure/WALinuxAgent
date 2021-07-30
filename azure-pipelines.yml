@@ -90,7 +90,7 @@ stages:
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '${{variables.azureConnection}}'  # $(azureConnection)
+        azureResourceManagerConnection: $(azureConnection)
         subscriptionId: '$(subId)'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
@@ -173,7 +173,7 @@ stages:
     pool: server
     steps:
       - task: ManualValidation@0
-        timeoutInMinutes: 120
+        timeoutInMinutes: 1
         inputs:
           notifyUsers: 'larohra'
           onTimeout: 'resume'
