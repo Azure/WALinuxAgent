@@ -206,7 +206,7 @@ stages:
         displayName: "Delete test RG"
         inputs:
           deploymentScope: 'Resource Group'
-          azureResourceManagerConnection: $(azureConnection)
+          azureResourceManagerConnection: '${{variables.azureConnection}}' # $(azureConnection)
           subscriptionId: $(subId)
           action: 'DeleteRG'
           resourceGroupName: '$(rgName)'
