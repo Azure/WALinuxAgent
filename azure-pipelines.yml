@@ -21,14 +21,14 @@ stages:
 # - stage: "Setup"
 
 #   jobs:
-# 
+#
 #   - job: "PrintMetadata"
 #     steps:
 #       - script: |
 #           ip -4 -o address
 #           wget -O - -q icanhazip.com
 #         displayName: 'IP'
-        
+
 #       - task: Bash@3
 #         inputs:
 #           targetType: 'inline'
@@ -41,7 +41,7 @@ stages:
   jobs:
   - job: "CreateVM"
     steps:
-    
+
     - task: InstallSSHKey@0
       displayName: 'Install SSH Key to agent'
       name: "InstallKey"
@@ -49,14 +49,14 @@ stages:
         knownHostsEntry: '$(SSH_PUBLIC)'
         sshPublicKey: '$(SSH_PUBLIC)'
         sshKeySecureFile: 'id_rsa'
-      
+
     - script: |
         echo "$(armDeploymentOutput)"
         rm -rf ~/.ssh/known_hosts
       displayName: "Clear known host keys in Orchestrator"
 
-    - script: | 
-          # Build the agent package in the container and just transfer out the zip 
+    - script: |
+          # Build the agent package in the container and just transfer out the zip
           bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
       displayName: "Build Agent ZIP"
       name: "agentZip"
@@ -75,23 +75,23 @@ stages:
         overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
         deploymentMode: 'Complete'
         deploymentOutputs: 'armDeploymentOutput'
-    
+
     - script: |
         n=0
         until [ "$n" -ge 5 ]
         do
             scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && break  # substitute your command here
-            n=$((n+1)) 
+            n=$((n+1))
             sleep 3
         done
       displayName: 'SCP command'
-        
+
     - script: |
         n=0
         until [ "$n" -ge 5 ]
         do
             ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)" && break  # substitute your command here
-            n=$((n+1)) 
+            n=$((n+1))
             sleep 3
         done
       displayName: 'SSH command'
@@ -100,11 +100,12 @@ stages:
         n=0
         until [ "$n" -ge 5 ]
         do
-            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/install_deps.sh" && break  # substitute your command here
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/install_deps.sh $(Build.ArtifactStagingDirectory)" && break  # substitute your command here
             n=$((n+1))
             sleep 3
         done
-      displayName: 'SSH command'
+        [ $n -ge 5 ] && exit 1
+      displayName: 'Run Pytest on VM'
 
     - task: PublishTestResults@2
 #      condition: succeededOrFailed()
@@ -126,7 +127,7 @@ stages:
   condition: succeededOrFailed()
   # variables:
   #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
-  jobs: 
+  jobs:
   - job: "Wait"
     # condition: succeeded("CreateVM")
     pool: server
