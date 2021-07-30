@@ -49,12 +49,12 @@ stages:
       azureConnection: '$(publicConn)'
       subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
       location: 'East US 2'
-    strategy:
-      matrix:
-        PublicCloud:
-          azureConnection: '$(publicConn)'
-          subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
-          location: 'East US 2'
+    # strategy:
+    #   matrix:
+    #     PublicCloud:
+    #       azureConnection: '$(publicConn)'
+    #       subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+    #       location: 'East US 2'
         # ChinaCloud:
         #   azureConnection: '$(mooncakeConn)'
         #   subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
