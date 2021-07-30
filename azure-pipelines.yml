@@ -101,12 +101,24 @@ stages:
         ec=1
         until [ "$n" -ge 5 ]
         do
-            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh $(Build.ArtifactStagingDirectory)" && ec=0 && break 
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results/" && ec=0 && break
             n=$((n+1))
             sleep 3
         done
         exit $ec
       displayName: 'Run Pytest on VM'
+
+    - script: |
+        n=0
+        ec=1
+        until [ "$n" -ge 5 ]
+        do
+            scp -o StrictHostKeyChecking=no -r $(adminUsername)@$(armDeploymentOutput.hostname.value):/home/$(adminUsername)/test_results/test-*.xml $(Build.ArtifactStagingDirectory)/ && ec=0 && break
+            n=$((n+1))
+            sleep 3
+        done
+        exit $ec
+      displayName: 'Get test-xml files'
 
     - task: PublishTestResults@2
       condition: succeededOrFailed()
