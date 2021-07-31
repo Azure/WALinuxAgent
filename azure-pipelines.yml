@@ -54,15 +54,15 @@ stages:
     strategy:
        matrix:
          PublicCloud:
-           azureConnection: '${{ variables.publicConn }}'
+           azConnect: '${{ variables.publicConn }}'
            subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
            location: 'East US 2'
          ChinaCloud:
-           azureConnection: '${{variables.mooncakeConn}}'
+           azConnect: '${{variables.mooncakeConn}}'
            subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
            location: 'china north 2'
          USGovCloud:
-           azureConnection: '${{ variables.fairfaxConn }}'
+           azConnect: '${{ variables.fairfaxConn }}'
            subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
            location: 'usgovarizona'
        maxParallel: 3
@@ -78,7 +78,7 @@ stages:
 
     - script: |
         # echo "$(armDeploymentOutput)"
-        echo "AZConn: $(azureConnection); Sub: $(subId); Location: $(location)"
+        echo "AZConn: $(azConnect); Sub: $(subId); Location: $(location)"
         rm -rf ~/.ssh/known_hosts
       displayName: "Clear known host keys in Orchestrator"
 
@@ -90,7 +90,7 @@ stages:
 
     - template: dcr/templates/arm-resources.yml
       parameters:
-        azConn: $(azureConnection)
+        azConn: $(azConnect)
         subId: '$(subId)'
         location: '$(location)'
 
@@ -195,15 +195,15 @@ stages:
     strategy:
        matrix:
          PublicCloud:
-           azureConnection: '${{ variables.publicConn }}'
+           azConnect: '${{ variables.publicConn }}'
            subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
            location: 'East US 2'
          ChinaCloud:
-           azureConnection: '${{ variables.mooncakeConn }}'
+           azConnect: '${{ variables.mooncakeConn }}'
            subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
            location: 'china north 2'
          USGovCloud:
-           azureConnection: '${{ variables.fairfaxConn }}'
+           azConnect: '${{ variables.fairfaxConn }}'
            subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
            location: 'usgovarizona'
        maxParallel: 3
@@ -211,7 +211,7 @@ stages:
       - template: dcr/templates/arm-resources.yml
         parameters:
           deleteRg: true
-          azConn: $(azureConnection)
+          azConn: $(azConnect)
           subId: $(subId)
 #      - task: AzureResourceManagerTemplateDeployment@3
 #        condition: succeededOrFailed()
