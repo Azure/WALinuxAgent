@@ -90,7 +90,7 @@ stages:
 
     - template: dcr/templates/arm-resources.yml
       parameters:
-        azConn: ${{ variables.azureConnection }}
+        azConn: $(azureConnection)
         subId: '$(subId)'
         location: '$(location)'
 
@@ -195,11 +195,11 @@ stages:
     strategy:
        matrix:
          PublicCloud:
-           azureConnection: ${{ variables.publicConn }}
+           azureConnection: '${{ variables.publicConn }}'
            subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
            location: 'East US 2'
          ChinaCloud:
-           azureConnection: ${{ variables.mooncakeConn }}
+           azureConnection: '${{ variables.mooncakeConn }}'
            subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
            location: 'china north 2'
          USGovCloud:
@@ -211,7 +211,7 @@ stages:
       - template: dcr/templates/arm-resources.yml
         parameters:
           deleteRg: true
-          azConn: ${{ variables.azureConnection }}
+          azConn: $(azureConnection)
           subId: $(subId)
 #      - task: AzureResourceManagerTemplateDeployment@3
 #        condition: succeededOrFailed()
