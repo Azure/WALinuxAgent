@@ -724,7 +724,7 @@ class WireClient(object):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, ok_codes=ok_codes)
-        if response is not None and not restutil.request_failed(response):
+        if response is not None and not restutil.request_failed(response, ok_codes=ok_codes):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
         return content, response.getheaders()
@@ -762,10 +762,7 @@ class WireClient(object):
         except (HttpError, ProtocolError, IOError) as error:
             msg = "Fetch failed: {0}".format(error)
             logger.warn(msg)
-            report_event(op=WALAEventOperation.Download,
-                            is_success=False,
-                            message=msg,
-                            log_event=False)
+            report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
 
             if isinstance(error, (InvalidContainerError, ResourceGoneError)):
                 # These are retryable errors that should force a goal state refresh in the host plugin
@@ -802,29 +799,47 @@ class WireClient(object):
 
     def update_extensions_goal_state(self):
         try:
-            correlation_id = str(uuid.uuid4())
-            url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
-            etag = self.get_etag()
-            if etag is not None:
-                headers['if-none-match'] = etag
+            # TODO: Remove this retry loop when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+            for _ in range(3):
+                correlation_id = str(uuid.uuid4())
+                url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
+                etag = self.get_etag()
+                if etag is not None:
+                    headers['if-none-match'] = etag
 
-            vm_settings, response_headers = self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
+                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+                logger.info("Fetching extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, etag)
 
-            # The response includes an etag if and only if the VM settings change.
-            response_etag = None
-            for h in response_headers:
-                if h[0].lower() == 'etag':
-                    response_etag = h[1]
+                vm_settings, response_headers = self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
+
+                # on error, fetch() logs the original exception and returns None as content
+                if vm_settings is None:
+                    raise Exception("Failed to retrieve the extensions goal state (vmSettings), the error was reported previously in the log.")
+
+                # The response includes an etag if and only if the VM settings change.
+                response_etag = None
+                for h in response_headers:
+                    if h[0].lower() == 'etag':
+                        response_etag = h[1]
+                        break
+
+                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+                logger.info("Fetched extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
+
+                # TODO: Remove the if clause when removing the retry loop (the else clause should remain)
+                if response_etag is None:
+                    logger.info("Expected a new goal state; will retry after a short delay...")
+                    time.sleep(5)
+                else:
+                    logger.info("Fetched new extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
+                    self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
                     break
-            if response_etag is None:
-                return
-
-            self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
 
         except Exception as exception:
-            # TODO: report HostGAPlugin failure
             # TODO: raise ProtocolError instead of logging a warning
-            logger.warn("Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception)))
+            message = "Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception))
+            logger.warn(message)
+            report_event(op=WALAEventOperation.GoalState, is_success=False, message=message, log_event=False)
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
