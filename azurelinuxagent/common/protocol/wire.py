@@ -834,7 +834,6 @@ class WireClient(object):
                     break
 
         except Exception as exception:
-            # TODO: report HostGAPlugin failure
             # TODO: raise ProtocolError instead of logging a warning
             message = "Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception))
             logger.warn(message)
