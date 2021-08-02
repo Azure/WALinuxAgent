@@ -799,7 +799,8 @@ class WireClient(object):
 
     def update_extensions_goal_state(self):
         try:
-            for retry in range(3):
+            # TODO: Remove this retry loop when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+            for _ in range(3):
                 correlation_id = str(uuid.uuid4())
                 url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
                 etag = self.get_etag()
@@ -825,6 +826,7 @@ class WireClient(object):
                 # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
                 logger.info("Fetched extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
 
+                # TODO: Remove the if clause when removing the retry loop (the else clause should remain)
                 if response_etag is None:
                     logger.info("Expected a new goal state; will retry after a short delay...")
                     time.sleep(5)
