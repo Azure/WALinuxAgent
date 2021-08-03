@@ -1639,9 +1639,9 @@ class TestExtension(AgentTestCase):
             if "sample.py" in cmd:
                 status_path = os.path.join(kwargs['env'][ExtCommandEnvVariable.ExtensionPath], "status",
                                            "{0}.status".format(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]))
+                mock_popen.deleted_status_file = status_path
                 if os.path.exists(status_path):
                     os.remove(status_path)
-                    mock_popen.deleted_status_file = status_path
             return original_popen(["echo", "Yes"], *args, **kwargs)
 
         with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
@@ -1729,7 +1729,7 @@ class TestExtension(AgentTestCase):
                                            "{0}.status".format(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]))
                 invalid_json_path = os.path.join(data_dir, "ext", "sample-status-invalid-json-format.json")
 
-                if os.path.exists(status_path):
+                if 'enable' in cmd:
                     invalid_json = fileutil.read_file(invalid_json_path)
                     fileutil.write_file(status_path,invalid_json)
 

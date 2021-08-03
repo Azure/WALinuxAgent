@@ -935,7 +935,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
-                mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
+                mc_handlers, _ = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
                                                                              no_of_extensions)
 
                 # Ensure we dont create a placeholder for Install command
@@ -950,7 +950,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 __assert_status_file_in_handlers()
 
                 # Update GS, remove 2 extensions and add 3
-                mc_handlers, sc_handler = self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
+                mc_handlers, _ = self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
                 __assert_status_file_in_handlers()
 
     def test_it_should_report_status_correctly_for_unsupported_goal_state(self):
