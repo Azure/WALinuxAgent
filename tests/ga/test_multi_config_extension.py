@@ -894,7 +894,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                         fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
                         kwargs['name'] == third_ext.name), "Error not reported")
 
-    def test_it_should_always_create_placeholder_for_all_extensions(self):
+    def test_it_should_always_create_placeholder_for_multi_config_extensions(self):
         original_popen = subprocess.Popen
         handler_statuses = {}
 
@@ -902,9 +902,6 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             for handler in mc_handlers:
                 file_name = "{0}.{1}.status".format(handler['runtimeSettingsStatus']['extensionName'],
                                                     handler['runtimeSettingsStatus']['sequenceNumber'])
-                __assert_status_file(handler['handlerName'], status_file=file_name)
-            for handler in sc_handler:
-                file_name = "{0}.status".format(handler['runtimeSettingsStatus']['sequenceNumber'])
                 __assert_status_file(handler['handlerName'], status_file=file_name)
 
         def __assert_status_file(handler_name, status_file):

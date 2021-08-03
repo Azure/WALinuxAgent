@@ -450,7 +450,7 @@ class TestExtension(AgentTestCase):
         self.assertNotEqual(0, len(vm_status.vmAgent.extensionHandlers))
         handler_status = next(
             status for status in vm_status.vmAgent.extensionHandlers if status.name == expected_handler_name)
-        self.assertEqual(expected_status, handler_status.status)
+        self.assertEqual(expected_status, handler_status.status, get_properties(handler_status))
         self.assertEqual(expected_handler_name, handler_status.name)
         self.assertEqual(version, handler_status.version)
         self.assertEqual(expected_ext_count, len([ext_handler for ext_handler in vm_status.vmAgent.extensionHandlers if
@@ -1664,7 +1664,7 @@ class TestExtension(AgentTestCase):
                                             expected_msg="Dependent Extension OSTCExtensions.OtherExampleHandlerLinux did not reach a terminal state within the allowed timeout. Last status was {0}".format(
                                                 ValidHandlerStatus.warning))
 
-    def test_it_should_not_create_placeholder_for_aks_extension(self, mock_http_get, mock_crypt_util, *args):
+    def test_it_should_not_create_placeholder_for_single_config_extensions(self, mock_http_get, mock_crypt_util, *args):
         original_popen = subprocess.Popen
 
         def mock_popen(cmd, *_, **kwargs):
@@ -1677,10 +1677,7 @@ class TestExtension(AgentTestCase):
                 ext_path = kwargs['env'][ExtCommandEnvVariable.ExtensionPath]
                 status_file_name = "{0}.status".format(seq_no)
                 status_file = os.path.join(ext_path, "status", status_file_name)
-                if "AKS" in cmd:
-                    self.assertFalse(os.path.exists(status_file), "Placeholder file should not be created for AKS")
-                else:
-                    self.assertTrue(os.path.exists(status_file), "Placeholder file should be created for all extensions")
+                self.assertFalse(os.path.exists(status_file), "Placeholder file should not be created for AKS")
 
             return original_popen(cmd, *_, **kwargs)
 
