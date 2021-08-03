@@ -1677,7 +1677,7 @@ class TestExtension(AgentTestCase):
                 ext_path = kwargs['env'][ExtCommandEnvVariable.ExtensionPath]
                 status_file_name = "{0}.status".format(seq_no)
                 status_file = os.path.join(ext_path, "status", status_file_name)
-                self.assertFalse(os.path.exists(status_file), "Placeholder file should not be created for AKS")
+                self.assertFalse(os.path.exists(status_file), "Placeholder file should not be created for single config extensions")
 
             return original_popen(cmd, *_, **kwargs)
 
