@@ -894,7 +894,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                         fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
                         kwargs['name'] == third_ext.name), "Error not reported")
 
-    def test_it_should_always_create_placeholder_for_all_extensions(self):
+    def test_it_should_always_create_placeholder_for_multi_config_extensions(self):
         original_popen = subprocess.Popen
         handler_statuses = {}
 
@@ -902,9 +902,6 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             for handler in mc_handlers:
                 file_name = "{0}.{1}.status".format(handler['runtimeSettingsStatus']['extensionName'],
                                                     handler['runtimeSettingsStatus']['sequenceNumber'])
-                __assert_status_file(handler['handlerName'], status_file=file_name)
-            for handler in sc_handler:
-                file_name = "{0}.status".format(handler['runtimeSettingsStatus']['sequenceNumber'])
                 __assert_status_file(handler['handlerName'], status_file=file_name)
 
         def __assert_status_file(handler_name, status_file):
@@ -938,7 +935,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
-                mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
+                mc_handlers, _ = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
                                                                              no_of_extensions)
 
                 # Ensure we dont create a placeholder for Install command
@@ -953,7 +950,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 __assert_status_file_in_handlers()
 
                 # Update GS, remove 2 extensions and add 3
-                mc_handlers, sc_handler = self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
+                mc_handlers, _ = self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
                 __assert_status_file_in_handlers()
 
     def test_it_should_report_status_correctly_for_unsupported_goal_state(self):
