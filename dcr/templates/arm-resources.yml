@@ -1,13 +1,10 @@
 # Template for dealing with ARM Deployments
 
 parameters:
-  - name: deleteRg
-    type: boolean
-    default: false
 #  - name: azConn
 #    type: string
-  - name: subId
-    type: string
+#  - name: subId
+#    type: string
 #  - name: rgName
 #    type: string
   - name: location
@@ -16,37 +13,15 @@ parameters:
 
 steps:
   - script: |
-      echo "Sub: ${{ parameters.subId }}; Location: ${{ parameters.location }}"
+      echo "Location: ${{ parameters.location }}"
 
-  - ${{ if and(eq(parameters.subId, '8e037ad4-618f-4466-8bc8-5099d41ac15b'), eq(parameters.deleteRg, true)) }}:
-    - task: AzureResourceManagerTemplateDeployment@3
-      condition: succeededOrFailed()
-      displayName: "Delete test RG"
-      inputs:
-        deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '${{ variables.publicConn }}'
-        subscriptionId: '${{ parameters.subId }}'
-        action: 'DeleteRG'
-        resourceGroupName: '$(rgName)'
-
-  - ${{ if and(eq(parameters.subId, '557a8daa-8ac8-4caa-88e4-3b6f939978b9'), eq(parameters.deleteRg, true)) }}:
-    - task: AzureResourceManagerTemplateDeployment@3
-      condition: succeededOrFailed()
-      displayName: "Delete test RG"
-      inputs:
-        deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '${{ variables.mooncakeConn }}'
-        subscriptionId: '${{ parameters.subId }}'
-        action: 'DeleteRG'
-        resourceGroupName: '$(rgName)'
-
-  - ${{ if and(eq(parameters.subId, '8e037ad4-618f-4466-8bc8-5099d41ac15b'), eq(parameters.deleteRg, false)) }}:
+  - ${{ if eq(parameters.location, 'East US 2') }}:
     - task: AzureResourceManagerTemplateDeployment@3
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
         azureResourceManagerConnection: '${{ variables.publicConn }}'
-        subscriptionId: '${{ parameters.subId }}'
+        subscriptionId: '${{ variables.publicSub }}'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
         location: '${{ parameters.location }}'
@@ -56,13 +31,13 @@ steps:
         deploymentMode: 'Complete'
         deploymentOutputs: 'armDeploymentOutput'
 
-  - ${{ if and(eq(parameters.subId, '557a8daa-8ac8-4caa-88e4-3b6f939978b9'), eq(parameters.deleteRg, false)) }}:
+  - ${{ if eq(parameters.location, 'china north 2') }}:
     - task: AzureResourceManagerTemplateDeployment@3
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
         azureResourceManagerConnection: '${{ variables.mooncakeConn }}'
-        subscriptionId: '${{ parameters.subId }}'
+        subscriptionId: '${{ variables.mooncakeSub }}'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'
         location: '${{ parameters.location }}'

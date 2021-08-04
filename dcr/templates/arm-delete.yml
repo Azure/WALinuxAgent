@@ -1,0 +1,32 @@
+# Template for deleting ARM resources
+
+parameters:
+  - name: location
+    type: string
+    default: ""
+
+steps:
+  - script: |
+      echo "Location: ${{ parameters.location }}"
+
+  - ${{ if eq(parameters.location, 'East US 2') }}:
+      - task: AzureResourceManagerTemplateDeployment@3
+        condition: succeededOrFailed()
+        displayName: "Delete test RG"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '${{ variables.publicConn }}'
+          subscriptionId: '${{ variables.publicSub }}'
+          action: 'DeleteRG'
+          resourceGroupName: '$(rgName)'
+
+  - ${{ if eq(parameters.location, 'china north 2') }}:
+      - task: AzureResourceManagerTemplateDeployment@3
+        condition: succeededOrFailed()
+        displayName: "Delete test RG"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '${{ variables.mooncakeConn }}'
+          subscriptionId: '${{ variables.mooncakeSub }}'
+          action: 'DeleteRG'
+          resourceGroupName: '$(rgName)'
