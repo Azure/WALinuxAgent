@@ -29,7 +29,7 @@ from azurelinuxagent.common.utils import fileutil
 from tests.common.mock_cgroup_environment import mock_cgroup_environment
 from tests.tools import AgentTestCase, patch, mock_sleep
 from tests.utils.cgroups_tools import CGroupsTools
-
+from azurelinuxagent.common.cgroup import CpuCgroup
 
 class _MockedFileSystemTestCase(AgentTestCase):
     def setUp(self):
@@ -82,6 +82,14 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             cpu, memory = SystemdCgroupsApi().get_cgroup_mount_points()
             self.assertEqual(cpu, '/sys/fs/cgroup/cpu,cpuacct', "The mount point for the CPU controller is incorrect")
             self.assertEqual(memory, '/sys/fs/cgroup/memory', "The mount point for the memory controller is incorrect")
+
+    def test_get_service_cgroup_paths_should_return_the_cgroup_mount_points(self):
+        with mock_cgroup_environment(self.tmp_dir):
+            cpu, memory = SystemdCgroupsApi().get_service_cgroup_paths("extension.service")
+            self.assertIn(cpu, '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service',
+                          "The mount point for the CPU controller is incorrect")
+            self.assertIn(memory, '/sys/fs/cgroup/memory/system.slice/extension.service',
+                          "The mount point for the memory controller is incorrect")
 
     def test_get_cpu_and_memory_cgroup_relative_paths_for_process_should_return_the_cgroup_relative_paths(self):
         with mock_cgroup_environment(self.tmp_dir):
@@ -166,7 +174,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(
-                any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
+                any(cg for cg in tracked.values() if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
                 "The extension's CPU is not being tracked")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -189,6 +197,37 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
                 self.assertIn("systemd-run", extension_calls[0], "The extension should have been invoked using systemd")
 
+    def test_start_tracking_extension_services_cgroups(self):
+
+        with mock_cgroup_environment(self.tmp_dir):
+            SystemdCgroupsApi().start_tracking_extension_services_cgroups("extension.service")
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertTrue(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is not being tracked")
+
+    def test_stop_tracking_extension_services_cgroups(self):
+
+        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+            CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+
+        def side_effect(path):
+            if path == '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service':
+                return True
+            return False
+
+        with mock_cgroup_environment(self.tmp_dir):
+            with patch("os.path.exists") as mock_path:
+                mock_path.side_effect = side_effect
+                SystemdCgroupsApi().stop_tracking_extension_services_cgroups("extension.service")
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertFalse(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is being tracked")
 
 class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
     def test_cleanup_legacy_cgroups_should_remove_legacy_cgroups(self):
