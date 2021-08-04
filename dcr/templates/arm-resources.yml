@@ -4,8 +4,8 @@ parameters:
   - name: deleteRg
     type: boolean
     default: false
-  - name: azConn
-    type: string
+#  - name: azConn
+#    type: string
   - name: subId
     type: string
 #  - name: rgName
@@ -16,25 +16,52 @@ parameters:
 
 steps:
   - script: |
-      echo "AZConn: ${{ parameters.azConn }}; Sub: ${{ parameters.subId }}; Location: ${{ parameters.location }}"
+      echo "Sub: ${{ parameters.subId }}; Location: ${{ parameters.location }}"
 
-  - ${{ if eq(parameters.deleteRg, true) }}:
+  - ${{ if and(eq(parameters.subId, '8e037ad4-618f-4466-8bc8-5099d41ac15b'), eq(parameters.deleteRg, true)) }}:
     - task: AzureResourceManagerTemplateDeployment@3
       condition: succeededOrFailed()
       displayName: "Delete test RG"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '${{ parameters.azConn }}'
+        azureResourceManagerConnection: '${{ variables.publicConn }}'
         subscriptionId: '${{ parameters.subId }}'
         action: 'DeleteRG'
         resourceGroupName: '$(rgName)'
 
-  - ${{ if eq(parameters.deleteRg, false) }}:
+  - ${{ if and(eq(parameters.subId, '557a8daa-8ac8-4caa-88e4-3b6f939978b9'), eq(parameters.deleteRg, true)) }}:
+    - task: AzureResourceManagerTemplateDeployment@3
+      condition: succeededOrFailed()
+      displayName: "Delete test RG"
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: '${{ variables.mooncakeConn }}'
+        subscriptionId: '${{ parameters.subId }}'
+        action: 'DeleteRG'
+        resourceGroupName: '$(rgName)'
+
+  - ${{ if and(eq(parameters.subId, '8e037ad4-618f-4466-8bc8-5099d41ac15b'), eq(parameters.deleteRg, false)) }}:
     - task: AzureResourceManagerTemplateDeployment@3
       name: "deployVM"
       inputs:
         deploymentScope: 'Resource Group'
-        azureResourceManagerConnection: '${{ parameters.azConn }}'
+        azureResourceManagerConnection: '${{ variables.publicConn }}'
+        subscriptionId: '${{ parameters.subId }}'
+        action: 'Create Or Update Resource Group'
+        resourceGroupName: '$(rgName)'
+        location: '${{ parameters.location }}'
+        templateLocation: 'URL of the file'
+        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
+        overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
+        deploymentMode: 'Complete'
+        deploymentOutputs: 'armDeploymentOutput'
+
+  - ${{ if and(eq(parameters.subId, '557a8daa-8ac8-4caa-88e4-3b6f939978b9'), eq(parameters.deleteRg, false)) }}:
+    - task: AzureResourceManagerTemplateDeployment@3
+      name: "deployVM"
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: '${{ variables.mooncakeConn }}'
         subscriptionId: '${{ parameters.subId }}'
         action: 'Create Or Update Resource Group'
         resourceGroupName: '$(rgName)'

@@ -61,10 +61,10 @@ stages:
            azConnect: '${{variables.mooncakeConn}}'
            subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
            location: 'china north 2'
-         USGovCloud:
-           azConnect: '${{ variables.fairfaxConn }}'
-           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
-           location: 'usgovarizona'
+#         USGovCloud:
+#           azConnect: '${{ variables.fairfaxConn }}'
+#           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
+#           location: 'usgovarizona'
        maxParallel: 3
     
     steps:
@@ -90,7 +90,7 @@ stages:
 
     - template: dcr/templates/arm-resources.yml
       parameters:
-        azConn: $(azConnect)
+#        azConn: '$(azConnect)'
         subId: '$(subId)'
         location: '$(location)'
 
@@ -202,16 +202,16 @@ stages:
            azConnect: '${{ variables.mooncakeConn }}'
            subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
            location: 'china north 2'
-         USGovCloud:
-           azConnect: '${{ variables.fairfaxConn }}'
-           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
-           location: 'usgovarizona'
+#         USGovCloud:
+#           azConnect: '${{ variables.fairfaxConn }}'
+#           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
+#           location: 'usgovarizona'
        maxParallel: 3
     steps:
       - template: dcr/templates/arm-resources.yml
         parameters:
           deleteRg: true
-          azConn: $(azConnect)
+#          azConn: $(azConnect)
           subId: $(subId)
 #      - task: AzureResourceManagerTemplateDeployment@3
 #        condition: succeededOrFailed()
