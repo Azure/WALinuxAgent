@@ -119,22 +119,26 @@ stages:
 
     - script: |
         n=0
+        ec=1
         until [ "$n" -ge 5 ]
         do
-            scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && break  # substitute your command here
+            scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && ec=0 && break  # substitute your command here
             n=$((n+1))
             sleep 3
         done
+        exit $ec
       displayName: 'SCP command'
 
     - script: |
         n=0
+        ec=1
         until [ "$n" -ge 5 ]
         do
-            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)" && break  # substitute your command here
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)" && ec=0 && break  # substitute your command here
             n=$((n+1))
             sleep 3
         done
+        exit $ec
       displayName: 'SSH command'
 
     - script: |
