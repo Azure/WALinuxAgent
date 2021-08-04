@@ -28,6 +28,7 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output, \
     TELEMETRY_MESSAGE_MAX_LEN
@@ -201,6 +202,22 @@ class SystemdCgroupsApi(CGroupsApi):
 
         return cpu_cgroup_path, memory_cgroup_path
 
+    def get_service_cgroup_paths(self, service_name):
+        """
+        Returns a tuple with the path of the cpu and memory cgroups for the given service.
+        The values returned can be None if the controller is not mounted.
+        """
+        controlgroup_path = systemd.get_unit_property(service_name, "ControlGroup")
+        cpu_mount_point, memory_mount_point = self.get_cgroup_mount_points()
+
+        cpu_cgroup_path = os.path.join(cpu_mount_point, controlgroup_path[1:]) \
+            if cpu_mount_point is not None else None
+
+        memory_cgroup_path = os.path.join(memory_mount_point, controlgroup_path[1:]) \
+            if memory_mount_point is not None else None
+
+        return cpu_cgroup_path, memory_cgroup_path
+
     @staticmethod
     def get_cgroup2_controllers():
         """
@@ -296,6 +313,29 @@ class SystemdCgroupsApi(CGroupsApi):
         finally:
             with self._systemd_run_commands_lock:
                 self._systemd_run_commands.remove(process.pid)
+
+    def start_tracking_extension_services_cgroups(self, service_name):
+        try:
+            cpu_cgroup_path, _ = self.get_service_cgroup_paths(service_name)
+
+            if cpu_cgroup_path is None:
+                logger.info("The CPU controller is not mounted; will not track resource usage")
+            else:
+                CGroupsTelemetry.track_cgroup(CpuCgroup(service_name, cpu_cgroup_path))
+        except Exception as exception:
+            logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(exception))
+
+    def stop_tracking_extension_services_cgroups(self, service_name):
+        try:
+            cpu_cgroup_path, _ = self.get_service_cgroup_paths(service_name)
+
+            if cpu_cgroup_path is None:
+                logger.info("The CPU cgroup path is not mounted; no need to stop tracking")
+            else:
+                if os.path.exists(cpu_cgroup_path):
+                    CGroupsTelemetry.stop_tracking(CpuCgroup(service_name, cpu_cgroup_path))
+        except Exception as exception:
+            logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
 
     def cleanup_legacy_cgroups(self):
         """

@@ -19,6 +19,8 @@ import os
 import re
 import subprocess
 
+import shutil
+
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
@@ -54,7 +56,6 @@ Description=Slice for Azure VM extension {extension_name}
 DefaultDependencies=no
 Before=slices.target
 [Slice]
-CPUAccounting=yes
 """
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
@@ -80,20 +81,24 @@ _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
 [Service]
 Slice=azure.slice
 """
-_AGENT_DROP_IN_FILE_CPU_ACCOUNTING = "11-CPUAccounting.conf"
-_AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS = """
+_DROP_IN_FILE_CPU_ACCOUNTING = "11-CPUAccounting.conf"
+_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS = """
 # This drop-in unit file was created by the Azure VM Agent.
 # Do not edit.
 [Service]
 CPUAccounting=yes
 """
-_AGENT_DROP_IN_FILE_CPU_QUOTA = "12-CPUQuota.conf"
-_AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
+_DROP_IN_FILE_CPU_QUOTA = "12-CPUQuota.conf"
+_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 # This drop-in unit file was created by the Azure VM Agent.
 # Do not edit.
 [Service]
 CPUQuota={0}
 """
+_CPU_QUOTA_CONTENTS_FORMAT = """CPUAccounting=yes
+CPUQuota={0}
+"""
+_AGENT_CPU_QUOTA = 5
 _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 
@@ -305,7 +310,7 @@ class CGroupConfigurator(object):
             agent_unit_file = systemd.get_agent_unit_file()
             agent_drop_in_path = systemd.get_agent_drop_in_path()
             agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
-            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING)
+            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_ACCOUNTING)
 
             files_to_create = []
 
@@ -331,7 +336,7 @@ class CGroupConfigurator(object):
                 CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_cpu_accounting)
             else:
                 if not os.path.exists(agent_drop_in_file_cpu_accounting):
-                    files_to_create.append((agent_drop_in_file_cpu_accounting, _AGENT_DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+                    files_to_create.append((agent_drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
 
             if len(files_to_create) > 0:
                 # create the unit files, but if 1 fails remove all and return
@@ -368,6 +373,27 @@ class CGroupConfigurator(object):
                     _log_cgroup_info("Removed {0}", path)
                 except Exception as exception:
                     _log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
+
+        @staticmethod
+        def __cleanup_directory_tree(path):
+            if os.path.exists(path):
+                try:
+                    shutil.rmtree(path)
+                    _log_cgroup_info("Removed {0}", path)
+                except Exception as exception:
+                    _log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
+
+        @staticmethod
+        def __create_all_files(files_to_create):
+            # create the unit files, but if 1 fails remove all and return
+            try:
+                for path, contents in files_to_create:
+                    CGroupConfigurator._Impl.__create_unit_file(path, contents)
+            except Exception as exception:
+                _log_cgroup_warning("Failed to create unit files : {0}", ustr(exception))
+                for unit_file in files_to_create:
+                    CGroupConfigurator._Impl.__cleanup_unit_file(unit_file)
+                return
 
         def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
             agent_unit_name = systemd.get_agent_unit_name()
@@ -461,8 +487,8 @@ class CGroupConfigurator(object):
         @staticmethod
         def __try_set_cpu_quota(quota):
             try:
-                drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), _AGENT_DROP_IN_FILE_CPU_QUOTA)
-                contents = _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)
+                drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
+                contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)
                 if os.path.exists(drop_in_file):
                     with open(drop_in_file, "r") as file_:
                         if file_.read() == contents:
@@ -623,7 +649,7 @@ class CGroupConfigurator(object):
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
-        def setup_extension_slice(self, extension_name):
+        def setup_extension_slice(self, extension_name, cpu_quota):
             """
             Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
             extensions are grouped under "azure-vmextensions.slice.
@@ -638,6 +664,8 @@ class CGroupConfigurator(object):
                 if not os.path.exists(extension_slice_path):
                     try:
                         slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name = extension_name)
+                        if cpu_quota is not None:
+                            slice_contents = slice_contents + _CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
                         CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                     except Exception as exception:
                         _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
@@ -661,6 +689,67 @@ class CGroupConfigurator(object):
                 except Exception as exception:
                     _log_cgroup_warning("systemctl stop failed (remove slice): {0}", ustr(exception))
 
+        def set_extension_services_cpu_memory_quota(self, services_list):
+            """
+            Each extension service will have name, systemd path and it's quotas.
+            This method ensures that drop-in files are created under service.d folder if quotas given.
+            ex: /lib/systemd/system/extension.service.d/11-CPUAccounting.conf
+            """
+            if self.enabled() and services_list is not None:
+                for service in services_list:
+                    service_name = service.get('name', None)
+                    unit_file_path = service.get('path', None)
+                    if service_name is not None and unit_file_path is not None:
+                        files_to_create = []
+                        drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
+                        cpu_quota = service.get('cpuQuota', None)
+                        if cpu_quota is not None:
+                            drop_in_file_cpu_accounting = os.path.join(drop_in_path,
+                                                                         _DROP_IN_FILE_CPU_ACCOUNTING)
+                            drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                            cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
+
+                            if not os.path.exists(drop_in_file_cpu_accounting):
+                                files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+                            if not os.path.exists(drop_in_file_cpu_accounting):
+                                files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
+                        else:
+                            _log_cgroup_info("CPUQuota not set for {0}".format(service_name))
+                        self.__create_all_files(files_to_create)
+                        _log_cgroup_info("CPUQuota set for {0} is {1}", service_name, cpu_quota)
+
+                # reload the systemd configuration; the new unit will be used once the service restarts
+                try:
+                    logger.info("Executing systemctl daemon-reload...")
+                    shellutil.run_command(["systemctl", "daemon-reload"])
+                except Exception as exception:
+                    _log_cgroup_warning("daemon-reload failed (create service unit files): {0}", ustr(exception))
+
+        def stop_tracking_extension_services_cgroups(self, services_list):
+            """
+            Remove the dropin files from service .d folder for the given service
+            and also, remove the cgroup entry from the tracked groups to stop tracking.
+            """
+            if self.enabled() and services_list is not None:
+                for service in services_list:
+                    service_name = service.get('name', None)
+                    unit_file_path = service.get('path', None)
+                    if service_name is not None:
+                        self._cgroups_api.stop_tracking_extension_services_cgroups(service_name)
+                        if unit_file_path is not None:
+                            drop_in_path =  os.path.join(unit_file_path, "{0}.d".format(service_name))
+                            CGroupConfigurator._Impl.__cleanup_directory_tree(drop_in_path)
+                            _log_cgroup_info("Drop in files removed for {0}".format(service_name))
+
+        def start_tracking_extension_services_cgroups(self, services_list):
+            """
+            Add the cgroup entry to start tracking the services cgroups.
+            """
+            if self.enabled() and services_list is not None:
+                for service in services_list:
+                    service_name = service.get('name', None)
+                    if service_name is not None:
+                        self._cgroups_api.start_tracking_extension_services_cgroups(service_name)
 
     # unique instance for the singleton
     _instance = None
