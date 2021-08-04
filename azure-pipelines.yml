@@ -13,8 +13,8 @@ variables:
   rgName: 'larohra-dcr-v2-test$(Build.BuildId)'
 
   # Cloud Data
-  publicConn: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
-  publicSub: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+  azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+  subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
   location: 'East US 2'
 
   fairfaxConn: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)'
@@ -94,26 +94,26 @@ stages:
       displayName: "Build Agent ZIP"
       name: "agentZip"
 
-    - template: dcr/templates/arm-resources.yml
-      parameters:
-#        azConn: '$(azConnect)'
-#        subId: '$(subId)'
-        location: '$(location)'
-
-#    - task: AzureResourceManagerTemplateDeployment@3
-#      name: "deployVM"
-#      inputs:
-#        deploymentScope: 'Resource Group'
-#        azureResourceManagerConnection: $(azureConnection)
-#        subscriptionId: '$(subId)'
-#        action: 'Create Or Update Resource Group'
-#        resourceGroupName: '$(rgName)'
+#    - template: dcr/templates/arm-resources.yml
+#      parameters:
+##        azConn: '$(azConnect)'
+##        subId: '$(subId)'
 #        location: '$(location)'
-#        templateLocation: 'URL of the file'
-#        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
-#        overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
-#        deploymentMode: 'Complete'
-#        deploymentOutputs: 'armDeploymentOutput'
+
+    - task: AzureResourceManagerTemplateDeployment@3
+      name: "deployVM"
+      inputs:
+        deploymentScope: 'Resource Group'
+        azureResourceManagerConnection: '$(azureConnection)'
+        subscriptionId: '$(subId)'
+        action: 'Create Or Update Resource Group'
+        resourceGroupName: '$(rgName)'
+        location: '$(location)'
+        templateLocation: 'URL of the file'
+        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
+        overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
+        deploymentMode: 'Complete'
+        deploymentOutputs: 'armDeploymentOutput'
 
     - script: |
         n=0
@@ -215,8 +215,17 @@ stages:
 #           location: 'usgovarizona'
 #       maxParallel: 3
     steps:
-      - template: dcr/templates/arm-delete.yml
-        parameters:
-           location: $(location)
-#          azConn: $(azConnect)
-#          subId: $(subId)
+#      - template: dcr/templates/arm-delete.yml
+#        parameters:
+#           location: $(location)
+##          azConn: $(azConnect)
+##          subId: $(subId)
+      - task: AzureResourceManagerTemplateDeployment@3
+        condition: succeededOrFailed()
+        displayName: "Delete test RG"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '$(azureConnection)' # $(azureConnection)
+          subscriptionId: '$(subId)'
+          action: 'DeleteRG'
+          resourceGroupName: '$(rgName)'
