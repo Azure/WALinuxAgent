@@ -110,7 +110,7 @@ stages:
         resourceGroupName: '$(rgName)'
         location: '$(location)'
         templateLocation: 'URL of the file'
-        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-07-22T18:59:28Z&se=2021-08-01T02:59:28Z&spr=https&sv=2020-08-04&sr=b&sig=eHKXUdBoY2KPqQr3Xs%2FfPCa6yVF%2BGFgDPHRzoip9qbU%3D'
+        csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-08-04T23:41:34Z&se=2021-09-04T07:41:34Z&spr=https&sv=2020-08-04&sr=b&sig=Ol0su7i90irDy1EzL7Etemop%2FCfAlZjp2ZH4FfmeWlQ%3D'
         overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
         deploymentMode: 'Complete'
         deploymentOutputs: 'armDeploymentOutput'
