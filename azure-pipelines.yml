@@ -171,7 +171,7 @@ stages:
       condition: succeededOrFailed()
       inputs:
         testResultsFormat: 'JUnit'
-        testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
+        testResultsFiles: '$(Build.ArtifactStagingDirectory)/**/test-*.xml'
         testRunTitle: 'Publish test results for Test'
 
 #    - task: AzureCLI@2
