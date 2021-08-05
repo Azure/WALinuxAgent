@@ -17,3 +17,4 @@ steps:
       - script: |
           ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results ${{ value }}"
         displayName: 'Run Pytest on scenario ${{ value }}'
+        condition: succeededOrFailed()
