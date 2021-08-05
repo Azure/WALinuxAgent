@@ -76,7 +76,7 @@ stages:
 
   jobs:
     - job: "CreateVM"
-      displayName: "Setup VM and Run Test for $(scenarioName)"
+      displayName: "Setup VM and Run Test"
 
     strategy:
        matrix: $[ variables.listOfScenarios ]
