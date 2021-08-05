@@ -12,6 +12,25 @@ variables:
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
   rgName: 'larohra-dcr-v2-test$(Build.BuildId)'
 
+  # Scenario List
+  listOfScenarios: "{
+        'scenarioA': {
+          'scenarioName': 'scenarioA'
+        },
+        'scenarioB': {
+          'scenarioName': 'scenarioB'
+        },
+        'scenarioC': {
+          'scenarioName': 'scenarioC'
+        },
+        'scenarioD': {
+          'scenarioName': 'scenarioD'
+        },
+        'scenarioE': {
+          'scenarioName': 'scenarioE'
+        }
+      }"
+
   # Cloud Data
   azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
   subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
@@ -54,23 +73,6 @@ stages:
 - stage: "Execute"
   variables:
     agentVersion: "9.9.9.9"
-    listOfScenarios: "{
-      'scenarioA': {
-        'scenarioName': 'scenarioA'
-      },
-      'scenarioB': {
-        'scenarioName': 'scenarioB'
-      },
-      'scenarioC': {
-        'scenarioName': 'scenarioC'
-      },
-      'scenarioD': {
-        'scenarioName': 'scenarioD'
-      },
-      'scenarioE': {
-        'scenarioName': 'scenarioE'
-      }
-    }"
 
   jobs:
   - job: "CreateVM"
@@ -220,7 +222,7 @@ stages:
     dependsOn: "Wait"
     condition: always()
     strategy:
-       matrix: $(listOfScenarios)
+       matrix: $[ variables.listOfScenarios ]
 #         PublicCloud:
 #           azConnect: '${{ variables.publicConn }}'
 #           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
