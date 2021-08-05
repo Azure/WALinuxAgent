@@ -13,8 +13,7 @@ parameters:
       - nine
 
 steps:
-  - ${{ each value in parameters.listOfScenarios }}:
-      - script: |
-          ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results ${{ value }}"
-        displayName: 'Run Pytest on scenario ${{ value }}'
-        condition: succeededOrFailed()
+#  - ${{ each value in parameters.listOfScenarios }}:
+  - script: |
+      ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results"
+    displayName: 'Run PyTest'

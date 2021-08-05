@@ -54,11 +54,29 @@ stages:
 - stage: "Execute"
   variables:
     agentVersion: "9.9.9.9"
+    listOfScenarios: {
+      'scenarioA': {
+        'scenarioName': 'scenarioA'
+      },
+      'scenarioB': {
+        'scenarioName': 'scenarioB'
+      },
+      'scenarioC': {
+        'scenarioName': 'scenarioC'
+      },
+      'scenarioD': {
+        'scenarioName': 'scenarioD'
+      },
+      'scenarioE': {
+        'scenarioName': 'scenarioE'
+      }
+    }
+
   jobs:
   - job: "CreateVM"
 
-#    strategy:
-#       matrix:
+    strategy:
+       matrix: $(listOfScenarios)
 #         PublicCloud:
 #           azConnect: '${{ variables.publicConn }}'
 #           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
@@ -71,7 +89,7 @@ stages:
 #           azConnect: '${{ variables.fairfaxConn }}'
 #           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
 #           location: 'usgovarizona'
-#       maxParallel: 3
+       maxParallel: 5
     
     steps:
     - task: InstallSSHKey@0
@@ -171,8 +189,8 @@ stages:
       condition: succeededOrFailed()
       inputs:
         testResultsFormat: 'JUnit'
-        testResultsFiles: '$(Build.ArtifactStagingDirectory)/**/test-*.xml'
-        testRunTitle: 'Publish test results for Test'
+        testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
+        testRunTitle: 'Publish test results for $(scenarioName)'
 
 #    - task: AzureCLI@2
 #    #   condition: succeeded('deployVM')
