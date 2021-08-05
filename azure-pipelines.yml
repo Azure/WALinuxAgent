@@ -75,7 +75,8 @@ stages:
     agentVersion: "9.9.9.9"
 
   jobs:
-  - job: "Setup VM and Run Test"
+    - job: "CreateVM"
+      displayName: "Setup VM and Run Test for $(scenarioName)"
 
     strategy:
        matrix: $[ variables.listOfScenarios ]
