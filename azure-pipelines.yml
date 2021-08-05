@@ -146,7 +146,7 @@ stages:
             sleep 3
         done
         exit $ec
-      displayName: 'SCP command'
+      displayName: 'Copy GA Zip to VM'
 
     - script: |
         n=0
@@ -158,8 +158,9 @@ stages:
             sleep 3
         done
         exit $ec
-      displayName: 'SSH command'
+      displayName: 'Setup dev GA on VM'
 
+    # Here we will run the yml per scenario. The scenarios can specify their specifics there
     - template: dcr/agent-bvt/run-test.yml
 
 #    - script: |
@@ -214,7 +215,7 @@ stages:
     pool: server
     steps:
       - task: ManualValidation@0
-        timeoutInMinutes: 5
+        timeoutInMinutes: 50
         inputs:
           notifyUsers: 'larohra'
           onTimeout: 'resume'
