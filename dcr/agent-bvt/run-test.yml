@@ -4,13 +4,6 @@ parameters:
     default:
       - one
       - two
-      - three
-      - four
-      - five
-      - six
-      - seven
-      - eight
-      - nine
 
 steps:
 #  - ${{ each value in parameters.listOfScenarios }}:

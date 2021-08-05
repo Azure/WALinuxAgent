@@ -75,7 +75,7 @@ stages:
     agentVersion: "9.9.9.9"
 
   jobs:
-  - job: "CreateVM"
+  - job: "Setup VM and Run Test"
 
     strategy:
        matrix: $[ variables.listOfScenarios ]
@@ -159,7 +159,7 @@ stages:
         exit $ec
       displayName: 'SSH command'
 
-    - template: dcr/templates/run-test.yml
+    - template: dcr/agent-bvt/run-test.yml
 
 #    - script: |
 #        ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results/"
