@@ -32,9 +32,9 @@ def main():
     release_pattern = "AGENT_VERSION = '(.*)'\n"
     if os.path.exists(release_file):
         with open(release_file, 'r') as rfh:
-            expected_version = re.match(release_pattern, rfh.read()).groups()[0]
+            expected_version = rfh.read().strip()
 
-    expected_version_string = "WALinuxAgent-{0}".format(expected_version)
+    expected_version_string = "Goal state agent: {0}".format(expected_version)
 
     if exit_code != 0:
         sys.exit(exit_code)
