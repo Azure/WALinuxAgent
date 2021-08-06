@@ -3,9 +3,8 @@
 
 import json
 import os
-import http.client as http_client
 
-
+from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.protocol.goal_state import GoalState, ExtensionsConfig
@@ -90,9 +89,9 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                     # used in the headers of the retry request.
                     protocol.mock_wire_data.set_container_id("GET_VM_SETTINGS_TEST_CONTAINER_ID")
                     protocol.mock_wire_data.set_role_config_name("GET_VM_SETTINGS_TEST_ROLE_CONFIG_NAME")
-                    return MockHttpResponse(status=http_client.GONE)
+                    return MockHttpResponse(status=httpclient.GONE)
                 # For this test we are interested only on the retry logic, so the second request (the retry) is not important; we use NOT_MODIFIED (304) for simplicity.
-                return MockHttpResponse(status=http_client.NOT_MODIFIED)
+                return MockHttpResponse(status=httpclient.NOT_MODIFIED)
 
             with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
                 protocol.update_extensions_goal_state(wait_for_new_goal_state=False)
