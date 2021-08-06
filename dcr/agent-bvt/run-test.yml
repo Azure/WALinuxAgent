@@ -9,7 +9,6 @@ steps:
   - script: ${{ format(parameters.sshCommand, "01_check_waagent_version") }}
     name: 'checkVersion'
   - script: ${{ format(parameters.sshCommand, "02_check_hostname") }}
-    dependsOn: 'checkVersion'
   - script: |
       ls /home/$(adminUsername)/test_results/agent-bvt/*
       cat /home/$(adminUsername)/test_results/agent-bvt/*.stdout
