@@ -11,3 +11,4 @@ steps:
       ls $(Build.ArtifactStagingDirectory)/*
       cat $(Build.ArtifactStagingDirectory)/agent-bvt-*.stdout
       cat $(Build.ArtifactStagingDirectory)/agent-bvt-*.stderr
+    condition: succeededOrFailed()
