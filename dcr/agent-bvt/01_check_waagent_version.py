@@ -15,11 +15,10 @@ def main():
     pipe = subprocess.Popen(['waagent', '-version'],
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE)
-    stdout_lines = list(map(lambda s: s.decode('utf-8'), pipe.stdout.readlines()))
-    exit_code = pipe.wait()
+    stdout, stderr = pipe.communicate()
+    exit_code = pipe.returncode
 
-    for line in stdout_lines:
-        print(line)
+    print(stdout)
 
     if args.custom_vhd:
         print("Skipping this test as this is a Custom Vhd")
@@ -38,11 +37,12 @@ def main():
 
     if exit_code != 0:
         sys.exit(exit_code)
-    elif expected_version_string in stdout_lines[0]:
+    elif expected_version_string in stdout.decode():
         sys.exit(0)
     else:
         print('Expected: {0}'.format(expected_version_string))
-        print('   Found: {0}'.format(stdout_lines[0]))
+        print('   Found: {0}'.format(stdout))
+        print("STDERR: {0}".format(stderr))
         sys.exit(1)
 
 
