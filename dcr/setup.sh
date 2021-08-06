@@ -19,6 +19,7 @@ sudo systemctl daemon-reload && sudo systemctl start walinuxagent
 
 apt-get install python3-pip -y
 pip3 install -U pytest
+pip3 install junit-xml
 
 sudo systemctl status walinuxagent --no-pager
 waagent --version
