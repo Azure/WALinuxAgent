@@ -15,7 +15,7 @@ variables:
   # Scenario List
   listOfScenarios: "{
           'scenarioA': {
-            'scenarioName': 'scenarioA'
+            'scenarioName': 'agent-bvt'
           }
         }"
   expandedListOfScenarios: "{
@@ -165,8 +165,16 @@ stages:
               exit $ec
             displayName: 'Setup dev GA on VM'
 
+          - script: |
+              mkdir -p $(Build.ArtifactStagingDirectory)/$(scenarioName)
+
           # Here we will run the yml per scenario. The scenarios can specify their specifics there
           - template: dcr/agent-bvt/run-test.yml
+
+          - task: PythonScript@0
+            inputs:
+              scriptSource: 'filePath'
+              scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
 
           #    - script: |
           #        ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results/"
@@ -181,18 +189,18 @@ stages:
           ##        exit $ec
           #      displayName: 'Run Pytest on VM'
 
-          - script: |
-              n=0
-              ec=1
-              until [ "$n" -ge 5 ]
-              do
-                  scp -o StrictHostKeyChecking=no -r $(adminUsername)@$(armDeploymentOutput.hostname.value):/home/$(adminUsername)/test_results/test-*.xml $(Build.ArtifactStagingDirectory)/ && ec=0 && break
-                  n=$((n+1))
-                  sleep 3
-              done
-              exit $ec
-            condition: succeededOrFailed()
-            displayName: 'Get test-xml files'
+#          - script: |
+#              n=0
+#              ec=1
+#              until [ "$n" -ge 5 ]
+#              do
+#                  scp -o StrictHostKeyChecking=no -r $(adminUsername)@$(armDeploymentOutput.hostname.value):/home/$(adminUsername)/test_results/test-*.xml $(Build.ArtifactStagingDirectory)/ && ec=0 && break
+#                  n=$((n+1))
+#                  sleep 3
+#              done
+#              exit $ec
+#            condition: succeededOrFailed()
+#            displayName: 'Get test-xml files'
 
           - task: PublishTestResults@2
             condition: succeededOrFailed()
