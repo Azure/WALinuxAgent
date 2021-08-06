@@ -6,7 +6,7 @@ parameters:
 steps:
   - script: ${{ format(parameters.sshCommand, '01_check_waagent_version') }}
     name: 'checkVersion'
-  - script: ${{ format(parameters.sshCommand, '02_check_hostname') }}
+  - script: ${{ format(parameters.sshCommand, '03_check_nslookup') }}
     condition: succeededOrFailed()
   - script: |
       ls $(Build.ArtifactStagingDirectory)/*
