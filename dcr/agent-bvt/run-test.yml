@@ -1,0 +1,19 @@
+variables:
+  sshCommand: 'ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value)
+  "sudo python3 /home/$(adminUsername)/dcr/agent-bvt/${0}">/home/$(adminUsername)/test_results/agent-bvt/{0}.stdout
+  2>/home/$(adminUsername)/test_results/agent-bvt/{0}.stderr'
+
+parameters:
+  - name: taskLists
+    type: stepList
+    default:
+      - script: ${{ format(variables.sshCommand, "01_check_waagent_version.py") }}
+        name: 'checkVersion'
+      - script: ${{ format(variables.sshCommand, "02_check_hostname.py") }}
+        dependsOn: 'checkVersion'
+      - script: |
+          ls /home/$(adminUsername)/test_results/agent-bvt/*
+          cat /home/$(adminUsername)/test_results/agent-bvt/*.stdout
+          cat /home/$(adminUsername)/test_results/agent-bvt/*.stderr
+
+steps: ${{ parameters.taskLists }}
