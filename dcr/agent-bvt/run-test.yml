@@ -7,7 +7,7 @@ parameters:
 
 steps:
   - script: ${{ format(parameters.sshCommand, "01_check_waagent_version") }}
-      name: 'checkVersion'
+    name: 'checkVersion'
   - script: ${{ format(parameters.sshCommand, "02_check_hostname") }}
     dependsOn: 'checkVersion'
   - script: |
