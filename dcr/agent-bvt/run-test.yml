@@ -1,14 +1,20 @@
 parameters:
   - name: sshCommand
     type: string
-    default: "ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) sudo python3 /home/$(adminUsername)/dcr/agent-bvt/${0}.py>$(Build.ArtifactStagingDirectory)/agent-bvt-{0}.stdout 2>$(Build.ArtifactStagingDirectory)/agent-bvt-{0}.stderr"
+    default: "ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) sudo python3 /home/$(adminUsername)/dcr/agent-bvt/{0}.py>$(Build.ArtifactStagingDirectory)/agent-bvt-{0}.stdout 2>$(Build.ArtifactStagingDirectory)/agent-bvt-{0}.stderr"
 
 steps:
   - script: ${{ format(parameters.sshCommand, '01_check_waagent_version') }}
     name: 'checkVersion'
   - script: ${{ format(parameters.sshCommand, '02_check_hostname') }}
+    condition: succeededOrFailed()
   - script: |
       ls $(Build.ArtifactStagingDirectory)/*
+      echo "STDOUT:"
       cat $(Build.ArtifactStagingDirectory)/agent-bvt-*.stdout
+      echo "STDERR:"
       cat $(Build.ArtifactStagingDirectory)/agent-bvt-*.stderr
     condition: succeededOrFailed()
+
+
+
