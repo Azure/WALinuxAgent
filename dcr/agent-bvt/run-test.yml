@@ -6,7 +6,7 @@ parameters:
 steps:
   - script: ${{ format(parameters.sshCommand, '01_check_waagent_version') }}
     name: 'checkVersion'
-  - script: ${{ format("ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) sudo python3 /home/$(adminUsername)/dcr/agent-bvt/${0}.py>/home/$(adminUsername)/test_results/agent-bvt/{0}.stdout 2>/home/$(adminUsername)/test_results/agent-bvt/{0}.stderr", '02_check_hostname') }}
+  - script: ${{ format(parameters.sshCommand, '02_check_hostname') }}
   - script: |
       ls /home/$(adminUsername)/test_results/agent-bvt/*
       cat /home/$(adminUsername)/test_results/agent-bvt/*.stdout
