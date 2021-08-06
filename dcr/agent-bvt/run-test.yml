@@ -8,9 +8,9 @@ parameters:
   - name: taskLists
     type: stepList
     default:
-      - script: ${{ format(parameters.sshCommand, "01_check_waagent_version.py") }}
+      - script: ${{ format(parameters.sshCommand, "01_check_waagent_version\.py") }}
         name: 'checkVersion'
-      - script: ${{ format(parameters.sshCommand, "02_check_hostname.py") }}
+      - script: ${{ format(parameters.sshCommand, "02_check_hostname\.py") }}
         dependsOn: 'checkVersion'
       - script: |
           ls /home/$(adminUsername)/test_results/agent-bvt/*
