@@ -178,6 +178,10 @@ class HttpRequestPredicates(object):
         return headers['x-ms-artifact-location']
 
     @staticmethod
+    def is_host_plugin_vm_settings_request(url):
+        return url.lower() == 'http://{0}:{1}/vmsettings'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
+
+    @staticmethod
     def is_host_plugin_health_request(url):
         return url.lower() == 'http://{0}:{1}/health'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
 
@@ -210,9 +214,12 @@ class HttpRequestPredicates(object):
 
 
 class MockHttpResponse:
-    def __init__(self, status, body=''):
+    def __init__(self, status, body=b''):
         self.body = body
         self.status = status
 
     def read(self, *_):
         return self.body
+
+    def getheaders(self):
+        return {}
