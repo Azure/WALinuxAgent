@@ -55,7 +55,9 @@ pool: #larohra-dcrvmsspool
 steps:
   - bash: |
       touch abc.py bcd.py cde.py
-      echo "##vso[task.setvariable variable=files;isOutput=true]($(ls *.py))"
+      fil=($(ls *.py))
+      echo "##vso[task.setvariable variable=files;isOutput=true]$fil"
 
-  - ${{ each value in variables.files }}:
-    - bash: echo $(value)
+  - template:  dcr/templates/test-files.yml
+    parameters:
+      files: $(files)
