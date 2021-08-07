@@ -166,7 +166,8 @@ stages:
             displayName: 'Setup dev GA on VM'
 
           - script: |
-              mkdir -p $(Build.ArtifactStagingDirectory)/$(scenarioName)
+              sudo pip install junit-xml
+              mkdir -p $(Build.ArtifactStagingDirectory)/tests/
 
           # Here we will run the yml per scenario. The scenarios can specify their specifics there
           - template: dcr/agent-bvt/run-test.yml
