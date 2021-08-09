@@ -84,7 +84,7 @@ stages:
         displayName: "Setup VM and Run Test"
 
         strategy:
-          matrix: $[ variables.listOfScenarios ]
+          matrix: $[ variables.expandedListOfScenarios ]
           #         PublicCloud:
           #           azConnect: '${{ variables.publicConn }}'
           #           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
@@ -173,10 +173,8 @@ stages:
 
           - script: |
               which pip
-              which pip3
               which python
               pip install junit-xml
-              pip3 install junit-xml
             displayName: "Download JUnit"
 
           # Here we will run the yml per scenario. The scenarios can specify their specifics there

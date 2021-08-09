@@ -2,16 +2,9 @@ import glob
 import re
 import sys
 from time import sleep
-
-if sys.version_info[0] == 3:
-    from urllib.parse import unquote_plus
-    from urllib.request import urlopen
-    from html.parser import HTMLParser
-
-elif sys.version_info[0] == 2:
-    from urllib import unquote_plus
-    from urllib2 import urlopen
-    from HTMLParser import HTMLParser
+from urllib.parse import unquote_plus
+from urllib.request import urlopen
+from html.parser import HTMLParser
 
 
 def show_blob_content(description, key):

@@ -9,6 +9,31 @@ steps:
 
   - script: ${{ format(parameters.sshCommand, '03_check_nslookup') }}
     condition: succeededOrFailed()
+    name: "checkNsLookup"
+
+  - script: ${{ format(parameters.sshCommand, '05_check_root_login') }}
+    condition: succeededOrFailed()
+    name: "checkRootLogin"
+
+  - script: ${{ format(parameters.sshCommand, '10_check_agent_processes') }}
+    condition: succeededOrFailed()
+    name: "checkAgentProcesses"
+
+  - script: ${{ format(parameters.sshCommand, '12_get_blob_content') }}
+    condition: succeededOrFailed()
+    name: "getBlobContents"
+
+  - script: ${{ format(parameters.sshCommand, '13_get_os_info') }}
+    condition: succeededOrFailed()
+    name: "GetOsInfo"
+
+  - script: ${{ format(parameters.sshCommand, '15_check_firewall') }}
+    condition: succeededOrFailed()
+    name: "CheckFirewall"
+
+  - script: ${{ format(parameters.sshCommand, '16_check_sudoers') }}
+    condition: succeededOrFailed()
+    name: "CheckSudoers"
 
   - script: |
       ls $(Build.ArtifactStagingDirectory)/*

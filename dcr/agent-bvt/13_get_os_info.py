@@ -1,12 +1,36 @@
+import platform
 import sys
-from dungeon_crawler.scenarios_utils.distro import get_distro
+
+import distro
+
+
+def get_distro():
+    """
+    In some distros, e.g. SUSE 15, platform.linux_distribution is present,
+    but returns an empty value
+    so we also try distro.linux_distribution in those cases
+    """
+    osinfo = []
+    if hasattr(platform, 'linux_distribution'):
+        osinfo = list(platform.linux_distribution(
+            full_distribution_name=0,
+            supported_dists=platform._supported_dists + ('alpine',)))
+
+        # Remove trailing whitespace and quote in distro name
+
+        osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
+    if not osinfo or not len(osinfo[0]):
+        # platform.linux_distribution() is deprecated, the suggested option is to use distro module
+        osinfo = distro.linux_distribution()
+
+    return osinfo
 
 
 def main():
-    distro = get_distro()
-    l0 = 'DISTRO_NAME = {0}'.format(distro[0])
-    l1 = 'DISTRO_VERSION = {0}'.format(distro[1])
-    l2 = 'DISTRO_CODE_NAME = {0}'.format(distro[2])
+    distro_ = get_distro()
+    l0 = 'DISTRO_NAME = {0}'.format(distro_[0])
+    l1 = 'DISTRO_VERSION = {0}'.format(distro_[1])
+    l2 = 'DISTRO_CODE_NAME = {0}'.format(distro_[2])
 
     print(l0)
     print(l1)
