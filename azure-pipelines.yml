@@ -172,6 +172,10 @@ stages:
               architecture: 'x64'
 
           - script: |
+              which pip
+              which pip3
+              which python
+              sudo pip install junit-xml
               sudo pip3 install junit-xml
             displayName: "Download JUnit"
 
