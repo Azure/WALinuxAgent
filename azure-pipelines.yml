@@ -175,8 +175,8 @@ stages:
               which pip
               which pip3
               which python
-              sudo pip install junit-xml
-              sudo pip3 install junit-xml
+              pip install junit-xml
+              pip3 install junit-xml
             displayName: "Download JUnit"
 
           # Here we will run the yml per scenario. The scenarios can specify their specifics there
