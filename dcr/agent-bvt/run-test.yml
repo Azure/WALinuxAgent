@@ -1,7 +1,7 @@
 parameters:
   - name: sshCommand
     type: string
-    default: "mkdir -p $(Build.ArtifactStagingDirectory)/tests/{0}/ && ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) sudo time python3 /home/$(adminUsername)/dcr/{0}.py>$(Build.ArtifactStagingDirectory)/tests/{0}/stdout 2>$(Build.ArtifactStagingDirectory)/tests/{0}/stderr || (ec=$? && echo $ec > $(Build.ArtifactStagingDirectory)/tests/{0}/returncode && exit $ec)"
+    default: "mkdir -p $(Build.ArtifactStagingDirectory)/tests/{0}/ && ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) sudo time python3 /home/$(adminUsername)/dcr/$(scenarioName)/{0}.py>$(Build.ArtifactStagingDirectory)/tests/{0}/stdout 2>$(Build.ArtifactStagingDirectory)/tests/{0}/stderr || (ec=$? && echo $ec > $(Build.ArtifactStagingDirectory)/tests/{0}/returncode && exit $ec)"
 
 steps:
   - script: ${{ format(parameters.sshCommand, '01_check_waagent_version') }}

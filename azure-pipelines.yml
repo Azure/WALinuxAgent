@@ -21,19 +21,19 @@ variables:
         }"
   expandedListOfScenarios: "{
         'scenarioA': {
-          'scenarioName': 'scenarioA'
+          'scenarioName': 'agent-bvt'
         },
         'scenarioB': {
-          'scenarioName': 'scenarioB'
+          'scenarioName': 'agent-bvt'
         },
         'scenarioC': {
-          'scenarioName': 'scenarioC'
+          'scenarioName': 'agent-bvt'
         },
         'scenarioD': {
-          'scenarioName': 'scenarioD'
+          'scenarioName': 'agent-bvt'
         },
         'scenarioE': {
-          'scenarioName': 'scenarioE'
+          'scenarioName': 'agent-bvt'
         }
       }"
 
@@ -186,6 +186,7 @@ stages:
               scriptSource: 'filePath'
               scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
             displayName: "Generate Test Files"
+            condition: succeededOrFailed()
 
           #    - script: |
           #        ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results/"
