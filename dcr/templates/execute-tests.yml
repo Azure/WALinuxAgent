@@ -1,0 +1,121 @@
+parameters:
+  - name: scenarios
+    type: object
+    default:
+      - agent-bvt
+
+  - name: distros
+    type: object
+    default:
+      - Ubuntu18:
+          publisher: "Canonical"
+          offer: "UbuntuServer"
+          version: "latest"
+          sku: "18.04-LTS"
+
+
+jobs:
+  - job: "CreateVM"
+    displayName: "Setup VM and Run Test"
+
+    strategy:
+      matrix:
+        ${{ each distro in parameters.distros }}:
+          ${{ each scenario in parameters.scenarios }}:
+            ${{ distro-scenario }}:
+              scenarioName: ${{ scenario }}
+              imagePublisher: ${{ distro.publisher }}
+              imageOffer: ${{ distro.offer }}
+              imageSku: ${{ distro.sku }}
+              imageVersion: ${{ distro.version }}
+#      matrix: $[ variables.expandedListOfScenarios ]
+      maxParallel: 5
+
+    steps:
+      - task: InstallSSHKey@0
+        displayName: 'Install SSH Key to agent'
+        name: "InstallKey"
+        inputs:
+          knownHostsEntry: '$(SSH_PUBLIC)'
+          sshPublicKey: '$(SSH_PUBLIC)'
+          sshKeySecureFile: 'id_rsa'
+
+      - script: |
+          rm -rf ~/.ssh/known_hosts
+          echo "##vso[task.setvariable variable=randNum;isOutput=true]$RANDOM"
+        displayName: "Clear known host keys in Orchestrator"
+
+      - script: |
+          # Build the agent package in the container and just transfer out the zip
+          bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
+        displayName: "Build Agent ZIP"
+        name: "agentZip"
+
+      - task: AzureResourceManagerTemplateDeployment@3
+        name: "deployVM"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '$(azureConnection)'
+          subscriptionId: '$(subId)'
+          action: 'Create Or Update Resource Group'
+          resourceGroupName: '$(rgName)-$(scenarioId)'
+          location: '$(location)'
+          templateLocation: 'URL of the file'
+          csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-08-04T23:41:34Z&se=2021-09-04T07:41:34Z&spr=https&sv=2020-08-04&sr=b&sig=Ol0su7i90irDy1EzL7Etemop%2FCfAlZjp2ZH4FfmeWlQ%3D'
+          overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)" -imagePublisher "$(imagePublisher)" -imageOffer "$(imageOffer)" -imageSku $(imageSku) -imageVersion $(imageVersion)'
+          deploymentMode: 'Complete'
+          deploymentOutputs: 'armDeploymentOutput'
+
+      - script: |
+          n=0
+          ec=1
+          until [ "$n" -ge 5 ]
+          do
+              scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && ec=0 && break  # substitute your command here
+              n=$((n+1))
+              sleep 3
+          done
+          exit $ec
+        displayName: 'Copy GA Zip to VM'
+
+      - script: |
+          n=0
+          ec=1
+          until [ "$n" -ge 5 ]
+          do
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)" && ec=0 && break  # substitute your command here
+              n=$((n+1))
+              sleep 3
+          done
+          exit $ec
+        displayName: 'Setup dev GA on VM'
+
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.8'
+          addToPath: true
+          architecture: 'x64'
+        displayName: "Set host python version"
+
+      - script: |
+          which pip
+          which python
+          pip install junit-xml
+        displayName: "Install test requirements on host"
+
+      # Here we will run the yml per scenario. The scenarios can specify their specifics there
+      - template: "dcr/$(scenarioName)/run-test.yml"
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
+        displayName: "Generate Test Files on host"
+        condition: succeededOrFailed()
+
+      - task: PublishTestResults@2
+        condition: succeededOrFailed()
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
+          testRunTitle: 'Publish test results for $(scenarioName)'

@@ -49,16 +49,11 @@ variables:
 
   fairfaxConn: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)'
   fairfaxSub: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
+  fairfaxLocation: 'usgovarizona'
 
   mooncakeConn: 'Guest Agent Mooncake ( 557a8daa-8ac8-4caa-88e4-3b6f939978b9 )'
   mooncakeSub: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
-
-  #  azureConnection: '$(mooncakeConn)'
-  #  subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
-  #  location: 'china north 2'
-  # azureConnection: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)' #'AzLinux DungeonCrawler(8e037ad4-618f-4466-8bc8-5099d41ac15b)'
-  # subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19' #'8e037ad4-618f-4466-8bc8-5099d41ac15b'
-  # location: 'usgovarizona' # 'East US 2'
+  mooncakeLocation: 'china north 2'
 
 pool: #larohra-dcrvmsspool
   vmImage: ubuntu-latest
@@ -75,157 +70,21 @@ stages:
   #           wget -O - -q icanhazip.com
   #         displayName: 'IP'
 
-  #       - task: Bash@3
-  #         inputs:
-  #           targetType: 'inline'
-  #           script: 'echo ''-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'''
-  #         displayName: "Parameters"
-
   - stage: "Execute"
     variables:
       agentVersion: "9.9.9.9"
 
     jobs:
-      - job: "CreateVM"
-        displayName: "Setup VM and Run Test"
-
-        strategy:
-          matrix: $[ variables.expandedListOfScenarios ]
-          #         PublicCloud:
-          #           azConnect: '${{ variables.publicConn }}'
-          #           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
-          #           location: 'East US 2'
-          #         ChinaCloud:
-          #           azConnect: '${{variables.mooncakeConn}}'
-          #           subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
-          #           location: 'china north 2'
-          #         USGovCloud:
-          #           azConnect: '${{ variables.fairfaxConn }}'
-          #           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
-          #           location: 'usgovarizona'
-          maxParallel: 5
-
-        steps:
-          - task: InstallSSHKey@0
-            displayName: 'Install SSH Key to agent'
-            name: "InstallKey"
-            inputs:
-              knownHostsEntry: '$(SSH_PUBLIC)'
-              sshPublicKey: '$(SSH_PUBLIC)'
-              sshKeySecureFile: 'id_rsa'
-
-          - script: |
-              # echo "$(armDeploymentOutput)"
-              echo "AZConn: $(azConnect); Sub: $(subId); Location: $(location)"
-              rm -rf ~/.ssh/known_hosts
-              echo "##vso[task.setvariable variable=randNum;isOutput=true]($RANDOM)"
-            displayName: "Clear known host keys in Orchestrator"
-
-          - script: |
-              # Build the agent package in the container and just transfer out the zip
-              bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
-            displayName: "Build Agent ZIP"
-            name: "agentZip"
-
-          #    - template: dcr/templates/arm-resources.yml
-          #      parameters:
-          ##        azConn: '$(azConnect)'
-          ##        subId: '$(subId)'
-          #        location: '$(location)'
-
-          - task: AzureResourceManagerTemplateDeployment@3
-            name: "deployVM"
-            inputs:
-              deploymentScope: 'Resource Group'
-              azureResourceManagerConnection: '$(azureConnection)'
-              subscriptionId: '$(subId)'
-              action: 'Create Or Update Resource Group'
-              resourceGroupName: '$(rgName)-$(scenarioId)'
-              location: '$(location)'
-              templateLocation: 'URL of the file'
-              csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-08-04T23:41:34Z&se=2021-09-04T07:41:34Z&spr=https&sv=2020-08-04&sr=b&sig=Ol0su7i90irDy1EzL7Etemop%2FCfAlZjp2ZH4FfmeWlQ%3D'
-              overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)"'
-              deploymentMode: 'Complete'
-              deploymentOutputs: 'armDeploymentOutput'
-
-          - script: |
-              n=0
-              ec=1
-              until [ "$n" -ge 5 ]
-              do
-                  scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && ec=0 && break  # substitute your command here
-                  n=$((n+1))
-                  sleep 3
-              done
-              exit $ec
-            displayName: 'Copy GA Zip to VM'
-
-          - script: |
-              n=0
-              ec=1
-              until [ "$n" -ge 5 ]
-              do
-                  ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup.sh $(agentVersion)" && ec=0 && break  # substitute your command here
-                  n=$((n+1))
-                  sleep 3
-              done
-              exit $ec
-            displayName: 'Setup dev GA on VM'
-
-          - task: UsePythonVersion@0
-            inputs:
-              versionSpec: '3.8'
-              addToPath: true
-              architecture: 'x64'
-
-          - script: |
-              which pip
-              which python
-              pip install junit-xml
-            displayName: "Download JUnit"
-
-          # Here we will run the yml per scenario. The scenarios can specify their specifics there
-          - template: dcr/agent-bvt/run-test.yml
-
-          - task: PythonScript@0
-            inputs:
-              scriptSource: 'filePath'
-              scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
-            displayName: "Generate Test Files"
-            condition: succeededOrFailed()
-
-          #    - script: |
-          #        ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results/"
-          ##        n=0
-          ##        ec=1
-          ##        until [ "$n" -ge 5 ]
-          ##        do
-          ##             && ec=0 && break
-          ##            n=$((n+1))
-          ##            sleep 3
-          ##        done
-          ##        exit $ec
-          #      displayName: 'Run Pytest on VM'
-
-#          - script: |
-#              n=0
-#              ec=1
-#              until [ "$n" -ge 5 ]
-#              do
-#                  scp -o StrictHostKeyChecking=no -r $(adminUsername)@$(armDeploymentOutput.hostname.value):/home/$(adminUsername)/test_results/test-*.xml $(Build.ArtifactStagingDirectory)/ && ec=0 && break
-#                  n=$((n+1))
-#                  sleep 3
-#              done
-#              exit $ec
-#            condition: succeededOrFailed()
-#            displayName: 'Get test-xml files'
-
-          - task: PublishTestResults@2
-            condition: succeededOrFailed()
-            inputs:
-              testResultsFormat: 'JUnit'
-              testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
-              testRunTitle: 'Publish test results for $(scenarioName)'
+      - template: 'dcr/templates/execute-tests.yml'
+        parameters:
+          scenarios:
+            - agent-bvt
+          distros:
+            - Ubuntu18:
+                publisher: "Canonical"
+                offer: "UbuntuServer"
+                version: "latest"
+                sku: "18.04-LTS"
 
   #    - task: AzureCLI@2
   #    #   condition: succeeded('deployVM')
