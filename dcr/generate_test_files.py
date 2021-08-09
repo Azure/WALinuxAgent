@@ -18,6 +18,8 @@ def main():
     scenario_name = os.environ['SCENARIONAME']
     artifact_dir = os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY']
 
+    print("Scenario Name: {0}; Build Artifact Dir: {1}".format(scenario_name, artifact_dir))
+
     tests_log_dir = os.path.join(artifact_dir, "tests")
     if not os.path.exists(tests_log_dir) or not any(os.listdir(tests_log_dir)):
         raise FileNotFoundError("Log Dir {0} not found".format(tests_log_dir))
