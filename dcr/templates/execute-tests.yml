@@ -104,7 +104,7 @@ jobs:
         displayName: "Install test requirements on host"
 
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
-      - template: "dcr/$(scenarioName)/run-test.yml"
+      - template: ../$(scenarioName)/run-test.yml
 
       - task: PythonScript@0
         inputs:
