@@ -31,7 +31,8 @@ def main():
         tc = TestCase(test, stdout=stdout, stderr=stderr)
 
         if os.path.exists(os.path.join(tests_log_dir, test, "returncode")):
-            tc.add_error_info("ExitCode: {0}".format(read_file(os.path.join(tests_log_dir, test, "returncode"))))
+            tc.add_error_info("ExitCode: {0}\nSTDOUT: {1}\nSTDERR: {2}".format(
+                read_file(os.path.join(tests_log_dir, test, "returncode")), stdout, stderr))
         test_cases.append(tc)
 
     ts = TestSuite(scenario_name, test_cases)

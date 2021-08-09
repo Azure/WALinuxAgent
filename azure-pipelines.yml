@@ -21,19 +21,24 @@ variables:
         }"
   expandedListOfScenarios: "{
         'scenarioA': {
-          'scenarioName': 'agent-bvt'
+          'scenarioName': 'agent-bvt',
+          'scenarioId': 1
         },
         'scenarioB': {
-          'scenarioName': 'agent-bvt'
+          'scenarioName': 'agent-bvt',
+          'scenarioId': 2
         },
         'scenarioC': {
-          'scenarioName': 'agent-bvt'
+          'scenarioName': 'agent-bvt',
+          'scenarioId': 3
         },
         'scenarioD': {
-          'scenarioName': 'agent-bvt'
+          'scenarioName': 'agent-bvt',
+          'scenarioId': 4
         },
         'scenarioE': {
-          'scenarioName': 'agent-bvt'
+          'scenarioName': 'agent-bvt',
+          'scenarioId': 5
         }
       }"
 
@@ -113,6 +118,7 @@ stages:
               # echo "$(armDeploymentOutput)"
               echo "AZConn: $(azConnect); Sub: $(subId); Location: $(location)"
               rm -rf ~/.ssh/known_hosts
+              echo "##vso[task.setvariable variable=randNum;isOutput=true]($RANDOM)"
             displayName: "Clear known host keys in Orchestrator"
 
           - script: |
@@ -134,7 +140,7 @@ stages:
               azureResourceManagerConnection: '$(azureConnection)'
               subscriptionId: '$(subId)'
               action: 'Create Or Update Resource Group'
-              resourceGroupName: '$(rgName)-$(scenarioName)'
+              resourceGroupName: '$(rgName)-$(scenarioId)'
               location: '$(location)'
               templateLocation: 'URL of the file'
               csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-08-04T23:41:34Z&se=2021-09-04T07:41:34Z&spr=https&sv=2020-08-04&sr=b&sig=Ol0su7i90irDy1EzL7Etemop%2FCfAlZjp2ZH4FfmeWlQ%3D'
@@ -277,4 +283,4 @@ stages:
               azureResourceManagerConnection: '$(azureConnection)' # $(azureConnection)
               subscriptionId: '$(subId)'
               action: 'DeleteRG'
-              resourceGroupName: '$(rgName)-$(scenarioName)'
+              resourceGroupName: '$(rgName)-$(scenarioId)'
