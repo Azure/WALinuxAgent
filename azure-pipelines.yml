@@ -182,7 +182,6 @@ stages:
             inputs:
               scriptSource: 'filePath'
               scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
-              pythonInterpreter: '/usr/bin/env python3'
             displayName: "Generate Test Files"
 
           #    - script: |
