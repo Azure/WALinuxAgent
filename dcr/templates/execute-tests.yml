@@ -22,7 +22,7 @@ jobs:
       matrix:
         ${{ each distro in parameters.distros }}:
           ${{ each scenario in parameters.scenarios }}:
-            ${{ distro-scenario }}:
+            ${{ format("{0}-{1}", distro, scenario) }}:
               scenarioName: ${{ scenario }}
               imagePublisher: ${{ distro.publisher }}
               imageOffer: ${{ distro.offer }}
