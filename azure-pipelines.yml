@@ -13,6 +13,7 @@ variables:
   rgName: 'larohra-dcr-v2-test$(Build.BuildId)'
 
   # Scenario List
+
   listOfScenarios: "{
           'scenarioA': {
             'scenarioName': 'agent-bvt'
@@ -247,7 +248,7 @@ stages:
         dependsOn: "Wait"
         condition: always()
         strategy:
-          matrix: $[ variables.listOfScenarios ]
+          matrix: $[ variables.expandedListOfScenarios ]
           #         PublicCloud:
           #           azConnect: '${{ variables.publicConn }}'
           #           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
