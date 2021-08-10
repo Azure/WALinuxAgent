@@ -104,7 +104,7 @@ jobs:
         displayName: "Install test requirements on host"
 
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
-      - template: ${{ format('../{0}/run-test.yml', $(scenarioName)) }}
+      - template: ../agent-bvt/run-test.yml # ${{ format('../{0}/run-test.yml', $(scenarioName)) }}
 
       - task: PythonScript@0
         inputs:
