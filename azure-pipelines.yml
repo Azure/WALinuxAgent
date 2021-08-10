@@ -80,12 +80,11 @@ stages:
           scenarios:
             - agent-bvt
           distros:
-            - Ubuntu18:
-                publisher: "Canonical"
-                offer: "UbuntuServer"
-                version: "latest"
-                sku: "18.04-LTS"
-                name: "ubuntu18"
+            - publisher: "Canonical"
+              offer: "UbuntuServer"
+              version: "latest"
+              sku: "18.04-LTS"
+              name: "ubuntu18"
 
   #    - task: AzureCLI@2
   #    #   condition: succeeded('deployVM')
