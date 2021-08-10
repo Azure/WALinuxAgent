@@ -85,6 +85,7 @@ stages:
                 offer: "UbuntuServer"
                 version: "latest"
                 sku: "18.04-LTS"
+                name: "ubuntu18"
 
   #    - task: AzureCLI@2
   #    #   condition: succeeded('deployVM')
