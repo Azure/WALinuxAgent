@@ -3,6 +3,45 @@
 # Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/python
 
+parameters:
+  - name: scenarios
+    type: object
+    default:
+      - agent-bvt
+
+  - name: distros
+    type: object
+    default:
+      - publisher: "Canonical"
+        offer: "UbuntuServer"
+        version: "latest"
+        sku: "18.04-LTS"
+        name: "ubuntu18"
+
+      - publisher: "OpenLogic"
+        offer: "CentOS"
+        sku: "7_9"
+        version: "latest"
+        name: "cent79"
+
+      - publisher: "SUSE"
+        offer: "sles-15-sp2-basic"
+        sku: "gen1"
+        version: "latest"
+        name: "suse15"
+
+      - publisher: "Debian"
+        offer: "debian-10"
+        sku: "10"
+        version: "latest"
+        name: "deb10"
+
+      - publisher: "RedHat"
+        offer: "RHEL"
+        sku: "8.2"
+        version: "latest"
+        name: "rhel82"
+
 trigger:
   - develop
 
@@ -78,13 +117,9 @@ stages:
       - template: 'dcr/templates/execute-tests.yml'
         parameters:
           scenarios:
-            - agent-bvt
+            - ${{ parameters.scenarios }}
           distros:
-            - publisher: "Canonical"
-              offer: "UbuntuServer"
-              version: "latest"
-              sku: "18.04-LTS"
-              name: "ubuntu18"
+            - ${{ parameters.distros }}
 
   #    - task: AzureCLI@2
   #    #   condition: succeeded('deployVM')
@@ -110,36 +145,9 @@ stages:
               notifyUsers: 'larohra'
               onTimeout: 'resume'
 
-      - job: "DeleteRG"
-        dependsOn: "Wait"
-        condition: always()
-        strategy:
-          matrix: $[ variables.expandedListOfScenarios ]
-          #         PublicCloud:
-          #           azConnect: '${{ variables.publicConn }}'
-          #           subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
-          #           location: 'East US 2'
-          #         ChinaCloud:
-          #           azConnect: '${{ variables.mooncakeConn }}'
-          #           subId: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
-          #           location: 'china north 2'
-          #         USGovCloud:
-          #           azConnect: '${{ variables.fairfaxConn }}'
-          #           subId: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
-          #           location: 'usgovarizona'
-          maxParallel: 10
-        steps:
-          #      - template: dcr/templates/arm-delete.yml
-          #        parameters:
-          #           location: $(location)
-          ##          azConn: $(azConnect)
-          ##          subId: $(subId)
-          - task: AzureResourceManagerTemplateDeployment@3
-            condition: succeededOrFailed()
-            displayName: "Delete test RG"
-            inputs:
-              deploymentScope: 'Resource Group'
-              azureResourceManagerConnection: '$(azureConnection)' # $(azureConnection)
-              subscriptionId: '$(subId)'
-              action: 'DeleteRG'
-              resourceGroupName: '$(rgName)-$(scenarioId)'
+      - template: dcr/templates/arm-delete.yml
+        parameters:
+          scenarios:
+            - ${{ parameters.scenarios }}
+          distros:
+            - ${{ parameters.distros }}

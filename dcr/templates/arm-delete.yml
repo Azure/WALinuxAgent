@@ -1,32 +1,30 @@
-# Template for deleting ARM resources
-
 parameters:
-  - name: location
-    type: string
-    default: ""
+  - name: scenarios
+    type: object
 
-steps:
-  - script: |
-      echo "Location: ${{ parameters.location }}"
+  - name: distros
+    type: object
 
-  - ${{ if eq(parameters.location, 'East US 2') }}:
-      - task: AzureResourceManagerTemplateDeployment@3
-        condition: succeededOrFailed()
-        displayName: "Delete test RG"
-        inputs:
-          deploymentScope: 'Resource Group'
-          azureResourceManagerConnection: '${{ variables.publicConn }}'
-          subscriptionId: '${{ variables.publicSub }}'
-          action: 'DeleteRG'
-          resourceGroupName: '$(rgName)'
+jobs:
+  - job: "DeleteRG"
+      dependsOn: "Wait"
+      condition: always()
+      strategy:
+        matrix:
+          ${{ each distro in parameters.distros }}:
+            ${{ each scenario in parameters.scenarios }}:
+              ${{ format('{0}-{1}', distro.name, scenario) }}:
+                scenarioName: ${{ scenario }}
+                distroName: ${{ distro.name }}
+        maxParallel: 10
 
-  - ${{ if eq(parameters.location, 'china north 2') }}:
-      - task: AzureResourceManagerTemplateDeployment@3
-        condition: succeededOrFailed()
-        displayName: "Delete test RG"
-        inputs:
-          deploymentScope: 'Resource Group'
-          azureResourceManagerConnection: '${{ variables.mooncakeConn }}'
-          subscriptionId: '${{ variables.mooncakeSub }}'
-          action: 'DeleteRG'
-          resourceGroupName: '$(rgName)'
+      steps:
+        - task: AzureResourceManagerTemplateDeployment@3
+          condition: succeededOrFailed()
+          displayName: "Delete test RG"
+          inputs:
+            deploymentScope: 'Resource Group'
+            azureResourceManagerConnection: '$(azureConnection)'
+            subscriptionId: '$(subId)'
+            action: 'DeleteRG'
+            resourceGroupName: '$(rgName)-$(scenarioName)-$(distroName)'
