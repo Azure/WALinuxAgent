@@ -12,6 +12,7 @@ parameters:
           offer: "UbuntuServer"
           version: "latest"
           sku: "18.04-LTS"
+          name: "ubuntu18"
 
 
 jobs:
@@ -22,13 +23,13 @@ jobs:
       matrix:
         ${{ each distro in parameters.distros }}:
           ${{ each scenario in parameters.scenarios }}:
-            ${{ format('{0}-{1}', distro.value, scenario) }}:
+            ${{ format('{0}-{1}', distro.name, scenario) }}:
               scenarioName: ${{ scenario }}
               imagePublisher: ${{ distro.publisher }}
               imageOffer: ${{ distro.offer }}
               imageSku: ${{ distro.sku }}
               imageVersion: ${{ distro.version }}
-              distroName: ${{ distro.value }}
+              distroName: ${{ distro.name }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 5
 
@@ -42,6 +43,7 @@ jobs:
           sshKeySecureFile: 'id_rsa'
 
       - script: |
+          echo "IP: $(imagePublisher); IO: $(imageOffer); IS: $(imageSku); IV: $(imageVersion); $(distroName)"
           rm -rf ~/.ssh/known_hosts
           echo "##vso[task.setvariable variable=randNum;isOutput=true]$RANDOM"
         displayName: "Clear known host keys in Orchestrator"
