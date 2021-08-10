@@ -8,6 +8,7 @@ parameters:
     type: object
     default:
       - agent-bvt
+      - agent-bvt-repeat
 
   - name: distros
     type: object

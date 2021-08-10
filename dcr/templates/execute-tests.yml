@@ -79,7 +79,7 @@ jobs:
               sleep 3
           done
           exit $ec
-        displayName: 'Copy GA Zip to VM'
+        displayName: 'Copy GA files to VM'
 
       - script: |
           n=0
