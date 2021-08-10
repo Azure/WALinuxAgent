@@ -22,12 +22,13 @@ jobs:
       matrix:
         ${{ each distro in parameters.distros }}:
           ${{ each scenario in parameters.scenarios }}:
-            ${{ format('{0}-{1}', distro.key, scenario) }}:
+            ${{ format('{0}-{1}', distro.value, scenario) }}:
               scenarioName: ${{ scenario }}
               imagePublisher: ${{ distro.publisher }}
               imageOffer: ${{ distro.offer }}
               imageSku: ${{ distro.sku }}
               imageVersion: ${{ distro.version }}
+              distroName: ${{ distro.value }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 5
 
@@ -58,7 +59,7 @@ jobs:
           azureResourceManagerConnection: '$(azureConnection)'
           subscriptionId: '$(subId)'
           action: 'Create Or Update Resource Group'
-          resourceGroupName: '$(rgName)-$(scenarioId)'
+          resourceGroupName: '$(rgName)-$(scenarioName)-$(distroName)'
           location: '$(location)'
           templateLocation: 'URL of the file'
           csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-08-04T23:41:34Z&se=2021-09-04T07:41:34Z&spr=https&sv=2020-08-04&sr=b&sig=Ol0su7i90irDy1EzL7Etemop%2FCfAlZjp2ZH4FfmeWlQ%3D'
