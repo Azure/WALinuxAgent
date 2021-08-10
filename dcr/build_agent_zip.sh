@@ -6,3 +6,4 @@ version=$(grep '^AGENT_VERSION' "$BUILD_SOURCESDIRECTORY/azurelinuxagent/common/
 echo "##vso[task.setvariable variable=agentVersion;isOutput=true]$version"
 sudo ./makepkg.py
 sudo cp ./eggs/WALinuxAgent-$version.zip "$BUILD_SOURCESDIRECTORY/dcr"
+sudo cp -r ./eggs/WALinuxAgent-$version "$BUILD_SOURCESDIRECTORY/dcr"

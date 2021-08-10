@@ -121,4 +121,4 @@ jobs:
         inputs:
           testResultsFormat: 'JUnit'
           testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
-          testRunTitle: 'Publish test results for $(scenarioName)'
+          testRunTitle: 'Publish test results for $(scenarioName)-$(distroName)'
