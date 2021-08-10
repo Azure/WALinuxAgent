@@ -7,23 +7,24 @@ parameters:
 
 jobs:
   - job: "DeleteRG"
-      condition: always()
-      strategy:
-        matrix:
-          ${{ each distro in parameters.distros }}:
-            ${{ each scenario in parameters.scenarios }}:
-              ${{ format('{0}-{1}', distro.name, scenario) }}:
-                scenarioName: ${{ scenario }}
-                distroName: ${{ distro.name }}
-        maxParallel: 10
+    dependsOn: "Wait"
+    condition: always()
+    strategy:
+      matrix:
+        ${{ each distro in parameters.distros }}:
+          ${{ each scenario in parameters.scenarios }}:
+            ${{ format('{0}-{1}', distro.name, scenario) }}:
+              scenarioName: ${{ scenario }}
+              distroName: ${{ distro.name }}
+      maxParallel: 10
 
-      steps:
-        - task: AzureResourceManagerTemplateDeployment@3
-          condition: succeededOrFailed()
-          displayName: "Delete test RG"
-          inputs:
-            deploymentScope: 'Resource Group'
-            azureResourceManagerConnection: '$(azureConnection)'
-            subscriptionId: '$(subId)'
-            action: 'DeleteRG'
-            resourceGroupName: '$(rgName)-$(scenarioName)-$(distroName)'
+    steps:
+      - task: AzureResourceManagerTemplateDeployment@3
+        condition: succeededOrFailed()
+        displayName: "Delete test RG"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '$(azureConnection)'
+          subscriptionId: '$(subId)'
+          action: 'DeleteRG'
+          resourceGroupName: '$(rgName)-$(scenarioName)-$(distroName)'

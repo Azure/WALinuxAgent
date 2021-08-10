@@ -146,7 +146,6 @@ stages:
               onTimeout: 'resume'
 
       - template: dcr/templates/arm-delete.yml
-        dependsOn: "Wait"
         parameters:
           scenarios:
             - ${{ parameters.scenarios }}
