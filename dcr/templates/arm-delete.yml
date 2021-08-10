@@ -7,7 +7,6 @@ parameters:
 
 jobs:
   - job: "DeleteRG"
-      dependsOn: "Wait"
       condition: always()
       strategy:
         matrix:
