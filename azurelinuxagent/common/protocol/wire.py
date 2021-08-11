@@ -95,8 +95,8 @@ class WireProtocol(DataContract):
         logger.info('Initializing goal state during protocol detection')
         self.client.update_goal_state(forced=True)
 
-    def update_extensions_goal_state(self, wait_for_new_goal_state=True):
-        self.client.update_extensions_goal_state(wait_for_new_goal_state=wait_for_new_goal_state)
+    def update_extensions_goal_state(self):
+        self.client.update_extensions_goal_state()
 
     def update_goal_state(self):
         self.client.update_goal_state()
@@ -789,61 +789,54 @@ class WireClient(object):
 
             if new_goal_state is not None:
                 self._goal_state = new_goal_state
+                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
                 if conf.get_enable_fast_track():
                     self.update_extensions_goal_state()
                 self._save_goal_state()
-                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
-    def update_extensions_goal_state(self, wait_for_new_goal_state=True):
+    def update_extensions_goal_state(self):
+        correlation_id = str(uuid.uuid4())
+        etag = self.get_etag()
+
         try:
-            # TODO: Remove this retry loop when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-            correlation_id = str(uuid.uuid4())
-            etag = self.get_etag()
+            # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+            logger.info("Fetching vmSettings [correlation ID: {0} eTag: {1}]", correlation_id, etag)
+            def get_vm_settings():
+                url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
+                if etag is not None:
+                    headers['if-none-match'] = etag
+                return self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
 
-            for _ in range(3):
-                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-                logger.info("Fetching extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, etag)
-                def get_vm_settings():
-                    url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
-                    if etag is not None:
-                        headers['if-none-match'] = etag
-                    return self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
+            try:
+                vm_settings, response_headers = get_vm_settings()
+            except ResourceGoneError:
+                self.update_host_plugin_from_goal_state()
+                vm_settings, response_headers = get_vm_settings()
 
-                try:
-                    vm_settings, response_headers = get_vm_settings()
-                except ResourceGoneError:
-                    self.update_host_plugin_from_goal_state()
-                    vm_settings, response_headers = get_vm_settings()
+            # on error, fetch() logs the original exception and returns None as content
+            if vm_settings is None:
+                raise Exception("Failed to retrieve the extensions goal state (vmSettings), the error was reported previously in the log.")
 
-                # on error, fetch() logs the original exception and returns None as content
-                if vm_settings is None:
-                    raise Exception("Failed to retrieve the extensions goal state (vmSettings), the error was reported previously in the log.")
-
-                # The response includes an etag if and only if the VM settings change.
-                response_etag = None
-                for h in response_headers:
-                    if h[0].lower() == 'etag':
-                        response_etag = h[1]
-                        break
-
-                # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-                logger.info("Fetched extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
-
-                # TODO: Remove the if clause when removing the retry loop (the else clause should remain)
-                if response_etag is None and wait_for_new_goal_state:
-                    logger.info("Expected a new goal state; will retry after a short delay...")
-                    time.sleep(5)
-                else:
-                    logger.info("Fetched new extensions goal state [correlation ID: {0} eTag: {1}]", correlation_id, response_etag)
-                    self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
+            # The response includes an etag if and only if the VM settings change.
+            response_etag = None
+            for h in response_headers:
+                if h[0].lower() == 'etag':
+                    response_etag = h[1]
                     break
+
+            if response_etag is not None:
+                logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
+                self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
+            else:
+                # TODO: Remove this log statement (the entire else clause) when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
+                logger.error("Expected new vmSettings, but the response did not include an eTag [correlation ID: {0} eTag: {1}]", correlation_id, etag)
 
         except Exception as exception:
             # TODO: raise ProtocolError instead of logging a warning
-            message = "Error fetching extension goal state (correlation id: {0}): {1}".format(correlation_id, ustr(exception))
+            message = "Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, ustr(exception))
             logger.warn(message)
             report_event(op=WALAEventOperation.GoalState, is_success=False, message=message, log_event=False)
 
