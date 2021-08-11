@@ -1667,15 +1667,25 @@ class ExtHandlerInstance(object):
             data_str, data = self._read_status_file(ext_status_file)
         except ExtensionStatusError as e:
             msg = ""
+            ext_status.status = ValidHandlerStatus.error
+
             if e.code == ExtensionStatusError.CouldNotReadStatusFile:
                 ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
                 msg = u"We couldn't read any status for {0} extension, for the sequence number {1}. It failed due" \
                       u" to {2}".format(self.get_full_name(ext), seq_no, ustr(e))
-            elif ExtensionStatusError.InvalidJsonFile:
+            elif e.code == ExtensionStatusError.InvalidJsonFile:
                 ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
                 msg = u"The status reported by the extension {0}(Sequence number {1}), was in an " \
                       u"incorrect format and the agent could not parse it correctly. Failed due to {2}" \
                       .format(self.get_full_name(ext), seq_no, ustr(e))
+            elif e.code == ExtensionStatusError.FileNotExists:
+                msg = "This status is being reported by the Guest Agent since no status file was " \
+                      "reported by extension {0}: {1}".format(self.get_extension_full_name(ext), ustr(e))
+
+                # Reporting a success code and transitioning status to keep in accordance with existing code that
+                # creates default status placeholder file
+                ext_status.code = ExtensionErrorCodes.PluginSuccess
+                ext_status.status = ValidHandlerStatus.transitioning
 
             # This log is periodic due to the verbose nature of the status check. Please make sure that the message
             # constructed above does not change very frequently and includes important info such as sequence number,
@@ -1688,7 +1698,6 @@ class ExtHandlerInstance(object):
                          log_event=False)
 
             ext_status.message = msg
-            ext_status.status = ValidHandlerStatus.error
 
             return ext_status
 
@@ -2166,6 +2175,9 @@ class ExtHandlerInstance(object):
     @staticmethod
     def _read_and_parse_json_status_file(ext_status_file):
 
+        if not os.path.exists(ext_status_file):
+            raise ExtensionStatusError(msg="Extension status file {0} does not exist".format(ext_status_file),
+                                       code=ExtensionStatusError.FileNotExists)
         try:
             data_str = fileutil.read_file(ext_status_file)
         except IOError as e:
@@ -2262,6 +2274,7 @@ class HandlerManifest(object):
     def supports_multiple_extensions(self):
         return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
 
+
 class ExtensionStatusError(ExtensionError):
     """
     When extension failed to provide a valid status file
@@ -2270,6 +2283,7 @@ class ExtensionStatusError(ExtensionError):
     InvalidJsonFile = 2
     StatusFileMalformed = 3
     MaxSizeExceeded = 4
+    FileNotExists = 5
 
     def __init__(self, msg=None, inner=None, code=-1):  # pylint: disable=W0235
         super(ExtensionStatusError, self).__init__(msg, inner, code)
