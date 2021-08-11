@@ -17,7 +17,7 @@ from tests.tools import AgentTestCase, patch
 
 _original_http_request = restutil.http_request
 
-@patch("azurelinuxagent.common.protocol.wire.conf.get_fetch_vm_settings", return_value=True)
+@patch("azurelinuxagent.common.protocol.wire.conf.get_enable_fast_track", return_value=True)
 class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_fetch_goal_state_should_raise_on_incomplete_goal_state(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -32,10 +32,9 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
     def test_update_goal_state_should_save_goal_state(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-            with patch("azurelinuxagent.common.protocol.wire.conf.get_fetch_vm_settings", return_value=True):
-                protocol.mock_wire_data.set_incarnation(999)
-                protocol.mock_wire_data.set_etag(888)
-                protocol.update_goal_state()
+            protocol.mock_wire_data.set_incarnation(999)
+            protocol.mock_wire_data.set_etag(888)
+            protocol.update_goal_state()
 
         extensions_config_file = os.path.join(conf.get_lib_dir(), "ExtensionsConfig.999.xml")
         vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.888.json")
