@@ -789,10 +789,10 @@ class WireClient(object):
 
             if new_goal_state is not None:
                 self._goal_state = new_goal_state
+                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
                 if conf.get_fetch_vm_settings():
                     self.update_extensions_goal_state()
                 self._save_goal_state()
-                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
 
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
