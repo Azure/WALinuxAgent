@@ -3431,17 +3431,19 @@ class TestExtension(AgentTestCase):
                         }
                     }
                 },
-                "agentName": AGENT_NAME,
-                "daemonVersion": "0.0.0.0",
-                "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-                "extensionSupportedFeatures": [name for name, _ in
-                                             get_agent_supported_features_list_for_extensions().items()],
-                "crpSupportedFeatures": [
+                "supportedFeatures": [
                     {
                         "Key": "MultipleExtensionsPerHandler",
                         "Value": "1.0"
                     }
-                ]
+                ],
+                "_metadataNotSentToCRP": {
+                    "agentName": AGENT_NAME,
+                    "daemonVersion": "0.0.0.0",
+                    "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+                    "extensionSupportedFeatures": [name for name, _ in
+                                                   get_agent_supported_features_list_for_extensions().items()]
+                }
 
             }
 

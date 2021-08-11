@@ -976,11 +976,14 @@ class ExtHandlersHandler(object):
             data = json.loads(status_blob_data)
 
         # Populating the fields that does not come from vm_status or status_blob_data
-        data["agentName"] = AGENT_NAME
-        data["daemonVersion"] = str(version.get_daemon_version())
-        data["pythonVersion"] = "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
-        data["extensionSupportedFeatures"] = [name for name, _ in
+        _metadataNotSentToCRP = {
+            "agentName": AGENT_NAME,
+            "daemonVersion": str(version.get_daemon_version()),
+            "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+            "extensionSupportedFeatures": [name for name, _ in
                                          get_agent_supported_features_list_for_extensions().items()]
+        }
+        data["_metadataNotSentToCRP"] = _metadataNotSentToCRP
 
         # Consuming supports_multi_config info from vm_status. creating a dict out of it for easy lookup in the next step.
         support_multi_config = dict()
@@ -999,9 +1002,6 @@ class ExtHandlersHandler(object):
             status = handler_status.get('runtimeSettingsStatus', dict()).get('settingsStatus', dict()).get('status', dict())
             status.pop('formattedMessage', None)
             status.pop('substatus', None)
-
-        # renaming supportedFeatures to crpSupportedFeatures
-        data["crpSupportedFeatures"] = data.pop("supportedFeatures", None)
 
         fileutil.write_file(status_path, json.dumps(data))
 
