@@ -93,7 +93,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(status=httpclient.NOT_MODIFIED)
 
             with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                protocol.update_extensions_goal_state(wait_for_new_goal_state=False)
+                protocol.update_extensions_goal_state()
 
             self.assertEqual(2, len(request_headers), "We expected 2 requests for vmSettings: the original request and the retry request")
             self.assertEqual("GET_VM_SETTINGS_TEST_CONTAINER_ID", request_headers[1][hostplugin._HEADER_CONTAINER_ID], "The retry request did not include the expected header for the ContainerId")
