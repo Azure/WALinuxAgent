@@ -790,7 +790,7 @@ class WireClient(object):
             if new_goal_state is not None:
                 self._goal_state = new_goal_state
                 self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
-                if conf.get_fetch_vm_settings():
+                if conf.get_enable_fast_track():
                     self.update_extensions_goal_state()
                 self._save_goal_state()
 
