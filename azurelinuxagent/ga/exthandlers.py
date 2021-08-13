@@ -720,7 +720,11 @@ class ExtHandlersHandler(object):
         # failures back to CRP. If a placeholder for an extension already exists with Transitioning status, we would
         # not override it, hence we only create a placeholder for enable/disable commands but the extensions have the
         # data to create their own if needed.
-        if ext_handler_i.should_create_default_placeholder(extension):
+
+        # Note: Due to a bug in multiple extensions, we're only creating a default placeholder for Multi-Config extensions.
+        # A fix will follow soon where we will report transitioning status for extensions by default if no status file
+        # found instead of reporting an error.
+        if ext_handler_i.should_perform_multi_config_op(extension):
             ext_handler_i.create_placeholder_status_file(extension)
         self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
 
@@ -1389,17 +1393,6 @@ class ExtHandlerInstance(object):
 
         CGroupConfigurator.get_instance().setup_extension_slice(
             extension_name=self.get_full_name())
-
-    def should_create_default_placeholder(self, extension=None):
-        """
-        There's a bug in the AKS extension where they dont update the status file if it exists.
-        This violates the contract we have with extensions. Until they fix their extension,
-        we're going to skip creating a placeholder for them to ensure they dont have any downtime.
-        For all other extensions, we should create a
-        """
-
-        ignore_extension_regex = r"Microsoft.AKS.Compute.AKS\S*"
-        return re.match(ignore_extension_regex, self.get_extension_full_name(extension)) is None
 
     def create_placeholder_status_file(self, extension=None, status=ValidHandlerStatus.transitioning, code=0,
                                        operation="Enabling Extension", message="Install/Enable is in progress."):
