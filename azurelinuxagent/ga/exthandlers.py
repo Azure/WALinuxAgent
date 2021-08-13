@@ -2181,7 +2181,7 @@ class ExtHandlerInstance(object):
     def _read_and_parse_json_status_file(ext_status_file):
 
         if not os.path.exists(ext_status_file):
-            raise ExtensionStatusError(msg="Extension status file {0} does not exist".format(ext_status_file),
+            raise ExtensionStatusError(msg="Status file {0} does not exist".format(ext_status_file),
                                        code=ExtensionStatusError.FileNotExists)
         try:
             data_str = fileutil.read_file(ext_status_file)
