@@ -450,7 +450,7 @@ class TestExtension_Deprecated(AgentTestCase):
         self.assertNotEqual(0, len(vm_status.vmAgent.extensionHandlers))
         handler_status = next(
             status for status in vm_status.vmAgent.extensionHandlers if status.name == expected_handler_name)
-        self.assertEqual(expected_status, handler_status.status)
+        self.assertEqual(expected_status, handler_status.status, get_properties(handler_status))
         self.assertEqual(expected_handler_name, handler_status.name)
         self.assertEqual(version, handler_status.version)
         self.assertEqual(expected_ext_count, len([ext_handler for ext_handler in vm_status.vmAgent.extensionHandlers if
@@ -1552,9 +1552,9 @@ class TestExtension_Deprecated(AgentTestCase):
             if "sample.py" in cmd:
                 status_path = os.path.join(kwargs['env'][ExtCommandEnvVariable.ExtensionPath], "status",
                                            "{0}.status".format(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]))
+                mock_popen.deleted_status_file = status_path
                 if os.path.exists(status_path):
                     os.remove(status_path)
-                    mock_popen.deleted_status_file = status_path
             return original_popen(["echo", "Yes"], *args, **kwargs)
 
         with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
@@ -1577,6 +1577,53 @@ class TestExtension_Deprecated(AgentTestCase):
                                             expected_msg="Dependent Extension OSTCExtensions.OtherExampleHandlerLinux did not reach a terminal state within the allowed timeout. Last status was {0}".format(
                                                 ValidHandlerStatus.warning))
 
+    def test_it_should_not_create_placeholder_for_single_config_extensions(self, mock_http_get, mock_crypt_util, *args):
+        original_popen = subprocess.Popen
+
+        def mock_popen(cmd, *_, **kwargs):
+            if 'env' in kwargs:
+                if ExtensionCommandNames.ENABLE not in cmd:
+                    # To force the test extension to not create a status file on Install, changing command
+                    return original_popen(["echo", "not-enable"], *_, **kwargs)
+
+                seq_no = kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]
+                ext_path = kwargs['env'][ExtCommandEnvVariable.ExtensionPath]
+                status_file_name = "{0}.status".format(seq_no)
+                status_file = os.path.join(ext_path, "status", status_file_name)
+                self.assertFalse(os.path.exists(status_file), "Placeholder file should not be created for single config extensions")
+
+            return original_popen(cmd, *_, **kwargs)
+
+        aks_test_mock = DATA_FILE.copy()
+        aks_test_mock["ext_conf"] = "wire/ext_conf_aks_extension.xml"
+
+        exthandlers_handler, protocol = self._create_mock(mockwiredata.WireProtocolData(aks_test_mock),
+                                                          mock_http_get, mock_crypt_util, *args)
+
+        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                        expected_handler_name="Microsoft.AKS.Compute.AKS.Linux.AKSNode")
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                        expected_handler_name="Microsoft.AKS.Compute.AKS-Engine.Linux.Billing")
+            # Extension without settings
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0",
+                                        expected_handler_name="Microsoft.AKS.Compute.AKS.Linux.Billing")
+
+            self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.success, 0,
+                                    expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                    expected_msg="Enabling non-AKS")
+            self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.success, 0,
+                                    expected_handler_name="Microsoft.AKS.Compute.AKS.Linux.AKSNode",
+                                    expected_msg="Enabling AKSNode")
+            self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.success, 0,
+                                    expected_handler_name="Microsoft.AKS.Compute.AKS-Engine.Linux.Billing",
+                                    expected_msg="Enabling AKSBilling")
+
     def test_it_should_include_part_of_status_in_ext_handler_message(self, mock_http_get, mock_crypt_util, *args):
         """
         Testing scenario when the status file is invalid,
@@ -1595,7 +1642,7 @@ class TestExtension_Deprecated(AgentTestCase):
                                            "{0}.status".format(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber]))
                 invalid_json_path = os.path.join(data_dir, "ext", "sample-status-invalid-json-format.json")
 
-                if os.path.exists(status_path):
+                if 'enable' in cmd:
                     invalid_json = fileutil.read_file(invalid_json_path)
                     fileutil.write_file(status_path,invalid_json)
 
