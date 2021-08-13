@@ -1533,7 +1533,9 @@ class TestExtension_Deprecated(AgentTestCase):
         exthandlers_handler.report_ext_handlers_status()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0)
+        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.transitioning, 0,
+                                expected_msg="This status is being reported by the Guest Agent since no status "
+                                             "file was reported by extension OSTCExtensions.ExampleHandlerLinux")
 
     def test_wait_for_handler_completion_no_status(self, mock_http_get, mock_crypt_util, *args):
         """
@@ -1560,14 +1562,14 @@ class TestExtension_Deprecated(AgentTestCase):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
-
                 # The Handler Status for the base extension should be ready as it was executed successfully by the agent
                 self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
                                             expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-                # The extension status reported by the Handler should be an error since no status file was found
-                self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0,
+                # The extension status reported by the Handler should be transitioning since no status file was found
+                self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.transitioning, 0,
                                         expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
-                                        expected_msg="No such file or directory: '{0}'".format(mock_popen.deleted_status_file))
+                                        expected_msg="This status is being reported by the Guest Agent since no status "
+                                                     "file was reported by extension OSTCExtensions.OtherExampleHandlerLinux")
 
                 # The Handler Status for the dependent extension should be NotReady as it was not executed at all
                 # And since it was not executed, it should not report any extension status either
