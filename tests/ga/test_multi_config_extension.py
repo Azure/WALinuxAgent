@@ -8,10 +8,10 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState, ExtensionStatus
+from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ValidHandlerStatus, ExtCommandEnvVariable, \
-    parse_ext_status, GoalStateStatus, ExtHandlerInstance
+    GoalStateStatus, ExtHandlerInstance
 from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
