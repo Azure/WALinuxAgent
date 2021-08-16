@@ -518,9 +518,9 @@ class ExtHandlersHandler(object):
                     if handler_i.get_handler_status() is None:
                         handler_i.set_handler_status(message=depends_on_err_msg, code=-1)
 
-                    handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=-1,
-                                                             operation=WALAEventOperation.ExtensionProcessing,
-                                                             message=depends_on_err_msg)
+                    handler_i.create_status_file_if_not_exist(extension, status=ValidHandlerStatus.error, code=-1,
+                                                              operation=WALAEventOperation.ExtensionProcessing,
+                                                              message=depends_on_err_msg)
 
                 # For SC extensions, overwrite the HandlerStatus with the relevant message
                 else:
@@ -639,8 +639,8 @@ class ExtHandlersHandler(object):
             # This error is only thrown for enable operation on MultiConfig extension.
             # Since these are maintained by the extensions, the expectation here is that they would update their status files appropriately with their errors.
             # The extensions should already have a placeholder status file, but incase they dont, setting one here to fail fast.
-            ext_handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=error.code,
-                                                         operation=ext_handler_i.operation, message=err_msg)
+            ext_handler_i.create_status_file_if_not_exist(extension, status=ValidHandlerStatus.error, code=error.code,
+                                                          operation=ext_handler_i.operation, message=err_msg)
             add_event(name=ext_name, version=ext_handler_i.ext_handler.properties.version, op=ext_handler_i.operation,
                       is_success=False, log_event=True, message=err_msg)
         except ExtensionConfigError as error:
@@ -680,8 +680,8 @@ class ExtHandlersHandler(object):
         # file with failure since the extensions wont be called where they can create their status files.
         # This way we guarantee reporting back to CRP
         if ext_handler_i.should_perform_multi_config_op(extension):
-            ext_handler_i.create_placeholder_status_file(extension, status=ValidHandlerStatus.error, code=error.code,
-                                                         operation=report_op, message=message)
+            ext_handler_i.create_status_file_if_not_exist(extension, status=ValidHandlerStatus.error, code=error.code,
+                                                          operation=report_op, message=message)
 
         if report:
             name = ext_handler_i.get_extension_full_name(extension)
@@ -1383,8 +1383,7 @@ class ExtHandlerInstance(object):
         CGroupConfigurator.get_instance().setup_extension_slice(
             extension_name=self.get_full_name())
 
-    def create_placeholder_status_file(self, extension=None, status=ValidHandlerStatus.transitioning, code=0,
-                                       operation="Enabling Extension", message="Install/Enable is in progress."):
+    def create_status_file_if_not_exist(self, extension, status, code, operation, message):
         _, status_path = self.get_status_file_path(extension)
         if status_path is not None and not os.path.exists(status_path):
             now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
