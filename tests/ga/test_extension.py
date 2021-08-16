@@ -27,7 +27,8 @@ import time
 import unittest
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
+    get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
@@ -3451,6 +3452,16 @@ class TestExtension(AgentTestCase):
             protocol.set_http_handlers(http_put_handler=mock_http_put)
             exthandlers_handler = get_exthandlers_handler(protocol)
 
+            # creating supported features list that is sent to crp
+            supported_features = []
+            for _, feature in get_agent_supported_features_list_for_crp().items():
+                supported_features.append(
+                    {
+                        "Key": feature.name,
+                        "Value": feature.version
+                    }
+                )
+
             expected_status = {
                 "version": "1.1",
                 "timestampUTC": "1970-01-01T00:00:00Z",
@@ -3504,17 +3515,15 @@ class TestExtension(AgentTestCase):
                         }
                     }
                 },
-                "agentName": AGENT_NAME,
-                "daemonVersion": "0.0.0.0",
-                "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-                "extensionSupportedFeatures": [name for name, _ in
-                                             get_agent_supported_features_list_for_extensions().items()],
-                "crpSupportedFeatures": [
-                    {
-                        "Key": "MultipleExtensionsPerHandler",
-                        "Value": "1.0"
-                    }
-                ]
+                "supportedFeatures": supported_features,
+                "_metadataNotSentToCRP": {
+                    "agentName": AGENT_NAME,
+                    "daemonVersion": "0.0.0.0",
+                    "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+                    "extensionSupportedFeatures": [name for name, _ in
+                                                   get_agent_supported_features_list_for_extensions().items()]
+
+                }
 
             }
 
