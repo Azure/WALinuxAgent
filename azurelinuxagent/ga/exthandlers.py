@@ -715,17 +715,6 @@ class ExtHandlersHandler(object):
             ext_handler_i.ensure_consistent_data_for_mc()
             ext_handler_i.update_settings(extension)
 
-        # Always create a placeholder file for enable/disable command if not exists
-        # We don't create a placeholder for other commands because we use status file as a way to report Handler level
-        # failures back to CRP. If a placeholder for an extension already exists with Transitioning status, we would
-        # not override it, hence we only create a placeholder for enable/disable commands but the extensions have the
-        # data to create their own if needed.
-
-        # Note: Due to a bug in multiple extensions, we're only creating a default placeholder for Multi-Config extensions.
-        # A fix will follow soon where we will report transitioning status for extensions by default if no status file
-        # found instead of reporting an error.
-        if ext_handler_i.should_perform_multi_config_op(extension):
-            ext_handler_i.create_placeholder_status_file(extension)
         self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
 
     @staticmethod
