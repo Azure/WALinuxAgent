@@ -34,18 +34,19 @@ jobs:
           sshKeySecureFile: 'id_rsa'
 
       - task: AzureKeyVault@2
+        displayName: "Fetch secrets from KV"
         inputs:
-          azureSubscription: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+          azureSubscription: '$(azureConnection)'
           KeyVaultName: 'dcrV2SPs'
           SecretsFilter: '*'
           RunAsPreJob: true
 
       - task: UsePythonVersion@0
-          inputs:
-            versionSpec: '3.8'
-            addToPath: true
-            architecture: 'x64'
         displayName: "Set host python version"
+        inputs:
+          versionSpec: '3.8'
+          addToPath: true
+          architecture: 'x64'
 
       - script: |
           echo "IP: $(imagePublisher); IO: $(imageOffer); IS: $(imageSku); IV: $(imageVersion); $(distroName)"
