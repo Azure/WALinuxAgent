@@ -33,6 +33,20 @@ jobs:
           sshPublicKey: '$(SSH_PUBLIC)'
           sshKeySecureFile: 'id_rsa'
 
+      - task: AzureKeyVault@2
+        inputs:
+          azureSubscription: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+          KeyVaultName: 'dcrV2SPs'
+          SecretsFilter: '*'
+          RunAsPreJob: true
+
+      - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '3.8'
+            addToPath: true
+            architecture: 'x64'
+        displayName: "Set host python version"
+
       - script: |
           echo "IP: $(imagePublisher); IO: $(imageOffer); IS: $(imageSku); IV: $(imageVersion); $(distroName)"
           rm -rf ~/.ssh/known_hosts
@@ -59,6 +73,17 @@ jobs:
           overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)" -imagePublisher "$(imagePublisher)" -imageOffer "$(imageOffer)" -imageSku $(imageSku) -imageVersion $(imageVersion)'
           deploymentMode: 'Complete'
           deploymentOutputs: 'armDeploymentOutput'
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'inline'
+          script: |
+            import os
+            import json
+
+            with open("$(Build.SourcesDirectory)/dcr/_metadata.json", 'w') as file_:
+                    json.dump(os.environ, file_)
+        displayName: "Create metadata file"
 
       - script: |
           n=0
@@ -96,18 +121,11 @@ jobs:
           exit $ec
         displayName: 'Setup dev GA on VM'
 
-      - task: UsePythonVersion@0
-        inputs:
-          versionSpec: '3.8'
-          addToPath: true
-          architecture: 'x64'
-        displayName: "Set host python version"
-
-      - script: |
-          which pip
-          which python
-          pip install junit-xml
-        displayName: "Install test requirements on host"
+#      - script: |
+#          which pip
+#          which python
+#          pip install junit-xml
+#        displayName: "Install test requirements on host"
 
       - script: |
           n=0
@@ -136,12 +154,12 @@ jobs:
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
 #      - template: ../agent-bvt/run-test.yml # ${{ format('../{0}/run-test.yml', $(scenarioName)) }}
 
-      - task: PythonScript@0
-        inputs:
-          scriptSource: 'filePath'
-          scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
-        displayName: "Generate Test Files on host"
-        condition: succeededOrFailed()
+#      - task: PythonScript@0
+#        inputs:
+#          scriptSource: 'filePath'
+#          scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
+#        displayName: "Generate Test Files on host"
+#        condition: succeededOrFailed()
 
       - task: PublishTestResults@2
         condition: succeededOrFailed()

@@ -1,4 +1,10 @@
 pytest
 junit-xml
 distro
-azure-mgmt-compute
+azure-identity
+azure-keyvault-keys
+azure-mgmt-compute>=17.0.0
+azure-mgmt-keyvault>=7.0.0
+azure-mgmt-network>=16.0.0
+azure-mgmt-resource>=15.0.0
+azure
