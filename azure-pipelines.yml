@@ -7,8 +7,8 @@ parameters:
   - name: scenarios
     type: object
     default:
-      - agent-bvt
-      - agent-bvt-repeat
+#      - agent-bvt
+      - agent-bvt-module
 
   - name: distros
     type: object
@@ -18,30 +18,31 @@ parameters:
         version: "latest"
         sku: "18.04-LTS"
         name: "ubuntu18"
+        setupPath: "dcr/distros/apt_get_setup.sh"
 
-      - publisher: "OpenLogic"
-        offer: "CentOS"
-        sku: "7_9"
-        version: "latest"
-        name: "cent79"
-
-      - publisher: "SUSE"
-        offer: "sles-15-sp2-basic"
-        sku: "gen1"
-        version: "latest"
-        name: "suse15"
-
-      - publisher: "Debian"
-        offer: "debian-10"
-        sku: "10"
-        version: "latest"
-        name: "deb10"
-
-      - publisher: "RedHat"
-        offer: "RHEL"
-        sku: "8.2"
-        version: "latest"
-        name: "rhel82"
+#      - publisher: "OpenLogic"
+#        offer: "CentOS"
+#        sku: "7_9"
+#        version: "latest"
+#        name: "cent79"
+#
+#      - publisher: "SUSE"
+#        offer: "sles-15-sp2-basic"
+#        sku: "gen1"
+#        version: "latest"
+#        name: "suse15"
+#
+#      - publisher: "Debian"
+#        offer: "debian-10"
+#        sku: "10"
+#        version: "latest"
+#        name: "deb10"
+#
+#      - publisher: "RedHat"
+#        offer: "RHEL"
+#        sku: "8.2"
+#        version: "latest"
+#        name: "rhel82"
 
 trigger:
   - develop
