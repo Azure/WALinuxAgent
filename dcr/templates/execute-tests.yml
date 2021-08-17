@@ -75,16 +75,16 @@ jobs:
           deploymentMode: 'Complete'
           deploymentOutputs: 'armDeploymentOutput'
 
-      - task: PythonScript@0
-        inputs:
-          scriptSource: 'inline'
-          script: |
-            import os
-            import json
-
-            with open("$(Build.SourcesDirectory)/dcr/_metadata.json", 'w') as file_:
-                    json.dump(os.environ, file_)
-        displayName: "Create metadata file"
+#      - task: PythonScript@0
+#        inputs:
+#          scriptSource: 'inline'
+#          script: |
+#            import os
+#            import json
+#
+#            with open("$(Build.SourcesDirectory)/dcr/_metadata.json", 'w') as file_:
+#                    json.dump(os.environ, file_)
+#        displayName: "Create metadata file"
 
       - script: |
           n=0
@@ -145,7 +145,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo python /home/$(adminUsername)/dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo python3 /home/$(adminUsername)/dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
