@@ -18,8 +18,10 @@
 import os.path
 
 from azurelinuxagent.agent import parse_args, Agent, usage, AgentCommands
-from azurelinuxagent.common import conf
+from azurelinuxagent.common import cgroupconfigurator, conf, logcollector
+from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.ga.collect_logs import CollectLogsHandler
 from tests.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
@@ -31,6 +33,7 @@ Debug.CgroupCheckPeriod = 300
 Debug.CgroupDisableOnProcessCheckFailure = True
 Debug.CgroupDisableOnQuotaCheckFailure = True
 Debug.CgroupLogMetrics = False
+Debug.EnableFastTrack = False
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure
@@ -40,7 +43,7 @@ Extensions.GoalStatePeriod = 6
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
-Logs.Collect = False
+Logs.Collect = True
 Logs.CollectPeriod = 3600
 Logs.Console = True
 Logs.Verbose = False
@@ -213,6 +216,49 @@ class TestAgent(AgentTestCase):
         full_mode = mock_log_collector.call_args_list[1][0][0]
         self.assertFalse(full_mode)
 
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_calls_collect_logs_on_valid_cgroups(self, mock_log_collector):
+        try:
+            CollectLogsHandler.enable_cgroups_validation()
+
+            @staticmethod
+            def mock_cgroup_paths(*args, **kwargs):
+                if args and args[0] == "self":
+                    relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
+                    return (cgroupconfigurator.LOGCOLLECTOR_SLICE, relative_path)
+                return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
+
+            with patch.object(SystemdCgroupsApi, "get_process_cgroup_relative_paths", mock_cgroup_paths):
+                agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+                agent.collect_logs(is_full_mode=True)
+                
+                mock_log_collector.assert_called_once()
+        finally:
+            CollectLogsHandler.disable_cgroups_validation()
+
+    def test_doesnt_call_collect_logs_on_invalid_cgroups(self):
+        try:
+            CollectLogsHandler.enable_cgroups_validation()
+
+            @staticmethod
+            def mock_cgroup_paths(*args, **kwargs):
+                if args and args[0] == "self":
+                    return ("NOT_THE_CORRECT_PATH", "NOT_THE_CORRECT_PATH")
+                return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
+
+            with patch.object(SystemdCgroupsApi, "get_process_cgroup_relative_paths", mock_cgroup_paths):
+                agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+                exit_error = RuntimeError("Exiting")
+                with patch("sys.exit", return_value=exit_error) as mock_exit:
+                    try:
+                        agent.collect_logs(is_full_mode=True)
+                    except RuntimeError as re:
+                        mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
+                        self.assertEqual(exit_error, re)
+        finally:
+            CollectLogsHandler.disable_cgroups_validation()
+        
     def test_it_should_parse_setup_firewall_properly(self):
 
         test_firewall_meta = {

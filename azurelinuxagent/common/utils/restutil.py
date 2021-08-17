@@ -21,7 +21,6 @@ import os
 import re
 import threading
 import time
-import traceback
 import socket
 import struct
 
@@ -338,10 +337,11 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     if redact_data:
         payload = "[REDACTED]"
 
+    # Logger requires the msg to be a ustr to log properly, ensuring that the data string that we log is always ustr
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    redact_sas_tokens_in_urls(url),
-                   payload,
+                   textutil.str_to_encoded_ustr(payload),
                    headers)
 
     conn.request(method=method, url=url, body=data, headers=headers)
@@ -625,6 +625,6 @@ def read_response_error(resp):
 
             result = textutil.replace_non_ascii(result)
 
-        except Exception:
-            logger.warn(traceback.format_exc())
+        except Exception as e:
+            logger.warn(textutil.format_exception(e))
     return result

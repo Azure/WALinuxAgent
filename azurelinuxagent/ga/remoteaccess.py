@@ -19,7 +19,6 @@
 
 import os
 import os.path
-import traceback
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
@@ -27,6 +26,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -48,20 +48,16 @@ class RemoteAccessHandler(object):
         self._protocol = protocol
         self._cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self._remote_access = None
-        self._incarnation = 0
         self._check_existing_jit_users = True
 
     def run(self):
         try:
             if self._os_util.jit_enabled:
-                current_incarnation = self._protocol.get_incarnation()
-                if self._incarnation != current_incarnation:
-                    # something changed. Handle remote access if any.
-                    self._incarnation = current_incarnation
-                    self._remote_access = self._protocol.client.get_remote_access()
-                    self._handle_remote_access()
+                # Handle remote access if any.
+                self._remote_access = self._protocol.client.get_remote_access()
+                self._handle_remote_access()
         except Exception as e:
-            msg = u"Exception processing goal state for remote access users: {0} {1}".format(ustr(e), traceback.format_exc())
+            msg = u"Exception processing goal state for remote access users: {0}".format(textutil.format_exception(e))
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.RemoteAccessHandling,

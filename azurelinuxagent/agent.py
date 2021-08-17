@@ -28,7 +28,8 @@ import re
 import subprocess
 import sys
 import threading
-import traceback
+from azurelinuxagent.common import cgroupconfigurator, logcollector
+from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -36,7 +37,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
@@ -44,6 +45,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION, \
     get_daemon_version, set_daemon_version
+from azurelinuxagent.ga.collect_logs import CollectLogsHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 
@@ -199,6 +201,22 @@ class Agent(object):
         else:
             print("Running log collector mode normal")
 
+        # Check the cgroups unit
+        if CollectLogsHandler.should_validate_cgroups():
+            cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
+
+            cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
+            memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
+
+            if not cpu_slice_matches or not memory_slice_matches:
+                print("The Log Collector process is not in the proper cgroups:")
+                if not cpu_slice_matches:
+                    print("\tunexpected cpu slice")
+                if not memory_slice_matches:
+                    print("\tunexpected memory slice")
+
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
+
         try:
             log_collector = LogCollector(is_full_mode)
             archive = log_collector.collect_logs_and_get_archive()
@@ -259,10 +277,10 @@ def main(args=None):
                 agent.collect_logs(log_collector_full_mode)
             elif command == AgentCommands.SetupFirewall:
                 agent.setup_firewall(firewall_metadata)
-        except Exception:
+        except Exception as e:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
-                         traceback.format_exc())
+                         textutil.format_exception(e))
 
 
 def parse_args(sys_args):

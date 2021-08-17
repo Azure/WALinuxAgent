@@ -40,7 +40,8 @@ echo,
 
 echo,### Gathering Extension Files ###
 copy,$LIB_DIR/*.xml
-copy,$LIB_DIR/waagent_status.json
+copy,$LIB_DIR/VmSettings.*.json
+copy,$LIB_DIR/waagent_status.*.json
 copy,$LIB_DIR/*/status/*.status
 copy,$LIB_DIR/*/config/*.settings
 copy,$LIB_DIR/*/config/HandlerState
@@ -119,7 +120,7 @@ copy,$LIB_DIR/SharedConfig.xml
 copy,$LIB_DIR/ManagedIdentity-*.json
 copy,$LIB_DIR/*/error.json
 copy,$LIB_DIR/Incarnation
-copy,$LIB_DIR/waagent_status.json
+copy,$LIB_DIR/waagent_status.*.json
 copy,$LIB_DIR/history/*.zip
 echo,
 

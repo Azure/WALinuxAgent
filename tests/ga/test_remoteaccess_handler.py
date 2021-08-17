@@ -469,7 +469,7 @@ class TestRemoteAccessHandler(AgentTestCase):
     def test_remote_access_handler_run_error(self, _):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             mock_protocol = WireProtocol("foo.bar")
-            mock_protocol.get_incarnation = MagicMock(side_effect=Exception("foobar!"))
+            mock_protocol.client.get_remote_access = MagicMock(side_effect=Exception("foobar!"))
 
             rah = RemoteAccessHandler(mock_protocol)
             rah.run()

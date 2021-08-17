@@ -246,7 +246,7 @@ setting affects how fast the agent starts executing extensions.
 #### __Extensions.GoalStateHistoryCleanupPeriod__
 
 _Type: Integer_  
-_Default: 86400 (24 hours)_
+_Default: 1800 (30 minutes)_
 
 How often to clean up the history folder of the agent. The agent keeps past goal
 states on this folder, each goal state represented with a set of small files. The
