@@ -189,6 +189,15 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             self.assertTrue(os.path.exists(extension_slice_unit_file), "{0} was not created".format(extension_slice_unit_file))
 
+    def test_remove_extension_slice_should_remove_unit_files(self):
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+
+            configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
+
+            self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not be present".format(extension_slice_unit_file))
+
     def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
         with self._get_cgroup_configurator(enable=False) as configurator:
             with patch.object(configurator, "supported", return_value=False):
