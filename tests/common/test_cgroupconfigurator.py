@@ -652,6 +652,38 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
             "The extension service's CPU is being tracked")
 
+    def test_start_tracking_unit_cgroups(self):
+
+        with self._get_cgroup_configurator() as configurator:
+            configurator.start_tracking_unit_cgroups("extension.service")
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertTrue(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is not being tracked")
+
+    def test_stop_tracking_unit_cgroups(self):
+
+        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+            CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+
+        def side_effect(path):
+            if path == '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service':
+                return True
+            return False
+
+        with self._get_cgroup_configurator() as configurator:
+            with patch("os.path.exists") as mock_path:
+                mock_path.side_effect = side_effect
+                configurator.stop_tracking_unit_cgroups("extension.service")
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertFalse(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is being tracked")
+
     def test_check_processes_in_agent_cgroup_should_raise_a_cgroups_exception_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
         with self._get_cgroup_configurator() as configurator:
             pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
