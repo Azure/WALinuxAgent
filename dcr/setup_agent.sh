@@ -18,17 +18,9 @@ fi
 echo "$version" > /etc/agent-release
 
 sudo systemctl stop $agent
-#sudo cp ./dcr/*-$version.zip /var/lib/waagent
-#sudo apt-get update && sudo apt-get install zip -y
-#sudo unzip /var/lib/waagent/WALinuxAgent-$version.zip -d /var/lib/waagent/WALinuxAgent-$version
 
 sudo cp -r ./dcr/*-$version /var/lib/waagent
 sudo systemctl daemon-reload && sudo systemctl start $agent
-
-#apt-get install python3-pip -y
-#pip3 install -U pytest
-#pip3 install junit-xml
-#pip3 install distro
 
 sudo systemctl status $agent --no-pager
 waagent --version

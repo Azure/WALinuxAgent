@@ -7,7 +7,7 @@ parameters:
   - name: scenarios
     type: object
     default:
-      - agent-bvt
+#      - agent-bvt
       - agent-bvt-module
 
   - name: distros
@@ -18,19 +18,20 @@ parameters:
         version: "latest"
         sku: "18.04-LTS"
         name: "ubuntu18"
-        setupPath: "dcr/distros/apt_get_setup.sh"
+#        setupPath: "dcr/distros/install_pip3.sh"
+
       - publisher: "Debian"
         offer: "debian-10"
         sku: "10"
         version: "latest"
         name: "deb10"
-        setupPath: "dcr/distros/apt_get_setup.sh"
+#        setupPath: "dcr/distros/install_pip3.sh"
 
-#      - publisher: "OpenLogic"
-#        offer: "CentOS"
-#        sku: "7_9"
-#        version: "latest"
-#        name: "cent79"
+      - publisher: "OpenLogic"
+        offer: "CentOS"
+        sku: "7_9"
+        version: "latest"
+        name: "cent79"
 #
 #      - publisher: "SUSE"
 #        offer: "sles-15-sp2-basic"
