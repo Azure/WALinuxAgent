@@ -33,6 +33,6 @@ if __name__ == '__main__':
                   run_test_and_report("execute CSE", execute_cse_tests)]
 
     ts = TestSuite(scenario_name, test_cases=test_cases)
-    output_file = os.path.join("home", admin_username, "test-result-{0}.xml".format(scenario_name))
+    output_file = os.path.join("/home", admin_username, "test-result-{0}.xml".format(scenario_name))
     with open(output_file, 'w') as f:
         to_xml_report_file(f, [ts])
