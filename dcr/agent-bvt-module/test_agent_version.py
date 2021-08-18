@@ -11,7 +11,7 @@ def test_agent_version():
     print("STDOUT:\n{0}".format(stdout.decode()))
     print("STDERR:\n{0}".format(stderr.decode()))
     if pipe.returncode != 0:
-        raise Exception("Unexpected error")
+        raise Exception("Unexpected error when fetching agent version")
 
     # release_file contains:
     # AGENT_VERSION = 'x.y.z'

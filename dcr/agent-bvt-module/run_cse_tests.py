@@ -69,3 +69,4 @@ def execute_cse_tests():
     add_cse(compute_client, rg_name, vm_name, extension_name, location)
     update_cse(compute_client, rg_name, vm_name, extension_name, location)
     delete_cse(compute_client, rg_name, vm_name, extension_name)
+    return "Successfully executed CSE", ""

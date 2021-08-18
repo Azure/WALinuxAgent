@@ -168,9 +168,21 @@ jobs:
 #        displayName: "Generate Test Files on host"
 #        condition: succeededOrFailed()
 
+      - script: |
+          n=0
+          ec=1
+          until [ "$n" -ge 5 ]
+          do
+              scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/dcr/$(scenarioName)/test-result-*.xml $(Build.ArtifactStagingDirectory) && ec=0 && break  # substitute your command here
+              n=$((n+1))
+              sleep 3
+          done
+          exit $ec
+        displayName: 'Fetch test results'
+
       - task: PublishTestResults@2
         condition: succeededOrFailed()
         inputs:
           testResultsFormat: 'JUnit'
-          testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-*.xml'
+          testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-result-*.xml'
           testRunTitle: 'Publish test results for $(scenarioName)-$(distroName)'
