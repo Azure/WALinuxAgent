@@ -1384,31 +1384,15 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
+        self.set_extension_resource_limits()
+
+    def set_extension_resource_limits(self):
         # setup the resource limits for extension operations and it's services.
-        resource_limits = self.get_extension_resource_limits(self.load_manifest())
+        man = self.load_manifest()
+        resource_limits = man.get_resource_limits(self.get_full_name())
         CGroupConfigurator.get_instance().setup_extension_slice(
             extension_name=self.get_full_name(), cpu_quota=resource_limits.get_extension_slice_cpu_quota())
         CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
-
-    def get_extension_resource_limits(self, man):
-        """
-        Placeholder values for testing and monitoring the monitor extension resource usage.
-        This will be enabled only when agent v3.6 runs.
-        """
-        if re.match(r"\AMicrosoft.Azure.Monitor.AzureMonitorLinuxAgent", self.get_full_name()) is not None\
-                and '3.6.0.0' <= version.AGENT_VERSION < '3.7.0.0':
-            test_man = {
-                "resourceLimits": {
-                    "services": [
-                        {
-                            "name": "mdsd.service",
-                            "path": "/lib/systemd/system",
-                        }
-                    ]
-                }
-            }
-            return ResourceLimits(test_man.get('resourceLimits', None))
-        return ResourceLimits(man.get_resource_limits())
 
     def create_status_file_if_not_exist(self, extension, status, code, operation, message):
         _, status_path = self.get_status_file_path(extension)
@@ -1471,7 +1455,7 @@ class ExtHandlerInstance(object):
             self.__set_extension_state(extension, ExtensionState.Enabled)
 
         # start tracking the extension services cgroup.
-        resource_limits = self.get_extension_resource_limits(man)
+        resource_limits = man.get_resource_limits(self.get_full_name())
         CGroupConfigurator.get_instance().start_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
 
@@ -1530,7 +1514,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
 
         # stop tracking extension services cgroup.
-        resource_limits = self.get_extension_resource_limits(man)
+        resource_limits = man.get_resource_limits(self.get_full_name())
         CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
 
@@ -2308,8 +2292,26 @@ class HandlerManifest(object):
     def supports_multiple_extensions(self):
         return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
 
-    def get_resource_limits(self):
-        return self.data.get('resourceLimits', None)
+    def get_resource_limits(self, extension_name):
+        """
+        Placeholder values for testing and monitoring the monitor extension resource usage.
+        This will be enabled only when agent v3.6 runs.
+        TODO : will add new criteria to enable for a month from the date this change gets released
+        """
+        if re.match(r"\AMicrosoft.Azure.Monitor.AzureMonitorLinuxAgent", extension_name) is not None\
+                and '3.6.0.0' <= version.AGENT_VERSION < '3.7.0.0':
+            test_man = {
+                "resourceLimits": {
+                    "services": [
+                        {
+                            "name": "mdsd.service",
+                            "path": "/lib/systemd/system",
+                        }
+                    ]
+                }
+            }
+            return ResourceLimits(test_man.get('resourceLimits', None))
+        return ResourceLimits(self.data.get('resourceLimits', None))
 
 
 class ResourceLimits(object):
