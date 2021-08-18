@@ -146,7 +146,7 @@ jobs:
       - script: |
           n=0
           ec=1
-          until [ "$n" -ge 5 ]
+          until [ "$n" -ge 1 ]
           do
               ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo python3 /home/$(adminUsername)/dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
               n=$((n+1))
