@@ -899,7 +899,7 @@ class ExtHandlersHandler(object):
 
     def report_ext_handlers_status(self, incarnation_changed=False):
         """
-        Go through handler_state dir, collect and report status
+        Go through handler_state dir, collect and report status and return the status
         """
         try:
             vm_status = VMStatus(status="Ready", message="Guest Agent is running",
@@ -952,6 +952,8 @@ class ExtHandlersHandler(object):
                 self.report_status_error_state.reset()
 
             self.write_ext_handlers_status_to_info_file(vm_status)
+
+            return vm_status
 
         except Exception as error:
             msg = u"Failed to report status: {0}".format(textutil.format_exception(error))

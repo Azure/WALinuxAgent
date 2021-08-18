@@ -146,6 +146,7 @@ __STRING_OPTIONS__ = {
 
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
+    "Extensions.InitialGoalStatePeriod": 6,
     "Extensions.GoalStateHistoryCleanupPeriod": 1800,
     "OS.EnableFirewallPeriod": 30,
     "OS.RemovePersistentNetRulesPeriod": 30,
@@ -344,6 +345,10 @@ def get_extensions_enabled(conf=__conf__):
 
 def get_goal_state_period(conf=__conf__):
     return conf.get_int("Extensions.GoalStatePeriod", 6)
+
+
+def get_initial_goal_state_period(conf=__conf__):
+    return conf.get_int("Extensions.InitialGoalStatePeriod", 6)
 
 
 def get_goal_state_history_cleanup_period(conf=__conf__):

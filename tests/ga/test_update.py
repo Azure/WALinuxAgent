@@ -30,7 +30,7 @@ from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
-    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler
+    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler, VMStatus
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
@@ -1501,13 +1501,21 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=0, enable_updates=True, sleep_interval=(300,))
 
-    @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
-    def test_interval_changes_when_extensions_disabled(self, _):
+    def test_interval_should_be_default_when_extensions_enabled(self):
         """
         When extension processing is disabled, the goal state interval should be larger.
         """
-        self.update_handler._upgrade_available = Mock(return_value=False)
-        self._test_run(invocations=1, calls=1, sleep_interval=(300,))
+        with patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=True):
+            update_handler = get_update_handler()
+            self.assertEqual(6, update_handler._goal_state_period, "Incorrect goal state period when extensions are enabled")
+
+    def test_interval_changes_when_extensions_disabled(self):
+        """
+        When extension processing is disabled, the goal state interval should be larger.
+        """
+        with patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False):
+            update_handler = get_update_handler()
+            self.assertEqual(300, update_handler._goal_state_period, "Incorrect goal state period when extensions are disabled")
 
     @patch("azurelinuxagent.common.logger.info")
     @patch("azurelinuxagent.ga.update.add_event")
@@ -2035,6 +2043,7 @@ class TestProcessGoalState(AgentTestCase):
             update_handler = get_update_handler()
             with patch.object(update_handler, "_upgrade_available", return_value=False):  # skip the upgrade logic
                 exthandlers_handler = Mock()
+                exthandlers_handler.report_ext_handlers_status = Mock(return_value=VMStatus(status="Ready", message="Ready"))
                 remote_access_handler = Mock()
 
                 def get_method_calls(mock, method):
