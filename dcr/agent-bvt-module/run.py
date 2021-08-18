@@ -7,7 +7,6 @@ from run_cse_tests import execute_cse_tests
 if __name__ == '__main__':
     # Environ vars
     load_dotenv()
-    print(os.environ)
 
     # Test 1
     stdout, stderr = test_agent_version()

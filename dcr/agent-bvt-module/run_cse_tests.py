@@ -6,14 +6,14 @@ from azure.mgmt.compute.models import VirtualMachineExtension
 
 __CSE_PUBLISHER = 'Microsoft.Azure.Extensions'
 __CSE_TYPE = 'CustomScript'
-__CSE_VERSION = "2.0"
+__CSE_VERSION = "2.1"
 
 
 def __get_props(location, script):
     extension_props = VirtualMachineExtension(
         location=location,
         publisher=__CSE_PUBLISHER,
-        virtual_machine_extension_type=__CSE_TYPE,
+        type_properties_type=__CSE_TYPE,
         type_handler_version=__CSE_VERSION,
         auto_upgrade_minor_version=True,
         settings={
@@ -62,7 +62,7 @@ def execute_cse_tests():
     location = os.environ['LOCATION']
 
     compute_client = ComputeManagementClient(
-        credentials=DefaultAzureCredential(),
+        credential=DefaultAzureCredential(),
         subscription_id=os.environ["SUBID"]
     )
     
