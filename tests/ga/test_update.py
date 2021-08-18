@@ -1503,7 +1503,7 @@ class TestUpdate(UpdateTestCase):
 
     def test_interval_should_be_default_when_extensions_enabled(self):
         """
-        When extension processing is disabled, the goal state interval should be larger.
+        When extension processing is enabled, the goal state interval should be the default.
         """
         with patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=True):
             update_handler = get_update_handler()
