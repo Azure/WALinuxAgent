@@ -56,6 +56,8 @@ Description=Slice for Azure VM extension {extension_name}
 DefaultDependencies=no
 Before=slices.target
 [Slice]
+CPUAccounting=yes
+CPUQuota={cpu_quota}
 """
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
@@ -623,6 +625,26 @@ class CGroupConfigurator(object):
                 pass
             return 0
 
+        def start_tracking_unit_cgroups(self, unit_name):
+            try:
+                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+
+                if cpu_cgroup_path is None:
+                    logger.info("The CPU controller is not mounted; will not track resource usage")
+                else:
+                    CGroupsTelemetry.track_cgroup(CpuCgroup(unit_name, cpu_cgroup_path))
+            except Exception as exception:
+                logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(exception))
+
+        def stop_tracking_unit_cgroups(self, unit_name):
+            try:
+                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+
+                if cpu_cgroup_path is not None and os.path.exists(cpu_cgroup_path):
+                    CGroupsTelemetry.stop_tracking(CpuCgroup(unit_name, cpu_cgroup_path))
+            except Exception as exception:
+                logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
+
         def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
@@ -656,6 +678,8 @@ class CGroupConfigurator(object):
 
             This method ensures that the extension slice is created. Setup should create
             under /lib/systemd/system if it is not exist.
+
+            Todo : set memory quota
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
@@ -663,9 +687,8 @@ class CGroupConfigurator(object):
                                                      SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
                 if not os.path.exists(extension_slice_path):
                     try:
-                        slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name = extension_name)
-                        if cpu_quota is not None:
-                            slice_contents = slice_contents + _CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
+                        cpu_quota = cpu_quota if cpu_quota is not None else ""
+                        slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
                         CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                     except Exception as exception:
                         _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
@@ -694,6 +717,8 @@ class CGroupConfigurator(object):
             Each extension service will have name, systemd path and it's quotas.
             This method ensures that drop-in files are created under service.d folder if quotas given.
             ex: /lib/systemd/system/extension.service.d/11-CPUAccounting.conf
+
+            TODO : set the memory quota
             """
             if self.enabled() and services_list is not None:
                 for service in services_list:
@@ -735,7 +760,7 @@ class CGroupConfigurator(object):
                     service_name = service.get('name', None)
                     unit_file_path = service.get('path', None)
                     if service_name is not None:
-                        self._cgroups_api.stop_tracking_extension_services_cgroups(service_name)
+                        self.stop_tracking_unit_cgroups(service_name)
                         if unit_file_path is not None:
                             drop_in_path =  os.path.join(unit_file_path, "{0}.d".format(service_name))
                             CGroupConfigurator._Impl.__cleanup_directory_tree(drop_in_path)
@@ -749,7 +774,7 @@ class CGroupConfigurator(object):
                 for service in services_list:
                     service_name = service.get('name', None)
                     if service_name is not None:
-                        self._cgroups_api.start_tracking_extension_services_cgroups(service_name)
+                        self.start_tracking_unit_cgroups(service_name)
 
     # unique instance for the singleton
     _instance = None
