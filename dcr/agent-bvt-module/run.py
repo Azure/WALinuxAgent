@@ -1,10 +1,12 @@
 import os
+from dotenv import load_dotenv
 
 from test_agent_version import test_agent_version
 from run_cse_tests import execute_cse_tests
 
 if __name__ == '__main__':
-    # Emviron vars
+    # Environ vars
+    load_dotenv()
     print(os.environ)
 
     # Test 1

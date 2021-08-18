@@ -85,6 +85,9 @@ jobs:
 #            with open("$(Build.SourcesDirectory)/dcr/_metadata.json", 'w') as file_:
 #                    json.dump(os.environ, file_)
 #        displayName: "Create metadata file"
+      - script: |
+          printenv > $(Build.SourcesDirectory)/dcr/.env
+        displayName: 'Get all environment variables'
 
       - script: |
           n=0
