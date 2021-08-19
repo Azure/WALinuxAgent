@@ -59,7 +59,7 @@ jobs:
           bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
           bash $(Build.SourcesDirectory)/dcr/get_pypy.sh
         displayName: "Build Agent ZIP and get PYPY"
-        name: "agentZip"
+#        name: "agentZip"
 
       - task: AzureResourceManagerTemplateDeployment@3
         name: "deployVM"
@@ -110,7 +110,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/distros/install_py3.sh $PYPYPATH" && ec=0 && break
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/distros/install_py3.sh $(pypyPath)" && ec=0 && break
               n=$((n+1))
               sleep 3
           done
@@ -154,7 +154,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[-f $scriptFile ] && sudo bash $scriptFile $PYPYPATH" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[-f $scriptFile ] && sudo bash $scriptFile $(pypyPath)" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
@@ -166,7 +166,7 @@ jobs:
           ec=1
           until [ "$n" -ge 1 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo $PYPYPATH /home/$(adminUsername)/dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo $(pypyPath) /home/$(adminUsername)/dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
