@@ -57,7 +57,8 @@ jobs:
       - script: |
           # Build the agent package in the container and just transfer out the zip
           bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
-        displayName: "Build Agent ZIP"
+          bash $(Build.SourcesDirectory)/dcr/get_pypy.sh
+        displayName: "Build Agent ZIP and get PYPY"
         name: "agentZip"
 
       - task: AzureResourceManagerTemplateDeployment@3
@@ -109,7 +110,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/distros/install_pip3.sh" && ec=0 && break
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/distros/install_py3.sh $(pypyPath)" && ec=0 && break
               n=$((n+1))
               sleep 3
           done
@@ -153,7 +154,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[-f $scriptFile ] && sudo bash $scriptFile" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[-f $scriptFile ] && sudo bash $scriptFile $(pypyPath)" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
@@ -165,7 +166,7 @@ jobs:
           ec=1
           until [ "$n" -ge 1 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo python3 /home/$(adminUsername)/dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo $(pypyPath) /home/$(adminUsername)/dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
