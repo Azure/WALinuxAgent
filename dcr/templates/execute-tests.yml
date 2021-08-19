@@ -118,17 +118,18 @@ jobs:
           exit $ec
         displayName: 'Setup test VM'
 
-      - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[ -f /home/$(adminUsername)/$(distroSetupPath) ] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
-        displayName: 'Execute Distro Setup on test VM'
+      - ${{ if variables.distroSetupPath }}:
+        - script: |
+            n=0
+            ec=1
+            until [ "$n" -ge 5 ]
+            do
+                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[ -f /home/$(adminUsername)/$(distroSetupPath) ] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
+                n=$((n+1))
+                sleep 3
+            done
+            exit $ec
+          displayName: 'Execute Distro Setup on test VM'
 
       - script: |
           n=0
