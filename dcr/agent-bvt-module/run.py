@@ -4,7 +4,7 @@ import time
 from dotenv import load_dotenv
 from junit_xml import TestCase, TestSuite, to_xml_report_file
 
-from test_agent_version import test_agent_version
+from test_agent_basics import test_agent_version, check_hostname, check_ns_lookup, check_root_login
 from run_cse_tests import execute_cse_tests
 
 
@@ -14,7 +14,9 @@ def run_test_and_report(test_name, test_func, *args):
     start_time = time.time()
     try:
         stdout, stderr = test_func(*args)
+        print("TestName: {0}\n\tStdout: {0}\n\tStderr: {1}".format(test_name, stdout, stderr))
     except Exception as err:
+        print("TestName: {0}\n\tError: {1}".format(test_name, err))
         tc.add_error_info(err)
 
     tc.stdout = stdout
@@ -30,6 +32,9 @@ if __name__ == '__main__':
     admin_username = os.environ['ADMINUSERNAME']
 
     test_cases = [run_test_and_report("check_agent_version", test_agent_version),
+                  run_test_and_report("Check hostname", check_hostname),
+                  run_test_and_report("Check NSLookup", check_ns_lookup),
+                  run_test_and_report("Check Root Login", check_root_login),
                   run_test_and_report("execute CSE", execute_cse_tests)]
 
     ts = TestSuite(scenario_name, test_cases=test_cases)

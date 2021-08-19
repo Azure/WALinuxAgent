@@ -41,9 +41,9 @@ parameters:
 #
       - publisher: "RedHat"
         offer: "RHEL"
-        sku: "8.2"
+        sku: "7-RAW"
         version: "latest"
-        name: "rhel82"
+        name: "rhel7Raw"
 
 trigger:
   - develop
