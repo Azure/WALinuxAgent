@@ -119,12 +119,11 @@ jobs:
         displayName: 'Setup test VM'
 
       - script: |
-          setupFile="/home/$(adminUsername)/$(distroSetupPath)"
           n=0
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[ -f $setupFile ] && sudo bash $setupFile" && ec=0 && break
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[ -f /home/$(adminUsername)/$(distroSetupPath) ] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
               n=$((n+1))
               sleep 3
           done
@@ -150,12 +149,11 @@ jobs:
 #        displayName: "Install test requirements on host"
 
       - script: |
-          scriptFile="/home/$(adminUsername)/dcr/$(scenarioName)/setup.sh"
           n=0
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[-f $scriptFile ] && sudo bash $scriptFile $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[-f /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh ] && sudo bash /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
