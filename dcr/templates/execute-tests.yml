@@ -124,7 +124,7 @@ jobs:
             ec=1
             until [ "$n" -ge 5 ]
             do
-                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[ -f /home/$(adminUsername)/$(distroSetupPath) ] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
+                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/$(distroSetupPath) ]] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
                 n=$((n+1))
                 sleep 3
             done
