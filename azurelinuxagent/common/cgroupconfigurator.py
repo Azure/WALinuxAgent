@@ -685,14 +685,13 @@ class CGroupConfigurator(object):
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
                                                      SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
-                if not os.path.exists(extension_slice_path):
-                    try:
-                        cpu_quota = cpu_quota if cpu_quota is not None else ""
-                        slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
-                        CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
-                    except Exception as exception:
-                        _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
-                        CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+                try:
+                    cpu_quota = cpu_quota if cpu_quota is not None else ""
+                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
+                    CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
+                except Exception as exception:
+                    _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
+                    CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
 
         def remove_extension_slice(self, extension_name):
             """
@@ -727,21 +726,18 @@ class CGroupConfigurator(object):
                     if service_name is not None and unit_file_path is not None:
                         files_to_create = []
                         drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
+                        drop_in_file_cpu_accounting = os.path.join(drop_in_path,
+                                                                   _DROP_IN_FILE_CPU_ACCOUNTING)
+                        files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
                         cpu_quota = service.get('cpuQuota', None)
                         if cpu_quota is not None:
-                            drop_in_file_cpu_accounting = os.path.join(drop_in_path,
-                                                                         _DROP_IN_FILE_CPU_ACCOUNTING)
                             drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
                             cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
-
-                            if not os.path.exists(drop_in_file_cpu_accounting):
-                                files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
-                            if not os.path.exists(drop_in_file_cpu_accounting):
-                                files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
+                            files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
+                            _log_cgroup_info("CPUQuota set for {0} is {1}", service_name, cpu_quota)
                         else:
                             _log_cgroup_info("CPUQuota not set for {0}".format(service_name))
                         self.__create_all_files(files_to_create)
-                        _log_cgroup_info("CPUQuota set for {0} is {1}", service_name, cpu_quota)
 
                 # reload the systemd configuration; the new unit will be used once the service restarts
                 try:
@@ -762,7 +758,7 @@ class CGroupConfigurator(object):
                     if service_name is not None:
                         self.stop_tracking_unit_cgroups(service_name)
                         if unit_file_path is not None:
-                            drop_in_path =  os.path.join(unit_file_path, "{0}.d".format(service_name))
+                            drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
                             CGroupConfigurator._Impl.__cleanup_directory_tree(drop_in_path)
                             _log_cgroup_info("Drop in files removed for {0}".format(service_name))
 
