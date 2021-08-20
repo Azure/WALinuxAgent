@@ -602,8 +602,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             configurator.set_extension_services_cpu_memory_quota(service_list)
 
-            self.assertFalse(os.path.exists(extension_service_cpu_accounting),
-                            "{0} should not have been created during setup".format(extension_service_cpu_accounting))
+            self.assertTrue(os.path.exists(extension_service_cpu_accounting),
+                            "{0} was not created".format(extension_service_cpu_accounting))
             self.assertFalse(os.path.exists(extension_service_cpu_quota),
                             "{0} should not have been created during setup".format(extension_service_cpu_quota))
 
