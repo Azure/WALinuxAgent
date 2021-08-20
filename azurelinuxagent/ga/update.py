@@ -142,8 +142,11 @@ class UpdateHandler(object):
         self._last_telemetry_heartbeat = None
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
+
+        # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
         self._last_try_update_goal_state_failed = False
+        self._report_status_last_failed_incarnation = -1
 
         self.last_incarnation = None
 
@@ -361,7 +364,7 @@ class UpdateHandler(object):
             while self.is_running:
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
-                self._process_goal_state(protocol, exthandlers_handler, remote_access_handler)
+                self._process_goal_state(exthandlers_handler, remote_access_handler)
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(self._goal_state_period)
 
@@ -415,7 +418,8 @@ class UpdateHandler(object):
             return False
         return True
 
-    def _process_goal_state(self, protocol, exthandlers_handler, remote_access_handler):
+    def _process_goal_state(self, exthandlers_handler, remote_access_handler):
+        protocol = exthandlers_handler.protocol
         if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
             return
@@ -451,27 +455,37 @@ class UpdateHandler(object):
             self.last_incarnation = incarnation
 
     def _report_status(self, exthandlers_handler, incarnation_changed):
+        # report_ext_handlers_status does its own error handling and returns None if an error occurred
         vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed)
-        extensions_summary = ExtensionsSummary(vm_status)
-        if self._extensions_summary != extensions_summary:
-            self._extensions_summary = extensions_summary
-            message = "Extension status: {0}".format(self._extensions_summary)
-            logger.info(message)
-            add_event(op=WALAEventOperation.GoalState, message=message)
-            if self._extensions_summary.converged:
-                message = "All extensions in the goal state have reached a terminal state: {0}".format(extensions_summary)
+        if vm_status is None:
+            return
+
+        try:
+            extensions_summary = ExtensionsSummary(vm_status)
+            if self._extensions_summary != extensions_summary:
+                self._extensions_summary = extensions_summary
+                message = "Extension status: {0}".format(self._extensions_summary)
                 logger.info(message)
                 add_event(op=WALAEventOperation.GoalState, message=message)
-                if self._is_initial_goal_state:
-                    self._on_initial_goal_state_completed(self._extensions_summary)
+                if self._extensions_summary.converged:
+                    message = "All extensions in the goal state have reached a terminal state: {0}".format(extensions_summary)
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.GoalState, message=message)
+                    if self._is_initial_goal_state:
+                        self._on_initial_goal_state_completed(self._extensions_summary)
+        except Exception as error:
+            # report errors only once per incarnation
+            if self._report_status_last_failed_incarnation != exthandlers_handler.protocol.get_incarnation():
+                self._report_status_last_failed_incarnation = exthandlers_handler.protocol.get_incarnation()
+                msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
+                logger.warn(msg)
+                add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
 
     def _on_initial_goal_state_completed(self, extensions_summary):
         fileutil.write_file(self._initial_goal_state_file_path(), ustr(extensions_summary))
-        if conf.get_extensions_enabled():
-            previous = self._goal_state_period
+        if conf.get_extensions_enabled() and self._goal_state_period != conf.get_goal_state_period():
             self._goal_state_period = conf.get_goal_state_period()
-            if self._goal_state_period != previous:
-                logger.info("Initial goal state completed, switched the goal state period to {0}", self._goal_state_period)
+            logger.info("Initial goal state completed, switched the goal state period to {0}", self._goal_state_period)
         self._is_initial_goal_state = False
 
     def forward_signal(self, signum, frame):
