@@ -63,6 +63,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
     MockCommand(r"^systemctl daemon-reload", ""),
 
+    MockCommand(r"^systemctl stop ([^\s]+)"),
+
     MockCommand(r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
 ''' 
 Running scope as unit: TEST_UNIT.scope
