@@ -20,7 +20,7 @@ def run_test_and_report(test_name, test_func, *args):
         print("\tDebug Output: {0}".format(test_name, stdout))
     except Exception as err:
         print("\tError: {1}".format(test_name, err))
-        tc.add_error_info(err, output=err.with_traceback(traceback.format_exc()))
+        tc.add_error_info(err, output=traceback.print_exc())
 
     tc.stdout = stdout
     tc.elapsed_sec = (time.time() - start_time)

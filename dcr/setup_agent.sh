@@ -18,7 +18,7 @@ fi
 echo "$version" > /etc/agent-release
 
 sudo systemctl stop $agent
-
+sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
 sudo cp -r ./dcr/*-$version /var/lib/waagent
 sudo systemctl daemon-reload && sudo systemctl start $agent
 
