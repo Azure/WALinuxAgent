@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from junit_xml import TestCase, TestSuite, to_xml_report_file
 
 from test_agent_basics import test_agent_version, check_hostname, check_ns_lookup, check_root_login
-from run_cse_tests import execute_cse_tests
+from execute_extension_tests import execute_cse_tests
 
 
 def run_test_and_report(test_name, test_func, *args):
