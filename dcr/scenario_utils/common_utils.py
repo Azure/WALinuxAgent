@@ -13,3 +13,4 @@ def execute_command_and_raise_on_error(command, shell=False, timeout=None):
         raise Exception("non-0 exit code: {0} for command: {1}".format(pipe.returncode, command))
 
     return stdout.decode().strip(), stderr.decode().strip()
+

@@ -166,7 +166,7 @@ jobs:
           ec=1
           until [ "$n" -ge 1 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "PYTHONPATH=. sudo $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done

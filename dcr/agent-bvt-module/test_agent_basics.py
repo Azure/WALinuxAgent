@@ -1,6 +1,9 @@
 import os
 import socket
 
+import re
+import sys
+
 from dcr.scenario_utils.common_utils import execute_command_and_raise_on_error
 
 
@@ -52,3 +55,40 @@ def check_root_login():
         return 'root login disabled'
     else:
         raise Exception('root login appears to be enabled: {0}'.format(root_passwd))
+
+
+def check_agent_processes():
+    daemon_pattern = r'.*python.*waagent -daemon$'
+    handler_pattern = r'.*python.*-run-exthandlers'
+    status_pattern = r'^(\S+)\s+'
+
+    std_out, _ = execute_command_and_raise_on_error(['ps', 'axo', 'stat,args'], timeout=30)
+
+    daemon = False
+    ext_handler = False
+    agent_processes = [line for line in std_out if 'python' in line]
+    for process in agent_processes:
+
+        if re.match(daemon_pattern, process):
+            daemon = True
+        elif re.match(handler_pattern, process):
+            ext_handler = True
+        else:
+            continue
+
+        status = re.match(status_pattern, process).groups(1)[0]
+        if status.startswith('S') or status.startswith('R'):
+            pass
+        else:
+            print('process is not running: {0}'.format(process))
+            sys.exit(1)
+
+    if not daemon:
+        print('daemon process not found:\n\n{0}'.format(std_out))
+        sys.exit(2)
+    if not ext_handler:
+        print('extension handler process not found:\n\n{0}'.format(std_out))
+        sys.exit(3)
+
+    print('expected processes found running')
+    sys.exit(0)
