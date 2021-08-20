@@ -44,7 +44,7 @@ def check_ns_lookup():
 
 def check_root_login():
     stdout, _ = execute_command_and_raise_on_error(['cat', '/etc/shadow'], timeout=30)
-    root_passwd_line = next(line for line in stdout if 'root' in line)
+    root_passwd_line = next(line for line in stdout.splitlines() if 'root' in line)
     print(root_passwd_line)
     root_passwd = root_passwd_line.split(":")[1]
 

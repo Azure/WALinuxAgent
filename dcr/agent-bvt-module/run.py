@@ -1,6 +1,7 @@
 import os
 import time
 
+import traceback
 from dotenv import load_dotenv
 from junit_xml import TestCase, TestSuite, to_xml_report_file
 
@@ -12,12 +13,14 @@ def run_test_and_report(test_name, test_func, *args):
     stdout = ""
     tc = TestCase(test_name)
     start_time = time.time()
+    print("---" * 20)
+    print("TestName: {0}".format(test_name))
     try:
         stdout = test_func(*args)
-        print("TestName: {0}\n\tDebug Output: {0}".format(test_name, stdout))
+        print("\tDebug Output: {0}".format(test_name, stdout))
     except Exception as err:
-        print("TestName: {0}\n\tError: {1}".format(test_name, err))
-        tc.add_error_info(err)
+        print("\tError: {1}".format(test_name, err))
+        tc.add_error_info(err, output=err.with_traceback(traceback.format_exc()))
 
     tc.stdout = stdout
     tc.elapsed_sec = (time.time() - start_time)
