@@ -9,18 +9,17 @@ from execute_extension_tests import execute_cse_tests
 
 
 def run_test_and_report(test_name, test_func, *args):
-    stdout, stderr = "", ""
+    stdout = ""
     tc = TestCase(test_name)
     start_time = time.time()
     try:
-        stdout, stderr = test_func(*args)
-        print("TestName: {0}\n\tStdout: {0}\n\tStderr: {1}".format(test_name, stdout, stderr))
+        stdout = test_func(*args)
+        print("TestName: {0}\n\tDebug Output: {0}".format(test_name, stdout))
     except Exception as err:
         print("TestName: {0}\n\tError: {1}".format(test_name, err))
         tc.add_error_info(err)
 
     tc.stdout = stdout
-    tc.stderr = stderr
     tc.elapsed_sec = (time.time() - start_time)
     return tc
 
