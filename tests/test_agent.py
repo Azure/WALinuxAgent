@@ -40,6 +40,7 @@ Extension.LogDir = /var/log/azure
 Extensions.Enabled = True
 Extensions.GoalStateHistoryCleanupPeriod = 1800
 Extensions.GoalStatePeriod = 6
+Extensions.InitialGoalStatePeriod = 6
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
