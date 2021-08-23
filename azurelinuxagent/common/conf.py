@@ -49,25 +49,43 @@ class ConfigurationProvider(object):
                 value = parts[1].split('#')[0].strip("\" ").strip()
                 self.values[key] = value if value != "None" else None
 
-    def get(self, key, default_val):
-        val = self.values.get(key)
-        return val if val is not None else default_val
+    @staticmethod
+    def _get_default(default):
+        if hasattr(default, '__call__'):
+            return default()
+        return default
 
-    def get_switch(self, key, default_val):
+    def get(self, key, default_value):
+        """
+        Retrieves a string parameter by key and returns its value. If not found returns the default value,
+        or if the default value is a callable returns the result of invoking the callable.
+        """
+        val = self.values.get(key)
+        return val if val is not None else self._get_default(default_value)
+
+    def get_switch(self, key, default_value):
+        """
+        Retrieves a switch parameter by key and returns its value as a boolean. If not found returns the default value,
+        or if the default value is a callable returns the result of invoking the callable.
+        """
         val = self.values.get(key)
         if val is not None and val.lower() == 'y':
             return True
         elif val is not None and val.lower() == 'n':
             return False
-        return default_val
+        return self._get_default(default_value)
 
-    def get_int(self, key, default_val):
+    def get_int(self, key, default_value):
+        """
+        Retrieves an int parameter by key and returns its value. If not found returns the default value,
+        or if the default value is a callable returns the result of invoking the callable.
+        """
         try:
             return int(self.values.get(key))
         except TypeError:
-            return default_val
+            return self._get_default(default_value)
         except ValueError:
-            return default_val
+            return self._get_default(default_value)
 
 
 __conf__ = ConfigurationProvider()
@@ -146,6 +164,7 @@ __STRING_OPTIONS__ = {
 
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
+    "Extensions.InitialGoalStatePeriod": 6,
     "Extensions.GoalStateHistoryCleanupPeriod": 1800,
     "OS.EnableFirewallPeriod": 30,
     "OS.RemovePersistentNetRulesPeriod": 30,
@@ -344,6 +363,10 @@ def get_extensions_enabled(conf=__conf__):
 
 def get_goal_state_period(conf=__conf__):
     return conf.get_int("Extensions.GoalStatePeriod", 6)
+
+
+def get_initial_goal_state_period(conf=__conf__):
+    return conf.get_int("Extensions.InitialGoalStatePeriod", default_value=lambda: get_goal_state_period(conf=conf))
 
 
 def get_goal_state_history_cleanup_period(conf=__conf__):

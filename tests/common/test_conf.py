@@ -75,6 +75,18 @@ class TestConf(AgentTestCase):
                 os.path.join(data_dir, "test_waagent.conf"),
                 self.conf)
 
+    def test_get_should_return_default_when_key_is_not_found(self):
+        self.assertEqual("The Default Value", self.conf.get("this-key-does-not-exist", "The Default Value"))
+        self.assertEqual("The Default Value", self.conf.get("this-key-does-not-exist", lambda: "The Default Value"))
+
+    def test_get_switch_should_return_default_when_key_is_not_found(self):
+        self.assertEqual(True, self.conf.get_switch("this-key-does-not-exist", True))
+        self.assertEqual(True, self.conf.get_switch("this-key-does-not-exist", lambda: True))
+
+    def test_get_int_should_return_default_when_key_is_not_found(self):
+        self.assertEqual(123456789, self.conf.get_int("this-key-does-not-exist", 123456789))
+        self.assertEqual(123456789, self.conf.get_int("this-key-does-not-exist", lambda: 123456789))
+
     def test_key_value_handling(self):
         self.assertEqual("Value1", self.conf.get("FauxKey1", "Bad"))
         self.assertEqual("Value2 Value2", self.conf.get("FauxKey2", "Bad"))

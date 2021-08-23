@@ -899,7 +899,8 @@ class ExtHandlersHandler(object):
 
     def report_ext_handlers_status(self, incarnation_changed=False):
         """
-        Go through handler_state dir, collect and report status
+        Go through handler_state dir, collect and report status.
+        Returns the status it reported, or None if an error occurred.
         """
         try:
             vm_status = VMStatus(status="Ready", message="Guest Agent is running",
@@ -953,6 +954,8 @@ class ExtHandlersHandler(object):
 
             self.write_ext_handlers_status_to_info_file(vm_status)
 
+            return vm_status
+
         except Exception as error:
             msg = u"Failed to report status: {0}".format(textutil.format_exception(error))
             logger.warn(msg)
@@ -961,6 +964,7 @@ class ExtHandlersHandler(object):
                       op=WALAEventOperation.ReportStatus,
                       is_success=False,
                       message=msg)
+            return None
 
     def write_ext_handlers_status_to_info_file(self, vm_status):
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.protocol.get_incarnation()))
