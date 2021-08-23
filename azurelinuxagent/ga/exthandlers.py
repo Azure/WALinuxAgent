@@ -2220,7 +2220,7 @@ class HandlerEnvironment(object):
     configFolder = "configFolder"
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
-    eventsFolder = "eventsFolder_preview"
+    eventsFolder = "eventsFolder"
     name = "name"
     version = "version"
 
