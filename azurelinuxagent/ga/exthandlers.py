@@ -1996,6 +1996,8 @@ class ExtHandlerInstance(object):
 
         if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
             handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
+            # For now, keep the preview key to not break extensions that were using the preview.
+            handler_env[HandlerEnvironment.eventsFolder_preview] = self.get_extension_events_dir()
 
         env = [{
             HandlerEnvironment.name: self.ext_handler.name,
@@ -2224,6 +2226,7 @@ class HandlerEnvironment(object):
     configFolder = "configFolder"
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
+    eventsFolder_preview = "eventsFolder_preview"
     eventsFolder = "eventsFolder"
     name = "name"
     version = "version"
