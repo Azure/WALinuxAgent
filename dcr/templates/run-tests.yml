@@ -7,13 +7,13 @@ parameters:
     default: ""
 
   - name: runPy
-    type: boolean
+    type: string
 
   - name: runYml
-    type: boolean
+    type: string
 
   - name: runScenarioSetup
-    type: boolean
+    type: string
 
 steps:
 
