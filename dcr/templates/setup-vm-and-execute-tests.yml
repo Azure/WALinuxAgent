@@ -159,12 +159,12 @@ jobs:
         displayName: "Check which file to run"
 
       - template: 'run-tests.yml'
-          parameters:
-            scenarioName: $(scenarioName)
-            distroSetupPath: $(distroSetupPath)
-            runPy: $(runPy)
-            runYml: $(runYml)
-            runScenarioSetup: $(runScenarioSetup)
+        parameters:
+          scenarioName: $(scenarioName)
+          distroSetupPath: $(distroSetupPath)
+          runPy: $(runPy)
+          runYml: $(runYml)
+          runScenarioSetup: $(runScenarioSetup)
 
 #      - script: |
 #          n=0
