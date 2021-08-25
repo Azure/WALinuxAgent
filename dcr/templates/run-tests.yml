@@ -58,4 +58,3 @@ steps:
 
   - ${{ if parameters.runYml }}:
     - template: ${{ format('../{0}/run.yml', parameters.scenarioName) }}
-      displayName: "Execute test YML on VM"
