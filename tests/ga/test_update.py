@@ -19,6 +19,8 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import currentThread
 
+_ORIGINAL_POPEN = subprocess.Popen
+
 from mock import PropertyMock
 
 from azurelinuxagent.common import conf
@@ -1105,7 +1107,7 @@ class TestUpdate(UpdateTestCase):
         if mock_time is None:
             mock_time = TimeMock()
 
-        with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
+        with patch('azurelinuxagent.ga.update.subprocess.Popen', return_value=mock_child) as mock_popen:
             with patch('time.time', side_effect=mock_time.time):
                 with patch('time.sleep', side_effect=mock_time.sleep):
                     self.update_handler.run_latest(child_args=child_args)
@@ -1596,14 +1598,13 @@ class TestUpdate(UpdateTestCase):
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
 
     def test_it_should_not_setup_persistent_firewall_rules_if_EnableFirewall_is_disabled(self):
-        original_popen = subprocess.Popen
         executed_firewall_commands = []
 
         def _mock_popen(cmd, *args, **kwargs):
             if 'firewall-cmd' in cmd:
                 executed_firewall_commands.append(cmd)
                 cmd = ["echo", "running"]
-            return original_popen(cmd, *args, **kwargs)
+            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.logger.info") as patch_info:
             with self._get_update_handler(iterations=1) as (update_handler, _):
@@ -1618,14 +1619,13 @@ class TestUpdate(UpdateTestCase):
 
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
-        original_popen = subprocess.Popen
         executed_commands = []
 
         def _mock_popen(cmd, *args, **kwargs):
             if 'firewall-cmd' in cmd:
                 executed_commands.append(cmd)
                 cmd = ["echo", "running"]
-            return original_popen(cmd, *args, **kwargs)
+            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with self._get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
