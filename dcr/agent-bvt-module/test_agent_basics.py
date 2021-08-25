@@ -66,9 +66,9 @@ def check_agent_processes():
 
     daemon = False
     ext_handler = False
-    agent_processes = [line for line in std_out if 'python' in line]
-    for process in agent_processes:
+    agent_processes = [line for line in std_out.splitlines() if 'python' in line]
 
+    for process in agent_processes:
         if re.match(daemon_pattern, process):
             daemon = True
         elif re.match(handler_pattern, process):
@@ -77,18 +77,30 @@ def check_agent_processes():
             continue
 
         status = re.match(status_pattern, process).groups(1)[0]
-        if status.startswith('S') or status.startswith('R'):
-            pass
-        else:
-            print('process is not running: {0}'.format(process))
-            sys.exit(1)
+        if not(status.startswith('S') or status.startswith('R')):
+            raise Exception('process is not running: {0}'.format(process))
 
     if not daemon:
-        print('daemon process not found:\n\n{0}'.format(std_out))
-        sys.exit(2)
+        raise Exception('daemon process not found:\n\n{0}'.format(std_out))
     if not ext_handler:
-        print('extension handler process not found:\n\n{0}'.format(std_out))
-        sys.exit(3)
+        raise Exception('extension handler process not found:\n\n{0}'.format(std_out))
 
-    print('expected processes found running')
-    sys.exit(0)
+    return 'expected processes found running'
+
+
+def check_sudoers(user):
+    found = False
+    root = '/etc/sudoers.d/'
+
+    for f in os.listdir(root):
+        sudoers = os.path.join(root, f)
+        with open(sudoers) as fh:
+            for entry in fh.readlines():
+                if entry.startswith(user) and 'ALL=(ALL)' in entry:
+                    print('entry found: {0}'.format(entry))
+                    found = True
+
+    if not found:
+        raise Exception('user {0} not found'.format(user))
+
+    return "Found user {0} in list of sudoers".format(user)

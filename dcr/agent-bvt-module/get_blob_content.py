@@ -1,17 +1,15 @@
 import glob
 import re
-import sys
+from html.parser import HTMLParser
 from time import sleep
 from urllib.parse import unquote_plus
 from urllib.request import urlopen
-from html.parser import HTMLParser
 
 
 def show_blob_content(description, key):
     config_files = glob.glob('/var/lib/waagent/ExtensionsConfig*.xml')
     if len(config_files) == 0:
-        print('no extension config files found')
-        sys.exit(1)
+        raise Exception('no extension config files found')
 
     config_files.sort()
     with open(config_files[-1], 'r') as fh:
@@ -22,8 +20,7 @@ def show_blob_content(description, key):
     match = re.match(status_pattern, status_line)
 
     if not match:
-        print(description + ' not found')
-        sys.exit(2)
+        raise Exception(description + ' not found')
 
     decoded_url = match.groups()[0]
     encoded_params = match.groups()[1].split('&amp;')
@@ -49,13 +46,5 @@ def show_blob_content(description, key):
                 # we are only collecting information, so do not fail the test
                 status = 'Error reading {0}: {1}'.format(description, e)
 
-    print("\n{0} content: {1}\n".format(description, status))
+    return "\n{0} content: {1}\n".format(description, status)
 
-
-def main():
-    show_blob_content('Status', 'StatusUploadBlob')
-    show_blob_content('InVMArtifacts', 'InVMArtifactsProfileBlob')
-
-
-if __name__ == "__main__":
-    main()

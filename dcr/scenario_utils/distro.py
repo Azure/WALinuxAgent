@@ -26,24 +26,15 @@ def get_distro():
     return osinfo
 
 
-def main():
-    distro_ = get_distro()
-    l0 = 'DISTRO_NAME = {0}'.format(distro_[0])
-    l1 = 'DISTRO_VERSION = {0}'.format(distro_[1])
-    l2 = 'DISTRO_CODE_NAME = {0}'.format(distro_[2])
+def print_distro_info():
+    print('\n--== distro ==--')
+    distro_name = get_distro()
 
-    print(l0)
-    print(l1)
-    print(l2)
+    print('DISTRO_NAME = {0}'.format(distro_name[0]))
+    print('DISTRO_VERSION = {0}'.format(distro_name[1]))
+    print('DISTRO_CODE_NAME = {0}'.format(distro_name[2]))
 
     print('PY_VERSION = {0}'.format(sys.version_info))
     print('PY_VERSION_MAJOR = {0}'.format(sys.version_info[0]))
     print('PY_VERSION_MINOR = {0}'.format(sys.version_info[1]))
     print('PY_VERSION_MICRO = {0}'.format(sys.version_info[2]))
-
-    with open('/etc/waagent-distro', 'w') as fh:
-        fh.write('{0}\n{1}\n{2}'.format(l0, l1, l2))
-
-
-if __name__ == "__main__":
-    main()
