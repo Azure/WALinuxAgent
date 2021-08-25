@@ -117,7 +117,7 @@ stages:
       agentVersion: "9.9.9.9"
 
     jobs:
-      - template: 'dcr/templates/execute-tests.yml'
+      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
         parameters:
           scenarios:
             - ${{ parameters.scenarios }}

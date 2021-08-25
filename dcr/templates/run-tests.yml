@@ -1,0 +1,61 @@
+parameters:
+  - name: scenarioName
+    type: string
+
+  - name: distroSetupPath
+    type: string
+    default: ""
+
+  - name: runPy
+    type: boolean
+
+  - name: runYml
+    type: boolean
+
+  - name: runScenarioSetup
+    type: boolean
+
+steps:
+
+  - ${{ if parameters.distroSetupPath }}:
+      - script: |
+          n=0
+          ec=1
+          until [ "$n" -ge 5 ]
+          do
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/$(distroSetupPath) ]] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
+              n=$((n+1))
+              sleep 3
+          done
+          exit $ec
+        displayName: 'Execute Distro Setup on test VM'
+
+  - ${{ if parameters.runScenarioSetup }}:
+    - script: |
+        n=0
+        ec=1
+        until [ "$n" -ge 5 ]
+        do
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh ]] && sudo bash /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
+            n=$((n+1))
+            sleep 3
+        done
+        exit $ec
+      displayName: "Install test dependencies on test VM"
+
+  - ${{ if parameters.runPy }}:
+    - script: |
+        n=0
+        ec=1
+        until [ "$n" -ge 1 ]
+        do
+            ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+            n=$((n+1))
+            sleep 3
+        done
+        exit $ec
+      displayName: "Execute test suite Py on VM"
+
+  - ${{ if parameters.runYml }}:
+    - template: ${{ format('../{0}/run.yml', parameters.scenarioName) }}
+      displayName: "Execute test YML on VM"

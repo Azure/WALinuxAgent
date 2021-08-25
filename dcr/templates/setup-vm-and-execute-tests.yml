@@ -118,19 +118,6 @@ jobs:
           exit $ec
         displayName: 'Setup test VM'
 
-      - ${{ if variables.distroSetupPath }}:
-        - script: |
-            n=0
-            ec=1
-            until [ "$n" -ge 5 ]
-            do
-                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/$(distroSetupPath) ]] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
-                n=$((n+1))
-                sleep 3
-            done
-            exit $ec
-          displayName: 'Execute Distro Setup on test VM'
-
       - script: |
           n=0
           ec=1
@@ -143,6 +130,19 @@ jobs:
           exit $ec
         displayName: 'Setup dev GA on VM'
 
+#      - ${{ if variables.distroSetupPath }}:
+#        - script: |
+#            n=0
+#            ec=1
+#            until [ "$n" -ge 5 ]
+#            do
+#                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/$(distroSetupPath) ]] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
+#                n=$((n+1))
+#                sleep 3
+#            done
+#            exit $ec
+#          displayName: 'Execute Distro Setup on test VM'
+
 #      - script: |
 #          which pip
 #          which python
@@ -150,28 +150,45 @@ jobs:
 #        displayName: "Install test requirements on host"
 
       - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh ]] && sudo bash /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
-        displayName: "Install test dependencies on test VM"
+          [[ -f $(Build.SourcesDirectory)/dcr/$(scenarioName)/run.py ]] && runPy=true || runPy=false
+          [[ -f $(Build.SourcesDirectory)/dcr/$(scenarioName)/run.yml ]] && runYml=true || runYml=false
+          [[ -f $(Build.SourcesDirectory)/dcr/$(scenarioName)/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
+          echo "##vso[task.setvariable variable=runPy]$runPy"
+          echo "##vso[task.setvariable variable=runYml]$runYml"
+          echo "##vso[task.setvariable variable=runScenarioSetup]runScenarioSetup"
+        displayName: "Check which file to run"
 
-      - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 1 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
-        displayName: "Execute test suite on VM"
+      - template: 'run-tests.yml'
+          parameters:
+            scenarioName: $(scenarioName)
+            distroSetupPath: $(distroSetupPath)
+            runPy: $(runPy)
+            runYml: $(runYml)
+            runScenarioSetup: $(runScenarioSetup)
+
+#      - script: |
+#          n=0
+#          ec=1
+#          until [ "$n" -ge 5 ]
+#          do
+#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh ]] && sudo bash /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
+#              n=$((n+1))
+#              sleep 3
+#          done
+#          exit $ec
+#        displayName: "Install test dependencies on test VM"
+
+#      - script: |
+#          n=0
+#          ec=1
+#          until [ "$n" -ge 1 ]
+#          do
+#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+#              n=$((n+1))
+#              sleep 3
+#          done
+#          exit $ec
+#        displayName: "Execute test suite on VM"
 
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
 #      - template: ../agent-bvt/run-test.yml # ${{ format('../{0}/run-test.yml', $(scenarioName)) }}
