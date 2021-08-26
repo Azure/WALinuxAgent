@@ -131,17 +131,18 @@ jobs:
         displayName: 'Setup dev GA on VM'
 
 #      - ${{ if variables.distroSetupPath }}:
-#        - script: |
-#            n=0
-#            ec=1
-#            until [ "$n" -ge 5 ]
-#            do
-#                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/$(distroSetupPath) ]] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
-#                n=$((n+1))
-#                sleep 3
-#            done
-#            exit $ec
-#          displayName: 'Execute Distro Setup on test VM'
+      - script: |
+          n=0
+          ec=1
+          until [ "$n" -ge 5 ]
+          do
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/$(distroSetupPath) ]] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
+              n=$((n+1))
+              sleep 3
+          done
+          exit $ec
+        condition: not(eq(variables.distroSetupPath, ''))
+        displayName: 'Execute Distro Setup on test VM'
 
 #      - script: |
 #          which pip
@@ -158,37 +159,39 @@ jobs:
           echo "##vso[task.setvariable variable=runScenarioSetup]runScenarioSetup"
         displayName: "Check which file to run"
 
-      - template: 'run-tests.yml'
-        parameters:
-          scenarioName: $(scenarioName)
-          distroSetupPath: $(distroSetupPath)
-          runPy: $(runPy)
-          runYml: $(runYml)
-          runScenarioSetup: $(runScenarioSetup)
+#      - template: 'run-tests.yml'
+#        parameters:
+#          scenarioName: $(scenarioName)
+#          distroSetupPath: $(distroSetupPath)
+#          runPy: $(runPy)
+#          runYml: $(runYml)
+#          runScenarioSetup: $(runScenarioSetup)
 
-#      - script: |
-#          n=0
-#          ec=1
-#          until [ "$n" -ge 5 ]
-#          do
-#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh ]] && sudo bash /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
-#              n=$((n+1))
-#              sleep 3
-#          done
-#          exit $ec
-#        displayName: "Install test dependencies on test VM"
+      - script: |
+          n=0
+          ec=1
+          until [ "$n" -ge 5 ]
+          do
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh ]] && sudo bash /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
+              n=$((n+1))
+              sleep 3
+          done
+          exit $ec
+        condition: eq(variables.runScenarioSetup, 'true')
+        displayName: "Install test dependencies on test VM"
 
-#      - script: |
-#          n=0
-#          ec=1
-#          until [ "$n" -ge 1 ]
-#          do
-#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
-#              n=$((n+1))
-#              sleep 3
-#          done
-#          exit $ec
-#        displayName: "Execute test suite on VM"
+      - script: |
+          n=0
+          ec=1
+          until [ "$n" -ge 1 ]
+          do
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+              n=$((n+1))
+              sleep 3
+          done
+          exit $ec
+        condition: eq(variables.runPy, 'true')
+        displayName: "Execute test suite on VM"
 
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
 #      - template: ../agent-bvt/run-test.yml # ${{ format('../{0}/run-test.yml', $(scenarioName)) }}
