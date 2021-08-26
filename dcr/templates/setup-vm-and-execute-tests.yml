@@ -156,7 +156,7 @@ jobs:
           [[ -f $(Build.SourcesDirectory)/dcr/$(scenarioName)/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
           echo "##vso[task.setvariable variable=runPy]$runPy"
           echo "##vso[task.setvariable variable=runYml]$runYml"
-          echo "##vso[task.setvariable variable=runScenarioSetup]runScenarioSetup"
+          echo "##vso[task.setvariable variable=runScenarioSetup]$runScenarioSetup"
         displayName: "Check which file to run"
 
 #      - template: 'run-tests.yml'
