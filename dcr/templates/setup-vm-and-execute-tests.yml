@@ -179,7 +179,6 @@ jobs:
         displayName: "Install test dependencies on test VM"
 
       - template: ../scenario/run.yml
-        condition: eq(variables.runYml, 'true')
 
       - script: |
           n=0
