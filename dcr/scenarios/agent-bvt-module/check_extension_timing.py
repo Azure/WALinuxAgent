@@ -1,10 +1,8 @@
 from __future__ import print_function
 
-import sys
 import re
 
 from dcr.scenario_utils.agent_log_parser import parse_agent_log_file, GOAL_STATE_COMPLETED
-
 
 extension_name_pattern = r'\[(\S*)\]'
 

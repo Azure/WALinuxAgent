@@ -55,9 +55,14 @@ jobs:
         displayName: "Clear known host keys in Orchestrator"
 
       - script: |
-          # Build the agent package in the container and just transfer out the zip
-          bash $(Build.SourcesDirectory)/dcr/build_agent_zip.sh
-          bash $(Build.SourcesDirectory)/dcr/get_pypy.sh
+          # Build the agent package in the container and just transfer out the zip and agent directory
+          bash $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
+
+          # Download pypy in the container and copy over the bits to the test VM to avoid internet dependencies
+          bash $(Build.SourcesDirectory)/dcr/scripts/get_pypy.sh
+
+          # Clean out unwanted scenarios for this container, only keep the one we're running
+          bash $(Build.SourcesDirectory)/dcr/scripts/move_scenario.sh
         displayName: "Build Agent ZIP and get PYPY"
         name: "agentZip"
 
@@ -123,20 +128,19 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/setup_agent.sh $(agentVersion)" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scripts/setup_agent.sh $(agentVersion)" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
           exit $ec
         displayName: 'Setup dev GA on VM'
 
-#      - ${{ if variables.distroSetupPath }}:
       - script: |
           n=0
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/$(distroSetupPath) ]] && sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
               n=$((n+1))
               sleep 3
           done
@@ -144,16 +148,10 @@ jobs:
         condition: not(eq(variables.distroSetupPath, ''))
         displayName: 'Execute Distro Setup on test VM'
 
-#      - script: |
-#          which pip
-#          which python
-#          pip install junit-xml
-#        displayName: "Install test requirements on host"
-
       - script: |
-          [[ -f $(Build.SourcesDirectory)/dcr/$(scenarioName)/run.py ]] && runPy=true || runPy=false
-          [[ -f $(Build.SourcesDirectory)/dcr/$(scenarioName)/run.yml ]] && runYml=true || runYml=false
-          [[ -f $(Build.SourcesDirectory)/dcr/$(scenarioName)/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
+          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.py ]] && runPy=true || runPy=false
+          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.yml ]] && runYml=true || runYml=false
+          [[ -f $(Build.SourcesDirectory)/dcr/scenario/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
           echo "##vso[task.setvariable variable=runPy]$runPy"
           echo "##vso[task.setvariable variable=runYml]$runYml"
           echo "##vso[task.setvariable variable=runScenarioSetup]$runScenarioSetup"
@@ -172,7 +170,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "[[ -f /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh ]] && sudo bash /home/$(adminUsername)/dcr/$(scenarioName)/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scenario/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
@@ -180,12 +178,15 @@ jobs:
         condition: eq(variables.runScenarioSetup, 'true')
         displayName: "Install test dependencies on test VM"
 
+      - template: ../scenario/run.yml
+        condition: eq(variables.runYml, 'true')
+
       - script: |
           n=0
           ec=1
           until [ "$n" -ge 1 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/$(scenarioName)/run.py" && ec=0 && break  # substitute your command here
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(agentZip.pypyPath) dcr/scenario/run.py" && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
@@ -194,12 +195,12 @@ jobs:
         displayName: "Execute test suite on VM"
 
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
-#      - template: ../agent-bvt/run-test.yml # ${{ format('../{0}/run-test.yml', $(scenarioName)) }}
+#      - template: ../agent-bvt/run.yml # ${{ format('../{0}/run.yml', $(scenarioName)) }}
 
 #      - task: PythonScript@0
 #        inputs:
 #          scriptSource: 'filePath'
-#          scriptPath: '$(Build.SourcesDirectory)/dcr/generate_test_files.py'
+#          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/generate_test_files.py'
 #        displayName: "Generate Test Files on host"
 #        condition: succeededOrFailed()
 

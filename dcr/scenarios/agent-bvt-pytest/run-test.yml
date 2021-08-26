@@ -8,5 +8,5 @@ parameters:
 steps:
 #  - ${{ each value in parameters.listOfScenarios }}:
   - script: |
-      ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/run_pytest.sh /home/$(adminUsername)/test_results"
+      ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scripts/run_pytest.sh /home/$(adminUsername)/test_results"
     displayName: 'Run PyTest'
