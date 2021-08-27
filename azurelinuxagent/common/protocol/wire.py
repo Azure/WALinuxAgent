@@ -841,9 +841,7 @@ class WireClient(object):
             return True
 
         except Exception as exception:
-            message = "Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, ustr(exception))
-            report_event(op=WALAEventOperation.GoalState, is_success=False, message=message, log_event=False)
-            logger.warn(message)
+            raise ProtocolError("Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, ustr(exception)))
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
