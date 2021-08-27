@@ -7,7 +7,7 @@ import os
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import IncompleteGoalStateError
-from azurelinuxagent.common.protocol.goal_state import GoalState, ExtensionsConfig
+from azurelinuxagent.common.protocol.goal_state import GoalState, ExtensionsConfig, _NUM_GS_FETCH_RETRIES
 from azurelinuxagent.common.protocol import hostplugin
 from azurelinuxagent.common.utils import restutil
 from tests.protocol.mocks import mock_wire_protocol
@@ -21,17 +21,17 @@ _original_http_request = restutil.http_request
 class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_fetch_goal_state_should_raise_on_incomplete_goal_state(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            GoalState.fetch_full_goal_state(protocol.client)
-
             protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
             protocol.mock_wire_data.reload()
             protocol.mock_wire_data.set_incarnation(2)
 
-            with self.assertRaises(IncompleteGoalStateError):
-                GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
+            with patch('time.sleep') as mock_sleep:
+                with self.assertRaises(IncompleteGoalStateError):
+                    GoalState(protocol.client)
+                self.assertEqual(_NUM_GS_FETCH_RETRIES, mock_sleep.call_count, "Unexpected number of retries")
 
     def test_update_goal_state_should_save_goal_state(self, _):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(999)
             protocol.mock_wire_data.set_etag(888)
             protocol.update_goal_state()
@@ -64,7 +64,6 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         for e in extensions:
             self.assertEqual(e["settings"][0]["protectedSettings"], "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e["name"]))
 
-
     def test_update_extensions_goal_state_should_should_retry_on_resource_gone_error(self, _):
         """
         Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
@@ -93,7 +92,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(status=httpclient.NOT_MODIFIED)
 
             with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                protocol.update_extensions_goal_state()
+                protocol.client._update_extensions_goal_state(force_update=False)
 
             self.assertEqual(2, len(request_headers), "We expected 2 requests for vmSettings: the original request and the retry request")
             self.assertEqual("GET_VM_SETTINGS_TEST_CONTAINER_ID", request_headers[1][hostplugin._HEADER_CONTAINER_ID], "The retry request did not include the expected header for the ContainerId")

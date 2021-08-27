@@ -160,7 +160,7 @@ class DaemonHandler(object):
                 #   current values.
                 protocol = self.protocol_util.get_protocol()
 
-                protocol.client.update_goal_state(forced=True)
+                protocol.client.update_goal_state(force_update=True)
 
                 setup_rdma_device(nd_version, protocol.client.get_shared_conf())
             except Exception as e:

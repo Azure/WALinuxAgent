@@ -1075,7 +1075,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 '''
 
                 if forced:
-                    protocol.client.update_goal_state(forced=True)
+                    protocol.client.update_goal_state(force_update=True)
                 else:
                     protocol.client.update_goal_state()
 
@@ -1090,7 +1090,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
-    def test_non_forced_update_should_not_update_the_goal_state_nor_the_host_plugin_when_the_incarnation_does_not_change(self):
+    def test_non_forced_update_should_not_update_the_goal_state_but_should_update_the_host_plugin_when_the_incarnation_does_not_change(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
 
@@ -1098,11 +1098,11 @@ class UpdateGoalStateTestCase(AgentTestCase):
             # goal state and then change those fields.
             goal_state = protocol.client.get_goal_state().xml_text
             shared_conf = protocol.client.get_shared_conf().xml_text
-            container_id = protocol.client.get_host_plugin().container_id
-            role_config_name = protocol.client.get_host_plugin().role_config_name
 
-            protocol.mock_wire_data.set_container_id(str(uuid.uuid4()))
-            protocol.mock_wire_data.set_role_config_name(str(uuid.uuid4()))
+            new_container_id = str(uuid.uuid4())
+            new_role_config_name = str(uuid.uuid4())
+            protocol.mock_wire_data.set_container_id(new_container_id)
+            protocol.mock_wire_data.set_role_config_name(new_role_config_name)
             protocol.mock_wire_data.shared_config = WireProtocolData.replace_xml_attribute_value(
                 protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
 
@@ -1111,8 +1111,8 @@ class UpdateGoalStateTestCase(AgentTestCase):
             self.assertEqual(protocol.client.get_goal_state().xml_text, goal_state)
             self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf)
 
-            self.assertEqual(protocol.client.get_host_plugin().container_id, container_id)
-            self.assertEqual(protocol.client.get_host_plugin().role_config_name, role_config_name)
+            self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
+            self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_forced_update_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_does_not_change(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1129,7 +1129,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
             protocol.mock_wire_data.set_role_config_name(new_role_config_name)
             protocol.mock_wire_data.shared_config = new_shared_conf
 
-            protocol.client.update_goal_state(forced=True)
+            protocol.client.update_goal_state(force_update=True)
 
             self.assertEqual(protocol.client.get_goal_state().incarnation, incarnation)
             self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)

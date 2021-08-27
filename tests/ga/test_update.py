@@ -47,7 +47,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    clear_singleton_instances, mock_sleep, skip_if_predicate_true
+    clear_singleton_instances, mock_sleep
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import HttpRequestPredicates
 
@@ -1907,29 +1907,23 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             update_handler = get_update_handler()
             self.assertFalse(update_handler._try_update_goal_state(protocol), "try_update_goal_state should have failed")
 
-    @skip_if_predicate_true(lambda: True, "TODO: Enable this test once we start retrieving the ExtensionsGoalState (vmSettings)")
     def test_it_should_update_the_goal_state(self):
         update_handler = get_update_handler()
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.set_incarnation(12345)
-            protocol.mock_wire_data.set_etag('54321')
 
             # the first goal state should produce an update
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '12345', "The goal state was not updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state was not updated (received unexpected ETag)")
 
             # no changes in the goal state should not produce an update
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '12345', "The goal state should not be updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state should not be updated (received unexpected ETag)")
 
             # a new  goal state should produce an update
             protocol.mock_wire_data.set_incarnation(6789)
-            protocol.mock_wire_data.set_etag('9876')
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '6789', "The goal state was not updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '9876', "The extensions goal state was not updated (received unexpected ETag)")
 
     def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
