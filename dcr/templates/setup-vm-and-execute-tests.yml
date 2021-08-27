@@ -2,6 +2,9 @@ parameters:
   - name: scenarios
     type: object
 
+  - name: templateScenarios
+    type: object
+
   - name: distros
     type: object
 
@@ -180,7 +183,7 @@ jobs:
 
       - template: run-tests.yml
         parameters:
-          runYmlFile: eq(variables['runYml'], 'true')
+          ymlFilePath: ${{ format("../scenarios/{0}/run.yml", variables.scenarioName) }}
 
       - script: |
           n=0

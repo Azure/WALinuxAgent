@@ -2,9 +2,8 @@ parameters:
 #  - name: runPy
 #    type: string
 
-  runYmlFile: 'false'
+  - name: ymlFilePath
+    type: string
 
 steps:
-
-  - ${{ if eq(parameters.runYml, 'true') }}:
-    - template: ../scenario/run.yml
+  - template: ${{ parameters.ymlFilePath }}
