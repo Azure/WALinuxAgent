@@ -178,7 +178,9 @@ jobs:
         condition: eq(variables.runScenarioSetup, 'true')
         displayName: "Install test dependencies on test VM"
 
-      - template: ../scenario/run.yml
+      - template: run-tests.yml
+        parameters:
+          runYmlFile: eq(variables['runYml'], 'true')
 
       - script: |
           n=0
