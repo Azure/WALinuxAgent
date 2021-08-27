@@ -183,7 +183,7 @@ jobs:
 
       - template: run-tests.yml
         parameters:
-          ymlFilePath: ${{ format("../scenarios/{0}/run.yml", variables.scenarioName) }}
+          ymlFilePath: ${{ format('../scenarios/{0}/run.yml', variables.scenarioName) }}
 
       - script: |
           n=0
