@@ -50,8 +50,14 @@ parameters:
         version: "latest"
         name: "rhel7Raw"
 
-trigger:
-  - develop
+#trigger:
+#  - develop
+
+resources:
+  pipelines:
+    - pipeline: builderArtifacts
+      source: larohra.WALinuxAgent-builder
+      trigger: true
 
 variables:
   vmName: 'larohra-simpleLinuxVM'
@@ -122,14 +128,21 @@ stages:
       agentVersion: "9.9.9.9"
 
     jobs:
-      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
-        parameters:
-          scenarios:
-            - ${{ parameters.scenarios }}
-          templateScenarios:
-            - ${{ parameters.templateScenarios }}
-          distros:
-            - ${{ parameters.distros }}
+      - job: "Verify artifacts"
+        # condition: succeeded("CreateVM")
+        steps:
+          - script: |
+              ls -al "$(Pipeline.Workspace)/builderArtifacts"
+              cat $(Pipeline.Workspace)/templates/temp.txt
+            displayName: "Check previous pipeline artifact"
+#      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
+#        parameters:
+#          scenarios:
+#            - ${{ parameters.scenarios }}
+#          templateScenarios:
+#            - ${{ parameters.templateScenarios }}
+#          distros:
+#            - ${{ parameters.distros }}
 
   #    - task: AzureCLI@2
   #    #   condition: succeeded('deployVM')
@@ -140,24 +153,24 @@ stages:
   #        scriptLocation: 'inlineScript'
   #        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
 
-  - stage: "Cleanup"
-    condition: succeededOrFailed()
-    # variables:
-    #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
-    jobs:
-      - job: "Wait"
-        # condition: succeeded("CreateVM")
-        pool: server
-        steps:
-          - task: ManualValidation@0
-            timeoutInMinutes: 50
-            inputs:
-              notifyUsers: 'larohra'
-              onTimeout: 'resume'
-
-      - template: dcr/templates/arm-delete.yml
-        parameters:
-          scenarios:
-            - ${{ parameters.scenarios }}
-          distros:
-            - ${{ parameters.distros }}
+#  - stage: "Cleanup"
+#    condition: succeededOrFailed()
+#    # variables:
+#    #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
+#    jobs:
+#      - job: "Wait"
+#        # condition: succeeded("CreateVM")
+#        pool: server
+#        steps:
+#          - task: ManualValidation@0
+#            timeoutInMinutes: 50
+#            inputs:
+#              notifyUsers: 'larohra'
+#              onTimeout: 'resume'
+#
+#      - template: dcr/templates/arm-delete.yml
+#        parameters:
+#          scenarios:
+#            - ${{ parameters.scenarios }}
+#          distros:
+#            - ${{ parameters.distros }}
