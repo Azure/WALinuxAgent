@@ -132,8 +132,9 @@ stages:
         # condition: succeeded("CreateVM")
         steps:
           - script: |
+              ls -al "$(Pipeline.Workspace)"
               ls -al "$(Pipeline.Workspace)/builderArtifacts"
-              cat $(Pipeline.Workspace)/templates/temp.txt
+              cat $(Pipeline.Workspace)/builderArtifacts/temp.txt
             displayName: "Check previous pipeline artifact"
 #      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
 #        parameters:
