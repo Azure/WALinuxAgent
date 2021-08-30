@@ -297,11 +297,11 @@ class UpdateHandler(object):
             logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
 
             #
-            # Force initialization of the goal state; some components depend on information provided by the goal state and this
+            # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g telemetry depends on the container ID.)
             #
             protocol = self.protocol_util.get_protocol()
-            protocol.update_goal_state(force_update=True)
+            protocol.client.update_goal_state()
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
