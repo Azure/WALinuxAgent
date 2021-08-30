@@ -128,7 +128,7 @@ stages:
       agentVersion: "9.9.9.9"
 
     jobs:
-      - job: "Verify artifacts"
+      - job: "VerifyArtifacts"
         # condition: succeeded("CreateVM")
         steps:
           - script: |
