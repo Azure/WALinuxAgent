@@ -1,0 +1,8 @@
+parameters:
+
+  - name: ymlFilePath
+    type: string
+    default: ''
+
+steps:
+  - template: ${{ parameters.ymlFilePath }}
