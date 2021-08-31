@@ -131,6 +131,15 @@ stages:
       - job: "VerifyArtifacts"
         # condition: succeeded("CreateVM")
         steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: 'specific'
+              project: '2349ba76-ef20-4728-8958-572d04781d1f'
+              definition: '2'
+              specificBuildWithTriggering: true
+              buildVersionToDownload: 'latest'
+              targetPath: '$(Pipeline.Workspace)'
+
           - script: |
               ls -al "$(Pipeline.Workspace)"
               ls -al "$(Pipeline.Workspace)/builderArtifacts"
