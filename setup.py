@@ -123,7 +123,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_udev_files(data_files)
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/arch/waagent.service"])
-    elif name == 'coreos':
+    elif name in ('coreos', 'flatcar'):
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/usr/share/oem",
                        src=["config/coreos/waagent.conf"])

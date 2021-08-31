@@ -81,7 +81,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name == "kali":
         return DebianOSBaseUtil()
 
-    if distro_name == "coreos" or distro_code_name == "coreos":
+    if distro_name in ("flatcar", "coreos") or distro_code_name in ("flatcar", "coreos"):
         return CoreOSUtil()
 
     if distro_name in ("suse", "sle_hpc", "sles", "opensuse"):
