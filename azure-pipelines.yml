@@ -146,9 +146,9 @@ stages:
               cat $(Pipeline.Workspace)/builderArtifacts/temp.txt
             displayName: "Check previous pipeline artifact"
 
-          - template: dcr/templates/run-executor.yml
-            parameters:
-              ymlFilePath: ${{ format('{0}/builderArtifacts/run-tests.yml', variables['Pipeline.Workspace']) }}
+          - template: run-tests.yml@builderArtifacts
+#            parameters:
+#              ymlFilePath: ${{ format('{0}/builderArtifacts/run-tests.yml', variables['Pipeline.Workspace']) }}
 #      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
 #        parameters:
 #          scenarios:
