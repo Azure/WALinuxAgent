@@ -50,50 +50,20 @@ parameters:
         version: "latest"
         name: "rhel7Raw"
 
-#trigger:
-#  - develop
+trigger:
+  - develop
 
-resources:
-  pipelines:
-    - pipeline: builderArtifacts
-      source: larohra.WALinuxAgent-builder
-      trigger: true
+#resources:
+#  pipelines:
+#    - pipeline: builderArtifacts
+#      source: larohra.WALinuxAgent-builder
+#      trigger: true
 
 variables:
   vmName: 'larohra-simpleLinuxVM'
   adminUsername: 'larohra'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
   rgName: 'larohra-dcr-v2-test$(Build.BuildId)'
-
-  # Scenario List
-
-  listOfScenarios: "{
-          'scenarioA': {
-            'scenarioName': 'agent-bvt'
-          }
-        }"
-  expandedListOfScenarios: "{
-        'scenarioA': {
-          'scenarioName': 'agent-bvt',
-          'scenarioId': 1
-        },
-        'scenarioB': {
-          'scenarioName': 'agent-bvt',
-          'scenarioId': 2
-        },
-        'scenarioC': {
-          'scenarioName': 'agent-bvt',
-          'scenarioId': 3
-        },
-        'scenarioD': {
-          'scenarioName': 'agent-bvt',
-          'scenarioId': 4
-        },
-        'scenarioE': {
-          'scenarioName': 'agent-bvt',
-          'scenarioId': 5
-        }
-      }"
 
   # Cloud Data
   azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
@@ -128,35 +98,35 @@ stages:
       agentVersion: "9.9.9.9"
 
     jobs:
-      - job: "VerifyArtifacts"
-        # condition: succeeded("CreateVM")
-        steps:
-          - task: DownloadPipelineArtifact@2
-            inputs:
-              buildType: 'specific'
-              project: '2349ba76-ef20-4728-8958-572d04781d1f'
-              definition: '2'
-              specificBuildWithTriggering: true
-              buildVersionToDownload: 'latest'
-              targetPath: '$(Pipeline.Workspace)'
-
-          - script: |
-              ls -al "$(Pipeline.Workspace)"
-              ls -al "$(Pipeline.Workspace)/builderArtifacts"
-              cat $(Pipeline.Workspace)/builderArtifacts/temp.txt
-            displayName: "Check previous pipeline artifact"
-
-          - template: run-tests.yml@builderArtifacts
+#      - job: "VerifyArtifacts"
+#        # condition: succeeded("CreateVM")
+#        steps:
+#          - task: DownloadPipelineArtifact@2
+#            inputs:
+#              buildType: 'specific'
+#              project: '2349ba76-ef20-4728-8958-572d04781d1f'
+#              definition: '2'
+#              specificBuildWithTriggering: true
+#              buildVersionToDownload: 'latest'
+#              targetPath: '$(Pipeline.Workspace)'
+#
+#          - script: |
+#              ls -al "$(Pipeline.Workspace)"
+#              ls -al "$(Pipeline.Workspace)/builderArtifacts"
+#              cat $(Pipeline.Workspace)/builderArtifacts/temp.txt
+#            displayName: "Check previous pipeline artifact"
+#
+#          - template: run-tests.yml@builderArtifacts
 #            parameters:
 #              ymlFilePath: ${{ format('{0}/builderArtifacts/run-tests.yml', variables['Pipeline.Workspace']) }}
-#      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
-#        parameters:
-#          scenarios:
-#            - ${{ parameters.scenarios }}
-#          templateScenarios:
-#            - ${{ parameters.templateScenarios }}
-#          distros:
-#            - ${{ parameters.distros }}
+      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
+        parameters:
+          scenarios:
+            - ${{ parameters.scenarios }}
+          templateScenarios:
+            - ${{ parameters.templateScenarios }}
+          distros:
+            - ${{ parameters.distros }}
 
   #    - task: AzureCLI@2
   #    #   condition: succeeded('deployVM')
@@ -167,24 +137,24 @@ stages:
   #        scriptLocation: 'inlineScript'
   #        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
 
-#  - stage: "Cleanup"
-#    condition: succeededOrFailed()
-#    # variables:
-#    #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
-#    jobs:
-#      - job: "Wait"
-#        # condition: succeeded("CreateVM")
-#        pool: server
-#        steps:
-#          - task: ManualValidation@0
-#            timeoutInMinutes: 50
-#            inputs:
-#              notifyUsers: 'larohra'
-#              onTimeout: 'resume'
-#
-#      - template: dcr/templates/arm-delete.yml
-#        parameters:
-#          scenarios:
-#            - ${{ parameters.scenarios }}
-#          distros:
-#            - ${{ parameters.distros }}
+  - stage: "Cleanup"
+    condition: succeededOrFailed()
+    # variables:
+    #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
+    jobs:
+      - job: "Wait"
+        # condition: succeeded("CreateVM")
+        pool: server
+        steps:
+          - task: ManualValidation@0
+            timeoutInMinutes: 50
+            inputs:
+              notifyUsers: 'larohra'
+              onTimeout: 'resume'
+
+      - template: dcr/templates/arm-delete.yml
+        parameters:
+          scenarios:
+            - ${{ parameters.scenarios }}
+          distros:
+            - ${{ parameters.distros }}
