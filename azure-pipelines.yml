@@ -145,6 +145,8 @@ stages:
               ls -al "$(Pipeline.Workspace)/builderArtifacts"
               cat $(Pipeline.Workspace)/builderArtifacts/temp.txt
             displayName: "Check previous pipeline artifact"
+
+          - template: ${{ format('{0}/builderArtifacts/run-tests.yml', variables['Pipeline.Workspace']) }}
 #      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
 #        parameters:
 #          scenarios:
