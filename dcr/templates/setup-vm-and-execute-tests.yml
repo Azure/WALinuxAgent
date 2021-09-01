@@ -47,7 +47,7 @@ jobs:
       - task: UsePythonVersion@0
         displayName: "Set host python version"
         inputs:
-          versionSpec: '3.8'
+          versionSpec: '3.7'
           addToPath: true
           architecture: 'x64'
 
@@ -195,7 +195,7 @@ jobs:
 #        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
       - script: |
-          sudo PYTHONPATH=. python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+          sudo -E PYTHONPATH=. python3 $(Build.SourcesDirectory)/dcr/scenario/run.host.py
         condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
         displayName: "Run the test file on the Orchestrator"
 
