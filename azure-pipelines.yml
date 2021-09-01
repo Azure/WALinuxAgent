@@ -9,7 +9,7 @@ parameters:
     default:
 #      - agent-bvt
       - agent-bvt-module
-      - azure-bvt-pytest
+      - agent-bvt-pytest
 
   - name: templateScenarios
     type: object
