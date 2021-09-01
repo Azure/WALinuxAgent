@@ -190,6 +190,7 @@ jobs:
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
+          workingDirectory: '$(Build.SourcesDirectory)'
         displayName: "Run the test file on the Orchestrator"
         condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
