@@ -49,19 +49,12 @@ _NUM_GS_FETCH_RETRIES = 6
 
 
 class GoalState(object):
-    def __init__(self, wire_client, full_goal_state=False, base_incarnation=None):
+    def __init__(self, wire_client):
         """
         Fetches the goal state using the given wire client.
 
-        By default it fetches only the goal state itself; to fetch the entire goal state (that includes all the
-        nested components, such as the extension config) use the 'full_goal_state' parameter.
-
-        If 'base_incarnation' is given, it fetches the full goal state if the new incarnation is different than
-        the given value, otherwise it fetches only the goal state itself.
-
-        For better code readability, use the static fetch_* methods below instead of instantiating GoalState
-        directly.
-
+        __init__ fetches only the goal state itself, not including inner properties such as ExtensionsConfig; to fetch the entire goal state
+        use the fetch_full_goal_state().
         """
         uri = GOAL_STATE_URI.format(wire_client.get_endpoint())
 
@@ -78,90 +71,58 @@ class GoalState(object):
             raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
 
         try:
-            self.expected_state = findtext(xml_doc, "ExpectedState")
             self.role_instance_id = findtext(role_instance, "InstanceId")
             role_config = find(role_instance, "Configuration")
             self.role_config_name = findtext(role_config, "ConfigName")
             container = find(xml_doc, "Container")
             self.container_id = findtext(container, "ContainerId")
-            lbprobe_ports = find(xml_doc, "LBProbePorts")
-            self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
 
             AgentGlobals.update_container_id(self.container_id)
 
-            if full_goal_state:
-                reason = 'force update'
-            elif base_incarnation not in (None, self.incarnation):
-                reason = 'new incarnation'
-            else:
-                self.hosting_env = None
-                self.shared_conf = None
-                self.certs = None
-                self.ext_conf = None
-                self.remote_access = None
-                return
+            # these properties are populated by fetch_full_goal_state()
+            self._hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
+            self.hosting_env = None
+            self._shared_conf_uri = findtext(xml_doc, "SharedConfig")
+            self.shared_conf = None
+            self._certs_uri = findtext(xml_doc, "Certificates")
+            self.certs = None
+            self._ext_conf_uri = findtext(xml_doc, "ExtensionsConfig")
+            self.ext_conf = None
+            self._remote_access_uri = findtext(container, "RemoteAccessInfo")
+            self.remote_access = None
+
         except Exception as exception:
             # We don't log the error here since fetching the goal state is done every few seconds
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
 
+    def fetch_full_goal_state(self, wire_client):
         try:
-            logger.info('Fetching new goal state [incarnation {0} ({1})]', self.incarnation, reason)
+            logger.info('Fetching goal state [incarnation {0}]', self.incarnation)
 
-            uri = findtext(xml_doc, "HostingEnvironmentConfig")
-            xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+            xml_text = wire_client.fetch_config(self._hosting_env_uri, wire_client.get_header())
             self.hosting_env = HostingEnv(xml_text)
 
-            uri = findtext(xml_doc, "SharedConfig")
-            xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+            xml_text = wire_client.fetch_config(self._shared_conf_uri, wire_client.get_header())
             self.shared_conf = SharedConfig(xml_text)
 
-            uri = findtext(xml_doc, "Certificates")
-            if uri is None:
-                self.certs = None
-            else:
-                xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
+            if self._certs_uri is not None:
+                xml_text = wire_client.fetch_config(self._certs_uri, wire_client.get_header_for_cert())
                 self.certs = Certificates(xml_text)
 
-            uri = findtext(xml_doc, "ExtensionsConfig")
-            if uri is None:
+            if self._ext_conf_uri is None:
                 self.ext_conf = ExtensionsConfig(None)
             else:
-                xml_text = wire_client.fetch_config(uri, wire_client.get_header())
+                xml_text = wire_client.fetch_config(self._ext_conf_uri, wire_client.get_header())
                 self.ext_conf = ExtensionsConfig(xml_text)
 
-            uri = findtext(container, "RemoteAccessInfo")
-            if uri is None:
-                self.remote_access = None
-            else:
-                xml_text = wire_client.fetch_config(uri, wire_client.get_header_for_cert())
+            if self._remote_access_uri is not None:
+                xml_text = wire_client.fetch_config(self._remote_access_uri, wire_client.get_header_for_cert())
                 self.remote_access = RemoteAccess(xml_text)
         except Exception as exception:
             logger.warn("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
             logger.info('Fetch goal state completed')
-
-    @staticmethod
-    def fetch_goal_state(wire_client):
-        """
-        Fetches the goal state, not including any nested properties (such as extension config).
-        """
-        return GoalState(wire_client)
-
-    @staticmethod
-    def fetch_full_goal_state(wire_client):
-        """
-        Fetches the full goal state, including nested properties (such as extension config).
-        """
-        return GoalState(wire_client, full_goal_state=True)
-
-    @staticmethod
-    def fetch_full_goal_state_if_incarnation_different_than(wire_client, incarnation):
-        """
-        Fetches the full goal state if the new incarnation is different than 'incarnation', otherwise returns None.
-        """
-        goal_state = GoalState(wire_client, base_incarnation=incarnation)
-        return goal_state if goal_state.incarnation != incarnation else None
 
 
 class HostingEnv(object):
