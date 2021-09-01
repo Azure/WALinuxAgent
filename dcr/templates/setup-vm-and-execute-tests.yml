@@ -186,13 +186,18 @@ jobs:
 ##          ymlFilePath: ${{ format('../scenarios/{0}/run.yml', variables.scenarioName) }}
 #          timesToRun: ${{ format('{0}', variables.timesToRun) }}
 
-      - task: PythonScript@0
-        inputs:
-          scriptSource: 'filePath'
-          scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
-          workingDirectory: '$(Build.SourcesDirectory)'
-        displayName: "Run the test file on the Orchestrator"
+#      - task: PythonScript@0
+#        inputs:
+#          scriptSource: 'filePath'
+#          scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
+#          workingDirectory: '$(Build.SourcesDirectory)'
+#        displayName: "Run the test file on the Orchestrator"
+#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+
+      - script: |
+          sudo PYTHONPATH=. python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
         condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+        displayName: "Run the test file on the Orchestrator"
 
       - script: |
           n=0
