@@ -1,6 +1,6 @@
 parameters:
-#  - name: runPy
-#    type: string
+  - name: timesToRun
+    type: string
 
   - name: ymlFilePath
     type: string
@@ -8,4 +8,6 @@ parameters:
 
 steps:
   - script: echo 'yolo this, FTW!'
+
+  - ${{  }}
 #  - template: ${{ parameters.ymlFilePath }}

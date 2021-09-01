@@ -153,10 +153,10 @@ jobs:
 
       - script: |
           [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.py ]] && runPy=true || runPy=false
-          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.yml ]] && runYml=true || runYml=false
+          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.host.py ]] && runHost=true || runHost=false
           [[ -f $(Build.SourcesDirectory)/dcr/scenario/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
           echo "##vso[task.setvariable variable=runPy]$runPy"
-          echo "##vso[task.setvariable variable=runYml]$runYml"
+          echo "##vso[task.setvariable variable=runHost]$runHost"
           echo "##vso[task.setvariable variable=runScenarioSetup]$runScenarioSetup"
         displayName: "Check which file to run"
 
@@ -183,7 +183,15 @@ jobs:
 
 #      - template: run-tests.yml
 #        parameters:
-#          ymlFilePath: ${{ format('../scenarios/{0}/run.yml', variables.scenarioName) }}
+##          ymlFilePath: ${{ format('../scenarios/{0}/run.yml', variables.scenarioName) }}
+#          timesToRun: ${{ format('{0}', variables.timesToRun) }}
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
+        displayName: "Run the test file on the Orchestrator"
+        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
       - script: |
           n=0
@@ -195,7 +203,7 @@ jobs:
               sleep 3
           done
           exit $ec
-        condition: eq(variables.runPy, 'true')
+        condition: and(succeededOrFailed(), eq(variables.runPy, 'true'))
         displayName: "Execute test suite on VM"
 
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
@@ -218,6 +226,7 @@ jobs:
               sleep 3
           done
           exit $ec
+        condition: succeededOrFailed()
         displayName: 'Fetch test results'
 
       - task: PublishTestResults@2
