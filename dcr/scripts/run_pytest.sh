@@ -4,6 +4,6 @@ set -euxo pipefail
 
 
 #           $1          $2          $3            $4              $5            $6                    $7
-# Usage:  Artifact Dir
-
-$PYPYPATH -m pytest ./**/agent-bvt/ --doctest-modules --junitxml="$1/test-result.xml"
+# Usage:  Artifact Dir  PyPypath
+ls -al "$2"
+$2 -m pytest ./**/agent-bvt/ --doctest-modules --junitxml="$1/test-result.xml"
