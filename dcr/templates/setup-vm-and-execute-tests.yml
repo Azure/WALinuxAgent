@@ -195,7 +195,7 @@ jobs:
 #        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
       - script: |
-          sudo -E PYTHONPATH=. python3 $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+          sudo -E PYTHONPATH=. $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
         condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
         displayName: "Run the test file on the Orchestrator"
 
