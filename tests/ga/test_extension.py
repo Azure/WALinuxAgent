@@ -36,7 +36,8 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME
+from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
+    AGENT_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
@@ -3467,7 +3468,7 @@ class TestExtension(AgentTestCase):
                 "timestampUTC": "1970-01-01T00:00:00Z",
                 "aggregateStatus": {
                     "guestAgentStatus": {
-                        "version": "9.9.9.9",
+                        "version": AGENT_VERSION,
                         "status": "Ready",
                         "formattedMessage": {
                             "lang": "en-US",
