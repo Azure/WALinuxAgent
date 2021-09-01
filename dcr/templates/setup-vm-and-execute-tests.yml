@@ -25,7 +25,7 @@ jobs:
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
 #      matrix: $[ variables.expandedListOfScenarios ]
-      maxParallel: 5
+      maxParallel: 50
 
     steps:
       - task: InstallSSHKey@0
