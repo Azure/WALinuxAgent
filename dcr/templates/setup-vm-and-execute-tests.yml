@@ -186,18 +186,35 @@ jobs:
 ##          ymlFilePath: ${{ format('../scenarios/{0}/run.yml', variables.scenarioName) }}
 #          timesToRun: ${{ format('{0}', variables.timesToRun) }}
 
-#      - task: PythonScript@0
-#        inputs:
-#          scriptSource: 'filePath'
-#          scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
-#          workingDirectory: '$(Build.SourcesDirectory)'
-#        displayName: "Run the test file on the Orchestrator"
-#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        displayName: "Run the test file on the Orchestrator"
+        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
       - script: |
-          sudo -E PYTHONPATH=. $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+          $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
         condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
         displayName: "Run the test file on the Orchestrator"
+
+      - task: Bash@3
+        inputs:
+          targetType: 'inline'
+          script: |
+            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+
+      - task: Bash@3
+        inputs:
+          targetType: 'inline'
+          script: |
+            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+          noProfile: false
+          noRc: false
+        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
       - script: |
           n=0

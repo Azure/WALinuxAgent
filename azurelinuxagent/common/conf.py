@@ -507,3 +507,12 @@ def get_cgroup_disable_on_quota_check_failure(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.CgroupDisableOnQuotaCheckFailure", True)
+
+
+def get_etp_collection_period(conf=__conf__):
+    """
+    Determines the frequency to perform ETP collection on extensions telemetry events.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.EtpCollectionPeriod", 300)
