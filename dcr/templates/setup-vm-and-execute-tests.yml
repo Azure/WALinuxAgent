@@ -233,5 +233,5 @@ jobs:
         condition: succeededOrFailed()
         inputs:
           testResultsFormat: 'JUnit'
-          testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-result-*.xml'
+          testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-result*.xml'
           testRunTitle: 'Publish test results for $(scenarioName)-$(distroName)'
