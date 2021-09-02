@@ -57,18 +57,18 @@ jobs:
           echo "##vso[task.setvariable variable=randNum;isOutput=true]$RANDOM"
         displayName: "Clear known host keys and set variables"
 
-#      - bash: $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
-#        displayName: "Build Agent Zip"
-#        name: "agentZip"
+      - bash: $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
+        displayName: "Build Agent Zip"
+        name: "buildAgentZip"
 
       - script: |
           # Build the agent package in the container and just transfer out the zip and agent directory
-           bash $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
+          # bash $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
 
           # Download pypy in the container and copy over the bits to the test VM to avoid internet dependencies
           bash $(Build.SourcesDirectory)/dcr/scripts/get_pypy.sh
 
-          which pip
+          # Install pip dependencies on the orchestrator VM
           pip install -r $(Build.SourcesDirectory)/dcr/requirements.txt
 
           # Clean out unwanted scenarios for this container, only keep the one we're running

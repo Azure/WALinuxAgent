@@ -5,4 +5,4 @@
 set -euxo pipefail
 
 $PYPYPATH -m ensurepip
-$PYPYPATH -m pip install "$1"
+$PYPYPATH -m pip install -r "$1"
