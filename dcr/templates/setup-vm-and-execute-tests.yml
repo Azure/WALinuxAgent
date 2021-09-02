@@ -168,16 +168,20 @@ jobs:
 #          runYml: $(runYml)
 #          runScenarioSetup: $(runScenarioSetup)
 
-      - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scenario/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
+      - task: Bash@3
+        inputs:
+          targetType: 'inline'
+          script: |
+            echo "$AGENTZIP_PYPYPATH"
+            n=0
+            ec=1
+            until [ "$n" -ge 5 ]
+            do
+                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scenario/setup.sh $(agentZip.pypyPath)" && ec=0 && break  # substitute your command here
+                n=$((n+1))
+                sleep 3
+            done
+            exit $ec
         condition: eq(variables.runScenarioSetup, 'true')
         displayName: "Install test dependencies on test VM"
 
@@ -195,26 +199,26 @@ jobs:
         displayName: "Run the test file on the Orchestrator"
         condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
-      - script: |
-          $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
-        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
-        displayName: "Run the test file on the Orchestrator"
-
-      - task: Bash@3
-        inputs:
-          targetType: 'inline'
-          script: |
-            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
-        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
-
-      - task: Bash@3
-        inputs:
-          targetType: 'inline'
-          script: |
-            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
-          noProfile: false
-          noRc: false
-        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+#      - script: |
+#          $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+#        displayName: "Run the test file on the Orchestrator"
+#
+#      - task: Bash@3
+#        inputs:
+#          targetType: 'inline'
+#          script: |
+#            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+#
+#      - task: Bash@3
+#        inputs:
+#          targetType: 'inline'
+#          script: |
+#            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
+#          noProfile: false
+#          noRc: false
+#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
       - script: |
           n=0
