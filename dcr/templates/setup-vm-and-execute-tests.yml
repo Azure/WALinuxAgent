@@ -63,7 +63,7 @@ jobs:
 
       - script: |
           # Build the agent package in the container and just transfer out the zip and agent directory
-#          bash $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
+          # bash $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
 
           # Download pypy in the container and copy over the bits to the test VM to avoid internet dependencies
           bash $(Build.SourcesDirectory)/dcr/scripts/get_pypy.sh
