@@ -24,14 +24,14 @@ parameters:
         version: "latest"
         sku: "18.04-LTS"
         name: "ubuntu18"
-#        setupPath: "dcr/distros/install_py3.sh"
+#        setupPath: "dcr/distros/install_pip_packages.sh"
 
 #      - publisher: "Debian"
 #        offer: "debian-10"
 #        sku: "10"
 #        version: "latest"
 #        name: "deb10"
-##        setupPath: "dcr/distros/install_py3.sh"
+##        setupPath: "dcr/distros/install_pip_packages.sh"
 #
 #      - publisher: "OpenLogic"
 #        offer: "CentOS"

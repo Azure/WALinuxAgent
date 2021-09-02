@@ -55,7 +55,7 @@ jobs:
           echo "IP: $(imagePublisher); IO: $(imageOffer); IS: $(imageSku); IV: $(imageVersion); $(distroName)"
           rm -rf ~/.ssh/known_hosts
           echo "##vso[task.setvariable variable=randNum;isOutput=true]$RANDOM"
-        displayName: "Clear known host keys in Orchestrator"
+        displayName: "Clear known host keys and set variables"
 
 #      - bash: $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
 #        displayName: "Build Agent Zip"
@@ -74,6 +74,7 @@ jobs:
           # Clean out unwanted scenarios for this container, only keep the one we're running
           bash $(Build.SourcesDirectory)/dcr/scripts/move_scenario.sh
         displayName: "Build Agent ZIP and get PYPY"
+        name: "agentZip"
 
       - task: AzureResourceManagerTemplateDeployment@3
         name: "deployVM"
@@ -91,16 +92,6 @@ jobs:
           deploymentMode: 'Complete'
           deploymentOutputs: 'armDeploymentOutput'
 
-#      - task: PythonScript@0
-#        inputs:
-#          scriptSource: 'inline'
-#          script: |
-#            import os
-#            import json
-#
-#            with open("$(Build.SourcesDirectory)/dcr/_metadata.json", 'w') as file_:
-#                    json.dump(os.environ, file_)
-#        displayName: "Create metadata file"
       - script: |
           printenv > $(Build.SourcesDirectory)/dcr/.env
           echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
@@ -125,7 +116,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/distros/install_py3.sh $(agentZip.pypyPath)" && ec=0 && break
+              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYPYPATH="$(agentZip.pypyPath)" bash /home/$(adminUsername)/dcr/scripts/install_pip_packages.sh /home/$(adminUsername)/dcr/requirements.txt" && ec=0 && break
               n=$((n+1))
               sleep 3
           done
@@ -178,7 +169,6 @@ jobs:
         inputs:
           targetType: 'inline'
           script: |
-            echo "$AGENTZIP_PYPYPATH"
             n=0
             ec=1
             until [ "$n" -ge 5 ]

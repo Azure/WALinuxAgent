@@ -7,7 +7,6 @@ curl "https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2" -o "pypy
 mkdir "pypy"
 tar xf "$BUILD_SOURCESDIRECTORY/dcr/pypy.tar.bz2" -C "pypy"
 pypy_path=$(ls -d pypy/*/bin/pypy3)
-$pypy_path -m pip install -r "requirements.txt"
 rm -rf "pypy.tar.bz2"
 popd
 echo "##vso[task.setvariable variable=pypyPath;isOutput=true]/home/$ADMINUSERNAME/dcr/$pypy_path"
