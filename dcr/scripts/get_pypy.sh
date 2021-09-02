@@ -9,4 +9,4 @@ tar xf "$BUILD_SOURCESDIRECTORY/dcr/pypy.tar.bz2" -C "pypy"
 pypy_path=$(ls -d pypy/*/bin/pypy3)
 rm -rf "pypy.tar.bz2"
 popd
-echo "##vso[task.setvariable variable=pypyPath;isOutput=true]/home/$ADMINUSERNAME/dcr/$pypy_path"
+echo "##vso[task.setvariable variable=pypyPath]/home/$ADMINUSERNAME/dcr/$pypy_path"

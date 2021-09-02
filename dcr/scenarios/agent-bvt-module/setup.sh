@@ -5,4 +5,4 @@
 set -euxo pipefail
 
 scenario_dir=$(dirname "$0")
-$1 -m pip install -r "$scenario_dir/requirements.txt"
+$PYPYPATH -m pip install -r "$scenario_dir/requirements.txt"
