@@ -9,7 +9,8 @@ parameters:
     default:
 #      - agent-bvt
 #      - agent-bvt-module
-      - agent-bvt-pytest
+#      - agent-bvt-pytest
+      - extension-telemetry-pipeline
 
   - name: templateScenarios
     type: object

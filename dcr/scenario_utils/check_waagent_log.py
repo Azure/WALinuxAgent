@@ -6,7 +6,7 @@ from dcr.scenario_utils.cgroups_helpers import is_systemd_distro
 from dcr.scenario_utils.distro import get_distro
 
 
-def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, exit_on_completion=True, ignore=None):
+def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
     # Returns any ERROR messages from the log except transient ones.
     # Currently, the only transient one is /proc/net/route not being set up if it's being reported before
     # provisioning was completed. In that case, we ignore that error message.
@@ -135,13 +135,12 @@ def is_data_in_waagent_log(data):
     """
     This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
     :param data: The string to look for in the agent logs
-    :return: True if test data string found in the agent log and False if not.
+    :raises: Exception if data string not found
     """
     for agent_log_line in parse_agent_log_file():
         if data in agent_log_line.text:
             print("Found data: {0} in line: {1}".format(data, agent_log_line.text))
-            return True
+            return
 
-    print("waagent.log file did not have the data string: {0}".format(data))
-    return False
+    raise AssertionError("waagent.log file did not have the data string: {0}".format(data))
 

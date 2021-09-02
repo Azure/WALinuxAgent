@@ -1,4 +1,7 @@
+import os
 import subprocess
+
+from dcr.scenario_utils.models import VMMetaData
 
 
 def execute_command_and_raise_on_error(command, shell=False, timeout=None):
@@ -13,4 +16,12 @@ def execute_command_and_raise_on_error(command, shell=False, timeout=None):
         raise Exception("non-0 exit code: {0} for command: {1}".format(pipe.returncode, command))
 
     return stdout.decode().strip(), stderr.decode().strip()
+
+
+def get_vm_data_from_env() -> VMMetaData:
+    rg_name = "{0}-{1}-{2}".format(os.environ['RGNAME'], os.environ['SCENARIONAME'], os.environ['DISTRONAME'])
+    return VMMetaData(vm_name=os.environ["VMNAME"],
+                      rg_name=rg_name,
+                      sub_id=os.environ["SUBID"],
+                      location=os.environ['LOCATION'])
 
