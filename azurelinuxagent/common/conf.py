@@ -539,7 +539,7 @@ def get_agent_cpu_quota(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.AgentCpuQuota", 100)
+    return conf.get_int("Debug.AgentCpuQuota", 100)
 
 def get_enable_fast_track(conf=__conf__):
     """
