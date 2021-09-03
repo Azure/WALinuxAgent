@@ -24,10 +24,11 @@ def main():
         TestObj("Add Cse", lambda: add_cse(vm_data), raise_on_error=True)
     ]
 
-    test_orchestrator = TestOrchestrator(tests=tests)
+    test_orchestrator = TestOrchestrator("ETPTests-Host", tests=tests)
     test_orchestrator.run_tests()
-    test_orchestrator.generate_report("ETPTests-Host", os.path.join(os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY'],
-                                                                    "test-results-etp-host.xml"))
+    test_orchestrator.generate_report(
+        os.path.join(os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY'], "test-results-etp-host.xml"))
+    assert not test_orchestrator.failed, f"Test Suite: {test_orchestrator.name} failed"
 
 
 if __name__ == '__main__':

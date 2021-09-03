@@ -70,12 +70,13 @@ if __name__ == '__main__':
     admin_username = os.environ['ADMINUSERNAME']
 
     tests = [
-        TestObj("Verify ETP enabled", verify_etp_enabled, raise_on_error=True),
+        TestObj("Verify ETP enabled", verify_etp_enabled, raise_on_error=True, retry=3),
         TestObj("Add Good extension events and verify", add_good_extension_events_and_verify),
         TestObj("Add Bad extension events and verify", add_bad_events_and_verify_count),
         TestObj("Verify all events processed", wait_for_extension_events_dir_empty),
     ]
 
-    test_orchestrator = TestOrchestrator(tests=tests)
+    test_orchestrator = TestOrchestrator("ETPTests-VM", tests=tests)
     test_orchestrator.run_tests()
-    test_orchestrator.generate_report("ETPTests-VM", os.path.join("/home", admin_username, "test-results-etp-vm.xml"))
+    test_orchestrator.generate_report(os.path.join("/home", admin_username, "test-result-etp-vm.xml"))
+    assert not test_orchestrator.failed, f"Test Suite: {test_orchestrator.name} failed"

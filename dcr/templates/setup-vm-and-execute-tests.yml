@@ -189,6 +189,10 @@ jobs:
           scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
+          # Add all KeyVault secrets explicitly as they're not added by default to the environment vars
+          AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
+          AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
+          AZURE_TENANT_ID: $(AZURE-TENANT-ID)
         displayName: "Run the test file on the Orchestrator"
         condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
@@ -241,7 +245,7 @@ jobs:
           ec=1
           until [ "$n" -ge 5 ]
           do
-              scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/test-result-*.xml $(Build.ArtifactStagingDirectory) && ec=0 && break  # substitute your command here
+              scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/test-result*.xml $(Build.ArtifactStagingDirectory) && ec=0 && break  # substitute your command here
               n=$((n+1))
               sleep 3
           done
