@@ -87,9 +87,6 @@ jobs:
           deploymentOutputs: 'armDeploymentOutput'
 
       - script: |
-          export AZURE_CLIENT_ID="$(AZURE-CLIENT-ID)"
-          export AZURE_CLIENT_SECRET="$(AZURE-CLIENT-SECRET)"
-          export AZURE_TENANT_ID="$(AZURE-TENANT-ID)"
           printenv > $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env

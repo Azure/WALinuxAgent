@@ -27,30 +27,30 @@ parameters:
         name: "ubuntu18"
 #        setupPath: "dcr/distros/install_pip_packages.sh"
 
-#      - publisher: "Debian"
-#        offer: "debian-10"
-#        sku: "10"
-#        version: "latest"
-#        name: "deb10"
-##        setupPath: "dcr/distros/install_pip_packages.sh"
+      - publisher: "Debian"
+        offer: "debian-10"
+        sku: "10"
+        version: "latest"
+        name: "deb10"
+#        setupPath: "dcr/distros/install_pip_packages.sh"
+
+      - publisher: "OpenLogic"
+        offer: "CentOS"
+        sku: "7_9"
+        version: "latest"
+        name: "cent79"
 #
-#      - publisher: "OpenLogic"
-#        offer: "CentOS"
-#        sku: "7_9"
-#        version: "latest"
-#        name: "cent79"
-##
-#      - publisher: "SUSE"
-#        offer: "sles-15-sp2-basic"
-#        sku: "gen1"
-#        version: "latest"
-#        name: "suse15"
-##
-#      - publisher: "RedHat"
-#        offer: "RHEL"
-#        sku: "7-RAW"
-#        version: "latest"
-#        name: "rhel7Raw"
+      - publisher: "SUSE"
+        offer: "sles-15-sp2-basic"
+        sku: "gen1"
+        version: "latest"
+        name: "suse15"
+#
+      - publisher: "RedHat"
+        offer: "RHEL"
+        sku: "7-RAW"
+        version: "latest"
+        name: "rhel7Raw"
 
 trigger:
   - develop
