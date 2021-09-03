@@ -40,6 +40,8 @@ class TestOrchestrator:
                             if attempt > test.retry:
                                 print("retrying in 10 secs")
                                 time.sleep(10)
+                    else:
+                        break
             self.test_cases.append(tc)
 
     def generate_report(self, test_file_path):
