@@ -182,6 +182,7 @@ __INTEGER_OPTIONS__ = {
     # versions of the Agent.
     #
     "Debug.CgroupCheckPeriod": 300,
+    "Debug.AgentCpuQuota": 100,
 }
 
 
@@ -531,6 +532,14 @@ def get_cgroup_disable_on_quota_check_failure(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.CgroupDisableOnQuotaCheckFailure", True)
+
+def get_agent_cpu_quota(conf=__conf__):
+    """
+    CPU quota for the agent as a percentage of 1 CPU (100% == 1 CPU)
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.AgentCpuQuota", 100)
 
 def get_enable_fast_track(conf=__conf__):
     """
