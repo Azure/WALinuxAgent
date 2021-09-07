@@ -84,17 +84,6 @@ pool: #larohra-dcrvmsspool
   vmImage: ubuntu-latest
 
 stages:
-  # - stage: "Setup"
-
-  #   jobs:
-  #
-  #   - job: "PrintMetadata"
-  #     steps:
-  #       - script: |
-  #           ip -4 -o address
-  #           wget -O - -q icanhazip.com
-  #         displayName: 'IP'
-
   - stage: "Execute"
     variables:
       agentVersion: "9.9.9.9"
@@ -129,15 +118,6 @@ stages:
             - ${{ parameters.templateScenarios }}
           distros:
             - ${{ parameters.distros }}
-
-  #    - task: AzureCLI@2
-  #    #   condition: succeeded('deployVM')
-  #      displayName: "Get instance view"
-  #      inputs:
-  #        azureSubscription: $(azureConnection)
-  #        scriptType: 'bash'
-  #        scriptLocation: 'inlineScript'
-  #        inlineScript: 'az vm get-instance-view --ids $(az vm list -g $(rgName) --query "[].id" -o tsv)'
 
   - stage: "Cleanup"
     condition: succeededOrFailed()

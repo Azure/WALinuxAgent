@@ -3,6 +3,7 @@
 pytest
 junit-xml
 distro
+cryptography
 azure-identity
 azure-keyvault-keys
 azure-mgmt-compute>=22.1.0
