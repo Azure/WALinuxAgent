@@ -20,6 +20,13 @@ def execute_command_and_raise_on_error(command, shell=False, timeout=None, stdou
     return stdout.decode().strip(), stderr.decode().strip()
 
 
+def execute_py_command_on_vm(command: str, username: str = None, host: str = None):
+    username = os.environ['ADMINUSERNAME'] if username is None else username
+    host = os.environ['ARMDEPLOYMENTOUTPUT_HOSTNAME_VALUE'] if host is None else host
+    ssh_cmd = f"ssh -o StrictHostKeyChecking=no {username}@{host} sudo PYTHONPATH=. {os.environ['PYPYPATH']} {command}"
+    execute_command_and_raise_on_error(command=ssh_cmd, shell=True)
+
+
 def get_vm_data_from_env() -> VMMetaData:
     rg_name = "{0}-{1}-{2}".format(os.environ['RGNAME'], os.environ['SCENARIONAME'], os.environ['DISTRONAME'])
     return VMMetaData(vm_name=os.environ["VMNAME"],
@@ -37,4 +44,3 @@ def random_alphanum(length: int) -> str:
         text = secrets.token_hex(nbytes=math.ceil(length / 2))
         is_length_even = length % 2 == 0
         return text if is_length_even else text[1:]
-
