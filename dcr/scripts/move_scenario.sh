@@ -11,4 +11,4 @@ popd
 # Move contents of the remaining scenario to a directory called scenario
 # This is done to be able to import the yml easily as importing a yml template can only be static, it cant be dynamic
 mkdir "$BUILD_SOURCESDIRECTORY/dcr/scenario"
-mv "$BUILD_SOURCESDIRECTORY/dcr/scenarios/$SCENARIONAME"/* "$BUILD_SOURCESDIRECTORY/dcr/scenario/"
+cp -r "$BUILD_SOURCESDIRECTORY/dcr/scenarios/$SCENARIONAME"/* "$BUILD_SOURCESDIRECTORY/dcr/scenario/"
