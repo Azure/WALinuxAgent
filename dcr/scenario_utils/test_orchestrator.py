@@ -6,6 +6,8 @@ from typing import List
 
 from junit_xml import TestCase, TestSuite, to_xml_report_file
 
+from dcr.scenario_utils.logging_utils import LoggingHandler
+
 
 class TestObj:
     def __init__(self, test_name, test_func, raise_on_error=False, retry=1):
@@ -15,12 +17,12 @@ class TestObj:
         self.retry = retry
 
 
-class TestOrchestrator:
-    def __init__(self, name: str, tests: List[TestObj]):
+class TestOrchestrator(LoggingHandler):
+    def __init__(self, name: str, tests: List[TestObj], *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.name = name
         self.tests: List[TestObj] = tests
         self.test_cases: List[TestCase] = []
-        self.__logger = logging.getLogger(self.__name__)
 
     def run_tests(self):
         skip_due_to = None
@@ -35,12 +37,12 @@ class TestOrchestrator:
                     if tc.is_error() or tc.is_failure():
                         attempt += 1
                         if attempt > test.retry and test.raise_on_error:
-                            self.__logger.warning(f"Breaking test case failed: {test.name}; Skipping remaining tests")
+                            self.log.warning(f"Breaking test case failed: {test.name}; Skipping remaining tests")
                             skip_due_to = test.name
                         else:
-                            self.__logger.warning(f"(Attempt {attempt-1}/Total {test.retry}) Test {test.name} failed")
+                            self.log.warning(f"(Attempt {attempt-1}/Total {test.retry}) Test {test.name} failed")
                             if attempt > test.retry:
-                                self.__logger.warning("retrying in 10 secs")
+                                self.log.warning("retrying in 10 secs")
                                 time.sleep(10)
                     else:
                         break
@@ -61,12 +63,12 @@ class TestOrchestrator:
         tc = TestCase(test_name, classname=os.environ['SCENARIONAME'])
         start_time = time.time()
         print("---" * 20)
-        self.__logger.info("TestName: {0}".format(test_name))
+        self.log.info("TestName: {0}".format(test_name))
         try:
             stdout = test_func()
-            self.__logger.info("Debug Output: {0}".format(test_name, stdout))
+            self.log.info("Debug Output: {0}".format(test_name, stdout))
         except Exception as err:
-            self.__logger.exception("Error: {1}".format(test_name, err))
+            self.log.exception("Error: {1}".format(test_name, err))
             tc.add_failure_info(f"Error: {err}; Stack: {traceback.format_exc()}")
 
         tc.stdout = stdout

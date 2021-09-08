@@ -7,6 +7,7 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineExtension
 from msrestazure.azure_exceptions import CloudError
 
+from dcr.scenario_utils.logging_utils import LoggingHandler
 from dcr.scenario_utils.models import ExtensionMetaData, VMMetaData
 
 
@@ -17,13 +18,13 @@ def _get_compute_client(sub_id) -> ComputeManagementClient:
     )
 
 
-class BaseExtensionTestClass:
+class BaseExtensionTestClass(LoggingHandler):
 
-    def __init__(self, extension_data: ExtensionMetaData, vm_data: VMMetaData):
+    def __init__(self, extension_data: ExtensionMetaData, vm_data: VMMetaData, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.__extension_data = extension_data
         self.__vm_data = vm_data
         self.__compute_client = _get_compute_client(self.__vm_data.sub_id)
-        self.__logger = logging.getLogger(__name__)
 
     def get_ext_props(self, settings=None, protected_settings=None, auto_upgrade_minor_version=True,
                       force_update_tag=None) -> VirtualMachineExtension:
@@ -48,17 +49,17 @@ class BaseExtensionTestClass:
                         self.__extension_data.name,
                         ext_prop
                     )
-                    self.__logger.info("Add extension: {0}".format(extension.result(timeout=5*60)))
+                    self.log.info("Add extension: {0}".format(extension.result(timeout=5*60)))
 
                     # Validate success from instance view
                     self.validate_ext()
 
                 except Exception as err:
                     if continue_on_error:
-                        self.__logger.exception("Ran into error but ignoring it as asked: {0}".format(err))
+                        self.log.exception("Ran into error but ignoring it as asked: {0}".format(err))
                         continue
                     else:
-                        self.__logger.exception(f"Ran into error when trying to execute extensions: {err}")
+                        self.log.exception(f"Ran into error when trying to execute extensions: {err}")
                         raise
         finally:
             # Always try to delete extensions if asked to remove even on errors
@@ -68,7 +69,7 @@ class BaseExtensionTestClass:
                     self.__vm_data.name,
                     self.__extension_data.name
                 ).result()
-                self.__logger.info("Delete vm extension: {0}".format(deletion))
+                self.log.info("Delete vm extension: {0}".format(deletion))
 
     def validate_ext(self):
         """
@@ -92,13 +93,13 @@ class BaseExtensionTestClass:
                 else:
                     status = ext.instance_view.statuses[0].code
                     status_message = ext.instance_view.statuses[0].message
-                    self.__logger.info('Extension Status: \n\tCode: [{0}]\n\tMessage: {1}'.format(status, status_message))
+                    self.log.info('Extension Status: \n\tCode: [{0}]\n\tMessage: {1}'.format(status, status_message))
                     break
             except Exception as err:
-                self.__logger.exception(f"Ran into error: {err}")
+                self.log.exception(f"Ran into error: {err}")
                 retry += 1
                 if retry < max_retry:
-                    self.__logger.info("Retrying in 30 secs")
+                    self.log.info("Retrying in 30 secs")
                     time.sleep(30)
                 raise
 
@@ -119,8 +120,8 @@ class BaseExtensionTestClass:
                 return ext
             except CloudError as ce:
                 if retries > 0:
-                    self.__logger.exception(f"Get extension error: {ce}")
-                    self.__logger.warning("...retrying [{0} attempts remaining]".format(retries))
+                    self.log.exception(f"Get extension error: {ce}")
+                    self.log.warning("...retrying [{0} attempts remaining]".format(retries))
                     retries -= 1
                     time.sleep(30 * (max_retries - retries))
                 else:
