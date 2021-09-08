@@ -23,14 +23,9 @@ class VMAccessExtension(BaseExtensionTestClass):
     def verify(self):
         os.chmod(self.private_key_file, 0o600)
         ip = os.environ['ARMDEPLOYMENTOUTPUT_HOSTNAME_VALUE']
-        ssh_cmd = 'echo script was executed successfully on remote vm'
-
-        ssh_args = ['ssh', '-o', 'StrictHostKeyChecking no', '-i',
-                    self.private_key_file,
-                    '{0}@{1}'.format(self.user_name, ip),
-                    ssh_cmd]
-
-        execute_command_and_raise_on_error(ssh_args, stdout=sys.stdout, stderr=sys.stderr)
+        ssh_cmd = f'ssh -o StrictHostKeyChecking=no -i {self.private_key_file} {self.user_name}@{ip} ' \
+                  f'"echo script was executed successfully on remote vm"'
+        execute_command_and_raise_on_error(ssh_cmd, shell=True)
 
 
 def add_and_verify_vmaccess(vm_data):
