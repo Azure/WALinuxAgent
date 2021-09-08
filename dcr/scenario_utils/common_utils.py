@@ -23,7 +23,7 @@ def execute_command_and_raise_on_error(command, shell=False, timeout=None, stdou
 def execute_py_command_on_vm(command: str, username: str = None, host: str = None):
     username = os.environ['ADMINUSERNAME'] if username is None else username
     host = os.environ['ARMDEPLOYMENTOUTPUT_HOSTNAME_VALUE'] if host is None else host
-    ssh_cmd = f"ssh -o StrictHostKeyChecking=no {username}@{host} sudo PYTHONPATH=. {os.environ['PYPYPATH']} {command}"
+    ssh_cmd = f"ssh -o StrictHostKeyChecking=no {username}@{host} sudo PYTHONPATH=. {os.environ['PYPYPATH']} /home/{username}/{command}"
     execute_command_and_raise_on_error(command=ssh_cmd, shell=True)
 
 
