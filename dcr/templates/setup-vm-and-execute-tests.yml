@@ -238,15 +238,7 @@ jobs:
 #        condition: succeededOrFailed()
 
       - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/test-result*.xml $(Build.ArtifactStagingDirectory) && ec=0 && break  # substitute your command here
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
+          if scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/test-result*.xml $(Build.ArtifactStagingDirectory) >&/dev/null ; then exit 0 ; else echo "No files found" ; fi
         condition: succeededOrFailed()
         displayName: 'Fetch test results'
 
