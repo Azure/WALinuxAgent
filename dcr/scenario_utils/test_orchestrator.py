@@ -69,7 +69,7 @@ class TestOrchestrator(LoggingHandler):
             self.log.info("Debug Output: {0}".format(test_name, stdout))
         except Exception as err:
             self.log.exception("Error: {1}".format(test_name, err))
-            tc.add_failure_info(f"Error: {err}; Stack: {traceback.format_exc()}")
+            tc.add_failure_info(f"Error: {err}", output=f"Stack: {traceback.format_exc()}")
 
         tc.stdout = stdout
         tc.elapsed_sec = (time.time() - start_time)
