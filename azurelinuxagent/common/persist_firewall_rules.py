@@ -17,14 +17,13 @@
 #
 import os
 import sys
-import traceback
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
-from azurelinuxagent.common.utils import shellutil, fileutil
+from azurelinuxagent.common.utils import shellutil, fileutil, textutil
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
 
@@ -275,9 +274,9 @@ if __name__ == '__main__':
             msg = "Unable to fetch service logs, Command: {0} failed with ExitCode: {1}\nStdout: {2}\nStderr: {3}".format(
                 ' '.join(cmd), error.returncode, error.stdout, error.stderr)
             logger.warn(msg)
-        except Exception:
+        except Exception as e:
             msg = "Ran into unexpected error when getting logs for {0} service. Error: {1}".format(
-                self._network_setup_service_name, traceback.format_exc())
+                self._network_setup_service_name, textutil.format_exception(e))
             logger.warn(msg)
 
         # Log service status and logs if we can fetch them from journalctl and send it to Kusto,

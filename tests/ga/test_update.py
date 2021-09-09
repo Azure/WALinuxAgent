@@ -7,6 +7,7 @@ import contextlib
 import glob
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -18,18 +19,20 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import currentThread
 
+_ORIGINAL_POPEN = subprocess.Popen
+
 from mock import PropertyMock
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError
+from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
-    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler
+    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler, VMStatus, ExtHandlerStatus, ExtensionStatus
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
@@ -37,14 +40,16 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, HandlerEnvironment
+from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ValidHandlerStatus
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
-    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, UpdateHandler
+    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, READONLY_FILE_GLOBS
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
-from tests.tools import AgentTestCase, call, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
+from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
     clear_singleton_instances, mock_sleep
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import HttpRequestPredicates
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -717,15 +722,16 @@ class TestUpdate(UpdateTestCase):
         UpdateTestCase.setUp(self)
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
         self.update_handler = get_update_handler()
+        protocol = Mock()
+        protocol.get_ext_handlers = Mock(return_value=(Mock(), Mock()))
         self.update_handler.protocol_util = Mock()
+        self.update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
 
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not reuse
         # a previous state
         clear_singleton_instances(ProtocolUtil)
 
     def test_creation(self):
-        self.assertTrue(self.update_handler.running)
-
         self.assertEqual(None, self.update_handler.last_attempt_time)
 
         self.assertEqual(0, len(self.update_handler.agents))
@@ -1101,11 +1107,11 @@ class TestUpdate(UpdateTestCase):
         if mock_time is None:
             mock_time = TimeMock()
 
-        with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
+        with patch('azurelinuxagent.ga.update.subprocess.Popen', return_value=mock_child) as mock_popen:
             with patch('time.time', side_effect=mock_time.time):
                 with patch('time.sleep', side_effect=mock_time.sleep):
                     self.update_handler.run_latest(child_args=child_args)
-                    self.assertEqual(1, mock_popen.call_count)
+                    self.assertEqual(1, mock_popen.call_count, "Expected a single call to the latest agent; got: {0}".format(mock_popen.call_args_list))
 
                     return mock_popen.call_args
 
@@ -1246,7 +1252,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, latest_agent.error.failure_count)
 
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
-            self.update_handler.running = False
+            self.update_handler.is_running = False
             self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Attempt blacklisting")))
 
         self.assertTrue(latest_agent.is_available)
@@ -1265,71 +1271,61 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=None, enable_updates=False, sleep_interval=(6,)):
-        if calls is None:
-            calls = [call.run()]
+    def _test_run(self, invocations=1, calls=1, enable_updates=False, sleep_interval=(6,)):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
-        # Note:
-        # - Python only allows mutations of objects to which a function has
-        #   a reference. Incrementing an integer directly changes the
-        #   reference. Incrementing an item of a list changes an item to
-        #   which the code has a reference.
-        #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
-        iterations = [0]
-
-        def iterator(*args, **kwargs):  # pylint: disable=unused-argument
-            iterations[0] += 1
-            if iterations[0] >= invocations:
-                self.update_handler.running = False
-            return
+        def iterator(*_, **__):
+            iterator.count += 1
+            if iterator.count <= invocations:
+                return True
+            return False
+        iterator.count = 0
 
         fileutil.write_file(conf.get_agent_pid_file_path(), ustr(42))
 
         with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
-            with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
-                with patch('azurelinuxagent.ga.update.get_monitor_handler') as mock_monitor:
-                    with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
-                        with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
-                            with patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler') as mock_telemetry_send_events:
-                                with patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler') as mock_event_collector:
-                                    with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                                        with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
-                                            with patch('time.sleep', side_effect=iterator) as sleep_mock:
-                                                with patch('sys.exit') as mock_exit:
-                                                    if isinstance(os.getppid, MagicMock):
-                                                        self.update_handler.run()
-                                                    else:
-                                                        with patch('os.getppid', return_value=42):
+            mock_handler.run_ext_handlers = Mock()
+            with patch('azurelinuxagent.ga.update.get_monitor_handler') as mock_monitor:
+                with patch.object(UpdateHandler, 'is_running') as mock_is_running:
+                    mock_is_running.__get__ = Mock(side_effect=iterator)
+                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
+                        with patch('azurelinuxagent.ga.update.get_env_handler') as mock_env:
+                            with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
+                                with patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler') as mock_telemetry_send_events:
+                                    with patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler') as mock_event_collector:
+                                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                                            with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
+                                                with patch('time.sleep') as sleep_mock:
+                                                    with patch('sys.exit') as mock_exit:
+                                                        if isinstance(os.getppid, MagicMock):
                                                             self.update_handler.run()
+                                                        else:
+                                                            with patch('os.getppid', return_value=42):
+                                                                self.update_handler.run()
 
-                                                self.assertEqual(1, mock_handler.call_count)
-                                                self.assertEqual(mock_handler.return_value.method_calls, calls)
-                                                self.assertEqual(1, mock_ra_handler.call_count)
-                                                self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
-                                                self.assertEqual(invocations, sleep_mock.call_count)
-                                                if invocations > 0:
-                                                    self.assertEqual(sleep_interval, sleep_mock.call_args[0])
-                                                self.assertEqual(1, mock_monitor.call_count)
-                                                self.assertEqual(1, mock_env.call_count)
-                                                self.assertEqual(1, mock_collect_logs.call_count)
-                                                self.assertEqual(1, mock_telemetry_send_events.call_count)
-                                                self.assertEqual(1, mock_event_collector.call_count)
-                                                self.assertEqual(1, mock_exit.call_count)
+                                                    self.assertEqual(1, mock_handler.call_count)
+                                                    self.assertEqual(calls, len([c for c in [call[0] for call in mock_handler.return_value.method_calls] if c == 'run']))
+                                                    self.assertEqual(1, mock_ra_handler.call_count)
+                                                    self.assertEqual(calls, len(mock_ra_handler.return_value.method_calls))
+                                                    if calls > 0:
+                                                        self.assertEqual(sleep_interval, sleep_mock.call_args[0])
+                                                    self.assertEqual(1, mock_monitor.call_count)
+                                                    self.assertEqual(1, mock_env.call_count)
+                                                    self.assertEqual(1, mock_collect_logs.call_count)
+                                                    self.assertEqual(1, mock_telemetry_send_events.call_count)
+                                                    self.assertEqual(1, mock_event_collector.call_count)
+                                                    self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
 
-    def test_run_keeps_running(self):
-        self._test_run(invocations=15, calls=[call.run()] * 15)
-
     def test_run_stops_if_update_available(self):
         self.update_handler._upgrade_available = Mock(return_value=True)
-        self._test_run(invocations=0, calls=[], enable_updates=True)
+        self._test_run(invocations=0, calls=0, enable_updates=True)
 
     def test_run_stops_if_orphaned(self):
         with patch('os.getppid', return_value=1):
-            self._test_run(invocations=0, calls=[], enable_updates=True)
+            self._test_run(invocations=0, calls=0, enable_updates=True)
 
     def test_run_clears_sentinel_on_successful_exit(self):
         self._test_run()
@@ -1337,7 +1333,7 @@ class TestUpdate(UpdateTestCase):
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
         self.update_handler._upgrade_available = Mock(side_effect=Exception)
-        self._test_run(invocations=0, calls=[], enable_updates=True)
+        self._test_run(invocations=1, calls=0, enable_updates=True)
         self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_run_emits_restart_event(self):
@@ -1376,13 +1372,13 @@ class TestUpdate(UpdateTestCase):
     def test_shutdown(self):
         self.update_handler._set_sentinel()
         self.update_handler._shutdown()
-        self.assertFalse(self.update_handler.running)
+        self.assertFalse(self.update_handler.is_running)
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_shutdown_ignores_missing_sentinel_file(self):
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
         self.update_handler._shutdown()
-        self.assertFalse(self.update_handler.running)
+        self.assertFalse(self.update_handler.is_running)
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_shutdown_ignores_exceptions(self):
@@ -1505,15 +1501,7 @@ class TestUpdate(UpdateTestCase):
         behavior never changes.
         """
         self.update_handler._upgrade_available = Mock(return_value=True)
-        self._test_run(invocations=0, calls=[], enable_updates=True, sleep_interval=(300,))
-
-    @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
-    def test_interval_changes_when_extensions_disabled(self, _):
-        """
-        When extension processing is disabled, the goal state interval should be larger.
-        """
-        self.update_handler._upgrade_available = Mock(return_value=False)
-        self._test_run(invocations=15, calls=[call.run()] * 15, sleep_interval=(300,))
+        self._test_run(invocations=0, calls=0, enable_updates=True, sleep_interval=(300,))
 
     @patch("azurelinuxagent.common.logger.info")
     @patch("azurelinuxagent.ga.update.add_event")
@@ -1561,7 +1549,7 @@ class TestUpdate(UpdateTestCase):
                     update_handler._cur_iteration = 0
                     update_handler._iterations = 0
                     update_handler.set_iterations = lambda i: _set_iterations(i)  # pylint: disable=unnecessary-lambda
-                    type(update_handler).running = PropertyMock(side_effect=check_running)
+                    type(update_handler).is_running = PropertyMock(side_effect=check_running)
                     with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
                         with patch('sys.exit'):
                             # Setup the initial number of iterations
@@ -1571,7 +1559,7 @@ class TestUpdate(UpdateTestCase):
                             finally:
                                 # Since PropertyMock requires us to mock the type(ClassName).property of the object,
                                 # reverting it back to keep the state of the test clean
-                                type(update_handler).running = True
+                                type(update_handler).is_running = True
 
     @staticmethod
     def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
@@ -1595,8 +1583,11 @@ class TestUpdate(UpdateTestCase):
             self.assertEqual(os.path.getctime(handler_env_file), last_modification_time,
                              "The creation time and last modified time of the HandlerEnvironment file dont match")
 
-            # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
-            # flag in HandlerEnvironment.json file
+        # Simulate a service restart by getting a new instance of the update handler and protocol and
+        # re-runnning the update handler. Then,ensure that the HandlerEnvironment file is recreated with eventsFolder
+        # flag in HandlerEnvironment.json file.
+        self._add_write_permission_to_goal_state_files()
+        with self._get_update_handler(iterations) as (update_handler, protocol):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)
@@ -1609,15 +1600,23 @@ class TestUpdate(UpdateTestCase):
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
 
+    def _add_write_permission_to_goal_state_files(self):
+        # UpdateHandler.run() marks some of the files from the goal state as read-only. Those files are overwritten when
+        # a new goal state is fetched. This is not a problem for the agent, since it  runs as root, but tests need
+        # to make those files writtable before fetching a new goal state. Note that UpdateHandler.run() fetches a new
+        # goal state, so tests that make multiple calls to that method need to call this function in-between calls.
+        for gb in READONLY_FILE_GLOBS:
+            for path in glob.iglob(os.path.join(conf.get_lib_dir(), gb)):
+                fileutil.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
     def test_it_should_not_setup_persistent_firewall_rules_if_EnableFirewall_is_disabled(self):
-        original_popen = subprocess.Popen
         executed_firewall_commands = []
 
         def _mock_popen(cmd, *args, **kwargs):
             if 'firewall-cmd' in cmd:
                 executed_firewall_commands.append(cmd)
                 cmd = ["echo", "running"]
-            return original_popen(cmd, *args, **kwargs)
+            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.logger.info") as patch_info:
             with self._get_update_handler(iterations=1) as (update_handler, _):
@@ -1632,14 +1631,13 @@ class TestUpdate(UpdateTestCase):
 
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
-        original_popen = subprocess.Popen
         executed_commands = []
 
         def _mock_popen(cmd, *args, **kwargs):
             if 'firewall-cmd' in cmd:
                 executed_commands.append(cmd)
                 cmd = ["echo", "running"]
-            return original_popen(cmd, *args, **kwargs)
+            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with self._get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
@@ -1679,6 +1677,7 @@ class TestUpdate(UpdateTestCase):
         # Disable extension telemetry pipeline and ensure events directory got deleted
         with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", False):
+                self._add_write_permission_to_goal_state_files()
                 update_handler.run(debug=True)
                 for ext_dir in expected_events_dirs:
                     self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
@@ -1701,34 +1700,36 @@ class MonitorThreadTest(AgentTestCase):
         AgentTestCase.setUp(self)
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
         currentThread().setName("ExtHandler")
+        protocol = Mock()
+        protocol.get_ext_handlers = Mock(return_value=(Mock(), Mock()))
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
+        self.update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         clear_singleton_instances(ProtocolUtil)
 
     def _test_run(self, invocations=1):
-        iterations = [0]
-
-        def iterator(*args, **kwargs):  # pylint: disable=unused-argument
-            iterations[0] += 1
-            if iterations[0] >= invocations:
-                self.update_handler.running = False
-            return
+        def iterator(*_, **__):
+            iterator.count += 1
+            if iterator.count <= invocations:
+                return True
+            return False
+        iterator.count = 0
 
         with patch('os.getpid', return_value=42):
             with patch.object(UpdateHandler, '_is_orphaned') as mock_is_orphaned:
                 mock_is_orphaned.__get__ = Mock(return_value=False)
-                with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
-                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
-                        with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                            with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
-                                with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
-                                    with patch('time.sleep', side_effect=iterator):
-                                        with patch('sys.exit'):
-                                            self.update_handler.run()
+                with patch.object(UpdateHandler, 'is_running') as mock_is_running:
+                    mock_is_running.__get__ = Mock(side_effect=iterator)
+                    with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
+                        with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
+                            with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                                with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                    with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
+                                        with patch('time.sleep'):
+                                            with patch('sys.exit'):
+                                                self.update_handler.run()
 
     def _setup_mock_thread_and_start_test_run(self, mock_thread, is_alive=True, invocations=0):
-        self.assertTrue(self.update_handler.running)
-
         thread = MagicMock()
         thread.run = MagicMock()
         thread.is_alive = MagicMock(return_value=is_alive)
@@ -1739,8 +1740,6 @@ class MonitorThreadTest(AgentTestCase):
         return thread
 
     def test_start_threads(self, mock_env, mock_monitor, mock_collect_logs, mock_telemetry_send_events, mock_telemetry_collector):
-        self.assertTrue(self.update_handler.running)
-
         def _get_mock_thread():
             thread = MagicMock()
             thread.run = MagicMock()
@@ -1758,7 +1757,7 @@ class MonitorThreadTest(AgentTestCase):
             self.assertEqual(1, thread().run.call_count)
 
     def test_check_if_monitor_thread_is_alive(self, _, mock_monitor, *args):  # pylint: disable=unused-argument
-        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=0)
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=True, invocations=1)
         self.assertEqual(1, mock_monitor.call_count)
         self.assertEqual(1, mock_monitor_thread.run.call_count)
         self.assertEqual(1, mock_monitor_thread.is_alive.call_count)
@@ -1786,14 +1785,14 @@ class MonitorThreadTest(AgentTestCase):
         self.assertEqual(1, mock_env_thread.start.call_count)
 
     def test_restart_monitor_thread(self, _, mock_monitor, *args):  # pylint: disable=unused-argument
-        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=0)
+        mock_monitor_thread = self._setup_mock_thread_and_start_test_run(mock_monitor, is_alive=False, invocations=1)
         self.assertEqual(True, mock_monitor.called)
         self.assertEqual(True, mock_monitor_thread.run.called)
         self.assertEqual(True, mock_monitor_thread.is_alive.called)
         self.assertEqual(True, mock_monitor_thread.start.called)
 
     def test_restart_env_thread(self, mock_env, *args):  # pylint: disable=unused-argument
-        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=0)
+        mock_env_thread = self._setup_mock_thread_and_start_test_run(mock_env, is_alive=False, invocations=1)
         self.assertEqual(True, mock_env.called)
         self.assertEqual(True, mock_env_thread.run.called)
         self.assertEqual(True, mock_env_thread.is_alive.called)
@@ -1899,6 +1898,286 @@ class TimeMock(Mock):
         current_time = self.next_time
         self.next_time += self.time_increment
         return current_time
+
+
+class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
+    """
+    Tests for UpdateHandler._try_update_goal_state()
+    """
+    def test_it_should_return_true_on_success(self):
+        update_handler = get_update_handler()
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            self.assertTrue(update_handler._try_update_goal_state(protocol), "try_update_goal_state should have succeeded")
+
+    def test_it_should_return_false_on_failure(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            def http_get_handler(url, *_, **__):
+                if self.is_goal_state_request(url):
+                    return HttpError('Exception to fake an error retrieving the goal state')
+                return None
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            update_handler = get_update_handler()
+            self.assertFalse(update_handler._try_update_goal_state(protocol), "try_update_goal_state should have failed")
+
+    def test_it_should_update_the_goal_state(self):
+        update_handler = get_update_handler()
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.mock_wire_data.set_incarnation(12345)
+
+            # the first goal state should produce an update
+            update_handler._try_update_goal_state(protocol)
+            self.assertEqual(protocol.get_incarnation(), '12345', "The goal state was not updated (received unexpected incarnation)")
+
+            # no changes in the goal state should not produce an update
+            update_handler._try_update_goal_state(protocol)
+            self.assertEqual(protocol.get_incarnation(), '12345', "The goal state should not be updated (received unexpected incarnation)")
+
+            # a new  goal state should produce an update
+            protocol.mock_wire_data.set_incarnation(6789)
+            update_handler._try_update_goal_state(protocol)
+            self.assertEqual(protocol.get_incarnation(), '6789', "The goal state was not updated (received unexpected incarnation)")
+
+    def test_it_should_log_errors_only_when_the_error_state_changes(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            def http_get_handler(url, *_, **__):
+                if self.is_goal_state_request(url):
+                    if fail_goal_state_request:
+                        return HttpError('Exception to fake an error retrieving the goal state')
+                return None
+
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            @contextlib.contextmanager
+            def create_log_and_telemetry_mocks():
+                with patch("azurelinuxagent.ga.update.logger", autospec=True) as logger_patcher:
+                    with patch("azurelinuxagent.ga.update.add_event") as add_event_patcher:
+                        yield logger_patcher, add_event_patcher
+
+            calls_to_strings = lambda calls: (str(c) for c in calls)
+            filter_calls = lambda calls, regex=None: (c for c in calls_to_strings(calls) if regex is None or re.match(regex, c))
+            logger_calls = lambda regex=None: [m for m in filter_calls(logger.method_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
+            warnings = lambda: logger_calls(r'call.warn\(.*An error occurred while retrieving the goal state.*')
+            periodic_warnings = lambda: logger_calls(r'call.periodic_warn\(.*Attempts to retrieve the goal state are failing.*')
+            success_messages = lambda: logger_calls(r'call.info\(.*Retrieving the goal state recovered from previous errors.*')
+            telemetry_calls = lambda regex=None: [m for m in filter_calls(add_event.mock_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
+            goal_state_events = lambda: telemetry_calls(r".*op='FetchGoalState'.*")
+
+            #
+            # Initially calls to retrieve the goal state are successful...
+            #
+            update_handler = get_update_handler()
+            fail_goal_state_request = False
+            with create_log_and_telemetry_mocks() as (logger, add_event):
+                update_handler._try_update_goal_state(protocol)
+
+                lc = logger_calls()
+                self.assertTrue(len(lc) == 0, "A successful call should not produce any log messages: [{0}]".format(lc))
+
+                tc = telemetry_calls()
+                self.assertTrue(len(tc) == 0, "A successful call should not produce any telemetry events: [{0}]".format(tc))
+
+            #
+            # ... then an error happens...
+            #
+            fail_goal_state_request = True
+            with create_log_and_telemetry_mocks() as (logger, add_event):
+                update_handler._try_update_goal_state(protocol)
+
+                w = warnings()
+                pw = periodic_warnings()
+                self.assertEqual(1, len(w), "A failure should have produced a warning: [{0}]".format(w))
+                self.assertEqual(1, len(pw), "A failure should have produced a periodic warning: [{0}]".format(pw))
+
+                gs = goal_state_events()
+                self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
+
+            #
+            # ... and errors continue happening...
+            #
+            with create_log_and_telemetry_mocks() as (logger, add_event):
+                update_handler._try_update_goal_state(protocol)
+                update_handler._try_update_goal_state(protocol)
+                update_handler._try_update_goal_state(protocol)
+
+                w = warnings()
+                pw = periodic_warnings()
+                self.assertTrue(len(w) == 0, "Subsequent failures should not produce warnings: [{0}]".format(w))
+                self.assertEqual(len(pw), 3, "Subsequent failures should produce periodic warnings: [{0}]".format(pw))
+
+                tc = telemetry_calls()
+                self.assertTrue(len(tc) == 0, "Subsequent failures should not produce any telemetry events: [{0}]".format(tc))
+
+            #
+            # ... until we finally succeed
+            #
+            fail_goal_state_request = False
+            with create_log_and_telemetry_mocks() as (logger, add_event):
+                update_handler._try_update_goal_state(protocol)
+
+                s = success_messages()
+                w = warnings()
+                pw = periodic_warnings()
+                self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(s))
+                self.assertTrue(len(w) == 0 and len(pw) == 0, "Recovering after failures should have not produced any warnings: [{0}] [{1}]".format(w, pw))
+
+                gs = goal_state_events()
+                self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
+
+def _create_update_handler():
+    """
+    Creates an UpdateHandler in which agent updates are mocked as a no-op.
+    """
+    update_handler = get_update_handler()
+    update_handler._upgrade_available = Mock(return_value=False)
+    return update_handler
+
+@contextlib.contextmanager
+def _mock_exthandlers_handler(extension_statuses=None):
+    """
+    Creates an ExtHandlersHandler that doesn't actually handle any extensions, but that returns status for 1 extension.
+    The returned ExtHandlersHandler uses a mock WireProtocol, and both the run() and report_ext_handlers_status() are
+    mocked. The mock run() is a no-op. If a list of extension_statuses is given, successive calls to the mock
+    report_ext_handlers_status() returns a single extension with each of the statuses in the list. If extension_statuses
+    is ommitted all calls to report_ext_handlers_status() return a single extension with a success status.
+    """
+    def create_vm_status(extension_status):
+        vm_status = VMStatus(status="Ready", message="Ready")
+        vm_status.vmAgent.extensionHandlers = [ExtHandlerStatus()]
+        vm_status.vmAgent.extensionHandlers[0].extension_status = ExtensionStatus(name="TestExtension")
+        vm_status.vmAgent.extensionHandlers[0].extension_status.status = extension_status
+        return vm_status
+
+    with mock_wire_protocol(DATA_FILE) as protocol:
+        exthandlers_handler = ExtHandlersHandler(protocol)
+        exthandlers_handler.run = Mock()
+        if extension_statuses is None:
+            exthandlers_handler.report_ext_handlers_status = Mock(return_value=create_vm_status(ValidHandlerStatus.success))
+        else:
+            exthandlers_handler.report_ext_handlers_status = Mock(side_effect=[create_vm_status(s) for s in extension_statuses])
+        yield exthandlers_handler
+
+
+class ProcessGoalStateTestCase(AgentTestCase):
+    """
+    Tests for UpdateHandler._process_goal_state()
+    """
+    def test_it_should_process_goal_state_only_on_new_goal_state(self):
+        with _mock_exthandlers_handler() as exthandlers_handler:
+            update_handler = _create_update_handler()
+            remote_access_handler = Mock()
+            remote_access_handler.run = Mock()
+
+            # process a goal state
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+            self.assertEqual(1, exthandlers_handler.run.call_count, "exthandlers_handler.run() should have been called on the first goal state")
+            self.assertEqual(1, exthandlers_handler.report_ext_handlers_status.call_count, "exthandlers_handler.report_ext_handlers_status() should have been called on the first goal state")
+            self.assertEqual(1, remote_access_handler.run.call_count, "remote_access_handler.run() should have been called on the first goal state")
+
+            # process the same goal state
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+            self.assertEqual(1, exthandlers_handler.run.call_count, "exthandlers_handler.run() should have not been called on the same goal state")
+            self.assertEqual(2, exthandlers_handler.report_ext_handlers_status.call_count, "exthandlers_handler.report_ext_handlers_status() should have been called on the same goal state")
+            self.assertEqual(1, remote_access_handler.run.call_count, "remote_access_handler.run() should not have been called on the same goal state")
+
+            # process a new goal state
+            exthandlers_handler.protocol.mock_wire_data.set_incarnation(999)
+            exthandlers_handler.protocol.client.update_goal_state()
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+            self.assertEqual(2, exthandlers_handler.run.call_count, "exthandlers_handler.run() should have been called on a new goal state")
+            self.assertEqual(3, exthandlers_handler.report_ext_handlers_status.call_count, "exthandlers_handler.report_ext_handlers_status() should have been called on a new goal state")
+            self.assertEqual(2, remote_access_handler.run.call_count, "remote_access_handler.run() should have been called on a new goal state")
+
+
+class ReportStatusTestCase(AgentTestCase):
+    """
+    Tests for UpdateHandler._report_status()
+    """
+    def test_report_status_should_log_errors_only_once_per_goal_state(self):
+        update_handler = _create_update_handler()
+        with _mock_exthandlers_handler() as exthandlers_handler:
+            with patch("azurelinuxagent.ga.update.logger.warn") as logger_warn:
+                update_handler._report_status(exthandlers_handler, False)
+                self.assertEqual(0, logger_warn.call_count, "UpdateHandler._report_status() should not report WARNINGS when there are no errors")
+
+                with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", return_value=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
+                    update_handler._report_status(exthandlers_handler, False)
+                    update_handler._report_status(exthandlers_handler, False)
+                    update_handler._report_status(exthandlers_handler, False)
+                    self.assertEqual(1, logger_warn.call_count, "UpdateHandler._report_status() should report only 1 WARNING when there are multiple errors within the same goal state")
+
+                    exthandlers_handler.protocol.mock_wire_data.set_incarnation(999)
+                    update_handler._try_update_goal_state(exthandlers_handler.protocol)
+                    update_handler._report_status(exthandlers_handler, True)
+                    self.assertEqual(2, logger_warn.call_count, "UpdateHandler._report_status() should continue reporting errors after a new goal state")
+
+
+class GoalStateIntervalTestCase(AgentTestCase):
+    def test_initial_goal_state_period_should_default_to_goal_state_period(self):
+        configuration_provider = conf.ConfigurationProvider()
+        test_file = os.path.join(self.tmp_dir, "waagent.conf")
+        with open(test_file, "w") as file_:
+            file_.write("Extensions.GoalStatePeriod=987654321\n")
+        conf.load_conf_from_file(test_file, configuration_provider)
+
+        self.assertEqual(987654321, conf.get_initial_goal_state_period(conf=configuration_provider))
+
+    def test_update_handler_should_use_the_default_goal_state_period(self):
+        update_handler = get_update_handler()
+        default = conf.get_int_default_value("Extensions.GoalStatePeriod")
+        self.assertEqual(default, update_handler._goal_state_period, "The UpdateHanlder is not using the default goal state period")
+
+    def test_update_handler_should_not_use_the_default_goal_state_period_when_extensions_are_disabled(self):
+        with patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False):
+            update_handler = get_update_handler()
+            self.assertEqual(GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, update_handler._goal_state_period, "Incorrect goal state period when extensions are disabled")
+
+    def test_the_default_goal_state_period_and_initial_goal_state_period_should_be_the_same(self):
+        update_handler = get_update_handler()
+        default = conf.get_int_default_value("Extensions.GoalStatePeriod")
+        self.assertEqual(default, update_handler._goal_state_period, "The UpdateHanlder is not using the default goal state period")
+
+    def test_update_handler_should_use_the_initial_goal_state_period_when_it_is_different_to_the_goal_state_period(self):
+        with patch('azurelinuxagent.common.conf.get_initial_goal_state_period', return_value=99999):
+            update_handler = get_update_handler()
+            self.assertEqual(99999, update_handler._goal_state_period, "Expected the initial goal state period")
+
+    def test_update_handler_should_use_the_initial_goal_state_period_until_the_goal_state_converges(self):
+        initial_goal_state_period, goal_state_period = 11111, 22222
+        with patch('azurelinuxagent.common.conf.get_initial_goal_state_period', return_value=initial_goal_state_period):
+            with patch('azurelinuxagent.common.conf.get_goal_state_period', return_value=goal_state_period):
+                with _mock_exthandlers_handler([ValidHandlerStatus.transitioning, ValidHandlerStatus.success]) as exthandlers_handler:
+                    remote_access_handler = Mock()
+
+                    update_handler = _create_update_handler()
+                    self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period")
+
+                    # the extension is transisioning, so we should still be using the initial goal state period
+                    update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+                    self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period when the extension is transitioning")
+
+                    # the goal state converged (the extension succeeded), so we should switch to the regular goal state period
+                    update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+                    self.assertEqual(goal_state_period, update_handler._goal_state_period, "Expected the regular goal state period after the goal state converged")
+
+    def test_update_handler_should_switch_to_the_regular_goal_state_period_when_the_goal_state_does_not_converges(self):
+        initial_goal_state_period, goal_state_period = 11111, 22222
+        with patch('azurelinuxagent.common.conf.get_initial_goal_state_period', return_value=initial_goal_state_period):
+            with patch('azurelinuxagent.common.conf.get_goal_state_period', return_value=goal_state_period):
+                with _mock_exthandlers_handler([ValidHandlerStatus.transitioning, ValidHandlerStatus.transitioning]) as exthandlers_handler:
+                    remote_access_handler = Mock()
+
+                    update_handler = _create_update_handler()
+                    self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period")
+
+                    # the extension is transisioning, so we should still be using the initial goal state period
+                    update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+                    self.assertEqual(initial_goal_state_period, update_handler._goal_state_period, "Expected the initial goal state period when the extension is transitioning")
+
+                    # a new goal state arrives before the current goal state converged (the extension is transitioning), so we should switch to the regular goal state period
+                    exthandlers_handler.protocol.mock_wire_data.set_incarnation(100)
+                    update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+                    self.assertEqual(goal_state_period, update_handler._goal_state_period, "Expected the regular goal state period when the goal state does not converge")
 
 
 if __name__ == '__main__':

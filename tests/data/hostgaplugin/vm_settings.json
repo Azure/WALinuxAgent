@@ -1,0 +1,77 @@
+{
+    "activityId": "c86d8064-6f11-4145-8178-e0587e0584de",
+    "correlationId": "6609dcb1-fccc-474a-9a59-8bd71ba06983",
+    "extensionsLastModifiedTickCount": 637632862319659103,
+    "inVMMetadata": {
+        "subscriptionId": "8e037ad4-618f-4466-8bc8-5099d41ac15b",
+        "resourceGroupName": "rg-dc-ht3rnxw",
+        "vmName": "edpymvazsh",
+        "location": "CentralUSEUAP",
+        "vmId": "ba323e38-2145-4cb9-8cbf-778c7824bc9e",
+        "vmSize": "Standard_D2s_v3",
+        "osType": "Linux"
+    },
+    "requiredFeatures": [
+        {
+            "name": "MultipleExtensionsPerHandler"
+        }
+    ],
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "version": "2.4.0.1"
+        },
+        {
+            "name": "Test",
+            "version": "2.4.0.1"
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.Azure.Extensions.CustomScript",
+            "version": "2.1.3",
+            "location": "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/708cdbbfb9ad4802ac80a012992930b1/Microsoft.Azure.Extensions_CustomScript_uscentraleuap_manifest.xml",
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "settings": [
+                {
+                    "publicSettings": "{\"commandToExecute\":\"echo '26c8d804-6d2e-4da1-ab5b-629ad733b3bb'\"}"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.CPlat.Core.RunCommandHandlerLinux",
+            "version": "1.2.0",
+            "location": "https://umsavbvncrpzbnxmxzmr.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml",
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settings": [
+                {
+                    "publicSettings": "{\"source\":{\"script\":\"echo '571bbcda-2992-4417-a65c-eaad1832c1f9'\"}}",
+                    "seqNo": 0,
+                    "extensionName": "MCExt1",
+                    "extensionState": "enabled"
+                },
+                {
+                    "publicSettings": "{\"source\":{\"script\":\"echo '58d6ac9d-9ef3-400a-99d7-1c3b5451eef6'\"}}",
+                    "seqNo": 0,
+                    "extensionName": "MCExt2",
+                    "extensionState": "enabled"
+                },
+                {
+                    "publicSettings": "{\"source\":{\"script\":\"echo '834cad38-9eec-483e-946d-f713cafc3da8'\"}}",
+                    "seqNo": 0,
+                    "extensionName": "MCExt3",
+                    "extensionState": "enabled"
+                }
+            ]
+        }
+    ]
+}

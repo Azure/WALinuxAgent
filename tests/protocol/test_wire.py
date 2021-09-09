@@ -31,7 +31,7 @@ from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig, GoalState
+from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
@@ -39,7 +39,6 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
@@ -393,6 +392,8 @@ class TestWireProtocol(AgentTestCase):
 
             with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", True):
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
                 multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
@@ -406,6 +407,8 @@ class TestWireProtocol(AgentTestCase):
             # Feature should not be reported if not present
             with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", False):
                 exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
                 self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
                 if "supportedFeatures" not in protocol.aggregate_status:
                     # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
@@ -425,12 +428,12 @@ class TestWireProtocol(AgentTestCase):
                 self.assertFalse(found, "Multi-config name should be present in supportedFeatures")
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
-    def test_send_event(self, mock_http_request, *args):
+    def test_send_encoded_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client.send_event("foo", event_str.encode('utf-8'))
+        client.send_encoded_event("foo", event_str.encode('utf-8'))
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
@@ -439,10 +442,10 @@ class TestWireProtocol(AgentTestCase):
 
         # the headers should include utf-8 encoding...
         self.assertTrue("utf-8" in headers['Content-Type'])
-        # the body is not encoded, just check for equality
-        self.assertIn(event_str, body_received)
+        # the body is encoded, decode and check for equality
+        self.assertIn(event_str, body_received.decode('utf-8'))
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_small_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -464,7 +467,7 @@ class TestWireProtocol(AgentTestCase):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 1)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -478,7 +481,7 @@ class TestWireProtocol(AgentTestCase):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 2)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
     def test_report_event_large_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         event_str = random_generator(2 ** 18)
@@ -1072,7 +1075,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 '''
 
                 if forced:
-                    protocol.client.update_goal_state(forced=True)
+                    protocol.client.update_goal_state(force_update=True)
                 else:
                     protocol.client.update_goal_state()
 
@@ -1087,7 +1090,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
                 self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
-    def test_non_forced_update_should_not_update_the_goal_state_nor_the_host_plugin_when_the_incarnation_does_not_change(self):
+    def test_non_forced_update_should_not_update_the_goal_state_but_should_update_the_host_plugin_when_the_incarnation_does_not_change(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
 
@@ -1095,11 +1098,11 @@ class UpdateGoalStateTestCase(AgentTestCase):
             # goal state and then change those fields.
             goal_state = protocol.client.get_goal_state().xml_text
             shared_conf = protocol.client.get_shared_conf().xml_text
-            container_id = protocol.client.get_host_plugin().container_id
-            role_config_name = protocol.client.get_host_plugin().role_config_name
 
-            protocol.mock_wire_data.set_container_id(str(uuid.uuid4()))
-            protocol.mock_wire_data.set_role_config_name(str(uuid.uuid4()))
+            new_container_id = str(uuid.uuid4())
+            new_role_config_name = str(uuid.uuid4())
+            protocol.mock_wire_data.set_container_id(new_container_id)
+            protocol.mock_wire_data.set_role_config_name(new_role_config_name)
             protocol.mock_wire_data.shared_config = WireProtocolData.replace_xml_attribute_value(
                 protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
 
@@ -1108,8 +1111,8 @@ class UpdateGoalStateTestCase(AgentTestCase):
             self.assertEqual(protocol.client.get_goal_state().xml_text, goal_state)
             self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf)
 
-            self.assertEqual(protocol.client.get_host_plugin().container_id, container_id)
-            self.assertEqual(protocol.client.get_host_plugin().role_config_name, role_config_name)
+            self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
+            self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_forced_update_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_does_not_change(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -1126,7 +1129,7 @@ class UpdateGoalStateTestCase(AgentTestCase):
             protocol.mock_wire_data.set_role_config_name(new_role_config_name)
             protocol.mock_wire_data.shared_config = new_shared_conf
 
-            protocol.client.update_goal_state(forced=True)
+            protocol.client.update_goal_state(force_update=True)
 
             self.assertEqual(protocol.client.get_goal_state().incarnation, incarnation)
             self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)
@@ -1201,123 +1204,6 @@ class UpdateGoalStateTestCase(AgentTestCase):
                     "Could not find the expected number of redacted settings. Expected {0}.\n{1}".format(len(protected_settings), extensions_config))
 
 
-class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
-    """
-    Tests for WireClient.try_update_goal_state()
-    """
-    def test_it_should_return_true_on_success(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            self.assertTrue(protocol.client.try_update_goal_state(), "try_update_goal_state should have succeeded")
-
-    def test_incomplete_gs_should_fail(self):
-
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            GoalState.fetch_full_goal_state(protocol.client)
-
-            protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
-            protocol.mock_wire_data.reload()
-            protocol.mock_wire_data.set_incarnation(2)
-
-            with self.assertRaises(IncompleteGoalStateError):
-                GoalState.fetch_full_goal_state_if_incarnation_different_than(protocol.client, 1)
-
-    def test_it_should_return_false_on_failure(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            def http_get_handler(url, *_, **__):
-                if self.is_goal_state_request(url):
-                    return HttpError('Exception to fake an error retrieving the goal state')
-                return None
-
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-
-            self.assertFalse(protocol.client.try_update_goal_state(), "try_update_goal_state should have failed")
-
-    def test_it_should_log_errors_only_when_the_error_state_changes(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            def http_get_handler(url, *_, **__):
-                if self.is_goal_state_request(url):
-                    if fail_goal_state_request:
-                        return HttpError('Exception to fake an error retrieving the goal state')
-                return None
-
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-
-            @contextlib.contextmanager
-            def create_log_and_telemetry_mocks():
-                with patch("azurelinuxagent.common.protocol.wire.logger", autospec=True) as logger_patcher:
-                    with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event_patcher:
-                        yield logger_patcher, add_event_patcher
-
-            calls_to_strings = lambda calls: (str(c) for c in calls)
-            filter_calls = lambda calls, regex=None: (c for c in calls_to_strings(calls) if regex is None or re.match(regex, c))
-            logger_calls = lambda regex=None: [m for m in filter_calls(logger.method_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
-            warnings = lambda: logger_calls(r'call.warn\(.*An error occurred while retrieving the goal state.*')
-            periodic_warnings = lambda: logger_calls(r'call.periodic_warn\(.*Attempts to retrieve the goal state are failing.*')
-            success_messages = lambda: logger_calls(r'call.info\(.*Retrieving the goal state recovered from previous errors.*')
-            telemetry_calls = lambda regex=None: [m for m in filter_calls(add_event.mock_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
-            goal_state_events = lambda: telemetry_calls(r".*op='FetchGoalState'.*")
-
-            #
-            # Initially calls to retrieve the goal state are successful...
-            #
-            fail_goal_state_request = False
-            with create_log_and_telemetry_mocks() as (logger, add_event):
-                protocol.client.try_update_goal_state()
-
-                lc = logger_calls()
-                self.assertTrue(len(lc) == 0, "A successful call should not produce any log messages: [{0}]".format(lc))
-
-                tc = telemetry_calls()
-                self.assertTrue(len(tc) == 0, "A successful call should not produce any telemetry events: [{0}]".format(tc))
-
-            #
-            # ... then an error happens...
-            #
-            fail_goal_state_request = True
-            with create_log_and_telemetry_mocks() as (logger, add_event):
-                protocol.client.try_update_goal_state()
-
-                w = warnings()
-                pw = periodic_warnings()
-                self.assertEqual(len(w), 1, "A failure should have produced a warning: [{0}]".format(w))
-                self.assertEqual(len(pw), 1, "A failure should have produced a periodic warning: [{0}]".format(pw))
-
-                gs = goal_state_events()
-                self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
-
-            #
-            # ... and errors continue happening...
-            #
-            with create_log_and_telemetry_mocks() as (logger, add_event):
-                protocol.client.try_update_goal_state()
-                protocol.client.try_update_goal_state()
-                protocol.client.try_update_goal_state()
-
-                w = warnings()
-                pw = periodic_warnings()
-                self.assertTrue(len(w) == 0, "Subsequent failures should not produce warnings: [{0}]".format(w))
-                self.assertEqual(len(pw), 3, "Subsequent failures should produce periodic warnings: [{0}]".format(pw))
-
-                tc = telemetry_calls()
-                self.assertTrue(len(tc) == 0, "Subsequent failures should not produce any telemetry events: [{0}]".format(tc))
-
-            #
-            # ... until we finally succeed
-            #
-            fail_goal_state_request = False
-            with create_log_and_telemetry_mocks() as (logger, add_event):
-                protocol.client.try_update_goal_state()
-
-                s = success_messages()
-                w = warnings()
-                pw = periodic_warnings()
-                self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(s))
-                self.assertTrue(len(w) == 0 and len(pw) == 0, "Recovering after failures should have not produced any warnings: [{0}] [{1}]".format(w, pw))
-
-                gs = goal_state_events()
-                self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
-
-
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
     Tests for WireClient.update_host_plugin_from_goal_state()
@@ -1364,6 +1250,8 @@ class MockResponse:
     def read(self, *_):
         return self.body
 
+    def getheaders(self):
+        return []
 
 if __name__ == '__main__':
     unittest.main()

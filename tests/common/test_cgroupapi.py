@@ -129,7 +129,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         original_popen = subprocess.Popen
 
         def mock_popen(command, *args, **kwargs):
-            if command.startswith('systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3'):
+            if command.startswith('systemd-run --unit'):
                 command = "echo TEST_OUTPUT"
             return original_popen(command, *args, **kwargs)
 
@@ -139,6 +139,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                     command_output = SystemdCgroupsApi().start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="A_TEST_COMMAND",
+                        cmd_name="test",
                         shell=True,
                         timeout=300,
                         cwd=self.tmp_dir,
@@ -154,6 +155,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             SystemdCgroupsApi().start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="test command",
+                cmd_name="test",
                 shell=False,
                 timeout=300,
                 cwd=self.tmp_dir,
@@ -174,6 +176,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 SystemdCgroupsApi().start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="the-test-extension-command",
+                    cmd_name="test",
                     timeout=300,
                     shell=True,
                     cwd=self.tmp_dir,
@@ -184,7 +187,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
                 self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The extension should have been invoked using systemd")
+                self.assertIn("systemd-run", extension_calls[0], "The extension should have been invoked using systemd")
 
 
 class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
