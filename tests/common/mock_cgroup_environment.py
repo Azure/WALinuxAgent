@@ -99,6 +99,8 @@ class UnitFilePaths:
     cpu_quota = "/lib/systemd/system/walinuxagent.service.d/12-CPUQuota.conf"
     extension_service_cpu_accounting = '/lib/systemd/system/extension.service.d/11-CPUAccounting.conf'
     extension_service_cpu_quota = '/lib/systemd/system/extension.service.d/12-CPUQuota.conf'
+    extension_service_memory_accounting = '/lib/systemd/system/extension.service.d/13-MemoryAccounting.conf'
+    extension_service_memory_limit = '/lib/systemd/system/extension.service.d/14-MemoryLimit.conf'
 
 @contextlib.contextmanager
 def mock_cgroup_environment(tmp_dir):
