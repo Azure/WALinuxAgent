@@ -41,7 +41,7 @@ class TestOrchestrator(LoggingHandler):
                             skip_due_to = test.name
                         else:
                             self.log.warning(f"(Attempt {attempt-1}/Total {test.retry}) Test {test.name} failed")
-                            if attempt > test.retry:
+                            if attempt <= test.retry:
                                 self.log.warning("retrying in 10 secs")
                                 time.sleep(10)
                     else:
