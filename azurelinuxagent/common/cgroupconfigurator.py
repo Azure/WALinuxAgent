@@ -14,7 +14,8 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-
+import glob
+import json
 import os
 import re
 import subprocess
@@ -23,7 +24,7 @@ import shutil
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
+from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
@@ -58,6 +59,8 @@ Before=slices.target
 [Slice]
 CPUAccounting=yes
 CPUQuota={cpu_quota}
+MemoryAccounting=yes
+MemoryLimit={memory_limit}
 """
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
@@ -97,10 +100,21 @@ _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 [Service]
 CPUQuota={0}
 """
-_CPU_QUOTA_CONTENTS_FORMAT = """CPUAccounting=yes
-CPUQuota={0}
+_DROP_IN_FILE_MEMORY_ACCOUNTING = "13-MemoryAccounting.conf"
+_DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
+MemoryAccounting=yes
 """
-_AGENT_CPU_QUOTA = 5
+_DROP_IN_FILE_MEMORY_LIMIT = "14-MemoryLimit.conf"
+_DROP_IN_FILE_MEMORY_LIMIT_CONTENTS_FORMAT = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
+MemoryLimit={0}
+"""
+
 _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 
@@ -507,6 +521,13 @@ class CGroupConfigurator(object):
                 return False
             return True
 
+        def __reset_extension_quotas(self):
+            extensions_names = self.get_handler_manifest_list()
+            for extensions_name, resource_limits in extensions_names:
+                self.reset_extension_slice_quotas(extensions_name)
+                if resource_limits is not None:
+                    self.reset_extension_service_quotas(resource_limits.get('services'))
+
         def check_cgroups(self, cgroup_metrics):
             if not self.enabled():
                 return
@@ -627,21 +648,27 @@ class CGroupConfigurator(object):
 
         def start_tracking_unit_cgroups(self, unit_name):
             try:
-                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+                cpu_cgroup_path, memory_cgroup_path = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
                 if cpu_cgroup_path is None:
                     logger.info("The CPU controller is not mounted; will not track resource usage")
                 else:
                     CGroupsTelemetry.track_cgroup(CpuCgroup(unit_name, cpu_cgroup_path))
+                if memory_cgroup_path is None:
+                    logger.info("The Memory controller is not mounted; will not track resource usage")
+                else:
+                    CGroupsTelemetry.track_cgroup(MemoryCgroup(unit_name, memory_cgroup_path))
             except Exception as exception:
                 logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(exception))
 
         def stop_tracking_unit_cgroups(self, unit_name):
             try:
-                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+                cpu_cgroup_path, memory_cgroup_path = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
                 if cpu_cgroup_path is not None and os.path.exists(cpu_cgroup_path):
                     CGroupsTelemetry.stop_tracking(CpuCgroup(unit_name, cpu_cgroup_path))
+                if memory_cgroup_path is not None and os.path.exists(memory_cgroup_path):
+                    CGroupsTelemetry.stop_tracking(MemoryCgroup(unit_name, memory_cgroup_path))
             except Exception as exception:
                 logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
 
@@ -671,7 +698,7 @@ class CGroupConfigurator(object):
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
-        def setup_extension_slice(self, extension_name, cpu_quota):
+        def setup_extension_slice(self, extension_name, cpu_quota, memory_limit):
             """
             Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
             extensions are grouped under "azure-vmextensions.slice.
@@ -679,7 +706,6 @@ class CGroupConfigurator(object):
             This method ensures that the extension slice is created. Setup should create
             under /lib/systemd/system if it is not exist.
 
-            Todo : set memory quota
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
@@ -687,7 +713,8 @@ class CGroupConfigurator(object):
                                                      SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
                 try:
                     cpu_quota = cpu_quota if cpu_quota is not None else ""
-                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
+                    memory_limit = memory_limit if memory_limit is not None else ""
+                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota, memory_limit=memory_limit)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
                     _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
@@ -717,7 +744,6 @@ class CGroupConfigurator(object):
             This method ensures that drop-in files are created under service.d folder if quotas given.
             ex: /lib/systemd/system/extension.service.d/11-CPUAccounting.conf
 
-            TODO : set the memory quota
             """
             if self.enabled() and services_list is not None:
                 for service in services_list:
@@ -729,7 +755,12 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+                        drop_in_file_memory_accounting = os.path.join(drop_in_path,
+                                                                   _DROP_IN_FILE_MEMORY_ACCOUNTING)
+                        files_to_create.append((drop_in_file_memory_accounting, _DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS))
+
                         cpu_quota = service.get('cpuQuota', None)
+                        memory_limit = service.get('memoryQuota', None)
                         if cpu_quota is not None:
                             drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
                             cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
@@ -737,6 +768,13 @@ class CGroupConfigurator(object):
                             _log_cgroup_info("CPUQuota set for {0} is {1}", service_name, cpu_quota)
                         else:
                             _log_cgroup_info("CPUQuota not set for {0}".format(service_name))
+                        if memory_limit is not None:
+                            drop_in_file_memory_limit = os.path.join(drop_in_path, _DROP_IN_FILE_MEMORY_LIMIT)
+                            memory_limit_contents = _DROP_IN_FILE_MEMORY_LIMIT_CONTENTS_FORMAT.format(memory_limit)
+                            files_to_create.append((drop_in_file_memory_limit, memory_limit_contents))
+                            _log_cgroup_info("MemoryLimit set for {0} is {1}", service_name, memory_limit)
+                        else:
+                            _log_cgroup_info("MemoryLimit not set for {0}".format(service_name))
                         self.__create_all_files(files_to_create)
 
                 # reload the systemd configuration; the new unit will be used once the service restarts
@@ -772,6 +810,68 @@ class CGroupConfigurator(object):
                     if service_name is not None:
                         self.start_tracking_unit_cgroups(service_name)
 
+        def reset_extension_slice_quotas(self, extension_name):
+            """
+            Dead code and will be called when extension disable implemented
+            """
+            unit_file_install_path = systemd.get_unit_file_install_path()
+            extension_slice_path = os.path.join(unit_file_install_path,
+                                                SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+            if os.path.exists(extension_slice_path):
+                try:
+                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota='')
+                    CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
+                except Exception as exception:
+                    _log_cgroup_warning("Failed to reset quotas for the extension slice: {0}", ustr(exception))
+                    CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+
+        def reset_extension_service_quotas(self, services_list):
+            """
+            Dead code and will be called when extension disable implemented
+            """
+            if services_list is not None:
+                for service in services_list:
+                    service_name = service.get('name', None)
+                    unit_file_path = service.get('path', None)
+                    if service_name is not None and unit_file_path is not None:
+                        files_to_create = []
+                        drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
+                        drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                        if os.path.exists(drop_in_file_cpu_quota):
+                            cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format('')
+                            files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
+                            _log_cgroup_info("CPUQuota reset for {0}", service_name)
+                        else:
+                            _log_cgroup_info("CPUQuota not reset for {0}".format(service_name))
+                        self.__create_all_files(files_to_create)
+
+            # reload the systemd configuration; the new unit will be used once the service restarts
+            try:
+                logger.info("Executing systemctl daemon-reload...")
+                shellutil.run_command(["systemctl", "daemon-reload"])
+            except Exception as exception:
+                _log_cgroup_warning("daemon-reload failed (reset extension quotas): {0}", ustr(exception))
+
+        @staticmethod
+        def get_handler_manifest_list():
+            """
+            Dead code and will be called when extension disable implemented
+            """
+            extensions_names = []
+            for manifest_path in glob.iglob(os.path.join(conf.get_lib_dir(), "*/HandlerManifest.json")):
+                match = re.search("(?P<extname>[\\w+\\.-]+).HandlerManifest\\.json", manifest_path)
+                if match is not None:
+                    extensions_name = match.group('extname')
+                    if not extensions_name.startswith('WALinuxAgent'):
+                        try:
+                            data = json.loads(fileutil.read_file(manifest_path))
+                        except (IOError, OSError) as e:
+                            raise CGroupsException(
+                                'Failed to load manifest file ({0}): {1}'.format(manifest_path, e.strerror))
+                        except ValueError:
+                            raise CGroupsException('Malformed manifest file ({0}).'.format(manifest_path))
+                        extensions_names.append([extensions_name, data[0].get('resourceLimits')])
+            return extensions_names
     # unique instance for the singleton
     _instance = None
 
