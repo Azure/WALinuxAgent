@@ -94,7 +94,7 @@ jobs:
         displayName: "Check asyncio"
 
       - script: |
-          echo "##vso[task.complete result=SucceededWithIssues;]Ending pipeline for tests"
+          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
           printenv > $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env

@@ -46,5 +46,5 @@ if __name__ == '__main__':
     print(sys.argv)
     start_time = time.time()
     print(f"Start Time: {start_time}")
-    print(asyncio.run(run_tasks(admin_username, vm_ips)))
+    print(asyncio.run(run_tasks(admin_username, ",".join([vm_ips, vm_ips, vm_ips]))))
     print(f"End time: {time.time()}; Duration: {time.time() - start_time} secs")
