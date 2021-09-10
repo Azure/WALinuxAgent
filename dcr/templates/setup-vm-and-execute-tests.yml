@@ -87,7 +87,7 @@ jobs:
           deploymentOutputs: 'armDeploymentOutput'
 
       - task: AzureCLI@2
-        displatName: "Get VMIp"
+        displayName: "Get VMIp"
         inputs:
           azureSubscription: '$(azureConnection)'
           scriptType: 'bash'
