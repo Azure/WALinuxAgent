@@ -21,6 +21,7 @@ jobs:
               imageVersion: ${{ distro.version }}
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
+              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', variables['Build.BuildId'], scenario, distro.name) }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 50
 
@@ -75,20 +76,31 @@ jobs:
           azureResourceManagerConnection: '$(azureConnection)'
           subscriptionId: '$(subId)'
           action: 'Create Or Update Resource Group'
-          resourceGroupName: '$(rgName)-$(scenarioName)-$(distroName)'
+          resourceGroupName: '$(rgName)'
           location: '$(location)'
           templateLocation: 'Linked artifact'
           csmFile: '$(Build.SourcesDirectory)/dcr/templates/deploy-linux-vm.json'
+          csmParametersFile: '$(Build.SourcesDirectory)/dcr/templates/deploy-linux-vm-params.json'
 #          csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-09-07T23:06:37Z&se=2021-12-01T08:06:37Z&spr=https&sv=2020-08-04&sr=b&sig=hKxa55MTroRqIfeD2xwNOF%2FWrQvZj4GMAOKfa2%2B3634%3D'
           overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)" -imagePublisher "$(imagePublisher)" -imageOffer "$(imageOffer)" -imageSku $(imageSku) -imageVersion $(imageVersion)'
           deploymentMode: 'Complete'
           deploymentOutputs: 'armDeploymentOutput'
 
+      - task: AzureCLI@2
+        displatName: "Get VMIp"
+        inputs:
+          azureSubscription: '$(azureConnection)'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            vmIp=$(az vm list-ip-addresses --resource-group $(rgName) --name $(vmName) --query "[].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv)
+            echo "##vso[task.setvariable variable=vmIp]$vmIp"
+
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
-          arguments: '"$(armDeploymentOutput.hostname.value)"'
+          arguments: '"$(vmIp),$(armDeploymentOutput.hostname.value)"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
         displayName: "Check asyncio"

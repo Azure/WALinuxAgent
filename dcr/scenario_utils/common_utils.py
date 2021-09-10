@@ -28,9 +28,8 @@ def execute_py_command_on_vm(command: str, username: str = None, host: str = Non
 
 
 def get_vm_data_from_env() -> VMMetaData:
-    rg_name = "{0}-{1}-{2}".format(os.environ['RGNAME'], os.environ['SCENARIONAME'], os.environ['DISTRONAME'])
     return VMMetaData(vm_name=os.environ["VMNAME"],
-                      rg_name=rg_name,
+                      rg_name=os.environ['RGNAME'],
                       sub_id=os.environ["SUBID"],
                       location=os.environ['LOCATION'])
 

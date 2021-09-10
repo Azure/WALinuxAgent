@@ -67,7 +67,7 @@ def __get_compute_client():
 
 def execute_cse_tests():
 
-    rg_name = "{0}-{1}-{2}".format(os.environ['RGNAME'], os.environ['SCENARIONAME'], os.environ['DISTRONAME'])
+    rg_name = os.environ['RGNAME']
     vm_name = os.environ['VMNAME']
     extension_name = "testCse"
     location = os.environ['LOCATION']

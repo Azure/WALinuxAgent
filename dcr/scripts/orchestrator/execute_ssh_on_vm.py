@@ -47,7 +47,7 @@ async def run_tasks(username, ips):
         ips.split(",")]
 
     try:
-        return await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=0.1)
+        return await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=10 * 60)
     except asyncio.TimeoutError as err:
         logger.error(f"SSH Commands timed out: {err}")
         # Terminate all tasks separately to make sure
