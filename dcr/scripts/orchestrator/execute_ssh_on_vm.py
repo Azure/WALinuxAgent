@@ -3,6 +3,7 @@ import logging
 
 import os
 import sys
+import time
 
 import uuid
 
@@ -43,5 +44,7 @@ if __name__ == '__main__':
     admin_username = os.environ['ADMINUSERNAME']
     vm_ips = os.environ['ARMDEPLOYMENTOUTPUT_HOSTNAME_VALUE']
     print(sys.argv)
-
+    start_time = time.time()
+    print(f"Start Time: {start_time}")
     print(asyncio.run(run_tasks(admin_username, vm_ips)))
+    print(f"End time: {time.time()}; Duration: {time.time() - start_time} secs")
