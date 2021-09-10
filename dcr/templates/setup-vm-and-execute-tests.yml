@@ -2,9 +2,6 @@ parameters:
   - name: scenarios
     type: object
 
-  - name: templateScenarios
-    type: object
-
   - name: distros
     type: object
 
@@ -87,7 +84,17 @@ jobs:
           deploymentMode: 'Complete'
           deploymentOutputs: 'armDeploymentOutput'
 
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: 'test command 1234 "test if its a single string"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        displayName: "Check asyncio"
+
       - script: |
+          echo "##vso[task.complete result=SucceededWithIssues;]Ending pipeline for tests"
           printenv > $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env

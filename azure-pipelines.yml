@@ -12,11 +12,6 @@ parameters:
 #      - agent-bvt-pytest
       - extension-telemetry-pipeline
 
-  - name: templateScenarios
-    type: object
-    default:
-      - agent-bvt
-
   - name: distros
     type: object
     default:
@@ -114,8 +109,6 @@ stages:
         parameters:
           scenarios:
             - ${{ parameters.scenarios }}
-          templateScenarios:
-            - ${{ parameters.templateScenarios }}
           distros:
             - ${{ parameters.distros }}
 
