@@ -22,6 +22,15 @@ async def execute_command_concurrently(command, username, ip, max_retry=5):
                 raise Exception(
                     f"Command {ssh_cmd} failed with exit code: {proc.returncode}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
             return stdout, stderr
+        except asyncio.CancelledError as err:
+            print(f"Task was cancelled: {ssh_cmd}; {err}")
+            try:
+                proc.terminate()
+            except Exception:
+                # Eat all exceptions when trying to terminate a process that has been Cancelled
+                pass
+            finally:
+                break
         except Exception as err:
             attempt += 1
             if attempt < max_retry:
@@ -37,13 +46,17 @@ async def run_tasks(username, ips):
         execute_command_concurrently(username=username, command=f"echo yolo-{uuid.uuid4()}", ip=ip_)) for ip_ in
         ips.split(",")]
 
-    return await asyncio.gather(*tasks, return_exceptions=True)
+    try:
+        return await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=0.1)
+    except asyncio.TimeoutError as err:
+        logger.error(f"SSH Commands timed out: {err}")
+        # Terminate all tasks separately to make sure
 
 
 if __name__ == '__main__':
     admin_username = os.environ['ADMINUSERNAME']
-    vm_ips = os.environ['ARMDEPLOYMENTOUTPUT_HOSTNAME_VALUE']
     print(sys.argv)
+    vm_ips = sys.argv[1]
     start_time = time.time()
     print(f"Start Time: {start_time}")
     print(asyncio.run(run_tasks(admin_username, ",".join([vm_ips, vm_ips, vm_ips]))))

@@ -88,7 +88,7 @@ jobs:
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
-          arguments: 'test command 1234 "test if its a single string"'
+          arguments: '"$(armDeploymentOutput.hostname.value)"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
         displayName: "Check asyncio"
