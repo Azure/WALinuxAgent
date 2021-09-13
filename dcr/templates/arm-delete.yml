@@ -5,6 +5,9 @@ parameters:
   - name: distros
     type: object
 
+  - name: rgPrefix
+    type: string
+
 jobs:
   - job: "DeleteRG"
     dependsOn: "Wait"
@@ -16,7 +19,7 @@ jobs:
             ${{ format('{0}-{1}', distro.name, scenario) }}:
               scenarioName: ${{ scenario }}
               distroName: ${{ distro.name }}
-              rgName: ${{ format('{0}-{1}-{2}', variables.rgNamePrefix, scenario, distro.name) }}
+              rgName: ${{ format('{0}-{1}-{2}', parameters.rgPrefix, scenario, distro.name) }}
       maxParallel: 10
 
     steps:

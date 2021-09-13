@@ -23,12 +23,11 @@ async def execute_command_concurrently(command, username, ip, max_retry=5):
     ]
 
     attempt = 0
-    # if max_retry % 2 == 0:
-    #     raise Exception(f"Failing {ssh_cmd}")
+    if max_retry % 2 == 0:
+        raise Exception(f"Failing {ssh_cmd}")
 
-    while attempt < 1:
+    while attempt < max_retry:
         try:
-            await asyncio.sleep(10)
             proc = await asyncio.create_subprocess_shell(ssh_cmd, stdout=asyncio.subprocess.PIPE,
                                                          stderr=asyncio.subprocess.PIPE)
             stdout, stderr = await proc.communicate()
@@ -60,11 +59,7 @@ async def run_tasks(username, ips):
         execute_command_concurrently(username=username, command=f"echo yolo-{uuid.uuid4()}", ip=ip_, max_retry=idx)) for idx, ip_ in
         enumerate(ips.split(","))]
 
-    try:
-        return await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=False), timeout=5)
-    except asyncio.TimeoutError as err:
-        logger.error(f"SSH Commands timed out: {err}")
-        # Terminate all tasks separately to make sure
+    return await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=False), timeout=10 * 60)
 
 
 if __name__ == '__main__':
@@ -73,5 +68,7 @@ if __name__ == '__main__':
     vm_ips = sys.argv[1]
     start_time = time.time()
     print(f"Start Time: {start_time}")
-    print(asyncio.run(run_tasks(admin_username, ",".join([vm_ips, vm_ips, vm_ips]))))
-    print(f"End time: {time.time()}; Duration: {time.time() - start_time} secs")
+    try:
+        print(asyncio.run(run_tasks(admin_username, ",".join([vm_ips, vm_ips, vm_ips]))))
+    finally:
+        print(f"End time: {time.time()}; Duration: {time.time() - start_time} secs")
