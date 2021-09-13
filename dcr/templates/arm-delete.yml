@@ -16,7 +16,7 @@ jobs:
             ${{ format('{0}-{1}', distro.name, scenario) }}:
               scenarioName: ${{ scenario }}
               distroName: ${{ distro.name }}
-              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', variables['Build.BuildId'], scenario, distro.name) }}
+              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', coalesce(variables.Build.BuildId, variables.Build_BuildId, variables['Build.BuildId']), scenario, distro.name) }}
       maxParallel: 10
 
     steps:

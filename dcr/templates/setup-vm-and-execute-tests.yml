@@ -21,7 +21,7 @@ jobs:
               imageVersion: ${{ distro.version }}
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
-              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', variables["Build.BuildId"], scenario, distro.name) }}
+              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', coalesce(variables.Build.BuildId, variables.Build_BuildId, variables['Build.BuildId']), scenario, distro.name) }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 50
 
