@@ -110,6 +110,8 @@ stages:
             - ${{ parameters.scenarios }}
           distros:
             - ${{ parameters.distros }}
+          buildId:
+            - ${{ coalesce(variables.Build.BuildId, variables.Build_BuildId, variables['Build.BuildId']) }}
 
   - stage: "Cleanup"
     condition: succeededOrFailed()

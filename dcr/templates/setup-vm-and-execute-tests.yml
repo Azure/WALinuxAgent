@@ -5,6 +5,9 @@ parameters:
   - name: distros
     type: object
 
+  - name: buildId
+    type: string
+
 jobs:
   - job: "CreateVM"
     displayName: "Setup VM and Run Test"
@@ -21,7 +24,7 @@ jobs:
               imageVersion: ${{ distro.version }}
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
-              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', coalesce(variables.Build.BuildId, variables.Build_BuildId, variables['Build.BuildId']), scenario, distro.name) }}
+              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', parameters.buildId, scenario, distro.name) }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 50
 
@@ -97,6 +100,14 @@ jobs:
             echo "##vso[task.setvariable variable=vmIp]$vmIp"
             vmssIps=$(az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName)  || echo "No VMSS IPs")
 
+      - script: |
+          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
+          printenv > $(Build.SourcesDirectory)/dcr/.env
+#          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
+#          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env
+#          echo "AZURE_TENANT_ID="$(AZURE-TENANT-ID)"" >> $(Build.SourcesDirectory)/dcr/.env
+        displayName: 'Get all environment variables'
+
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
@@ -105,14 +116,6 @@ jobs:
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
         displayName: "Check asyncio"
-
-      - script: |
-          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
-          printenv > $(Build.SourcesDirectory)/dcr/.env
-#          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
-#          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env
-#          echo "AZURE_TENANT_ID="$(AZURE-TENANT-ID)"" >> $(Build.SourcesDirectory)/dcr/.env
-        displayName: 'Get all environment variables'
 
       - script: |
           n=0
