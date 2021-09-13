@@ -21,7 +21,7 @@ jobs:
               imageVersion: ${{ distro.version }}
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
-              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', variables['Build.BuildId'], scenario, distro.name) }}
+              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', variables["Build.BuildId"], scenario, distro.name) }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 50
 
@@ -93,8 +93,9 @@ jobs:
           scriptType: 'bash'
           scriptLocation: 'inlineScript'
           inlineScript: |
-            vmIp=$(az vm list-ip-addresses --resource-group $(rgName) --name $(vmName) --query "[].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv)
+            vmIp=$(az vm list-ip-addresses --resource-group $(rgName) --name $(vmName) --query "[].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv || echo "No VM Ips")
             echo "##vso[task.setvariable variable=vmIp]$vmIp"
+            vmssIps=$(az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName)  || echo "No VMSS IPs")
 
       - task: PythonScript@0
         inputs:

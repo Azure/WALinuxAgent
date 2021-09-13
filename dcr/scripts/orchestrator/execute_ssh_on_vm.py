@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 async def execute_command_concurrently(command, username, ip, max_retry=5):
     ssh_cmd = f'ssh -o StrictHostKeyChecking=no {username}@{ip} "{command}"'
     attempt = 0
+    raise Exception(f"Failing {ssh_cmd}")
     while attempt < max_retry:
         try:
             proc = await asyncio.create_subprocess_shell(ssh_cmd, stdout=asyncio.subprocess.PIPE,
