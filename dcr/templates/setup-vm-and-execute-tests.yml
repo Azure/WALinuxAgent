@@ -5,6 +5,9 @@ parameters:
   - name: distros
     type: object
 
+  - name: rgPrefix
+    type: string
+
 jobs:
   - job: "CreateVM"
     displayName: "Setup VM and Run Test"
@@ -21,7 +24,7 @@ jobs:
               imageVersion: ${{ distro.version }}
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
-              rgName: ${{ format('{0}-{1}-{2}', variables.rgNamePrefix, scenario, distro.name) }}
+              rgName: ${{ format('{0}-{1}-{2}', parameters.rgPrefix, scenario, distro.name) }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 50
 

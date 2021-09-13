@@ -111,6 +111,7 @@ stages:
             - ${{ parameters.scenarios }}
           distros:
             - ${{ parameters.distros }}
+          rgPrefix: $(rgNamePrefix)
 
   - stage: "Cleanup"
     condition: succeededOrFailed()
