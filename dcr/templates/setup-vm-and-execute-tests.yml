@@ -96,9 +96,8 @@ jobs:
           scriptType: 'bash'
           scriptLocation: 'inlineScript'
           inlineScript: |
-            vmIp=$(az vm list-ip-addresses --resource-group $(rgName) --name $(vmName) --query "[].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv || echo "No VM Ips")
-            echo "##vso[task.setvariable variable=vmIp]$vmIp"
-            vmssIps=$(az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName)  || echo "No VMSS IPs")
+            az vm list-ip-addresses --resource-group $(rgName) --name $(vmName) --query "[].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv > $(Build.SourcesDirectory)/dcr/.vm_ips || echo "No VM Ips"
+            az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName) --output tsv > $(Build.SourcesDirectory)/dcr/.vmss_ips || echo "No VMSS IPs"
 
       - script: |
           printenv > $(Build.SourcesDirectory)/dcr/.env
@@ -111,47 +110,47 @@ jobs:
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
-          arguments: '"$(vmIp),$(armDeploymentOutput.hostname.value)"'
+          arguments: 'setup_vm'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
         displayName: "Check asyncio"
 
-      - script: |
-          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && ec=0 && break  # substitute your command here
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
-        displayName: 'Copy GA/DCR files to VM'
-
-      - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYPYPATH="$(pypyPath)" bash /home/$(adminUsername)/dcr/scripts/install_pip_packages.sh /home/$(adminUsername)/dcr/requirements.txt" && ec=0 && break
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
-        displayName: 'Setup test VM'
-
-      - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scripts/setup_agent.sh $(agentVersion)" && ec=0 && break  # substitute your command here
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
-        displayName: 'Setup dev GA on VM'
+#      - script: |
+#          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
+#          n=0
+#          ec=1
+#          until [ "$n" -ge 5 ]
+#          do
+#              scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && ec=0 && break  # substitute your command here
+#              n=$((n+1))
+#              sleep 3
+#          done
+#          exit $ec
+#        displayName: 'Copy GA/DCR files to VM'
+#
+#      - script: |
+#          n=0
+#          ec=1
+#          until [ "$n" -ge 5 ]
+#          do
+#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYPYPATH="$(pypyPath)" bash /home/$(adminUsername)/dcr/scripts/install_pip_packages.sh /home/$(adminUsername)/dcr/requirements.txt" && ec=0 && break
+#              n=$((n+1))
+#              sleep 3
+#          done
+#          exit $ec
+#        displayName: 'Setup test VM'
+#
+#      - script: |
+#          n=0
+#          ec=1
+#          until [ "$n" -ge 5 ]
+#          do
+#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scripts/setup_agent.sh $(agentVersion)" && ec=0 && break  # substitute your command here
+#              n=$((n+1))
+#              sleep 3
+#          done
+#          exit $ec
+#        displayName: 'Setup dev GA on VM'
 
       - script: |
           n=0
