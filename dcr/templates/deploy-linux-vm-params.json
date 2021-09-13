@@ -4,15 +4,6 @@
     "parameters": {
         "vmName": {
             "value": "larohra-simpleLinuxVM"
-        },
-        "adminUsername": {
-            "value": "larohra"
-        },
-        "adminPasswordOrKey": {
-            "value": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCuc/MSnyIR63/poTVz3rOudHb52UPuxtxDkK54GkzLHjQgx2D1OvgNcLdXBRIuFgBhhwe2erj+zrECW2r+8K/c/8L191vScMNs2C5U10VECqBL5LL1JnnvmGlimOsGJP3yGecfSwidWiOD96pvrqIq2y3uw3Ea9Hx3DWRs2P/BYpilkPw2ngSnCdtbxQFR1Wk2dXdcE8fXhHkSAiHWnapg3nl6LfLFQo3XHMs9qXhsIkIYrFvlhqLTOLUAqgueNhsHYIuLLbCu409FlAP2S6Ri3yim8HVlxMRFL8Ecxkhzk8WmXwCWiMq6dvi78UtuEi9mjA9E4YYM+TeKBsqClFvl"
-        },
-        "dnsLabelPrefix": {
-            "value": "dcrv2test"
         }
     }
 }
