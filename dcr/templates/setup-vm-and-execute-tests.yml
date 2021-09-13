@@ -152,18 +152,28 @@ jobs:
 #          exit $ec
 #        displayName: 'Setup dev GA on VM'
 
-      - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 5 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/$(distroSetupPath)" && ec=0 && break
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: '"sudo bash /home/$(adminUsername)/$(distroSetupPath)"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
         condition: not(eq(variables.distroSetupPath, ''))
         displayName: 'Execute Distro Setup on test VM'
+
+#      - script: |
+#          n=0
+#          ec=1
+#          until [ "$n" -ge 5 ]
+#          do
+#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "" && ec=0 && break
+#              n=$((n+1))
+#              sleep 3
+#          done
+#          exit $ec
+#        condition: not(eq(variables.distroSetupPath, ''))
+#        displayName: 'Execute Distro Setup on test VM'
 
       - script: |
           [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.py ]] && runPy=true || runPy=false

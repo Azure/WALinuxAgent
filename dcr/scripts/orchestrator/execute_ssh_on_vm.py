@@ -72,7 +72,7 @@ async def run_tasks(username, command):
         agent_version = os.environ.get("AGENTVERSION")
 
         setup_commands = [
-            f"scp -o StrictHostKeyChecking=no -r {os.environ.get('BUILD_SOURCESDIRECTORY')}/dcr/ {username}@${{ip}}:~/",
+            f"scp -o StrictHostKeyChecking=no -r {os.environ.get('BUILD_SOURCESDIRECTORY')}/dcr/ {username}@{{ip}}:~/",
             f'{ssh_cmd} "sudo PYPYPATH="{pypy_path}" bash {dcr_root_dir}/scripts/install_pip_packages.sh {dcr_root_dir}/requirements.txt"',
             f'{ssh_cmd} "sudo bash {dcr_root_dir}/scripts/setup_agent.sh {agent_version}"'
         ]
@@ -81,7 +81,7 @@ async def run_tasks(username, command):
         cmd = f'{ssh_cmd} "{command}"'
         tasks = [asyncio.create_task(execute_command_concurrently(commands=[cmd], ip=ip_)) for ip_ in ips]
 
-    return await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=False), timeout=10 * 60)
+    return await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=False), timeout=15 * 60)
 
 
 if __name__ == '__main__':
