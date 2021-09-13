@@ -5,9 +5,6 @@ parameters:
   - name: distros
     type: object
 
-  - name: buildId
-    type: string
-
 jobs:
   - job: "CreateVM"
     displayName: "Setup VM and Run Test"
@@ -24,7 +21,7 @@ jobs:
               imageVersion: ${{ distro.version }}
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
-              rgName: ${{ format('larohra-dcr-v2-test{0}-{1}-{2}', parameters.buildId, scenario, distro.name) }}
+              rgName: ${{ format('{0}-{1}-{2}', variables.rgNamePrefix, scenario, distro.name) }}
 #      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 50
 
@@ -101,7 +98,6 @@ jobs:
             vmssIps=$(az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName)  || echo "No VMSS IPs")
 
       - script: |
-          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
           printenv > $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
 #          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env
@@ -118,6 +114,7 @@ jobs:
         displayName: "Check asyncio"
 
       - script: |
+          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
           n=0
           ec=1
           until [ "$n" -ge 5 ]
