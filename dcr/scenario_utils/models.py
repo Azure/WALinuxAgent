@@ -36,7 +36,7 @@ class VMMetaData:
         self.__location = location
         self.__admin_username = admin_username
         if ips is None:
-            ips = _get_ips()
+            ips = _get_ips(admin_username)
         self.__ips = ips
 
     @property
@@ -64,15 +64,29 @@ class VMMetaData:
         return self.__ips
 
 
-def _get_ips() -> list:
+def _get_ips(username) -> list:
+    """
+    Try fetching Ips from the files that we create via az-cli.
+    We do a best effort to fetch this from both orchestrator or the test VM. Its located in different locations on both
+    scenarios.
+    """
 
-    if os.path.exists(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vm_ips"):
-        with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vm_ips", 'r') as vm_ips:
-            vms = [ip.strip() for ip in vm_ips.readlines()]
+    vms, vmss = [], []
+    orchestrator_path = os.environ['BUILD_SOURCESDIRECTORY']
+    test_vm_path = os.path.join("/home", username)
 
-    if os.path.exists(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vmss_ips"):
-        with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vmss_ips", 'r') as vmss_ips:
-            vmss = [ip.strip() for ip in vmss_ips.readlines()]
+    for ip_path in [orchestrator_path, test_vm_path]:
+
+        if os.path.exists(os.path.join(ip_path, "/dcr/.vm_ips")):
+            with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vm_ips", 'r') as vm_ips:
+                vms = [ip.strip() for ip in vm_ips.readlines()]
+
+        if os.path.exists(os.path.join(ip_path, "/dcr/.vmss_ips")):
+            with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vmss_ips", 'r') as vmss_ips:
+                vmss = [ip.strip() for ip in vmss_ips.readlines()]
+
+        if any(vms + vmss):
+            return vms + vmss
 
     return vms + vmss
 
