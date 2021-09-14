@@ -1627,7 +1627,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
         self.assertTrue(any(
             "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
-            patch_info.call_args_list), "Info not logged properly")
+            patch_info.call_args_list), "Info not logged properly, got: {0}".format(patch_info.call_args_list))
 
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
