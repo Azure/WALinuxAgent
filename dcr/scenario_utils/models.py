@@ -73,19 +73,21 @@ def _get_ips(username) -> list:
     """
 
     vms, vmss = [], []
-    orchestrator_path = os.environ['BUILD_SOURCESDIRECTORY']
-    test_vm_path = os.path.join("/home", username)
+    orchestrator_path = os.path.join(os.environ['BUILD_SOURCESDIRECTORY'], "dcr")
+    test_vm_path = os.path.join("/home", username, "dcr")
 
     for ip_path in [orchestrator_path, test_vm_path]:
 
-        if os.path.exists(os.path.join(ip_path, "/dcr/.vm_ips")):
-            print(f'Found path: {os.path.join(ip_path, "/dcr/.vm_ips")}')
-            with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vm_ips", 'r') as vm_ips:
+        vm_ip_path = os.path.join(ip_path, ".vm_ips")
+        if os.path.exists(vm_ip_path):
+            print(f'Found path: {vm_ip_path}')
+            with open(vm_ip_path, 'r') as vm_ips:
                 vms = [ip.strip() for ip in vm_ips.readlines()]
 
-        if os.path.exists(os.path.join(ip_path, "/dcr/.vmss_ips")):
-            print(f'Found path: {os.path.join(ip_path, "/dcr/.vmss_ips")}')
-            with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vmss_ips", 'r') as vmss_ips:
+        vmss_ip_path = os.path.join(ip_path, ".vmss_ips")
+        if os.path.exists(vmss_ip_path):
+            print(f'Found path: {vmss_ip_path}')
+            with open(vmss_ip_path, 'r') as vmss_ips:
                 vmss = [ip.strip() for ip in vmss_ips.readlines()]
 
         if any(vms + vmss):
