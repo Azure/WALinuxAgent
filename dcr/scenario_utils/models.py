@@ -38,6 +38,7 @@ class VMMetaData:
         if ips is None:
             ips = _get_ips(admin_username)
         self.__ips = ips
+        print(f"IPs: {self.__ips}")
 
     @property
     def name(self) -> str:
@@ -78,10 +79,12 @@ def _get_ips(username) -> list:
     for ip_path in [orchestrator_path, test_vm_path]:
 
         if os.path.exists(os.path.join(ip_path, "/dcr/.vm_ips")):
+            print(f'Found path: {os.path.join(ip_path, "/dcr/.vm_ips")}')
             with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vm_ips", 'r') as vm_ips:
                 vms = [ip.strip() for ip in vm_ips.readlines()]
 
         if os.path.exists(os.path.join(ip_path, "/dcr/.vmss_ips")):
+            print(f'Found path: {os.path.join(ip_path, "/dcr/.vmss_ips")}')
             with open(f"{os.environ['BUILD_SOURCESDIRECTORY']}/dcr/.vmss_ips", 'r') as vmss_ips:
                 vmss = [ip.strip() for ip in vmss_ips.readlines()]
 
