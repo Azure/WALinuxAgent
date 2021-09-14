@@ -94,7 +94,6 @@ _AGENT_DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 [Service]
 CPUQuota={0}
 """
-_AGENT_CPU_QUOTA = 5
 _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 
@@ -424,7 +423,7 @@ class CGroupConfigurator(object):
             if not self.supported():
                 raise CGroupsException("Attempted to enable cgroups, but they are not supported on the current platform")
             self._cgroups_enabled = True
-            self.__set_cpu_quota(_AGENT_CPU_QUOTA)
+            self.__set_cpu_quota(conf.get_agent_cpu_quota())
 
         def disable(self, reason):
             self._cgroups_enabled = False
