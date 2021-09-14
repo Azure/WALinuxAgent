@@ -1,4 +1,3 @@
-import logging
 import time
 from typing import List
 
@@ -8,7 +7,7 @@ from azure.mgmt.compute.models import VirtualMachineExtension
 from msrestazure.azure_exceptions import CloudError
 
 from dcr.scenario_utils.logging_utils import LoggingHandler
-from dcr.scenario_utils.models import ExtensionMetaData, VMMetaData
+from dcr.scenario_utils.models import ExtensionMetaData, get_vm_data_from_env
 
 
 def _get_compute_client(sub_id) -> ComputeManagementClient:
@@ -20,10 +19,10 @@ def _get_compute_client(sub_id) -> ComputeManagementClient:
 
 class BaseExtensionTestClass(LoggingHandler):
 
-    def __init__(self, extension_data: ExtensionMetaData, vm_data: VMMetaData, *args, **kwargs):
+    def __init__(self, extension_data: ExtensionMetaData, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.__extension_data = extension_data
-        self.__vm_data = vm_data
+        self.__vm_data = get_vm_data_from_env()
         self.__compute_client = _get_compute_client(self.__vm_data.sub_id)
 
     def get_ext_props(self, settings=None, protected_settings=None, auto_upgrade_minor_version=True,

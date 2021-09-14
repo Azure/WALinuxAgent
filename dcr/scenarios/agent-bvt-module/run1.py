@@ -2,12 +2,13 @@ import os
 
 from dotenv import load_dotenv
 
+from dcr.scenario_utils.models import get_vm_data_from_env
 from dcr.scenario_utils.test_orchestrator import TestObj, TestOrchestrator
 from test_agent_basics import test_agent_version, check_hostname, check_ns_lookup, check_root_login
 
 if __name__ == '__main__':
     load_dotenv()
-    admin_username = os.environ['ADMINUSERNAME']
+    admin_username = get_vm_data_from_env().admin_username
     tests = [
         TestObj("check_agent_version", test_agent_version),
         TestObj("Check hostname", check_hostname),

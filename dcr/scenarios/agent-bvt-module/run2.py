@@ -5,13 +5,14 @@ from dotenv import load_dotenv
 from check_extension_timing import verify_extension_timing
 from check_firewall import check_firewall
 from dcr.scenario_utils.check_waagent_log import check_waagent_log_for_errors
+from dcr.scenario_utils.models import get_vm_data_from_env
 from dcr.scenario_utils.test_orchestrator import TestObj, TestOrchestrator
 from get_blob_content import show_blob_content
 from test_agent_basics import check_agent_processes, check_sudoers
 
 if __name__ == '__main__':
     load_dotenv()
-    admin_username = os.environ['ADMINUSERNAME']
+    admin_username = get_vm_data_from_env().admin_username
     tests = [
         TestObj("check agent processes", check_agent_processes),
         TestObj("check agent log", check_waagent_log_for_errors),

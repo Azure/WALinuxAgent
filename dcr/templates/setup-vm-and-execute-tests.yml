@@ -192,21 +192,31 @@ jobs:
 #          runYml: $(runYml)
 #          runScenarioSetup: $(runScenarioSetup)
 
-      - task: Bash@3
+      - task: PythonScript@0
         inputs:
-          targetType: 'inline'
-          script: |
-            n=0
-            ec=1
-            until [ "$n" -ge 5 ]
-            do
-                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYPYPATH="$(pypyPath)" bash /home/$(adminUsername)/dcr/scenario/setup.sh" && ec=0 && break  # substitute your command here
-                n=$((n+1))
-                sleep 3
-            done
-            exit $ec
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: '"sudo PYPYPATH=$(pypyPath) bash /home/$(adminUsername)/dcr/scenario/setup.sh"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
         condition: eq(variables.runScenarioSetup, 'true')
         displayName: "Install test dependencies on test VM"
+
+#      - task: Bash@3
+#        inputs:
+#          targetType: 'inline'
+#          script: |
+#            n=0
+#            ec=1
+#            until [ "$n" -ge 5 ]
+#            do
+#                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "" && ec=0 && break  # substitute your command here
+#                n=$((n+1))
+#                sleep 3
+#            done
+#            exit $ec
+#        condition: eq(variables.runScenarioSetup, 'true')
+#        displayName: "Install test dependencies on test VM"
 
 #      - template: run-tests.yml
 #        parameters:
@@ -247,18 +257,28 @@ jobs:
 #          noRc: false
 #        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
 
-      - script: |
-          n=0
-          ec=1
-          until [ "$n" -ge 1 ]
-          do
-              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(pypyPath) dcr/scenario/run.py" && ec=0 && break  # substitute your command here
-              n=$((n+1))
-              sleep 3
-          done
-          exit $ec
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: '"sudo PYTHONPATH=. $(pypyPath) dcr/scenario/run.py"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
         condition: and(succeededOrFailed(), eq(variables.runPy, 'true'))
         displayName: "Execute test suite on VM"
+
+#      - script: |
+#          n=0
+#          ec=1
+#          until [ "$n" -ge 1 ]
+#          do
+#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(pypyPath) dcr/scenario/run.py" && ec=0 && break  # substitute your command here
+#              n=$((n+1))
+#              sleep 3
+#          done
+#          exit $ec
+#        condition: and(succeededOrFailed(), eq(variables.runPy, 'true'))
+#        displayName: "Execute test suite on VM"
 
       # Here we will run the yml per scenario. The scenarios can specify their specifics there
 #      - template: ../agent-bvt/run.yml # ${{ format('../{0}/run.yml', $(scenarioName)) }}
@@ -270,10 +290,20 @@ jobs:
 #        displayName: "Generate Test Files on host"
 #        condition: succeededOrFailed()
 
-      - script: |
-          if scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/test-result*.xml $(Build.ArtifactStagingDirectory) >&/dev/null ; then exit 0 ; else echo "No files found" ; fi
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: 'fetch_results'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
         condition: succeededOrFailed()
         displayName: 'Fetch test results'
+
+#      - script: |
+#          if scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/test-result*.xml $(Build.ArtifactStagingDirectory) >&/dev/null ; then exit 0 ; else echo "No files found" ; fi
+#        condition: succeededOrFailed()
+#        displayName: 'Fetch test results'
 
       - task: PublishTestResults@2
         condition: succeededOrFailed()

@@ -6,6 +6,7 @@ import time
 from dotenv import load_dotenv
 
 from dcr.scenario_utils.check_waagent_log import is_data_in_waagent_log, check_waagent_log_for_errors
+from dcr.scenario_utils.models import get_vm_data_from_env
 from dcr.scenario_utils.test_orchestrator import TestObj
 from dcr.scenario_utils.test_orchestrator import TestOrchestrator
 from etp_helpers import add_extension_events_and_get_count, wait_for_extension_events_dir_empty
@@ -67,7 +68,7 @@ def verify_etp_enabled():
 if __name__ == '__main__':
     # load env
     load_dotenv()
-    admin_username = os.environ['ADMINUSERNAME']
+    admin_username = get_vm_data_from_env().admin_username
 
     tests = [
         TestObj("Verify ETP enabled", verify_etp_enabled, raise_on_error=True, retry=3),

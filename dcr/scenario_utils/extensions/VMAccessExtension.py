@@ -1,35 +1,34 @@
+import asyncio
 import os
-import sys
 
-from dcr.scenario_utils.common_utils import random_alphanum, execute_command_and_raise_on_error
+from dcr.scenario_utils.common_utils import random_alphanum, execute_commands_concurrently_on_test_vms
 from dcr.scenario_utils.crypto import generate_ssh_key_pair
 from dcr.scenario_utils.extensions.BaseExtensionTestClass import BaseExtensionTestClass
-from dcr.scenario_utils.models import ExtensionMetaData, VMMetaData
+from dcr.scenario_utils.models import ExtensionMetaData
 
 
 class VMAccessExtension(BaseExtensionTestClass):
 
-    def __init__(self, extension_name: str, vm_data: VMMetaData):
+    def __init__(self, extension_name: str):
         extension_data = ExtensionMetaData(
             publisher='Microsoft.OSTCExtensions',
             ext_type='VMAccessForLinux',
             version="1.5",
             ext_name=extension_name
         )
-        super().__init__(extension_data, vm_data)
+        super().__init__(extension_data)
         self.public_key, self.private_key_file = generate_ssh_key_pair('dcr_py')
         self.user_name = f'dcr{random_alphanum(length=8)}'
 
     def verify(self):
         os.chmod(self.private_key_file, 0o600)
-        ip = os.environ['ARMDEPLOYMENTOUTPUT_HOSTNAME_VALUE']
-        ssh_cmd = f'ssh -o StrictHostKeyChecking=no -i {self.private_key_file} {self.user_name}@{ip} ' \
+        ssh_cmd = f'ssh -o StrictHostKeyChecking=no -i {self.private_key_file} {self.user_name}@{{ip}} ' \
                   f'"echo script was executed successfully on remote vm"'
-        execute_command_and_raise_on_error(ssh_cmd, shell=True)
+        print(asyncio.run(execute_commands_concurrently_on_test_vms([ssh_cmd])))
 
 
-def add_and_verify_vmaccess(vm_data):
-    vmaccess = VMAccessExtension(extension_name="testVmAccessExt", vm_data=vm_data)
+def add_and_verify_vmaccess():
+    vmaccess = VMAccessExtension(extension_name="testVmAccessExt")
     ext_props = [
         vmaccess.get_ext_props(protected_settings={'username': vmaccess.user_name, 'ssh_key': vmaccess.public_key,
                                                    'reset_ssh': 'false'})
