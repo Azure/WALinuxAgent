@@ -86,3 +86,7 @@ def get_vm_data_from_env() -> VMMetaData:
                                                      admin_username=os.environ['ADMINUSERNAME'])
 
     return get_vm_data_from_env.__instance
+
+
+get_vm_data_from_env.__instance = None
+
