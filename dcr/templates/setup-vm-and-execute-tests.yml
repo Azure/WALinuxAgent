@@ -71,18 +71,26 @@ jobs:
       - script: pip install -r $(Build.SourcesDirectory)/dcr/requirements.txt
         displayName: "Install pip modules on orchestrator"
 
-      - script: |
-          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.py ]] && runPy=true || runPy=false
-          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.host.py ]] && runHost=true || runHost=false
-          [[ -f $(Build.SourcesDirectory)/dcr/scenario/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
-          [[ -f $(Build.SourcesDirectory)/dcr/scenario/template.json ]] && template="scenario/template.json" || template="templates/deploy-linux-vm.json"
-          [[ -f $(Build.SourcesDirectory)/dcr/scenario/parameters.json ]] && params="scenario/parameters.json" || params="templates/deploy-linux-vm-params.json"
-          echo "##vso[task.setvariable variable=runPy]$runPy"
-          echo "##vso[task.setvariable variable=runHost]$runHost"
-          echo "##vso[task.setvariable variable=runScenarioSetup]$runScenarioSetup"
-          echo "##vso[task.setvariable variable=templateFile]$(Build.SourcesDirectory)/dcr/$template"
-          echo "##vso[task.setvariable variable=parametersFile]$(Build.SourcesDirectory)/dcr/$params"
-        displayName: "Check which file to run"
+#      - script: |
+#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.py ]] && runPy=true || runPy=false
+#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.host.py ]] && runHost=true || runHost=false
+#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
+#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/template.json ]] && template="scenario/template.json" || template="templates/deploy-linux-vm.json"
+#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/parameters.json ]] && params="scenario/parameters.json" || params="templates/deploy-linux-vm-params.json"
+#          echo "##vso[task.setvariable variable=runPy]$runPy"
+#          echo "##vso[task.setvariable variable=runHost]$runHost"
+#          echo "##vso[task.setvariable variable=runScenarioSetup]$runScenarioSetup"
+#          echo "##vso[task.setvariable variable=templateFile]$(Build.SourcesDirectory)/dcr/$template"
+#          echo "##vso[task.setvariable variable=parametersFile]$(Build.SourcesDirectory)/dcr/$params"
+#        displayName: "Check which file to run"
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/set_environment.py'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        displayName: "Set Environment"
 
       - task: AzureResourceManagerTemplateDeployment@3
         name: "deployVM"
