@@ -126,7 +126,7 @@ jobs:
           arguments: 'setup_vm'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        displayName: "Check asyncio"
+        displayName: "Setup test VM"
 
 #      - script: |
 #          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
@@ -172,7 +172,7 @@ jobs:
           arguments: '"sudo bash /home/$(adminUsername)/$(distroSetupPath)"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: not(eq(variables.distroSetupPath, ''))
+        condition: and(succeeded(), not(eq(variables.distroSetupPath, '')))
         displayName: 'Execute Distro Setup on test VM'
 
 #      - script: |
@@ -203,7 +203,7 @@ jobs:
           arguments: '"sudo PYPYPATH=$(pypyPath) bash /home/$(adminUsername)/dcr/scenario/setup.sh"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: eq(variables.runScenarioSetup, 'true')
+        condition: and(succeeded(), eq(variables.runScenarioSetup, 'true'))
         displayName: "Install test dependencies on test VM"
 
 #      - task: Bash@3
@@ -238,7 +238,7 @@ jobs:
           AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
           AZURE_TENANT_ID: $(AZURE-TENANT-ID)
         displayName: "Run the test file on the Orchestrator"
-        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
+        condition: and(succeeded(), eq(variables.runHost, 'true'))
 
 #      - script: |
 #          $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py

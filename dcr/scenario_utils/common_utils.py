@@ -73,7 +73,9 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                     raise Exception(
                         f"Command {cmd} failed with exit code: {proc.returncode}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
 
-                logger.info(f"Command: {cmd}\n\tSTDOUT: {stdout}\n\tSTDERR: {stderr}")
+                print(f"Command: {cmd}")
+                print(f"\tSTDOUT: {stdout}")
+                print(f"\tSTDERR: {stderr}")
                 break
 
             except asyncio.CancelledError as err:
