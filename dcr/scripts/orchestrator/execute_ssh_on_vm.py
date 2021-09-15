@@ -28,12 +28,12 @@ async def run_tasks(command: str):
         ]
         try:
             # Try fetching test results in a best effort scenario, if unable to fetch, dont throw an error
-            return await execute_commands_concurrently_on_test_vms(commands=commands)
+            return await execute_commands_concurrently_on_test_vms(commands=commands, timeout=15)
         except Exception as err:
             logger.warning(f"Unable to fetch test results; Error: {err}", exc_info=True)
     else:
         cmd = f'{ssh_cmd} "{command}"'
-        return await execute_commands_concurrently_on_test_vms(commands=[cmd])
+        return await execute_commands_concurrently_on_test_vms(commands=[cmd], timeout=15)
 
 
 if __name__ == '__main__':
