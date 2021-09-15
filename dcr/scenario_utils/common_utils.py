@@ -9,6 +9,7 @@ from typing import List
 from dcr.scenario_utils.models import get_vm_data_from_env
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def execute_command_and_raise_on_error(command, shell=False, timeout=None, stdout=subprocess.PIPE,
@@ -16,8 +17,8 @@ def execute_command_and_raise_on_error(command, shell=False, timeout=None, stdou
     pipe = subprocess.Popen(command, shell=shell, stdout=stdout, stderr=stderr)
     stdout, stderr = pipe.communicate(timeout=timeout)
 
-    print("STDOUT:\n{0}".format(stdout.decode()))
-    print("STDERR:\n{0}".format(stderr.decode()))
+    logger.info("STDOUT:\n{0}".format(stdout.decode()))
+    logger.info("STDERR:\n{0}".format(stderr.decode()))
     if pipe.returncode != 0:
         raise Exception("non-0 exit code: {0} for command: {1}".format(pipe.returncode, command))
 
@@ -28,11 +29,11 @@ def execute_py_script_over_ssh_on_test_vms(command: str):
     """
     Execute a python script over SSH on test VMs. If there are multiple VMs, this will execute the script on all VMs concurrently.
     The script should be relative to the dcr/ directory.
-    Prints the stdout/stderr of the script
+    logs the stdout/stderr of the script
     raises: Exception if any script exits with non-0 exit code.
     """
     ssh_cmd = f"ssh -o StrictHostKeyChecking=no {{username}}@{{ip}} sudo PYTHONPATH=. {os.environ['PYPYPATH']} /home/{{username}}/{command}"
-    print(asyncio.run(execute_commands_concurrently_on_test_vms([ssh_cmd])))
+    logger.info(asyncio.run(execute_commands_concurrently_on_test_vms([ssh_cmd])))
 
 
 def random_alphanum(length: int) -> str:
@@ -72,7 +73,7 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                     raise Exception(
                         f"Command {cmd} failed with exit code: {proc.returncode}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
 
-                print(f"Command: {cmd}\n\tSTDOUT: {stdout}\n\tSTDERR: {stderr}")
+                logger.info(f"Command: {cmd}\n\tSTDOUT: {stdout}\n\tSTDERR: {stderr}")
                 break
 
             except asyncio.CancelledError as err:

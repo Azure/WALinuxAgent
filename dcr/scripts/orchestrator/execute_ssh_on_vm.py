@@ -21,7 +21,7 @@ async def run_tasks(command: str):
             f'{ssh_cmd} "sudo PYPYPATH="{pypy_path}" bash {dcr_root_dir}/scripts/install_pip_packages.sh {dcr_root_dir}/requirements.txt"',
             f'{ssh_cmd} "sudo bash {dcr_root_dir}/scripts/setup_agent.sh {agent_version}"'
         ]
-        return await execute_commands_concurrently_on_test_vms(commands=setup_commands)
+        return await execute_commands_concurrently_on_test_vms(commands=setup_commands, timeout=15)
     elif command == "fetch_results":
         commands = [
             f"scp -o StrictHostKeyChecking=no {{username}}@{{ip}}:~/test-result*.xml {os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY']}"
