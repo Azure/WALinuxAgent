@@ -1396,8 +1396,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         resource_limits = man.get_resource_limits(extension_name, self.ext_handler.properties.version)
         CGroupConfigurator.get_instance().setup_extension_slice(
-            extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota(),
-            memory_limit=resource_limits.get_extension_slice_memory_quota())
+            extension_name=extension_name)
         CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
     def create_status_file_if_not_exist(self, extension, status, code, operation, message):
@@ -2320,7 +2319,8 @@ class HandlerManifest(object):
                     "resourceLimits": {
                         "services": [
                             {
-                                "name": "mdsd.service"
+                                "name": "mdsd.service",
+                                "path": "/lib/systemd/system"
                             }
                         ]
                     }
@@ -2331,7 +2331,8 @@ class HandlerManifest(object):
                     "resourceLimits": {
                         "services": [
                             {
-                                "name": "azuremonitoragent.service"
+                                "name": "azuremonitoragent.service",
+                                "path": "/lib/systemd/system"
                             }
                         ]
                     }
