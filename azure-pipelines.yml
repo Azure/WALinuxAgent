@@ -8,7 +8,7 @@ parameters:
     type: object
     default:
 #      - agent-bvt
-      - agent-bvt-module
+#      - agent-bvt-module
 #      - agent-bvt-pytest
 #      - extension-telemetry-pipeline
       - ext-seq-multiple-dependencies

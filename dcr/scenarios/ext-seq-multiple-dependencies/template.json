@@ -41,6 +41,13 @@
             "metadata": {
                 "description": "Location for all resources."
             }
+        },
+        "dnsLabelPrefix": {
+            "type": "string",
+            "defaultValue": "[toLower(format('simplelinuxvm-{0}', uniqueString(resourceGroup().id)))]",
+            "metadata": {
+                "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+            }
         }
     },
     "variables": {
@@ -127,7 +134,7 @@
             "properties": {
                 "publicIPAllocationMethod": "Dynamic",
                 "dnsSettings": {
-                    "domainNameLabel": "[parameters('vmName')]"
+                    "domainNameLabel": "[parameters('dnsLabelPrefix')]"
                 }
             }
         },
