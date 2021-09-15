@@ -110,7 +110,7 @@ jobs:
           scriptLocation: 'inlineScript'
           inlineScript: |
             az vm list-ip-addresses --resource-group $(rgName) --name $(vmName) --query "[].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv > $(Build.SourcesDirectory)/dcr/.vm_ips || echo "No VM Ips"
-            az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName) --output tsv > $(Build.SourcesDirectory)/dcr/.vmss_ips || echo "No VMSS IPs"
+            az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName) --query "[].ipAddress" --output tsv > $(Build.SourcesDirectory)/dcr/.vmss_ips || echo "No VMSS IPs"
 
       - script: |
           printenv > $(Build.SourcesDirectory)/dcr/.env
