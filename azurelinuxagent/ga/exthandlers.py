@@ -111,7 +111,6 @@ class ExtCommandEnvVariable(object):
     UpdatingFromVersion = "{0}_UPDATING_FROM_VERSION".format(Prefix)
     WireProtocolAddress = "{0}_WIRE_PROTOCOL_ADDRESS".format(Prefix)
     ExtensionSupportedFeatures = "{0}_EXTENSION_SUPPORTED_FEATURES".format(Prefix)
-    AzureMonitorLinuxAgentCgroupSetup = True
 
 
 def validate_has_key(obj, key, full_key_path):
@@ -1390,8 +1389,6 @@ class ExtHandlerInstance(object):
 
     def set_extension_resource_limits(self):
         extension_name = self.get_full_name()
-        if self.check_azuremonitorlinuxagent(extension_name):
-            ExtCommandEnvVariable.AzureMonitorLinuxAgentCgroupSetup = False
         # setup the resource limits for extension operations and it's services.
         man = self.load_manifest()
         resource_limits = man.get_resource_limits(extension_name, self.ext_handler.properties.version)
@@ -1446,9 +1443,9 @@ class ExtHandlerInstance(object):
         env = {
             ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code
         }
-
-        if self.check_azuremonitorlinuxagent(self.get_full_name()) and \
-                ExtCommandEnvVariable.AzureMonitorLinuxAgentCgroupSetup:
+        # This check to call the setup if AzureMonitorLinuxAgent extension already installed and not called setup before
+        if self.is_azuremonitorlinuxagent(self.get_full_name()) and \
+                not CGroupConfigurator.get_instance().is_resource_limits_setup_completed(self.get_full_name()):
             self.set_extension_resource_limits()
 
         self.set_operation(WALAEventOperation.Enable)
@@ -2187,7 +2184,7 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     @staticmethod
-    def check_azuremonitorlinuxagent(extension_name):
+    def is_azuremonitorlinuxagent(extension_name):
         if re.match(r"\AMicrosoft.Azure.Monitor.AzureMonitorLinuxAgent", extension_name) is not None\
             and datetime.datetime.utcnow() < datetime.datetime.strptime(conf.get_cgroup_monitor_expiry_time(), "%Y-%m-%d"):
             return True
@@ -2313,7 +2310,7 @@ class HandlerManifest(object):
         Placeholder values for testing and monitoring the monitor extension resource usage.
         This will be disabled after nov 30th.
         """
-        if ExtHandlerInstance.check_azuremonitorlinuxagent(extension_name):
+        if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
             if LooseVersion(str_version) < LooseVersion("1.12"):
                 test_man = {
                     "resourceLimits": {

@@ -400,6 +400,14 @@ class CGroupConfigurator(object):
                     CGroupConfigurator._Impl.__cleanup_unit_file(unit_file)
                 return
 
+        def is_resource_limits_setup_completed(self, extension_name):
+            unit_file_install_path = systemd.get_unit_file_install_path()
+            extension_slice_path = os.path.join(unit_file_install_path,
+                                                SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+            if os.path.exists(extension_slice_path):
+                return True
+            return False
+
         def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
             agent_unit_name = systemd.get_agent_unit_name()
 
