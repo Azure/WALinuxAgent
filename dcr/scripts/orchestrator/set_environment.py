@@ -55,10 +55,10 @@ if __name__ == '__main__':
     _check_if_file_in_scenario_and_set_variable(file_name="run.py", name="runPy", true_value="true")
     _check_if_file_in_scenario_and_set_variable(file_name="run.host.py", name="runHost", true_value="true")
     _check_if_file_in_scenario_and_set_variable(file_name="setup.sh", name="runScenarioSetup", true_value="true")
-    _check_if_file_in_scenario_and_set_variable(file_name="template.json", name="template",
+    _check_if_file_in_scenario_and_set_variable(file_name="template.json", name="templateFile",
                                                 true_value=os.path.join(scenario_path, "template.json"),
                                                 false_val=os.path.join(template_dir, "deploy-linux-vm.json"))
-    _check_if_file_in_scenario_and_set_variable(file_name="parameters.json", name="template",
+    _check_if_file_in_scenario_and_set_variable(file_name="parameters.json", name="parametersFile",
                                                 true_value=os.path.join(scenario_path, "parameters.json"),
                                                 false_val=os.path.join(template_dir, "deploy-linux-vm-params.json"))
 

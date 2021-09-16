@@ -8,8 +8,8 @@ from typing import List
 
 from dcr.scenario_utils.models import get_vm_data_from_env
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def execute_command_and_raise_on_error(command, shell=False, timeout=None, stdout=subprocess.PIPE,
