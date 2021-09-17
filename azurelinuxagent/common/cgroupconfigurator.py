@@ -22,7 +22,7 @@ import shutil
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
@@ -56,7 +56,6 @@ DefaultDependencies=no
 Before=slices.target
 [Slice]
 CPUAccounting=yes
-MemoryAccounting=yes
 """
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
@@ -96,14 +95,6 @@ _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 [Service]
 CPUQuota={0}
 """
-_DROP_IN_FILE_MEMORY_ACCOUNTING = "13-MemoryAccounting.conf"
-_DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS = """
-# This drop-in unit file was created by the Azure VM Agent.
-# Do not edit.
-[Service]
-MemoryAccounting=yes
-"""
-
 _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 
@@ -130,7 +121,8 @@ class CGroupConfigurator(object):
         def __init__(self):
             self._initialized = False
             self._cgroups_supported = False
-            self._cgroups_enabled = False
+            self._agent_cgroups_enabled = False
+            self._ext_cgroups_enabled = False
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
@@ -177,7 +169,7 @@ class CGroupConfigurator(object):
                     self.enable()
                     CGroupsTelemetry.track_cgroup(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
 
-                _log_cgroup_info('Cgroups enabled: {0}', self._cgroups_enabled)
+                _log_cgroup_info('Cgroups enabled: {0}', self._agent_cgroups_enabled)
 
             except Exception as exception:
                 _log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
@@ -456,21 +448,36 @@ class CGroupConfigurator(object):
             return self._cgroups_supported
 
         def enabled(self):
-            return self._cgroups_enabled
+            return self._agent_cgroups_enabled
+
+        def ext_enabled(self):
+            return self._ext_cgroups_enabled
 
         def enable(self):
             if not self.supported():
                 raise CGroupsException("Attempted to enable cgroups, but they are not supported on the current platform")
-            self._cgroups_enabled = True
+            self._agent_cgroups_enabled = True
+            self._ext_cgroups_enabled = True
             self.__set_cpu_quota(conf.get_agent_cpu_quota())
 
-        def disable(self, reason):
-            self._cgroups_enabled = False
+        def disable(self, reason, telemetry_name = None):
+            # Todo: disable/reset extension when ext quotas introduced
+            if telemetry_name is None:                 # disable all
+                self._agent_cgroups_enabled = False
+                self._ext_cgroups_enabled = False
+                self.__reset_cpu_quota()
+                CGroupsTelemetry.reset()
+            elif telemetry_name == AGENT_NAME_TELEMETRY: # disable agent
+                self._agent_cgroups_enabled = False
+                self.__reset_cpu_quota()
+                CGroupsTelemetry.stop_tracking(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
+            else:
+                self._ext_cgroups_enabled = False # disable extension
+
             message = "[CGW] Disabling resource usage monitoring. Reason: {0}".format(reason)
             logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
             add_event(op=WALAEventOperation.CGroupsDisabled, message=message, is_success=False, log_event=False)
-            self.__reset_cpu_quota()
-            CGroupsTelemetry.reset()
+
 
         @staticmethod
         def __set_cpu_quota(quota):
@@ -538,12 +545,13 @@ class CGroupConfigurator(object):
             except CGroupsException as exception:
                 errors.append(exception)
 
-            disable = not process_check_success and conf.get_cgroup_disable_on_process_check_failure() \
-                      or \
-                      not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure()
+            reason = "Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors]))
 
-            if disable:
-                self.disable("Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors])))
+            if not process_check_success and conf.get_cgroup_disable_on_process_check_failure():
+                self.disable(reason)
+
+            if not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure():
+                self.disable(reason, telemetry_name=AGENT_NAME_TELEMETRY)
 
         def _check_processes_in_agent_cgroup(self):
             """
@@ -637,28 +645,30 @@ class CGroupConfigurator(object):
             return 0
 
         def start_tracking_unit_cgroups(self, unit_name):
+            """
+            TODO: Memory tracking
+            """
             try:
-                cpu_cgroup_path, memory_cgroup_path = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
                 if cpu_cgroup_path is None:
                     logger.info("The CPU controller is not mounted; will not track resource usage")
                 else:
                     CGroupsTelemetry.track_cgroup(CpuCgroup(unit_name, cpu_cgroup_path))
-                if memory_cgroup_path is None:
-                    logger.info("The Memory controller is not mounted; will not track resource usage")
-                else:
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(unit_name, memory_cgroup_path))
+
             except Exception as exception:
                 logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(exception))
 
         def stop_tracking_unit_cgroups(self, unit_name):
+            """
+            TODO: Memory tracking
+            """
             try:
-                cpu_cgroup_path, memory_cgroup_path = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
                 if cpu_cgroup_path is not None and os.path.exists(cpu_cgroup_path):
                     CGroupsTelemetry.stop_tracking(CpuCgroup(unit_name, cpu_cgroup_path))
-                if memory_cgroup_path is not None and os.path.exists(memory_cgroup_path):
-                    CGroupsTelemetry.stop_tracking(MemoryCgroup(unit_name, memory_cgroup_path))
+
             except Exception as exception:
                 logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
 
@@ -676,7 +686,7 @@ class CGroupConfigurator(object):
             :param stderr: File object to redirect stderr to
             :param error_code: Extension error code to raise in case of error
             """
-            if self.enabled():
+            if self.ext_enabled():
                 try:
                     return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
@@ -697,7 +707,7 @@ class CGroupConfigurator(object):
             under /lib/systemd/system if it is not exist.
             TODO: set cpu and memory quotas
             """
-            if self.enabled():
+            if self.ext_enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
                                                      SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
@@ -713,11 +723,12 @@ class CGroupConfigurator(object):
             This method ensures that the extension slice gets removed from /lib/systemd/system if it exist
             Lastly stop the unit. This would ensure the cleanup the /sys/fs/cgroup controller paths
             """
-            if self.enabled():
+            if self.ext_enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
                 if os.path.exists(extension_slice_path):
+                    self.stop_tracking_unit_cgroups(extension_slice_name)
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
                 # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
                 try:
@@ -733,7 +744,7 @@ class CGroupConfigurator(object):
             ex: /lib/systemd/system/extension.service.d/11-CPUAccounting.conf
             TODO: set cpu and memory quotas
             """
-            if self.enabled() and services_list is not None:
+            if self.ext_enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
                     unit_file_path = service.get('path', None)
@@ -743,9 +754,6 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
-                        drop_in_file_memory_accounting = os.path.join(drop_in_path,
-                                                                   _DROP_IN_FILE_MEMORY_ACCOUNTING)
-                        files_to_create.append((drop_in_file_memory_accounting, _DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS))
 
                         self.__create_all_files(files_to_create)
 
@@ -761,7 +769,7 @@ class CGroupConfigurator(object):
             Remove the dropin files from service .d folder for the given service
             and also, remove the cgroup entry from the tracked groups to stop tracking.
             """
-            if self.enabled() and services_list is not None:
+            if self.ext_enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
                     unit_file_path = service.get('path', None)
@@ -776,7 +784,7 @@ class CGroupConfigurator(object):
             """
             Add the cgroup entry to start tracking the services cgroups.
             """
-            if self.enabled() and services_list is not None:
+            if self.ext_enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
                     if service_name is not None:

@@ -2326,7 +2326,7 @@ class HandlerManifest(object):
     def get_resource_limits(self, extension_name, str_version):
         """
         Placeholder values for testing and monitoring the monitor extension resource usage.
-        This will be disabled after nov 30th.
+        This is not effective after nov 30th.
         """
         if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
             if LooseVersion(str_version) < LooseVersion("1.12"):

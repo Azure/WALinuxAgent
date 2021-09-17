@@ -189,14 +189,10 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension")
 
             expected_cpu_accounting = "CPUAccounting=yes"
-            expected_memory_accounting = "MemoryAccounting=yes"
 
             self.assertTrue(os.path.exists(extension_slice_unit_file), "{0} was not created".format(extension_slice_unit_file))
             self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_cpu_accounting),
                 "CPUAccounting was not set correctly. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(
-                    extension_slice_unit_file)))
-            self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_memory_accounting),
-                "MemoryAccounting was not set correctly. Expected: {0}. Got:\n{1}".format(expected_memory_accounting, fileutil.read_file(
                     extension_slice_unit_file)))
 
     def test_remove_extension_slice_should_remove_unit_files(self):
@@ -575,22 +571,15 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         with self._get_cgroup_configurator() as configurator:
             # get the paths to the mocked files
             extension_service_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_accounting)
-            extension_service_memory_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_memory_accounting)
 
             configurator.set_extension_services_cpu_memory_quota(service_list)
             expected_cpu_accounting = "CPUAccounting=yes"
-            expected_memory_accounting = "MemoryAccounting=yes"
 
             # create drop in files to set those properties
             self.assertTrue(os.path.exists(extension_service_cpu_accounting), "{0} was not created".format(extension_service_cpu_accounting))
             self.assertTrue(
                 fileutil.findre_in_file(extension_service_cpu_accounting, expected_cpu_accounting),
                 "CPUAccounting was not enabled. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(extension_service_cpu_accounting)))
-
-            self.assertTrue(os.path.exists(extension_service_memory_accounting), "{0} was not created".format(extension_service_memory_accounting))
-            self.assertTrue(
-                fileutil.findre_in_file(extension_service_memory_accounting, expected_memory_accounting),
-                "MemoryAccounting was not enabled. Expected: {0}. Got:\n{1}".format(expected_memory_accounting, fileutil.read_file(extension_service_memory_accounting)))
 
     def test_set_extension_services_when_quotas_not_defined(self):
         service_list = [
@@ -626,9 +615,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         self.assertTrue(
             any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
             "The extension service's CPU is not being tracked")
-        self.assertTrue(
-            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'memory' in cg.path),
-            "The extension service's CPU is not being tracked")
 
     def test_stop_tracking_extension_services_cgroups(self):
         service_list = [
@@ -640,28 +626,19 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
             CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
-        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-            CpuCgroup('extension.service', '/sys/fs/cgroup/memory/system.slice/extension.service')
 
         with self._get_cgroup_configurator() as configurator:
 
             extension_service_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_accounting)
-            extension_service_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_quota)
-
             configurator.stop_tracking_extension_services_cgroups(service_list)
 
             self.assertFalse(os.path.exists(extension_service_cpu_accounting),
                             "{0} should not have been created".format(extension_service_cpu_accounting))
-            self.assertFalse(os.path.exists(extension_service_cpu_quota),
-                            "{0} should not have been created".format(extension_service_cpu_quota))
 
         tracked = CGroupsTelemetry._tracked
 
         self.assertFalse(
             any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
-            "The extension service's CPU is being tracked")
-        self.assertFalse(
-            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'memory' in cg.path),
             "The extension service's CPU is being tracked")
 
     def test_start_tracking_unit_cgroups(self):
