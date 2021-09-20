@@ -87,7 +87,19 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
 
+
+class HandlerStatus(object):
+    """
+    Statuses for Handlers
+    """
+    ready = "Ready"
+    not_ready = "NotReady"
+
+
 class ValidHandlerStatus(object):
+    """
+    Statuses for Extensions
+    """
     transitioning = "transitioning"
     warning = "warning"
     error = "error"
@@ -1423,7 +1435,7 @@ class ExtHandlerInstance(object):
             raise
         # Even if a single extension is enabled for this handler, set the Handler state as Enabled
         self.set_handler_state(ExtHandlerState.Enabled)
-        self.set_handler_status(status="Ready", message="Plugin enabled")
+        self.set_handler_status(status=HandlerStatus.ready, message="Plugin enabled")
 
     def should_perform_multi_config_op(self, extension):
         return self.supports_multi_config and extension is not None
@@ -1476,7 +1488,7 @@ class ExtHandlerInstance(object):
         # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled
         if not self.supports_multi_config or not any(self.enabled_extensions):
             self.set_handler_state(ExtHandlerState.Installed)
-            self.set_handler_status(status="NotReady", message="Plugin disabled")
+            self.set_handler_status(status=HandlerStatus.not_ready, message="Plugin disabled")
 
     def install(self, uninstall_exit_code=None, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the install.
@@ -1492,7 +1504,7 @@ class ExtHandlerInstance(object):
         self.launch_command(install_cmd, cmd_name="install", timeout=900, extension=extension,
                             extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed, env=env)
         self.set_handler_state(ExtHandlerState.Installed)
-        self.set_handler_status(status="NotReady", message="Plugin installed but not enabled")
+        self.set_handler_status(status=HandlerStatus.not_ready, message="Plugin installed but not enabled")
 
     def uninstall(self, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the uninstall.
@@ -2069,7 +2081,7 @@ class ExtHandlerInstance(object):
             self.report_event(name=extension_name, message=message, is_success=False, log_event=False)
             self.logger.warn(message)
 
-    def set_handler_status(self, status="NotReady", message="", code=0):
+    def set_handler_status(self, status=HandlerStatus.not_ready, message="", code=0):
         state_dir = self.get_conf_dir()
 
         handler_status = ExtHandlerStatus()
