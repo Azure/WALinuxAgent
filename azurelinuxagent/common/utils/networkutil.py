@@ -120,6 +120,7 @@ class AddFirewallRules(object):
     """
 
     __ACCEPT_COMMAND = "-A"
+    __INSERT_COMMAND = "-I"
 
     @staticmethod
     def _add_wait(wait, command):
@@ -150,6 +151,13 @@ class AddFirewallRules(object):
         return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
+    def __get_accept_command_params_nonroot_tcp(wait, command, destination):
+        cmd = AddFirewallRules.__get_common_command_params(command, destination)
+        cmd.pop()
+        cmd.extend(["--destination-port", "53", "-j", "ACCEPT"])
+        return AddFirewallRules._add_wait(wait, cmd)
+
+    @staticmethod
     def __get_common_drop_command_params(wait, command, destination):
         cmd = AddFirewallRules.__get_common_command_params(command, destination)
         cmd.extend(["conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
@@ -159,6 +167,12 @@ class AddFirewallRules(object):
     def get_iptables_accept_command(wait, command, destination, owner_uid):
         cmd = AddFirewallRules.__get_iptables_base_command()
         cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid))
+        return cmd
+
+    @staticmethod
+    def get_iptables_accept_command_nonroot_tcp(wait, command, destination):
+        cmd = AddFirewallRules.__get_iptables_base_command()
+        cmd.extend(AddFirewallRules.__get_accept_command_params_nonroot_tcp(wait, command, destination))
         return cmd
 
     @staticmethod
@@ -206,6 +220,9 @@ class AddFirewallRules(object):
 
         accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_rule)
+
+        accept_rule_nonroot_tcp = AddFirewallRules.get_iptables_accept_command_nonroot_tcp(wait, AddFirewallRules.__INSERT_COMMAND, dst_ip)
+        AddFirewallRules.__execute_cmd(accept_rule_nonroot_tcp)
 
         drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip)
         AddFirewallRules.__execute_cmd(drop_rule)
