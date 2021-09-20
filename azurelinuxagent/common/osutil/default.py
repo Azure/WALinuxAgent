@@ -78,6 +78,9 @@ def _get_iptables_version_command():
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
     return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)
 
+def _get_firewall_accept_command_nonroot_tcp(wait, command, destination):
+    return AddFirewallRules.get_iptables_accept_command_nonroot_tcp(wait, command, destination)
+
 
 def _get_firewall_drop_command(wait, command, destination):
     return AddFirewallRules.get_iptables_drop_command(wait, command, destination)
