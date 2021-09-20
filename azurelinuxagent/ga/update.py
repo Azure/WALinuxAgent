@@ -108,7 +108,7 @@ class ExtensionsSummary(object):
             # take the name and status of the extension if is it not None, else use the handler's
             self.summary = [(o.name, o.status) for o in map(lambda h: h.extension_status if h.extension_status is not None else h, vm_status.vmAgent.extensionHandlers)]
             self.summary.sort(key=lambda s: s[0])  # sort by extension name to make comparisons easier
-            self.converged = all(status in (ValidHandlerStatus.success, ValidHandlerStatus.error, HandlerStatus.ready) for _, status in self.summary)
+            self.converged = all(status in (ValidHandlerStatus.success, ValidHandlerStatus.error, HandlerStatus.ready, HandlerStatus.not_ready) for _, status in self.summary)
 
     def __eq__(self, other):
         return self.summary == other.summary
