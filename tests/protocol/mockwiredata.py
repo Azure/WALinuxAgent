@@ -301,6 +301,14 @@ class WireProtocolData(object):
         plugins_list = find(ext_config_doc, "Plugins")
         return len(findall(plugins_list, "Plugin"))
 
+    def get_no_of_extensions_in_config(self):
+        if self.ext_conf is None:
+            return 0
+        ext_config_doc = parse_doc(self.ext_conf)
+        plugin_settings = find(ext_config_doc, "PluginSettings")
+        return len(findall(plugin_settings, "ExtensionRuntimeSettings")) + len(
+            findall(plugin_settings, "RuntimeSettings"))
+
     #
     # Having trouble reading the regular expressions below? you are not alone!
     #

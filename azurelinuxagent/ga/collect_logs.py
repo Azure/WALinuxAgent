@@ -26,7 +26,7 @@ import time
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import subprocess_dev_null, ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.osutil import systemd
@@ -161,41 +161,54 @@ class CollectLogsHandler(ThreadHandlerInterface):
         collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
         final_command = systemd_cmd + resource_limits + collect_logs_cmd
 
-        start_time = datetime.datetime.utcnow()
-        success = False
-        msg = None
+        def exec_command(output_file):
+            start_time = datetime.datetime.utcnow()
+            success = False
+            msg = None
+            try:
+                # TODO: Remove track_process (and its implementation) when the log collector is moved to the agent's cgroup
+                shellutil.run_command(final_command, log_error=False, track_process=False,
+                    stdout=output_file, stderr=output_file)
+                duration = elapsed_milliseconds(start_time)
+                archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
+
+                msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
+                                                                                                    duration)
+                logger.info(msg)
+                success = True
+
+                return True
+            except Exception as e:
+                duration = elapsed_milliseconds(start_time)
+
+                if isinstance(e, CommandError):
+                    exception_message = ustr("[stderr] %s", e.stderr)  # pylint: disable=no-member
+                else:
+                    exception_message = ustr(e)
+
+                msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, exception_message)
+                # No need to log to the local log since we ran run_command with logging errors as enabled
+
+                return False
+            finally:
+                add_event(
+                    name=AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.LogCollection,
+                    is_success=success,
+                    message=msg,
+                    log_event=False)
+        
         try:
-            # TODO: Remove track_process (and its implementation) when the log collector is moved to the agent's cgroup
-            shellutil.run_command(final_command, log_error=True, track_process=False)
-            duration = elapsed_milliseconds(start_time)
-            archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
-
-            msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
-                                                                                                   duration)
-            logger.info(msg)
-            success = True
-
-            return True
-        except Exception as e:
-            duration = elapsed_milliseconds(start_time)
-
-            if isinstance(e, CommandError):
-                exception_message = ustr("[stderr] %s", e.stderr)  # pylint: disable=no-member
-            else:
-                exception_message = ustr(e)
-
-            msg = "Failed to collect logs. Elapsed time: {0} ms. Error: {1}".format(duration, exception_message)
-            # No need to log to the local log since we ran run_command with logging errors as enabled
-
-            return False
+            logfile = open(conf.get_agent_log_file(), "a+")
+        except Exception:
+            with subprocess_dev_null() as DEVNULL:
+                return exec_command(DEVNULL)
+        else:
+            return exec_command(logfile)
         finally:
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.LogCollection,
-                is_success=success,
-                message=msg,
-                log_event=False)
+            if logfile is not None:
+                logfile.close()
 
     def _send_logs(self):
         msg = None

@@ -22,6 +22,15 @@ Defines all exceptions
 """
 
 
+class ExitException(BaseException):
+    """
+    Used to exit the agent's process
+    """
+    def __init__(self, reason):
+        super(ExitException, self).__init__()
+        self.reason = reason
+
+
 class AgentError(Exception):
     """
     Base class of agent error.
@@ -97,6 +106,12 @@ class ExtensionDownloadError(ExtensionError):
 class ExtensionConfigError(ExtensionError):
     """
     Error raised when extension config file is malformed
+    """
+
+
+class MultiConfigExtensionEnableError(ExtensionError):
+    """
+    Error raised when enable for a Multi-Config extension is failing.
     """
 
 
