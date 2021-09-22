@@ -1,5 +1,11 @@
 import os
+from enum import Enum, auto
 from typing import List
+
+
+class VMModelType(Enum):
+    VM = auto()
+    VMSS = auto()
 
 
 class ExtensionMetaData:
@@ -35,9 +41,18 @@ class VMMetaData:
         self.__sub_id = sub_id
         self.__location = location
         self.__admin_username = admin_username
-        if ips is None:
-            ips = _get_ips(admin_username)
-        self.__ips = ips
+
+        vm_ips, vmss_ips = _get_ips(admin_username)
+        # By default assume the test is running on a VM
+        self.__type = VMModelType.VM
+        self.__ips = vm_ips
+        if any(vmss_ips):
+            self.__type = VMModelType.VMSS
+            self.__ips = vmss_ips
+
+        if ips is not None:
+            self.__ips = ips
+
         print(f"IPs: {self.__ips}")
 
     @property
@@ -64,12 +79,17 @@ class VMMetaData:
     def ips(self) -> List[str]:
         return self.__ips
 
+    @property
+    def model_type(self):
+        return self.__type
 
-def _get_ips(username) -> list:
+
+def _get_ips(username) -> (list, list):
     """
     Try fetching Ips from the files that we create via az-cli.
     We do a best effort to fetch this from both orchestrator or the test VM. Its located in different locations on both
     scenarios.
+    Returns: Tuple of (VmIps, VMSSIps).
     """
 
     vms, vmss = [], []
@@ -81,17 +101,14 @@ def _get_ips(username) -> list:
         vm_ip_path = os.path.join(ip_path, ".vm_ips")
         if os.path.exists(vm_ip_path):
             with open(vm_ip_path, 'r') as vm_ips:
-                vms = [ip.strip() for ip in vm_ips.readlines()]
+                vms.extend(ip.strip() for ip in vm_ips.readlines())
 
         vmss_ip_path = os.path.join(ip_path, ".vmss_ips")
         if os.path.exists(vmss_ip_path):
             with open(vmss_ip_path, 'r') as vmss_ips:
-                vmss = [ip.strip() for ip in vmss_ips.readlines()]
+                vmss.extend(ip.strip() for ip in vmss_ips.readlines())
 
-        if any(vms + vmss):
-            return vms + vmss
-
-    return vms + vmss
+    return vms, vmss
 
 
 def get_vm_data_from_env() -> VMMetaData:

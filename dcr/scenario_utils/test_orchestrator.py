@@ -18,15 +18,15 @@ class TestObj:
 
 
 class TestOrchestrator(LoggingHandler):
-    def __init__(self, name: str, tests: List[TestObj], *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, name: str, tests: List[TestObj]):
+        super().__init__()
         self.name = name
-        self.tests: List[TestObj] = tests
-        self.test_cases: List[TestCase] = []
+        self.__tests: List[TestObj] = tests
+        self.__test_cases: List[TestCase] = []
 
     def run_tests(self):
         skip_due_to = None
-        for test in self.tests:
+        for test in self.__tests:
             tc = TestCase(test.name, classname=os.environ['SCENARIONAME'])
             if skip_due_to is not None:
                 tc.add_skipped_info(message=f"Skipped due to failing test: {skip_due_to}")
@@ -46,23 +46,22 @@ class TestOrchestrator(LoggingHandler):
                                 time.sleep(10)
                     else:
                         break
-            self.test_cases.append(tc)
+            self.__test_cases.append(tc)
 
     def generate_report(self, test_file_path):
-        ts = TestSuite(self.name, test_cases=self.test_cases)
+        ts = TestSuite(self.name, test_cases=self.__test_cases)
         with open(test_file_path, 'w') as f:
             to_xml_report_file(f, [ts])
 
     @property
     def failed(self) -> bool:
-        return any(tc.is_error() or tc.is_failure() for tc in self.test_cases)
+        return any(tc.is_error() or tc.is_failure() for tc in self.__test_cases)
 
     def run_test_and_get_tc(self, test_name, test_func) -> TestCase:
         stdout = ""
 
         tc = TestCase(test_name, classname=os.environ['SCENARIONAME'])
         start_time = time.time()
-        print("---" * 20)
         self.log.info("TestName: {0}".format(test_name))
         try:
             stdout = test_func()
