@@ -130,6 +130,8 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         #     print(item.rstrip())
         raise Exception("waagent.log contains the following ERROR(s): {0}".format('\n '.join(errors)))
 
+    print(f"No errors/warnings found in {waagent_log}")
+
 
 def is_data_in_waagent_log(data):
     """

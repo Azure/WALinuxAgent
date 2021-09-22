@@ -177,4 +177,4 @@ class ComputeManager:
     def compute_manager(self):
         if self.__compute_manager is None:
             self.__compute_manager = VirtualMachineHelper() if self.is_vm else VirtualMachineScaleSetHelper()
-        return self.compute_manager
+        return self.__compute_manager
