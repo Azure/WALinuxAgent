@@ -49,7 +49,7 @@ class ExtensionSequencingTestClass(LoggingHandler):
             try:
                 props = DeploymentProperties(template=ext_json,
                                              mode=DeploymentMode.incremental)
-                poller = self.__compute_manager.resource_client.deployments.create_or_update(
+                poller = self.__compute_manager.resource_client.deployments.begin_create_or_update(
                     self.__vm_data.rg_name, 'TestDeployment', props)
                 # Wait a max of 10 mins
                 poller.wait(timeout=10 * 60)
