@@ -107,12 +107,13 @@ class ExtensionSequencingTestClass(LoggingHandler):
     
     def get_sorted_extension_names(self, test_guid):
         # Retrieve the VMSS extension instances
-        vmss_vm_extensions = self.__compute_manager.get_vm_instance_view().extensions
+        vmss_vm_extensions = self.__compute_manager.get_extensions()
         
         # Log the extension enabled datetime
         for ext in vmss_vm_extensions:
-            ext.time = self.__get_time(ext, test_guid)
-            self.log.info("Extension {0} Status: {1}".format(ext.name, ext.statuses[0]))
+            ext_instance_view = self.__compute_manager.get_extension_instance_view(ext.name)
+            ext.time = self.__get_time(ext_instance_view, test_guid)
+            self.log.info("Extension {0} Status: {1}".format(ext.name, ext_instance_view.statuses[0]))
         
         # sort the extensions based on their enabled datetime
         sorted_extensions = sorted(vmss_vm_extensions, key=lambda ext_: ext_.time)

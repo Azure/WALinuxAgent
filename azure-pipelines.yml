@@ -124,7 +124,7 @@ stages:
         pool: server
         steps:
           - task: ManualValidation@0
-            timeoutInMinutes: 50
+            timeoutInMinutes: 500
             inputs:
               notifyUsers: 'larohra'
               onTimeout: 'resume'

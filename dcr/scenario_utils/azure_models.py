@@ -1,6 +1,8 @@
 import time
 from abc import ABC, abstractmethod
+from typing import List
 
+from azure.core.exceptions import HttpResponseError
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineScaleSetExtension, \
@@ -57,6 +59,10 @@ class AzureComputeBaseClass(ABC, LoggingHandler):
         pass
 
     @abstractmethod
+    def get_extensions(self):
+        pass
+
+    @abstractmethod
     def get_extension_instance_view(self, extension_name):
         pass
 
@@ -65,14 +71,14 @@ class AzureComputeBaseClass(ABC, LoggingHandler):
                       force_update_tag=None):
         pass
 
-    def _get_instance_view_with_retry(self, get_func):
+    def _run_azure_op_with_retry(self, get_func):
         max_retries = 3
         retries = max_retries
         while retries > 0:
             try:
                 ext = get_func()
                 return ext
-            except CloudError as ce:
+            except (CloudError, HttpResponseError) as ce:
                 if retries > 0:
                     self.log.exception(f"Got Azure error: {ce}")
                     self.log.warning("...retrying [{0} attempts remaining]".format(retries))
@@ -96,14 +102,20 @@ class VirtualMachineHelper(AzureComputeBaseClass):
         return self.compute_client.virtual_machine_extensions
 
     def get_vm_instance_view(self) -> VirtualMachineInstanceView:
-        return self._get_instance_view_with_retry(lambda: self.vm_func.get(
+        return self._run_azure_op_with_retry(lambda: self.vm_func.get(
             resource_group_name=self.vm_data.rg_name,
             vm_name=self.vm_data.name,
             expand="instanceView"
         ))
 
+    def get_extensions(self) -> List[VirtualMachineExtension]:
+        return self._run_azure_op_with_retry(lambda: self.extension_func.list(
+            resource_group_name=self.vm_data.rg_name,
+            vm_name=self.vm_data.name
+        ))
+
     def get_extension_instance_view(self, extension_name) -> VirtualMachineExtensionInstanceView:
-        return self._get_instance_view_with_retry(lambda: self.extension_func.get(
+        return self._run_azure_op_with_retry(lambda: self.extension_func.get(
             resource_group_name=self.vm_data.rg_name,
             vm_name=self.vm_data.name,
             vm_extension_name=extension_name,
@@ -138,13 +150,19 @@ class VirtualMachineScaleSetHelper(AzureComputeBaseClass):
         return self.compute_client.virtual_machine_scale_set_extensions
 
     def get_vm_instance_view(self) -> VirtualMachineScaleSetInstanceView:
-        return self._get_instance_view_with_retry(lambda: self.vm_func.get_instance_view(
+        return self._run_azure_op_with_retry(lambda: self.vm_func.get_instance_view(
+            resource_group_name=self.vm_data.rg_name,
+            vm_scale_set_name=self.vm_data.name
+        ))
+
+    def get_extensions(self) -> List[VirtualMachineScaleSetExtension]:
+        return self._run_azure_op_with_retry(lambda: self.extension_func.list(
             resource_group_name=self.vm_data.rg_name,
             vm_scale_set_name=self.vm_data.name
         ))
 
     def get_extension_instance_view(self, extension_name) -> VirtualMachineExtensionInstanceView:
-        return self._get_instance_view_with_retry(lambda: self.extension_func.get(
+        return self._run_azure_op_with_retry(lambda: self.extension_func.get(
             resource_group_name=self.vm_data.rg_name,
             vm_scale_set_name=self.vm_data.name,
             vmss_extension_name=extension_name,
