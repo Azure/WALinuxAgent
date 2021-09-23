@@ -138,10 +138,9 @@ class VirtualMachineScaleSetHelper(AzureComputeBaseClass):
         return self.compute_client.virtual_machine_scale_set_extensions
 
     def get_vm_instance_view(self) -> VirtualMachineScaleSetInstanceView:
-        return self._get_instance_view_with_retry(lambda: self.vm_func.get(
+        return self._get_instance_view_with_retry(lambda: self.vm_func.get_instance_view(
             resource_group_name=self.vm_data.rg_name,
-            vm_scale_set_name=self.vm_data.name,
-            expand="instanceView"
+            vm_scale_set_name=self.vm_data.name
         ))
 
     def get_extension_instance_view(self, extension_name) -> VirtualMachineExtensionInstanceView:

@@ -11,7 +11,7 @@ def main():
     ext_seq = ExtensionSequencingTestClass()
 
     tests = [
-        TestObj("Add Extensions with dependencies", lambda: ext_seq.run(add_extensions_with_dependency_template())),
+        TestObj("Add Extensions with dependencies", lambda: ext_seq.run(add_extensions_with_dependency_template()), raise_on_error=True),
         TestObj("Remove dependent extension", lambda: ext_seq.run(remove_dependent_extension_template())),
         TestObj("Remove all dependencies", lambda: ext_seq.run(remove_all_dependencies_template())),
         TestObj("Add more dependencies", lambda: ext_seq.run(add_more_dependencies_template())),
