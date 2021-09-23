@@ -97,15 +97,15 @@ class VirtualMachineHelper(AzureComputeBaseClass):
 
     def get_vm_instance_view(self) -> VirtualMachineInstanceView:
         return self._get_instance_view_with_retry(lambda: self.vm_func.get(
-            resource_group_name=self.__vm_data.rg_name,
-            vm_name=self.__vm_data.name,
+            resource_group_name=self.vm_data.rg_name,
+            vm_name=self.vm_data.name,
             expand="instanceView"
         ))
 
     def get_extension_instance_view(self, extension_name) -> VirtualMachineExtensionInstanceView:
         return self._get_instance_view_with_retry(lambda: self.extension_func.get(
-            resource_group_name=self.__vm_data.rg_name,
-            vm_name=self.__vm_data.name,
+            resource_group_name=self.vm_data.rg_name,
+            vm_name=self.vm_data.name,
             vm_extension_name=extension_name,
             expand="instanceView"
         ))
@@ -113,7 +113,7 @@ class VirtualMachineHelper(AzureComputeBaseClass):
     def get_ext_props(self, extension_data, settings=None, protected_settings=None, auto_upgrade_minor_version=True,
                       force_update_tag=None) -> VirtualMachineExtension:
         return VirtualMachineExtension(
-            location=self.__vm_data.location,
+            location=self.vm_data.location,
             publisher=extension_data.publisher,
             type_properties_type=extension_data.ext_type,
             type_handler_version=extension_data.version,
@@ -139,15 +139,15 @@ class VirtualMachineScaleSetHelper(AzureComputeBaseClass):
 
     def get_vm_instance_view(self) -> VirtualMachineScaleSetInstanceView:
         return self._get_instance_view_with_retry(lambda: self.vm_func.get(
-            resource_group_name=self.__vm_data.rg_name,
-            vm_scale_set_name=self.__vm_data.name,
+            resource_group_name=self.vm_data.rg_name,
+            vm_scale_set_name=self.vm_data.name,
             expand="instanceView"
         ))
 
     def get_extension_instance_view(self, extension_name) -> VirtualMachineExtensionInstanceView:
         return self._get_instance_view_with_retry(lambda: self.extension_func.get(
-            resource_group_name=self.__vm_data.rg_name,
-            vm_scale_set_name=self.__vm_data.name,
+            resource_group_name=self.vm_data.rg_name,
+            vm_scale_set_name=self.vm_data.name,
             vmss_extension_name=extension_name,
             expand="instanceView"
         ))
