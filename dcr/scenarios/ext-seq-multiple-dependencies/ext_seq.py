@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from time import sleep
 
-from azure.mgmt.resource.resources.models import DeploymentMode, DeploymentProperties
+from azure.mgmt.resource.resources.models import DeploymentMode, DeploymentProperties, Deployment
 from msrestazure.azure_exceptions import CloudError
 
 from dcr.scenario_utils.azure_models import ComputeManager
@@ -40,8 +40,11 @@ class ExtensionSequencingTestClass(LoggingHandler):
         self.__vm_data = get_vm_data_from_env()
         self.__compute_manager = ComputeManager().compute_manager
 
+        # Update the VMSS name
+        ExtensionSequencingTestClass.extension_template['resources'][0]['name'] = self.__vm_data.name
+
     def deploy_extensions(self, ext_json):
-        self.log.debug(f"Deploying extension template: {ext_json}")
+        self.log.info(f"Deploying extension template: {ext_json}")
 
         retry = 0
         max_retry = 5
@@ -50,7 +53,7 @@ class ExtensionSequencingTestClass(LoggingHandler):
                 props = DeploymentProperties(template=ext_json,
                                              mode=DeploymentMode.incremental)
                 poller = self.__compute_manager.resource_client.deployments.begin_create_or_update(
-                    self.__vm_data.rg_name, 'TestDeployment', props)
+                    self.__vm_data.rg_name, 'TestDeployment', Deployment(properties=props))
                 # Wait a max of 10 mins
                 poller.wait(timeout=10 * 60)
                 if poller.done():
