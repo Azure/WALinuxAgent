@@ -154,7 +154,7 @@ class VirtualMachineScaleSetHelper(AzureComputeBaseClass):
         # use the compute_client.virutal_machine_scale_sets function -
         # https://docs.microsoft.com/en-us/python/api/azure-mgmt-compute/azure.mgmt.compute.v2019_12_01.operations.virtualmachinescalesetsoperations?view=azure-python
 
-        for vm in self._run_azure_op_with_retry(self.vm_func.list(self.vm_data.rg_name, self.vm_data.name)):
+        for vm in self._run_azure_op_with_retry(lambda: self.vm_func.list(self.vm_data.rg_name, self.vm_data.name)):
             try:
                 return self._run_azure_op_with_retry(lambda: self.vm_func.get_instance_view(
                     resource_group_name=self.vm_data.rg_name,

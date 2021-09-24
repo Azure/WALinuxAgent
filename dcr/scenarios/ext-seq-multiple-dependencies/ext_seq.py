@@ -128,7 +128,9 @@ class ExtensionSequencingTestClass(LoggingHandler):
         for ext in sorted_extension_names:
             # Check if the depending extension are already installed
             if ext not in dependency_map:
-                raise Exception("Unwanted extension found in Instance view: {0}".format(ext))
+                # Some extensions might be installed by policy, continue in this case
+                self.log.info("Unwanted extension found in Instance view: {0}".format(ext))
+                continue
             if dependency_map[ext] is not None:
                 for dep in dependency_map[ext]:
                     if installed_ext.get(dep) is None:
