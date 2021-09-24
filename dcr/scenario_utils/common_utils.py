@@ -69,13 +69,13 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                 proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE,
                                                              stderr=asyncio.subprocess.PIPE)
                 stdout, stderr = await proc.communicate()
+                stdout = stdout.decode('utf-8')
+                stderr = stderr.decode('utf-8')
                 if proc.returncode != 0:
                     raise Exception(
                         f"Command {cmd} failed with exit code: {proc.returncode}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
 
-                print(f"[{username}/{ip}] Command: {cmd}")
-                print(f"\tSTDOUT: {stdout.decode('utf-8')}")
-                print(f"\tSTDERR: {stderr.decode('utf-8')}")
+                print(f"[{username}/{ip}] Command: {cmd}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
                 break
 
             except asyncio.CancelledError as err:

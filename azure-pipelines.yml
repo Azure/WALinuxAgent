@@ -8,9 +8,9 @@ parameters:
     type: object
     default:
 #      - agent-bvt
-#      - agent-bvt-module
+      - agent-bvt-module
 #      - agent-bvt-pytest
-#      - extension-telemetry-pipeline
+      - extension-telemetry-pipeline
       - ext-seq-multiple-dependencies
 
   - name: distros
@@ -30,17 +30,17 @@ parameters:
 #        name: "deb10"
 ##        setupPath: "dcr/distros/install_pip_packages.sh"
 #
-#      - publisher: "OpenLogic"
-#        offer: "CentOS"
-#        sku: "7_9"
-#        version: "latest"
-#        name: "cent79"
-###
-#      - publisher: "SUSE"
-#        offer: "sles-15-sp2-basic"
-#        sku: "gen1"
-#        version: "latest"
-#        name: "suse15"
+      - publisher: "OpenLogic"
+        offer: "CentOS"
+        sku: "7_9"
+        version: "latest"
+        name: "cent79"
+##
+      - publisher: "SUSE"
+        offer: "sles-15-sp2-basic"
+        sku: "gen1"
+        version: "latest"
+        name: "suse15"
 ##
 #      - publisher: "RedHat"
 #        offer: "RHEL"
@@ -124,7 +124,7 @@ stages:
         pool: server
         steps:
           - task: ManualValidation@0
-            timeoutInMinutes: 500
+            timeoutInMinutes: 50
             inputs:
               notifyUsers: 'larohra'
               onTimeout: 'resume'
