@@ -143,17 +143,30 @@ class VirtualMachineScaleSetHelper(AzureComputeBaseClass):
 
     @property
     def vm_func(self):
-        return self.compute_client.virtual_machine_scale_sets
+        return self.compute_client.virtual_machine_scale_set_vms
 
     @property
     def extension_func(self):
         return self.compute_client.virtual_machine_scale_set_extensions
 
     def get_vm_instance_view(self) -> VirtualMachineScaleSetInstanceView:
-        return self._run_azure_op_with_retry(lambda: self.vm_func.get_instance_view(
-            resource_group_name=self.vm_data.rg_name,
-            vm_scale_set_name=self.vm_data.name
-        ))
+        # Since this is a VMSS, return the instance view of the first VMSS VM. For the instance view of the complete VMSS,
+        # use the compute_client.virutal_machine_scale_sets function -
+        # https://docs.microsoft.com/en-us/python/api/azure-mgmt-compute/azure.mgmt.compute.v2019_12_01.operations.virtualmachinescalesetsoperations?view=azure-python
+
+        for vm in self._run_azure_op_with_retry(self.vm_func.list(self.vm_data.rg_name, self.vm_data.name)):
+            try:
+                return self._run_azure_op_with_retry(lambda: self.vm_func.get_instance_view(
+                    resource_group_name=self.vm_data.rg_name,
+                    vm_scale_set_name=self.vm_data.name,
+                    instance_id=vm.instance_id
+                ))
+            except Exception as err:
+                self.log.warning(
+                    f"Unable to fetch instance view of VMSS VM: {vm}. Trying out other instances.\nError: {err}")
+                continue
+
+        raise Exception(f"Unable to fetch instance view of any VMSS instances for {self.vm_data.name}")
 
     def get_extensions(self) -> List[VirtualMachineScaleSetExtension]:
         return self._run_azure_op_with_retry(lambda: self.extension_func.list(
