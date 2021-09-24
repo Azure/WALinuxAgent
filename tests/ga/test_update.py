@@ -1111,7 +1111,11 @@ class TestUpdate(UpdateTestCase):
             with patch('time.time', side_effect=mock_time.time):
                 with patch('time.sleep', side_effect=mock_time.sleep):
                     self.update_handler.run_latest(child_args=child_args)
-                    self.assertEqual(1, mock_popen.call_count, "Expected a single call to the latest agent; got: {0}".format(mock_popen.call_args_list))
+                    agent_calls = [args[0] for (args, _) in mock_popen.call_args_list if
+                                   "WALinuxAgent" in ''.join(args[0])]
+                    self.assertEqual(1, len(agent_calls),
+                                     "Expected a single call to the latest agent; got: {0}. All mocked calls: {1}".format(
+                                         agent_calls, mock_popen.call_args_list))
 
                     return mock_popen.call_args
 
