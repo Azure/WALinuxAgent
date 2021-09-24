@@ -1685,10 +1685,23 @@ class TestUpdate(UpdateTestCase):
     def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
         # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
         with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            self._add_write_permission_to_goal_state_files()
             update_handler.run(debug=True)
             for ext_dir in expected_events_dirs:
                 self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
+    def test_it_should_recreate_extension_event_directories_for_existing_extensions_if_extension_telemetry_pipeline_enabled(self):
+        with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            # Delete existing events directory
+            for ext_dir in expected_events_dirs:
+                shutil.rmtree(ext_dir, ignore_errors=True)
+                self.assertFalse(os.path.exists(ext_dir), "Extension directory not deleted")
+
+            with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
+                self._add_write_permission_to_goal_state_files()
+                update_handler.run(debug=True)
+                for ext_dir in expected_events_dirs:
+                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
 @patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')
 @patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler')
