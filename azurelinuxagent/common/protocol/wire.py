@@ -128,14 +128,14 @@ class WireProtocol(DataContract):
         return self.client.get_etag()
 
     def get_in_vm_gs_metadata(self):
-        return self.client.get_ext_conf().in_vm_gs_metadata
+        return self.client.get_extensions_goal_state().in_vm_gs_metadata
 
     def get_required_features(self):
-        return self.client.get_ext_conf().required_features
+        return self.client.get_extensions_goal_state().required_features
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
-        ext_conf = self.client.get_ext_conf()
+        ext_conf = self.client.get_extensions_goal_state()
         return ext_conf.vmagent_manifests, goal_state.incarnation
 
     def get_vmagent_pkgs(self, vmagent_manifest):
@@ -147,9 +147,9 @@ class WireProtocol(DataContract):
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
         goal_state = self.client.get_goal_state()
-        ext_conf = self.client.get_ext_conf()
+        extensions_goal_state = self.client.get_extensions_goal_state()
         # In wire protocol, incarnation is equivalent to ETag
-        return ext_conf.ext_handlers, goal_state.incarnation
+        return extensions_goal_state.ext_handlers, goal_state.incarnation
 
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
@@ -905,11 +905,6 @@ class WireClient(object):
             raise ProtocolError("Trying to fetch goal state before initialization!")
         return self._goal_state
 
-    def get_extensions_goal_state(self):
-        if self._extensions_goal_state is None:
-            raise ProtocolError("Trying to fetch extensions goal state before initialization!")
-        return self._extensions_goal_state
-
     def get_hosting_env(self):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Hosting Environment before initialization!")
@@ -925,9 +920,9 @@ class WireClient(object):
             raise ProtocolError("Trying to fetch Certificates before initialization!")
         return self._goal_state.certs
 
-    def get_ext_conf(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Extension Conf before initialization!")
+    def get_extensions_goal_state(self):
+        if self._extensions_goal_state is None:
+            raise ProtocolError("Trying to fetch ExtensioalState before initialization!")
         return self._extensions_goal_state
 
     def get_ext_manifest(self, ext_handler):
@@ -1099,17 +1094,17 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        ext_conf = self.get_ext_conf()
+        extensions_goal_state = self.get_extensions_goal_state()
 
-        if ext_conf.status_upload_blob is None:
+        if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(force_update=True)
-            ext_conf = self.get_ext_conf()
+            extensions_goal_state = self.get_extensions_goal_state()
 
-        if ext_conf.status_upload_blob is None:
+        if extensions_goal_state.status_upload_blob is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
 
-        blob_type = ext_conf.status_upload_blob_type
+        blob_type = extensions_goal_state.status_upload_blob_type
         if blob_type not in ["BlockBlob", "PageBlob"]:
             blob_type = "BlockBlob"
             logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
@@ -1130,7 +1125,7 @@ class WireClient(object):
         # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob, ext_conf.status_upload_blob, ext_conf.status_upload_blob_type)
+            host.put_vm_status(self.status_blob, extensions_goal_state.status_upload_blob, extensions_goal_state.status_upload_blob_type)
             return
         except ResourceGoneError:
             # refresh the host plugin client and try again on the next iteration of the main loop
@@ -1142,7 +1137,7 @@ class WireClient(object):
             self.report_status_event(msg, is_success=True)
 
         try:
-            if self.status_blob.upload(ext_conf.status_upload_blob):
+            if self.status_blob.upload(extensions_goal_state.status_upload_blob):
                 return
         except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
@@ -1314,9 +1309,9 @@ class WireClient(object):
         return self._host_plugin
 
     def has_artifacts_profile_blob(self):
-        ext_conf = self.get_ext_conf()
-        return ext_conf and not \
-            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
+        extensions_goal_state = self.get_extensions_goal_state()
+        return extensions_goal_state and not \
+            textutil.is_str_none_or_whitespace(extensions_goal_state.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1328,7 +1323,7 @@ class WireClient(object):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
-            blob = self.get_ext_conf().artifacts_profile_blob
+            blob = self.get_extensions_goal_state().artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)[0]
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
