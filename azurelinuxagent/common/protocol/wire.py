@@ -19,6 +19,7 @@
 import json
 import os
 import random
+import re
 import time
 import uuid
 import xml.sax.saxutils as saxutils
@@ -578,6 +579,8 @@ class WireClient(object):
         self._endpoint = endpoint
         self._goal_state = None
         self._extensions_goal_state = None
+        self._vm_settings_text = None
+        self._vm_settings_etag = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
@@ -787,16 +790,24 @@ class WireClient(object):
             # in the goal state (e.g. report status)
             self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
+            use_fast_track = conf.get_enable_fast_track()
+
             if force_update:
                 logger.info("Forcing an update of the goal state..")
 
             if force_update or self._goal_state is None or self._goal_state.incarnation != goal_state.incarnation:
                 goal_state.fetch_full_goal_state(self)
                 self._goal_state = goal_state
+                # TODO: Once Fast Track is fully enabled, this should be done only if not use_fast_track
+                if self._goal_state.extensions_config_uri is None:
+                    self._extensions_goal_state = ExtensionsGoalState(None)
+                else:
+                    xml_text = self.fetch_config(self._goal_state.extensions_config_uri, self.get_header())
+                    self._extensions_goal_state = ExtensionsGoalState(xml_text)
                 updated = True
 
-            if conf.get_enable_fast_track():
-                if self._update_extensions_goal_state(force_update):
+            if use_fast_track:
+                if self._update_vm_settings(force_update):
                     updated = True
 
             if updated:
@@ -805,7 +816,7 @@ class WireClient(object):
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
-    def _update_extensions_goal_state(self, force_update):
+    def _update_vm_settings(self, force_update):
         correlation_id = str(uuid.uuid4())
         etag = None if force_update else self.get_etag()
 
@@ -837,7 +848,8 @@ class WireClient(object):
                 return False
 
             logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
-            self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
+            self._vm_settings_text = vm_settings
+            self._vm_settings_etag = response_etag
             return True
 
         except Exception as exception:
@@ -865,11 +877,12 @@ class WireClient(object):
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
-            if self._goal_state.ext_conf is not None and self._goal_state.ext_conf.xml_text is not None:
-                self._save_cache(self._goal_state.ext_conf.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
+            if self._extensions_goal_state is not None and self._extensions_goal_state.xml_text is not None:
+                self._save_cache(self._extensions_goal_state.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
 
-            if self._extensions_goal_state is not None:
-                self._save_cache(self._extensions_goal_state.get_redacted_vm_settings(), VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state.etag))
+            if self._vm_settings_text is not None:
+                redacted_vm_settings_text = re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._vm_settings_text)
+                self._save_cache(redacted_vm_settings_text, VM_SETTINGS_FILE_NAME.format(self._vm_settings_etag))
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
@@ -881,21 +894,21 @@ class WireClient(object):
 
     def get_etag(self):
         """
-        Returns the Etag of the current ExtensionsGoalState, or None, if the goal state has not been retrieved.
+        Returns the Etag of the current vmSettings, or None, if the vmSettings have not been retrieved.
         """
-        if self._extensions_goal_state is None:
+        if self._vm_settings_text is None:
             return None
-        return self._extensions_goal_state.etag
-
-    def get_extensions_goal_state(self):
-        if self._extensions_goal_state is None:
-            raise ProtocolError("Trying to fetch the extensions goal state before initialization!")
-        return self._extensions_goal_state
+        return self._vm_settings_etag
 
     def get_goal_state(self):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch goal state before initialization!")
         return self._goal_state
+
+    def get_extensions_goal_state(self):
+        if self._extensions_goal_state is None:
+            raise ProtocolError("Trying to fetch extensions goal state before initialization!")
+        return self._extensions_goal_state
 
     def get_hosting_env(self):
         if self._goal_state is None:
@@ -915,7 +928,7 @@ class WireClient(object):
     def get_ext_conf(self):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Extension Conf before initialization!")
-        return self._goal_state.ext_conf
+        return self._extensions_goal_state
 
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:

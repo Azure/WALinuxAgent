@@ -31,7 +31,7 @@ from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
@@ -73,11 +73,11 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
     with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
         # These tests use mock wire data that dont have any extensions (extension config will be empty).
         # Populate the upload blob and artifacts profile blob.
-        ext_conf = ExtensionsConfig(None)
-        ext_conf.artifacts_profile_blob = artifacts_profile_blob
-        ext_conf.status_upload_blob = status_upload_blob
-        ext_conf.status_upload_blob_type = status_upload_blob_type
-        protocol.client._goal_state.ext_conf = ext_conf
+        extensions_goal_state = ExtensionsGoalState(None)
+        extensions_goal_state.artifacts_profile_blob = artifacts_profile_blob
+        extensions_goal_state.status_upload_blob = status_upload_blob
+        extensions_goal_state.status_upload_blob_type = status_upload_blob_type
+        protocol.client._extensions_goal_state = extensions_goal_state
 
         yield protocol
 
@@ -276,7 +276,7 @@ class TestWireProtocol(AgentTestCase):
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *_):
         # Test when artifacts_profile_blob is null/None
         with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-            protocol.client._goal_state.ext_conf = ExtensionsConfig(None)
+            protocol.client._extensions_goal_state = ExtensionsGoalState(None)
 
             self.assertEqual(None, protocol.client.get_artifacts_profile())
 
@@ -1178,9 +1178,10 @@ class UpdateGoalStateTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_MULTIPLE_EXT) as protocol:
             # instantiating the protocol fetches the goal state, so there is no need to do another call to update_goal_state()
             goal_state = protocol.client.get_goal_state()
+            extensions_goal_state = protocol.client.get_extensions_goal_state()
 
             protected_settings = []
-            for ext_handler in goal_state.ext_conf.ext_handlers.extHandlers:
+            for ext_handler in extensions_goal_state.ext_handlers.extHandlers:
                 for extension in ext_handler.properties.extensions:
                     if extension.protectedSettings is not None:
                         protected_settings.append(extension.protectedSettings)
