@@ -242,8 +242,8 @@ class AddFirewallRules(object):
         accept_cmd = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_cmd)
 
-        accept_rule_nonroot_tcp = AddFirewallRules.get_firewalld_accept_command_nonroot_tcp(command, dst_ip)
-        AddFirewallRules.__execute_cmd(accept_rule_nonroot_tcp)
+        # accept_rule_nonroot_tcp = AddFirewallRules.get_firewalld_accept_command_nonroot_tcp(command, dst_ip)
+        # AddFirewallRules.__execute_cmd(accept_rule_nonroot_tcp)
 
         drop_cmd = AddFirewallRules.get_firewalld_drop_command(command, dst_ip)
         AddFirewallRules.__execute_cmd(drop_cmd)
