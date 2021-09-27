@@ -56,7 +56,7 @@ from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_col
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, ValidHandlerStatus
+from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, ValidHandlerStatus, HandlerStatus
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
@@ -105,9 +105,10 @@ class ExtensionsSummary(object):
             self.summary = []
             self.converged = True
         else:
-            self.summary = [(h.extension_status.name, h.extension_status.status) for h in vm_status.vmAgent.extensionHandlers]
+            # take the name and status of the extension if is it not None, else use the handler's
+            self.summary = [(o.name, o.status) for o in map(lambda h: h.extension_status if h.extension_status is not None else h, vm_status.vmAgent.extensionHandlers)]
             self.summary.sort(key=lambda s: s[0])  # sort by extension name to make comparisons easier
-            self.converged = all(status in (ValidHandlerStatus.success, ValidHandlerStatus.error) for _, status in self.summary)
+            self.converged = all(status in (ValidHandlerStatus.success, ValidHandlerStatus.error, HandlerStatus.ready, HandlerStatus.not_ready) for _, status in self.summary)
 
     def __eq__(self, other):
         return self.summary == other.summary
@@ -297,11 +298,11 @@ class UpdateHandler(object):
             logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
 
             #
-            # Fetch the goal state one time; some components depend on information provided by the goal state and this
+            # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g telemetry depends on the container ID.)
             #
             protocol = self.protocol_util.get_protocol()
-            protocol.update_goal_state()
+            protocol.client.update_goal_state(force_update=True)
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)

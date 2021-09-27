@@ -112,7 +112,12 @@ DATA_FILE_REQUIRED_FEATURES = DATA_FILE.copy()
 DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
+DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
+
+DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS = DATA_FILE.copy()
+DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings-protected_settings.json"
+DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf-protected_settings.xml"
 
 class WireProtocolData(object):
     def __init__(self, data_files=None):

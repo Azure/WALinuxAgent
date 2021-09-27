@@ -36,7 +36,8 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME
+from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
+    AGENT_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
@@ -991,6 +992,38 @@ class TestExtension_Deprecated(AgentTestCase):
             invocation_record.compare(
                 (dep_ext_level_6, ExtensionCommandNames.UNINSTALL),
                 (dep_ext_level_5, ExtensionCommandNames.UNINSTALL)
+            )
+
+    def test_it_should_process_sequencing_properly_even_if_no_settings_for_dependent_extension(
+            self, mock_get, mock_crypt, *args):
+        test_data_file = DATA_FILE.copy()
+        test_data_file["ext_conf"] = "wire/ext_conf_dependencies_with_empty_settings.xml"
+        test_data = mockwiredata.WireProtocolData(test_data_file)
+        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
+
+        ext_1 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+        ext_2 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
+
+        with enable_invocations(ext_1, ext_2) as invocation_record:
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Ensure no extension status was reported for OtherExampleHandlerLinux as no settings provided for it
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+
+            # Ensure correct status reported back for the other extension with settings
+            self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                        expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
+            self._assert_ext_status(protocol.report_vm_status, "success", 0,
+                                    expected_handler_name="OSTCExtensions.ExampleHandlerLinux")
+
+            # Ensure the invocation order follows the dependency levels
+            invocation_record.compare(
+                (ext_2, ExtensionCommandNames.INSTALL),
+                (ext_2, ExtensionCommandNames.ENABLE),
+                (ext_1, ExtensionCommandNames.INSTALL),
+                (ext_1, ExtensionCommandNames.ENABLE)
             )
 
     def test_ext_handler_sequencing_should_fail_if_handler_failed(self, mock_get, mock_crypt, *args):
@@ -3467,7 +3500,7 @@ class TestExtension(AgentTestCase):
                 "timestampUTC": "1970-01-01T00:00:00Z",
                 "aggregateStatus": {
                     "guestAgentStatus": {
-                        "version": "9.9.9.9",
+                        "version": AGENT_VERSION,
                         "status": "Ready",
                         "formattedMessage": {
                             "lang": "en-US",

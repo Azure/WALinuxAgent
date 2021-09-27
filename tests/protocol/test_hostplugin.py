@@ -186,7 +186,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(should_initialize, host.is_initialized)
 
         self.assertEqual(1, patch_event.call_count)
-        self.assertEqual('InitializeHostPlugin', patch_event.call_args[0][0])
+        self.assertEqual('InitializeHostPlugin', patch_event.call_args[1]['op'])
 
         self.assertEqual(should_initialize, patch_event.call_args[1]['is_success'])
         self.assertEqual(1, patch_report_health.call_count)

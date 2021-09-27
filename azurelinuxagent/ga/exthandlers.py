@@ -87,7 +87,19 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
 
+
+class HandlerStatus(object):
+    """
+    Statuses for Handlers
+    """
+    ready = "Ready"
+    not_ready = "NotReady"
+
+
 class ValidHandlerStatus(object):
+    """
+    Statuses for Extensions
+    """
     transitioning = "transitioning"
     warning = "warning"
     error = "error"
@@ -563,8 +575,12 @@ class ExtHandlersHandler(object):
         Check the status of the extension being handled. Wait until it has a terminal state or times out.
         :raises: Exception if it is not handled successfully.
         """
-
         extension_name = handler_i.get_extension_full_name(extension)
+
+        # If the handler had no settings, we should not wait at all for handler to report status.
+        if extension is None:
+            logger.info("No settings found for {0}, not waiting for it's status".format(extension_name))
+            return
 
         try:
             ext_completed, status = False, None
@@ -1423,7 +1439,7 @@ class ExtHandlerInstance(object):
             raise
         # Even if a single extension is enabled for this handler, set the Handler state as Enabled
         self.set_handler_state(ExtHandlerState.Enabled)
-        self.set_handler_status(status="Ready", message="Plugin enabled")
+        self.set_handler_status(status=HandlerStatus.ready, message="Plugin enabled")
 
     def should_perform_multi_config_op(self, extension):
         return self.supports_multi_config and extension is not None
@@ -1476,7 +1492,7 @@ class ExtHandlerInstance(object):
         # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled
         if not self.supports_multi_config or not any(self.enabled_extensions):
             self.set_handler_state(ExtHandlerState.Installed)
-            self.set_handler_status(status="NotReady", message="Plugin disabled")
+            self.set_handler_status(status=HandlerStatus.not_ready, message="Plugin disabled")
 
     def install(self, uninstall_exit_code=None, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the install.
@@ -1492,7 +1508,7 @@ class ExtHandlerInstance(object):
         self.launch_command(install_cmd, cmd_name="install", timeout=900, extension=extension,
                             extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed, env=env)
         self.set_handler_state(ExtHandlerState.Installed)
-        self.set_handler_status(status="NotReady", message="Plugin installed but not enabled")
+        self.set_handler_status(status=HandlerStatus.not_ready, message="Plugin installed but not enabled")
 
     def uninstall(self, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the uninstall.
@@ -1652,7 +1668,9 @@ class ExtHandlerInstance(object):
     def collect_ext_status(self, ext):
         self.logger.verbose("Collect extension status for {0}".format(self.get_extension_full_name(ext)))
         seq_no, ext_status_file = self.get_status_file_path(ext)
-        if seq_no == -1:
+
+        # We should never try to read any status file if the handler has no settings, returning None in that case
+        if seq_no == -1 or ext is None:
             return None
 
         data = None
@@ -1996,6 +2014,8 @@ class ExtHandlerInstance(object):
 
         if get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
             handler_env[HandlerEnvironment.eventsFolder] = self.get_extension_events_dir()
+            # For now, keep the preview key to not break extensions that were using the preview.
+            handler_env[HandlerEnvironment.eventsFolder_preview] = self.get_extension_events_dir()
 
         env = [{
             HandlerEnvironment.name: self.ext_handler.name,
@@ -2067,7 +2087,7 @@ class ExtHandlerInstance(object):
             self.report_event(name=extension_name, message=message, is_success=False, log_event=False)
             self.logger.warn(message)
 
-    def set_handler_status(self, status="NotReady", message="", code=0):
+    def set_handler_status(self, status=HandlerStatus.not_ready, message="", code=0):
         state_dir = self.get_conf_dir()
 
         handler_status = ExtHandlerStatus()
@@ -2224,6 +2244,7 @@ class HandlerEnvironment(object):
     configFolder = "configFolder"
     statusFolder = "statusFolder"
     heartbeatFile = "heartbeatFile"
+    eventsFolder_preview = "eventsFolder_preview"
     eventsFolder = "eventsFolder"
     name = "name"
     version = "version"

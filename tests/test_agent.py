@@ -29,6 +29,7 @@ EXPECTED_CONFIGURATION = \
 AutoUpdate.GAFamily = Prod
 Autoupdate.Frequency = 3600
 DVD.MountPoint = /mnt/cdrom/secure
+Debug.AgentCpuQuota = 100
 Debug.CgroupCheckPeriod = 300
 Debug.CgroupDisableOnProcessCheckFailure = True
 Debug.CgroupDisableOnQuotaCheckFailure = True

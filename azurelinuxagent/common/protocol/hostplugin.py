@@ -100,7 +100,7 @@ class HostPluginProtocol(object):
             self.api_versions = self.get_api_versions()
             self.is_available = API_VERSION in self.api_versions
             self.is_initialized = self.is_available
-            add_event(WALAEventOperation.InitializeHostPlugin,
+            add_event(op=WALAEventOperation.InitializeHostPlugin,
                       is_success=self.is_available)
         return self.is_available
 
