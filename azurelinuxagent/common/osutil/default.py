@@ -78,6 +78,7 @@ def _get_iptables_version_command():
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
     return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)
 
+
 def _get_firewall_accept_command_nonroot_tcp(wait, command, destination):
     return AddFirewallRules.get_iptables_accept_command_nonroot_tcp(wait, command, destination)
 
@@ -270,11 +271,17 @@ class DefaultOSUtil(object):
 
         try:
             wait = self.get_firewall_will_wait()
-
             # If the DROP rule exists, make no changes
             try:
                 drop_rule = _get_firewall_drop_command(wait, "-C", dst_ip)
                 shellutil.run_command(drop_rule)
+                try:
+                    accept_rule = _get_firewall_accept_command_nonroot_tcp(wait, "-C", dst_ip)
+                    shellutil.run_command(accept_rule)
+                except CommandError as e:
+                    logger.info("new ip table rule not found hence adding it")
+                    accept_rule = _get_firewall_accept_command_nonroot_tcp(wait, "-I", dst_ip)
+                    shellutil.run_command(accept_rule)
                 logger.verbose("Firewall appears established")
                 return True
             except CommandError as e:
@@ -287,6 +294,7 @@ class DefaultOSUtil(object):
             # Otherwise, append both rules
             try:
                 AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+                logger.info("Firewall set using IP Tables")
             except Exception as error:
                 logger.warn(ustr(error))
                 raise
