@@ -1632,8 +1632,8 @@ class TestUpdate(UpdateTestCase):
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
                     update_handler.run(debug=True)
 
-        # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
-        self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
+        # Firewall-cmd should only be called 4 times - 1st to check if running, 2nd & 3rd & 4th for the QueryPassThrough cmd
+        self.assertEqual(4, len(executed_commands), "The number of times firwall-cmd should be called is only 4")
         self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),
                          "First command should be to check if firewalld is running")
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
