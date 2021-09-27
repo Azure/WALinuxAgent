@@ -25,7 +25,6 @@ jobs:
               distroName: ${{ distro.name }}
               distroSetupPath: ${{ distro.setupPath }}
               rgName: ${{ format('{0}-{1}-{2}', parameters.rgPrefix, scenario, distro.name) }}
-#      matrix: $[ variables.expandedListOfScenarios ]
       maxParallel: 50
 
     steps:
@@ -63,26 +62,12 @@ jobs:
 
       - bash: $(Build.SourcesDirectory)/dcr/scripts/get_pypy.sh
         displayName: "Get PyPy"
-#        name: "agentZip"
 
       - bash: $(Build.SourcesDirectory)/dcr/scripts/move_scenario.sh
         displayName: "Move scenarios"
 
       - script: pip install -r $(Build.SourcesDirectory)/dcr/requirements.txt
         displayName: "Install pip modules on orchestrator"
-
-#      - script: |
-#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.py ]] && runPy=true || runPy=false
-#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/run.host.py ]] && runHost=true || runHost=false
-#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/setup.sh ]] && runScenarioSetup=true || runScenarioSetup=false
-#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/template.json ]] && template="scenario/template.json" || template="templates/deploy-linux-vm.json"
-#          [[ -f $(Build.SourcesDirectory)/dcr/scenario/parameters.json ]] && params="scenario/parameters.json" || params="templates/deploy-linux-vm-params.json"
-#          echo "##vso[task.setvariable variable=runPy]$runPy"
-#          echo "##vso[task.setvariable variable=runHost]$runHost"
-#          echo "##vso[task.setvariable variable=runScenarioSetup]$runScenarioSetup"
-#          echo "##vso[task.setvariable variable=templateFile]$(Build.SourcesDirectory)/dcr/$template"
-#          echo "##vso[task.setvariable variable=parametersFile]$(Build.SourcesDirectory)/dcr/$params"
-#        displayName: "Check which file to run"
 
       - task: PythonScript@0
         inputs:
@@ -105,7 +90,6 @@ jobs:
           templateLocation: 'Linked artifact'
           csmFile: '$(templateFile)'
           csmParametersFile: '$(parametersFile)'
-#          csmFileLink: 'https://bootdiagsokypwackoodny.blob.core.windows.net/testlinuxagentarm/simple-linux-vm.json?sp=r&st=2021-09-07T23:06:37Z&se=2021-12-01T08:06:37Z&spr=https&sv=2020-08-04&sr=b&sig=hKxa55MTroRqIfeD2xwNOF%2FWrQvZj4GMAOKfa2%2B3634%3D'
           overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)" -imagePublisher "$(imagePublisher)" -imageOffer "$(imageOffer)" -imageSku $(imageSku) -imageVersion $(imageVersion)'
           deploymentMode: 'Complete'
           deploymentOutputs: 'armDeploymentOutput'
@@ -122,9 +106,9 @@ jobs:
 
       - script: |
           printenv > $(Build.SourcesDirectory)/dcr/.env
-          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
-          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env
-          echo "AZURE_TENANT_ID=$(AZURE-TENANT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
+#          echo "AZURE_CLIENT_ID=$(AZURE-CLIENT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
+#          echo "AZURE_CLIENT_SECRET=$(AZURE-CLIENT-SECRET)" >> $(Build.SourcesDirectory)/dcr/.env
+#          echo "AZURE_TENANT_ID=$(AZURE-TENANT-ID)" >> $(Build.SourcesDirectory)/dcr/.env
         displayName: 'Get all environment variables'
 
       - task: PythonScript@0
@@ -136,43 +120,6 @@ jobs:
           PYTHONPATH: $(Build.SourcesDirectory)
         displayName: "Setup test VM"
 
-#      - script: |
-#          echo "##vso[task.complete result=Failed;]Ending pipeline for tests"
-#          n=0
-#          ec=1
-#          until [ "$n" -ge 5 ]
-#          do
-#              scp -o StrictHostKeyChecking=no -r $(Build.SourcesDirectory)/dcr/ $(adminUsername)@$(armDeploymentOutput.hostname.value):~/ && ec=0 && break  # substitute your command here
-#              n=$((n+1))
-#              sleep 3
-#          done
-#          exit $ec
-#        displayName: 'Copy GA/DCR files to VM'
-#
-#      - script: |
-#          n=0
-#          ec=1
-#          until [ "$n" -ge 5 ]
-#          do
-#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYPYPATH="$(pypyPath)" bash /home/$(adminUsername)/dcr/scripts/install_pip_packages.sh /home/$(adminUsername)/dcr/requirements.txt" && ec=0 && break
-#              n=$((n+1))
-#              sleep 3
-#          done
-#          exit $ec
-#        displayName: 'Setup test VM'
-#
-#      - script: |
-#          n=0
-#          ec=1
-#          until [ "$n" -ge 5 ]
-#          do
-#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo bash /home/$(adminUsername)/dcr/scripts/setup_agent.sh $(agentVersion)" && ec=0 && break  # substitute your command here
-#              n=$((n+1))
-#              sleep 3
-#          done
-#          exit $ec
-#        displayName: 'Setup dev GA on VM'
-
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
@@ -183,57 +130,15 @@ jobs:
         condition: and(succeeded(), not(eq(variables.distroSetupPath, '')))
         displayName: 'Execute Distro Setup on test VM'
 
-#      - script: |
-#          n=0
-#          ec=1
-#          until [ "$n" -ge 5 ]
-#          do
-#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "" && ec=0 && break
-#              n=$((n+1))
-#              sleep 3
-#          done
-#          exit $ec
-#        condition: not(eq(variables.distroSetupPath, ''))
-#        displayName: 'Execute Distro Setup on test VM'
-
-#      - template: 'run-tests.yml'
-#        parameters:
-#          scenarioName: $(scenarioName)
-#          distroSetupPath: $(distroSetupPath)
-#          runPy: $(runPy)
-#          runYml: $(runYml)
-#          runScenarioSetup: $(runScenarioSetup)
-
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
-          arguments: '"sudo PYPYPATH=$(pypyPath) bash /home/$(adminUsername)/dcr/scenario/setup.sh"'
+          arguments: '"sudo bash /home/$(adminUsername)/dcr/scenario/setup.sh"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
         condition: and(succeeded(), eq(variables.runScenarioSetup, 'true'))
         displayName: "Install test dependencies on test VM"
-
-#      - task: Bash@3
-#        inputs:
-#          targetType: 'inline'
-#          script: |
-#            n=0
-#            ec=1
-#            until [ "$n" -ge 5 ]
-#            do
-#                ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "" && ec=0 && break  # substitute your command here
-#                n=$((n+1))
-#                sleep 3
-#            done
-#            exit $ec
-#        condition: eq(variables.runScenarioSetup, 'true')
-#        displayName: "Install test dependencies on test VM"
-
-#      - template: run-tests.yml
-#        parameters:
-##          ymlFilePath: ${{ format('../scenarios/{0}/run.yml', variables.scenarioName) }}
-#          timesToRun: ${{ format('{0}', variables.timesToRun) }}
 
       - task: PythonScript@0
         inputs:
@@ -248,27 +153,6 @@ jobs:
         displayName: "Run the test file on the Orchestrator"
         condition: and(succeeded(), eq(variables.runHost, 'true'))
 
-#      - script: |
-#          $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
-#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
-#        displayName: "Run the test file on the Orchestrator"
-#
-#      - task: Bash@3
-#        inputs:
-#          targetType: 'inline'
-#          script: |
-#            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
-#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
-#
-#      - task: Bash@3
-#        inputs:
-#          targetType: 'inline'
-#          script: |
-#            $USEPYTHONVERSION_PYTHONLOCATION/bin/python $(Build.SourcesDirectory)/dcr/scenario/run.host.py
-#          noProfile: false
-#          noRc: false
-#        condition: and(succeededOrFailed(), eq(variables.runHost, 'true'))
-
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
@@ -279,29 +163,6 @@ jobs:
         condition: and(succeededOrFailed(), eq(variables.runPy, 'true'))
         displayName: "Execute test suite on VM"
 
-#      - script: |
-#          n=0
-#          ec=1
-#          until [ "$n" -ge 1 ]
-#          do
-#              ssh -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value) "sudo PYTHONPATH=. $(pypyPath) dcr/scenario/run.py" && ec=0 && break  # substitute your command here
-#              n=$((n+1))
-#              sleep 3
-#          done
-#          exit $ec
-#        condition: and(succeededOrFailed(), eq(variables.runPy, 'true'))
-#        displayName: "Execute test suite on VM"
-
-      # Here we will run the yml per scenario. The scenarios can specify their specifics there
-#      - template: ../agent-bvt/run.yml # ${{ format('../{0}/run.yml', $(scenarioName)) }}
-
-#      - task: PythonScript@0
-#        inputs:
-#          scriptSource: 'filePath'
-#          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/generate_test_files.py'
-#        displayName: "Generate Test Files on host"
-#        condition: succeededOrFailed()
-
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
@@ -311,11 +172,6 @@ jobs:
           PYTHONPATH: $(Build.SourcesDirectory)
         condition: succeededOrFailed()
         displayName: 'Fetch test results'
-
-#      - script: |
-#          if scp -o StrictHostKeyChecking=no $(adminUsername)@$(armDeploymentOutput.hostname.value):~/test-result*.xml $(Build.ArtifactStagingDirectory) >&/dev/null ; then exit 0 ; else echo "No files found" ; fi
-#        condition: succeededOrFailed()
-#        displayName: 'Fetch test results'
 
       - task: PublishTestResults@2
         condition: succeededOrFailed()

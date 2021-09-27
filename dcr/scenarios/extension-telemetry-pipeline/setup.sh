@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 
 #            1          2           3
-# Usage: <pypyPath>
+# Usage:
 set -euxo pipefail
-
-#scenario_dir=$(dirname "$0")
-#$1 -m pip install -r "$scenario_dir/requirements.txt"
 
 if systemctl status walinuxagent;then
     agent="walinuxagent"

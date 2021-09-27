@@ -1,4 +1,0 @@
-pytest
-junit-xml
-distro
-pudb

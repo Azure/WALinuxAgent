@@ -8,7 +8,7 @@ from dcr.scenario_utils.test_orchestrator import TestOrchestrator, TestObj
 if __name__ == '__main__':
 
     # Execute run1.py first
-    execute_py_script_over_ssh_on_test_vms(command="dcr/scenarios/agent-bvt-module/run1.py")
+    execute_py_script_over_ssh_on_test_vms(command="dcr/scenarios/agent-bvt/run1.py")
 
     # Add extensions from the Host
     tests = [
@@ -23,5 +23,5 @@ if __name__ == '__main__':
     assert not test_orchestrator.failed, f"Test Suite: {test_orchestrator.name} failed"
 
     # Execute run2.py finally
-    execute_py_script_over_ssh_on_test_vms(command="dcr/scenarios/agent-bvt-module/run2.py")
+    execute_py_script_over_ssh_on_test_vms(command="dcr/scenarios/agent-bvt/run2.py")
 
