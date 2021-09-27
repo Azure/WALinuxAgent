@@ -91,12 +91,9 @@ class WireProtocol(DataContract):
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
-        # Set the initial goal state
+        # Initialize the goal state, including all the inner properties
         logger.info('Initializing goal state during protocol detection')
-        self.client.update_goal_state(forced=True)
-
-    def update_extensions_goal_state(self):
-        self.client.update_extensions_goal_state()
+        self.client.update_goal_state(force_update=True)
 
     def update_goal_state(self):
         self.client.update_goal_state()
@@ -774,36 +771,45 @@ class WireClient(object):
         """
         Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
         """
-        goal_state = GoalState.fetch_goal_state(self)
+        goal_state = GoalState(self)
         self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-    def update_goal_state(self, forced=False):
+    def update_goal_state(self, force_update=False):
         """
-        Updates the goal state if the incarnation changed or if 'forced' is True
+        Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
-            if self._goal_state is None or forced:
-                new_goal_state = GoalState.fetch_full_goal_state(self)
-            else:
-                new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
+            updated = False
 
-            if new_goal_state is not None:
-                self._goal_state = new_goal_state
-                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
-                if conf.get_enable_fast_track():
-                    self.update_extensions_goal_state()
+            goal_state = GoalState(self)
+
+            # Always update the hostgaplugin, since the agent may issue requests to it even if there are no other changes
+            # in the goal state (e.g. report status)
+            self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
+
+            if force_update:
+                logger.info("Forcing an update of the goal state..")
+
+            if force_update or self._goal_state is None or self._goal_state.incarnation != goal_state.incarnation:
+                goal_state.fetch_full_goal_state(self)
+                self._goal_state = goal_state
+                updated = True
+
+            if conf.get_enable_fast_track():
+                if self._update_extensions_goal_state(force_update):
+                    updated = True
+
+            if updated:
                 self._save_goal_state()
 
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
-    def update_extensions_goal_state(self):
+    def _update_extensions_goal_state(self, force_update):
         correlation_id = str(uuid.uuid4())
-        etag = self.get_etag()
+        etag = None if force_update else self.get_etag()
 
         try:
-            # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-            logger.info("Fetching vmSettings [correlation ID: {0} eTag: {1}]", correlation_id, etag)
             def get_vm_settings():
                 url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
                 if etag is not None:
@@ -827,18 +833,15 @@ class WireClient(object):
                     response_etag = h[1]
                     break
 
-            if response_etag is not None:
-                logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
-                self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
-            else:
-                # TODO: Remove this log statement (the entire else clause) when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-                logger.error("Expected new vmSettings, but the response did not include an eTag [correlation ID: {0} eTag: {1}]", correlation_id, etag)
+            if response_etag is None:
+                return False
+
+            logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
+            self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
+            return True
 
         except Exception as exception:
-            # TODO: raise ProtocolError instead of logging a warning
-            message = "Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, ustr(exception))
-            logger.warn(message)
-            report_event(op=WALAEventOperation.GoalState, is_success=False, message=message, log_event=False)
+            raise ProtocolError("Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, ustr(exception)))
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
@@ -1087,7 +1090,7 @@ class WireClient(object):
 
         if ext_conf.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
-            self.update_goal_state(forced=True)  # FT: This will come from the ExtensionsGoalState
+            self.update_goal_state(force_update=True)
             ext_conf = self.get_ext_conf()
 
         if ext_conf.status_upload_blob is None:
@@ -1291,7 +1294,7 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = GoalState.fetch_goal_state(self)
+            goal_state = GoalState(self)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                      goal_state.container_id,
                                                      goal_state.role_config_name))

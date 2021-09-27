@@ -19,6 +19,8 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import currentThread
 
+_ORIGINAL_POPEN = subprocess.Popen
+
 from mock import PropertyMock
 
 from azurelinuxagent.common import conf
@@ -41,11 +43,11 @@ from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ValidHandlerStatus
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
-    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler
+    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, READONLY_FILE_GLOBS
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    clear_singleton_instances, mock_sleep, skip_if_predicate_true
+    clear_singleton_instances, mock_sleep
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import HttpRequestPredicates
 
@@ -1105,11 +1107,11 @@ class TestUpdate(UpdateTestCase):
         if mock_time is None:
             mock_time = TimeMock()
 
-        with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
+        with patch('azurelinuxagent.ga.update.subprocess.Popen', return_value=mock_child) as mock_popen:
             with patch('time.time', side_effect=mock_time.time):
                 with patch('time.sleep', side_effect=mock_time.sleep):
                     self.update_handler.run_latest(child_args=child_args)
-                    self.assertEqual(1, mock_popen.call_count, "Expected a single call to the latest agent; got: {0}".format([call.args for call in mock_popen.call_args_list]))
+                    self.assertEqual(1, mock_popen.call_count, "Expected a single call to the latest agent; got: {0}".format(mock_popen.call_args_list))
 
                     return mock_popen.call_args
 
@@ -1581,8 +1583,11 @@ class TestUpdate(UpdateTestCase):
             self.assertEqual(os.path.getctime(handler_env_file), last_modification_time,
                              "The creation time and last modified time of the HandlerEnvironment file dont match")
 
-            # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
-            # flag in HandlerEnvironment.json file
+        # Simulate a service restart by getting a new instance of the update handler and protocol and
+        # re-runnning the update handler. Then,ensure that the HandlerEnvironment file is recreated with eventsFolder
+        # flag in HandlerEnvironment.json file.
+        self._add_write_permission_to_goal_state_files()
+        with self._get_update_handler(iterations) as (update_handler, protocol):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)
@@ -1595,15 +1600,23 @@ class TestUpdate(UpdateTestCase):
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
 
+    def _add_write_permission_to_goal_state_files(self):
+        # UpdateHandler.run() marks some of the files from the goal state as read-only. Those files are overwritten when
+        # a new goal state is fetched. This is not a problem for the agent, since it  runs as root, but tests need
+        # to make those files writtable before fetching a new goal state. Note that UpdateHandler.run() fetches a new
+        # goal state, so tests that make multiple calls to that method need to call this function in-between calls.
+        for gb in READONLY_FILE_GLOBS:
+            for path in glob.iglob(os.path.join(conf.get_lib_dir(), gb)):
+                fileutil.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
     def test_it_should_not_setup_persistent_firewall_rules_if_EnableFirewall_is_disabled(self):
-        original_popen = subprocess.Popen
         executed_firewall_commands = []
 
         def _mock_popen(cmd, *args, **kwargs):
             if 'firewall-cmd' in cmd:
                 executed_firewall_commands.append(cmd)
                 cmd = ["echo", "running"]
-            return original_popen(cmd, *args, **kwargs)
+            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.logger.info") as patch_info:
             with self._get_update_handler(iterations=1) as (update_handler, _):
@@ -1614,18 +1627,17 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
         self.assertTrue(any(
             "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
-            patch_info.call_args_list), "Info not logged properly")
+            patch_info.call_args_list), "Info not logged properly, got: {0}".format(patch_info.call_args_list))
 
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
-        original_popen = subprocess.Popen
         executed_commands = []
 
         def _mock_popen(cmd, *args, **kwargs):
             if 'firewall-cmd' in cmd:
                 executed_commands.append(cmd)
                 cmd = ["echo", "running"]
-            return original_popen(cmd, *args, **kwargs)
+            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with self._get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
@@ -1665,6 +1677,7 @@ class TestUpdate(UpdateTestCase):
         # Disable extension telemetry pipeline and ensure events directory got deleted
         with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", False):
+                self._add_write_permission_to_goal_state_files()
                 update_handler.run(debug=True)
                 for ext_dir in expected_events_dirs:
                     self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
@@ -1907,29 +1920,23 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             update_handler = get_update_handler()
             self.assertFalse(update_handler._try_update_goal_state(protocol), "try_update_goal_state should have failed")
 
-    @skip_if_predicate_true(lambda: True, "TODO: Enable this test once we start retrieving the ExtensionsGoalState (vmSettings)")
     def test_it_should_update_the_goal_state(self):
         update_handler = get_update_handler()
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.set_incarnation(12345)
-            protocol.mock_wire_data.set_etag('54321')
 
             # the first goal state should produce an update
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '12345', "The goal state was not updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state was not updated (received unexpected ETag)")
 
             # no changes in the goal state should not produce an update
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '12345', "The goal state should not be updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state should not be updated (received unexpected ETag)")
 
             # a new  goal state should produce an update
             protocol.mock_wire_data.set_incarnation(6789)
-            protocol.mock_wire_data.set_etag('9876')
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '6789', "The goal state was not updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '9876', "The extensions goal state was not updated (received unexpected ETag)")
 
     def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
