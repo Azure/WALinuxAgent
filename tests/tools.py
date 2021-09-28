@@ -452,6 +452,7 @@ supported_distro = [
     ["ubuntu", "15.10", "Snappy Ubuntu Core"],
 
     ["coreos", "", ""],
+    ["flatcar", "", ""],
 
     ["suse", "12", "SUSE Linux Enterprise Server"],
     ["suse", "13.2", "openSUSE"],
