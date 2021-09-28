@@ -917,6 +917,7 @@ class UpdateHandler(object):
 
     @staticmethod
     def _ensure_extension_telemetry_state_configured_properly(protocol):
+        etp_enabled = get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported
         for name, path in list_agent_lib_directory(skip_agent_package=True):
 
             try:
@@ -933,13 +934,17 @@ class UpdateHandler(object):
                     # This is to ensure that existing extensions can start using the telemetry pipeline if they support
                     # it and also ensures that the extensions are not sending out telemetry if the Agent has to disable the feature.
                     handler_instance.create_handler_env()
+                    events_dir = handler_instance.get_extension_events_dir()
+                    # If ETP is enabled and events directory doesn't exist for handler, create it
+                    if etp_enabled and not(os.path.exists(events_dir)):
+                        fileutil.mkdir(events_dir, mode=0o700)
             except Exception as e:
                 logger.warn(
                     "Unable to re-create HandlerEnvironment file on service startup. Error: {0}".format(ustr(e)))
                 continue
 
         try:
-            if not get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
+            if not etp_enabled:
                 # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
                 # because the agent will not be listening on those events.
                 extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
