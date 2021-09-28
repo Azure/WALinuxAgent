@@ -122,7 +122,7 @@ class CGroupConfigurator(object):
             self._initialized = False
             self._cgroups_supported = False
             self._agent_cgroups_enabled = False
-            self._ext_cgroups_enabled = False
+            self._extension_cgroups_enabled = False
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
@@ -169,7 +169,7 @@ class CGroupConfigurator(object):
                     self.enable()
                     CGroupsTelemetry.track_cgroup(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
 
-                _log_cgroup_info('Cgroups enabled: {0}', self._agent_cgroups_enabled)
+                _log_cgroup_info('Agent cgroups enabled: {0}', self._agent_cgroups_enabled)
 
             except Exception as exception:
                 _log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
@@ -372,13 +372,14 @@ class CGroupConfigurator(object):
                     _log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
 
         @staticmethod
-        def __cleanup_directory_tree(path):
-            if os.path.exists(path):
-                try:
-                    shutil.rmtree(path)
-                    _log_cgroup_info("Removed {0}", path)
-                except Exception as exception:
-                    _log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
+        def __cleanup_all_files(files_to_cleanup):
+            for path in files_to_cleanup:
+                if os.path.exists(path):
+                    try:
+                        os.remove(path)
+                        _log_cgroup_info("Removed {0}", path)
+                    except Exception as exception:
+                        _log_cgroup_warning("Failed to remove {0}: {1}", path, ustr(exception))
 
         @staticmethod
         def __create_all_files(files_to_create):
@@ -448,31 +449,34 @@ class CGroupConfigurator(object):
             return self._cgroups_supported
 
         def enabled(self):
+            return self._agent_cgroups_enabled | self._extension_cgroups_enabled
+
+        def agent_enabled(self):
             return self._agent_cgroups_enabled
 
-        def ext_enabled(self):
-            return self._ext_cgroups_enabled
+        def extension_enabled(self):
+            return self._extension_cgroups_enabled
 
         def enable(self):
             if not self.supported():
                 raise CGroupsException("Attempted to enable cgroups, but they are not supported on the current platform")
             self._agent_cgroups_enabled = True
-            self._ext_cgroups_enabled = True
+            self._extension_cgroups_enabled = True
             self.__set_cpu_quota(conf.get_agent_cpu_quota())
 
         def disable(self, reason, telemetry_name = None):
             # Todo: disable/reset extension when ext quotas introduced
             if telemetry_name is None:                 # disable all
                 self._agent_cgroups_enabled = False
-                self._ext_cgroups_enabled = False
-                self.__reset_cpu_quota()
+                self._extension_cgroups_enabled = False
+                self.__reset_agent_cpu_quota()
                 CGroupsTelemetry.reset()
             elif telemetry_name == AGENT_NAME_TELEMETRY: # disable agent
                 self._agent_cgroups_enabled = False
-                self.__reset_cpu_quota()
+                self.__reset_agent_cpu_quota()
                 CGroupsTelemetry.stop_tracking(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
             else:
-                self._ext_cgroups_enabled = False # disable extension
+                self._extension_cgroups_enabled = False # disable extension
 
             message = "[CGW] Disabling resource usage monitoring. Reason: {0}".format(reason)
             logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
@@ -493,7 +497,7 @@ class CGroupConfigurator(object):
                 CGroupsTelemetry.set_track_throttled_time(True)
 
         @staticmethod
-        def __reset_cpu_quota():
+        def __reset_agent_cpu_quota():
             """
             Removes any CPUQuota on the agent
 
@@ -686,7 +690,7 @@ class CGroupConfigurator(object):
             :param stderr: File object to redirect stderr to
             :param error_code: Extension error code to raise in case of error
             """
-            if self.ext_enabled():
+            if self.enabled():
                 try:
                     return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
@@ -707,7 +711,7 @@ class CGroupConfigurator(object):
             under /lib/systemd/system if it is not exist.
             TODO: set cpu and memory quotas
             """
-            if self.ext_enabled():
+            if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
                                                      SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
@@ -723,7 +727,7 @@ class CGroupConfigurator(object):
             This method ensures that the extension slice gets removed from /lib/systemd/system if it exist
             Lastly stop the unit. This would ensure the cleanup the /sys/fs/cgroup controller paths
             """
-            if self.ext_enabled():
+            if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
@@ -744,7 +748,7 @@ class CGroupConfigurator(object):
             ex: /lib/systemd/system/extension.service.d/11-CPUAccounting.conf
             TODO: set cpu and memory quotas
             """
-            if self.ext_enabled() and services_list is not None:
+            if self.enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
                     unit_file_path = service.get('path', None)
@@ -769,22 +773,26 @@ class CGroupConfigurator(object):
             Remove the dropin files from service .d folder for the given service
             and also, remove the cgroup entry from the tracked groups to stop tracking.
             """
-            if self.ext_enabled() and services_list is not None:
+            if self.enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
                     unit_file_path = service.get('path', None)
                     if service_name is not None:
                         self.stop_tracking_unit_cgroups(service_name)
                         if unit_file_path is not None:
+                            files_to_cleanup = []
                             drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
-                            CGroupConfigurator._Impl.__cleanup_directory_tree(drop_in_path)
+                            drop_in_file_cpu_accounting = os.path.join(drop_in_path,
+                                                                       _DROP_IN_FILE_CPU_ACCOUNTING)
+                            files_to_cleanup.append(drop_in_file_cpu_accounting)
+                            CGroupConfigurator._Impl.__cleanup_all_files(files_to_cleanup)
                             _log_cgroup_info("Drop in files removed for {0}".format(service_name))
 
         def start_tracking_extension_services_cgroups(self, services_list):
             """
             Add the cgroup entry to start tracking the services cgroups.
             """
-            if self.ext_enabled() and services_list is not None:
+            if self.enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
                     if service_name is not None:

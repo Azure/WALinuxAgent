@@ -844,8 +844,10 @@ exit 0
                         configurator.enable()
 
                         configurator.check_cgroups([])
-
-                        self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                        if method_to_fail == "_check_processes_in_agent_cgroup":
+                            self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                        else:
+                            self.assertFalse(configurator.agent_enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
 
                         disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
                         self.assertTrue(

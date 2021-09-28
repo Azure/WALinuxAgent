@@ -206,6 +206,7 @@ class SystemdCgroupsApi(CGroupsApi):
         """
         Returns a tuple with the path of the cpu and memory cgroups for the given unit.
         The values returned can be None if the controller is not mounted.
+        Ex: ControlGroup=/azure.slice/walinuxagent.service
         """
         controlgroup_path = systemd.get_unit_property(unit_name, "ControlGroup")
         cpu_mount_point, memory_mount_point = self.get_cgroup_mount_points()
