@@ -18,8 +18,6 @@ import os
 import re
 import subprocess
 
-import shutil
-
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
