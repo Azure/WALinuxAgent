@@ -26,26 +26,40 @@ class BaseExtensionTestClass(LoggingHandler):
         )
 
     def run(self, ext_props: List, remove: bool = True, continue_on_error: bool = False):
+
+        def __add_extension():
+            extension = self.__compute_manager.extension_func.begin_create_or_update(
+                self.__vm_data.rg_name,
+                self.__vm_data.name,
+                self.__extension_data.name,
+                ext_prop
+            )
+            self.log.info("Add extension: {0}".format(extension.result(timeout=5 * 60)))
+
+        def _retry_on_retryable_error(func):
+            retry = 1
+            while retry < 5:
+                try:
+                    func()
+                except Exception as err_:
+                    if "RetryableError" in err_ and retry < 5:
+                        self.log.warning(f"({retry}/5) Ran into RetryableError, retrying in 30 secs: {err_}")
+                        time.sleep(30)
+                        retry += 1
+                        continue
+                    raise
+
         try:
             for ext_prop in ext_props:
                 try:
-                    extension = self.__compute_manager.extension_func.begin_create_or_update(
-                        self.__vm_data.rg_name,
-                        self.__vm_data.name,
-                        self.__extension_data.name,
-                        ext_prop
-                    )
-                    self.log.info("Add extension: {0}".format(extension.result(timeout=5*60)))
-
+                    _retry_on_retryable_error(__add_extension)
                     # Validate success from instance view
-                    self.validate_ext()
-
+                    _retry_on_retryable_error(self.validate_ext)
                 except Exception as err:
                     if continue_on_error:
                         self.log.exception("Ran into error but ignoring it as asked: {0}".format(err))
                         continue
                     else:
-                        self.log.exception(f"Ran into error when trying to execute extensions: {err}")
                         raise
         finally:
             # Always try to delete extensions if asked to remove even on errors

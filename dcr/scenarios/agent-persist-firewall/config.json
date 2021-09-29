@@ -1,0 +1,49 @@
+{
+  "image-set": "systemd-supported",
+  "packer-provisioner-extensions": {
+    "prepend": [
+      {
+        "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E {{ .Path }}",
+        "inline": [
+          "d=$(which date)",
+          "ipt=$(which iptables)",
+          "cp \"/tmp/provisioner_utils/access_wire_ip.sh\" \"/usr/bin/\"",
+          "chmod 777 \"/usr/bin/access_wire_ip.sh\"",
+          "mkdir -p /home/dcr || echo \"this is only needed for Suse VMs for running cron jobs as non-root\"",
+          "echo \"@reboot ($d --utc +\\%FT\\%T.\\%3NZ && /usr/bin/access_wire_ip.sh $ipt) > /var/tmp/reboot-cron-root.log 2>&1\" | crontab -u root -",
+          "echo \"@reboot ($d --utc +\\%FT\\%T.\\%3NZ && /usr/bin/access_wire_ip.sh $ipt) > /var/tmp/reboot-cron-dcr.log 2>&1\" | crontab -u dcr -",
+          "(crontab -l 2>/dev/null; echo \"@reboot ($d --utc +\\%FT\\%T.\\%3NZ) > /var/log/reboot_time.txt 2>&1\") | crontab -u root -",
+          "s=$(which systemctl)",
+          "(crontab -l 2>/dev/null; echo \"@reboot ($s status walinuxagent-network-setup.service || $s status waagent-network-setup.service) > /var/log/reboot_network_setup.txt 2>&1\") | crontab -u root -"
+        ],
+        "inline_shebang": "/bin/sh -ex",
+        "type": "shell",
+        "timeout": "1m"
+      }
+    ],
+    "append": [
+      {
+        "execute_command": "chmod +x {{ .Path }}; {{ .Vars }} sudo -E {{ .Path }}",
+        "inline": [
+          "sed -i 's/OS.EnableFirewall=n/OS.EnableFirewall=y/g' /etc/waagent.conf",
+          "file=\"wa*-network-setup.service\"",
+          "[ $(ls \"/usr/lib/systemd/system/$file\" \"/lib/systemd/system/$file\" 2>/dev/null | wc -w) -gt 0 ] && echo \"agent-network-setup file exists\" || echo \"agent-network-setup file does not exists\""
+        ],
+        "inline_shebang": "/bin/sh -ex",
+        "type": "shell",
+        "timeout": "1m"
+      }
+    ]
+  },
+  "environment": {
+    "test_regions": [
+      "West US 2"
+    ],
+    "servicePrincipalName": {
+      "subscription_id": "8e037ad4-618f-4466-8bc8-5099d41ac15b",
+      "client_id": "cd8bc24d-406a-479d-b3e4-855d852e8a9d",
+      "tenant_id": "72f988bf-86f1-41af-91ab-2d7cd011db47",
+      "object_id": "85f9bd52-5e31-41b8-9141-9b30d5815d66"
+    }
+  }
+}

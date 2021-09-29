@@ -59,7 +59,7 @@ class ExtensionSequencingTestClass(LoggingHandler):
                 if poller.done():
                     break
                 else:
-                    raise Exception("Extension deployment timed out after 10 mins")
+                    raise TimeoutError("Extension deployment timed out after 10 mins")
             except CloudError as ce:
                 self.log.warning(f"Cloud Error: {ce}", exc_info=True)
                 retry += 1

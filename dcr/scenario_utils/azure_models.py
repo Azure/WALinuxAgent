@@ -1,8 +1,10 @@
 import time
 from abc import ABC, abstractmethod
+from builtins import TimeoutError
 from typing import List
 
 from azure.core.exceptions import HttpResponseError
+from azure.core.polling import LROPoller
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineScaleSetExtension, \
@@ -71,6 +73,10 @@ class AzureComputeBaseClass(ABC, LoggingHandler):
                       force_update_tag=None):
         pass
 
+    @abstractmethod
+    def restart(self, timeout=5):
+        pass
+
     def _run_azure_op_with_retry(self, get_func):
         max_retries = 3
         retries = max_retries
@@ -135,8 +141,26 @@ class VirtualMachineHelper(AzureComputeBaseClass):
             force_update_tag=force_update_tag
         )
 
+    def restart(self, timeout=5):
+        poller : LROPoller = self._run_azure_op_with_retry(lambda: self.vm_func.begin_restart(
+            resource_group_name=self.vm_data.rg_name,
+            vm_name=self.vm_data.name
+        ))
+        poller.wait(timeout=timeout * 60)
+        if not poller.done():
+            raise TimeoutError(f"Machine {self.vm_data.name} failed to restart after {timeout} mins")
+
 
 class VirtualMachineScaleSetHelper(AzureComputeBaseClass):
+
+    def restart(self, timeout=5):
+        poller: LROPoller = self._run_azure_op_with_retry(lambda: self.vm_func.begin_restart(
+            resource_group_name=self.vm_data.rg_name,
+            vm_scale_set_name=self.vm_data.name
+        ))
+        poller.wait(timeout=timeout * 60)
+        if not poller.done():
+            raise TimeoutError(f"ScaleSet {self.vm_data.name} failed to restart after {timeout} mins")
 
     def __init__(self):
         super().__init__()

@@ -8,10 +8,9 @@ parameters:
     type: object
     default:
 #      - agent-bvt
-      - agent-bvt
-#      - agent-bvt-pytest
-      - extension-telemetry-pipeline
-      - ext-seq-multiple-dependencies
+#      - extension-telemetry-pipeline
+#      - ext-seq-multiple-dependencies
+      - agent-persist-firewall
 
   - name: distros
     type: object
@@ -30,17 +29,17 @@ parameters:
 #        name: "deb10"
 ##        setupPath: "dcr/distros/install_pip_packages.sh"
 #
-      - publisher: "OpenLogic"
-        offer: "CentOS"
-        sku: "7_9"
-        version: "latest"
-        name: "cent79"
+#      - publisher: "OpenLogic"
+#        offer: "CentOS"
+#        sku: "7_9"
+#        version: "latest"
+#        name: "cent79"
 ##
-      - publisher: "SUSE"
-        offer: "sles-15-sp2-basic"
-        sku: "gen1"
-        version: "latest"
-        name: "suse15"
+#      - publisher: "SUSE"
+#        offer: "sles-15-sp2-basic"
+#        sku: "gen1"
+#        version: "latest"
+#        name: "suse15"
 ##
 #      - publisher: "RedHat"
 #        offer: "RHEL"
@@ -50,12 +49,6 @@ parameters:
 
 trigger:
   - develop
-
-#resources:
-#  pipelines:
-#    - pipeline: builderArtifacts
-#      source: larohra.WALinuxAgent-builder
-#      trigger: true
 
 variables:
   vmName: 'larohra-simpleLinuxVM'
@@ -85,27 +78,6 @@ stages:
       agentVersion: "9.9.9.9"
 
     jobs:
-#      - job: "VerifyArtifacts"
-#        # condition: succeeded("CreateVM")
-#        steps:
-#          - task: DownloadPipelineArtifact@2
-#            inputs:
-#              buildType: 'specific'
-#              project: '2349ba76-ef20-4728-8958-572d04781d1f'
-#              definition: '2'
-#              specificBuildWithTriggering: true
-#              buildVersionToDownload: 'latest'
-#              targetPath: '$(Pipeline.Workspace)'
-#
-#          - script: |
-#              ls -al "$(Pipeline.Workspace)"
-#              ls -al "$(Pipeline.Workspace)/builderArtifacts"
-#              cat $(Pipeline.Workspace)/builderArtifacts/temp.txt
-#            displayName: "Check previous pipeline artifact"
-#
-#          - template: run-tests.yml@builderArtifacts
-#            parameters:
-#              ymlFilePath: ${{ format('{0}/builderArtifacts/run-tests.yml', variables['Pipeline.Workspace']) }}
       - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
         parameters:
           scenarios:
@@ -116,11 +88,8 @@ stages:
 
   - stage: "Cleanup"
     condition: succeededOrFailed()
-    # variables:
-    #   createVMPass: $[ stageDependencies.Setup.BuildAgent.outputs['agentZip.agentVersion'] ]
     jobs:
       - job: "Wait"
-        # condition: succeeded("CreateVM")
         pool: server
         steps:
           - task: ManualValidation@0

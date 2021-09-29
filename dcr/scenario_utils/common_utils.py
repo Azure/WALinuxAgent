@@ -1,15 +1,34 @@
 import asyncio
-import logging
 import math
 import os
 import secrets
 import subprocess
+import time
+from datetime import datetime
 from typing import List
 
+from dcr.scenario_utils.distro import get_distro
+from dcr.scenario_utils.logging_utils import get_logger
 from dcr.scenario_utils.models import get_vm_data_from_env
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger("CommonUtils")
+
+
+def get_current_agent_name(distro_name=None):
+    """
+    Only Ubuntu and Debian used walinuxagent, everyone else uses waagent.
+    Note: If distro_name is not specified, we will search the distro in the VM itself
+    :return: walinuxagent or waagent
+    """
+
+    if distro_name is None:
+        distro_name = get_distro()[0]
+
+    walinuxagent_distros = ["ubuntu", "debian"]
+    if any(dist.lower() in distro_name.lower() for dist in walinuxagent_distros):
+        return "walinuxagent"
+
+    return "waagent"
 
 
 def execute_command_and_raise_on_error(command, shell=False, timeout=None, stdout=subprocess.PIPE,
@@ -95,3 +114,29 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                     await asyncio.sleep(3)
                 else:
                     raise
+
+
+def execute_with_retry(func, max_retry=3, sleep=5):
+    retry = 0
+    while retry < max_retry:
+        try:
+            func()
+            return
+        except Exception as error:
+            print("{0} Op failed with error: {1}. Retry: {2}, total attempts: {3}".format(datetime.utcnow().isoformat(),
+                                                                                          error, retry + 1, max_retry))
+            retry += 1
+            if retry < max_retry:
+                time.sleep(sleep)
+                continue
+            raise
+
+
+def read_file(log_file):
+    if not os.path.exists(log_file):
+        raise Exception("{0} file not found!".format(log_file))
+
+    with open(log_file) as f:
+        lines = list(map(lambda _: _.strip(), f.readlines()))
+
+    return lines
