@@ -822,6 +822,8 @@ class WireClient(object):
                 if self._update_vm_settings(force_update):
                     updated = True
 
+                # TODO: Create an ExtensionsGoalState from the vmSettings and compare against self._extensions_goal_state
+
             if updated:
                 self._save_goal_state()
 

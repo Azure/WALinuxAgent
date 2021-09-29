@@ -78,6 +78,10 @@ class ExtensionsGoalState(object):
 
         return extensions_goal_state
 
+    @staticmethod
+    def from_vm_settings(json_text):
+        raise NotImplementedError()  # TODO: Implement parsing of vmSettings
+
     def _parse_required_features(self, required_features_list):
         for required_feature in findall(required_features_list, "RequiredFeature"):
             feature_name = findtext(required_feature, "Name")
