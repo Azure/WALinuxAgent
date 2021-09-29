@@ -7,7 +7,8 @@ set -euxo pipefail
 d=$(which date)
 ipt=$(which iptables)
 username="larohra"
-cp "access_wire_ip.sh" "/usr/bin/"
+script_dir=$(dirname "$0")
+cp "$script_dir/access_wire_ip.sh" "/usr/bin/"
 chmod 777 "/usr/bin/access_wire_ip.sh"
 mkdir -p /home/$username || echo "this is only needed for Suse VMs for running cron jobs as non-root"
 # Setup Cron jobs
