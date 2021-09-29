@@ -35,7 +35,7 @@ def get_deprovision_handler(distro_name=DISTRO_NAME,
             return Ubuntu1804DeprovisionHandler()
         else:
             return UbuntuDeprovisionHandler()
-    if distro_name == "coreos":
+    if distro_name in ("flatcar", "coreos"):
         return CoreOSDeprovisionHandler()
     if "Clear Linux" in distro_full_name:
         return ClearLinuxDeprovisionHandler()  # pylint: disable=E1120
