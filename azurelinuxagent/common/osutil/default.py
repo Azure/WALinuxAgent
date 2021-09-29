@@ -113,6 +113,10 @@ def _get_firewall_delete_conntrack_drop_command(wait, destination):
                      ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
                       "--ctstate", "INVALID,NEW", "-j", "DROP"])
 
+def _get_firewall_delete_accept_nonroot_tcp_command(wait, destination):
+    return _add_wait(wait,
+                     ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "--destination-port", "53", "-j", "ACCEPT"])
+
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
 ALL_CPUS_REGEX = re.compile('^cpu .*')
@@ -239,6 +243,7 @@ class DefaultOSUtil(object):
 
             self._delete_rule(_get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
             self._delete_rule(_get_firewall_delete_conntrack_drop_command(wait, dst_ip))
+            self._delete_rule(_get_firewall_delete_accept_nonroot_tcp_command(wait, dst_ip))
 
             return True
 
@@ -279,9 +284,14 @@ class DefaultOSUtil(object):
                     accept_rule = _get_firewall_accept_command_nonroot_tcp(wait, "-C", dst_ip)
                     shellutil.run_command(accept_rule)
                 except CommandError as e:
-                    logger.info("new ip table rule not found hence adding it")
-                    accept_rule = _get_firewall_accept_command_nonroot_tcp(wait, "-I", dst_ip)
-                    shellutil.run_command(accept_rule)
+                    logger.info("Iptable rule to allow tcp request to wireserver is not found. Adding it")
+                    try:
+                        accept_rule = _get_firewall_accept_command_nonroot_tcp(wait, "-I", dst_ip)
+                        shellutil.run_command(accept_rule)
+                        logger.info("Iptable rule to allow tcp request to wireserver added")
+                    except Exception as error:
+                        logger.warn(ustr(error))
+                        raise
                 logger.verbose("Firewall appears established")
                 return True
             except CommandError as e:
