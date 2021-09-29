@@ -73,7 +73,7 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
     with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
         # These tests use mock wire data that dont have any extensions (extension config will be empty).
         # Populate the upload blob and artifacts profile blob.
-        extensions_goal_state = ExtensionsGoalState(None)
+        extensions_goal_state = ExtensionsGoalState()
         extensions_goal_state.artifacts_profile_blob = artifacts_profile_blob
         extensions_goal_state.status_upload_blob = status_upload_blob
         extensions_goal_state.status_upload_blob_type = status_upload_blob_type
@@ -276,7 +276,7 @@ class TestWireProtocol(AgentTestCase):
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *_):
         # Test when artifacts_profile_blob is null/None
         with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-            protocol.client._extensions_goal_state = ExtensionsGoalState(None)
+            protocol.client._extensions_goal_state = ExtensionsGoalState()
 
             self.assertEqual(None, protocol.client.get_artifacts_profile())
 

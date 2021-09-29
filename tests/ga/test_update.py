@@ -1409,7 +1409,7 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(self._test_upgrade_available())
 
     def test_upgrade_available_handles_missing_family(self):
-        extensions_goal_state = ExtensionsGoalState(load_data("wire/ext_conf_missing_family.xml"))
+        extensions_goal_state = ExtensionsGoalState.from_extensions_config(load_data("wire/ext_conf_missing_family.xml"))
         protocol = ProtocolMock()
         protocol.family = "Prod"
         protocol.agent_manifests = extensions_goal_state.vmagent_manifests  # pylint: disable=attribute-defined-outside-init

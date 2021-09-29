@@ -29,9 +29,9 @@ from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHa
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
 
 
-class ExtensionsConfig(object):
-    def __init__(self, xml_text):
-        self.xml_text = xml_text
+class ExtensionsGoalState(object):
+    def __init__(self):
+        self.xml_text = None
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.in_vm_gs_metadata = InVMGoalStateMetaData()
@@ -40,10 +40,12 @@ class ExtensionsConfig(object):
         self.artifacts_profile_blob = None
         self.required_features = []
 
-        if xml_text is None:
-            return
+    @staticmethod
+    def from_extensions_config(xml_text):
+        extensions_goal_state = ExtensionsGoalState()
+        extensions_goal_state.xml_text = xml_text
 
-        xml_doc = parse_doc(self.xml_text)
+        xml_doc = parse_doc(extensions_goal_state.xml_text)
 
         ga_families_list = find(xml_doc, "GAFamilies")
         ga_families = findall(ga_families_list, "GAFamily")
@@ -57,22 +59,24 @@ class ExtensionsConfig(object):
             for uri in uris:
                 manifest_uri = VMAgentManifestUri(uri=gettext(uri))
                 manifest.versionsManifestUris.append(manifest_uri)
-            self.vmagent_manifests.vmAgentManifests.append(manifest)
+            extensions_goal_state.vmagent_manifests.vmAgentManifests.append(manifest)
 
-        self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
+        extensions_goal_state.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
         required_features_list = find(xml_doc, "RequiredFeatures")
         if required_features_list is not None:
-            self._parse_required_features(required_features_list)
+            extensions_goal_state._parse_required_features(required_features_list)
 
-        self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
-        self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
+        extensions_goal_state.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
+        extensions_goal_state.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
 
         status_upload_node = find(xml_doc, "StatusUploadBlob")
-        self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
-        logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
+        extensions_goal_state.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
+        logger.verbose("Extension config shows status blob type as [{0}]", extensions_goal_state.status_upload_blob_type)
 
-        self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
+        extensions_goal_state.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
+
+        return extensions_goal_state
 
     def _parse_required_features(self, required_features_list):
         for required_feature in findall(required_features_list, "RequiredFeature"):
@@ -137,8 +141,8 @@ class ExtensionsConfig(object):
         for plugin in plugins:
             ext_handler = ExtHandler()
             try:
-                ExtensionsConfig._parse_plugin(ext_handler, plugin)
-                ExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
+                ExtensionsGoalState._parse_plugin(ext_handler, plugin)
+                ExtensionsGoalState._parse_plugin_settings(ext_handler, plugin_settings)
             except ExtensionConfigError as error:
                 ext_handler.invalid_setting_reason = ustr(error)
 
@@ -279,11 +283,11 @@ class ExtensionsConfig(object):
                     handler_name, version, len(runtime_settings_nodes))
                 raise ExtensionConfigError(msg)
             # Only Runtime settings available, parse that
-            ExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
+            ExtensionsGoalState.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
                                                       ext_handler)
         elif extension_runtime_settings_nodes:
             # Parse the ExtensionRuntime settings for the given extension
-            ExtensionsConfig.__parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes,
+            ExtensionsGoalState.__parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes,
                                                                 ext_handler)
 
     @staticmethod
@@ -327,8 +331,8 @@ class ExtensionsConfig(object):
                 len(depends_on_nodes))
             raise ExtensionConfigError(msg)
         depends_on_node = depends_on_nodes[0] if depends_on_nodes else None
-        depends_on_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_node, handler_name)
-        ExtensionsConfig.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
+        depends_on_level = ExtensionsGoalState.__get_dependency_level_from_node(depends_on_node, handler_name)
+        ExtensionsGoalState.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
                                                             depends_on_level)
 
     @staticmethod
@@ -390,7 +394,7 @@ class ExtensionsConfig(object):
             if extension_name in (None, ""):
                 raise ExtensionConfigError("No Name not specified for DependsOn object in ExtensionRuntimeSettings for MultiConfig!")
 
-            dependency_level = ExtensionsConfig.__get_dependency_level_from_node(depends_on_node, extension_name)
+            dependency_level = ExtensionsGoalState.__get_dependency_level_from_node(depends_on_node, extension_name)
             dependency_levels[extension_name] = dependency_level
 
         ext_handler.supports_multi_config = True
@@ -402,7 +406,7 @@ class ExtensionsConfig(object):
             # State can either be `ExtensionState.Enabled` (default) or `ExtensionState.Disabled`
             state = getattrib(extension_runtime_setting_node, "state")
             state = ustr(state.lower()) if state not in (None, "") else ExtensionState.Enabled
-            ExtensionsConfig.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
+            ExtensionsGoalState.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
                                                                 ext_handler, dependency_levels[extension_name],
                                                                 state=state)
 
@@ -437,7 +441,3 @@ class ExtensionsConfig(object):
             ext.certificateThumbprint = thumbprint
             ext_handler.properties.extensions.append(ext)
 
-
-class ExtensionsGoalState(ExtensionsConfig):
-    def __init__(self, xml_text):
-        super(ExtensionsGoalState, self).__init__(xml_text)

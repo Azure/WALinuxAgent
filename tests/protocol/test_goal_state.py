@@ -52,7 +52,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
 
         with open(extensions_config_file, "r") as file_:
-            extensions_goal_state = ExtensionsGoalState(file_.read())
+            extensions_goal_state = ExtensionsGoalState.from_extensions_config(file_.read())
         self.assertEqual(4, len(extensions_goal_state.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
         for e in extensions_goal_state.ext_handlers.extHandlers:
             self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))

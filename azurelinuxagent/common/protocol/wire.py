@@ -790,7 +790,12 @@ class WireClient(object):
             # in the goal state (e.g. report status)
             self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-            use_fast_track = conf.get_enable_fast_track()
+            #
+            # TODO: This value should be set by querying the HostGAPlugin to check whether it supports Fast Track
+            #
+            fast_track_supported = True
+
+            use_fast_track = conf.get_enable_fast_track() and fast_track_supported
 
             if force_update:
                 logger.info("Forcing an update of the goal state..")
@@ -798,15 +803,22 @@ class WireClient(object):
             if force_update or self._goal_state is None or self._goal_state.incarnation != goal_state.incarnation:
                 goal_state.fetch_full_goal_state(self)
                 self._goal_state = goal_state
-                # TODO: Once Fast Track is fully enabled, this should be done only if not use_fast_track
+                #
+                # TODO: When Fast Track is fully enabled we should get the ExtensionsGoalState from ExtensionsConfig only
+                #       when not using fast track
+                # if not use_fast_track:
                 if self._goal_state.extensions_config_uri is None:
-                    self._extensions_goal_state = ExtensionsGoalState(None)
+                    self._extensions_goal_state = ExtensionsGoalState()
                 else:
                     xml_text = self.fetch_config(self._goal_state.extensions_config_uri, self.get_header())
-                    self._extensions_goal_state = ExtensionsGoalState(xml_text)
+                    self._extensions_goal_state = ExtensionsGoalState.from_extensions_config(xml_text)
+                # END TODO
                 updated = True
 
             if use_fast_track:
+                #
+                # TODO: When Fast Track is fully enabled we should populate self._extensions_goal_state using the VmSettings
+                #
                 if self._update_vm_settings(force_update):
                     updated = True
 
