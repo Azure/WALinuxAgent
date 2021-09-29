@@ -96,8 +96,10 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
 
                 print(f"##[group][{username}/{ip}] - ({attempt}/{max_retry})")
                 print(f"##[command]{cmd}")
-                print(f"##[debug]Stdout: {stdout}")
-                print(f"##[warning]Stderr: {stderr}")
+                if stdout:
+                    print(f"##[debug]Stdout: {stdout}")
+                if stderr:
+                    print(f"##[warning]Stderr: {stderr}")
                 print("##[endgroup]")
                 break
 
