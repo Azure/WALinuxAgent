@@ -5,8 +5,9 @@ import sys
 import time
 
 from dcr.scenario_utils.common_utils import execute_commands_concurrently_on_test_vms
+from dcr.scenario_utils.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("ExecuteSSHOnVM")
 
 
 async def run_tasks(command: str):

@@ -94,7 +94,11 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                     raise Exception(
                         f"Command {cmd} failed with exit code: {proc.returncode}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
 
-                print(f"[{username}/{ip}] Command: {cmd}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
+                print(f"##[group][{username}/{ip}] - ({attempt}/{max_retry})")
+                print(f"##[command]{cmd}")
+                print(f"##[debug]Stdout: {stdout}")
+                print(f"##[warning]Stderr: {stderr}")
+                print("##[endgroup]")
                 break
 
             except asyncio.CancelledError as err:
