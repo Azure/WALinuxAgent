@@ -16,11 +16,9 @@ def _check_if_file_in_scenario_and_set_variable(file_name: str, name: str, true_
     file_path = os.path.join(scenario_path, file_name)
     if os.path.exists(file_path):
         logger.info(f"Found file: {file_path}, setting variable: {name}")
-        execute_command_and_raise_on_error(command=add_variable_to_pipeline.format(name=name, value=true_value),
-                                           shell=True)
+        print(add_variable_to_pipeline.format(name=name, value=true_value))
     elif false_val is not None:
-        execute_command_and_raise_on_error(command=add_variable_to_pipeline.format(name=name, value=false_val),
-                                           shell=True)
+        print(add_variable_to_pipeline.format(name=name, value=false_val))
 
 
 def _override_config():
@@ -38,7 +36,7 @@ def _override_config():
     with open(config_path, encoding="utf-8") as config_fh:
         config_data = json.load(config_fh)
         for key, val in config_data.items():
-            execute_command_and_raise_on_error(command=add_variable_to_pipeline.format(name=key, value=val), shell=True)
+            print(add_variable_to_pipeline.format(name=key, value=val))
 
 
 if __name__ == '__main__':
@@ -51,7 +49,7 @@ if __name__ == '__main__':
     __dcr_dir = os.path.join(os.environ.get("BUILD_SOURCESDIRECTORY"), "dcr")
     scenario_path = os.path.join(__dcr_dir, "scenario")
     template_dir = os.path.join(__dcr_dir, "templates")
-    add_variable_to_pipeline = 'echo "##vso[task.setvariable variable={name};]{value}"'
+    add_variable_to_pipeline = '##vso[task.setvariable variable={name};]{value}'
 
     _check_if_file_in_scenario_and_set_variable(file_name="run.py", name="runPy", true_value="true")
     _check_if_file_in_scenario_and_set_variable(file_name="run.host.py", name="runHost", true_value="true")
