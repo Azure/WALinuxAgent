@@ -28,7 +28,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
@@ -1413,10 +1413,10 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(self._test_upgrade_available())
 
     def test_upgrade_available_handles_missing_family(self):
-        extensions_config = ExtensionsConfig(load_data("wire/ext_conf_missing_family.xml"))
+        extensions_goal_state = ExtensionsGoalState.from_extensions_config(load_data("wire/ext_conf_missing_family.xml"))
         protocol = ProtocolMock()
         protocol.family = "Prod"
-        protocol.agent_manifests = extensions_config.vmagent_manifests  # pylint: disable=attribute-defined-outside-init
+        protocol.agent_manifests = extensions_goal_state.vmagent_manifests  # pylint: disable=attribute-defined-outside-init
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
