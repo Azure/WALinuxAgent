@@ -423,37 +423,40 @@ class UpdateHandler(object):
         protocol = exthandlers_handler.protocol
         if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
+            # We should have a cached goal state here, go ahead and report status for that.
+            self._report_status(exthandlers_handler, incarnation_changed=False)
             return
 
-        if self._upgrade_available(protocol):
-            available_agent = self.get_latest_agent()
-            if available_agent is None:
-                reason = "Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT)
-            else:
-                reason = "Agent {0} discovered update {1} -- exiting".format(CURRENT_AGENT, available_agent.name)
-            raise ExitException(reason)
+        else: 
+            if self._upgrade_available(protocol):
+                available_agent = self.get_latest_agent()
+                if available_agent is None:
+                    reason = "Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT)
+                else:
+                    reason = "Agent {0} discovered update {1} -- exiting".format(CURRENT_AGENT, available_agent.name)
+                raise ExitException(reason)
 
-        incarnation = protocol.get_incarnation()
+            incarnation = protocol.get_incarnation()
 
-        try:
-            if incarnation != self.last_incarnation:  # TODO: This check should be based in the etag for the extensions goal state
-                if not self._extensions_summary.converged:
-                    message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
-                    logger.warn(message)
-                    add_event(op=WALAEventOperation.GoalState, message=message, is_success=False, log_event=False)
-                    if self._is_initial_goal_state:
-                        self._on_initial_goal_state_completed(self._extensions_summary)
-                self._extensions_summary = ExtensionsSummary()
-                exthandlers_handler.run()
+            try:
+                if incarnation != self.last_incarnation:  # TODO: This check should be based in the etag for the extensions goal state
+                    if not self._extensions_summary.converged:
+                        message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
+                        logger.warn(message)
+                        add_event(op=WALAEventOperation.GoalState, message=message, is_success=False, log_event=False)
+                        if self._is_initial_goal_state:
+                            self._on_initial_goal_state_completed(self._extensions_summary)
+                    self._extensions_summary = ExtensionsSummary()
+                    exthandlers_handler.run()
 
-            # report status always, even if the goal state did not change
-            # do it before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, incarnation_changed=incarnation != self.last_incarnation)
+                # report status always, even if the goal state did not change
+                # do it before processing the remote access, since that operation can take a long time
+                self._report_status(exthandlers_handler, incarnation_changed=incarnation != self.last_incarnation)
 
-            if incarnation != self.last_incarnation:
-                remote_access_handler.run()
-        finally:
-            self.last_incarnation = incarnation
+                if incarnation != self.last_incarnation:
+                    remote_access_handler.run()
+            finally:
+                self.last_incarnation = incarnation
 
     def _report_status(self, exthandlers_handler, incarnation_changed):
         # report_ext_handlers_status does its own error handling and returns None if an error occurred

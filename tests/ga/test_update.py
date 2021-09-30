@@ -2110,6 +2110,60 @@ class ReportStatusTestCase(AgentTestCase):
     """
     Tests for UpdateHandler._report_status()
     """
+
+    def setUp(self):
+        self.patches = [
+            patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)),
+            patch("sys.exit")
+        ]
+
+        for p in self.patches:
+            p.start()
+
+        return super().setUp()
+
+    def tearDown(self):
+        
+        for p in self.patches:
+            p.stop()
+
+        return super().tearDown()
+
+    def test_upload_status_blob_even_on_failed_goal_state(self):
+
+        @contextlib.contextmanager
+        def mock_update_handler():
+            def goal_state_handler(url, **kwargs):
+                if not HttpRequestPredicates.is_goal_state_request(url):
+                    return None
+                try:
+                    return goal_state_handler.return_vals.pop()
+                except IndexError:
+                    raise HttpError()
+            # returning None forces the default value. We return twice, the first for 
+            # protocol.detect during creation of the mock wire protocol, the second for
+            # the initial call in run().
+            goal_state_handler.return_vals = [ None, None ]
+
+            is_running_patch = patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=[True, False, True]))
+
+            try:
+                with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=goal_state_handler) as protocol:
+                    update_handler = get_update_handler()
+
+                    update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+                    update_handler._report_status = Mock()
+
+                    is_running_patch.start()
+                    yield update_handler
+            finally:
+                is_running_patch.stop()
+
+        with mock_update_handler() as update_handler:
+            update_handler.run(debug=True)
+            update_handler._report_status.assert_called_once()
+
+
     def test_report_status_should_log_errors_only_once_per_goal_state(self):
         update_handler = _create_update_handler()
         with _mock_exthandlers_handler() as exthandlers_handler:
