@@ -53,7 +53,8 @@ def execute_py_script_over_ssh_on_test_vms(command: str):
     raises: Exception if any script exits with non-0 exit code.
     """
     ssh_cmd = f"ssh -o StrictHostKeyChecking=no {{username}}@{{ip}} sudo PYTHONPATH=. {os.environ['PYPYPATH']} /home/{{username}}/{command}"
-    logger.info(asyncio.run(execute_commands_concurrently_on_test_vms([ssh_cmd])))
+    asyncio.run(execute_commands_concurrently_on_test_vms([ssh_cmd]))
+    logger.info(f"Finished executing SSH command: {ssh_cmd}")
 
 
 def random_alphanum(length: int) -> str:

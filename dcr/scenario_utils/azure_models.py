@@ -142,6 +142,7 @@ class VirtualMachineHelper(AzureComputeBaseClass):
         )
 
     def restart(self, timeout=5):
+        self.log.info(f"Initiating restart of machine: {self.vm_data.name}")
         poller : LROPoller = self._run_azure_op_with_retry(lambda: self.vm_func.begin_restart(
             resource_group_name=self.vm_data.rg_name,
             vm_name=self.vm_data.name
@@ -149,6 +150,7 @@ class VirtualMachineHelper(AzureComputeBaseClass):
         poller.wait(timeout=timeout * 60)
         if not poller.done():
             raise TimeoutError(f"Machine {self.vm_data.name} failed to restart after {timeout} mins")
+        self.log.info(f"Restarted machine: {self.vm_data.name}")
 
 
 class VirtualMachineScaleSetHelper(AzureComputeBaseClass):

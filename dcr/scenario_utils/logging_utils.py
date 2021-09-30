@@ -26,7 +26,8 @@ class LoggingHandler:
             return logger
 
         # No handlers found for logger, set it up
-        log_formatter = logging.Formatter("##[%(levelname)s] [%(asctime)s] [%(module)s] %(message)s")
+        log_formatter = logging.Formatter("##[%(levelname)s] [%(asctime)s] [%(module)s] {%(pathname)s:%(lineno)d} %(message)s",
+                                          datefmt="%Y-%m-%dT%H:%M:%S%z")
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(log_formatter)
         logger.addHandler(console_handler)
