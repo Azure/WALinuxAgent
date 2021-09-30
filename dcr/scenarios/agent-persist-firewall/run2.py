@@ -46,7 +46,7 @@ if __name__ == '__main__':
     load_dotenv()
     admin_username = get_vm_data_from_env().admin_username
     tests = [
-        TestObj("Verify system rebooted", verify_system_rebooted),
+        TestObj("Verify system rebooted", verify_system_rebooted, raise_on_error=True),
         TestObj("Generate SVG", lambda: generate_svg(svg_name="agent_running.svg")),
         TestObj("Verify wireIP unreachable for non-root", verify_wire_ip_unreachable_for_non_root),
         TestObj("Verify wireIP reachable for root", verify_wire_ip_reachable_for_root),
