@@ -33,6 +33,7 @@ class TestOrchestrator(LoggingHandler):
             else:
                 attempt = 1
                 while attempt <= test.retry:
+                    print(f"##[group][{test.name}] - Attempts ({attempt}/{test.retry})")
                     tc = self.run_test_and_get_tc(test.name, test.func)
                     if tc.is_error() or tc.is_failure():
                         attempt += 1
@@ -44,7 +45,9 @@ class TestOrchestrator(LoggingHandler):
                             if attempt <= test.retry:
                                 self.log.warning("retrying in 10 secs")
                                 time.sleep(10)
+                        print("##[endgroup]")
                     else:
+                        print("##[endgroup]")
                         break
             self.__test_cases.append(tc)
 
@@ -62,10 +65,10 @@ class TestOrchestrator(LoggingHandler):
 
         tc = TestCase(test_name, classname=os.environ['SCENARIONAME'])
         start_time = time.time()
-        self.log.info("TestName: {0}".format(test_name))
+        self.log.info("Execute Test: {0}".format(test_name))
         try:
             stdout = test_func()
-            self.log.info("Debug Output: {0}".format(test_name, stdout))
+            self.log.debug("[{0}] Debug Output: {1}".format(test_name, stdout))
         except Exception as err:
             self.log.exception("Error: {1}".format(test_name, err))
             tc.add_failure_info(f"Error: {err}", output=f"Stack: {traceback.format_exc()}")

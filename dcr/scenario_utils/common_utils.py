@@ -119,9 +119,9 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                 print(f"##[group][{username}/{ip}] - Attempts ({attempt}/{max_retry})")
                 print(f"##[command]{cmd}")
                 if stdout:
-                    print(f"##[debug]Stdout: {stdout}")
+                    logger.info(f"Stdout: {stdout}")
                 if stderr:
-                    print(f"##[warning]Stderr: {stderr}")
+                    logger.warning(f"Stderr: {stderr}")
                 print("##[endgroup]")
 
 
