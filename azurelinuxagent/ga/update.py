@@ -113,6 +113,9 @@ class ExtensionsSummary(object):
     def __eq__(self, other):
         return self.summary == other.summary
 
+    def __ne__(self, other):
+        return not (self.summary == other.summary)
+
     def __str__(self):
         return ustr(self.summary)
 
