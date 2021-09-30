@@ -2120,20 +2120,20 @@ class ReportStatusTestCase(AgentTestCase):
         for p in self.patches:
             p.start()
 
-        return super().setUp()
+        return AgentTestCase.setUp(self)
 
     def tearDown(self):
         
         for p in self.patches:
             p.stop()
 
-        return super().tearDown()
+        return AgentTestCase.tearDown(self)
 
     def test_upload_status_blob_even_on_failed_goal_state(self):
 
         @contextlib.contextmanager
         def mock_update_handler():
-            def goal_state_handler(url, **kwargs):
+            def goal_state_handler(url, **kwargs): # pylint: disable=unused_argument
                 if not HttpRequestPredicates.is_goal_state_request(url):
                     return None
                 try:
