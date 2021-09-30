@@ -10,6 +10,7 @@ from typing import List
 from dcr.scenario_utils.distro import get_distro
 from dcr.scenario_utils.logging_utils import get_logger
 from dcr.scenario_utils.models import get_vm_data_from_env
+from dcr.scenario_utils.exceptions import CommandError
 
 logger = get_logger("CommonUtils")
 
@@ -83,6 +84,7 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
 
     for command in commands:
         cmd = command.format(ip=ip, username=username)
+        stdout, stderr = "", ""
         while attempt < max_retry:
             try:
                 proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE,
@@ -91,16 +93,8 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                 stdout = stdout.decode('utf-8')
                 stderr = stderr.decode('utf-8')
                 if proc.returncode != 0:
-                    raise Exception(
-                        f"Command {cmd} failed with exit code: {proc.returncode}.\n\tStdout: {stdout}\n\tStderr: {stderr}")
+                    raise CommandError(command=cmd, exit_code=proc.returncode, stdout=stdout, stderr=stderr)
 
-                print(f"##[group][{username}/{ip}] - ({attempt}/{max_retry})")
-                print(f"##[command]{cmd}")
-                if stdout:
-                    print(f"##[debug]Stdout: {stdout}")
-                if stderr:
-                    print(f"##[warning]Stderr: {stderr}")
-                print("##[endgroup]")
                 break
 
             except asyncio.CancelledError as err:
@@ -120,6 +114,14 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                     await asyncio.sleep(3)
                 else:
                     raise
+            finally:
+                print(f"##[group][{username}/{ip}] - Attempts ({attempt}/{max_retry})")
+                print(f"##[command]{cmd}")
+                if stdout:
+                    print(f"##[debug]Stdout: {stdout}")
+                if stderr:
+                    print(f"##[warning]Stderr: {stderr}")
+                print("##[endgroup]")
 
 
 def execute_with_retry(func, max_retry=3, sleep=5):
