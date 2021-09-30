@@ -2192,7 +2192,7 @@ class ExtensionsSummaryTestCase(AgentTestCase):
 
         self.assertTrue(summary1 == summary2, "{0} == {1} should be True".format(summary1, summary2))
 
-    def test_equality_operator_should_return_false_on_items_with_the_different_values(self):
+    def test_equality_operator_should_return_false_on_items_with_different_values(self):
         summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
         summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
 
