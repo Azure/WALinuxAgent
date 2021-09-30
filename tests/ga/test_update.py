@@ -2133,7 +2133,7 @@ class ReportStatusTestCase(AgentTestCase):
 
         @contextlib.contextmanager
         def mock_update_handler():
-            def goal_state_handler(url, **kwargs): # pylint: disable=unused_argument
+            def goal_state_handler(url, **kwargs): # pylint: disable=unused-argument
                 if not HttpRequestPredicates.is_goal_state_request(url):
                     return None
                 try:
