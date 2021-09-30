@@ -179,3 +179,16 @@ jobs:
           testResultsFormat: 'JUnit'
           testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-result*.xml'
           testRunTitle: 'Publish test results for $(scenarioName)-$(distroName)'
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: 'harvest'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        condition: succeededOrFailed()
+        displayName: 'Fetch Harvest results'
+
+      - publish: $(Build.ArtifactStagingDirectory)/harvest
+        artifact: $(rgName)-harvest
