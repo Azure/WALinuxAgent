@@ -2129,7 +2129,7 @@ class ReportStatusTestCase(AgentTestCase):
 
         return AgentTestCase.tearDown(self)
 
-    def test_upload_status_blob_even_on_failed_goal_state(self):
+    def test_upload_status_blob_even_on_failed_goal_state_fetch(self):
 
         @contextlib.contextmanager
         def mock_update_handler():
