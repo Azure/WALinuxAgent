@@ -153,26 +153,23 @@
       "apiVersion": "2020-06-01",
       "name": "[parameters('networkSecurityGroupName')]",
       "location": "[parameters('location')]",
-      "tags": {
-        "AzureDevOps": "true"
+      "properties": {
+        "securityRules": [
+          {
+            "name": "SSH_service_tag",
+            "properties": {
+              "priority": 100,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",              
+              "sourceAddressPrefix": "AzureDevOps",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "22"
+            }
+          }
+        ]
       }
-      // "properties": {
-      //   "securityRules": [
-      //     {
-      //       "name": "SSH",
-      //       "properties": {
-      //         "priority": 100,
-      //         "protocol": "Tcp",
-      //         "access": "Allow",
-      //         "direction": "Inbound",              
-      //         "sourceAddressPrefix": "*",
-      //         "sourcePortRange": "*",
-      //         "destinationAddressPrefix": "*",
-      //         "destinationPortRange": "22"
-      //       }
-      //     }
-      //   ]
-      // }
     },
     {
       "type": "Microsoft.Network/virtualNetworks",
