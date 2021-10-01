@@ -251,7 +251,7 @@ class TestExtHandlers(AgentTestCase):
 
     def test_it_should_report_error_if_plugin_settings_version_mismatch(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_PLUGIN_SETTINGS_MISMATCH) as protocol:
-            with patch("azurelinuxagent.common.protocol.goal_state.add_event") as mock_add_event:
+            with patch("azurelinuxagent.common.protocol.extensions_goal_state.add_event") as mock_add_event:
                 # Forcing update of GoalState to allow the ExtConfig to report an event
                 protocol.mock_wire_data.set_incarnation(2)
                 protocol.client.update_goal_state()

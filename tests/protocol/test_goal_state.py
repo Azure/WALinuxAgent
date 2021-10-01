@@ -7,7 +7,8 @@ import os
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import IncompleteGoalStateError
-from azurelinuxagent.common.protocol.goal_state import GoalState, ExtensionsConfig, _NUM_GS_FETCH_RETRIES
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.goal_state import GoalState, _NUM_GS_FETCH_RETRIES
 from azurelinuxagent.common.protocol import hostplugin
 from azurelinuxagent.common.utils import restutil
 from tests.protocol.mocks import mock_wire_protocol
@@ -51,9 +52,9 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
 
         with open(extensions_config_file, "r") as file_:
-            extensions_config = ExtensionsConfig(file_.read())
-        self.assertEqual(4, len(extensions_config.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
-        for e in extensions_config.ext_handlers.extHandlers:
+            extensions_goal_state = ExtensionsGoalState.from_extensions_config(file_.read())
+        self.assertEqual(4, len(extensions_goal_state.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
+        for e in extensions_goal_state.ext_handlers.extHandlers:
             self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
         # TODO: Use azurelinuxagent.common.protocol.ExtensionsGoalState once it implements parsing
@@ -64,7 +65,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         for e in extensions:
             self.assertEqual(e["settings"][0]["protectedSettings"], "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e["name"]))
 
-    def test_update_extensions_goal_state_should_should_retry_on_resource_gone_error(self, _):
+    def test_update_vm_settings_should_should_retry_on_resource_gone_error(self, _):
         """
         Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
         needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
@@ -92,7 +93,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(status=httpclient.NOT_MODIFIED)
 
             with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                protocol.client._update_extensions_goal_state(force_update=False)
+                protocol.client._update_vm_settings(force_update=False)
 
             self.assertEqual(2, len(request_headers), "We expected 2 requests for vmSettings: the original request and the retry request")
             self.assertEqual("GET_VM_SETTINGS_TEST_CONTAINER_ID", request_headers[1][hostplugin._HEADER_CONTAINER_ID], "The retry request did not include the expected header for the ContainerId")
