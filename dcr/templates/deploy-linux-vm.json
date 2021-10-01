@@ -162,7 +162,7 @@
               "protocol": "Tcp",
               "access": "Allow",
               "direction": "Inbound",              
-              "sourceAddressPrefix": "AzureDevOps",
+              "sourceAddressPrefix": "*",
               "sourcePortRange": "*",
               "destinationAddressPrefix": "*",
               "destinationPortRange": "22"
