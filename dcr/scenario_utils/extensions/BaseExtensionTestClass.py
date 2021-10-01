@@ -1,6 +1,8 @@
 import time
 from typing import List
 
+from azure.core.polling import LROPoller
+
 from dcr.scenario_utils.azure_models import ComputeManager
 from dcr.scenario_utils.logging_utils import LoggingHandler
 from dcr.scenario_utils.models import ExtensionMetaData, get_vm_data_from_env
@@ -28,7 +30,7 @@ class BaseExtensionTestClass(LoggingHandler):
     def run(self, ext_props: List, remove: bool = True, continue_on_error: bool = False):
 
         def __add_extension():
-            extension = self.__compute_manager.extension_func.begin_create_or_update(
+            extension: LROPoller = self.__compute_manager.extension_func.begin_create_or_update(
                 self.__vm_data.rg_name,
                 self.__vm_data.name,
                 self.__extension_data.name,
@@ -41,6 +43,7 @@ class BaseExtensionTestClass(LoggingHandler):
             while retry < 5:
                 try:
                     func()
+                    break
                 except Exception as err_:
                     if "RetryableError" in err_ and retry < 5:
                         self.log.warning(f"({retry}/5) Ran into RetryableError, retrying in 30 secs: {err_}")
