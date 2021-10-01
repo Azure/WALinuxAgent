@@ -2133,6 +2133,9 @@ class ReportStatusTestCase(AgentTestCase):
 
         @contextlib.contextmanager
         def mock_update_handler():
+            # Note: this function's signature has to coincide with that of http_get_request,
+            # and thus needs **kwargs. We don't need the information, though, so we tell pylint 
+            # we aren't planning on using the argument.
             def goal_state_handler(url, **kwargs): # pylint: disable=unused-argument
                 if not HttpRequestPredicates.is_goal_state_request(url):
                     return None
