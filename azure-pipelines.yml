@@ -7,10 +7,10 @@ parameters:
   - name: scenarios
     type: object
     default:
-#      - agent-bvt
+      - agent-bvt
 #      - extension-telemetry-pipeline
-      - ext-seq-multiple-dependencies
-      - agent-persist-firewall
+#      - ext-seq-multiple-dependencies
+#      - agent-persist-firewall
 
   - name: distros
     type: object
@@ -29,11 +29,11 @@ parameters:
 #        name: "deb10"
 ##        setupPath: "dcr/distros/install_pip_packages.sh"
 #
-      - publisher: "OpenLogic"
-        offer: "CentOS"
-        sku: "7_9"
-        version: "latest"
-        name: "cent79"
+#      - publisher: "OpenLogic"
+#        offer: "CentOS"
+#        sku: "7_9"
+#        version: "latest"
+#        name: "cent79"
 ##
 #      - publisher: "SUSE"
 #        offer: "sles-15-sp2-basic"
