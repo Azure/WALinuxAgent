@@ -78,7 +78,7 @@ def _get_iptables_version_command():
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
     return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)
 
-
+# returns this rule : iptables -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w
 def _get_firewall_accept_command_nonroot_tcp(wait, command, destination):
     return AddFirewallRules.get_iptables_accept_command_nonroot_tcp(wait, command, destination)
 

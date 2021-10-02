@@ -119,7 +119,12 @@ class AddFirewallRules(object):
     Please make sure to not log anything in any function this class.
     """
 
+    #-A adds the rule to the eno of the ip table chain
     __ACCEPT_COMMAND = "-A"
+
+    #-I inserts the rule at the index specified. If no number specified the rules get added to the top of the chain
+    # iptables -t security -I OUTPUT 1 -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w and
+    # iptables -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w both adds the rule as the first rule in the chain
     __INSERT_COMMAND = "-I"
 
     @staticmethod
@@ -241,6 +246,9 @@ class AddFirewallRules(object):
 
         accept_cmd = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_cmd)
+
+        accept_cmd_nonroot_tcp = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)
+        AddFirewallRules.__execute_cmd(accept_cmd_nonroot_tcp)
 
         drop_cmd = AddFirewallRules.get_firewalld_drop_command(command, dst_ip)
         AddFirewallRules.__execute_cmd(drop_cmd)
