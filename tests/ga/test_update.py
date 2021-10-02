@@ -2234,8 +2234,11 @@ class ReportStatusTestCase(AgentTestCase):
                     "handlerVersion": "1.0.0"
                 }
 
-                self.assertDictContainsSubset(expectedHandlerInfo, ext_handler_statuses[0],
-                    "Expected extension information to match the provided extension.")
+                for key, expected_val in expectedHandlerInfo.items():
+                    actual_val = ext_handler_statuses[0].get(key)
+
+                    msg = "Extension information '{0}' did not match the provided extension.".format(key)
+                    self.assertEqual(actual_val, expected_val, msg)
 
         finally:
             # clean up the static variable
