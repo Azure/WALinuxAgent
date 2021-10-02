@@ -280,18 +280,6 @@ class DefaultOSUtil(object):
             try:
                 drop_rule = _get_firewall_drop_command(wait, "-C", dst_ip)
                 shellutil.run_command(drop_rule)
-                try:
-                    accept_rule = _get_firewall_accept_command_nonroot_tcp(wait, "-C", dst_ip)
-                    shellutil.run_command(accept_rule)
-                except CommandError as e:
-                    logger.info("Iptable rule to allow tcp request to wireserver is not found. Adding it")
-                    try:
-                        accept_rule = _get_firewall_accept_command_nonroot_tcp(wait, "-I", dst_ip)
-                        shellutil.run_command(accept_rule)
-                        logger.info("Iptable rule to allow tcp request to wireserver added")
-                    except Exception as error:
-                        logger.warn(ustr(error))
-                        raise
                 logger.verbose("Firewall appears established")
                 return True
             except CommandError as e:
