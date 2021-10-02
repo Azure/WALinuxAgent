@@ -781,7 +781,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
             self.assertTrue(success, "Enabling the firewall was not successful")
-            self.assertEqual(len(mock_iptables.command_calls), 2, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
+            self.assertEqual(len(mock_iptables.command_calls), 1, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
             self.assertEqual(mock_iptables.command_calls[0], drop_check_command, "Unexpected command: {0}".format(mock_iptables.command_calls[0]))
 
             self.assertTrue(osutil._enable_firewall)
