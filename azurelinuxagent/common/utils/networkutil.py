@@ -158,7 +158,7 @@ class AddFirewallRules(object):
     @staticmethod
     def __get_accept_command_params_nonroot_tcp(wait, command, destination):
         cmd = AddFirewallRules.__get_common_command_params(command, destination)
-        cmd.pop() #poped the last parameter -m since it is not needed in this rule
+        cmd.remove("-m") #removed the  parameter -m since it is not needed in this rule
         cmd.extend(["--destination-port", "53", "-j", "ACCEPT"])
         return AddFirewallRules._add_wait(wait, cmd)
 

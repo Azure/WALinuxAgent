@@ -1658,11 +1658,11 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
                         "The remaining commands should only be for querying the firewall commands")
 
-    def test_it_should_set_nonroot_tcp_iptable_if_drop_available(self):
+    def test_it_should_set_nonroot_tcp_iptable_if_drop_available_accept_unavailable(self):
         osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            with self._get_update_handler(test_data=DATA_FILE) as (update_handler, protocol):
+            with self._get_update_handler(test_data=DATA_FILE) as (update_handler, _ ):
                 #drop rule is present
                 mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=0)
                 # non root tcp iptable rule is absent
@@ -1689,7 +1689,7 @@ class TestUpdate(UpdateTestCase):
         osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            with self._get_update_handler(test_data=DATA_FILE) as (update_handler, protocol):
+            with self._get_update_handler(test_data=DATA_FILE) as (update_handler, _):
                 #drop rule is not available
                 mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=1)
 
@@ -1708,7 +1708,7 @@ class TestUpdate(UpdateTestCase):
         osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            with self._get_update_handler(test_data=DATA_FILE) as (update_handler, protocol):
+            with self._get_update_handler(test_data=DATA_FILE) as (update_handler, _):
                 #drop rule is available
                 mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=0)
                 # non root tcp iptable rule is available
