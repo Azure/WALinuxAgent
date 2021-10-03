@@ -990,7 +990,7 @@ class UpdateHandler(object):
 
         update_handler = get_update_handler()
 
-        # checks if the iptable rule is available in the chain
+        # "-C" checks if the iptable rule is available in the chain
         drop_rule = _get_firewall_drop_command("-w", "-C", dst_ip)
         if not update_handler._check_if_iptable_rule_is_available(drop_rule):
             return
