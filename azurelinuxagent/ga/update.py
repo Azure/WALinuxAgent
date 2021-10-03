@@ -1011,7 +1011,7 @@ class UpdateHandler(object):
         try:
             shellutil.run_command(command)
             return True
-        except Exception as e:
+        except Exception:
             return False
 
 class GuestAgent(object):
