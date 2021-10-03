@@ -32,12 +32,15 @@ import zipfile
 
 from datetime import datetime, timedelta
 
+from azurelinuxagent.common.utils import shellutil
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
+from azurelinuxagent.common.osutil.default import _get_firewall_drop_command, _get_firewall_accept_command_nonroot_tcp
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
@@ -122,6 +125,7 @@ class ExtensionsSummary(object):
 
 def get_update_handler():
     return UpdateHandler()
+
 
 
 class UpdateHandler(object):
@@ -346,6 +350,7 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
+            self._add_nonroot_tcp_firewallrule_if_not_enabled(dst_ip=protocol.get_endpoint())
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -980,6 +985,34 @@ class UpdateHandler(object):
             message=msg,
             log_event=False)
 
+    @staticmethod
+    def _add_nonroot_tcp_firewallrule_if_not_enabled(dst_ip):
+
+        update_handler = get_update_handler()
+
+        drop_rule = _get_firewall_drop_command("-w", "-C", dst_ip)
+        if not update_handler._check_if_iptable_rule_available(drop_rule):
+            return True
+        else:
+            accept_non_root = _get_firewall_accept_command_nonroot_tcp("-w", "-C", dst_ip)
+            if not update_handler._check_if_iptable_rule_available(accept_non_root):
+                try:
+                    logger.info("Firewall rule to allow non root users to do tcp request to wireserver unavailable . Setting it now.")
+                    accept_non_root = _get_firewall_accept_command_nonroot_tcp("-w", "-I", dst_ip)
+                    shellutil.run_command(accept_non_root)
+                    logger.info("Succesfully Firewall rule to allow non root users to do tcp request to wireserver ")
+                    return True
+                except Exception as e:
+                    msg = "Unable to set the nonroot tcp access firewall rule".format(ustr(e))
+                    logger.error(msg)
+
+    @staticmethod
+    def _check_if_iptable_rule_available(command):
+        try:
+            shellutil.run_command(command)
+            return True
+        except Exception as e:
+            return False
 
 class GuestAgent(object):
     def __init__(self, path=None, pkg=None, host=None):
