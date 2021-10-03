@@ -992,7 +992,7 @@ class UpdateHandler(object):
 
         drop_rule = _get_firewall_drop_command("-w", "-C", dst_ip)
         if not update_handler._check_if_iptable_rule_available(drop_rule):
-            return True
+            return
         else:
             accept_non_root = _get_firewall_accept_command_nonroot_tcp("-w", "-C", dst_ip)
             if not update_handler._check_if_iptable_rule_available(accept_non_root):
