@@ -990,23 +990,24 @@ class UpdateHandler(object):
 
         update_handler = get_update_handler()
 
+        # checks if the iptable rule is available in the chain
         drop_rule = _get_firewall_drop_command("-w", "-C", dst_ip)
-        if not update_handler._check_if_iptable_rule_available(drop_rule):
+        if not update_handler._check_if_iptable_rule_is_available(drop_rule):
             return
         else:
             accept_non_root = _get_firewall_accept_command_nonroot_tcp("-w", "-C", dst_ip)
-            if not update_handler._check_if_iptable_rule_available(accept_non_root):
+            if not update_handler._check_if_iptable_rule_is_available(accept_non_root):
                 try:
                     logger.info("Firewall rule to allow non root users to do tcp request to wireserver unavailable . Setting it now.")
                     accept_non_root = _get_firewall_accept_command_nonroot_tcp("-w", "-I", dst_ip)
                     shellutil.run_command(accept_non_root)
-                    logger.info("Succesfully Firewall rule to allow non root users to do tcp request to wireserver ")
+                    logger.info("Succesfully added firewall rule to allow non root users to do tcp request to wireserver ")
                 except Exception as e:
                     msg = "Unable to set the nonroot tcp access firewall rule:{0}".format(ustr(e))
                     logger.error(msg)
 
     @staticmethod
-    def _check_if_iptable_rule_available(command):
+    def _check_if_iptable_rule_is_available(command):
         try:
             shellutil.run_command(command)
             return True
