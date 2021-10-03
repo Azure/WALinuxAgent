@@ -1001,9 +1001,8 @@ class UpdateHandler(object):
                     accept_non_root = _get_firewall_accept_command_nonroot_tcp("-w", "-I", dst_ip)
                     shellutil.run_command(accept_non_root)
                     logger.info("Succesfully Firewall rule to allow non root users to do tcp request to wireserver ")
-                    return True
                 except Exception as e:
-                    msg = "Unable to set the nonroot tcp access firewall rule".format(ustr(e))
+                    msg = "Unable to set the nonroot tcp access firewall rule:{0}".format(ustr(e))
                     logger.error(msg)
 
     @staticmethod
