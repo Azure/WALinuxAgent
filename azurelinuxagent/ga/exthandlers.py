@@ -1539,6 +1539,8 @@ class ExtHandlerInstance(object):
         resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.properties.version)
         CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
+        CGroupConfigurator.get_instance().remove_extension_services_drop_in_files(
+            resource_limits.get_service_list())
 
         uninstall_cmd = man.get_uninstall_command()
         self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
@@ -1566,6 +1568,7 @@ class ExtHandlerInstance(object):
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
             CGroupConfigurator.get_instance().remove_extension_slice(
                 extension_name=self.get_full_name())
+
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)

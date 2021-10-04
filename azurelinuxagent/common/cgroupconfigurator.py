@@ -95,6 +95,10 @@ CPUQuota={0}
 """
 _AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
+class DisableCgroups(object):
+    ALL = "all"
+    AGENT = "agent"
+    EXTENSIONS = "extensions"
 
 def _log_cgroup_info(format_string, *args):
     message = format_string.format(*args)
@@ -120,7 +124,7 @@ class CGroupConfigurator(object):
             self._initialized = False
             self._cgroups_supported = False
             self._agent_cgroups_enabled = False
-            self._extension_cgroups_enabled = False
+            self._extensions_cgroups_enabled = False
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
@@ -447,34 +451,34 @@ class CGroupConfigurator(object):
             return self._cgroups_supported
 
         def enabled(self):
-            return self._agent_cgroups_enabled | self._extension_cgroups_enabled
+            return self._agent_cgroups_enabled | self._extensions_cgroups_enabled
 
         def agent_enabled(self):
             return self._agent_cgroups_enabled
 
-        def extension_enabled(self):
-            return self._extension_cgroups_enabled
+        def extensions_enabled(self):
+            return self._extensions_cgroups_enabled
 
         def enable(self):
             if not self.supported():
                 raise CGroupsException("Attempted to enable cgroups, but they are not supported on the current platform")
             self._agent_cgroups_enabled = True
-            self._extension_cgroups_enabled = True
+            self._extensions_cgroups_enabled = True
             self.__set_cpu_quota(conf.get_agent_cpu_quota())
 
-        def disable(self, reason, telemetry_name = None):
+        def disable(self, reason, disableCgroups):
             # Todo: disable/reset extension when ext quotas introduced
-            if telemetry_name is None:                 # disable all
+            if disableCgroups == DisableCgroups.ALL:                 # disable all
                 self._agent_cgroups_enabled = False
-                self._extension_cgroups_enabled = False
+                self._extensions_cgroups_enabled = False
                 self.__reset_agent_cpu_quota()
                 CGroupsTelemetry.reset()
-            elif telemetry_name == AGENT_NAME_TELEMETRY: # disable agent
+            elif disableCgroups == DisableCgroups.AGENT: # disable agent
                 self._agent_cgroups_enabled = False
                 self.__reset_agent_cpu_quota()
                 CGroupsTelemetry.stop_tracking(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
-            else:
-                self._extension_cgroups_enabled = False # disable extension
+            elif disableCgroups == DisableCgroups.EXTENSIONS: # disable extensions
+                self._extensions_cgroups_enabled = False
 
             message = "[CGW] Disabling resource usage monitoring. Reason: {0}".format(reason)
             logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
@@ -550,10 +554,10 @@ class CGroupConfigurator(object):
             reason = "Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors]))
 
             if not process_check_success and conf.get_cgroup_disable_on_process_check_failure():
-                self.disable(reason)
+                self.disable(reason, DisableCgroups.ALL)
 
             if not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure():
-                self.disable(reason, telemetry_name=AGENT_NAME_TELEMETRY)
+                self.disable(reason, DisableCgroups.AGENT)
 
         def _check_processes_in_agent_cgroup(self):
             """
@@ -693,7 +697,7 @@ class CGroupConfigurator(object):
                     return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
                     reason = 'Failed to start {0} using systemd-run, will try invoking the extension directly. Error: {1}'.format(extension_name, ustr(exception))
-                    self.disable(reason)
+                    self.disable(reason, DisableCgroups.ALL)
                     # fall-through and re-invoke the extension
 
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
@@ -730,7 +734,7 @@ class CGroupConfigurator(object):
                 extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
                 if os.path.exists(extension_slice_path):
-                    self.stop_tracking_unit_cgroups(extension_slice_name)
+                    self.stop_tracking_unit_cgroups(extension_name)
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
                 # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
                 try:
@@ -766,25 +770,32 @@ class CGroupConfigurator(object):
                 except Exception as exception:
                     _log_cgroup_warning("daemon-reload failed (create service unit files): {0}", ustr(exception))
 
-        def stop_tracking_extension_services_cgroups(self, services_list):
+        def remove_extension_services_drop_in_files(self, services_list):
             """
             Remove the dropin files from service .d folder for the given service
-            and also, remove the cgroup entry from the tracked groups to stop tracking.
+            """
+            if services_list is not None:
+                for service in services_list:
+                    service_name = service.get('name', None)
+                    unit_file_path = service.get('path', None)
+                    if service_name is not None and unit_file_path is not None:
+                        files_to_cleanup = []
+                        drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
+                        drop_in_file_cpu_accounting = os.path.join(drop_in_path,
+                                                                   _DROP_IN_FILE_CPU_ACCOUNTING)
+                        files_to_cleanup.append(drop_in_file_cpu_accounting)
+                        CGroupConfigurator._Impl.__cleanup_all_files(files_to_cleanup)
+                        _log_cgroup_info("Drop in files removed for {0}".format(service_name))
+
+        def stop_tracking_extension_services_cgroups(self, services_list):
+            """
+            Remove the cgroup entry from the tracked groups to stop tracking.
             """
             if self.enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
-                    unit_file_path = service.get('path', None)
                     if service_name is not None:
                         self.stop_tracking_unit_cgroups(service_name)
-                        if unit_file_path is not None:
-                            files_to_cleanup = []
-                            drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
-                            drop_in_file_cpu_accounting = os.path.join(drop_in_path,
-                                                                       _DROP_IN_FILE_CPU_ACCOUNTING)
-                            files_to_cleanup.append(drop_in_file_cpu_accounting)
-                            CGroupConfigurator._Impl.__cleanup_all_files(files_to_cleanup)
-                            _log_cgroup_info("Drop in files removed for {0}".format(service_name))
 
         def start_tracking_extension_services_cgroups(self, services_list):
             """
