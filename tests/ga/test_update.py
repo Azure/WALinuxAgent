@@ -2141,8 +2141,7 @@ class ReportStatusTestCase(AgentTestCase):
             *   http_<action>_handler where action is get, put, or post: This arg
                 is treated like mock_wire_protocol would.
         
-        Returned UpdateHandler instance has its protocol mocked via mock_wire_protocol
-        and its _report_status function wrapped in a mock for accounting purposes.
+        Returned UpdateHandler instance has its protocol mocked via mock_wire_protocol.
         """
         
         # Build the side_effect list for the UpdateHandler.is_running PropertyMock.
@@ -2164,19 +2163,16 @@ class ReportStatusTestCase(AgentTestCase):
                 
                 update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
 
-                original_report_status = update_handler._report_status
-                update_handler._report_status = Mock(side_effect=original_report_status)
-
                 is_running_patch.start()
                 yield update_handler
         finally:
             is_running_patch.stop()
 
     @staticmethod
-    def _goal_state_handler(url, **kwargs): # pylint: disable=unused-argument
+    def _fail_goal_state_fetch(url, **_): # pylint: disable=unused-argument
         """
         Note: this function's signature has to coincide with that of http_get_request,
-        and thus needs **kwargs. We don't need the information, though, so we tell pylint 
+        and thus needs **_. We don't need the information, though, so we tell pylint 
         we aren't planning on using the argument.
 
         Relies on this function to have the property return_vals, so it'll need to be
@@ -2185,7 +2181,7 @@ class ReportStatusTestCase(AgentTestCase):
         if not HttpRequestPredicates.is_goal_state_request(url):
             return None
         try:
-            return ReportStatusTestCase._goal_state_handler.return_vals.pop()
+            return ReportStatusTestCase._fail_goal_state_fetch.return_vals.pop()
         except IndexError:
             raise HttpError()
 
@@ -2195,9 +2191,9 @@ class ReportStatusTestCase(AgentTestCase):
             # returning None forces the default value. We return twice, the first for 
             # protocol.detect during creation of the mock wire protocol, the second for
             # the initial call in run().
-            ReportStatusTestCase._goal_state_handler.return_vals = [ None, None ]
+            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None ]
 
-            with ReportStatusTestCase._mock_update_handler(http_get_handler=ReportStatusTestCase._goal_state_handler) as update_handler:
+            with ReportStatusTestCase._mock_update_handler(http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
                 update_handler.run(debug=True)
 
                 mock_protocol = update_handler.protocol_util.get_protocol()
@@ -2205,18 +2201,18 @@ class ReportStatusTestCase(AgentTestCase):
                     "Expected a single status blob to be uploaded")
         finally:
             # clean up the static variable
-            del ReportStatusTestCase._goal_state_handler.return_vals
+            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
     
-    def test_update_status_for_cached_goal_state_on_failed_fetch(self):
+    def test_upload_status_for_cached_goal_state_on_failed_fetch(self):
 
         try:
             # Adds one return to the test above (test_upload_vm_status_even_on_failed_goal_state_fetch).
             # The third (and last) return is to allow for the extensions to be processed once so that
             # we will have extension status to test for.
-            ReportStatusTestCase._goal_state_handler.return_vals = [ None, None, None ]
+            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None, None ]
 
             with ReportStatusTestCase._mock_update_handler(iterations=2,
-                http_get_handler=ReportStatusTestCase._goal_state_handler) as update_handler:
+                http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
                 update_handler.run(debug=True)
 
                 wire_data = update_handler.protocol_util.get_protocol().mock_wire_data
@@ -2242,8 +2238,7 @@ class ReportStatusTestCase(AgentTestCase):
 
         finally:
             # clean up the static variable
-            del ReportStatusTestCase._goal_state_handler.return_vals
-
+            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
 
     def test_report_status_should_log_errors_only_once_per_goal_state(self):
         update_handler = _create_update_handler()

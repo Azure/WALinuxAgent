@@ -192,7 +192,7 @@ class WireProtocolData(object):
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
-    def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument
+    def mock_http_get(self, url, *_, **kwargs):  # pylint: disable=unused-argument
         content = None
         response_headers = []
 
@@ -276,7 +276,7 @@ class WireProtocolData(object):
         resp.getheaders = Mock(return_value=response_headers)
         return resp
 
-    def mock_http_post(self, url, *args, **kwargs):  # pylint: disable=unused-argument
+    def mock_http_post(self, url, *_, **__):  # pylint: disable=unused-argument
         content = None
 
         resp = MagicMock()
@@ -291,7 +291,7 @@ class WireProtocolData(object):
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
-    def mock_http_put(self, url, data, **kwargs):  # pylint: disable=unused-argument
+    def mock_http_put(self, url, data, **_):  # pylint: disable=unused-argument
         content = ''
 
         resp = MagicMock()
