@@ -4,7 +4,8 @@ import time
 import traceback
 from typing import List
 
-from junit_xml import TestCase, TestSuite, to_xml_report_file
+# from junit_xml import TestCase, TestSuite, to_xml_report_file
+from junitparser import TestCase, Skipped, Failure, TestSuite, JUnitXml
 
 from dcr.scenario_utils.logging_utils import LoggingHandler
 
@@ -29,13 +30,15 @@ class TestOrchestrator(LoggingHandler):
         for test in self.__tests:
             tc = TestCase(test.name, classname=os.environ['SCENARIONAME'])
             if skip_due_to is not None:
-                tc.add_skipped_info(message=f"Skipped due to failing test: {skip_due_to}")
+                tc.result = [Skipped(message=f"Skipped due to failing test: {skip_due_to}")]
+                # tc.add_skipped_info(message=f"Skipped due to failing test: {skip_due_to}")
             else:
                 attempt = 1
                 while attempt <= test.retry:
                     print(f"##[group][{test.name}] - Attempts ({attempt}/{test.retry})")
                     tc = self.run_test_and_get_tc(test.name, test.func)
-                    if tc.is_error() or tc.is_failure():
+                    # if tc.is_error() or tc.is_failure():
+                    if isinstance(tc.result, Failure):
                         attempt += 1
                         if attempt > test.retry and test.raise_on_error:
                             self.log.warning(f"Breaking test case failed: {test.name}; Skipping remaining tests")
@@ -52,13 +55,22 @@ class TestOrchestrator(LoggingHandler):
             self.__test_cases.append(tc)
 
     def generate_report(self, test_file_path):
-        ts = TestSuite(self.name, test_cases=self.__test_cases)
-        with open(test_file_path, 'w') as f:
-            to_xml_report_file(f, [ts])
+        # ts = TestSuite(self.name, test_cases=self.__test_cases)
+        # with open(test_file_path, 'w') as f:
+        #     to_xml_report_file(f, [ts])
+
+        ts = TestSuite(self.name)
+        for tc in self.__test_cases:
+            ts.add_testcase(tc)
+
+        xml_junit = JUnitXml()
+        xml_junit.add_testsuite(ts)
+        xml_junit.write(filepath=test_file_path, pretty=True)
 
     @property
     def failed(self) -> bool:
-        return any(tc.is_error() or tc.is_failure() for tc in self.__test_cases)
+        return any(isinstance(tc.result, Failure) for tc in self.__test_cases)
+        # return any(tc.is_error() or tc.is_failure() for tc in self.__test_cases)
 
     def run_test_and_get_tc(self, test_name, test_func) -> TestCase:
         stdout = ""
@@ -71,9 +83,12 @@ class TestOrchestrator(LoggingHandler):
             self.log.debug("[{0}] Debug Output: {1}".format(test_name, stdout))
         except Exception as err:
             self.log.exception("Error: {1}".format(test_name, err))
-            tc.add_failure_info(f"Error: {err}", output=f"Stack: {traceback.format_exc()}")
+            tc.result = [Failure(f"Failure: {err}", type_=f"Stack: {traceback.format_exc()}")]
+            # tc.add_failure_info(f"Error: {err}", output=f"Stack: {traceback.format_exc()}")
 
-        tc.stdout = stdout
-        tc.elapsed_sec = (time.time() - start_time)
+        # tc.stdout = stdout
+        # tc.elapsed_sec = (time.time() - start_time)
+        tc.system_out = stdout
+        tc.time = (time.time() - start_time)
         return tc
 

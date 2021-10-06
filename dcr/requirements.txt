@@ -9,6 +9,7 @@ azure-mgmt-resource>=15.0.0
 cryptography
 distro
 junit-xml
+junitparser
 msrestazure
 pudb
 pytest
