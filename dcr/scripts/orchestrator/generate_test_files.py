@@ -19,7 +19,7 @@ def merge_xml_files(test_file_pattern):
         # Move file to harvest dir to save state and not publish the same test twice
         shutil.move(test_file, os.path.join(staging_dir, "harvest", os.path.basename(test_file)))
 
-    if any(xml_data.tests):
+    if xml_data.tests > 0:
         # Merge all files into a single file for cleaner output
         output_file_name = f"test-results-{os.environ['SCENARIONAME']}-{os.environ['DISTRONAME']}.xml"
         xml_data.write(os.path.join(staging_dir, output_file_name))
