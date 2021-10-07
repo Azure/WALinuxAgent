@@ -21,7 +21,7 @@ _original_http_request = restutil.http_request
 @patch("azurelinuxagent.common.protocol.wire.conf.get_enable_fast_track", return_value=True)
 class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_fetch_goal_state_should_raise_on_incomplete_goal_state(self, _):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
             protocol.mock_wire_data.reload()
             protocol.mock_wire_data.set_incarnation(2)
@@ -52,7 +52,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
 
         with open(extensions_config_file, "r") as file_:
-            extensions_goal_state = ExtensionsGoalState.from_extensions_config(file_.read())
+            extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(123, file_.read())
         self.assertEqual(4, len(extensions_goal_state.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
         for e in extensions_goal_state.ext_handlers.extHandlers:
             self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
@@ -65,7 +65,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         for e in extensions:
             self.assertEqual(e["settings"][0]["protectedSettings"], "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e["name"]))
 
-    def test_update_vm_settings_should_should_retry_on_resource_gone_error(self, _):
+    def test_fetch_vm_settings_should_should_retry_on_resource_gone_error(self, _):
         """
         Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
         needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
@@ -93,7 +93,7 @@ class GoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(status=httpclient.NOT_MODIFIED)
 
             with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                protocol.client._update_vm_settings(force_update=False)
+                protocol.client._fetch_vm_settings(123)
 
             self.assertEqual(2, len(request_headers), "We expected 2 requests for vmSettings: the original request and the retry request")
             self.assertEqual("GET_VM_SETTINGS_TEST_CONTAINER_ID", request_headers[1][hostplugin._HEADER_CONTAINER_ID], "The retry request did not include the expected header for the ContainerId")

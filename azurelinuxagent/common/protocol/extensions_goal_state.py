@@ -17,21 +17,32 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import json
+import re
 
 from collections import defaultdict
+from operator import attrgetter
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerList, ExtHandlerVersionUri, VMAgentManifest, \
-    VMAgentManifestList, VMAgentManifestUri, InVMGoalStateMetaData, RequiredFeature, ExtensionState
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
+    VMAgentManifestList, VMAgentManifestUri, InVMGoalStateMetaData, ExtensionState
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext, format_exception
 
 
 class ExtensionsGoalState(object):
+    """
+    ExtensionsGoalState represents the extensions information in the goal state; that information can originate from
+    ExtensionsConfig when the goal state is retrieved from the WireServe or from vmSettings when it is retrieved from
+    the HostGAPlugin.
+
+    NOTE: Do not instantiate this class directly, use one of the create_* methods instead.
+    """
     def __init__(self):
-        self.xml_text = None
+        self._id = None
+        self._text = None
+        self._type = None
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.in_vm_gs_metadata = InVMGoalStateMetaData()
@@ -41,11 +52,56 @@ class ExtensionsGoalState(object):
         self.required_features = []
 
     @staticmethod
-    def from_extensions_config(xml_text):
-        extensions_goal_state = ExtensionsGoalState()
-        extensions_goal_state.xml_text = xml_text
+    def create_empty():
+        return ExtensionsGoalState()
 
-        xml_doc = parse_doc(extensions_goal_state.xml_text)
+    @staticmethod
+    def create_from_extensions_config(incarnation, xml_text):
+        return _ExtensionsGoalStateFromExtensionsConfig(incarnation, xml_text)
+
+    @staticmethod
+    def create_from_vm_settings(etag, json_text):
+        return _ExtensionsGoalStateFromVmSettings(etag, json_text)
+
+    def get_id(self):
+        """
+        Returns the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
+        was created from vmSettings.
+        """
+        return self._id
+
+    def get_redacted_text(self):
+        """
+        Returns the raw text (either the ExtensionsConfig or the vmSettings) with any confidential data removed.
+        """
+        return None
+
+    @staticmethod
+    def compare(from_extensions_config, from_vm_settings):
+        """
+        Compares the current instance against 'other' and logs a GoalStateMismatch message if they are different
+        """
+        def report_difference(attribute):
+            message = "Mismatch in ExtensionsConfig (incarnation {0}) and vmSettings (etag {1}).\nAttribute: {2}\n{3} != {4}".format(
+                from_extensions_config.get_id(), from_vm_settings.get_id(),
+                attribute,
+                attrgetter(attribute)(from_extensions_config), attrgetter(attribute)(from_vm_settings)
+            )
+            logger.info("[GoalStateMismatch] {0}", message)
+            add_event(op=WALAEventOperation.GoalStateMismatch, is_success=False, message=message)
+
+        if from_extensions_config.required_features != from_vm_settings.required_features:
+            report_difference("required_features")
+
+
+class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
+    def __init__(self, incarnation, xml_text):
+        super(_ExtensionsGoalStateFromExtensionsConfig, self).__init__()
+        self._id = incarnation
+        self._text = xml_text
+        self._type = 'ExtensionsConfig'
+
+        xml_doc = parse_doc(xml_text)
 
         ga_families_list = find(xml_doc, "GAFamilies")
         ga_families = findall(ga_families_list, "GAFamily")
@@ -59,44 +115,36 @@ class ExtensionsGoalState(object):
             for uri in uris:
                 manifest_uri = VMAgentManifestUri(uri=gettext(uri))
                 manifest.versionsManifestUris.append(manifest_uri)
-            extensions_goal_state.vmagent_manifests.vmAgentManifests.append(manifest)
+            self.vmagent_manifests.vmAgentManifests.append(manifest)
 
-        extensions_goal_state.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
+        self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
         required_features_list = find(xml_doc, "RequiredFeatures")
         if required_features_list is not None:
-            extensions_goal_state._parse_required_features(required_features_list)
+            self._parse_required_features(required_features_list)
 
-        extensions_goal_state.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
-        extensions_goal_state.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
+        self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
+        self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
 
         status_upload_node = find(xml_doc, "StatusUploadBlob")
-        extensions_goal_state.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
-        logger.verbose("Extension config shows status blob type as [{0}]", extensions_goal_state.status_upload_blob_type)
+        self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
+        logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
 
-        extensions_goal_state.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
+        self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
 
-        return extensions_goal_state
-
-    @staticmethod
-    def from_vm_settings(json_text):
-        raise NotImplementedError()  # TODO: Implement parsing of vmSettings
+    def get_redacted_text(self):
+        text = self._text
+        for ext_handler in self.ext_handlers.extHandlers:
+            for extension in ext_handler.properties.extensions:
+                if extension.protectedSettings is not None:
+                    text = text.replace(extension.protectedSettings, "*** REDACTED ***")
+        return text
 
     def _parse_required_features(self, required_features_list):
         for required_feature in findall(required_features_list, "RequiredFeature"):
             feature_name = findtext(required_feature, "Name")
-            feature_value = findtext(required_feature, "Value")
-            self.required_features.append(RequiredFeature(name=feature_name, value=feature_value))
-
-    def get_redacted_xml_text(self):
-        if self.xml_text is None:
-            return "<None/>"
-        xml_text = self.xml_text
-        for ext_handler in self.ext_handlers.extHandlers:
-            for extension in ext_handler.properties.extensions:
-                if extension.protectedSettings is not None:
-                    xml_text = xml_text.replace(extension.protectedSettings, "*** REDACTED ***")
-        return xml_text
+            # per the documentation, RequiredFeatures also have a "Value" attribute but currently it is not being populated
+            self.required_features.append(feature_name)
 
     def __parse_plugins_and_settings_and_populate_ext_handlers(self, xml_doc):
         """
@@ -145,8 +193,8 @@ class ExtensionsGoalState(object):
         for plugin in plugins:
             ext_handler = ExtHandler()
             try:
-                ExtensionsGoalState._parse_plugin(ext_handler, plugin)
-                ExtensionsGoalState._parse_plugin_settings(ext_handler, plugin_settings)
+                _ExtensionsGoalStateFromExtensionsConfig._parse_plugin(ext_handler, plugin)
+                _ExtensionsGoalStateFromExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
             except ExtensionConfigError as error:
                 ext_handler.invalid_setting_reason = ustr(error)
 
@@ -287,11 +335,11 @@ class ExtensionsGoalState(object):
                     handler_name, version, len(runtime_settings_nodes))
                 raise ExtensionConfigError(msg)
             # Only Runtime settings available, parse that
-            ExtensionsGoalState.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
+            _ExtensionsGoalStateFromExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
                                                       ext_handler)
         elif extension_runtime_settings_nodes:
             # Parse the ExtensionRuntime settings for the given extension
-            ExtensionsGoalState.__parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes,
+            _ExtensionsGoalStateFromExtensionsConfig.__parse_extension_runtime_settings(plugin_settings_node, extension_runtime_settings_nodes,
                                                                 ext_handler)
 
     @staticmethod
@@ -335,8 +383,8 @@ class ExtensionsGoalState(object):
                 len(depends_on_nodes))
             raise ExtensionConfigError(msg)
         depends_on_node = depends_on_nodes[0] if depends_on_nodes else None
-        depends_on_level = ExtensionsGoalState.__get_dependency_level_from_node(depends_on_node, handler_name)
-        ExtensionsGoalState.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
+        depends_on_level = _ExtensionsGoalStateFromExtensionsConfig.__get_dependency_level_from_node(depends_on_node, handler_name)
+        _ExtensionsGoalStateFromExtensionsConfig.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
                                                             depends_on_level)
 
     @staticmethod
@@ -398,7 +446,7 @@ class ExtensionsGoalState(object):
             if extension_name in (None, ""):
                 raise ExtensionConfigError("No Name not specified for DependsOn object in ExtensionRuntimeSettings for MultiConfig!")
 
-            dependency_level = ExtensionsGoalState.__get_dependency_level_from_node(depends_on_node, extension_name)
+            dependency_level = _ExtensionsGoalStateFromExtensionsConfig.__get_dependency_level_from_node(depends_on_node, extension_name)
             dependency_levels[extension_name] = dependency_level
 
         ext_handler.supports_multi_config = True
@@ -410,7 +458,7 @@ class ExtensionsGoalState(object):
             # State can either be `ExtensionState.Enabled` (default) or `ExtensionState.Disabled`
             state = getattrib(extension_runtime_setting_node, "state")
             state = ustr(state.lower()) if state not in (None, "") else ExtensionState.Enabled
-            ExtensionsGoalState.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
+            _ExtensionsGoalStateFromExtensionsConfig.__parse_and_add_extension_settings(extension_runtime_setting_node, extension_name,
                                                                 ext_handler, dependency_levels[extension_name],
                                                                 state=state)
 
@@ -445,3 +493,32 @@ class ExtensionsGoalState(object):
             ext.certificateThumbprint = thumbprint
             ext_handler.properties.extensions.append(ext)
 
+
+class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
+    def __init__(self, etag, json_text):
+        super(_ExtensionsGoalStateFromVmSettings, self).__init__()
+        self._id = etag
+        self._text = json_text
+        self._type = 'VmSettings'
+
+        try:
+            self._parse_vm_settings(json_text)
+        except Exception as e:
+            # TODO: Review code to determine whether we can rename ExtensionConfigError to InvalidExtensionsGoalStateError or
+            #       if we need to differentiate between errors in ExtensionsConfig and vmSettings.
+            raise ExtensionConfigError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), json_text))
+
+    def _parse_vm_settings(self, json_text):
+        vm_settings = json.loads(json_text)
+        self._parse_required_features(vm_settings)
+        # TODO: Parse all atttributes
+
+    def _parse_required_features(self, vm_settings):
+        required_features = vm_settings.get("requiredFeatures")
+        if required_features is not None:
+            if not isinstance(required_features, list):
+                raise Exception("requiredFeatures should be an array")
+            self.required_features.append(required_features)
+
+    def get_redacted_text(self):
+        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
