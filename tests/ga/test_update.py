@@ -2169,28 +2169,33 @@ class ReportStatusTestCase(AgentTestCase):
             is_running_patch.stop()
 
     @staticmethod
-    def _fail_goal_state_fetch(url, **_): # pylint: disable=unused-argument
+    def _fail_goal_state_fetch(url, **_):
         """
-        Note: this function's signature has to coincide with that of http_get_request,
-        and thus needs **_. We don't need the information, though, so we tell pylint 
-        we aren't planning on using the argument.
+        For each goal state requested, returns values in order before failing with an
+        HttpError. Is useful for getting the agent into a specific state before causing
+        a failure.
 
-        Relies on this function to have the property return_vals, so it'll need to be
-        set before being called
+        Relies on this function to have the property return_vals populated with a list
+        of values to be returned in order. Any `None` in the list will cause the mock wire
+        data to be queried and returned, and thus functions as a sort of default.
         """
         if not HttpRequestPredicates.is_goal_state_request(url):
+            # url does not represent a request for a goal state; return None so
+            # that the mock_wire_protocol will return whatever data is in the mock
+            # wire data object (as per the mock_wire_protocol's docstring).
             return None
         try:
             return ReportStatusTestCase._fail_goal_state_fetch.return_vals.pop()
         except IndexError:
             raise HttpError()
 
-    def test_upload_vm_status_even_on_failed_goal_state_fetch(self):
+    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self):
 
         try:
-            # returning None forces the default value. We return twice, the first for 
-            # protocol.detect during creation of the mock wire protocol, the second for
-            # the initial call in run().
+            # Returning None forces the mock wire data to return the contents in the static
+            # files, as documented in mock_wire_protocol's docstring. We return twice, the 
+            # first for protocol.detect during creation of the mock wire protocol, the second
+            # for the initial call in run().
             ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None ]
 
             with ReportStatusTestCase._mock_update_handler(http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
@@ -2203,7 +2208,7 @@ class ReportStatusTestCase(AgentTestCase):
             # clean up the static variable
             del ReportStatusTestCase._fail_goal_state_fetch.return_vals
     
-    def test_upload_status_for_cached_goal_state_on_failed_fetch(self):
+    def test_update_handler_should_report_status_for_cached_goal_state_on_failed_fetch(self):
 
         try:
             # Adds one return to the test above (test_upload_vm_status_even_on_failed_goal_state_fetch).
