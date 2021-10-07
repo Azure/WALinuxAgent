@@ -10,7 +10,7 @@ from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ValidHandlerStatus, ExtCommandEnvVariable, \
+from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionStatusValue, ExtCommandEnvVariable, \
     GoalStateStatus, ExtHandlerInstance
 from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
@@ -229,11 +229,11 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                           handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                           expected_count=3)
         expected_extensions = {
-            "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1,
+            "firstExtension": {"status": ExtensionStatusValue.success, "seq_no": 1,
                                "message": get_message("Enabling firstExtension")},
-            "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2,
+            "secondExtension": {"status": ExtensionStatusValue.success, "seq_no": 2,
                                 "message": get_message("Enabling secondExtension")},
-            "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3,
+            "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 3,
                                "message": get_message("Enabling thirdExtension")},
         }
         self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
@@ -241,7 +241,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                          handler_name="Microsoft.Powershell.ExampleExtension")
         expected_extensions = {
-            "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9,
+            "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 9,
                                                       "message": get_message("Enabling SingleConfig extension")}
         }
         self._assert_extension_status(sc_handler[:], expected_extensions)
@@ -259,8 +259,8 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                           handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                           status="Ready", expected_count=2)
         expected_extensions = {
-            "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None},
-            "fourthExtension": {"status": ValidHandlerStatus.success, "seq_no": 101, "message": None},
+            "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 99, "message": None},
+            "fourthExtension": {"status": ExtensionStatusValue.success, "seq_no": 101, "message": None},
         }
         self.__assert_extension_not_present(mc_handlers[:], ["firstExtension", "secondExtension"])
         self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
@@ -268,7 +268,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                          handler_name="Microsoft.Powershell.ExampleExtension",
                                                          status="Ready")
         expected_extensions = {
-            "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+            "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 10,
                                                       "message": None}
         }
         self._assert_extension_status(sc_handler[:], expected_extensions)
@@ -346,7 +346,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                                                                "OSTCExtensions.ExampleHandlerLinux"))
             self.assertTrue(all(
                 handler['runtimeSettingsStatus']['settingsStatus']['status']['operation'] == WALAEventOperation.Download and
-                handler['runtimeSettingsStatus']['settingsStatus']['status']['status'] == ValidHandlerStatus.error for
+                handler['runtimeSettingsStatus']['settingsStatus']['status']['status'] == ExtensionStatusValue.error for
                 handler in mc_handlers), "Incorrect data reported")
             sc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                               handler_name="Microsoft.Powershell.ExampleExtension",
@@ -391,9 +391,9 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                                   expected_count=3, status="Ready")
                 expected_extensions = {
-                    "firstExtension": {"status": ValidHandlerStatus.error, "seq_no": 1, "message": fail_code},
-                    "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": None},
-                    "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3, "message": None},
+                    "firstExtension": {"status": ExtensionStatusValue.error, "seq_no": 1, "message": fail_code},
+                    "secondExtension": {"status": ExtensionStatusValue.success, "seq_no": 2, "message": None},
+                    "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 3, "message": None},
                 }
                 self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
 
@@ -446,7 +446,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                               expected_count=1, handler_version=new_version)
             expected_extensions = {
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None}
+                "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 99, "message": None}
             }
             self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
             self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status, handler_version=new_version,
@@ -509,14 +509,14 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                               expected_count=1, handler_version=new_version)
             expected_extensions = {
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": None}
+                "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 99, "message": None}
             }
             self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
             sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                              handler_version=new_version,
                                                              handler_name="Microsoft.Powershell.ExampleExtension")
             expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 10,
                                                           "message": None}
             }
             self._assert_extension_status(sc_handler, expected_extensions)
@@ -567,14 +567,14 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                               expected_count=1, handler_version=new_version,
                                                               status="NotReady", message=fail_code)
             expected_extensions = {
-                "thirdExtension": {"status": ValidHandlerStatus.error, "seq_no": 99, "message": fail_code}
+                "thirdExtension": {"status": ExtensionStatusValue.error, "seq_no": 99, "message": fail_code}
             }
             self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
             sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                              handler_version=new_version,
                                                              handler_name="Microsoft.Powershell.ExampleExtension")
             expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 10,
                                                           "message": None}
             }
             self._assert_extension_status(sc_handler, expected_extensions)
@@ -615,9 +615,9 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                                   expected_count=3, status="Ready")
                 expected_extensions = {
-                    "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1, "message": None},
-                    "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2, "message": None},
-                    "thirdExtension": {"status": ValidHandlerStatus.error, "seq_no": 3, "message": fail_code},
+                    "firstExtension": {"status": ExtensionStatusValue.success, "seq_no": 1, "message": None},
+                    "secondExtension": {"status": ExtensionStatusValue.success, "seq_no": 2, "message": None},
+                    "thirdExtension": {"status": ExtensionStatusValue.error, "seq_no": 3, "message": fail_code},
                 }
                 self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
 
@@ -625,7 +625,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                                  handler_name="Microsoft.Powershell.ExampleExtension",
                                                                  status="NotReady", message=fail_code)
                 expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.error, "seq_no": 9,
+                    "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.error, "seq_no": 9,
                                                               "message": fail_code}
                 }
                 self._assert_extension_status(sc_handler, expected_extensions)
@@ -661,8 +661,8 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                               handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                               expected_count=2, status="Ready")
             expected_extensions = {
-                "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99, "message": "Enabling thirdExtension"},
-                "fourthExtension": {"status": ValidHandlerStatus.success, "seq_no": 101, "message": "Enabling fourthExtension"},
+                "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 99, "message": "Enabling thirdExtension"},
+                "fourthExtension": {"status": ExtensionStatusValue.success, "seq_no": 101, "message": "Enabling fourthExtension"},
             }
             self._assert_extension_status(mc_handlers, expected_extensions, multi_config=True)
             __assert_state_file("OSTCExtensions.ExampleHandlerLinux", "1.0.0",
@@ -672,7 +672,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                              handler_name="Microsoft.Powershell.ExampleExtension")
             expected_extensions = {
-                "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 10,
                                                           "message": "Enabling SingleConfig Extension"}
             }
             self._assert_extension_status(sc_handler, expected_extensions)
@@ -784,7 +784,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                                   expected_count=1, handler_version="1.1.0")
                 expected_extensions = {
-                    "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 99,
+                    "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 99,
                                        "message": "Enabling thirdExtension"},
                 }
                 self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
@@ -793,7 +793,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                                  handler_name="Microsoft.Powershell.ExampleExtension",
                                                                  handler_version="1.1.0")
                 expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 10,
+                    "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 10,
                                                               "message": "Enabling SingleConfig extension"}
                 }
                 self._assert_extension_status(sc_handler[:], expected_extensions)
@@ -928,11 +928,11 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                        "reported by extension {0}: " \
                                        "[ExtensionStatusError] Status file"
                 expected_extensions = {
-                    "firstExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 1,
+                    "firstExtension": {"status": ExtensionStatusValue.transitioning, "seq_no": 1,
                                        "message": agent_status_message.format("OSTCExtensions.ExampleHandlerLinux.firstExtension")},
-                    "secondExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 2,
+                    "secondExtension": {"status": ExtensionStatusValue.transitioning, "seq_no": 2,
                                         "message": agent_status_message.format("OSTCExtensions.ExampleHandlerLinux.secondExtension")},
-                    "thirdExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 3,
+                    "thirdExtension": {"status": ExtensionStatusValue.transitioning, "seq_no": 3,
                                        "message": agent_status_message.format("OSTCExtensions.ExampleHandlerLinux.thirdExtension")},
                 }
                 self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
@@ -940,7 +940,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                  handler_name="Microsoft.Powershell.ExampleExtension")
                 expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 9,
+                    "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.transitioning, "seq_no": 9,
                                                               "message": agent_status_message.format("Microsoft.Powershell.ExampleExtension")}
                 }
                 self._assert_extension_status(sc_handler[:], expected_extensions)
@@ -995,16 +995,16 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                                   expected_count=3, status="NotReady", message=err_msg)
                 expected_extensions = {
-                    "firstExtension": {"status": ValidHandlerStatus.error, "seq_no": 1, "message": err_msg},
-                    "secondExtension": {"status": ValidHandlerStatus.error, "seq_no": 2, "message": err_msg},
-                    "thirdExtension": {"status": ValidHandlerStatus.error, "seq_no": 3, "message": err_msg},
+                    "firstExtension": {"status": ExtensionStatusValue.error, "seq_no": 1, "message": err_msg},
+                    "secondExtension": {"status": ExtensionStatusValue.error, "seq_no": 2, "message": err_msg},
+                    "thirdExtension": {"status": ExtensionStatusValue.error, "seq_no": 3, "message": err_msg},
                 }
                 self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
 
                 sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                  handler_name="Microsoft.Powershell.ExampleExtension")
                 expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9}
+                    "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 9}
                 }
                 self._assert_extension_status(sc_handler[:], expected_extensions)
 
@@ -1036,16 +1036,16 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                     # Since the extensions were not even executed, their status file should reflect the last status
                     # (Handler status above should always report the error though)
                     expected_extensions = {
-                        "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 1},
-                        "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2},
-                        "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 3},
+                        "firstExtension": {"status": ExtensionStatusValue.success, "seq_no": 1},
+                        "secondExtension": {"status": ExtensionStatusValue.success, "seq_no": 2},
+                        "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 3},
                     }
                     self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
 
                     sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                      handler_name="Microsoft.Powershell.ExampleExtension")
                     expected_extensions = {
-                        "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 9}
+                        "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 9}
                     }
                     self._assert_extension_status(sc_handler[:], expected_extensions)
 
@@ -1091,23 +1091,23 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                                   expected_count=3)
                 expected_extensions = {
-                    "firstExtension": {"status": ValidHandlerStatus.success, "seq_no": 2},
-                    "secondExtension": {"status": ValidHandlerStatus.success, "seq_no": 2},
-                    "thirdExtension": {"status": ValidHandlerStatus.success, "seq_no": 1},
+                    "firstExtension": {"status": ExtensionStatusValue.success, "seq_no": 2},
+                    "secondExtension": {"status": ExtensionStatusValue.success, "seq_no": 2},
+                    "thirdExtension": {"status": ExtensionStatusValue.success, "seq_no": 1},
                 }
                 self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
 
                 sc_dependent_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                            handler_name="Microsoft.Powershell.ExampleExtension")
                 expected_extensions = {
-                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.success, "seq_no": 2}
+                    "Microsoft.Powershell.ExampleExtension": {"status": ExtensionStatusValue.success, "seq_no": 2}
                 }
                 self._assert_extension_status(sc_dependent_handler[:], expected_extensions)
                 sc_independent_handler = self._assert_and_get_handler_status(
                     aggregate_status=protocol.aggregate_status, handler_name="Microsoft.Azure.Geneva.GenevaMonitoring",
                     handler_version="1.1.0")
                 expected_extensions = {
-                    "Microsoft.Azure.Geneva.GenevaMonitoring": {"status": ValidHandlerStatus.success, "seq_no": 1}
+                    "Microsoft.Azure.Geneva.GenevaMonitoring": {"status": ExtensionStatusValue.success, "seq_no": 1}
                 }
                 self._assert_extension_status(sc_independent_handler[:], expected_extensions)
 
@@ -1119,9 +1119,9 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
                                                           message=mc_message)
 
         expected_extensions = {
-            "firstExtension": {"status": ValidHandlerStatus.error, "seq_no": 2, "message": fail_code},
-            "secondExtension": {"status": ValidHandlerStatus.error, "seq_no": 2, "message": err_msg},
-            "thirdExtension": {"status": ValidHandlerStatus.error, "seq_no": 1, "message": err_msg},
+            "firstExtension": {"status": ExtensionStatusValue.error, "seq_no": 2, "message": fail_code},
+            "secondExtension": {"status": ExtensionStatusValue.error, "seq_no": 2, "message": err_msg},
+            "thirdExtension": {"status": ExtensionStatusValue.error, "seq_no": 1, "message": err_msg},
         }
         self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
 
@@ -1186,7 +1186,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
                     status_file = "{0}.{1}.status".format(env[ExtCommandEnvVariable.ExtensionName],
                                                           env[ExtCommandEnvVariable.ExtensionSeqNumber])
 
-                    status_contents = [{"status": {"status": ValidHandlerStatus.error, "code": fail_code,
+                    status_contents = [{"status": {"status": ExtensionStatusValue.error, "code": fail_code,
                                                    "formattedMessage": {"message": fail_code, "lang": "en-US"}}}]
                     fileutil.write_file(os.path.join(env[ExtCommandEnvVariable.ExtensionPath], "status", status_file),
                                         json.dumps(status_contents))
