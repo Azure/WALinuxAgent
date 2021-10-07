@@ -40,7 +40,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
-from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ValidHandlerStatus
+from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, READONLY_FILE_GLOBS, ExtensionsSummary
@@ -2069,7 +2069,7 @@ def _mock_exthandlers_handler(extension_statuses=None):
         exthandlers_handler = ExtHandlersHandler(protocol)
         exthandlers_handler.run = Mock()
         if extension_statuses is None:
-            exthandlers_handler.report_ext_handlers_status = Mock(return_value=create_vm_status(ValidHandlerStatus.success))
+            exthandlers_handler.report_ext_handlers_status = Mock(return_value=create_vm_status(ExtensionStatusValue.success))
         else:
             exthandlers_handler.report_ext_handlers_status = Mock(side_effect=[create_vm_status(s) for s in extension_statuses])
         yield exthandlers_handler
@@ -2163,7 +2163,7 @@ class GoalStateIntervalTestCase(AgentTestCase):
         initial_goal_state_period, goal_state_period = 11111, 22222
         with patch('azurelinuxagent.common.conf.get_initial_goal_state_period', return_value=initial_goal_state_period):
             with patch('azurelinuxagent.common.conf.get_goal_state_period', return_value=goal_state_period):
-                with _mock_exthandlers_handler([ValidHandlerStatus.transitioning, ValidHandlerStatus.success]) as exthandlers_handler:
+                with _mock_exthandlers_handler([ExtensionStatusValue.transitioning, ExtensionStatusValue.success]) as exthandlers_handler:
                     remote_access_handler = Mock()
 
                     update_handler = _create_update_handler()
@@ -2181,7 +2181,7 @@ class GoalStateIntervalTestCase(AgentTestCase):
         initial_goal_state_period, goal_state_period = 11111, 22222
         with patch('azurelinuxagent.common.conf.get_initial_goal_state_period', return_value=initial_goal_state_period):
             with patch('azurelinuxagent.common.conf.get_goal_state_period', return_value=goal_state_period):
-                with _mock_exthandlers_handler([ValidHandlerStatus.transitioning, ValidHandlerStatus.transitioning]) as exthandlers_handler:
+                with _mock_exthandlers_handler([ExtensionStatusValue.transitioning, ExtensionStatusValue.transitioning]) as exthandlers_handler:
                     remote_access_handler = Mock()
 
                     update_handler = _create_update_handler()
@@ -2211,36 +2211,36 @@ class ExtensionsSummaryTestCase(AgentTestCase):
         return ExtensionsSummary(vm_status)
 
     def test_equality_operator_should_return_true_on_items_with_the_same_value(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
 
         self.assertTrue(summary1 == summary2, "{0} == {1} should be True".format(summary1, summary2))
 
     def test_equality_operator_should_return_false_on_items_with_different_values(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertFalse(summary1 == summary2, "{0} == {1} should be False")
 
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertFalse(summary1 == summary2, "{0} == {1} should be False")
 
     def test_inequality_operator_should_return_true_on_items_with_different_values(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertTrue(summary1 != summary2, "{0} != {1} should be True".format(summary1, summary2))
 
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertTrue(summary1 != summary2, "{0} != {1} should be True")
 
     def test_inequality_operator_should_return_false_on_items_with_same_value(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
 
         self.assertFalse(summary1 != summary2, "{0} != {1} should be False".format(summary1, summary2))
 
