@@ -46,7 +46,6 @@ async def run_tasks(command: str):
 
 
 if __name__ == '__main__':
-    print(sys.argv)
     start_time = time.time()
     print(f"Start Time: {start_time}")
     try:
