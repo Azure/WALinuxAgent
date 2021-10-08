@@ -130,6 +130,9 @@ def get_distro():
     if os.path.exists("/etc/euleros-release"):
         osinfo[0] = "euleros"
 
+    if os.path.exists("/etc/UnionTech-release"):
+        osinfo[0] = "uos"
+
     if os.path.exists("/etc/mariner-release"):
         osinfo[0] = "mariner"
 
@@ -187,7 +190,7 @@ def has_logrotate():
         logrotate_version = shellutil.run_command(["logrotate", "--version"]).split("\n")[0]
         return logrotate_version
     except shellutil.CommandError:
-        # A non-zero return code means that logrotate isn't present on 
+        # A non-zero return code means that logrotate isn't present on
         # the system; --version shouldn't fail otherwise.
         return COMMAND_ABSENT
     except Exception:
