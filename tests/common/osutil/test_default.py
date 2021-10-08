@@ -663,7 +663,7 @@ Match host 192.168.1.2\n\
         set_command(osutil._get_firewall_drop_command(wait, "-C", destination))
         set_command(osutil._get_firewall_drop_command(wait, "-A", destination))
         set_command(osutil._get_firewall_accept_command(wait, "-A", destination, uid))
-        set_command(osutil._get_firewall_accept_command_nonroot_tcp(wait,"-I",destination))
+        set_command(osutil._get_firewall_accept_dns_tcp_request_command(wait, "-I", destination))
         # the agent assumes the rules have been deleted when these commands return 1
         set_command(osutil._get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
         set_command(osutil._get_firewall_delete_owner_accept_command(wait, destination, uid), exit_code=1)
@@ -743,14 +743,14 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
             drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination))
             accept_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_command(mock_iptables.wait, "-A", mock_iptables.destination, mock_iptables.uid))
-            accept_command_nonroot = TestOSUtil._command_to_string(osutil._get_firewall_accept_command_nonroot_tcp(mock_iptables.wait,"-I", mock_iptables.destination))
+            accept_command_dns_tcp = TestOSUtil._command_to_string(osutil._get_firewall_accept_dns_tcp_request_command(mock_iptables.wait, "-I", mock_iptables.destination))
             drop_add_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-A", mock_iptables.destination))
 
             self.assertTrue(success, "Enabling the firewall was not successful")
             self.assertEqual(len(mock_iptables.command_calls), 4, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
             self.assertEqual(mock_iptables.command_calls[0], drop_check_command, "The first command should check the drop rule")
             self.assertEqual(mock_iptables.command_calls[1], accept_command, "The second command should add the accept rule")
-            self.assertEqual(mock_iptables.command_calls[2], accept_command_nonroot,
+            self.assertEqual(mock_iptables.command_calls[2], accept_command_dns_tcp,
                              "The third command should add the accept rule")
             self.assertEqual(mock_iptables.command_calls[3], drop_add_command, "The fourth command should add the drop rule")
 
@@ -852,7 +852,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
                 delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))
                 delete_owner_accept_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_owner_accept_command(mock_iptables.wait, mock_iptables.destination, mock_iptables.uid))
                 delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination))
-                delete_accept_tcp_nonroot_tcp = TestOSUtil._command_to_string(osutil._get_firewall_delete_accept_nonroot_tcp_command(mock_iptables.wait,mock_iptables.destination))
+                delete_accept_dns_tcp_command = TestOSUtil._command_to_string(osutil._get_firewall_delete_accept_dns_tcp_command(mock_iptables.wait, mock_iptables.destination))
                 self.assertTrue(success, "Removing the firewall should have succeeded")
                 self.assertEqual(len(delete_commands), 4, "Expected 4 delete commands: [{0}]".format(delete_commands))
                 # delete rules < 2.2.26
@@ -860,13 +860,13 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
                 self.assertEqual(delete_commands[delete_conntrack_accept_command], 2, "The delete conntrack accept command should have been executed twice")
                 self.assertIn(delete_owner_accept_command, delete_commands, "The delete owner accept command was not executed")
                 self.assertEqual(delete_commands[delete_owner_accept_command], 2, "The delete owner accept command should have been executed twice")
-                self.assertIn(delete_accept_tcp_nonroot_tcp, delete_commands, "The delete owner accept command was not executed")
-                self.assertEqual(delete_commands[delete_accept_tcp_nonroot_tcp], 2, "The delete tcp accept non root command should have been executed twice")
+                self.assertIn(delete_accept_dns_tcp_command, delete_commands, "The delete owner accept command was not executed")
+                self.assertEqual(delete_commands[delete_accept_dns_tcp_command], 2, "The delete tcp accept non root command should have been executed twice")
                 # delete rules >= 2.2.26
                 self.assertIn(delete_conntrack_drop_command, delete_commands, "The delete conntrack drop command was not executed")
                 self.assertEqual(delete_commands[delete_conntrack_drop_command], 2, "The delete conntrack drop command should have been executed twice")
-                self.assertIn(delete_accept_tcp_nonroot_tcp, delete_commands, "The delete owner accept command was not executed")
-                self.assertEqual(delete_commands[delete_accept_tcp_nonroot_tcp], 2, "The delete tcp accept non root command should have been executed twice")
+                self.assertIn(delete_accept_dns_tcp_command, delete_commands, "The delete owner accept command was not executed")
+                self.assertEqual(delete_commands[delete_accept_dns_tcp_command], 2, "The delete tcp accept non root command should have been executed twice")
                 self.assertTrue(osutil._enable_firewall)
 
     def test_remove_firewall_should_not_retry_invalid_rule(self):

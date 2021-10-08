@@ -79,8 +79,9 @@ def _get_firewall_accept_command(wait, command, destination, owner_uid):
     return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)
 
 # returns this rule : iptables -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w
-def _get_firewall_accept_command_nonroot_tcp(wait, command, destination):
-    return AddFirewallRules.get_iptables_accept_command_nonroot_tcp(wait, command, destination)
+# This rule allows DNS TCP request to wireserver ip for non root users
+def _get_firewall_accept_dns_tcp_request_command(wait, command, destination):
+    return AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, command, destination)
 
 
 def _get_firewall_drop_command(wait, command, destination):
@@ -104,18 +105,15 @@ def _get_firewall_delete_conntrack_accept_command(wait, destination):
 
 
 def _get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
-    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
-                            "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
+    return _add_wait(wait, AddFirewallRules.get_iptables_accept_command("", "-D", destination, owner_uid))
 
 
 def _get_firewall_delete_conntrack_drop_command(wait, destination):
-    return _add_wait(wait,
-                     ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
-                      "--ctstate", "INVALID,NEW", "-j", "DROP"])
+    return _add_wait(wait, AddFirewallRules.get_iptables_drop_command("", "-D", destination))
 
-def _get_firewall_delete_accept_nonroot_tcp_command(wait, destination):
-    return _add_wait(wait,
-                     ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "--destination-port", "53", "-j", "ACCEPT"])
+
+def _get_firewall_delete_accept_dns_tcp_command(wait, destination):
+    return _add_wait(wait, AddFirewallRules.get_iptables_accept_dns_tcp_request_command("", "-D", destination))
 
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
@@ -243,7 +241,7 @@ class DefaultOSUtil(object):
 
             self._delete_rule(_get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
             self._delete_rule(_get_firewall_delete_conntrack_drop_command(wait, dst_ip))
-            self._delete_rule(_get_firewall_delete_accept_nonroot_tcp_command(wait, dst_ip))
+            self._delete_rule(_get_firewall_delete_accept_dns_tcp_command(wait, dst_ip))
 
             return True
 
@@ -292,7 +290,6 @@ class DefaultOSUtil(object):
             # Otherwise, append all rules
             try:
                 AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
-                logger.info("Firewall set using IP Tables")
             except Exception as error:
                 logger.warn(ustr(error))
                 raise

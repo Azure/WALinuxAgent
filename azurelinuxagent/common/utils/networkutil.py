@@ -119,12 +119,12 @@ class AddFirewallRules(object):
     Please make sure to not log anything in any function this class.
     """
 
-    #-A adds the rule to the eno of the ip table chain
+   # __ACCEPT_COMMAND adds the rule to the end of the iptable chain
     __ACCEPT_COMMAND = "-A"
 
-    #-I inserts the rule at the index specified. If no number specified the rules get added to the top of the chain
+    # __INSERT_COMMAND inserts the rule at the index specified. If no number specified the rules get added to the top of the chain
     # iptables -t security -I OUTPUT 1 -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w and
-    # iptables -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w both adds the rule as the first rule in the chain
+    # iptables -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w both adds the rule as the first rule of the chain
     __INSERT_COMMAND = "-I"
 
     @staticmethod
@@ -156,9 +156,10 @@ class AddFirewallRules(object):
         return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
-    def __get_accept_command_params_nonroot_tcp(wait, command, destination):
+    def __get_accept_command_params_dns_tcp_request(wait, command, destination):
         cmd = AddFirewallRules.__get_common_command_params(command, destination)
-        cmd.remove("-m") #removed the  parameter -m since it is not needed in this rule
+        # removed the parameter -m since it is not needed in this rule
+        cmd.remove("-m")
         cmd.extend(["--destination-port", "53", "-j", "ACCEPT"])
         return AddFirewallRules._add_wait(wait, cmd)
 
@@ -174,10 +175,11 @@ class AddFirewallRules(object):
         cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid))
         return cmd
 
+    # This rule allows DNS TCP request to wireserver ip for non root users
     @staticmethod
-    def get_iptables_accept_command_nonroot_tcp(wait, command, destination):
+    def get_iptables_accept_dns_tcp_request_command(wait, command, destination):
         cmd = AddFirewallRules.__get_iptables_base_command()
-        cmd.extend(AddFirewallRules.__get_accept_command_params_nonroot_tcp(wait, command, destination))
+        cmd.extend(AddFirewallRules.__get_accept_command_params_dns_tcp_request(wait, command, destination))
         return cmd
 
     @staticmethod
@@ -195,10 +197,10 @@ class AddFirewallRules(object):
         return cmd
 
     @staticmethod
-    def get_firewalld_accept_command_nonroot_tcp(command, destination, wait=""):
+    def get_firewalld_accept_dns_tcp_request_command(command, destination, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
-            AddFirewallRules.__get_accept_command_params_nonroot_tcp(wait, AddFirewallRules.__INSERT_COMMAND, destination))
+            AddFirewallRules.__get_accept_command_params_dns_tcp_request(wait, AddFirewallRules.__INSERT_COMMAND, destination))
         return cmd
 
     @staticmethod
@@ -233,8 +235,8 @@ class AddFirewallRules(object):
         accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_rule)
 
-        accept_rule_nonroot_tcp = AddFirewallRules.get_iptables_accept_command_nonroot_tcp(wait, AddFirewallRules.__INSERT_COMMAND, dst_ip)
-        AddFirewallRules.__execute_cmd(accept_rule_nonroot_tcp)
+        accept_rule_dns_tcp_rule = AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.__INSERT_COMMAND, dst_ip)
+        AddFirewallRules.__execute_cmd(accept_rule_dns_tcp_rule)
 
         drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip)
         AddFirewallRules.__execute_cmd(drop_rule)
@@ -247,8 +249,8 @@ class AddFirewallRules(object):
         accept_cmd = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_cmd)
 
-        accept_cmd_nonroot_tcp = AddFirewallRules.get_firewalld_accept_command_nonroot_tcp(command, dst_ip, uid)
-        AddFirewallRules.__execute_cmd(accept_cmd_nonroot_tcp)
+        accept_cmd_dns_tcp_cmd = AddFirewallRules.get_firewalld_accept_dns_tcp_request_command(command, dst_ip, uid)
+        AddFirewallRules.__execute_cmd(accept_cmd_dns_tcp_cmd)
 
         drop_cmd = AddFirewallRules.get_firewalld_drop_command(command, dst_ip)
         AddFirewallRules.__execute_cmd(drop_cmd)
