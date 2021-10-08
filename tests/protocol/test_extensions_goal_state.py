@@ -52,7 +52,7 @@ class ExtensionsGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
     def test_compare_should_report_mismatches_between_extensions_config_and_vm_settings(self):
         from_vm_settings = ExtensionsGoalState.create_from_vm_settings("123", fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json")))
-        from_extensions_config = ExtensionsGoalState.create_from_vm_settings("123", fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json")))
+        from_extensions_config = ExtensionsGoalState.create_from_extensions_config("123", fileutil.read_file(os.path.join(data_dir, "hostgaplugin/ext_conf.xml")))
 
         with patch("azurelinuxagent.common.protocol.extensions_goal_state.add_event") as add_event_patcher:
             ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
