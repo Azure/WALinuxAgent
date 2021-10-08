@@ -78,7 +78,7 @@ stages:
       agentVersion: "9.9.9.9"
 
     jobs:
-      - template: 'dcr/templates/setup-vm-and-execute-tests.yml'
+      - template: 'templates/setup-vm-and-execute-tests.yml'
         parameters:
           scenarios:
             - ${{ parameters.scenarios }}
@@ -98,7 +98,7 @@ stages:
               notifyUsers: 'larohra'
               onTimeout: 'resume'
 
-      - template: dcr/templates/arm-delete.yml
+      - template: templates/arm-delete.yml
         parameters:
           scenarios:
             - ${{ parameters.scenarios }}

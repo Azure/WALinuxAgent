@@ -202,3 +202,4 @@ jobs:
       - publish: $(Build.ArtifactStagingDirectory)/harvest
         artifact: $(rgName)-harvest
         condition: succeededOrFailed()
+        displayName: 'Publish Harvest logs'
