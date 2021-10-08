@@ -42,7 +42,6 @@ class ExtensionsGoalState(object):
     def __init__(self):
         self._id = None
         self._text = None
-        self._type = None
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.in_vm_gs_metadata = InVMGoalStateMetaData()
@@ -53,7 +52,7 @@ class ExtensionsGoalState(object):
 
     @staticmethod
     def create_empty():
-        return ExtensionsGoalState()
+        return _EmptyExtensionsGoalState()
 
     @staticmethod
     def create_from_extensions_config(incarnation, xml_text):
@@ -72,14 +71,16 @@ class ExtensionsGoalState(object):
 
     def get_redacted_text(self):
         """
-        Returns the raw text (either the ExtensionsConfig or the vmSettings) with any confidential data removed.
+        Returns the raw text (either the ExtensionsConfig or the vmSettings) with any confidential data removed, or None for empty goal states.
         """
-        return None
+        raise NotImplementedError()
 
     @staticmethod
     def compare(from_extensions_config, from_vm_settings):
         """
-        Compares the current instance against 'other' and logs a GoalStateMismatch message if they are different
+        Compares the two instances given as argument and logs a GoalStateMismatch message if they are different.
+
+        NOTE: The order of the two instances is important for the debug info to be logged correctly (ExtensionsConfig first, vmSettings second)
         """
         def report_difference(attribute):
             message = "Mismatch in ExtensionsConfig (incarnation {0}) and vmSettings (etag {1}).\nAttribute: {2}\n{3} != {4}".format(
@@ -94,12 +95,16 @@ class ExtensionsGoalState(object):
             report_difference("required_features")
 
 
+class _EmptyExtensionsGoalState(ExtensionsGoalState):
+    def get_redacted_text(self):
+        return None
+
+
 class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     def __init__(self, incarnation, xml_text):
         super(_ExtensionsGoalStateFromExtensionsConfig, self).__init__()
         self._id = incarnation
         self._text = xml_text
-        self._type = 'ExtensionsConfig'
 
         xml_doc = parse_doc(xml_text)
 
@@ -499,7 +504,6 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         super(_ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = etag
         self._text = json_text
-        self._type = 'VmSettings'
 
         try:
             self._parse_vm_settings(json_text)
@@ -518,7 +522,7 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         if required_features is not None:
             if not isinstance(required_features, list):
                 raise Exception("requiredFeatures should be an array")
-            self.required_features.append(required_features)
+            self.required_features.extend([feature["name"] for feature in required_features])
 
     def get_redacted_text(self):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
