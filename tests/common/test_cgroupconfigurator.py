@@ -28,8 +28,9 @@ import threading
 
 from nose.plugins.attrib import attr
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD, _AGENT_CPU_QUOTA
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
@@ -213,7 +214,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             configurator.enable()
 
-            expected_quota = "CPUQuota={0}%".format(_AGENT_CPU_QUOTA)
+            expected_quota = "CPUQuota={0}%".format(conf.get_agent_cpu_quota())
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
             self.assertTrue(
                 fileutil.findre_in_file(agent_drop_in_file_cpu_quota, expected_quota),

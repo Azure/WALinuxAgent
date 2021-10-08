@@ -87,7 +87,19 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
 
-class ValidHandlerStatus(object):
+
+class ExtHandlerStatusValue(object):
+    """
+    Statuses for Extension Handlers
+    """
+    ready = "Ready"
+    not_ready = "NotReady"
+
+
+class ExtensionStatusValue(object):
+    """
+    Statuses for Extensions
+    """
     transitioning = "transitioning"
     warning = "warning"
     error = "error"
@@ -95,7 +107,7 @@ class ValidHandlerStatus(object):
     STRINGS = ['transitioning', 'warning', 'error', 'success']
 
 
-_EXTENSION_TERMINAL_STATUSES = [ValidHandlerStatus.error, ValidHandlerStatus.success]
+_EXTENSION_TERMINAL_STATUSES = [ExtensionStatusValue.error, ExtensionStatusValue.success]
 
 
 class ExtCommandEnvVariable(object):
@@ -135,7 +147,7 @@ def parse_formatted_message(formatted_message):
 def parse_ext_substatus(substatus):
     # Check extension sub status format
     validate_has_key(substatus, 'status', 'substatus/status')
-    validate_in_range(substatus['status'], ValidHandlerStatus.STRINGS, 'substatus/status')
+    validate_in_range(substatus['status'], ExtensionStatusValue.STRINGS, 'substatus/status')
     status = ExtensionSubStatus()
     status.name = substatus.get('name')
     status.status = substatus.get('status')
@@ -162,8 +174,8 @@ def parse_ext_status(ext_status, data):
     validate_has_key(status_data, 'status', 'status/status')
 
     status = status_data['status']
-    if status not in ValidHandlerStatus.STRINGS:
-        status = ValidHandlerStatus.error
+    if status not in ExtensionStatusValue.STRINGS:
+        status = ExtensionStatusValue.error
 
     applied_time = status_data.get('configurationAppliedTime')
     ext_status.configurationAppliedTime = applied_time
@@ -518,7 +530,7 @@ class ExtHandlersHandler(object):
                     if handler_i.get_handler_status() is None:
                         handler_i.set_handler_status(message=depends_on_err_msg, code=-1)
 
-                    handler_i.create_status_file_if_not_exist(extension, status=ValidHandlerStatus.error, code=-1,
+                    handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=-1,
                                                               operation=WALAEventOperation.ExtensionProcessing,
                                                               message=depends_on_err_msg)
 
@@ -563,8 +575,12 @@ class ExtHandlersHandler(object):
         Check the status of the extension being handled. Wait until it has a terminal state or times out.
         :raises: Exception if it is not handled successfully.
         """
-
         extension_name = handler_i.get_extension_full_name(extension)
+
+        # If the handler had no settings, we should not wait at all for handler to report status.
+        if extension is None:
+            logger.info("No settings found for {0}, not waiting for it's status".format(extension_name))
+            return
 
         try:
             ext_completed, status = False, None
@@ -588,7 +604,7 @@ class ExtHandlersHandler(object):
                 extension_name, status)
             raise Exception(msg)
 
-        if status != ValidHandlerStatus.success:
+        if status != ExtensionStatusValue.success:
             msg = "Dependent Extension {0} did not succeed. Status was {1}".format(extension_name, status)
             raise Exception(msg)
 
@@ -639,7 +655,7 @@ class ExtHandlersHandler(object):
             # This error is only thrown for enable operation on MultiConfig extension.
             # Since these are maintained by the extensions, the expectation here is that they would update their status files appropriately with their errors.
             # The extensions should already have a placeholder status file, but incase they dont, setting one here to fail fast.
-            ext_handler_i.create_status_file_if_not_exist(extension, status=ValidHandlerStatus.error, code=error.code,
+            ext_handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=error.code,
                                                           operation=ext_handler_i.operation, message=err_msg)
             add_event(name=ext_name, version=ext_handler_i.ext_handler.properties.version, op=ext_handler_i.operation,
                       is_success=False, log_event=True, message=err_msg)
@@ -680,7 +696,7 @@ class ExtHandlersHandler(object):
         # file with failure since the extensions wont be called where they can create their status files.
         # This way we guarantee reporting back to CRP
         if ext_handler_i.should_perform_multi_config_op(extension):
-            ext_handler_i.create_status_file_if_not_exist(extension, status=ValidHandlerStatus.error, code=error.code,
+            ext_handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=error.code,
                                                           operation=report_op, message=message)
 
         if report:
@@ -1423,7 +1439,7 @@ class ExtHandlerInstance(object):
             raise
         # Even if a single extension is enabled for this handler, set the Handler state as Enabled
         self.set_handler_state(ExtHandlerState.Enabled)
-        self.set_handler_status(status="Ready", message="Plugin enabled")
+        self.set_handler_status(status=ExtHandlerStatusValue.ready, message="Plugin enabled")
 
     def should_perform_multi_config_op(self, extension):
         return self.supports_multi_config and extension is not None
@@ -1476,7 +1492,7 @@ class ExtHandlerInstance(object):
         # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled
         if not self.supports_multi_config or not any(self.enabled_extensions):
             self.set_handler_state(ExtHandlerState.Installed)
-            self.set_handler_status(status="NotReady", message="Plugin disabled")
+            self.set_handler_status(status=ExtHandlerStatusValue.not_ready, message="Plugin disabled")
 
     def install(self, uninstall_exit_code=None, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the install.
@@ -1492,7 +1508,7 @@ class ExtHandlerInstance(object):
         self.launch_command(install_cmd, cmd_name="install", timeout=900, extension=extension,
                             extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed, env=env)
         self.set_handler_state(ExtHandlerState.Installed)
-        self.set_handler_status(status="NotReady", message="Plugin installed but not enabled")
+        self.set_handler_status(status=ExtHandlerStatusValue.not_ready, message="Plugin installed but not enabled")
 
     def uninstall(self, extension=None):
         # For Handler level operations, extension just specifies the settings that initiated the uninstall.
@@ -1652,7 +1668,9 @@ class ExtHandlerInstance(object):
     def collect_ext_status(self, ext):
         self.logger.verbose("Collect extension status for {0}".format(self.get_extension_full_name(ext)))
         seq_no, ext_status_file = self.get_status_file_path(ext)
-        if seq_no == -1:
+
+        # We should never try to read any status file if the handler has no settings, returning None in that case
+        if seq_no == -1 or ext is None:
             return None
 
         data = None
@@ -1664,7 +1682,7 @@ class ExtHandlerInstance(object):
             data_str, data = self._read_status_file(ext_status_file)
         except ExtensionStatusError as e:
             msg = ""
-            ext_status.status = ValidHandlerStatus.error
+            ext_status.status = ExtensionStatusValue.error
 
             if e.code == ExtensionStatusError.CouldNotReadStatusFile:
                 ext_status.code = ExtensionErrorCodes.PluginUnknownFailure
@@ -1682,7 +1700,7 @@ class ExtHandlerInstance(object):
                 # Reporting a success code and transitioning status to keep in accordance with existing code that
                 # creates default status placeholder file
                 ext_status.code = ExtensionErrorCodes.PluginSuccess
-                ext_status.status = ValidHandlerStatus.transitioning
+                ext_status.status = ExtensionStatusValue.transitioning
 
             # This log is periodic due to the verbose nature of the status check. Please make sure that the message
             # constructed above does not change very frequently and includes important info such as sequence number,
@@ -1725,7 +1743,7 @@ class ExtHandlerInstance(object):
                 ext_status.message = "Could not get a valid status from the extension {0}. Encountered the " \
                                      "following error: {1}".format(self.get_full_name(ext), ustr(e))
                 ext_status.code = ExtensionErrorCodes.PluginSettingsStatusInvalid
-                ext_status.status = ValidHandlerStatus.error
+                ext_status.status = ExtensionStatusValue.error
 
         return ext_status
 
@@ -1739,7 +1757,7 @@ class ExtHandlerInstance(object):
         # Missing status file is considered a non-terminal state here
         # so that extension sequencing can wait until it becomes existing
         if not os.path.exists(ext_status_file):
-            status = ValidHandlerStatus.warning
+            status = ExtensionStatusValue.warning
         else:
             ext_status = self.collect_ext_status(ext)
             status = ext_status.status if ext_status is not None else None
@@ -1826,7 +1844,7 @@ class ExtHandlerInstance(object):
                 # This way the error would be reported back to CRP and the failure would be propagated instantly as compared to CRP eventually timing it out.
                 ext_status = ExtensionStatus(name=ext.name, seq_no=ext.sequenceNumber,
                                              code=ExtensionErrorCodes.PluginUnknownFailure,
-                                             status=ValidHandlerStatus.error, message=msg)
+                                             status=ExtensionStatusValue.error, message=msg)
                 ext_handler_status.extension_status = ext_status
                 ext_handler_statuses.append(ext_handler_status)
 
@@ -2069,7 +2087,7 @@ class ExtHandlerInstance(object):
             self.report_event(name=extension_name, message=message, is_success=False, log_event=False)
             self.logger.warn(message)
 
-    def set_handler_status(self, status="NotReady", message="", code=0):
+    def set_handler_status(self, status=ExtHandlerStatusValue.not_ready, message="", code=0):
         state_dir = self.get_conf_dir()
 
         handler_status = ExtHandlerStatus()

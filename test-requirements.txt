@@ -6,6 +6,10 @@ mock==4.0.2; python_version >= '3.6'
 distro; python_version >= '3.8'
 nose
 nose-timer; python_version >= '2.7'
+
+# Pinning the wrapt requirement to 1.12.0 due to the bug - https://github.com/GrahamDumpleton/wrapt/issues/188
+wrapt==1.12.0; python_version > '2.6' and python_version < '3.6'
+
 pylint; python_version > '2.6' and python_version < '3.6'
 pylint==2.8.3; python_version >= '3.6'
 
