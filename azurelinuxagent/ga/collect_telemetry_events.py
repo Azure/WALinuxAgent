@@ -74,7 +74,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
     Periodic operation for collecting extension telemetry events and enqueueing them for the SendTelemetryHandler thread.
     """
 
-    _EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=5)
+    _EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(seconds=conf.get_etp_collection_period())
     _EXTENSION_EVENT_FILE_NAME_REGEX = re.compile(r"^(\d+)\.json$", re.IGNORECASE)
 
     # Limits

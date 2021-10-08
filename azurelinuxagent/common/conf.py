@@ -548,3 +548,11 @@ def get_enable_fast_track(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableFastTrack", False)
+
+
+def get_etp_collection_period(conf=__conf__):
+    """
+    Determines the frequency to perform ETP collection on extensions telemetry events.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.EtpCollectionPeriod", 300)
