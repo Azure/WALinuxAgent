@@ -24,7 +24,7 @@ from operator import attrgetter
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import ExtensionConfigError
+from azurelinuxagent.common.exception import ExtensionsConfigError, VmSettingsError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerList, ExtHandlerVersionUri, VMAgentManifest, \
     VMAgentManifestList, VMAgentManifestUri, InVMGoalStateMetaData, ExtensionState
@@ -45,10 +45,10 @@ class ExtensionsGoalState(object):
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.in_vm_gs_metadata = InVMGoalStateMetaData()
-        self.status_upload_blob = None
-        self.status_upload_blob_type = None
+        self._status_upload_blob = None
+        self._status_upload_blob_type = None
         self.artifacts_profile_blob = None
-        self.required_features = []
+        self._required_features = []
 
     @staticmethod
     def create_empty():
@@ -75,6 +75,15 @@ class ExtensionsGoalState(object):
         """
         raise NotImplementedError()
 
+    def get_required_features(self):
+        return self._required_features
+
+    def get_status_upload_blob(self):
+        return self._status_upload_blob
+
+    def get_status_upload_blob_type(self):
+        return self._status_upload_blob_type
+
     @staticmethod
     def compare(from_extensions_config, from_vm_settings):
         """
@@ -91,8 +100,16 @@ class ExtensionsGoalState(object):
             logger.info("[GoalStateMismatch] {0}", message)
             add_event(op=WALAEventOperation.GoalStateMismatch, is_success=False, message=message)
 
-        if from_extensions_config.required_features != from_vm_settings.required_features:
-            report_difference("required_features")
+        if from_extensions_config.get_required_features() != from_vm_settings.get_required_features():
+            report_difference("_required_features")
+
+    def _do_common_validations(self):
+        """
+        Does validations common to vmSettings and ExtensionsConfig
+        """
+        if self._status_upload_blob_type not in ["BlockBlob", "PageBlob"]:
+            logger.info("Status Blob type '{0}' is ot valid, assuming BlockBlob", self._status_upload_blob)
+            self._status_upload_blob_type = "BlockBlob"
 
 
 class _EmptyExtensionsGoalState(ExtensionsGoalState):
@@ -105,7 +122,14 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         super(_ExtensionsGoalStateFromExtensionsConfig, self).__init__()
         self._id = incarnation
         self._text = xml_text
+        self._parse_extensions_config(xml_text)
 
+        try:
+            self._do_common_validations()
+        except Exception as e:
+            raise ExtensionsConfigError("Error parsing ExtensionsConfig (incarnation: {0}): {1}\n{2}".format(incarnation, format_exception(e), xml_text))
+
+    def _parse_extensions_config(self, xml_text):
         xml_doc = parse_doc(xml_text)
 
         ga_families_list = find(xml_doc, "GAFamilies")
@@ -128,14 +152,16 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         if required_features_list is not None:
             self._parse_required_features(required_features_list)
 
-        self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
+        self._status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
         self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
 
         status_upload_node = find(xml_doc, "StatusUploadBlob")
-        self.status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
-        logger.verbose("Extension config shows status blob type as [{0}]", self.status_upload_blob_type)
+        self._status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
+        logger.verbose("Extension config shows status blob type as [{0}]", self._status_upload_blob_type)
 
         self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
+
+        self._do_common_validations()
 
     def get_redacted_text(self):
         text = self._text
@@ -149,7 +175,7 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         for required_feature in findall(required_features_list, "RequiredFeature"):
             feature_name = findtext(required_feature, "Name")
             # per the documentation, RequiredFeatures also have a "Value" attribute but currently it is not being populated
-            self.required_features.append(feature_name)
+            self._required_features.append(feature_name)
 
     def __parse_plugins_and_settings_and_populate_ext_handlers(self, xml_doc):
         """
@@ -200,7 +226,7 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             try:
                 _ExtensionsGoalStateFromExtensionsConfig._parse_plugin(ext_handler, plugin)
                 _ExtensionsGoalStateFromExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
-            except ExtensionConfigError as error:
+            except ExtensionsConfigError as error:
                 ext_handler.invalid_setting_reason = ustr(error)
 
             self.ext_handlers.extHandlers.append(ext_handler)
@@ -243,7 +269,7 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
                                                             getattrib(plugin, "version"))
         ext_handler.properties.state = getattrib(plugin, "state")
         if ext_handler.properties.state in (None, ""):
-            raise ExtensionConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
+            raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
         def getattrib_wrapped_in_list(node, attr_name):
             attr = getattrib(node, attr_name)
@@ -317,12 +343,12 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
                 version, handler_name, ', '.join(set([getattrib(x, "version") for x in ext_handler_plugin_settings])))
             add_event(op=WALAEventOperation.PluginSettingsVersionMismatch, message=msg, log_event=True,
                       is_success=False)
-            raise ExtensionConfigError(msg)
+            raise ExtensionsConfigError(msg)
 
         if len(settings) > 1:
             msg = "Multiple plugin settings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
                 handler_name, version, len(settings))
-            raise ExtensionConfigError(msg)
+            raise ExtensionsConfigError(msg)
 
         plugin_settings_node = settings[0]
         runtime_settings_nodes = findall(plugin_settings_node, "RuntimeSettings")
@@ -332,13 +358,13 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             # There can only be a single RuntimeSettings node or multiple ExtensionRuntimeSettings nodes per Plugin
             msg = "Both RuntimeSettings and ExtensionRuntimeSettings found for the same handler: {0} and version: {1}".format(
                 handler_name, version)
-            raise ExtensionConfigError(msg)
+            raise ExtensionsConfigError(msg)
 
         if runtime_settings_nodes:
             if len(runtime_settings_nodes) > 1:
                 msg = "Multiple RuntimeSettings found for the same handler: {0} and version: {1} (Expected: 1; Available: {2})".format(
                     handler_name, version, len(runtime_settings_nodes))
-                raise ExtensionConfigError(msg)
+                raise ExtensionsConfigError(msg)
             # Only Runtime settings available, parse that
             _ExtensionsGoalStateFromExtensionsConfig.__parse_runtime_settings(plugin_settings_node, runtime_settings_nodes[0], handler_name,
                                                       ext_handler)
@@ -386,7 +412,7 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         if len(depends_on_nodes) > 1:
             msg = "Extension Handler can only have a single dependsOn node for Single config extensions. Found: {0}".format(
                 len(depends_on_nodes))
-            raise ExtensionConfigError(msg)
+            raise ExtensionsConfigError(msg)
         depends_on_node = depends_on_nodes[0] if depends_on_nodes else None
         depends_on_level = _ExtensionsGoalStateFromExtensionsConfig.__get_dependency_level_from_node(depends_on_node, handler_name)
         _ExtensionsGoalStateFromExtensionsConfig.__parse_and_add_extension_settings(runtime_settings_node, handler_name, ext_handler,
@@ -449,7 +475,7 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         for depends_on_node in findall(plugin_settings_node, "DependsOn"):
             extension_name = getattrib(depends_on_node, "name")
             if extension_name in (None, ""):
-                raise ExtensionConfigError("No Name not specified for DependsOn object in ExtensionRuntimeSettings for MultiConfig!")
+                raise ExtensionsConfigError("No Name not specified for DependsOn object in ExtensionRuntimeSettings for MultiConfig!")
 
             dependency_level = _ExtensionsGoalStateFromExtensionsConfig.__get_dependency_level_from_node(depends_on_node, extension_name)
             dependency_levels[extension_name] = dependency_level
@@ -459,7 +485,7 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             # Name and State will only be set for ExtensionRuntimeSettings for Multi-Config
             extension_name = getattrib(extension_runtime_setting_node, "name")
             if extension_name in (None, ""):
-                raise ExtensionConfigError("Extension Name not specified for ExtensionRuntimeSettings for MultiConfig!")
+                raise ExtensionsConfigError("Extension Name not specified for ExtensionRuntimeSettings for MultiConfig!")
             # State can either be `ExtensionState.Enabled` (default) or `ExtensionState.Disabled`
             state = getattrib(extension_runtime_setting_node, "state")
             state = ustr(state.lower()) if state not in (None, "") else ExtensionState.Enabled
@@ -471,7 +497,7 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     def __parse_and_add_extension_settings(settings_node, name, ext_handler, depends_on_level, state=ExtensionState.Enabled):
         seq_no = getattrib(settings_node, "seqNo")
         if seq_no in (None, ""):
-            raise ExtensionConfigError("SeqNo not specified for the Extension: {0}".format(name))
+            raise ExtensionsConfigError("SeqNo not specified for the Extension: {0}".format(name))
 
         try:
             runtime_settings = json.loads(gettext(settings_node))
@@ -507,22 +533,33 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         try:
             self._parse_vm_settings(json_text)
+            self._do_common_validations()
         except Exception as e:
-            # TODO: Review code to determine whether we can rename ExtensionConfigError to InvalidExtensionsGoalStateError or
-            #       if we need to differentiate between errors in ExtensionsConfig and vmSettings.
-            raise ExtensionConfigError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), json_text))
+            raise VmSettingsError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), json_text))  # <==
 
     def _parse_vm_settings(self, json_text):
         vm_settings = json.loads(json_text)
+        self._parse_status_upload_blob(vm_settings)
         self._parse_required_features(vm_settings)
         # TODO: Parse all atttributes
+
+    def _parse_status_upload_blob(self, vm_settings):
+        status_upload_blob = vm_settings.get("StatusUploadBlob")
+        if status_upload_blob is None:
+            raise Exception("Missing statusUploadBlob")
+        self._status_upload_blob = status_upload_blob["value"]
+        if self._status_upload_blob is None:
+            raise Exception("Missing statusUploadBlob.value")
+        self._status_upload_blob_type = status_upload_blob["statusBlobType"]
+        if self._status_upload_blob is None:
+            raise Exception("Missing statusUploadBlob.statusBlobType")
 
     def _parse_required_features(self, vm_settings):
         required_features = vm_settings.get("requiredFeatures")
         if required_features is not None:
             if not isinstance(required_features, list):
                 raise Exception("requiredFeatures should be an array")
-            self.required_features.extend([feature["name"] for feature in required_features])
+            self._required_features.extend([feature["name"] for feature in required_features])
 
     def get_redacted_text(self):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)

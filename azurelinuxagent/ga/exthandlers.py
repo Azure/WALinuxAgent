@@ -42,7 +42,7 @@ from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, \
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionsGoalStateError, \
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
@@ -620,7 +620,7 @@ class ExtHandlersHandler(object):
         try:
             # Ensure the extension config was valid
             if ext_handler_i.ext_handler.is_invalid_setting:
-                raise ExtensionConfigError(ext_handler_i.ext_handler.invalid_setting_reason)
+                raise ExtensionsGoalStateError(ext_handler_i.ext_handler.invalid_setting_reason)
 
             handler_state = ext_handler_i.ext_handler.properties.state
 
@@ -659,7 +659,7 @@ class ExtHandlersHandler(object):
                                                           operation=ext_handler_i.operation, message=err_msg)
             add_event(name=ext_name, version=ext_handler_i.ext_handler.properties.version, op=ext_handler_i.operation,
                       is_success=False, log_event=True, message=err_msg)
-        except ExtensionConfigError as error:
+        except ExtensionsGoalStateError as error:
             # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
             err_msg = "Ran into config errors: {0}. \nPlease retry again as another operation with updated settings".format(
                 ustr(error))
@@ -762,7 +762,7 @@ class ExtHandlersHandler(object):
             else:
                 ext_handler_i.logger.info("Extension already disabled, not doing anything")
         else:
-            raise ExtensionConfigError(
+            raise ExtensionsGoalStateError(
                 "Unknown requested state for Extension {0}: {1}".format(extension.name, extension.state))
 
     @staticmethod
@@ -1037,7 +1037,7 @@ class ExtHandlersHandler(object):
         ext_handler_statuses = []
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
-        #  extension even if HandlerState == NotInstalled (Sample scenario: ExtensionConfigError, DecideVersionError, etc)
+        # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
         if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
@@ -1356,7 +1356,7 @@ class ExtHandlerInstance(object):
         # CRP can wrongfully request send a Multi-Config GoalState even if the Handler supports only Single Config.
         # Checking this only if HandlerState == Enable. In case of Uninstall, we dont care.
         if self.supports_multi_config and not self.load_manifest().supports_multiple_extensions():
-            raise ExtensionConfigError(
+            raise ExtensionsGoalStateError(
                 "Handler {0} does not support MultiConfig but CRP expects it, failing due to inconsistent data".format(
                     self.ext_handler.name))
 
@@ -1424,7 +1424,7 @@ class ExtHandlerInstance(object):
                 }
             ]
             # Create status directory if not exists. This is needed in the case where the Handler fails before even
-            # initializing the directories (ExtensionConfigError, Version deleted from PIR error, etc)
+            # initializing the directories (ExtensionsGoalStateError, Version deleted from PIR error, etc)
             if not os.path.exists(os.path.dirname(status_path)):
                 fileutil.mkdir(os.path.dirname(status_path), mode=0o700)
             self.logger.info("Creating a placeholder status file {0} with status: {1}".format(status_path, status))

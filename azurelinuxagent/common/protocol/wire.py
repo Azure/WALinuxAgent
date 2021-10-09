@@ -127,7 +127,7 @@ class WireProtocol(DataContract):
         return self.client.get_extensions_goal_state().in_vm_gs_metadata
 
     def get_required_features(self):
-        return self.client.get_extensions_goal_state().required_features
+        return self.client.get_extensions_goal_state().get_required_features()
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
@@ -1111,18 +1111,15 @@ class WireClient(object):
     def upload_status_blob(self):
         extensions_goal_state = self.get_extensions_goal_state()
 
-        if extensions_goal_state.status_upload_blob is None:
+        if extensions_goal_state.get_status_upload_blob() is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(force_update=True)
             extensions_goal_state = self.get_extensions_goal_state()
 
-        if extensions_goal_state.status_upload_blob is None:
+        if extensions_goal_state.get_status_upload_blob() is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
 
-        blob_type = extensions_goal_state.status_upload_blob_type
-        if blob_type not in ["BlockBlob", "PageBlob"]:
-            blob_type = "BlockBlob"
-            logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
+        blob_type = extensions_goal_state.get_status_upload_blob_type()
 
         try:
             self.status_blob.prepare(blob_type)
@@ -1140,7 +1137,7 @@ class WireClient(object):
         # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob, extensions_goal_state.status_upload_blob, extensions_goal_state.status_upload_blob_type)
+            host.put_vm_status(self.status_blob, extensions_goal_state.get_status_upload_blob(), extensions_goal_state.get_status_upload_blob_type())
             return
         except ResourceGoneError:
             # refresh the host plugin client and try again on the next iteration of the main loop
@@ -1152,7 +1149,7 @@ class WireClient(object):
             self.report_status_event(msg, is_success=True)
 
         try:
-            if self.status_blob.upload(extensions_goal_state.status_upload_blob):
+            if self.status_blob.upload(extensions_goal_state.get_status_upload_blob()):
                 return
         except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
