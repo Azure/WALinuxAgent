@@ -1,12 +1,13 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
+import json
 import os.path
 import re
 
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, _CaseInsensitiveDict
 from azurelinuxagent.common.utils import restutil, fileutil
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol import mockwiredata
@@ -97,3 +98,46 @@ class ExtensionsGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         self.assertEqual("https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w", vm_settings.get_status_upload_blob(), 'statusUploadBlob.value was not parsed correctly')
         self.assertEqual("BlockBlob", vm_settings.get_status_upload_blob_type(), 'statusBlobType was not parsed correctly')
         self.assertEqual(["MultipleExtensionsPerHandler"], vm_settings.get_required_features(), 'requiredFeatures was not parsed correctly')
+
+
+class CaseInsensitiveDictionaryTestCase(AgentTestCase):
+    def test_it_should_retrieve_items_in_a_case_insensitive_fashion(self):
+        dictionary = json.loads('''{
+            "activityId": "2e7f8b5d-f637-4721-b757-cb190d49b4e9",
+            "StatusUploadBlob": {
+                "statusBlobType": "BlockBlob",
+                "value": "https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+            },
+            "gaFamilies": [
+                {
+                    "Name": "Prod",
+                    "Version": "2.5.0.2",
+                    "Uris": [
+                        "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
+                        "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
+                    ]
+                },
+                {
+                    "Name": "Test",
+                    "Version": "2.5.0.2",
+                    "Uris": [
+                        "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
+                        "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
+                    ]
+                }
+            ]
+         }''')
+
+        case_insensitive = _CaseInsensitiveDict(dictionary)
+
+        def get_item(key, expected_value):
+            try:
+                self.assertEqual(expected_value, case_insensitive[key], "Operator [] retrieved incorrect value for '{0}'".format(key))
+            except KeyError:
+                self.fail("Failed to retrieve '{0}'".format(key))
+
+            self.assertEqual(expected_value, case_insensitive.get(key), "Method get() retrieved incorrect '{0}'".format(key))
+
+        get_item("activityId", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
+        get_item("ACTIVITYID", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
+

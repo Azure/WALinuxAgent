@@ -544,7 +544,7 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         # TODO: Parse all atttributes
 
     def _parse_status_upload_blob(self, vm_settings):
-        status_upload_blob = vm_settings.get("StatusUploadBlob")
+        status_upload_blob = vm_settings.get("statusUploadBlob")
         if status_upload_blob is None:
             raise Exception("Missing statusUploadBlob")
         self._status_upload_blob = status_upload_blob["value"]
@@ -563,3 +563,38 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     def get_redacted_text(self):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
+
+
+class _CaseInsensitiveDictKey(str):
+    def __hash__(self):
+        return str.__hash__(self.casefold())
+
+    def __eq__(self, other):
+        return str.__eq__(self.casefold(), other.casefold())
+
+    def __ne__(self, other):
+        return not (self == other)
+
+
+class _CaseInsensitiveDict(dict):
+    def __init__(self, dictionary):
+        super(_CaseInsensitiveDict, self).__init__()
+        for key, value in dictionary.items():
+            self[_CaseInsensitiveDictKey(key)] = self.to_case_insensitive_dict(value)
+
+    def get(self, key):
+        return super(_CaseInsensitiveDict, self).get(_CaseInsensitiveDictKey(key))
+
+    def __getitem__(self, key):
+        return super(_CaseInsensitiveDict, self).__getitem__(_CaseInsensitiveDictKey(key))
+
+    @staticmethod
+    def to_case_insensitive_dict(item):
+        if isinstance(item, dict):
+            case_insensitive_dict = {}
+            for key, value in item.items():
+                case_insensitive_dict[_CaseInsensitiveDictKey(key)] = _CaseInsensitiveDict.to_case_insensitive_dict(value)
+            return case_insensitive_dict
+        if isinstance(item, list):
+            return [_CaseInsensitiveDict.to_case_insensitive_dict(list_item) for list_item in item]
+        return item
