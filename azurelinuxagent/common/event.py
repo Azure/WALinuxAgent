@@ -88,6 +88,7 @@ class WALAEventOperation:
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     GoalState = "GoalState"
+    GoalStateMismatch = "GoalStateMismatch"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"

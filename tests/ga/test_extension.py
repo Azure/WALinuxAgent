@@ -2592,11 +2592,7 @@ class TestExtension_Deprecated(AgentTestCase):
         required_features = protocol.get_required_features()
         self.assertEqual(3, len(required_features), "Incorrect features parsed")
         for i, feature in enumerate(required_features):
-            self.assertEqual(feature.name, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
-            if i < 2:
-                self.assertIsNone(feature.value, "Value not present")
-            else:
-                self.assertEqual(feature.value, "3.0", "Value mismatch")
+            self.assertEqual(feature, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
 
     def test_it_should_fail_goal_state_if_required_features_not_supported(self, mock_get, mock_crypt_util, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)

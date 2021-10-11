@@ -1204,6 +1204,42 @@ class UpdateGoalStateTestCase(AgentTestCase):
                     len(protected_settings),
                     "Could not find the expected number of redacted settings. Expected {0}.\n{1}".format(len(protected_settings), extensions_config))
 
+    def test_update_goal_state_should_save_goal_state(self):
+        # Enable FastTrack to also save the vmSettings
+        with patch("azurelinuxagent.common.protocol.wire.conf.get_enable_fast_track", return_value=True):
+            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS) as protocol:
+                protocol.mock_wire_data.set_incarnation(999)
+                protocol.mock_wire_data.set_etag(888)
+                protocol.update_goal_state()
+
+            extensions_config_file = os.path.join(conf.get_lib_dir(), "ExtensionsConfig.999.xml")
+            vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.888.json")
+            expected_files = [
+                os.path.join(conf.get_lib_dir(), "GoalState.999.xml"),
+                os.path.join(conf.get_lib_dir(), "SharedConfig.xml"),
+                os.path.join(conf.get_lib_dir(), "Certificates.xml"),
+                os.path.join(conf.get_lib_dir(), "HostingEnvironmentConfig.xml"),
+                extensions_config_file,
+                vm_settings_file
+            ]
+
+            for f in expected_files:
+                self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
+
+            with open(extensions_config_file, "r") as file_:
+                extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(123, file_.read())
+            self.assertEqual(4, len(extensions_goal_state.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
+            for e in extensions_goal_state.ext_handlers.extHandlers:
+                self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
+
+            # TODO: Use azurelinuxagent.common.protocol.ExtensionsGoalState once it implements parsing
+            with open(vm_settings_file, "r") as file_:
+                vm_settings = json.load(file_)
+            extensions = vm_settings["extensionGoalStates"]
+            self.assertEqual(4, len(extensions), "Expected 4 extensions in the test vmSettings")
+            for e in extensions:
+                self.assertEqual(e["settings"][0]["protectedSettings"], "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e["name"]))
+
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
