@@ -14,8 +14,6 @@ else
     agent="waagent"
 fi
 
-# Required for Agent-BVT test
-echo "$version" > /etc/agent-release
 sudo systemctl stop $agent
 
 # We need to force the agent to AutoUpdate to enable our testing

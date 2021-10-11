@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from dcr.scenario_utils.check_waagent_log import is_data_in_waagent_log, check_waagent_log_for_errors
 from dcr.scenario_utils.models import get_vm_data_from_env
-from dcr.scenario_utils.test_orchestrator import TestObj
+from dcr.scenario_utils.test_orchestrator import TestFuncObj
 from dcr.scenario_utils.test_orchestrator import TestOrchestrator
 from etp_helpers import add_extension_events_and_get_count, wait_for_extension_events_dir_empty
 
@@ -66,18 +66,14 @@ def verify_etp_enabled():
 
 
 if __name__ == '__main__':
-    # load env
-    load_dotenv()
-    admin_username = get_vm_data_from_env().admin_username
-
     tests = [
-        TestObj("Verify ETP enabled", verify_etp_enabled, raise_on_error=True, retry=3),
-        TestObj("Add Good extension events and verify", add_good_extension_events_and_verify),
-        TestObj("Add Bad extension events and verify", add_bad_events_and_verify_count),
-        TestObj("Verify all events processed", wait_for_extension_events_dir_empty),
+        TestFuncObj("Verify ETP enabled", verify_etp_enabled, raise_on_error=True, retry=3),
+        TestFuncObj("Add Good extension events and verify", add_good_extension_events_and_verify),
+        TestFuncObj("Add Bad extension events and verify", add_bad_events_and_verify_count),
+        TestFuncObj("Verify all events processed", wait_for_extension_events_dir_empty),
     ]
 
     test_orchestrator = TestOrchestrator("ETPTests-VM", tests=tests)
     test_orchestrator.run_tests()
-    test_orchestrator.generate_report(os.path.join("/home", admin_username, "test-result-etp-vm.xml"))
+    test_orchestrator.generate_report_on_vm("test-result-etp-vm.xml")
     assert not test_orchestrator.failed, f"Test Suite: {test_orchestrator.name} failed"

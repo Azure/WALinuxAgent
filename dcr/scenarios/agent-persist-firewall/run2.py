@@ -1,10 +1,5 @@
-import os
-
-from dotenv import load_dotenv
-
 from dcr.scenario_utils.common_utils import get_current_agent_name
-from dcr.scenario_utils.models import get_vm_data_from_env
-from dcr.scenario_utils.test_orchestrator import TestObj, TestOrchestrator
+from dcr.scenario_utils.test_orchestrator import TestFuncObj, TestOrchestrator
 from persist_firewall_helpers import verify_wire_ip_in_iptables, verify_system_rebooted, generate_svg, \
     verify_wire_ip_unreachable_for_non_root, verify_wire_ip_reachable_for_root, run_systemctl_command, \
     firewalld_service_enabled, print_stateful_debug_data
@@ -43,15 +38,13 @@ def check_external_service_status():
 
 
 if __name__ == '__main__':
-    load_dotenv()
-    admin_username = get_vm_data_from_env().admin_username
     tests = [
-        TestObj("Verify system rebooted", verify_system_rebooted, raise_on_error=True),
-        TestObj("Generate SVG", lambda: generate_svg(svg_name="agent_running.svg")),
-        TestObj("Verify wireIP unreachable for non-root", verify_wire_ip_unreachable_for_non_root),
-        TestObj("Verify wireIP reachable for root", verify_wire_ip_reachable_for_root),
-        TestObj("Verify_Wire_IP_IPTables", lambda: verify_wire_ip_in_iptables(max_retry=1)),
-        TestObj("Verify External services", check_external_service_status)
+        TestFuncObj("Verify system rebooted", verify_system_rebooted, raise_on_error=True),
+        TestFuncObj("Generate SVG", lambda: generate_svg(svg_name="agent_running.svg")),
+        TestFuncObj("Verify wireIP unreachable for non-root", verify_wire_ip_unreachable_for_non_root),
+        TestFuncObj("Verify wireIP reachable for root", verify_wire_ip_reachable_for_root),
+        TestFuncObj("Verify_Wire_IP_IPTables", lambda: verify_wire_ip_in_iptables(max_retry=1)),
+        TestFuncObj("Verify External services", check_external_service_status)
     ]
 
     test_orchestrator = TestOrchestrator("PersistFirewall-VM2", tests=tests)
@@ -60,6 +53,6 @@ if __name__ == '__main__':
     # Print stateful debug data before reboot because the state might be lost after
     print_stateful_debug_data()
 
-    test_orchestrator.generate_report(os.path.join("/home", admin_username, "test-result-pf-run2.xml"))
+    test_orchestrator.generate_report_on_vm("test-result-pf-run2.xml")
     assert not test_orchestrator.failed, f"Test Suite: {test_orchestrator.name} failed"
 

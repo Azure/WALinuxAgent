@@ -12,6 +12,8 @@ __NON_ROOT_CRON_LOG = "/var/tmp/reboot-cron-non-root.log"
 __NON_ROOT_WIRE_XML = "/var/tmp/wire-versions-non-root.xml"
 __ROOT_WIRE_XML = "/var/tmp/wire-versions-root.xml"
 
+SVG_DIR = os.path.join("/var", "log", "svgs")
+
 
 def get_wire_ip():
     wireserver_endpoint_file = '/var/lib/waagent/WireServerEndpoint'
@@ -205,7 +207,7 @@ def get_logs_from_journalctl(unit_name):
 def generate_svg(svg_name):
     # This is a good to have, but not must have. Not failing tests if we're unable to generate a SVG
     print("Running systemd-analyze plot command to get the svg for boot execution order")
-    dest_dir = os.path.join("/var", "log", "svgs")
+    dest_dir = SVG_DIR
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
     retry = 0

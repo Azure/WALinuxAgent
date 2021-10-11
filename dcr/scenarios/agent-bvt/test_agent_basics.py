@@ -1,10 +1,11 @@
 import os
+import re
 import socket
 
-import re
-import sys
+from dotenv import load_dotenv
 
 from dcr.scenario_utils.common_utils import execute_command_and_raise_on_error
+from dcr.scenario_utils.models import get_vm_data_from_env
 
 
 def test_agent_version():
@@ -12,12 +13,8 @@ def test_agent_version():
 
     # release_file contains:
     # AGENT_VERSION = 'x.y.z'
-    expected_version = 'unknown'
-    release_file = '/etc/agent-release'
-
-    if os.path.exists(release_file):
-        with open(release_file, 'r') as rfh:
-            expected_version = rfh.read().strip()
+    load_dotenv()
+    expected_version = os.environ.get("AGENTVERSION")
 
     if "Goal state agent: {0}".format(expected_version) not in stdout:
         raise Exception("expected version {0} not found".format(expected_version))
@@ -26,7 +23,7 @@ def test_agent_version():
 
 
 def check_hostname():
-    vm_name = os.environ['VMNAME']
+    vm_name = get_vm_data_from_env().name
     stdout, _ = execute_command_and_raise_on_error(['hostname'], timeout=30)
 
     if vm_name.lower() != stdout.lower():

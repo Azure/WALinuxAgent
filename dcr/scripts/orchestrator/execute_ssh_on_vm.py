@@ -1,8 +1,9 @@
 import asyncio
-import logging
 import os
 import sys
 import time
+
+from enum import Enum
 
 from dcr.scenario_utils.common_utils import execute_commands_concurrently_on_test_vms
 from dcr.scenario_utils.logging_utils import get_logger
@@ -10,12 +11,18 @@ from dcr.scenario_utils.logging_utils import get_logger
 logger = get_logger("dcr.scripts.orchestrator.execute_ssh_on_vm")
 
 
+class SetupCommands:
+    setup_vm = "setup_vm"
+    fetch_results = "fetch_results"
+    harvest = "harvest"
+
+
 async def run_tasks(command: str):
     ssh_cmd = f'ssh -o StrictHostKeyChecking=no {{username}}@{{ip}}'
     sources_dir = os.environ.get('BUILD_SOURCESDIRECTORY')
-    artifact_dir = os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY']
+    artifact_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY')
 
-    if command == "setup_vm":
+    if command == SetupCommands.setup_vm:
         dcr_root_dir = f"/home/{{username}}/dcr"
         pypy_path = os.environ.get("PYPYPATH")
         agent_version = os.environ.get("AGENTVERSION")
@@ -26,7 +33,7 @@ async def run_tasks(command: str):
             f'{ssh_cmd} "sudo bash {dcr_root_dir}/scripts/setup_agent.sh {agent_version}"'
         ]
         return await execute_commands_concurrently_on_test_vms(commands=setup_commands, timeout=15)
-    elif command == "fetch_results":
+    elif command == SetupCommands.fetch_results:
         commands = [
             f"scp -o StrictHostKeyChecking=no {{username}}@{{ip}}:~/test-result*.xml {artifact_dir}"
         ]
@@ -35,7 +42,7 @@ async def run_tasks(command: str):
             return await execute_commands_concurrently_on_test_vms(commands=commands, timeout=15)
         except Exception as err:
             logger.warning(f"Unable to fetch test results; Error: {err}", exc_info=True)
-    elif command == "harvest":
+    elif command == SetupCommands.harvest:
         commands = [
             f"bash {sources_dir}/dcr/scripts/test-vm/harvest.sh {{username}} {{ip}} {artifact_dir}/harvest"
         ]

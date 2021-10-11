@@ -70,9 +70,6 @@ pool: #larohra-dcrvmsspool
 
 stages:
   - stage: "Execute"
-    variables:
-      agentVersion: "9.9.9.9"
-
     jobs:
       - template: 'templates/setup-vm-and-execute-tests.yml'
         parameters:

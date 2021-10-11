@@ -2,6 +2,8 @@ import os
 from enum import Enum, auto
 from typing import List
 
+from dotenv import load_dotenv
+
 
 class VMModelType(Enum):
     VM = auto()
@@ -113,6 +115,7 @@ def _get_ips(username) -> (list, list):
 
 def get_vm_data_from_env() -> VMMetaData:
     if get_vm_data_from_env.__instance is None:
+        load_dotenv()
         get_vm_data_from_env.__instance = VMMetaData(vm_name=os.environ["VMNAME"],
                                                      rg_name=os.environ['RGNAME'],
                                                      sub_id=os.environ["SUBID"],

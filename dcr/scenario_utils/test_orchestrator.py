@@ -1,16 +1,16 @@
-import logging
 import os
 import time
 import traceback
 from typing import List
 
-# from junit_xml import TestCase, TestSuite, to_xml_report_file
+from dotenv import load_dotenv
 from junitparser import TestCase, Skipped, Failure, TestSuite, JUnitXml
 
 from dcr.scenario_utils.logging_utils import LoggingHandler
+from dcr.scenario_utils.models import get_vm_data_from_env
 
 
-class TestObj:
+class TestFuncObj:
     def __init__(self, test_name, test_func, raise_on_error=False, retry=1):
         self.name = test_name
         self.func = test_func
@@ -19,10 +19,10 @@ class TestObj:
 
 
 class TestOrchestrator(LoggingHandler):
-    def __init__(self, name: str, tests: List[TestObj]):
+    def __init__(self, name: str, tests: List[TestFuncObj]):
         super().__init__()
         self.name = name
-        self.__tests: List[TestObj] = tests
+        self.__tests: List[TestFuncObj] = tests
         self.__test_cases: List[TestCase] = []
 
     def run_tests(self):
@@ -31,13 +31,11 @@ class TestOrchestrator(LoggingHandler):
             tc = TestCase(test.name, classname=os.environ['SCENARIONAME'])
             if skip_due_to is not None:
                 tc.result = [Skipped(message=f"Skipped due to failing test: {skip_due_to}")]
-                # tc.add_skipped_info(message=f"Skipped due to failing test: {skip_due_to}")
             else:
                 attempt = 1
                 while attempt <= test.retry:
                     print(f"##[group][{test.name}] - Attempts ({attempt}/{test.retry})")
                     tc = self.run_test_and_get_tc(test.name, test.func)
-                    # if tc.is_error() or tc.is_failure():
                     if isinstance(tc.result, Failure):
                         attempt += 1
                         if attempt > test.retry and test.raise_on_error:
@@ -55,10 +53,6 @@ class TestOrchestrator(LoggingHandler):
             self.__test_cases.append(tc)
 
     def generate_report(self, test_file_path):
-        # ts = TestSuite(self.name, test_cases=self.__test_cases)
-        # with open(test_file_path, 'w') as f:
-        #     to_xml_report_file(f, [ts])
-
         ts = TestSuite(self.name)
         for tc in self.__test_cases:
             ts.add_testcase(tc)
@@ -67,10 +61,27 @@ class TestOrchestrator(LoggingHandler):
         xml_junit.add_testsuite(ts)
         xml_junit.write(filepath=test_file_path, pretty=True)
 
+    def generate_report_on_orchestrator(self, file_name: str):
+        """
+        Use this function to generate Junit XML report on the orchestrator.
+        The report is dropped in `$(Build.ArtifactStagingDirectory)/harvest` directory
+        """
+        assert file_name.startswith("test-result"), "File name is invalid, it should start with test-result*"
+        self.generate_report(os.path.join(os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY'], file_name))
+
+    def generate_report_on_vm(self, file_name):
+        """
+        Use this function to generate Junit XML report on the Test VM.
+        The report is dropped in `/home/$(adminUsername)/` directory
+        """
+        assert file_name.startswith("test-result"), "File name is invalid, it should start with test-result*"
+        load_dotenv()
+        admin_username = get_vm_data_from_env().admin_username
+        self.generate_report(os.path.join("/home", admin_username, file_name))
+
     @property
     def failed(self) -> bool:
         return any(isinstance(tc.result, Failure) for tc in self.__test_cases)
-        # return any(tc.is_error() or tc.is_failure() for tc in self.__test_cases)
 
     def run_test_and_get_tc(self, test_name, test_func) -> TestCase:
         stdout = ""
@@ -84,10 +95,7 @@ class TestOrchestrator(LoggingHandler):
         except Exception as err:
             self.log.exception("Error: {1}".format(test_name, err))
             tc.result = [Failure(f"Failure: {err}", type_=f"Stack: {traceback.format_exc()}")]
-            # tc.add_failure_info(f"Error: {err}", output=f"Stack: {traceback.format_exc()}")
 
-        # tc.stdout = stdout
-        # tc.elapsed_sec = (time.time() - start_time)
         tc.system_out = stdout
         tc.time = (time.time() - start_time)
         return tc

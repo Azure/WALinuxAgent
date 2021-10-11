@@ -1,11 +1,6 @@
-import os
-
-from dotenv import load_dotenv
-
 from dcr.scenario_utils.check_waagent_log import check_waagent_log_for_errors
 from dcr.scenario_utils.common_utils import get_current_agent_name
-from dcr.scenario_utils.models import get_vm_data_from_env
-from dcr.scenario_utils.test_orchestrator import TestObj, TestOrchestrator
+from dcr.scenario_utils.test_orchestrator import TestFuncObj, TestOrchestrator
 from persist_firewall_helpers import verify_wire_ip_in_iptables, run_systemctl_command, verify_system_rebooted, \
     generate_svg, verify_wire_ip_unreachable_for_non_root, verify_wire_ip_reachable_for_root
 
@@ -23,21 +18,19 @@ def ensure_agent_not_running():
 
 
 if __name__ == '__main__':
-    load_dotenv()
-    admin_username = get_vm_data_from_env().admin_username
     tests = [
-        TestObj("Verify system rebooted", verify_system_rebooted, raise_on_error=True),
-        TestObj("Ensure agent not running", ensure_agent_not_running),
-        TestObj("Generate SVG", lambda: generate_svg(svg_name="agent_not_running.svg")),
-        TestObj("Verify wire IP unreachable for non-root", verify_wire_ip_unreachable_for_non_root),
-        TestObj("Verify wire IP reachable for root", verify_wire_ip_reachable_for_root),
+        TestFuncObj("Verify system rebooted", verify_system_rebooted, raise_on_error=True),
+        TestFuncObj("Ensure agent not running", ensure_agent_not_running),
+        TestFuncObj("Generate SVG", lambda: generate_svg(svg_name="agent_not_running.svg")),
+        TestFuncObj("Verify wire IP unreachable for non-root", verify_wire_ip_unreachable_for_non_root),
+        TestFuncObj("Verify wire IP reachable for root", verify_wire_ip_reachable_for_root),
         # Considering the rules should be set on reboot, not adding a retry check
-        TestObj("Verify wire IP in IPTables", lambda: verify_wire_ip_in_iptables(max_retry=1)),
-        TestObj("Check agent log", check_waagent_log_for_errors)
+        TestFuncObj("Verify wire IP in IPTables", lambda: verify_wire_ip_in_iptables(max_retry=1)),
+        TestFuncObj("Check agent log", check_waagent_log_for_errors)
     ]
 
     test_orchestrator = TestOrchestrator("PersistFirewall-VM3", tests=tests)
     test_orchestrator.run_tests()
-    test_orchestrator.generate_report(os.path.join("/home", admin_username, "test-result-pf-run3.xml"))
+    test_orchestrator.generate_report_on_vm("test-result-pf-run3.xml")
     assert not test_orchestrator.failed, f"Test Suite: {test_orchestrator.name} failed"
 

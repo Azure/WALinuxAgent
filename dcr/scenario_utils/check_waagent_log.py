@@ -1,5 +1,4 @@
 import re
-import sys
 
 from dcr.scenario_utils.agent_log_parser import AGENT_LOG_FILE, parse_agent_log_file
 from dcr.scenario_utils.cgroups_helpers import is_systemd_distro
