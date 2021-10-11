@@ -17,7 +17,7 @@ class CustomScriptExtension(BaseExtensionTestClass):
 
 def add_cse():
     # Install and remove CSE
-    cse = CustomScriptExtension(extension_name="testEtpCse")
+    cse = CustomScriptExtension(extension_name="testCSE")
 
     ext_props = [
         cse.get_ext_props(settings={'commandToExecute': f"echo \'Hello World! {uuid.uuid4()} \'"}),

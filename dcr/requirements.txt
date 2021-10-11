@@ -11,5 +11,4 @@ distro
 junitparser
 msrestazure
 pudb
-pytest
 python-dotenv

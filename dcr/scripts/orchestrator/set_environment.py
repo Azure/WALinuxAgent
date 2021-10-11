@@ -45,7 +45,7 @@ if __name__ == '__main__':
     It determines what files to run and what not.
     Eg: If we're supposed to run run.host.py or run.py 
     """
-    logger = get_logger("SetEnvironment")
+    logger = get_logger("dcr.script.orchestrator.set_environment")
     __dcr_dir = os.path.join(os.environ.get("BUILD_SOURCESDIRECTORY"), "dcr")
     scenario_path = os.path.join(__dcr_dir, "scenario")
     template_dir = os.path.join(__dcr_dir, "templates")

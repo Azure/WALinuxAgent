@@ -7,7 +7,7 @@ import time
 from dcr.scenario_utils.common_utils import execute_commands_concurrently_on_test_vms
 from dcr.scenario_utils.logging_utils import get_logger
 
-logger = get_logger("ExecuteSSHOnVM")
+logger = get_logger("dcr.scripts.orchestrator.execute_ssh_on_vm")
 
 
 async def run_tasks(command: str):

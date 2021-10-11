@@ -10,9 +10,8 @@ from typing import List
 from dcr.scenario_utils.distro import get_distro
 from dcr.scenario_utils.logging_utils import get_logger
 from dcr.scenario_utils.models import get_vm_data_from_env
-from dcr.scenario_utils.exceptions import CommandError
 
-logger = get_logger("CommonUtils")
+logger = get_logger("dcr.scenario_utils.common_utils")
 
 
 def get_current_agent_name(distro_name=None):
@@ -48,7 +47,7 @@ def execute_command_and_raise_on_error(command, shell=False, timeout=None, stdou
 def execute_py_script_over_ssh_on_test_vms(command: str):
     """
     Execute a python script over SSH on test VMs. If there are multiple VMs, this will execute the script on all VMs concurrently.
-    The script should be relative to the dcr/ directory.
+    The script should be relative to the dcr/ directory. It uses the PyPy interpreter to execute the script and
     logs the stdout/stderr of the script
     raises: Exception if any script exits with non-0 exit code.
     """
@@ -94,7 +93,8 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                 stdout = stdout.decode('utf-8')
                 stderr = stderr.decode('utf-8')
                 if proc.returncode != 0:
-                    raise CommandError(command=cmd, exit_code=proc.returncode, stdout=stdout, stderr=stderr)
+                    raise Exception(
+                        f"Failed command: {cmd}. Exit Code: {proc.returncode}")
 
                 break
 
@@ -110,7 +110,7 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
             except Exception as err:
                 attempt += 1
                 if attempt < max_retry:
-                    logger.warning(f"[{username}/{ip}] ({attempt}/{max_retry}) Failed to execute command: {err}. Retrying in 3 secs",
+                    logger.warning(f"[{username}/{ip}] ({attempt}/{max_retry}) Failed to execute command {cmd}: {err}. Retrying in 3 secs",
                                    exc_info=True)
                     await asyncio.sleep(3)
                 else:

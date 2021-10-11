@@ -42,14 +42,15 @@ parameters:
         version: "latest"
         name: "rhel7Raw"
 
+# ToDo: Setup trigger for scheduled runs for develop
 trigger:
   - develop
 
 variables:
-  vmName: 'larohra-simpleLinuxVM'
-  adminUsername: 'larohra'
+  vmName: 'dcrLinuxVM'
+  adminUsername: 'dcr'
   SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
-  rgNamePrefix: "larohra-dcr-v2-test$(Build.BuildId)"
+  rgNamePrefix: "dcr-v2-test$(Build.BuildId)"
 
   # Cloud Data
   azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
