@@ -119,13 +119,20 @@ class AddFirewallRules(object):
     Please make sure to not log anything in any function this class.
     """
 
-   # __ACCEPT_COMMAND adds the rule to the end of the iptable chain
-    __ACCEPT_COMMAND = "-A"
+    # -A adds the rule to the end of the iptable chain
+    __APPEND_COMMAND = "-A"
 
-    # __INSERT_COMMAND inserts the rule at the index specified. If no number specified the rules get added to the top of the chain
+    # -I inserts the rule at the index specified. If no number specified the rules get added to the top of the chain
     # iptables -t security -I OUTPUT 1 -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w and
     # iptables -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w both adds the rule as the first rule of the chain
     __INSERT_COMMAND = "-I"
+
+    # -D deletes the specific rule in the iptable chain
+    __DELETE_COMMAND = "-D"
+
+    @staticmethod
+    def return_delete_command():
+        return AddFirewallRules.__DELETE_COMMAND
 
     @staticmethod
     def _add_wait(wait, command):
@@ -192,7 +199,7 @@ class AddFirewallRules(object):
     def get_firewalld_accept_command(command, destination, uid, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
-            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.__ACCEPT_COMMAND, destination,
+            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.__APPEND_COMMAND, destination,
                                                                 uid))
         return cmd
 
@@ -207,7 +214,7 @@ class AddFirewallRules(object):
     def get_firewalld_drop_command(command, destination, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
-            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.__ACCEPT_COMMAND, destination))
+            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.__APPEND_COMMAND, destination))
         return cmd
 
     @staticmethod
@@ -232,13 +239,13 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip, uid)
+        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.__APPEND_COMMAND, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_rule)
 
         accept_rule_dns_tcp_rule = AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.__INSERT_COMMAND, dst_ip)
         AddFirewallRules.__execute_cmd(accept_rule_dns_tcp_rule)
 
-        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.__ACCEPT_COMMAND, dst_ip)
+        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.__APPEND_COMMAND, dst_ip)
         AddFirewallRules.__execute_cmd(drop_rule)
 
     @staticmethod
