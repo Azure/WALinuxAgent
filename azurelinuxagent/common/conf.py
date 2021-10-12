@@ -183,6 +183,7 @@ __INTEGER_OPTIONS__ = {
     #
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 100,
+    "Debug.EtpCollectionPeriod": 300
 }
 
 
