@@ -130,9 +130,24 @@ class AddFirewallRules(object):
     # -D deletes the specific rule in the iptable chain
     __DELETE_COMMAND = "-D"
 
+    # -C checks if a specific rule exists
+    __CHECK_COMMAND = "-C"
+
+    @staticmethod
+    def return_append_command():
+        return AddFirewallRules.__APPEND_COMMAND
+
+    @staticmethod
+    def return_insert_command():
+        return AddFirewallRules.__INSERT_COMMAND
+
     @staticmethod
     def return_delete_command():
         return AddFirewallRules.__DELETE_COMMAND
+
+    @staticmethod
+    def return_check_command():
+        return AddFirewallRules.__CHECK_COMMAND
 
     @staticmethod
     def _add_wait(wait, command):
