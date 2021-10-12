@@ -1461,7 +1461,7 @@ class ExtHandlerInstance(object):
         }
         # This check to call the setup if AzureMonitorLinuxAgent extension already installed and not called setup before
         if self.is_azuremonitorlinuxagent(self.get_full_name()) and \
-                not CGroupConfigurator.get_instance().is_resource_limits_setup_completed(self.get_full_name()):
+                not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(self.get_full_name()):
             self.set_extension_resource_limits()
 
         self.set_operation(WALAEventOperation.Enable)
@@ -2206,7 +2206,8 @@ class ExtHandlerInstance(object):
 
     @staticmethod
     def is_azuremonitorlinuxagent(extension_name):
-        if re.match(r"\AMicrosoft.Azure.Monitor.AzureMonitorLinuxAgent", extension_name) is not None\
+        cgroup_monitor_extension_name = conf.get_cgroup_monitor_extension_name()
+        if re.match(r"\A" + cgroup_monitor_extension_name, extension_name) is not None\
             and datetime.datetime.utcnow() < datetime.datetime.strptime(conf.get_cgroup_monitor_expiry_time(), "%Y-%m-%d"):
             return True
         return False

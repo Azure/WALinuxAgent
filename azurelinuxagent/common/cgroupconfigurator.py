@@ -395,7 +395,7 @@ class CGroupConfigurator(object):
                     CGroupConfigurator._Impl.__cleanup_unit_file(unit_file)
                 return
 
-        def is_resource_limits_setup_completed(self, extension_name):
+        def is_extension_resource_limits_setup_completed(self, extension_name):
             unit_file_install_path = systemd.get_unit_file_install_path()
             extension_slice_path = os.path.join(unit_file_install_path,
                                                 SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
@@ -451,7 +451,7 @@ class CGroupConfigurator(object):
             return self._cgroups_supported
 
         def enabled(self):
-            return self._agent_cgroups_enabled | self._extensions_cgroups_enabled
+            return self._agent_cgroups_enabled or self._extensions_cgroups_enabled
 
         def agent_enabled(self):
             return self._agent_cgroups_enabled

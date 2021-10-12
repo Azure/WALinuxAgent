@@ -562,7 +562,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                     self.assertEqual(expected_output.format("very specific test message"), process_output)
 
-    def test_set_extension_services_cpu_memory_quota(self):
+    def test_it_should_set_extension_services_cpu_memory_quota(self):
         service_list = [
             {
                 "name": "extension.service",
@@ -582,7 +582,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 fileutil.findre_in_file(extension_service_cpu_accounting, expected_cpu_accounting),
                 "CPUAccounting was not enabled. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(extension_service_cpu_accounting)))
 
-    def test_set_extension_services_when_quotas_not_defined(self):
+    def test_it_should_set_extension_services_when_quotas_not_defined(self):
         service_list = [
             {
                 "name": "extension.service",
@@ -601,7 +601,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertFalse(os.path.exists(extension_service_cpu_quota),
                             "{0} should not have been created during setup".format(extension_service_cpu_quota))
 
-    def test_start_tracking_extension_services_cgroups(self):
+    def test_it_should_start_tracking_extension_services_cgroups(self):
         service_list = [
             {
                 "name": "extension.service",
@@ -617,7 +617,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
             "The extension service's CPU is not being tracked")
 
-    def test_stop_tracking_extension_services_cgroups(self):
+    def test_it_should_stop_tracking_extension_services_cgroups(self):
         service_list = [
             {
                 "name": "extension.service",
@@ -637,7 +637,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
             "The extension service's CPU is being tracked")
 
-    def test_remove_extension_services_drop_in_files(self):
+    def test_it_should_remove_extension_services_drop_in_files(self):
         service_list = [
             {
                 "name": "extension.service",
@@ -651,7 +651,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertFalse(os.path.exists(extension_service_cpu_accounting),
                             "{0} should not have been created".format(extension_service_cpu_accounting))
 
-    def test_start_tracking_unit_cgroups(self):
+    def test_it_should_start_tracking_unit_cgroups(self):
 
         with self._get_cgroup_configurator() as configurator:
             configurator.start_tracking_unit_cgroups("extension.service")
@@ -662,7 +662,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
             "The extension service's CPU is not being tracked")
 
-    def test_stop_tracking_unit_cgroups(self):
+    def test_it_should_stop_tracking_unit_cgroups(self):
 
         CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
             CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')

@@ -35,6 +35,7 @@ Debug.CgroupDisableOnProcessCheckFailure = True
 Debug.CgroupDisableOnQuotaCheckFailure = True
 Debug.CgroupLogMetrics = False
 Debug.CgroupMonitorExpiryTime = 2021-11-30
+Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
 Debug.EnableFastTrack = False
 DetectScvmmEnv = False
 EnableOverProvisioning = True
