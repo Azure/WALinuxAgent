@@ -35,6 +35,7 @@ Debug.CgroupDisableOnProcessCheckFailure = True
 Debug.CgroupDisableOnQuotaCheckFailure = True
 Debug.CgroupLogMetrics = False
 Debug.EnableFastTrack = False
+Debug.EtpCollectionPeriod = 300
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure
