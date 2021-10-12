@@ -430,6 +430,8 @@ class UpdateHandler(object):
         protocol = exthandlers_handler.protocol
         if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
+            # We should have a cached goal state here, go ahead and report status for that.
+            self._report_status(exthandlers_handler, incarnation_changed=False)
             return
 
         if self._upgrade_available(protocol):

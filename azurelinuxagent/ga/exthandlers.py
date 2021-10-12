@@ -368,7 +368,7 @@ class ExtHandlersHandler(object):
     def __get_unsupported_features(self):
         required_features = self.protocol.get_required_features()
         supported_features = get_agent_supported_features_list_for_crp()
-        return [feature.name for feature in required_features if feature.name not in supported_features]
+        return [feature for feature in required_features if feature not in supported_features]
 
     def __process_and_handle_extensions(self, etag):
         try:

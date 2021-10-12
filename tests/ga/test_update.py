@@ -1416,7 +1416,7 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(self._test_upgrade_available())
 
     def test_upgrade_available_handles_missing_family(self):
-        extensions_goal_state = ExtensionsGoalState.from_extensions_config(load_data("wire/ext_conf_missing_family.xml"))
+        extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(123, load_data("wire/ext_conf_missing_family.xml"))
         protocol = ProtocolMock()
         protocol.family = "Prod"
         protocol.agent_manifests = extensions_goal_state.vmagent_manifests  # pylint: disable=attribute-defined-outside-init
@@ -2183,6 +2183,141 @@ class ReportStatusTestCase(AgentTestCase):
     """
     Tests for UpdateHandler._report_status()
     """
+
+    def setUp(self):
+        self.patches = [
+            patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)),
+            patch("sys.exit")
+        ]
+
+        for p in self.patches:
+            p.start()
+
+        return AgentTestCase.setUp(self)
+
+    def tearDown(self):
+        
+        for p in self.patches:
+            p.stop()
+
+        return AgentTestCase.tearDown(self)
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _mock_update_handler(iterations=1, **kwargs):
+        """
+        Creates an UpdateHandler instance that will run n iterations.
+
+        Can be supplied keyword args for:
+            *   mock_wire_data_file: This arg is treated like mock_wire_protocol
+                would. Defaults to mockwiredata.DATA_FILE_STATUS_BLOB
+            *   http_<action>_handler where action is get, put, or post: This arg
+                is treated like mock_wire_protocol would.
+        
+        Returned UpdateHandler instance has its protocol mocked via mock_wire_protocol.
+        """
+        
+        # Build the side_effect list for the UpdateHandler.is_running PropertyMock.
+        # Return True for the first n iterations followed by a single False to stop
+        # and then another True because the current UpdateHanlder implementation 
+        # does a __set__ during shutdown.
+        is_running_return_values = [True] * iterations + [False, True]
+        is_running_patch = patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=is_running_return_values))
+
+        mock_http_get = kwargs.get("http_get_handler")
+        mock_http_put = kwargs.get("http_put_handler")
+        mock_http_post = kwargs.get("http_post_handler")
+
+        mock_wire_data_file = kwargs.get("mock_wire_data_file", mockwiredata.DATA_FILE_STATUS_BLOB)
+
+        try:
+            with mock_wire_protocol(mock_wire_data_file, mock_http_get, mock_http_post, mock_http_put) as protocol:
+                update_handler = get_update_handler()
+                
+                update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+
+                is_running_patch.start()
+                yield update_handler
+        finally:
+            is_running_patch.stop()
+
+    @staticmethod
+    def _fail_goal_state_fetch(url, **_):
+        """
+        For each goal state requested, returns values in order before failing with an
+        HttpError. Is useful for getting the agent into a specific state before causing
+        a failure.
+
+        Relies on this function to have the property return_vals populated with a list
+        of values to be returned in order. Any `None` in the list will cause the mock wire
+        data to be queried and returned, and thus functions as a sort of default.
+        """
+        if not HttpRequestPredicates.is_goal_state_request(url):
+            # url does not represent a request for a goal state; return None so
+            # that the mock_wire_protocol will return whatever data is in the mock
+            # wire data object (as per the mock_wire_protocol's docstring).
+            return None
+        try:
+            return ReportStatusTestCase._fail_goal_state_fetch.return_vals.pop()
+        except IndexError:
+            raise HttpError()
+
+    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self):
+
+        try:
+            # Returning None forces the mock wire data to return the contents in the static
+            # files, as documented in mock_wire_protocol's docstring. We return twice, the 
+            # first for protocol.detect during creation of the mock wire protocol, the second
+            # for the initial call in run().
+            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None ]
+
+            with ReportStatusTestCase._mock_update_handler(http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
+                update_handler.run(debug=True)
+
+                mock_protocol = update_handler.protocol_util.get_protocol()
+                self.assertEqual(mock_protocol.mock_wire_data.call_counts['/StatusBlob'], 1,
+                    "Expected a single status blob to be uploaded")
+        finally:
+            # clean up the static variable
+            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
+    
+    def test_update_handler_should_report_status_for_cached_goal_state_on_failed_fetch(self):
+
+        try:
+            # Adds one return to the test above (test_upload_vm_status_even_on_failed_goal_state_fetch).
+            # The third (and last) return is to allow for the extensions to be processed once so that
+            # we will have extension status to test for.
+            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None, None ]
+
+            with ReportStatusTestCase._mock_update_handler(iterations=2,
+                http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
+                update_handler.run(debug=True)
+
+                wire_data = update_handler.protocol_util.get_protocol().mock_wire_data
+                self.assertEqual(wire_data.call_counts['/StatusBlob'], 2,
+                    "Expected two status blobs to be uploaded, one for each iteration of the run loop.")
+                
+                latest_status_blob_str = wire_data.status_blobs[-1]
+                latest_status_blob = json.loads(latest_status_blob_str)
+                
+                ext_handler_statuses = latest_status_blob.get('aggregateStatus', {}).get("handlerAggregateStatus")
+                self.assertEqual(len(ext_handler_statuses), 1, "Expected status for a single extension")
+
+                expectedHandlerInfo = {
+                    "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                    "handlerVersion": "1.0.0"
+                }
+
+                for key, expected_val in expectedHandlerInfo.items():
+                    actual_val = ext_handler_statuses[0].get(key)
+
+                    msg = "Extension information '{0}' did not match the provided extension.".format(key)
+                    self.assertEqual(actual_val, expected_val, msg)
+
+        finally:
+            # clean up the static variable
+            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
+
     def test_report_status_should_log_errors_only_once_per_goal_state(self):
         update_handler = _create_update_handler()
         with _mock_exthandlers_handler() as exthandlers_handler:
