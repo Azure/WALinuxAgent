@@ -159,6 +159,8 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
+    "Debug.CgroupMonitorExpiryTime": "2021-11-30",
+    "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
 }
 
 
@@ -541,6 +543,22 @@ def get_agent_cpu_quota(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.AgentCpuQuota", 100)
+
+def get_cgroup_monitor_expiry_time (conf=__conf__):
+    """
+    cgroups monitoring disabled after expiry time
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.CgroupMonitorExpiryTime", "2021-11-30")
+
+def get_cgroup_monitor_extension_name (conf=__conf__):
+    """
+    cgroups monitoring extension name
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.CgroupMonitorExtensionName", "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent")
 
 def get_enable_fast_track(conf=__conf__):
     """
