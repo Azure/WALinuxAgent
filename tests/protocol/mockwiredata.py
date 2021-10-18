@@ -119,6 +119,9 @@ DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings-protected_settings.json"
 DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf-protected_settings.xml"
 
+DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
+DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
+
 class WireProtocolData(object):
     def __init__(self, data_files=None):
         if data_files is None:
@@ -130,6 +133,7 @@ class WireProtocolData(object):
             "/health": 0,
             "/HealthService": 0,
             "/vmAgentLog": 0,
+            '/StatusBlob': 0,
             "goalstate": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
@@ -143,6 +147,7 @@ class WireProtocolData(object):
             "in_vm_artifacts_profile": 0,
             "vm_settings": 0
         }
+        self.status_blobs = []
         self.data_files = data_files
         self.version_info = None
         self.goal_state = None
@@ -187,7 +192,7 @@ class WireProtocolData(object):
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
-    def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument
+    def mock_http_get(self, url, *_, **kwargs):
         content = None
         response_headers = []
 
@@ -271,7 +276,7 @@ class WireProtocolData(object):
         resp.getheaders = Mock(return_value=response_headers)
         return resp
 
-    def mock_http_post(self, url, *args, **kwargs):  # pylint: disable=unused-argument
+    def mock_http_post(self, url, *_, **__):
         content = None
 
         resp = MagicMock()
@@ -286,15 +291,17 @@ class WireProtocolData(object):
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
-    def mock_http_put(self, url, *args, **kwargs):  # pylint: disable=unused-argument
-        content = None
+    def mock_http_put(self, url, data, **_):
+        content = ''
 
         resp = MagicMock()
         resp.status = httpclient.OK
 
         if url.endswith('/vmAgentLog'):
             self.call_counts['/vmAgentLog'] += 1
-            content = ''
+        elif url.endswith('/StatusBlob'):
+            self.call_counts['/StatusBlob'] += 1
+            self.status_blobs.append(data)
         else:
             raise Exception("Bad url {0}".format(url))
 

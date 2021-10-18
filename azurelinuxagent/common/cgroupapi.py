@@ -28,6 +28,7 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output, \
     TELEMETRY_MESSAGE_MAX_LEN
@@ -201,6 +202,24 @@ class SystemdCgroupsApi(CGroupsApi):
 
         return cpu_cgroup_path, memory_cgroup_path
 
+    def get_unit_cgroup_paths(self, unit_name):
+        """
+        Returns a tuple with the path of the cpu and memory cgroups for the given unit.
+        The values returned can be None if the controller is not mounted.
+        Ex: ControlGroup=/azure.slice/walinuxagent.service
+        controlgroup_path[1:] = azure.slice/walinuxagent.service
+        """
+        controlgroup_path = systemd.get_unit_property(unit_name, "ControlGroup")
+        cpu_mount_point, memory_mount_point = self.get_cgroup_mount_points()
+
+        cpu_cgroup_path = os.path.join(cpu_mount_point, controlgroup_path[1:]) \
+            if cpu_mount_point is not None else None
+
+        memory_cgroup_path = os.path.join(memory_mount_point, controlgroup_path[1:]) \
+            if memory_mount_point is not None else None
+
+        return cpu_cgroup_path, memory_cgroup_path
+
     @staticmethod
     def get_cgroup2_controllers():
         """
@@ -264,6 +283,7 @@ class SystemdCgroupsApi(CGroupsApi):
             else:
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
                 CGroupsTelemetry.track_cgroup(CpuCgroup(extension_name, cpu_cgroup_path))
+
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
                 logger.info("The extension command already completed; will not track resource usage")

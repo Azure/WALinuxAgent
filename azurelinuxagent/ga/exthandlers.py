@@ -27,6 +27,7 @@ import stat
 import tempfile
 import time
 import zipfile
+from distutils.version import LooseVersion
 from collections import defaultdict
 from functools import partial
 
@@ -1400,8 +1401,16 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
+        self.set_extension_resource_limits()
+
+    def set_extension_resource_limits(self):
+        extension_name = self.get_full_name()
+        # setup the resource limits for extension operations and it's services.
+        man = self.load_manifest()
+        resource_limits = man.get_resource_limits(extension_name, self.ext_handler.properties.version)
         CGroupConfigurator.get_instance().setup_extension_slice(
-            extension_name=self.get_full_name())
+            extension_name=extension_name)
+        CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
     def create_status_file_if_not_exist(self, extension, status, code, operation, message):
         _, status_path = self.get_status_file_path(extension)
@@ -1450,6 +1459,10 @@ class ExtHandlerInstance(object):
         env = {
             ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code
         }
+        # This check to call the setup if AzureMonitorLinuxAgent extension already installed and not called setup before
+        if self.is_azuremonitorlinuxagent(self.get_full_name()) and \
+                not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(self.get_full_name()):
+            self.set_extension_resource_limits()
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -1462,6 +1475,11 @@ class ExtHandlerInstance(object):
         if self.should_perform_multi_config_op(extension):
             # Only save extension state if MC supported
             self.__set_extension_state(extension, ExtensionState.Enabled)
+
+        # start tracking the extension services cgroup.
+        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.properties.version)
+        CGroupConfigurator.get_instance().start_tracking_extension_services_cgroups(
+            resource_limits.get_service_list())
 
     def _disable_extension(self, extension=None):
         self.set_operation(WALAEventOperation.Disable)
@@ -1516,6 +1534,14 @@ class ExtHandlerInstance(object):
         # failure/status using status file.
         self.set_operation(WALAEventOperation.UnInstall)
         man = self.load_manifest()
+
+        # stop tracking extension services cgroup.
+        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.properties.version)
+        CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
+            resource_limits.get_service_list())
+        CGroupConfigurator.get_instance().remove_extension_services_drop_in_files(
+            resource_limits.get_service_list())
+
         uninstall_cmd = man.get_uninstall_command()
         self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
         self.launch_command(uninstall_cmd, cmd_name="uninstall", extension=extension)
@@ -1542,6 +1568,7 @@ class ExtHandlerInstance(object):
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
             CGroupConfigurator.get_instance().remove_extension_slice(
                 extension_name=self.get_full_name())
+
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
@@ -2178,6 +2205,14 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     @staticmethod
+    def is_azuremonitorlinuxagent(extension_name):
+        cgroup_monitor_extension_name = conf.get_cgroup_monitor_extension_name()
+        if re.match(r"\A" + cgroup_monitor_extension_name, extension_name) is not None\
+            and datetime.datetime.utcnow() < datetime.datetime.strptime(conf.get_cgroup_monitor_expiry_time(), "%Y-%m-%d"):
+            return True
+        return False
+
+    @staticmethod
     def _read_status_file(ext_status_file):
         err_count = 0
         while True:
@@ -2291,6 +2326,59 @@ class HandlerManifest(object):
 
     def supports_multiple_extensions(self):
         return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+
+    def get_resource_limits(self, extension_name, str_version):
+        """
+        Placeholder values for testing and monitoring the monitor extension resource usage.
+        This is not effective after nov 30th.
+        """
+        if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
+            if LooseVersion(str_version) < LooseVersion("1.12"):
+                test_man = {
+                    "resourceLimits": {
+                        "services": [
+                            {
+                                "name": "mdsd.service",
+                                "path": "/lib/systemd/system"
+                            }
+                        ]
+                    }
+                }
+                return ResourceLimits(test_man.get('resourceLimits', None))
+            else:
+                test_man = {
+                    "resourceLimits": {
+                        "services": [
+                            {
+                                "name": "azuremonitoragent.service",
+                                "path": "/lib/systemd/system"
+                            }
+                        ]
+                    }
+                }
+                return ResourceLimits(test_man.get('resourceLimits', None))
+
+        return ResourceLimits(self.data.get('resourceLimits', None))
+
+
+class ResourceLimits(object):
+    def __init__(self, data):
+        self.data = data
+
+    def get_extension_slice_cpu_quota(self):
+        if self.data is not None:
+            return self.data.get('cpuQuota', None)
+        return None
+
+    def get_extension_slice_memory_quota(self):
+        if self.data is not None:
+            return self.data.get('memoryQuota', None)
+        return None
+
+    def get_service_list(self):
+        if self.data is not None:
+            return self.data.get('services', None)
+        return None
 
 
 class ExtensionStatusError(ExtensionError):
