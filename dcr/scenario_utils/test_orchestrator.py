@@ -26,6 +26,7 @@ class TestOrchestrator(LoggingHandler):
         self.__test_cases: List[TestCase] = []
 
     def run_tests(self):
+        load_dotenv()
         skip_due_to = None
         for test in self.__tests:
             tc = TestCase(test.name, classname=os.environ['SCENARIONAME'])
