@@ -193,10 +193,10 @@ jobs:
           arguments: 'harvest'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: succeededOrFailed()
+        condition: False
         displayName: 'Fetch Harvest results'
 
       - publish: $(Build.ArtifactStagingDirectory)/harvest
         artifact: $(rgName)-harvest
-        condition: succeededOrFailed()
+        condition: False
         displayName: 'Publish Harvest logs'

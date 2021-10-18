@@ -93,9 +93,7 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                 stdout = stdout.decode('utf-8')
                 stderr = stderr.decode('utf-8')
                 if proc.returncode != 0:
-                    raise Exception(
-                        f"Failed command: {cmd}. Exit Code: {proc.returncode}")
-
+                    raise Exception(f"Failed command: {cmd}. Exit Code: {proc.returncode}")
                 break
 
             except asyncio.CancelledError as err:
@@ -107,6 +105,7 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                     pass
                 finally:
                     return
+
             except Exception as err:
                 attempt += 1
                 if attempt < max_retry:
@@ -115,6 +114,7 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
                     await asyncio.sleep(3)
                 else:
                     raise
+
             finally:
                 print(f"##[group][{username}/{ip}] - Attempts ({attempt}/{max_retry})")
                 print(f"##[command]{cmd}")
