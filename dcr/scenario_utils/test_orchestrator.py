@@ -52,7 +52,7 @@ class TestOrchestrator(LoggingHandler):
                         break
             self.__test_cases.append(tc)
 
-    def generate_report(self, test_file_path):
+    def __generate_report(self, test_file_path):
         ts = TestSuite(self.name)
         for tc in self.__test_cases:
             ts.add_testcase(tc)
@@ -67,7 +67,7 @@ class TestOrchestrator(LoggingHandler):
         The report is dropped in `$(Build.ArtifactStagingDirectory)/harvest` directory
         """
         assert file_name.startswith("test-result"), "File name is invalid, it should start with test-result*"
-        self.generate_report(os.path.join(os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY'], file_name))
+        self.__generate_report(os.path.join(os.environ['BUILD_ARTIFACTSTAGINGDIRECTORY'], file_name))
 
     def generate_report_on_vm(self, file_name):
         """
@@ -77,7 +77,7 @@ class TestOrchestrator(LoggingHandler):
         assert file_name.startswith("test-result"), "File name is invalid, it should start with test-result*"
         load_dotenv()
         admin_username = get_vm_data_from_env().admin_username
-        self.generate_report(os.path.join("/home", admin_username, file_name))
+        self.__generate_report(os.path.join("/home", admin_username, file_name))
 
     @property
     def failed(self) -> bool:
