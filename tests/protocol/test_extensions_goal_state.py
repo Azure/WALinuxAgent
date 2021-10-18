@@ -7,7 +7,7 @@ import re
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, _CaseInsensitiveDict
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, _CaseFoldedDict
 from azurelinuxagent.common.utils import restutil, fileutil
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol import mockwiredata
@@ -100,13 +100,13 @@ class ExtensionsGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(["MultipleExtensionsPerHandler"], vm_settings.get_required_features(), 'requiredFeatures was not parsed correctly')
 
 
-class CaseInsensitiveDictionaryTestCase(AgentTestCase):
-    def test_it_should_retrieve_items_in_a_case_insensitive_fashion(self):
+class CaseFoldedDictionaryTestCase(AgentTestCase):
+    def test_it_should_retrieve_items_ignoring_case(self):
         dictionary = json.loads('''{
             "activityId": "2e7f8b5d-f637-4721-b757-cb190d49b4e9",
             "StatusUploadBlob": {
                 "statusBlobType": "BlockBlob",
-                "value": "https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+                "value": "https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status"
             },
             "gaFamilies": [
                 {
@@ -116,28 +116,29 @@ class CaseInsensitiveDictionaryTestCase(AgentTestCase):
                         "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
                         "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
                     ]
-                },
-                {
-                    "Name": "Test",
-                    "Version": "2.5.0.2",
-                    "Uris": [
-                        "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
-                        "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
-                    ]
                 }
             ]
          }''')
 
-        case_insensitive = _CaseInsensitiveDict(dictionary)
+        case_folded = _CaseFoldedDict.from_dict(dictionary)
 
-        def get_item(key, expected_value):
+        def test_retrieve_item(key, expected_value):
+            """
+            Test for operators [] and in, and methods get() and has_key()
+            """
             try:
-                self.assertEqual(expected_value, case_insensitive[key], "Operator [] retrieved incorrect value for '{0}'".format(key))
+                self.assertEqual(expected_value, case_folded[key], "Operator [] retrieved incorrect value for '{0}'".format(key))
             except KeyError:
-                self.fail("Failed to retrieve '{0}'".format(key))
+                self.fail("Operator [] failed to retrieve '{0}'".format(key))
 
-            self.assertEqual(expected_value, case_insensitive.get(key), "Method get() retrieved incorrect '{0}'".format(key))
+            self.assertTrue(case_folded.has_key(key), "Method has_key() did not find '{0}'".format(key))
 
-        get_item("activityId", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
-        get_item("ACTIVITYID", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
+            self.assertEqual(expected_value, case_folded.get(key), "Method get() retrieved incorrect value for '{0}'".format(key))
+            self.assertTrue(key in case_folded, "Operator in did not find key '{0}'".format(key))
 
+        test_retrieve_item("activityId", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
+        test_retrieve_item("activityid", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
+        test_retrieve_item("ACTIVITYID", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
+
+        self.assertEqual("BlockBlob", case_folded["statusuploadblob"]["statusblobtype"], "Failed to retrieve item in nested dictionary")
+        self.assertEqual("Prod", case_folded["gafamilies"][0]["name"], "Failed to retrieve item in nested array")

@@ -100,6 +100,10 @@ class ExtensionsGoalState(object):
             logger.info("[GoalStateMismatch] {0}", message)
             add_event(op=WALAEventOperation.GoalStateMismatch, is_success=False, message=message)
 
+        if from_extensions_config.get_status_upload_blob() != from_vm_settings.get_status_upload_blob():
+            report_difference("_status_upload_blob")
+        if from_extensions_config.get_status_upload_blob_type() != from_vm_settings.get_status_upload_blob_type():
+            report_difference("_status_upload_blob_type")
         if from_extensions_config.get_required_features() != from_vm_settings.get_required_features():
             report_difference("_required_features")
 
@@ -538,7 +542,7 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             raise VmSettingsError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), json_text))  # <==
 
     def _parse_vm_settings(self, json_text):
-        vm_settings = json.loads(json_text)
+        vm_settings = _CaseFoldedDict.from_dict(json.loads(json_text))
         self._parse_status_upload_blob(vm_settings)
         self._parse_required_features(vm_settings)
         # TODO: Parse all atttributes
@@ -565,36 +569,64 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
 
 
-class _CaseInsensitiveDictKey(str):
-    def __hash__(self):
-        return str.__hash__(self.casefold())
-
-    def __eq__(self, other):
-        return str.__eq__(self.casefold(), other.casefold())
-
-    def __ne__(self, other):
-        return not (self == other)
-
-
-class _CaseInsensitiveDict(dict):
-    def __init__(self, dictionary):
-        super(_CaseInsensitiveDict, self).__init__()
+#
+# TODO: The current implementation of the vmSettings API uses inconsistent cases on the names of the json items it returns.
+#       To work around that, we use _CaseFoldedDict to query those json items in a case-insensitive matter, Do not use
+#       _CaseFoldedDict for other purposes. Remove it once the vmSettings API is updated.
+#
+class _CaseFoldedDict(dict):
+    @staticmethod
+    def from_dict(dictionary):
+        case_folded = _CaseFoldedDict()
         for key, value in dictionary.items():
-            self[_CaseInsensitiveDictKey(key)] = self.to_case_insensitive_dict(value)
+            case_folded[key] = _CaseFoldedDict._to_case_folded_dict_item(value)
+        return case_folded
 
     def get(self, key):
-        return super(_CaseInsensitiveDict, self).get(_CaseInsensitiveDictKey(key))
+        return super(_CaseFoldedDict, self).get(key.casefold())
+
+    def has_key(self, key):
+        return super(_CaseFoldedDict, self).get(key.casefold())
 
     def __getitem__(self, key):
-        return super(_CaseInsensitiveDict, self).__getitem__(_CaseInsensitiveDictKey(key))
+        return super(_CaseFoldedDict, self).__getitem__(key.casefold())
+
+    def __setitem__(self, key, value):
+        return super(_CaseFoldedDict, self).__setitem__(key.casefold(), value)
+
+    def __contains__(self, key):
+        return  super(_CaseFoldedDict, self).__contains__(key.casefold())
 
     @staticmethod
-    def to_case_insensitive_dict(item):
+    def _to_case_folded_dict_item(item):
         if isinstance(item, dict):
-            case_insensitive_dict = {}
+            case_folded_dict = _CaseFoldedDict()
             for key, value in item.items():
-                case_insensitive_dict[_CaseInsensitiveDictKey(key)] = _CaseInsensitiveDict.to_case_insensitive_dict(value)
-            return case_insensitive_dict
+                case_folded_dict[key.casefold()] = _CaseFoldedDict._to_case_folded_dict_item(value)
+            return case_folded_dict
         if isinstance(item, list):
-            return [_CaseInsensitiveDict.to_case_insensitive_dict(list_item) for list_item in item]
+            return [_CaseFoldedDict._to_case_folded_dict_item(list_item) for list_item in item]
         return item
+
+    def copy(self):
+        raise NotImplementedError()
+
+    @staticmethod
+    def fromkeys(*args, **kwargs):
+        raise NotImplementedError()
+
+    def pop(self, key, default=None):
+        raise NotImplementedError()
+
+    def setdefault(self, key, default=None):
+        raise NotImplementedError()
+
+    def update(self, E=None, **F):  # known special case of dict.update
+        raise NotImplementedError()
+
+    def __delitem__(self, *args, **kwargs):
+        raise NotImplementedError()
+
+
+
+
