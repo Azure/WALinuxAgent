@@ -40,7 +40,7 @@ def run(*args):
 
 def check_firewall(username):
     if not __is_firewall_enabled():
-        raise Exception("The firewall is not enabled, skipping checks")
+        return "The firewall is not enabled, skipping checks"
 
     with open(WIRESERVER_ENDPOINT_FILE, 'r') as f:
         wireserver_ip = f.read()

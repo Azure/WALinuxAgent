@@ -3,7 +3,7 @@
 # Usage: <username>   <IP>  <Artifact Directory>
 set -euxo pipefail
 
-ssh -o "StrictHostKeyChecking no" "$1"@"$2" "sudo tar --exclude='journal/*' --exclude='*.zip' -czf logs-$2.tgz /var/log /var/lib/waagent/ /root"
+ssh -o "StrictHostKeyChecking no" "$1"@"$2" "sudo tar --exclude='journal/*' --exclude='*.zip' -czf logs-$2.tgz /var/log /var/lib/waagent/ /root /etc/waagent.conf"
 
 # Create directory if doesn't exist
 mkdir -p "$3"

@@ -85,6 +85,9 @@ async def _execute_commands_on_vm_async(commands: List[str], username: str, ip: 
     for command in commands:
         cmd = command.format(ip=ip, username=username)
         stdout, stderr = "", ""
+        # ToDo: Separate out retries due to network error vs retries due to test failures.
+        #  The latter should be only once (or as specified by the test author).
+        #  https://msazure.visualstudio.com/One/_workitems/edit/12377120
         while attempt < max_retry:
             try:
                 proc = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE,
