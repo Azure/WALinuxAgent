@@ -633,7 +633,9 @@ class _CaseFoldedDict(dict):
 def _casefold(string):
     if sys.version_info[0] == 2:
         return type(string).lower(string)  # the type of "string" can be unicode or str
-    return str.casefold(string)
+    # Class 'str' has no 'casefold' member (no-member) -- Disabled: This warning shows up on Python 2.7 pylint runs
+    # but this code is actually not executed on Python 2.
+    return str.casefold(string)  # pylint: disable=no-member
 
 
 
