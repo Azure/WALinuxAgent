@@ -631,7 +631,7 @@ class _CaseFoldedDict(dict):
 
 # casefold() does not exist on Python 2 so we use lower() there
 def _casefold(string):
-    if sys.version_info.major != 2:
+    if sys.version_info[0] != 2:
         return ustr.casefold(string)
     return type(string).lower(string)  # the type of "string" can be unicode or str
 
