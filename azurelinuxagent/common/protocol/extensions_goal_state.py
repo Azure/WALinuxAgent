@@ -18,6 +18,7 @@
 
 import json
 import re
+import sys
 
 from collections import defaultdict
 from operator import attrgetter
@@ -583,26 +584,26 @@ class _CaseFoldedDict(dict):
         return case_folded
 
     def get(self, key):
-        return super(_CaseFoldedDict, self).get(key.casefold())
+        return super(_CaseFoldedDict, self).get(_casefold(key))
 
     def has_key(self, key):
-        return super(_CaseFoldedDict, self).get(key.casefold())
+        return super(_CaseFoldedDict, self).get(_casefold(key))
 
     def __getitem__(self, key):
-        return super(_CaseFoldedDict, self).__getitem__(key.casefold())
+        return super(_CaseFoldedDict, self).__getitem__(_casefold(key))
 
     def __setitem__(self, key, value):
-        return super(_CaseFoldedDict, self).__setitem__(key.casefold(), value)
+        return super(_CaseFoldedDict, self).__setitem__(_casefold(key), value)
 
     def __contains__(self, key):
-        return  super(_CaseFoldedDict, self).__contains__(key.casefold())
+        return  super(_CaseFoldedDict, self).__contains__(_casefold(key))
 
     @staticmethod
     def _to_case_folded_dict_item(item):
         if isinstance(item, dict):
             case_folded_dict = _CaseFoldedDict()
             for key, value in item.items():
-                case_folded_dict[key.casefold()] = _CaseFoldedDict._to_case_folded_dict_item(value)
+                case_folded_dict[_casefold(key)] = _CaseFoldedDict._to_case_folded_dict_item(value)
             return case_folded_dict
         if isinstance(item, list):
             return [_CaseFoldedDict._to_case_folded_dict_item(list_item) for list_item in item]
@@ -626,6 +627,13 @@ class _CaseFoldedDict(dict):
 
     def __delitem__(self, *args, **kwargs):
         raise NotImplementedError()
+
+
+# casefold() does not exist on Python 2 so we use lower() there
+def _casefold(string):
+    if sys.version_info.major != 2:
+        return ustr.casefold(string)
+    return type(string).lower(string)  # the type of "string" can be unicode or str
 
 
 
