@@ -23,7 +23,7 @@ class TestOrchestrator(LoggingHandler):
         super().__init__()
         self.name = name
         self.__tests: List[TestFuncObj] = tests
-        self.__test_cases: List[TestCase] = []
+        self.__test_suite = TestSuite(name)
 
     def run_tests(self):
         load_dotenv()
@@ -51,15 +51,11 @@ class TestOrchestrator(LoggingHandler):
                     else:
                         print("##[endgroup]")
                         break
-            self.__test_cases.append(tc)
+            self.__test_suite.add_testcase(tc)
 
     def __generate_report(self, test_file_path):
-        ts = TestSuite(self.name)
-        for tc in self.__test_cases:
-            ts.add_testcase(tc)
-
         xml_junit = JUnitXml()
-        xml_junit.add_testsuite(ts)
+        xml_junit.add_testsuite(self.__test_suite)
         xml_junit.write(filepath=test_file_path, pretty=True)
 
     def generate_report_on_orchestrator(self, file_name: str):
@@ -82,7 +78,7 @@ class TestOrchestrator(LoggingHandler):
 
     @property
     def failed(self) -> bool:
-        return any(isinstance(tc.result, Failure) for tc in self.__test_cases)
+        return (self.__test_suite.failures + self.__test_suite.errors) > 0
 
     def run_test_and_get_tc(self, test_name, test_func) -> TestCase:
         stdout = ""
@@ -95,6 +91,7 @@ class TestOrchestrator(LoggingHandler):
             self.log.debug("[{0}] Debug Output: {1}".format(test_name, stdout))
         except Exception as err:
             self.log.exception("Error: {1}".format(test_name, err))
+            stdout = str(err)
             tc.result = [Failure(f"Failure: {err}", type_=f"Stack: {traceback.format_exc()}")]
 
         tc.system_out = stdout

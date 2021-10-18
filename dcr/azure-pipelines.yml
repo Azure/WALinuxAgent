@@ -15,6 +15,7 @@ parameters:
 #        version: "latest"
 #        sku: "18.04-LTS"
 #        name: "ubuntu18"
+        # ToDo: Figure out a better way to incorporate distro setup scripts
 #        setupPath: "dcr/distros/install_pip_packages.sh"
 
       - publisher: "Debian"

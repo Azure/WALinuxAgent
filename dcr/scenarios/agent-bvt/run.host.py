@@ -1,13 +1,9 @@
-import os
-
 from dcr.scenario_utils.common_utils import execute_py_script_over_ssh_on_test_vms
 from dcr.scenario_utils.extensions.CustomScriptExtension import add_cse
 from dcr.scenario_utils.extensions.VMAccessExtension import add_and_verify_vmaccess
-from dcr.scenario_utils.logging_utils import get_logger
 from dcr.scenario_utils.test_orchestrator import TestOrchestrator, TestFuncObj
 
 if __name__ == '__main__':
-    get_logger('debug_tests').info(os.environ)
     # Execute run1.py first
     execute_py_script_over_ssh_on_test_vms(command="dcr/scenarios/agent-bvt/run1.py")
 
