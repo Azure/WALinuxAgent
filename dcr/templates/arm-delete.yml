@@ -11,7 +11,6 @@ parameters:
 jobs:
   - job: "DeleteRG"
     dependsOn: "Wait"
-    condition: eq(stageDependencies.Execute.CreateVM.outputs['setOutputVars.armDeployed'], 'true')
     strategy:
       matrix:
         ${{ each distro in parameters.distros }}:
@@ -20,11 +19,16 @@ jobs:
               scenarioName: ${{ scenario }}
               distroName: ${{ distro.name }}
               rgName: ${{ format('{0}-{1}-{2}', parameters.rgPrefix, scenario, distro.name) }}
+              stageName: ${{ format('{0}-{1}', distro.name, scenario) }}
       maxParallel: 10
 
     steps:
       - task: AzureResourceManagerTemplateDeployment@3
-        condition: succeededOrFailed()
+        condition: |
+          or(
+            eq(stageDependencies.Execute.CreateVM.outputs['setOutputVars.armDeployed'], 'true'),
+            eq(stageDependencies.Execute.CreateVM.outputs[format('{0}.setOutputVars.armDeployed', variables.stageName)], 'true')
+          )
         displayName: "Delete test RG"
         inputs:
           deploymentScope: 'Resource Group'

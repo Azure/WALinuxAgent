@@ -4,8 +4,8 @@ parameters:
     default:
       - agent-bvt
       - extension-telemetry-pipeline
-      - ext-seq-multiple-dependencies
-      - agent-persist-firewall
+#      - ext-seq-multiple-dependencies
+#      - agent-persist-firewall
 
   - name: distros
     type: object
@@ -25,23 +25,23 @@ parameters:
         name: "deb10"
 ##        setupPath: "dcr/distros/install_pip_packages.sh"
 #
-#      - publisher: "OpenLogic"
-#        offer: "CentOS"
-#        sku: "7_9"
+      - publisher: "OpenLogic"
+        offer: "CentOS"
+        sku: "7_9"
+        version: "latest"
+        name: "cent79"
+##
+#      - publisher: "SUSE"
+#        offer: "sles-15-sp2-basic"
+#        sku: "gen1"
 #        version: "latest"
-#        name: "cent79"
+#        name: "suse15"
 ##
-      - publisher: "SUSE"
-        offer: "sles-15-sp2-basic"
-        sku: "gen1"
-        version: "latest"
-        name: "suse15"
-##
-      - publisher: "RedHat"
-        offer: "RHEL"
-        sku: "7-RAW"
-        version: "latest"
-        name: "rhel7Raw"
+#      - publisher: "RedHat"
+#        offer: "RHEL"
+#        sku: "7-RAW"
+#        version: "latest"
+#        name: "rhel7Raw"
 
 # ToDo: Setup trigger for scheduled runs for develop
 trigger:

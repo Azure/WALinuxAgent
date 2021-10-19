@@ -6,7 +6,7 @@ set -euxo pipefail
 
 d=$(which date)
 ipt=$(which iptables)
-username="larohra"
+username="dcr"
 script_dir=$(dirname "$0")
 cp "$script_dir/access_wire_ip.sh" "/usr/bin/"
 chmod 777 "/usr/bin/access_wire_ip.sh"
