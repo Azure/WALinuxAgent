@@ -58,6 +58,7 @@ variables:
   subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
   location: 'East US 2'
 
+  # ToDo: Create new pipelines for Fairfax and Mooncake
   fairfaxConn: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)'
   fairfaxSub: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
   fairfaxLocation: 'usgovarizona'
@@ -85,6 +86,7 @@ stages:
     jobs:
       - job: "Wait"
         pool: server
+        # ToDo: Add a parameter to force wait before deleting the Test VMs
         condition: in(stageDependencies.Execute.CreateVM.result, 'Failed', 'SucceededWithIssues')
         steps:
           - task: ManualValidation@0
