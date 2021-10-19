@@ -85,6 +85,7 @@ stages:
     jobs:
       - job: "Wait"
         pool: server
+        condition: in(stageDependencies.Execute.CreateVM.result, 'Failed', 'SucceededWithIssues')
         steps:
           - task: ManualValidation@0
             timeoutInMinutes: 50

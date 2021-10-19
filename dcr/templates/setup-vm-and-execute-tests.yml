@@ -105,7 +105,11 @@ jobs:
 
       - script: |
           printenv > $(Build.SourcesDirectory)/dcr/.env
+
+          # This variable is needed in the Cleanup stage to determine whether to cleanup or not
+          echo '##vso[task.setvariable variable=armDeployed;isOutput=true]true'
         displayName: 'Get all environment variables'
+        name: 'setOutputVars'
 
       - task: PythonScript@0
         inputs:
@@ -137,6 +141,10 @@ jobs:
         condition: and(succeeded(), eq(variables.runScenarioSetup, 'true'))
         displayName: "Execute Scenario Setup on test VM"
 
+      # This task is needed to ensure we execute the following tasks even if a single one of them fails
+      - bash: echo "##vso[task.setvariable variable=executeTests]true"
+        displayName: "Start executing tests"
+
       - task: PythonScript@0
         inputs:
           scriptSource: 'filePath'
@@ -148,7 +156,7 @@ jobs:
           AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
           AZURE_TENANT_ID: $(AZURE-TENANT-ID)
         displayName: "Run the test file on the Orchestrator"
-        condition: and(succeeded(), eq(variables.runHost, 'true'))
+        condition: and(eq(variables.executeTests, 'true'), eq(variables.runHost, 'true'))
 
       - task: PythonScript@0
         inputs:
@@ -157,11 +165,7 @@ jobs:
           arguments: '"sudo PYTHONPATH=. $(pypyPath) dcr/scenario/run.py"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: |
-          and(
-            notIn(dependencies.CreateVM.runScenarioSetup.result, 'Failed', 'Canceled'),
-            eq(variables.runPy, 'true')
-          )
+        condition: and(eq(variables.executeTests, 'true'), eq(variables.runPy, 'true'))
         displayName: "Execute test suite on VM"
 
       - task: PythonScript@0
@@ -171,7 +175,7 @@ jobs:
           arguments: 'fetch_results'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: succeededOrFailed()
+        condition: eq(variables.executeTests, 'true')
         displayName: 'Fetch test results'
 
       - task: PythonScript@0
@@ -181,11 +185,11 @@ jobs:
           arguments: '"$(Build.ArtifactStagingDirectory)/test-result*.xml"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: succeededOrFailed()
+        condition: eq(variables.executeTests, 'true')
         displayName: 'Merge test results'
 
       - task: PublishTestResults@2
-        condition: succeededOrFailed()
+        condition: eq(variables.executeTests, 'true')
         inputs:
           testResultsFormat: 'JUnit'
           testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-result*.xml'
@@ -198,15 +202,10 @@ jobs:
           arguments: 'harvest'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: False
+        condition: and(failed(), eq(variables.executeTests, 'true'))
         displayName: 'Fetch Harvest results'
 
       - publish: $(Build.ArtifactStagingDirectory)/harvest
         artifact: $(rgName)-harvest
-        condition: False
+        condition: and(failed(), eq(variables.executeTests, 'true'))
         displayName: 'Publish Harvest logs'
-
-      - script: |
-          printenv
-        displayName: 'Print all environment variables'
-        condition: always()

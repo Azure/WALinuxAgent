@@ -11,7 +11,7 @@ parameters:
 jobs:
   - job: "DeleteRG"
     dependsOn: "Wait"
-    condition: always()
+    condition: eq(stageDependencies.Execute.CreateVM.outputs['setOutputVars.armDeployed'], 'true')
     strategy:
       matrix:
         ${{ each distro in parameters.distros }}:
