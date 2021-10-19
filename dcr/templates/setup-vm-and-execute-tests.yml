@@ -127,6 +127,7 @@ jobs:
         displayName: 'Execute Distro Setup on test VM'
 
       - task: PythonScript@0
+        name: "runScenarioSetup"
         inputs:
           scriptSource: 'filePath'
           scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
@@ -134,7 +135,7 @@ jobs:
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
         condition: and(succeeded(), eq(variables.runScenarioSetup, 'true'))
-        displayName: "Install test dependencies on test VM"
+        displayName: "Execute Scenario Setup on test VM"
 
       - task: PythonScript@0
         inputs:
@@ -156,7 +157,11 @@ jobs:
           arguments: '"sudo PYTHONPATH=. $(pypyPath) dcr/scenario/run.py"'
         env:
           PYTHONPATH: $(Build.SourcesDirectory)
-        condition: and(succeededOrFailed(), eq(variables.runPy, 'true'))
+        condition: |
+          and(
+            notIn(dependencies.CreateVM.runScenarioSetup.result, 'Failed', 'Canceled'),
+            eq(variables.runPy, 'true')
+          )
         displayName: "Execute test suite on VM"
 
       - task: PythonScript@0
@@ -200,3 +205,8 @@ jobs:
         artifact: $(rgName)-harvest
         condition: False
         displayName: 'Publish Harvest logs'
+
+      - script: |
+          printenv
+        displayName: 'Print all environment variables'
+        condition: always()
