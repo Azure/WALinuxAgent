@@ -11,6 +11,7 @@ parameters:
 jobs:
   - job: "DeleteRG"
     dependsOn: "Wait"
+    condition: always()
     strategy:
       matrix:
         ${{ each distro in parameters.distros }}:
@@ -23,7 +24,6 @@ jobs:
 
     steps:
       - task: AzureResourceManagerTemplateDeployment@3
-        condition: succeededOrFailed()
         displayName: "Delete test RG"
         inputs:
           deploymentScope: 'Resource Group'
