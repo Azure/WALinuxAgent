@@ -87,7 +87,7 @@ jobs:
           resourceGroupName: '$(rgName)'
           location: '$(location)'
           templateLocation: 'Linked artifact'
-          csmFile: '$(templateFile)+123'
+          csmFile: '$(templateFile)'
           csmParametersFile: '$(parametersFile)'
           overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)" -imagePublisher "$(imagePublisher)" -imageOffer "$(imageOffer)" -imageSku $(imageSku) -imageVersion $(imageVersion)'
           deploymentMode: 'Complete'
