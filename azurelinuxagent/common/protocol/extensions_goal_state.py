@@ -113,7 +113,7 @@ class ExtensionsGoalState(object):
         Does validations common to vmSettings and ExtensionsConfig
         """
         if self._status_upload_blob_type not in ["BlockBlob", "PageBlob"]:
-            logger.info("Status Blob type '{0}' is ot valid, assuming BlockBlob", self._status_upload_blob)
+            logger.info("Status Blob type '{0}' is not valid, assuming BlockBlob", self._status_upload_blob)
             self._status_upload_blob_type = "BlockBlob"
 
 
