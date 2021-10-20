@@ -72,7 +72,7 @@ class ExtensionsGoalState(object):
 
     def get_redacted_text(self):
         """
-        Returns the raw text (either the ExtensionsConfig or the vmSettings) with any confidential data removed, or None for empty goal states.
+        Returns the raw text (either the ExtensionsConfig or the vmSettings) with any confidential data removed, or an empty string for empty goal states.
         """
         raise NotImplementedError()
 
@@ -119,7 +119,7 @@ class ExtensionsGoalState(object):
 
 class _EmptyExtensionsGoalState(ExtensionsGoalState):
     def get_redacted_text(self):
-        return None
+        return ''
 
 
 class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
@@ -127,12 +127,12 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         super(_ExtensionsGoalStateFromExtensionsConfig, self).__init__()
         self._id = incarnation
         self._text = xml_text
-        self._parse_extensions_config(xml_text)
 
         try:
+            self._parse_extensions_config(xml_text)
             self._do_common_validations()
         except Exception as e:
-            raise ExtensionsConfigError("Error parsing ExtensionsConfig (incarnation: {0}): {1}\n{2}".format(incarnation, format_exception(e), xml_text))
+            raise ExtensionsConfigError("Error parsing ExtensionsConfig (incarnation: {0}): {1}\n{2}".format(incarnation, format_exception(e), self.get_redacted_text()))
 
     def _parse_extensions_config(self, xml_text):
         xml_doc = parse_doc(xml_text)
@@ -165,8 +165,6 @@ class _ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         logger.verbose("Extension config shows status blob type as [{0}]", self._status_upload_blob_type)
 
         self.in_vm_gs_metadata.parse_node(find(xml_doc, "InVMGoalStateMetaData"))
-
-        self._do_common_validations()
 
     def get_redacted_text(self):
         text = self._text
@@ -540,7 +538,7 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             self._parse_vm_settings(json_text)
             self._do_common_validations()
         except Exception as e:
-            raise VmSettingsError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), json_text))  # <==
+            raise VmSettingsError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), self.get_redacted_text()))
 
     def _parse_vm_settings(self, json_text):
         vm_settings = _CaseFoldedDict.from_dict(json.loads(json_text))
@@ -552,10 +550,10 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         status_upload_blob = vm_settings.get("statusUploadBlob")
         if status_upload_blob is None:
             raise Exception("Missing statusUploadBlob")
-        self._status_upload_blob = status_upload_blob["value"]
+        self._status_upload_blob = status_upload_blob.get("value")
         if self._status_upload_blob is None:
             raise Exception("Missing statusUploadBlob.value")
-        self._status_upload_blob_type = status_upload_blob["statusBlobType"]
+        self._status_upload_blob_type = status_upload_blob.get("statusBlobType")
         if self._status_upload_blob is None:
             raise Exception("Missing statusUploadBlob.statusBlobType")
 
@@ -564,7 +562,15 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         if required_features is not None:
             if not isinstance(required_features, list):
                 raise Exception("requiredFeatures should be an array")
-            self._required_features.extend([feature["name"] for feature in required_features])
+
+            def get_required_features_names():
+                for feature in required_features:
+                    name = feature.get("name")
+                    if name is None:
+                        raise Exception("A required feature is missing the 'name' property")
+                    yield name
+
+            self._required_features.extend(get_required_features_names())
 
     def get_redacted_text(self):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)

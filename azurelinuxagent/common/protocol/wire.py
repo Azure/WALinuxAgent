@@ -897,13 +897,13 @@ class WireClient(object):
             if self._extensions_goal_state is not None:
                 # disable=assignment-from-none: E1128: Assigning result of a function call, where the function returns None
                 text = self._extensions_goal_state.get_redacted_text()  # pylint: disable=assignment-from-none
-                if text is not None:
+                if text != '':
                     self._save_cache(text, EXT_CONF_FILE_NAME.format(self._extensions_goal_state.get_id()))
             # TODO: When Fast Track is fully enabled self._extensions_goal_state_from_vm_settings will go away and this can be deleted
             if self._extensions_goal_state_from_vm_settings is not None:
                 # disable=assignment-from-none: E1128: Assigning result of a function call, where the function returns None
                 text = self._extensions_goal_state_from_vm_settings.get_redacted_text()  # pylint: disable=assignment-from-none
-                if text is not None:
+                if text != '':
                     self._save_cache(text, VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state_from_vm_settings.get_id()))
             # END TODO
 
