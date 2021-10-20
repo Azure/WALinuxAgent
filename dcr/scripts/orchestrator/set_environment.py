@@ -1,9 +1,10 @@
 import json
-import logging
 import os.path
 
-from dcr.scenario_utils.common_utils import execute_command_and_raise_on_error
 from dcr.scenario_utils.logging_utils import get_logger
+
+logger = get_logger("dcr.script.orchestrator.set_environment")
+add_variable_to_pipeline = '##vso[task.setvariable variable={name};]{value}'
 
 
 def _check_if_file_in_scenario_and_set_variable(file_name: str, name: str, true_value: str, false_val: str = None):
@@ -45,11 +46,9 @@ if __name__ == '__main__':
     It determines what files to run and what not.
     Eg: If we're supposed to run run.host.py or run.py 
     """
-    logger = get_logger("dcr.script.orchestrator.set_environment")
     __dcr_dir = os.path.join(os.environ.get("BUILD_SOURCESDIRECTORY"), "dcr")
     scenario_path = os.path.join(__dcr_dir, "scenario")
     template_dir = os.path.join(__dcr_dir, "templates")
-    add_variable_to_pipeline = '##vso[task.setvariable variable={name};]{value}'
 
     _check_if_file_in_scenario_and_set_variable(file_name="run.py", name="runPy", true_value="true")
     _check_if_file_in_scenario_and_set_variable(file_name="run.host.py", name="runHost", true_value="true")

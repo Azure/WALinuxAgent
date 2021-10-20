@@ -13,7 +13,7 @@
       "type": "string",
       "defaultValue": "simpleLinuxVM",
       "metadata": {
-        "description": "The name of you Virtual Machine."
+        "description": "The name of your Virtual Machine."
       }
     },
     "adminUsername": {

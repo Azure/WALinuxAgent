@@ -2,19 +2,19 @@ parameters:
   - name: scenarios
     type: object
     default:
-#      - agent-bvt
-#      - extension-telemetry-pipeline
+      - agent-bvt
+      - extension-telemetry-pipeline
       - ext-seq-multiple-dependencies
-#      - agent-persist-firewall
+      - agent-persist-firewall
 
   - name: distros
     type: object
     default:
-#      - publisher: "Canonical"
-#        offer: "UbuntuServer"
-#        version: "latest"
-#        sku: "18.04-LTS"
-#        name: "ubuntu18"
+      - publisher: "Canonical"
+        offer: "UbuntuServer"
+        version: "latest"
+        sku: "18.04-LTS"
+        name: "ubuntu18"
         # ToDo: Figure out a better way to incorporate distro setup scripts
 #        setupPath: "dcr/distros/install_pip_packages.sh"
 
@@ -37,11 +37,11 @@ parameters:
         version: "latest"
         name: "suse15"
 ##
-#      - publisher: "RedHat"
-#        offer: "RHEL"
-#        sku: "7-RAW"
-#        version: "latest"
-#        name: "rhel7Raw"
+      - publisher: "RedHat"
+        offer: "RHEL"
+        sku: "7-RAW"
+        version: "latest"
+        name: "rhel7Raw"
 
 # ToDo: Setup trigger for scheduled runs for develop
 trigger:
