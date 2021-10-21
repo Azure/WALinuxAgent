@@ -24,7 +24,7 @@ from azurelinuxagent.common.future import ustr
 class CGroupsTelemetry(object):
     """
     """
-    _tracked = []
+    _tracked = {}
     _track_throttled_time = False
     _rlock = threading.RLock()
 
@@ -47,37 +47,37 @@ class CGroupsTelemetry(object):
 
         with CGroupsTelemetry._rlock:
             if not CGroupsTelemetry.is_tracked(cgroup.path):
-                CGroupsTelemetry._tracked.append(cgroup)
+                CGroupsTelemetry._tracked[cgroup.path] = cgroup
                 logger.info("Started tracking cgroup {0}", cgroup)
 
     @staticmethod
     def is_tracked(path):
         """
         Returns true if the given item is in the list of tracked items
-        O(n) operation. But limited to few cgroup objects we have.
+        O(1) operation.
         """
         with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked:
-                if path == cgroup.path:
-                    return True
+            if path in CGroupsTelemetry._tracked:
+                return True
 
         return False
 
     @staticmethod
     def stop_tracking(cgroup):
         """
-        Stop tracking the cgroups for the given name
+        Stop tracking the cgroups for the given path
         """
         with CGroupsTelemetry._rlock:
-            CGroupsTelemetry._tracked.remove(cgroup)
-            logger.info("Stopped tracking cgroup {0}", cgroup)
+            if cgroup.path in CGroupsTelemetry._tracked:
+                CGroupsTelemetry._tracked.pop(cgroup.path)
+                logger.info("Stopped tracking cgroup {0}", cgroup)
 
     @staticmethod
     def poll_all_tracked():
         metrics = []
-
+        inactive_cgroups = []
         with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked[:]:
+            for cgroup in CGroupsTelemetry._tracked.values():
                 try:
                     metrics.extend(cgroup.get_tracked_metrics(track_throttled_time=CGroupsTelemetry._track_throttled_time))
                 except Exception as e:
@@ -89,12 +89,14 @@ class CGroupsTelemetry(object):
                         logger.periodic_warn(logger.EVERY_HOUR, '[PERIODIC] Could not collect metrics for cgroup '
                                                                 '{0}. Error : {1}'.format(cgroup.name, ustr(e)))
                 if not cgroup.is_active():
-                    CGroupsTelemetry.stop_tracking(cgroup)
+                    inactive_cgroups.append(cgroup)
+            for inactive_cgroup in inactive_cgroups:
+                CGroupsTelemetry.stop_tracking(inactive_cgroup)
 
         return metrics
 
     @staticmethod
     def reset():
         with CGroupsTelemetry._rlock:
-            CGroupsTelemetry._tracked *= 0  # emptying the list
+            CGroupsTelemetry._tracked.clear()  # emptying the dictionary
             CGroupsTelemetry._track_throttled_time = False

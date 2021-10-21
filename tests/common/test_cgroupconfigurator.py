@@ -29,8 +29,9 @@ import threading
 from nose.plugins.attrib import attr
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD
+from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD, \
+    DisableCgroups
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
@@ -75,7 +76,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-            self.assertTrue(any(cg for cg in tracked if cg.name == AGENT_NAME_TELEMETRY and 'cpu' in cg.path),
+            self.assertTrue(any(cg for cg in tracked.values() if cg.name == AGENT_NAME_TELEMETRY and 'cpu' in cg.path),
                 "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
@@ -96,7 +97,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-            self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
+            self.assertFalse(any(cg for cg in tracked.values() if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
                 "The Agent's memory should not be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present(self):
@@ -188,7 +189,12 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension")
 
+            expected_cpu_accounting = "CPUAccounting=yes"
+
             self.assertTrue(os.path.exists(extension_slice_unit_file), "{0} was not created".format(extension_slice_unit_file))
+            self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_cpu_accounting),
+                "CPUAccounting was not set correctly. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(
+                    extension_slice_unit_file)))
 
     def test_remove_extension_slice_should_remove_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
@@ -239,7 +245,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             if not CGroupsTelemetry._track_throttled_time:
                 raise Exception("Test setup should have started tracking Throttle Time")
 
-            configurator.disable("UNIT TEST")
+            configurator.disable("UNIT TEST", DisableCgroups.AGENT)
 
             agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
@@ -252,7 +258,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
         with self._get_cgroup_configurator() as configurator:
-            configurator.disable("UNIT TEST")
+            configurator.disable("UNIT TEST", DisableCgroups.ALL)
 
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
                 configurator.start_extension_command(
@@ -310,7 +316,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         tracked = CGroupsTelemetry._tracked
 
         self.assertTrue(
-            any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
+            any(cg for cg in tracked.values() if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
             "The extension's CPU is not being tracked")
 
     def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
@@ -556,6 +562,127 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                     self.assertEqual(expected_output.format("very specific test message"), process_output)
 
+    def test_it_should_set_extension_services_cpu_memory_quota(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system"
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_service_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_accounting)
+
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+            expected_cpu_accounting = "CPUAccounting=yes"
+
+            # create drop in files to set those properties
+            self.assertTrue(os.path.exists(extension_service_cpu_accounting), "{0} was not created".format(extension_service_cpu_accounting))
+            self.assertTrue(
+                fileutil.findre_in_file(extension_service_cpu_accounting, expected_cpu_accounting),
+                "CPUAccounting was not enabled. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(extension_service_cpu_accounting)))
+
+    def test_it_should_set_extension_services_when_quotas_not_defined(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_service_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_accounting)
+            extension_service_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_quota)
+
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+
+            self.assertTrue(os.path.exists(extension_service_cpu_accounting),
+                            "{0} was not created".format(extension_service_cpu_accounting))
+            self.assertFalse(os.path.exists(extension_service_cpu_quota),
+                            "{0} should not have been created during setup".format(extension_service_cpu_quota))
+
+    def test_it_should_start_tracking_extension_services_cgroups(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            configurator.start_tracking_extension_services_cgroups(service_list)
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertTrue(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is not being tracked")
+
+    def test_it_should_stop_tracking_extension_services_cgroups(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+
+        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+            CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+
+        with self._get_cgroup_configurator() as configurator:
+            configurator.stop_tracking_extension_services_cgroups(service_list)
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertFalse(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is being tracked")
+
+    def test_it_should_remove_extension_services_drop_in_files(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            extension_service_cpu_accounting = configurator.mocks.get_mapped_path(
+            UnitFilePaths.extension_service_cpu_accounting)
+            configurator.remove_extension_services_drop_in_files(service_list)
+            self.assertFalse(os.path.exists(extension_service_cpu_accounting),
+                            "{0} should not have been created".format(extension_service_cpu_accounting))
+
+    def test_it_should_start_tracking_unit_cgroups(self):
+
+        with self._get_cgroup_configurator() as configurator:
+            configurator.start_tracking_unit_cgroups("extension.service")
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertTrue(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is not being tracked")
+
+    def test_it_should_stop_tracking_unit_cgroups(self):
+
+        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+            CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+
+        def side_effect(path):
+            if path == '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service':
+                return True
+            return False
+
+        with self._get_cgroup_configurator() as configurator:
+            with patch("os.path.exists") as mock_path:
+                mock_path.side_effect = side_effect
+                configurator.stop_tracking_unit_cgroups("extension.service")
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertFalse(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is being tracked")
+
     def test_check_processes_in_agent_cgroup_should_raise_a_cgroups_exception_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
         with self._get_cgroup_configurator() as configurator:
             pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
@@ -727,8 +854,10 @@ exit 0
                         configurator.enable()
 
                         configurator.check_cgroups([])
-
-                        self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                        if method_to_fail == "_check_processes_in_agent_cgroup":
+                            self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                        else:
+                            self.assertFalse(configurator.agent_enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
 
                         disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
                         self.assertTrue(

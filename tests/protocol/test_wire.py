@@ -75,8 +75,8 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
         # Populate the upload blob and artifacts profile blob.
         extensions_goal_state = ExtensionsGoalState()
         extensions_goal_state.artifacts_profile_blob = artifacts_profile_blob
-        extensions_goal_state.status_upload_blob = status_upload_blob
-        extensions_goal_state.status_upload_blob_type = status_upload_blob_type
+        extensions_goal_state._status_upload_blob = status_upload_blob
+        extensions_goal_state._status_upload_blob_type = status_upload_blob_type
         protocol.client._extensions_goal_state = extensions_goal_state
 
         yield protocol
@@ -212,11 +212,11 @@ class TestWireProtocol(AgentTestCase):
 
     def test_status_blob_parsing(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            self.assertEqual(protocol.client.get_extensions_goal_state().status_upload_blob,
+            self.assertEqual(protocol.client.get_extensions_goal_state().get_status_upload_blob(),
                              'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
                              'sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&'
                              'sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo')
-            self.assertEqual(protocol.client.get_extensions_goal_state().status_upload_blob_type, u'BlockBlob')
+            self.assertEqual(protocol.client.get_extensions_goal_state().get_status_upload_blob_type(), u'BlockBlob')
 
     def test_get_host_ga_plugin(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -251,19 +251,6 @@ class TestWireProtocol(AgentTestCase):
                         patch_default_upload.assert_not_called()
                         patch_http.assert_called_once_with(testurl, protocol.client.status_blob)
                         self.assertFalse(HostPluginProtocol.is_default_channel)
-
-    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized")
-    def test_upload_status_blob_unknown_type_assumes_block(self, *_):
-        with create_mock_protocol(status_upload_blob=testurl, status_upload_blob_type="NotALegalType") as protocol:
-            protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
-
-            with patch.object(StatusBlob, "prepare") as patch_prepare:
-                with patch.object(StatusBlob, "upload") as patch_default_upload:
-                    HostPluginProtocol.is_default_channel = False
-                    protocol.client.upload_status_blob()
-
-                    patch_prepare.assert_called_once_with("BlockBlob")
-                    patch_default_upload.assert_called_once_with(testurl)
 
     def test_upload_status_blob_reports_prepare_error(self, *_):
         with create_mock_protocol(status_upload_blob=testurl, status_upload_blob_type=testtype) as protocol:
@@ -506,9 +493,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             vmagent_manifests = [manifest.family for manifest in extensions_goal_state.vmagent_manifests.vmAgentManifests]
             self.assertEqual(0, len(extensions_goal_state.vmagent_manifests.vmAgentManifests),
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
-            self.assertIsNone(extensions_goal_state.status_upload_blob,
+            self.assertIsNone(extensions_goal_state.get_status_upload_blob(),
                               "Status upload blob in the extension config is expected to be None")
-            self.assertIsNone(extensions_goal_state.status_upload_blob_type,
+            self.assertIsNone(extensions_goal_state.get_status_upload_blob_type(),
                               "Type of status upload blob in the extension config is expected to be None")
             self.assertIsNone(extensions_goal_state.artifacts_profile_blob,
                               "Artifacts profile blob in the extensions config is expected to be None")
@@ -528,8 +515,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
             self.assertEqual("https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&sp=rw"
                              "&se=9999-01-01&sk=key1&sv=2014-02-14&sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo",
-                             extensions_goal_state.status_upload_blob, "Unexpected value for status upload blob URI")
-            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type,
+                             extensions_goal_state.get_status_upload_blob(), "Unexpected value for status upload blob URI")
+            self.assertEqual("BlockBlob", extensions_goal_state.get_status_upload_blob_type(),
                              "Unexpected status upload blob type in the extension config")
             self.assertEqual(None, extensions_goal_state.artifacts_profile_blob,
                              "Artifacts profile blob in the extension config should have been None")
