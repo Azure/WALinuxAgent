@@ -1,13 +1,18 @@
 {
-    "activityId": "c86d8064-6f11-4145-8178-e0587e0584de",
-    "correlationId": "6609dcb1-fccc-474a-9a59-8bd71ba06983",
-    "extensionsLastModifiedTickCount": 637632862319659103,
+    "activityId": "2e7f8b5d-f637-4721-b757-cb190d49b4e9",
+    "correlationId": "1bef4c48-044e-4225-8f42-1d1eac1eb158",
+    "extensionsLastModifiedTickCount": 637693267431616449,
+    "extensionGoalStatesSource": "Fabric",
+    "StatusUploadBlob": {
+        "statusBlobType": "BlockBlob",
+        "value": "https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+    },
     "inVMMetadata": {
         "subscriptionId": "8e037ad4-618f-4466-8bc8-5099d41ac15b",
-        "resourceGroupName": "rg-dc-ht3rnxw",
-        "vmName": "edpymvazsh",
+        "resourceGroupName": "rg-dc-qphvx25",
+        "vmName": "edpxmal5j1",
         "location": "CentralUSEUAP",
-        "vmId": "ba323e38-2145-4cb9-8cbf-778c7824bc9e",
+        "vmId": "058b176d-445b-4e75-bd97-4911511b7d96",
         "vmSize": "Standard_D2s_v3",
         "osType": "Linux"
     },
@@ -18,28 +23,41 @@
     ],
     "gaFamilies": [
         {
-            "name": "Prod",
-            "version": "2.4.0.1"
+            "Name": "Prod",
+            "Version": "2.5.0.2",
+            "Uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
+            ]
         },
         {
-            "name": "Test",
-            "version": "2.4.0.1"
+            "Name": "Test",
+            "Version": "2.5.0.2",
+            "Uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
+            ]
         }
     ],
     "extensionGoalStates": [
         {
             "name": "Microsoft.Azure.Extensions.CustomScript",
-            "version": "2.1.3",
-            "location": "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/708cdbbfb9ad4802ac80a012992930b1/Microsoft.Azure.Extensions_CustomScript_uscentraleuap_manifest.xml",
+            "version": "2.1.6",
+            "location": "https://umsavwggj2v40kvqhc0w.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "failoverlocation": "https://umsanh4b5rfz0q0p4pwm.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "additionalLocations": [
+                "https://umsafwzhkbm1rfrhl0ws.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml"
+            ],
             "state": "enabled",
             "autoUpgrade": true,
             "runAsStartupTask": false,
             "isJson": true,
             "useExactVersion": true,
             "settingsSeqNo": 0,
+            "isMultiConfig": false,
             "settings": [
                 {
-                    "publicSettings": "{\"commandToExecute\":\"echo '26c8d804-6d2e-4da1-ab5b-629ad733b3bb'\"}"
+                    "publicSettings": "{\"commandToExecute\":\"echo '09cd27e9-fbd6-48ad-be86-55f3783e0a23'\"}"
                 }
             ]
         },
@@ -47,26 +65,32 @@
             "name": "Microsoft.CPlat.Core.RunCommandHandlerLinux",
             "version": "1.2.0",
             "location": "https://umsavbvncrpzbnxmxzmr.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml",
+            "failoverlocation": "https://umsawqtlsshtn5v2nfgh.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml",
+            "additionalLocations": [
+                "https://umsajbjtqrb3zqjvgb2z.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml"
+            ],
             "state": "enabled",
             "autoUpgrade": true,
             "runAsStartupTask": false,
             "isJson": true,
             "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": true,
             "settings": [
                 {
-                    "publicSettings": "{\"source\":{\"script\":\"echo '571bbcda-2992-4417-a65c-eaad1832c1f9'\"}}",
+                    "publicSettings": "{\"source\":{\"script\":\"echo '737fa9f1-e9bf-4c3e-ab1f-9e03cd0b5b40'\"}}",
                     "seqNo": 0,
                     "extensionName": "MCExt1",
                     "extensionState": "enabled"
                 },
                 {
-                    "publicSettings": "{\"source\":{\"script\":\"echo '58d6ac9d-9ef3-400a-99d7-1c3b5451eef6'\"}}",
+                    "publicSettings": "{\"source\":{\"script\":\"echo 'f6a0a405-c028-4e68-bd77-5d491fbbd9cf'\"}}",
                     "seqNo": 0,
                     "extensionName": "MCExt2",
                     "extensionState": "enabled"
                 },
                 {
-                    "publicSettings": "{\"source\":{\"script\":\"echo '834cad38-9eec-483e-946d-f713cafc3da8'\"}}",
+                    "publicSettings": "{\"source\":{\"script\":\"echo '338e316a-01bf-4513-8ae1-b603b09ad155'\"}}",
                     "seqNo": 0,
                     "extensionName": "MCExt3",
                     "extensionState": "enabled"
