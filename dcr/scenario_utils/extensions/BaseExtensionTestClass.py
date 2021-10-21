@@ -38,6 +38,14 @@ class BaseExtensionTestClass(LoggingHandler):
             )
             self.log.info("Add extension: {0}".format(extension.result(timeout=5 * 60)))
 
+        def __remove_extension():
+            self.__compute_manager.extension_func.begin_delete(
+                self.__vm_data.rg_name,
+                self.__vm_data.name,
+                self.__extension_data.name
+            ).result()
+            self.log.info(f"Delete vm extension {self.__extension_data.name} successful")
+
         def _retry_on_retryable_error(func):
             retry = 1
             while retry < 5:
@@ -45,7 +53,7 @@ class BaseExtensionTestClass(LoggingHandler):
                     func()
                     break
                 except Exception as err_:
-                    if "RetryableError" in err_ and retry < 5:
+                    if "RetryableError" in str(err_) and retry < 5:
                         self.log.warning(f"({retry}/5) Ran into RetryableError, retrying in 30 secs: {err_}")
                         time.sleep(30)
                         retry += 1
@@ -67,12 +75,7 @@ class BaseExtensionTestClass(LoggingHandler):
         finally:
             # Always try to delete extensions if asked to remove even on errors
             if remove:
-                self.__compute_manager.extension_func.begin_delete(
-                    self.__vm_data.rg_name,
-                    self.__vm_data.name,
-                    self.__extension_data.name
-                ).result()
-                self.log.info(f"Delete vm extension {self.__extension_data.name} successful")
+                _retry_on_retryable_error(__remove_extension)
 
     def validate_ext(self):
         """
