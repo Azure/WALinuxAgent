@@ -678,6 +678,24 @@ class CGroupConfigurator(object):
             except Exception as exception:
                 logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
 
+        def stop_tracking_extension_cgroups(self, extension_name):
+            """
+            TODO: Memory tracking
+            """
+            try:
+                extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice',
+                                                    extension_slice_name + ".slice")
+
+                cpu_cgroup_mountpoint, _ = self._cgroups_api.get_cgroup_mount_points()
+                cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
+
+                if cpu_cgroup_path is not None and os.path.exists(cpu_cgroup_path):
+                    CGroupsTelemetry.stop_tracking(CpuCgroup(extension_name, cpu_cgroup_path))
+
+            except Exception as exception:
+                logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
+
         def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
@@ -734,7 +752,7 @@ class CGroupConfigurator(object):
                 extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
                 if os.path.exists(extension_slice_path):
-                    self.stop_tracking_unit_cgroups(extension_name)
+                    self.stop_tracking_extension_cgroups(extension_name)
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
                 # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
                 try:

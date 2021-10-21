@@ -197,11 +197,22 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     extension_slice_unit_file)))
 
     def test_remove_extension_slice_should_remove_unit_files(self):
+        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
+                                  'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
+            CpuCgroup('Microsoft.CPlat.Extension',
+                      '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
+
         with self._get_cgroup_configurator() as configurator:
             # get the paths to the mocked files
             extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
 
             configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
+
+            tracked = CGroupsTelemetry._tracked
+
+            self.assertFalse(
+                any(cg for cg in tracked.values() if cg.name == 'Microsoft.CPlat.Extension' and 'cpu' in cg.path),
+                "The extension's CPU is being tracked")
 
             self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not be present".format(extension_slice_unit_file))
 
