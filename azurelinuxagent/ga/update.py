@@ -571,6 +571,7 @@ class UpdateHandler(object):
                 "Changing this value affects how often extensions are processed and status for the VM is reported. Too small a value may report the VM as unresponsive")
             log_if_int_changed_from_default("Extensions.InitialGoalStatePeriod", conf.get_initial_goal_state_period(),
                 "Changing this value affects how often extensions are processed and status for the VM is reported. Too small a value may report the VM as unresponsive")
+            log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_autoupdate_frequency())
             log_if_op_disabled("OS.EnableFirewall", conf.enable_firewall())
             log_if_op_disabled("Extensions.Enabled", conf.get_extensions_enabled())
 
