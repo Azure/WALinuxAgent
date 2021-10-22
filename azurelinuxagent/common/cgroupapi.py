@@ -274,7 +274,7 @@ class SystemdCgroupsApi(CGroupsApi):
         logger.info("Started extension in unit '{0}'", scope_name)
 
         try:
-            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name + ".slice")
+            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
 
             cpu_cgroup_mountpoint, _ = self.get_cgroup_mount_points()
 
