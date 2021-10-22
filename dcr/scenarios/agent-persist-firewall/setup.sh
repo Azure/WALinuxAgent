@@ -21,6 +21,9 @@ s=$(which systemctl)
 # Enable Firewall for all distros
 sed -i 's/OS.EnableFirewall=n/OS.EnableFirewall=y/g' /etc/waagent.conf
 
+# Restart agent to pick up the new conf
+systemctl restart waagent || systemctl restart walinuxagent
+
 # Ensure that the setup file exists
 file="wa*-network-setup.service"
 [ "$(ls /usr/lib/systemd/system/$file /lib/systemd/system/$file 2>/dev/null | wc -w)" -gt 0 ] && echo "agent-network-setup file exists" || echo "agent-network-setup file does not exists"
