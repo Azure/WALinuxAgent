@@ -197,22 +197,24 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     extension_slice_unit_file)))
 
     def test_remove_extension_slice_should_remove_unit_files(self):
-        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
-                                  'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-            CpuCgroup('Microsoft.CPlat.Extension',
-                      '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
-
         with self._get_cgroup_configurator() as configurator:
-            # get the paths to the mocked files
-            extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+            with patch("os.path.exists") as mock_path:
+                mock_path.return_value = True
+                # get the paths to the mocked files
+                extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
 
-            configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
+                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
+                                          'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
+                    CpuCgroup('Microsoft.CPlat.Extension',
+                              '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
-            tracked = CGroupsTelemetry._tracked
+                configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
 
-            self.assertFalse(
-                any(cg for cg in tracked.values() if cg.name == 'Microsoft.CPlat.Extension' and 'cpu' in cg.path),
-                "The extension's CPU is being tracked")
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertFalse(
+                    any(cg for cg in tracked.values() if cg.name == 'Microsoft.CPlat.Extension' and 'cpu' in cg.path),
+                    "The extension's CPU is being tracked")
 
             self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not be present".format(extension_slice_unit_file))
 
@@ -636,17 +638,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             }
         ]
 
-        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-            CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
-
         with self._get_cgroup_configurator() as configurator:
-            configurator.stop_tracking_extension_services_cgroups(service_list)
+            with patch("os.path.exists") as mock_path:
+                mock_path.return_value = True
+                CGroupsTelemetry.track_cgroup(CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
+                configurator.stop_tracking_extension_services_cgroups(service_list)
 
-        tracked = CGroupsTelemetry._tracked
+                tracked = CGroupsTelemetry._tracked
 
-        self.assertFalse(
-            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
-            "The extension service's CPU is being tracked")
+                self.assertFalse(
+                    any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+                    "The extension service's CPU is being tracked")
 
     def test_it_should_remove_extension_services_drop_in_files(self):
         service_list = [
@@ -675,9 +677,6 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
     def test_it_should_stop_tracking_unit_cgroups(self):
 
-        CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-            CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
-
         def side_effect(path):
             if path == '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service':
                 return True
@@ -686,13 +685,15 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         with self._get_cgroup_configurator() as configurator:
             with patch("os.path.exists") as mock_path:
                 mock_path.side_effect = side_effect
+                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 configurator.stop_tracking_unit_cgroups("extension.service")
 
-        tracked = CGroupsTelemetry._tracked
+                tracked = CGroupsTelemetry._tracked
 
-        self.assertFalse(
-            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
-            "The extension service's CPU is being tracked")
+                self.assertFalse(
+                    any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+                    "The extension service's CPU is being tracked")
 
     def test_check_processes_in_agent_cgroup_should_raise_a_cgroups_exception_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
         with self._get_cgroup_configurator() as configurator:

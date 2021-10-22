@@ -398,7 +398,7 @@ class CGroupConfigurator(object):
         def is_extension_resource_limits_setup_completed(self, extension_name):
             unit_file_install_path = systemd.get_unit_file_install_path()
             extension_slice_path = os.path.join(unit_file_install_path,
-                                                SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                                                SystemdCgroupsApi.get_extension_slice_name(extension_name) + ".slice")
             if os.path.exists(extension_slice_path):
                 return True
             return False
@@ -683,9 +683,9 @@ class CGroupConfigurator(object):
             TODO: Memory tracking
             """
             try:
-                extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                extension_slice_name = SystemdCgroupsApi.get_extension_slice_name(extension_name) + ".slice"
                 cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice',
-                                                    extension_slice_name + ".slice")
+                                                    extension_slice_name)
 
                 cpu_cgroup_mountpoint, _ = self._cgroups_api.get_cgroup_mount_points()
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
@@ -734,7 +734,7 @@ class CGroupConfigurator(object):
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
-                                                     SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name) + ".slice")
                 try:
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
@@ -749,7 +749,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
-                extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                extension_slice_name = SystemdCgroupsApi.get_extension_slice_name(extension_name) + ".slice"
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
                 if os.path.exists(extension_slice_path):
                     self.stop_tracking_extension_cgroups(extension_name)

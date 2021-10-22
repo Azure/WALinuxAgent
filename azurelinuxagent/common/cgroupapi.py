@@ -249,13 +249,13 @@ class SystemdCgroupsApi(CGroupsApi):
         return unit_not_found in stderr or scope_name not in stderr
 
     @staticmethod
-    def get_extension_cgroup_name(extension_name):
+    def get_extension_slice_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return EXTENSION_SLICE_PREFIX + "-" + extension_name.replace('-', '_')
 
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
-        extension_slice_name = self.get_extension_cgroup_name(extension_name)
+        extension_slice_name = self.get_extension_slice_name(extension_name)
         with self._systemd_run_commands_lock:
             process = subprocess.Popen(  # pylint: disable=W1509
                 "systemd-run --unit={0} --scope --slice={1}.slice {2}".format(scope, extension_slice_name, command),
