@@ -785,56 +785,87 @@ class WireClient(object):
             # in the goal state (e.g. report status)
             self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-            #
-            # TODO: This value should be set by querying the HostGAPlugin to check whether it supports Fast Track
-            #
-            fast_track_supported = True
-
-            use_fast_track = conf.get_enable_fast_track() and fast_track_supported
-
             if force_update:
                 logger.info("Forcing an update of the goal state..")
 
-            if force_update or \
-            self._goal_state is None or self._extensions_goal_state is None or \
-            self._goal_state.incarnation != goal_state.incarnation:
+            fetch_full_goal_state = force_update or \
+                self._goal_state is None or self._extensions_goal_state is None or \
+                self._goal_state.incarnation != goal_state.incarnation
+
+            #
+            # TODO: Today we always update self._extensions_goal_state using the ExtensionsConfig. After that, we
+            #       query the vmSettings only to compare them against the ExtensionsConfig (unless FastTrack is
+            #       disabled in waagent.conf)
+            #       When FastTrack is fully implemented, we will need instead to update self._extensions_goal_state
+            #       from the vmSettings and fallback to the ExtensionsConfig only if FastTrack is disabled or if it is
+            #       not supported by the HostGAPlugin.
+            #       Extensions processing is always based on self._extensions_goal_state, while self._extensions_goal_state_from_vm_settings
+            #       is currently held only for debugging purposes.
+            #
+            if fetch_full_goal_state:
                 goal_state.fetch_full_goal_state(self)
                 self._goal_state = goal_state
-                #
-                # TODO: When Fast Track is fully enabled we should get the ExtensionsGoalState from ExtensionsConfig only
-                #       when not using fast track
-                # if not use_fast_track:
                 if self._goal_state.extensions_config_uri is None:
                     self._extensions_goal_state = ExtensionsGoalState.create_empty()
                 else:
                     xml_text = self.fetch_config(self._goal_state.extensions_config_uri, self.get_header())
                     self._extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(goal_state.incarnation, xml_text)
-                # END TODO
                 updated = True
 
-            if use_fast_track:
+            if conf.get_enable_fast_track():
+                # TODO: We need to handle exceptions raised by this section, log them, and continue processing the goal
+                #       state. They should not bubble up outside of this function.
                 request_etag = None if force_update or self._extensions_goal_state_from_vm_settings is None else self._extensions_goal_state_from_vm_settings.get_id()
                 response_etag, vm_settings = self._fetch_vm_settings(request_etag)
-                if vm_settings is not None:
-                    # TODO: When Fast Track is fully enabled this should actually be assigned to self._extensions_goal_state
+                if vm_settings is not None:  # vmSettings is None when there has not been a new goal state, or the HostGAPlugin does not support FastTrack
                     self._extensions_goal_state_from_vm_settings = ExtensionsGoalState.create_from_vm_settings(response_etag, vm_settings)
                     updated = True
-                # TODO: When Fast Track is fully enabled this comparison should be removed
                 # If either goal state was updated, compare them
                 if updated:
                     ExtensionsGoalState.compare(self._extensions_goal_state, self._extensions_goal_state_from_vm_settings)
-                # END TODO
+                # END-TODO
 
+            # If either goal state was updated, save them
             if updated:
                 self._save_goal_state()
 
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
+    # def supports_fast_track(self):
+    #     if self._supports_fast_track is None:
+    #         correlation_id = str(uuid.uuid4())
+    #
+    #         try:
+    #             url, headers = self.get_vm_settings_request(correlation_id)
+    #             response = restutil.http_get(url, headers, max_retry=1)
+    #             if response.status == httpclient.OK:
+    #                 self._supports_fast_track = True
+    #                 HostPluginProtocol.log_vm_settings_message("The HostGAPlugin supports Fast Track [correlation ID: {0}]".format(correlation_id), True)
+    #             else:
+    #                 self._supports_fast_track = False
+    #                 if response.status == httpclient.NOT_FOUND:
+    #                     HostPluginProtocol.log_vm_settings_message("The HostGAPlugin does not support Fast Track [correlation ID: {0}]".format(correlation_id), False)
+    #                 else:
+    #                     HostPluginProtocol.log_vm_settings_message("Unexpected HTTP status [correlation ID: {0}]: {1}".format(correlation_id, response.status), False)
+    #             return True
+    #         except Exception as exception:
+    #             self._supports_fast_track = False
+    #             HostPluginProtocol.log_vm_settings_message("Error fetching vmSettings to check for Fast Track support [correlation ID: {0}]: {1}".format(correlation_id, ustr(exception)), False)
+    #             return False
+    #     return self._supports_fast_track
+
+
+    # @staticmethod
+    # def log_vm_settings_message(message, is_success):
+    #     logger.info("[{0}] {1}", WALAEventOperation.VmSettings, message)
+    #     add_event(op=WALAEventOperation.VmSettings, message=message, is_success=is_success, log_event=False)
+
     def _fetch_vm_settings(self, etag):
         """
         Queries the vmSettings from the HostGAPlugin using the given etag, returns a tuple of the response's etag and content.
-        If the vmSettings have not been updated for the given etag returns (None, None).
+        If the vmSettings have not been updated for the given etag, or if the HostGAPlugin does not support FastTrack,
+        returns (None, None).
         """
         correlation_id = str(uuid.uuid4())
 
@@ -843,31 +874,38 @@ class WireClient(object):
                 url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
                 if etag is not None:
                     headers['if-none-match'] = etag
-                return self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
+                return restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1)
 
             try:
-                vm_settings, response_headers = get_vm_settings()
-            except ResourceGoneError:
+                response = get_vm_settings()
+            except ResourceGoneError:  # retry after refreshing the HostGAPlugin
                 self.update_host_plugin_from_goal_state()
-                vm_settings, response_headers = get_vm_settings()
+                response = get_vm_settings()
 
-            # on error, fetch() logs the original exception and returns None as content
-            if vm_settings is None:
-                raise Exception("Failed to retrieve the extensions goal state (vmSettings), the error was reported previously in the log.")
+            if response.status == httpclient.NOT_MODIFIED:
+                return None, None
 
-            # The response includes an etag if and only if the VM settings change.
-            response_etag = None
-            for h in response_headers:
+            # TODO: Currently we use the vmSettings just to compare against ExtensionsConfig and we handle
+            #       Not Supported just as if there was no update in the vmSettings. Once FastTrack is
+            #       fully enabled, if the HostGAPlugin does not support FastTrack we actually need to
+            #       fallback to using the ExtensionsConfig
+            if response.status == httpclient.NOT_FOUND:  # the HostGAPlugin does not support FastTrack
+                return None, None
+            # END TODO
+
+            if response.status != httpclient.OK:
+                raise ProtocolError("GET [{0}]: {1}".format(url, restutil.read_response_error(response)))
+
+            for h in response.getheaders():
                 if h[0].lower() == 'etag':
                     response_etag = h[1]
                     break
-
-            if response_etag is None:
-                return None, None
+            else:  # since the vmSettings were updated, the response must include an etag
+                raise ProtocolError("The vmSettings do no include an Etag [correlation ID: {0}]".format(correlation_id))
 
             logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
-
-            return response_etag, vm_settings
+            response_content = self.decode_config(response.read())
+            return response_etag, response_content
 
         except Exception as exception:
             raise ProtocolError("Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, ustr(exception)))

@@ -62,6 +62,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         fileutil.rm_dirs(self.lib_dir)
 
     _TEST_EVENT_PROVIDER_ID = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+    _TEST_EVENT_OPERATION = "TEST_EVENT_OPERATION"
 
     @contextlib.contextmanager
     def _create_send_telemetry_events_handler(self, timeout=0.5, start_thread=True, batching_queue_limit=1):
@@ -312,7 +313,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
         event = TelemetryEvent(1, TestSendTelemetryEventsHandler._TEST_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(CURRENT_VERSION)))
-        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, WALAEventOperation.Unknown))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, True))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, 0))
@@ -343,9 +344,10 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
             TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
             # Validating the crafted message by the collect_and_send_events call.
-            self.assertEqual(1, len(telemetry_handler.event_calls), "Only 1 event should be sent")
+            extension_events = self._get_extension_events(telemetry_handler)
+            self.assertEqual(1, len(extension_events), "Only 1 event should be sent")
 
-            _, collected_event = telemetry_handler.event_calls[0]
+            collected_event = extension_events[0]
 
             # Some of those expected values come from the mock protocol and imds client set up during test initialization
             osutil = get_osutil()
@@ -355,23 +357,23 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             sample_message = '<Event id="1"><![CDATA[' \
                              '<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
                              '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
-                             '<Param Name="Operation" Value="Unknown" T="mt:wstr" />' \
+                             '<Param Name="Operation" Value="{1}" T="mt:wstr" />' \
                              '<Param Name="OperationSuccess" Value="True" T="mt:bool" />' \
                              '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
                              '<Param Name="Duration" Value="0" T="mt:uint64" />' \
-                             '<Param Name="GAVersion" Value="{1}" T="mt:wstr" />' \
+                             '<Param Name="GAVersion" Value="{2}" T="mt:wstr" />' \
                              '<Param Name="ContainerId" Value="c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2" T="mt:wstr" />' \
-                             '<Param Name="OpcodeName" Value="{2}" T="mt:wstr" />' \
-                             '<Param Name="EventTid" Value="{3}" T="mt:uint64" />' \
-                             '<Param Name="EventPid" Value="{4}" T="mt:uint64" />' \
-                             '<Param Name="TaskName" Value="{5}" T="mt:wstr" />' \
+                             '<Param Name="OpcodeName" Value="{3}" T="mt:wstr" />' \
+                             '<Param Name="EventTid" Value="{4}" T="mt:uint64" />' \
+                             '<Param Name="EventPid" Value="{5}" T="mt:uint64" />' \
+                             '<Param Name="TaskName" Value="{6}" T="mt:wstr" />' \
                              '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
                              '<Param Name="ExtensionType" Value="json" T="mt:wstr" />' \
                              '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
-                             '<Param Name="OSVersion" Value="{6}" T="mt:wstr" />' \
+                             '<Param Name="OSVersion" Value="{7}" T="mt:wstr" />' \
                              '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
-                             '<Param Name="RAM" Value="{7}" T="mt:uint64" />' \
-                             '<Param Name="Processors" Value="{8}" T="mt:uint64" />' \
+                             '<Param Name="RAM" Value="{8}" T="mt:uint64" />' \
+                             '<Param Name="Processors" Value="{9}" T="mt:uint64" />' \
                              '<Param Name="TenantName" Value="db00a7755a5e4e8a8fe4b19bc3b330c3" T="mt:wstr" />' \
                              '<Param Name="RoleName" Value="MachineRole" T="mt:wstr" />' \
                              '<Param Name="RoleInstanceName" Value="b61f93d0-e1ed-40b2-b067-22c243233448.MachineRole_IN_0" T="mt:wstr" />' \
@@ -380,7 +382,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="ResourceGroupName" Value="test-rg" T="mt:wstr" />' \
                              '<Param Name="VMId" Value="99999999-8888-7777-6666-555555555555" T="mt:wstr" />' \
                              '<Param Name="ImageOrigin" Value="2468" T="mt:uint64" />' \
-                             ']]></Event>'.format(AGENT_VERSION, CURRENT_AGENT, test_opcodename, test_eventtid,
+                             ']]></Event>'.format(AGENT_VERSION, TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION, CURRENT_AGENT, test_opcodename, test_eventtid,
                                                   test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
                                                   osutil.get_processor_cores()).encode('utf-8')
 
@@ -401,7 +403,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
             # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
             TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
-            self.assertEqual(4, len(telemetry_handler.event_calls))
+            self.assertEqual(4, len(self._get_extension_events(telemetry_handler)))
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_events_with_large_events(self, mock_lib_dir):
@@ -420,4 +422,8 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                 self.assertEqual(3, patch_periodic_warn.call_count)
 
                 # The send_event call should never be called as the events are larger than 2**16.
-                self.assertEqual(0, len(telemetry_handler.event_calls))
+                self.assertEqual(0, len(self._get_extension_events(telemetry_handler)))
+
+    @staticmethod
+    def _get_extension_events(telemetry_handler):
+        return [bytes for _, bytes in telemetry_handler.event_calls if TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION in bytes.decode()]

@@ -185,10 +185,10 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(return_value, host.is_available)
         self.assertEqual(should_initialize, host.is_initialized)
 
-        self.assertEqual(1, patch_event.call_count)
-        self.assertEqual('InitializeHostPlugin', patch_event.call_args[1]['op'])
+        init_events = [e for e in patch_event.call_args_list if e.kwargs['op'] == 'InitializeHostPlugin']
+        self.assertEqual(1, len(init_events), 'Expected exactly 1 InitializeHostPlugin event')
 
-        self.assertEqual(should_initialize, patch_event.call_args[1]['is_success'])
+        self.assertEqual(should_initialize, init_events[0].kwargs['is_success'])
         self.assertEqual(1, patch_report_health.call_count)
 
         self.assertEqual(should_report_healthy, patch_report_health.call_args[1]['is_healthy'])
@@ -667,8 +667,9 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                     patch_http_put.return_value = MockResponse(None, 201)
 
                     host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
-                    self.assertEqual(1, patch_http_get.call_count)
-                    self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
+
+                    get_versions = [args for args in patch_http_get.call_args_list if args[0][0] == hostplugin_versions_url]
+                    self.assertEqual(1, len(get_versions), "Expected exactly 1 GET on {0}".format(hostplugin_versions_url))
 
                     self.assertEqual(2, patch_http_put.call_count)
                     self.assertEqual(hostplugin_status_url, patch_http_put.call_args_list[0][0][0])
@@ -707,8 +708,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                     with self.assertRaises(HttpError):
                         host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
 
-                    self.assertEqual(1, patch_http_get.call_count)
-                    self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
+                    get_versions = [args for args in patch_http_get.call_args_list if args[0][0] == hostplugin_versions_url]
+                    self.assertEqual(1, len(get_versions), "Expected exactly 1 GET on {0}".format(hostplugin_versions_url))
 
                     self.assertEqual(1, patch_http_put.call_count)
                     self.assertEqual(hostplugin_status_url, patch_http_put.call_args[0][0])
@@ -748,8 +749,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                     with self.assertRaises(HttpError):
                         host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
 
-                    self.assertEqual(1, patch_http_get.call_count)
-                    self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
+                    get_versions = [args for args in patch_http_get.call_args_list if args[0][0] == hostplugin_versions_url]
+                    self.assertEqual(1, len(get_versions), "Expected exactly 1 GET on {0}".format(hostplugin_versions_url))
 
                     self.assertEqual(1, patch_http_put.call_count)
                     self.assertEqual(hostplugin_status_url, patch_http_put.call_args[0][0])
