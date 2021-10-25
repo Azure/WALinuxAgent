@@ -8,7 +8,7 @@ ConditionPathExists=/etc/waagent.conf
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python -u /usr/bin/waagent -daemon
+ExecStart=/usr/bin/python3 -u /usr/bin/waagent -daemon
 Restart=always
 RestartSec=5
 
