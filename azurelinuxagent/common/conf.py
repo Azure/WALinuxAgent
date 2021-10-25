@@ -184,7 +184,7 @@ __INTEGER_OPTIONS__ = {
     # versions of the Agent.
     #
     "Debug.CgroupCheckPeriod": 300,
-    "Debug.AgentCpuQuota": 100,
+    "Debug.AgentCpuQuota": 75,
     "Debug.EtpCollectionPeriod": 300
 }
 
@@ -542,7 +542,7 @@ def get_agent_cpu_quota(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AgentCpuQuota", 100)
+    return conf.get_int("Debug.AgentCpuQuota", 75)
 
 def get_cgroup_monitor_expiry_time (conf=__conf__):
     """
