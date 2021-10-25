@@ -1,0 +1,14 @@
+# This is a list of pip packages that will be installed on both the orchestrator and the test VM
+# Only add the common packages here, for more specific modules, add them to the scenario itself
+azure-identity
+azure-keyvault-keys
+azure-mgmt-compute>=22.1.0
+azure-mgmt-keyvault>=7.0.0
+azure-mgmt-network>=16.0.0
+azure-mgmt-resource>=15.0.0
+cryptography
+distro
+junitparser
+msrestazure
+pudb
+python-dotenv

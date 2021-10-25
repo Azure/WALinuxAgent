@@ -1,0 +1,33 @@
+parameters:
+  - name: scenarios
+    type: object
+
+  - name: distros
+    type: object
+
+  - name: rgPrefix
+    type: string
+
+jobs:
+  - job: "DeleteRG"
+    dependsOn: "Wait"
+    condition: always()
+    strategy:
+      matrix:
+        ${{ each distro in parameters.distros }}:
+          ${{ each scenario in parameters.scenarios }}:
+            ${{ format('{0}-{1}', distro.name, scenario) }}:
+              scenarioName: ${{ scenario }}
+              distroName: ${{ distro.name }}
+              rgName: ${{ format('{0}-{1}-{2}', parameters.rgPrefix, scenario, distro.name) }}
+      maxParallel: 50
+
+    steps:
+      - task: AzureResourceManagerTemplateDeployment@3
+        displayName: "Delete test RG"
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '$(azureConnection)'
+          subscriptionId: '$(subId)'
+          action: 'DeleteRG'
+          resourceGroupName: '$(rgName)'
