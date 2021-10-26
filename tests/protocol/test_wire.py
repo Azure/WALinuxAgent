@@ -1319,7 +1319,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(_ErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
 
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                # Reset the error reported and verify that additional errors are reported
+                # Reset the error reporter and verify that additional errors are reported
                 protocol.client._vm_settings_error_reporter._next_report = datetime.now()
 
                 for _ in range(3):

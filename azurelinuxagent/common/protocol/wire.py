@@ -825,11 +825,9 @@ class WireClient(object):
                     # If either goal state was updated, compare them
                     if updated:
                         ExtensionsGoalState.compare(self._extensions_goal_state, self._extensions_goal_state_from_vm_settings)
-
-                    self._vm_settings_error_reporter.report_summary()
                 except Exception as error:
                     self._vm_settings_error_reporter.report_error(ustr(error))
-                    self._vm_settings_error_reporter.report_summary()
+                self._vm_settings_error_reporter.report_summary()
 
             # If either goal state was updated, save them
             if updated:
