@@ -1,0 +1,104 @@
+parameters:
+  - name: scenarios
+    type: object
+    default:
+      - agent-bvt
+      - extension-telemetry-pipeline
+      - ext-seq-multiple-dependencies
+      - agent-persist-firewall
+
+  - name: distros
+    type: object
+    default:
+      - publisher: "Canonical"
+        offer: "UbuntuServer"
+        version: "latest"
+        sku: "18.04-LTS"
+        name: "ubuntu18"
+        # ToDo: Figure out a better way to incorporate distro setup scripts
+#        setupPath: "dcr/distros/install_pip_packages.sh"
+
+      - publisher: "Debian"
+        offer: "debian-10"
+        sku: "10"
+        version: "latest"
+        name: "deb10"
+##        setupPath: "dcr/distros/install_pip_packages.sh"
+#
+      - publisher: "OpenLogic"
+        offer: "CentOS"
+        sku: "7_9"
+        version: "latest"
+        name: "cent79"
+##
+      - publisher: "SUSE"
+        offer: "sles-15-sp2-basic"
+        sku: "gen1"
+        version: "latest"
+        name: "suse15"
+##
+      - publisher: "RedHat"
+        offer: "RHEL"
+        sku: "7-RAW"
+        version: "latest"
+        name: "rhel7Raw"
+
+# ToDo: Setup trigger for scheduled runs for develop
+trigger:
+  - develop
+
+variables:
+  vmName: 'dcrLinuxVM'
+  adminUsername: 'dcr'
+  SSH_PUBLIC: "$(sshPublicKey)" # set in GUI variables
+  rgNamePrefix: "dcr-v2-test$(Build.BuildId)"
+
+  # Cloud Data
+  azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+  subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+  location: 'East US 2'
+
+  # ToDo: Create new pipelines for Fairfax and Mooncake
+  fairfaxConn: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)'
+  fairfaxSub: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
+  fairfaxLocation: 'usgovarizona'
+
+  mooncakeConn: 'Guest Agent Mooncake ( 557a8daa-8ac8-4caa-88e4-3b6f939978b9 )'
+  mooncakeSub: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
+  mooncakeLocation: 'china north 2'
+
+pool: #larohra-dcrvmsspool
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: "Execute"
+    jobs:
+      - template: 'templates/setup-vm-and-execute-tests.yml'
+        parameters:
+          scenarios:
+            - ${{ parameters.scenarios }}
+          distros:
+            - ${{ parameters.distros }}
+          rgPrefix: $(rgNamePrefix)
+
+  - stage: "Cleanup"
+    condition: succeededOrFailed()
+    jobs:
+      - job: "Wait"
+        pool: server
+        # ToDo: Add a parameter to force wait before deleting the Test VMs
+        condition: in(stageDependencies.Execute.CreateVM.result, 'Failed', 'SucceededWithIssues')
+        steps:
+          - task: ManualValidation@0
+            timeoutInMinutes: 50
+            inputs:
+              notifyUsers: 'larohra'
+              onTimeout: 'resume'
+
+      - template: templates/arm-delete.yml
+        parameters:
+          scenarios:
+            - ${{ parameters.scenarios }}
+          distros:
+            - ${{ parameters.distros }}
+          rgPrefix: $(rgNamePrefix)

@@ -1,0 +1,304 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "adminUsername": {
+            "type": "string"
+        },
+        "adminPasswordOrKey": {
+            "type": "string"
+        },
+        "vmSize": {
+            "type": "string",
+            "defaultValue": "Standard_B2s"
+        },
+        "vmName": {
+            "type": "string"
+        },
+        "scenarioPrefix": {
+            "type": "string",
+            "defaultValue": "dcr"
+        },
+        "imagePublisher": {
+            "type": "string",
+            "defaultValue": "Canonical"
+        },
+        "imageOffer": {
+            "type": "string",
+            "defaultValue": "UbuntuServer"
+        },
+        "imageVersion": {
+            "type": "string",
+            "defaultValue": "latest"
+        },
+        "imageSku": {
+            "type": "string",
+            "defaultValue": "18.04-LTS"
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        },
+        "dnsLabelPrefix": {
+            "type": "string",
+            "defaultValue": "[toLower(format('simplelinuxvm-{0}', uniqueString(resourceGroup().id)))]",
+            "metadata": {
+                "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+            }
+        }
+    },
+    "variables": {
+        "nicName": "[concat(parameters('scenarioPrefix'),'Nic')]",
+        "vnetAddressPrefix": "10.130.0.0/16",
+        "subnetName": "[concat(parameters('scenarioPrefix'),'Subnet')]",
+        "subnetPrefix": "10.130.0.0/24",
+        "publicIPAddressName": "[concat(parameters('scenarioPrefix'),'PublicIp')]",
+        "lbIpName": "[concat(parameters('scenarioPrefix'),'PublicLbIp')]",
+        "lbIpId": "[resourceId('Microsoft.Network/publicIPAddresses', variables('lbIpName'))]",
+        "virtualNetworkName": "[concat(parameters('scenarioPrefix'),'Vnet')]",
+        "lbName": "[concat(parameters('scenarioPrefix'),'lb')]",
+        "bepoolName": "[concat(variables('lbName'), 'bepool')]",
+        "natpoolName": "[concat(variables('lbName'), 'natpool')]",
+        "feIpConfigName": "[concat(variables('lbName'), 'fepool', 'IpConfig')]",
+        "sshProbeName": "[concat(variables('lbName'), 'probe')]",
+        "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('virtualNetworkName'))]",
+        "subnetRef": "[concat(variables('vnetID'),'/subnets/',variables('subnetName'))]",
+        "lbId": "[resourceId('Microsoft.Network/loadBalancers', variables('lbName'))]",
+        "bepoolID": "[concat(variables('lbId'), '/backendAddressPools/', variables('bepoolName'))]",
+        "natpoolID": "[concat(variables('lbId'), '/inboundNatPools/', variables('natpoolName'))]",
+        "feIpConfigId": "[concat(variables('lbId'), '/frontendIPConfigurations/', variables('feIpConfigName'))]",
+        "sshProbeId": "[concat(variables('lbId'), '/probes/', variables('sshProbeName'))]",
+        "sshKeyPath": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
+        "networkSecurityGroupName": "networkSecurityGroup1"
+    },
+    "resources": [
+        {
+            "apiVersion": "2017-06-01",
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "name": "[variables('networkSecurityGroupName')]",
+            "location": "[parameters('location')]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "SSH",
+                        "properties": {
+                            "description": "Locks inbound down to jenkins ip range.",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 100,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2016-12-01",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('virtualNetworkName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkSecurityGroups/', variables('networkSecurityGroupName'))]"
+            ],
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vnetAddressPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnetPrefix')]",
+                            "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('lbIpName')]",
+            "location": "[parameters('location')]",
+            "apiVersion": "2017-04-01",
+            "properties": {
+                "publicIPAllocationMethod": "Dynamic",
+                "dnsSettings": {
+                    "domainNameLabel": "[parameters('dnsLabelPrefix')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "name": "[variables('lbName')]",
+            "location": "[parameters('location')]",
+            "apiVersion": "2016-03-30",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('lbIpName'))]"
+            ],
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "[variables('feIpConfigName')]",
+                        "properties": {
+                            "PublicIpAddress": {
+                                "id": "[variables('lbIpId')]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "[variables('bepoolName')]"
+                    }
+                ],
+                "inboundNatPools": [
+                    {
+                        "name": "[variables('natpoolName')]",
+                        "properties": {
+                            "FrontendIPConfiguration": {
+                                "Id": "[variables('feIpConfigId')]"
+                            },
+                            "BackendPort": 22,
+                            "Protocol": "tcp",
+                            "FrontendPortRangeStart": 3500,
+                            "FrontendPortRangeEnd": 4500
+                        }
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "ProbeRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('feIpConfigId')]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[variables('bepoolID')]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "idleTimeoutInMinutes": 5,
+                            "probe": {
+                                "id": "[variables('sshProbeId')]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "[variables('sshProbeName')]",
+                        "properties": {
+                            "protocol": "tcp",
+                            "port": 22,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "apiVersion": "2018-06-01",
+            "type": "Microsoft.Compute/virtualMachineScaleSets",
+            "name": "[parameters('vmName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+                "[concat('Microsoft.Network/loadBalancers/', variables('lbName'))]"
+            ],
+            "sku": {
+                "name": "[parameters('vmSize')]",
+                "tier": "Standard",
+                "capacity": 3
+            },
+            "properties": {
+                "virtualMachineProfile": {
+                    "extensionProfile": {},
+                    "osProfile": {
+                        "computerNamePrefix": "[parameters('vmName')]",
+                        "adminUsername": "[parameters('adminUsername')]",
+                        "linuxConfiguration": {
+                            "disablePasswordAuthentication": true,
+                            "ssh": {
+                                "publicKeys": [
+                                    {
+                                        "path": "[variables('sshKeyPath')]",
+                                        "keyData": "[parameters('adminPasswordOrKey')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "storageProfile": {
+                        "osDisk": {
+                            "osType": "Linux",
+                            "createOption": "FromImage"
+                        },
+                        "imageReference": {
+                            "publisher": "[parameters('imagePublisher')]",
+                            "offer": "[parameters('imageOffer')]",
+                            "sku": "[parameters('imageSku')]",
+                            "version": "[parameters('imageVersion')]"
+                        }
+                    },
+                    "networkProfile": {
+                        "healthProbe": {
+                            "id": "[variables('sshProbeId')]"
+                        },
+                        "networkInterfaceConfigurations": [
+                            {
+                                "name": "[variables('nicName')]",
+                                "properties": {
+                                    "primary": true,
+                                    "ipConfigurations": [
+                                        {
+                                            "name": "ipconfig1",
+                                            "properties": {
+                                                "primary": true,
+                                                "publicIPAddressConfiguration": {
+                                                    "name": "[variables('publicIPAddressName')]",
+                                                    "properties": {
+                                                        "idleTimeoutInMinutes": 15
+                                                    }
+                                                },
+                                                "subnet": {
+                                                    "id": "[variables('subnetRef')]"
+                                                },
+                                                "loadBalancerBackendAddressPools": [
+                                                    {
+                                                        "id": "[variables('bepoolID')]"
+                                                    }
+                                                ],
+                                                "loadBalancerInboundNatPools": [
+                                                    {
+                                                        "id": "[variables('natpoolID')]"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                },
+                "upgradePolicy": {
+                    "mode": "Automatic"
+                }
+            }
+        }
+    ]
+}
