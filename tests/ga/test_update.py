@@ -29,7 +29,7 @@ from azurelinuxagent.common.exception import ProtocolError, UpdateError, Resourc
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_VM_SETTINGS, URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
+from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
     VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler, VMStatus, ExtHandlerStatus, ExtensionStatus
@@ -47,7 +47,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
-    clear_singleton_instances, mock_sleep
+    clear_singleton_instances, mock_sleep, skip_if_predicate_true
 from tests.protocol import mockwiredata
 from tests.protocol.mocks import HttpRequestPredicates
 
@@ -2212,43 +2212,44 @@ class ReportStatusTestCase(AgentTestCase):
         finally:
             # clean up the static variable
             del ReportStatusTestCase._fail_goal_state_fetch.return_vals
-    
-    # def test_update_handler_should_report_status_for_cached_goal_state_on_failed_fetch(self):
-    #
-    #     try:
-    #         # Adds one return to the test above (test_upload_vm_status_even_on_failed_goal_state_fetch).
-    #         # The third (and last) return is to allow for the extensions to be processed once so that
-    #         # we will have extension status to test for.
-    #         ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None, None ]
-    #
-    #         with ReportStatusTestCase._mock_update_handler(iterations=2,
-    #             http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
-    #             update_handler.run(debug=True)
-    #
-    #             wire_data = update_handler.protocol_util.get_protocol().mock_wire_data
-    #             self.assertEqual(wire_data.call_counts['/StatusBlob'], 2,
-    #                 "Expected two status blobs to be uploaded, one for each iteration of the run loop.")
-    #
-    #             latest_status_blob_str = wire_data.status_blobs[-1]
-    #             latest_status_blob = json.loads(latest_status_blob_str)
-    #
-    #             ext_handler_statuses = latest_status_blob.get('aggregateStatus', {}).get("handlerAggregateStatus")
-    #             self.assertEqual(1, len(ext_handler_statuses), "Expected status for a single extension")
-    #
-    #             expectedHandlerInfo = {
-    #                 "handlerName": "OSTCExtensions.ExampleHandlerLinux",
-    #                 "handlerVersion": "1.0.0"
-    #             }
-    #
-    #             for key, expected_val in expectedHandlerInfo.items():
-    #                 actual_val = ext_handler_statuses[0].get(key)
-    #
-    #                 msg = "Extension information '{0}' did not match the provided extension.".format(key)
-    #                 self.assertEqual(actual_val, expected_val, msg)
-    #
-    #     finally:
-    #         # clean up the static variable
-    #         del ReportStatusTestCase._fail_goal_state_fetch.return_vals
+
+    @skip_if_predicate_true(lambda: True, "See TODO comment in test_update_handler_should_report_status_even_on_failed_goal_state_fetch")
+    def test_update_handler_should_report_status_for_cached_goal_state_on_failed_fetch(self):
+
+        try:
+            # Adds one return to the test above (test_upload_vm_status_even_on_failed_goal_state_fetch).
+            # The third (and last) return is to allow for the extensions to be processed once so that
+            # we will have extension status to test for.
+            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None, None, None ]
+
+            with ReportStatusTestCase._mock_update_handler(iterations=2,
+                http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
+                update_handler.run(debug=True)
+
+                wire_data = update_handler.protocol_util.get_protocol().mock_wire_data
+                self.assertEqual(wire_data.call_counts['/StatusBlob'], 2,
+                    "Expected two status blobs to be uploaded, one for each iteration of the run loop.")
+
+                latest_status_blob_str = wire_data.status_blobs[-1]
+                latest_status_blob = json.loads(latest_status_blob_str)
+
+                ext_handler_statuses = latest_status_blob.get('aggregateStatus', {}).get("handlerAggregateStatus")
+                self.assertEqual(1, len(ext_handler_statuses), "Expected status for a single extension")
+
+                expectedHandlerInfo = {
+                    "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                    "handlerVersion": "1.0.0"
+                }
+
+                for key, expected_val in expectedHandlerInfo.items():
+                    actual_val = ext_handler_statuses[0].get(key)
+
+                    msg = "Extension information '{0}' did not match the provided extension.".format(key)
+                    self.assertEqual(actual_val, expected_val, msg)
+
+        finally:
+            # clean up the static variable
+            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
 
     def test_report_status_should_log_errors_only_once_per_goal_state(self):
         update_handler = _create_update_handler()

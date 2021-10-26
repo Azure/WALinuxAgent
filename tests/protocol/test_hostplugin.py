@@ -32,9 +32,8 @@ from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates
+from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
-from tests.protocol.test_wire import MockResponse as TestWireMockResponse
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 
 
@@ -648,7 +647,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
     def test_ensure_health_service_called(self):
         host_plugin = self._init_host()
 
-        with patch("azurelinuxagent.common.utils.restutil.http_get", return_value=TestWireMockResponse(status_code=200, body=b'')) as patch_http_get:
+        with patch("azurelinuxagent.common.utils.restutil.http_get", return_value=MockHttpResponse(200)) as patch_http_get:
             with patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions") as patch_report_versions:
                 host_plugin.get_api_versions()
                 self.assertEqual(1, patch_http_get.call_count)
