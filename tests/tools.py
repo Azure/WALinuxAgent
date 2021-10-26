@@ -276,7 +276,7 @@ class AgentTestCase(unittest.TestCase):
 
         return None
 
-    def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):  # pylint: disable=keyword-arg-before-vararg
+    def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):
         try:
             function(*args, **kwargs)
         except Exception as e:
