@@ -100,10 +100,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     @staticmethod
     def _collect_events():
-        def append_event(event):
-            for p in event.parameters:
+        def append_event(e):
+            for p in e.parameters:
                 if p.name == 'Operation' and p.value == TestEvent._Operation or p.name == 'Category' and p.value == TestEvent._Category:
-                    event_list.append(event)
+                    event_list.append(e)
         event_list = []
         send_telemetry_events = MagicMock()
         send_telemetry_events.enqueue_event = MagicMock(wraps=append_event)

@@ -426,4 +426,4 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
     @staticmethod
     def _get_extension_events(telemetry_handler):
-        return [bytes for _, bytes in telemetry_handler.event_calls if TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION in bytes.decode()]
+        return [event_xml for _, event_xml in telemetry_handler.event_calls if TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION in event_xml.decode()]
