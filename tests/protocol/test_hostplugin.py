@@ -184,10 +184,10 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(return_value, host.is_available)
         self.assertEqual(should_initialize, host.is_initialized)
 
-        init_events = [e for e in patch_event.call_args_list if e.kwargs['op'] == 'InitializeHostPlugin']
+        init_events = [kwargs for _, kwargs in patch_event.call_args_list if kwargs['op'] == 'InitializeHostPlugin']
         self.assertEqual(1, len(init_events), 'Expected exactly 1 InitializeHostPlugin event')
 
-        self.assertEqual(should_initialize, init_events[0].kwargs['is_success'])
+        self.assertEqual(should_initialize, init_events[0]['is_success'])
         self.assertEqual(1, patch_report_health.call_count)
 
         self.assertEqual(should_report_healthy, patch_report_health.call_args[1]['is_healthy'])

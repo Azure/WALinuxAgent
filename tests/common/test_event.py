@@ -598,7 +598,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 GuestAgentGenericLogsSchema.Context3: ''
             })
 
-    @skip_if_predicate_true(lambda: True, "Enable this test when SEND_LOGS_TO_TELEMETRY is enabled")
+    @skip_if_predicate_true(lambda: True, "TODO: This test fails since the agent also generates other events; needs to be fixed")
     def test_add_log_event_should_always_create_events_when_forced(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
             create_event_function=lambda: add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event',

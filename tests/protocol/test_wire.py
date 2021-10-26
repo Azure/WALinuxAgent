@@ -1320,7 +1320,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
                 # Reset the error reporter and verify that additional errors are reported
-                protocol.client._vm_settings_error_reporter._next_report = datetime.now()
+                protocol.client._vm_settings_error_reporter._next_period = datetime.now()
 
                 for _ in range(3):
                     protocol.client.update_goal_state()

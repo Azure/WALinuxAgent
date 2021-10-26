@@ -826,6 +826,7 @@ class WireClient(object):
                     if updated:
                         ExtensionsGoalState.compare(self._extensions_goal_state, self._extensions_goal_state_from_vm_settings)
                 except Exception as error:
+                    # TODO: Once FastTrack is stable, these exceptions should be rare. Add a traceback to the error message at that point.
                     self._vm_settings_error_reporter.report_error(ustr(error))
                 self._vm_settings_error_reporter.report_summary()
 
@@ -1506,7 +1507,7 @@ class _ErrorReporter(object):
     def __init__(self, operation):
         self._operation = operation
         self._error_count = 0
-        self._next_report = datetime.now() + _ErrorReporter._Period
+        self._next_period = datetime.now() + _ErrorReporter._Period
 
     def report_error(self, error):
         self._error_count += 1
@@ -1515,8 +1516,8 @@ class _ErrorReporter(object):
             add_event(op=self._operation, message=error, is_success=False, log_event=False)
 
     def report_summary(self):
-        if datetime.now() >= self._next_report:
-            self._next_report = datetime.now() + _ErrorReporter._Period
+        if datetime.now() >= self._next_period:
+            self._next_period = datetime.now() + _ErrorReporter._Period
             if self._error_count > 0:
                 message = "{0} errors in the last period".format(self._error_count)
                 logger.info("[{0}] {1}", self._operation, message)

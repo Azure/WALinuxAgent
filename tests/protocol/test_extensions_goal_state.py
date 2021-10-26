@@ -16,7 +16,7 @@ class ExtensionsGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         from_extensions_config = ExtensionsGoalState.create_from_extensions_config("123", fileutil.read_file(os.path.join(data_dir, "hostgaplugin/ext_conf.xml")))
 
         from_vm_settings._required_features = ['FORCE_A_MISMATCH_FEATURE']
-        with self.assertRaisesRegex(GoalStateMismatchError, "MultipleExtensionsPerHandler.*!=.*FORCE_A_MISMATCH_FEATURE"):
+        with self.assertRaisesRegexCM(GoalStateMismatchError, "MultipleExtensionsPerHandler.*!=.*FORCE_A_MISMATCH_FEATURE"):
             ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
 
     def test_create_from_extensions_config_should_assume_block_when_blob_type_is_not_valid(self):
