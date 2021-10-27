@@ -25,11 +25,16 @@ from operator import attrgetter
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import ExtensionsConfigError, VmSettingsError
+from azurelinuxagent.common.exception import ExtensionsConfigError, VmSettingsError, AgentError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerList, ExtHandlerVersionUri, VMAgentManifest, \
     VMAgentManifestList, VMAgentManifestUri, InVMGoalStateMetaData, ExtensionState
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext, format_exception
+
+
+class GoalStateMismatchError(AgentError):
+    def __init__(self, msg):
+        super(GoalStateMismatchError, self).__init__(msg)
 
 
 class ExtensionsGoalState(object):
@@ -92,21 +97,20 @@ class ExtensionsGoalState(object):
 
         NOTE: The order of the two instances is important for the debug info to be logged correctly (ExtensionsConfig first, vmSettings second)
         """
-        def report_difference(attribute):
+        def raise_error(attribute):
             message = "Mismatch in ExtensionsConfig (incarnation {0}) and vmSettings (etag {1}).\nAttribute: {2}\n{3} != {4}".format(
                 from_extensions_config.get_id(), from_vm_settings.get_id(),
                 attribute,
                 attrgetter(attribute)(from_extensions_config), attrgetter(attribute)(from_vm_settings)
             )
-            logger.info("[GoalStateMismatch] {0}", message)
-            add_event(op=WALAEventOperation.GoalStateMismatch, is_success=False, message=message)
+            raise GoalStateMismatchError(message)
 
         if from_extensions_config.get_status_upload_blob() != from_vm_settings.get_status_upload_blob():
-            report_difference("_status_upload_blob")
+            raise_error("_status_upload_blob")
         if from_extensions_config.get_status_upload_blob_type() != from_vm_settings.get_status_upload_blob_type():
-            report_difference("_status_upload_blob_type")
+            raise_error("_status_upload_blob_type")
         if from_extensions_config.get_required_features() != from_vm_settings.get_required_features():
-            report_difference("_required_features")
+            raise_error("_required_features")
 
     def _do_common_validations(self):
         """
