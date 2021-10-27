@@ -103,9 +103,21 @@ class ExtensionDownloadError(ExtensionError):
     """
 
 
-class ExtensionConfigError(ExtensionError):
+class ExtensionsGoalStateError(ExtensionError):
     """
-    Error raised when extension config file is malformed
+    Error raised when the ExtensionsGoalState is malformed
+    """
+
+
+class ExtensionsConfigError(ExtensionsGoalStateError):
+    """
+    Error raised when the ExtensionsConfig is malformed
+    """
+
+
+class VmSettingsError(ExtensionsGoalStateError):
+    """
+    Error raised when the VmSettings are malformed
     """
 
 

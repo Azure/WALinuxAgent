@@ -27,6 +27,7 @@ import stat
 import tempfile
 import time
 import zipfile
+from distutils.version import LooseVersion
 from collections import defaultdict
 from functools import partial
 
@@ -42,7 +43,7 @@ from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
     add_periodic, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionError, ExtensionErrorCodes, \
-    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionConfigError, \
+    ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionsGoalStateError, \
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
@@ -620,7 +621,7 @@ class ExtHandlersHandler(object):
         try:
             # Ensure the extension config was valid
             if ext_handler_i.ext_handler.is_invalid_setting:
-                raise ExtensionConfigError(ext_handler_i.ext_handler.invalid_setting_reason)
+                raise ExtensionsGoalStateError(ext_handler_i.ext_handler.invalid_setting_reason)
 
             handler_state = ext_handler_i.ext_handler.properties.state
 
@@ -659,7 +660,7 @@ class ExtHandlersHandler(object):
                                                           operation=ext_handler_i.operation, message=err_msg)
             add_event(name=ext_name, version=ext_handler_i.ext_handler.properties.version, op=ext_handler_i.operation,
                       is_success=False, log_event=True, message=err_msg)
-        except ExtensionConfigError as error:
+        except ExtensionsGoalStateError as error:
             # Catch and report Invalid ExtensionConfig errors here to fail fast rather than timing out after 90 min
             err_msg = "Ran into config errors: {0}. \nPlease retry again as another operation with updated settings".format(
                 ustr(error))
@@ -762,7 +763,7 @@ class ExtHandlersHandler(object):
             else:
                 ext_handler_i.logger.info("Extension already disabled, not doing anything")
         else:
-            raise ExtensionConfigError(
+            raise ExtensionsGoalStateError(
                 "Unknown requested state for Extension {0}: {1}".format(extension.name, extension.state))
 
     @staticmethod
@@ -1037,7 +1038,7 @@ class ExtHandlersHandler(object):
         ext_handler_statuses = []
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
-        #  extension even if HandlerState == NotInstalled (Sample scenario: ExtensionConfigError, DecideVersionError, etc)
+        # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
         if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
@@ -1356,7 +1357,7 @@ class ExtHandlerInstance(object):
         # CRP can wrongfully request send a Multi-Config GoalState even if the Handler supports only Single Config.
         # Checking this only if HandlerState == Enable. In case of Uninstall, we dont care.
         if self.supports_multi_config and not self.load_manifest().supports_multiple_extensions():
-            raise ExtensionConfigError(
+            raise ExtensionsGoalStateError(
                 "Handler {0} does not support MultiConfig but CRP expects it, failing due to inconsistent data".format(
                     self.ext_handler.name))
 
@@ -1400,8 +1401,16 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
+        self.set_extension_resource_limits()
+
+    def set_extension_resource_limits(self):
+        extension_name = self.get_full_name()
+        # setup the resource limits for extension operations and it's services.
+        man = self.load_manifest()
+        resource_limits = man.get_resource_limits(extension_name, self.ext_handler.properties.version)
         CGroupConfigurator.get_instance().setup_extension_slice(
-            extension_name=self.get_full_name())
+            extension_name=extension_name)
+        CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
     def create_status_file_if_not_exist(self, extension, status, code, operation, message):
         _, status_path = self.get_status_file_path(extension)
@@ -1424,7 +1433,7 @@ class ExtHandlerInstance(object):
                 }
             ]
             # Create status directory if not exists. This is needed in the case where the Handler fails before even
-            # initializing the directories (ExtensionConfigError, Version deleted from PIR error, etc)
+            # initializing the directories (ExtensionsGoalStateError, Version deleted from PIR error, etc)
             if not os.path.exists(os.path.dirname(status_path)):
                 fileutil.mkdir(os.path.dirname(status_path), mode=0o700)
             self.logger.info("Creating a placeholder status file {0} with status: {1}".format(status_path, status))
@@ -1450,6 +1459,10 @@ class ExtHandlerInstance(object):
         env = {
             ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code
         }
+        # This check to call the setup if AzureMonitorLinuxAgent extension already installed and not called setup before
+        if self.is_azuremonitorlinuxagent(self.get_full_name()) and \
+                not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(self.get_full_name()):
+            self.set_extension_resource_limits()
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -1462,6 +1475,11 @@ class ExtHandlerInstance(object):
         if self.should_perform_multi_config_op(extension):
             # Only save extension state if MC supported
             self.__set_extension_state(extension, ExtensionState.Enabled)
+
+        # start tracking the extension services cgroup.
+        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.properties.version)
+        CGroupConfigurator.get_instance().start_tracking_extension_services_cgroups(
+            resource_limits.get_service_list())
 
     def _disable_extension(self, extension=None):
         self.set_operation(WALAEventOperation.Disable)
@@ -1516,6 +1534,14 @@ class ExtHandlerInstance(object):
         # failure/status using status file.
         self.set_operation(WALAEventOperation.UnInstall)
         man = self.load_manifest()
+
+        # stop tracking extension services cgroup.
+        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.properties.version)
+        CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
+            resource_limits.get_service_list())
+        CGroupConfigurator.get_instance().remove_extension_services_drop_in_files(
+            resource_limits.get_service_list())
+
         uninstall_cmd = man.get_uninstall_command()
         self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
         self.launch_command(uninstall_cmd, cmd_name="uninstall", extension=extension)
@@ -1542,6 +1568,7 @@ class ExtHandlerInstance(object):
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
             CGroupConfigurator.get_instance().remove_extension_slice(
                 extension_name=self.get_full_name())
+
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
@@ -2178,6 +2205,14 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     @staticmethod
+    def is_azuremonitorlinuxagent(extension_name):
+        cgroup_monitor_extension_name = conf.get_cgroup_monitor_extension_name()
+        if re.match(r"\A" + cgroup_monitor_extension_name, extension_name) is not None\
+            and datetime.datetime.utcnow() < datetime.datetime.strptime(conf.get_cgroup_monitor_expiry_time(), "%Y-%m-%d"):
+            return True
+        return False
+
+    @staticmethod
     def _read_status_file(ext_status_file):
         err_count = 0
         while True:
@@ -2291,6 +2326,59 @@ class HandlerManifest(object):
 
     def supports_multiple_extensions(self):
         return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+
+    def get_resource_limits(self, extension_name, str_version):
+        """
+        Placeholder values for testing and monitoring the monitor extension resource usage.
+        This is not effective after nov 30th.
+        """
+        if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
+            if LooseVersion(str_version) < LooseVersion("1.12"):
+                test_man = {
+                    "resourceLimits": {
+                        "services": [
+                            {
+                                "name": "mdsd.service",
+                                "path": "/lib/systemd/system"
+                            }
+                        ]
+                    }
+                }
+                return ResourceLimits(test_man.get('resourceLimits', None))
+            else:
+                test_man = {
+                    "resourceLimits": {
+                        "services": [
+                            {
+                                "name": "azuremonitoragent.service",
+                                "path": "/lib/systemd/system"
+                            }
+                        ]
+                    }
+                }
+                return ResourceLimits(test_man.get('resourceLimits', None))
+
+        return ResourceLimits(self.data.get('resourceLimits', None))
+
+
+class ResourceLimits(object):
+    def __init__(self, data):
+        self.data = data
+
+    def get_extension_slice_cpu_quota(self):
+        if self.data is not None:
+            return self.data.get('cpuQuota', None)
+        return None
+
+    def get_extension_slice_memory_quota(self):
+        if self.data is not None:
+            return self.data.get('memoryQuota', None)
+        return None
+
+    def get_service_list(self):
+        if self.data is not None:
+            return self.data.get('services', None)
+        return None
 
 
 class ExtensionStatusError(ExtensionError):

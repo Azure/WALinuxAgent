@@ -61,6 +61,10 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 '''MemoryAccounting=no
 '''),
 
+    MockCommand(r"^systemctl show extension\.service --property ControlGroup$",
+'''ControlGroup=/system.slice/extension.service
+'''),
+
     MockCommand(r"^systemctl daemon-reload", ""),
 
     MockCommand(r"^systemctl stop ([^\s]+)"),
@@ -93,7 +97,10 @@ class UnitFilePaths:
     slice = "/lib/systemd/system/walinuxagent.service.d/10-Slice.conf"
     cpu_accounting = "/lib/systemd/system/walinuxagent.service.d/11-CPUAccounting.conf"
     cpu_quota = "/lib/systemd/system/walinuxagent.service.d/12-CPUQuota.conf"
-
+    extension_service_cpu_accounting = '/lib/systemd/system/extension.service.d/11-CPUAccounting.conf'
+    extension_service_cpu_quota = '/lib/systemd/system/extension.service.d/12-CPUQuota.conf'
+    extension_service_memory_accounting = '/lib/systemd/system/extension.service.d/13-MemoryAccounting.conf'
+    extension_service_memory_limit = '/lib/systemd/system/extension.service.d/14-MemoryLimit.conf'
 
 @contextlib.contextmanager
 def mock_cgroup_environment(tmp_dir):

@@ -2,6 +2,11 @@
     "activityId": "b3f493e2-cab8-487d-820a-5718504f2f3f",
     "correlationId": "4f4939fb-35e6-411f-98f1-aeaf8796ed30",
     "extensionsLastModifiedTickCount": 637629365237217593,
+    "extensionGoalStatesSource": "Fabric",
+    "StatusUploadBlob": {
+        "statusBlobType": "BlockBlob",
+        "value": "https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+    },
     "inVMMetadata": {
         "subscriptionId": "a53f7094-a16c-47af-abe4-b05c05d0d79a",
         "resourceGroupName": "narrieta-rg",

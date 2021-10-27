@@ -579,9 +579,13 @@ class UpdateHandler(object):
                 "Changing this value affects how often extensions are processed and status for the VM is reported. Too small a value may report the VM as unresponsive")
             log_if_op_disabled("OS.EnableFirewall", conf.enable_firewall())
             log_if_op_disabled("Extensions.Enabled", conf.get_extensions_enabled())
+            log_if_op_disabled("AutoUpdate.Enabled", conf.get_autoupdate_enabled())
 
             if conf.enable_firewall():
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
+
+            if conf.get_autoupdate_enabled():
+                log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_autoupdate_frequency())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
                 log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))

@@ -1,0 +1,211 @@
+parameters:
+  - name: scenarios
+    type: object
+
+  - name: distros
+    type: object
+
+  - name: rgPrefix
+    type: string
+
+jobs:
+  - job: "CreateVM"
+    displayName: "Setup VM and Run Test"
+
+    strategy:
+      matrix:
+        ${{ each distro in parameters.distros }}:
+          ${{ each scenario in parameters.scenarios }}:
+            ${{ format('{0}-{1}', distro.name, scenario) }}:
+              scenarioName: ${{ scenario }}
+              imagePublisher: ${{ distro.publisher }}
+              imageOffer: ${{ distro.offer }}
+              imageSku: ${{ distro.sku }}
+              imageVersion: ${{ distro.version }}
+              distroName: ${{ distro.name }}
+              distroSetupPath: ${{ distro.setupPath }}
+              rgName: ${{ format('{0}-{1}-{2}', parameters.rgPrefix, scenario, distro.name) }}
+      maxParallel: 50
+
+    steps:
+      - task: InstallSSHKey@0
+        displayName: 'Install SSH Key to agent'
+        name: "InstallKey"
+        inputs:
+          knownHostsEntry: '$(SSH_PUBLIC)'
+          sshPublicKey: '$(SSH_PUBLIC)'
+          sshKeySecureFile: 'id_rsa'
+
+      - task: AzureKeyVault@2
+        displayName: "Fetch secrets from KV"
+        inputs:
+          azureSubscription: '$(azureConnection)'
+          KeyVaultName: 'dcrV2SPs'
+          SecretsFilter: '*'
+          RunAsPreJob: true
+
+      - task: UsePythonVersion@0
+        displayName: "Set host python version"
+        inputs:
+          versionSpec: '3.7'
+          addToPath: true
+          architecture: 'x64'
+
+      - script: |
+          rm -rf ~/.ssh/known_hosts
+          mkdir -p "$(Build.ArtifactStagingDirectory)/harvest"
+        displayName: "Clear known host keys and create directories"
+
+      - bash: $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
+        displayName: "Build Agent Zip"
+
+      - bash: $(Build.SourcesDirectory)/dcr/scripts/get_pypy.sh
+        displayName: "Get PyPy"
+
+      - bash: $(Build.SourcesDirectory)/dcr/scripts/move_scenario.sh
+        displayName: "Move scenarios"
+
+      - script: pip install -r $(Build.SourcesDirectory)/dcr/requirements.txt
+        displayName: "Install pip modules on orchestrator"
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/set_environment.py'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        displayName: "Set Environment"
+
+      - task: AzureResourceManagerTemplateDeployment@3
+        name: "deployVM"
+        timeoutInMinutes: 10
+        inputs:
+          deploymentScope: 'Resource Group'
+          azureResourceManagerConnection: '$(azureConnection)'
+          subscriptionId: '$(subId)'
+          action: 'Create Or Update Resource Group'
+          resourceGroupName: '$(rgName)'
+          location: '$(location)'
+          templateLocation: 'Linked artifact'
+          csmFile: '$(templateFile)'
+          csmParametersFile: '$(parametersFile)'
+          overrideParameters: '-vmName "$(vmName)" -adminUsername "$(adminUsername)" -adminPasswordOrKey "$(SSH_PUBLIC)" -imagePublisher "$(imagePublisher)" -imageOffer "$(imageOffer)" -imageSku $(imageSku) -imageVersion $(imageVersion)'
+          deploymentMode: 'Complete'
+          deploymentOutputs: 'armDeploymentOutput'
+
+      - task: AzureCLI@2
+        displayName: "Get VMIp"
+        inputs:
+          azureSubscription: '$(azureConnection)'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: |
+            az vm list-ip-addresses --resource-group $(rgName) --name $(vmName) --query "[].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv > $(Build.SourcesDirectory)/dcr/.vm_ips || echo "No VM Ips"
+            az vmss list-instance-public-ips --name $(vmName) --resource-group $(rgName) --query "[].ipAddress" --output tsv > $(Build.SourcesDirectory)/dcr/.vmss_ips || echo "No VMSS IPs"
+
+      - script: |
+          printenv > $(Build.SourcesDirectory)/dcr/.env
+
+          # This variable is needed in the Cleanup stage to determine whether to cleanup or not
+          echo '##vso[task.setvariable variable=armDeployed;isOutput=true]true'
+        displayName: 'Get all environment variables'
+        name: 'setOutputVars'
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: 'setup_vm'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        displayName: "Setup test VM"
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: '"sudo bash /home/$(adminUsername)/$(distroSetupPath)"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        condition: and(succeeded(), not(eq(variables.distroSetupPath, '')))
+        displayName: 'Execute Distro Setup on test VM'
+
+      - task: PythonScript@0
+        name: "runScenarioSetup"
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: '"sudo bash /home/$(adminUsername)/dcr/scenario/setup.sh"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        condition: and(succeeded(), eq(variables.runScenarioSetup, 'true'))
+        displayName: "Execute Scenario Setup on test VM"
+
+      # This task is needed to ensure we execute the following tasks even if a single one of them fails
+      - bash: echo "##vso[task.setvariable variable=executeTests]true"
+        displayName: "Start executing tests"
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scenario/run.host.py'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+          # Add all KeyVault secrets explicitly as they're not added by default to the environment vars
+          AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
+          AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
+          AZURE_TENANT_ID: $(AZURE-TENANT-ID)
+        displayName: "Run the test file on the Orchestrator"
+        condition: and(eq(variables.executeTests, 'true'), eq(variables.runHost, 'true'))
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: '"sudo PYTHONPATH=. $(pypyPath) dcr/scenario/run.py"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        condition: and(eq(variables.executeTests, 'true'), eq(variables.runPy, 'true'))
+        displayName: "Execute test suite on VM"
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: 'fetch_results'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        condition: eq(variables.executeTests, 'true')
+        displayName: 'Fetch test results'
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/generate_test_files.py'
+          arguments: '"$(Build.ArtifactStagingDirectory)/test-result*.xml"'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        condition: eq(variables.executeTests, 'true')
+        displayName: 'Merge test results'
+
+      - task: PublishTestResults@2
+        condition: eq(variables.executeTests, 'true')
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-result*.xml'
+          testRunTitle: 'Publish test results for $(scenarioName)-$(distroName)'
+
+      - task: PythonScript@0
+        inputs:
+          scriptSource: 'filePath'
+          scriptPath: '$(Build.SourcesDirectory)/dcr/scripts/orchestrator/execute_ssh_on_vm.py'
+          arguments: 'harvest'
+        env:
+          PYTHONPATH: $(Build.SourcesDirectory)
+        condition: and(failed(), eq(variables.executeTests, 'true'))
+        displayName: 'Fetch Harvest results'
+
+      - publish: $(Build.ArtifactStagingDirectory)/harvest
+        artifact: $(rgName)-harvest
+        condition: and(failed(), eq(variables.executeTests, 'true'))
+        displayName: 'Publish Harvest logs'
