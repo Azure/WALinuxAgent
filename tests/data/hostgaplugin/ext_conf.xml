@@ -1,81 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Extensions version="1.0.0.0" goalStateIncarnation="10"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
-  <GAFamilies>
-    <GAFamily>
-      <Name>Prod</Name>
-      <Uris>
-        <Uri>https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
-        <Uri>https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
-      </Uris>
-      <Version>2.4.0.1</Version>
-    </GAFamily>
-    <GAFamily>
-      <Name>Test</Name>
-      <Uris>
-        <Uri>https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml</Uri>
-        <Uri>https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml</Uri>
-      </Uris>
-      <Version>2.4.0.1</Version>
-    </GAFamily>
-  </GAFamilies>
-  <Location>CentralUSEUAP</Location>
-  <ServiceName>CRP</ServiceName>
-</GuestAgentExtension>
-<RequiredFeatures>
-  <RequiredFeature>
-    <Name>MultipleExtensionsPerHandler</Name>
-  </RequiredFeature>
-</RequiredFeatures>
-<StatusUploadBlob statusBlobType="BlockBlob">https://dcrcf5h3g6.blob.core.windows.net/$system/edpymvazsh.ba323e38-2145-4cb9-8cbf-778c7824bc9e.status?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=xYQPQ6IHQh%2b57h2OA6u4CUr85wzaxQH7WF2qHi3Hu98%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=w</StatusUploadBlob>
-<Plugins>
-  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.3" location="https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/708cdbbfb9ad4802ac80a012992930b1/Microsoft.Azure.Extensions_CustomScript_uscentraleuap_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/708cdbbfb9ad4802ac80a012992930b1/Microsoft.Azure.Extensions_CustomScript_uscentraleuap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
-  <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerLinux" version="1.2.0" location="https://umsavbvncrpzbnxmxzmr.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsawqtlsshtn5v2nfgh.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
-    <additionalLocations>
-      <additionalLocation>https://umsajbjtqrb3zqjvgb2z.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml</additionalLocation>
-    </additionalLocations>
-  </Plugin>
-</Plugins>
-<PluginSettings>
-  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.3">
-    <RuntimeSettings seqNo="0">{
-  "runtimeSettings": [
-    {
-      "handlerSettings": {
-        "publicSettings": {"commandToExecute":"echo '26c8d804-6d2e-4da1-ab5b-629ad733b3bb'"}
+<Extensions version="1.0.0.0" goalStateIncarnation="10">
+  <GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+    <GAFamilies>
+      <GAFamily>
+        <Name>Prod</Name>
+        <Uris>
+          <Uri>https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
+          <Uri>https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
+        </Uris>
+        <Version>2.5.0.2</Version>
+      </GAFamily>
+      <GAFamily>
+        <Name>Test</Name>
+        <Uris>
+          <Uri>https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml</Uri>
+          <Uri>https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml</Uri>
+        </Uris>
+        <Version>2.5.0.2</Version>
+      </GAFamily>
+    </GAFamilies>
+    <Location>CentralUSEUAP</Location>
+    <ServiceName>CRP</ServiceName>
+  </GuestAgentExtension>
+  <RequiredFeatures>
+    <RequiredFeature>
+      <Name>MultipleExtensionsPerHandler</Name>
+    </RequiredFeature>
+  </RequiredFeatures>
+  <StatusUploadBlob statusBlobType="BlockBlob">https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=w</StatusUploadBlob>
+  <Plugins>
+    <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.6" location="https://umsavwggj2v40kvqhc0w.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsanh4b5rfz0q0p4pwm.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+      <additionalLocations>
+        <additionalLocation>https://umsafwzhkbm1rfrhl0ws.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml</additionalLocation>
+      </additionalLocations>
+    </Plugin>
+    <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerLinux" version="1.2.0" location="https://umsavbvncrpzbnxmxzmr.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsawqtlsshtn5v2nfgh.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+      <additionalLocations>
+        <additionalLocation>https://umsajbjtqrb3zqjvgb2z.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml</additionalLocation>
+      </additionalLocations>
+    </Plugin>
+  </Plugins>
+  <PluginSettings>
+    <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.6">
+      <RuntimeSettings seqNo="0">
+        {
+          "runtimeSettings": [
+            {
+              "handlerSettings": {
+                "publicSettings": {"commandToExecute":"echo '09cd27e9-fbd6-48ad-be86-55f3783e0a23'"}
+              }
+            }
+          ]
       }
-    }
-  ]
-}</RuntimeSettings>
-  </Plugin>
-  <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerLinux" version="1.2.0">
-    <ExtensionRuntimeSettings seqNo="0" name="MCExt1" state="enabled">{
-  "runtimeSettings": [
-    {
-      "handlerSettings": {
-        "publicSettings": {"source":{"script":"echo '571bbcda-2992-4417-a65c-eaad1832c1f9'"}}
+      </RuntimeSettings>
+    </Plugin>
+    <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerLinux" version="1.2.0">
+      <ExtensionRuntimeSettings seqNo="0" name="MCExt1" state="enabled">
+        {
+          "runtimeSettings": [
+            {
+              "handlerSettings": {
+                "publicSettings": {"source":{"script":"echo '737fa9f1-e9bf-4c3e-ab1f-9e03cd0b5b40'"}}
+              }
+            }
+          ]
       }
-    }
-  ]
-}</ExtensionRuntimeSettings>
-    <ExtensionRuntimeSettings seqNo="0" name="MCExt2" state="enabled">{
-  "runtimeSettings": [
-    {
-      "handlerSettings": {
-        "publicSettings": {"source":{"script":"echo '58d6ac9d-9ef3-400a-99d7-1c3b5451eef6'"}}
+      </ExtensionRuntimeSettings>
+      <ExtensionRuntimeSettings seqNo="0" name="MCExt2" state="enabled">
+        {
+          "runtimeSettings": [
+            {
+              "handlerSettings": {
+                "publicSettings": {"source":{"script":"echo 'f6a0a405-c028-4e68-bd77-5d491fbbd9cf'"}}
+              }
+            }
+          ]
+      }</ExtensionRuntimeSettings>
+      <ExtensionRuntimeSettings seqNo="0" name="MCExt3" state="enabled">
+        {
+          "runtimeSettings": [
+            {
+              "handlerSettings": {
+                "publicSettings": {"source":{"script":"echo '338e316a-01bf-4513-8ae1-b603b09ad155'"}}
+              }
+            }
+          ]
       }
-    }
-  ]
-}</ExtensionRuntimeSettings>
-    <ExtensionRuntimeSettings seqNo="0" name="MCExt3" state="enabled">{
-  "runtimeSettings": [
-    {
-      "handlerSettings": {
-        "publicSettings": {"source":{"script":"echo '834cad38-9eec-483e-946d-f713cafc3da8'"}}
-      }
-    }
-  ]
-}</ExtensionRuntimeSettings>
-  </Plugin>
-</PluginSettings>
-<InVMArtifactsProfileBlob>https://dcrcf5h3g6.blob.core.windows.net/$system/edpymvazsh.ba323e38-2145-4cb9-8cbf-778c7824bc9e.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=y40xBuoKCIheR%2fzq2P7ocWSRmsWNB9TizIojGwm0A2A%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
-<InVMGoalStateMetaData inSvdSeqNo="10" createdOnTicks="637632862319659103" activityId="c86d8064-6f11-4145-8178-e0587e0584de" correlationId="6609dcb1-fccc-474a-9a59-8bd71ba06983" /></Extensions>
+      </ExtensionRuntimeSettings>
+    </Plugin>
+  </PluginSettings>
+  <InVMArtifactsProfileBlob>https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=mOMtcUyao4oNPMtcVhQjzMK%2bmGSJS3Y1MIKOJPjqzus%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
+  <InVMGoalStateMetaData inSvdSeqNo="10" createdOnTicks="637693267431616449" activityId="2e7f8b5d-f637-4721-b757-cb190d49b4e9" correlationId="1bef4c48-044e-4225-8f42-1d1eac1eb158" />
+</Extensions>

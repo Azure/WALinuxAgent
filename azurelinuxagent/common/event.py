@@ -88,7 +88,6 @@ class WALAEventOperation:
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
     GoalState = "GoalState"
-    GoalStateMismatch = "GoalStateMismatch"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"
@@ -125,6 +124,7 @@ class WALAEventOperation:
     Unknown = "Unknown"
     Upgrade = "Upgrade"
     Update = "Update"
+    VmSettings = "VmSettings"
 
 
 SHOULD_ENCODE_MESSAGE_LEN = 80

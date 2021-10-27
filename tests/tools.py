@@ -239,16 +239,18 @@ class AgentTestCase(unittest.TestCase):
         self.fail(msg)
 
     class _AssertRaisesContextManager(object):
-        def __init__(self, expected_exception_type, test_case):
+        def __init__(self, expected_exception_type, test_case, match_regex=None):
             self._expected_exception_type = expected_exception_type
             self._test_case = test_case
+            self._match_regex = match_regex
+            self.exception = None
 
         def __enter__(self):
             return self
 
         @staticmethod
-        def _get_type_name(type):  # pylint: disable=redefined-builtin
-            return type.__name__ if hasattr(type, "__name__") else str(type)
+        def _get_type_name(t):
+            return t.__name__ if hasattr(t, "__name__") else str(t)
 
         def __exit__(self, exception_type, exception, *_):
             if exception_type is None:
@@ -258,8 +260,11 @@ class AgentTestCase(unittest.TestCase):
                 raised = AgentTestCase._AssertRaisesContextManager._get_type_name(exception_type)
                 expected = AgentTestCase._AssertRaisesContextManager._get_type_name(self._expected_exception_type)
                 self._test_case.fail("Raised '{0}', but expected '{1}'".format(raised, expected))
-
-            self.exception = exception  # pylint: disable=attribute-defined-outside-init
+            if self._match_regex is not None:
+                exception_text = str(exception)
+                if re.search(self._match_regex, exception_text) is None:
+                    self._test_case.fail("The exception did not match the expected pattern. Expected: r'{0}' Got: '{1}'".format(self._match_regex, exception_text))
+            self.exception = exception
             return True
 
     def emulate_assertRaises(self, exception_type, function=None, *args, **kwargs):  # pylint: disable=keyword-arg-before-vararg
@@ -281,6 +286,12 @@ class AgentTestCase(unittest.TestCase):
                 self.fail("Expected exception {0} matching {1}.  Actual: {2}".format(
                     exception_type, regex, str(e)))
         self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
+
+    def assertRaisesRegexCM(self, exception_type, regex):
+        """
+        Similar to assertRaisesRegex, but returns a context manager (mostly needed for Python 2.*, which does not have a assertRaisesRegex)
+        """
+        return AgentTestCase._AssertRaisesContextManager(exception_type, self, match_regex=regex)
 
     def emulate_assertDictEqual(self, first, second, msg=None):
         def fail(message):

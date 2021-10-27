@@ -16,7 +16,7 @@
         },
         {
             "name": "Operation",
-            "value": "InitializeCGroups"
+            "value": "ThisIsATestEventOperation"
         },
         {
             "name": "OperationSuccess",
