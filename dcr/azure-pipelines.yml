@@ -47,6 +47,9 @@ parameters:
 trigger:
   - develop
 
+# no PR triggers
+pr: none
+
 variables:
   vmName: 'dcrLinuxVM'
   adminUsername: 'dcr'

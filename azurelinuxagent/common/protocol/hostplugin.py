@@ -142,9 +142,6 @@ class HostPluginProtocol(object):
         return return_val
 
     def get_vm_settings_request(self, correlation_id):
-        if not self.ensure_initialized():
-            raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
-
         url = URI_FORMAT_VM_SETTINGS.format(self.endpoint, HOST_PLUGIN_PORT)
 
         headers = {

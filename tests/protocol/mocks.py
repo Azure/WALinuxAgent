@@ -27,7 +27,7 @@ _USE_MOCK_WIRE_DATA_RE = re.compile(
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, fail_on_unknown_request=True):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True):
     """
     Creates a WireProtocol object that handles requests to the WireServer and the Host GA Plugin (i.e requests on the WireServer endpoint), plus
     some requests to storage (requests on the fake server 'mock-goal-state').
@@ -39,6 +39,9 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     function is interpreted similarly to the "return_value" argument of patch(): if it is an exception the exception is raised or, if it is
     any object other than None, the value is returned by the mock. If the handler function returns None the call is handled using the mock
     wireserver data or passed to the original to restutil.http_request.
+
+    The 'do_not_mock' lambda can be used to skip the mocks for specific requests; if the lambda returns True, the mocks won't be applied and the
+    original common.utils.restutil.http_request will be invoked instead.
 
     The returned protocol object maintains a list of "tracked" urls. When a handler function returns a value than is not None the url for the
     request is automatically added to the tracked list. The handler function can add other items to this list using the track_url() method on
@@ -73,6 +76,10 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     original_http_request = restutil.http_request
 
     def http_request(method, url, data, **kwargs):
+        # call the original resutil.http_request if the request should be mocked
+        if protocol.do_not_mock(method, url):
+            return original_http_request(method, url, data, **kwargs)
+
         # if there is a handler for the request, use it
         handler = None
         if method == 'GET':
@@ -138,6 +145,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     protocol.get_tracked_urls = lambda: tracked_urls
     protocol.set_http_handlers = lambda http_get_handler=None, http_post_handler=None, http_put_handler=None:\
         http_handlers(get=http_get_handler, post=http_post_handler, put=http_put_handler)
+    protocol.do_not_mock = do_not_mock
 
     # go do it
     try:
@@ -214,12 +222,14 @@ class HttpRequestPredicates(object):
 
 
 class MockHttpResponse:
-    def __init__(self, status, body=b''):
+    def __init__(self, status, body=b'', headers=None, reason=None):
         self.body = body
         self.status = status
+        self.headers = [] if headers is None else headers
+        self.reason = reason
 
     def read(self, *_):
         return self.body
 
     def getheaders(self):
-        return {}
+        return self.headers
