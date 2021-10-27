@@ -39,6 +39,7 @@ DefaultDependencies=no
 Before=slices.target
 """
 _VMEXTENSIONS_SLICE = EXTENSION_SLICE_PREFIX + ".slice"
+_AZURE_VMEXTENSIONS_SLICE = AZURE_SLICE + "/" + _VMEXTENSIONS_SLICE
 _VMEXTENSIONS_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Extensions
@@ -398,7 +399,7 @@ class CGroupConfigurator(object):
         def is_extension_resource_limits_setup_completed(self, extension_name):
             unit_file_install_path = systemd.get_unit_file_install_path()
             extension_slice_path = os.path.join(unit_file_install_path,
-                                                SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                                                SystemdCgroupsApi.get_extension_slice_name(extension_name))
             if os.path.exists(extension_slice_path):
                 return True
             return False
@@ -652,7 +653,7 @@ class CGroupConfigurator(object):
 
         def start_tracking_unit_cgroups(self, unit_name):
             """
-            TODO: Memory tracking
+            TODO: Start tracking Memory Cgroups
             """
             try:
                 cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
@@ -667,13 +668,31 @@ class CGroupConfigurator(object):
 
         def stop_tracking_unit_cgroups(self, unit_name):
             """
-            TODO: Memory tracking
+            TODO: remove Memory cgroups from tracked list.
             """
             try:
                 cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
-                if cpu_cgroup_path is not None and os.path.exists(cpu_cgroup_path):
+                if cpu_cgroup_path is not None:
                     CGroupsTelemetry.stop_tracking(CpuCgroup(unit_name, cpu_cgroup_path))
+
+            except Exception as exception:
+                logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
+
+        def stop_tracking_extension_cgroups(self, extension_name):
+            """
+            TODO: remove extension Memory cgroups from tracked list
+            """
+            try:
+                extension_slice_name = SystemdCgroupsApi.get_extension_slice_name(extension_name)
+                cgroup_relative_path = os.path.join(_AZURE_VMEXTENSIONS_SLICE,
+                                                    extension_slice_name)
+
+                cpu_cgroup_mountpoint, _ = self._cgroups_api.get_cgroup_mount_points()
+                cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
+
+                if cpu_cgroup_path is not None:
+                    CGroupsTelemetry.stop_tracking(CpuCgroup(extension_name, cpu_cgroup_path))
 
             except Exception as exception:
                 logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
@@ -716,7 +735,7 @@ class CGroupConfigurator(object):
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
-                                                     SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
@@ -731,10 +750,10 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
-                extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                extension_slice_name = SystemdCgroupsApi.get_extension_slice_name(extension_name)
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
                 if os.path.exists(extension_slice_path):
-                    self.stop_tracking_unit_cgroups(extension_name)
+                    self.stop_tracking_extension_cgroups(extension_name)
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
                 # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
                 try:
