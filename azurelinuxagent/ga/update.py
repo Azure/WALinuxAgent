@@ -999,7 +999,7 @@ class UpdateHandler(object):
         #
         def _execute_run_command(command):
             try:
-                shellutil.run_command(command, log_error=True)
+                shellutil.run_command(command)
                 return True
             except CommandError as e:
                 # return code 1 is expected while using the check command. Raise if encounter any other return code
