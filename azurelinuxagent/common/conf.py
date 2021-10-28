@@ -136,7 +136,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
-    "Debug.EnableFastTrack": False,
+    "Debug.EnableFastTrack": True,
 }
 
 
@@ -159,7 +159,7 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
-    "Debug.CgroupMonitorExpiryTime": "2021-11-30",
+    "Debug.CgroupMonitorExpiryTime": "2022-01-31",
     "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
 }
 
@@ -551,7 +551,7 @@ def get_cgroup_monitor_expiry_time (conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get("Debug.CgroupMonitorExpiryTime", "2021-11-30")
+    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-01-31")
 
 def get_cgroup_monitor_extension_name (conf=__conf__):
     """
@@ -568,7 +568,7 @@ def get_enable_fast_track(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableFastTrack", False)
+    return conf.get_switch("Debug.EnableFastTrack", True)
 
 
 def get_etp_collection_period(conf=__conf__):
