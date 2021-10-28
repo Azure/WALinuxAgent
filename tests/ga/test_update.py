@@ -1324,7 +1324,7 @@ class TestUpdate(UpdateTestCase):
         self._test_run()
 
     def test_run_stops_if_update_available(self):
-        self.update_handler._upgrade_available = Mock(return_value=True)
+        self.update_handler._check_and_download_agent_if_upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=0, enable_updates=True)
 
     def test_run_stops_if_orphaned(self):
@@ -1336,7 +1336,7 @@ class TestUpdate(UpdateTestCase):
         self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
-        self.update_handler._upgrade_available = Mock(side_effect=Exception)
+        self.update_handler._check_and_download_agent_if_upgrade_available = Mock(side_effect=Exception)
         self._test_run(invocations=1, calls=0, enable_updates=True)
         self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
 
@@ -1407,7 +1407,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._upgrade_available(protocol, base_version=base_version)
+        return self.update_handler._check_and_download_agent_if_upgrade_available(protocol, base_version=base_version)
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
@@ -1420,7 +1420,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
-                self.assertFalse(self.update_handler._upgrade_available(protocol, base_version=CURRENT_VERSION))
+                self.assertFalse(self.update_handler._check_and_download_agent_if_upgrade_available(protocol, base_version=CURRENT_VERSION))
                 self.assertEqual(0, mock_logger.call_count)
 
     def test_upgrade_available_includes_old_agents(self):
@@ -1504,7 +1504,7 @@ class TestUpdate(UpdateTestCase):
         before an update is found, this test attempts to ensure that
         behavior never changes.
         """
-        self.update_handler._upgrade_available = Mock(return_value=True)
+        self.update_handler._check_and_download_agent_if_upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=0, enable_updates=True, sleep_interval=(300,))
 
     @patch("azurelinuxagent.common.logger.info")
@@ -2046,7 +2046,7 @@ def _create_update_handler():
     Creates an UpdateHandler in which agent updates are mocked as a no-op.
     """
     update_handler = get_update_handler()
-    update_handler._upgrade_available = Mock(return_value=False)
+    update_handler._check_and_download_agent_if_upgrade_available = Mock(return_value=False)
     return update_handler
 
 @contextlib.contextmanager

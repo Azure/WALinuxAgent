@@ -120,6 +120,14 @@ class ExtensionsSummary(object):
         return ustr(self.summary)
 
 
+class AgentUpgradeType(object):
+    """
+    Enum for different modes of Agent Upgrade
+    """
+    Hotfix = "Hotfix"
+    Normal = "Normal"
+
+
 def get_update_handler():
     return UpdateHandler()
 
@@ -132,7 +140,11 @@ class UpdateHandler(object):
         self.protocol_util = get_protocol_util()
 
         self._is_running = True
+
+        # Member variables to keep track of the Agent AutoUpgrade
         self.last_attempt_time = None
+        self._last_hotfix_upgrade_time = None
+        self._last_normal_upgrade_time = None
 
         self.agents = []
 
@@ -430,13 +442,14 @@ class UpdateHandler(object):
             self._report_status(exthandlers_handler, incarnation_changed=False)
             return
 
-        if self._upgrade_available(protocol):
+        if self._check_and_download_agent_if_upgrade_available(protocol):
             available_agent = self.get_latest_agent()
+            # Legacy behavior: The current agent can become unavailable and needs to be reverted.
+            # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
             if available_agent is None:
-                reason = "Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT)
-            else:
-                reason = "Agent {0} discovered update {1} -- exiting".format(CURRENT_AGENT, available_agent.name)
-            raise ExitException(reason)
+                raise ExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
+
+        self.__upgrade_agent_if_permitted()
 
         incarnation = protocol.get_incarnation()
 
@@ -818,15 +831,20 @@ class UpdateHandler(object):
                 str(e))
         return
 
-    def _upgrade_available(self, protocol, base_version=CURRENT_VERSION):
+    def _check_and_download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
+        """
+        This function periodically (1hr by default) checks if new Agent upgrade is available and downloads it on filesystem if it is.
+        rtype: Boolean
+        return: True if current agent is no longer available or an agent with a higher version number is available
+        else False
+        """
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
             return False
 
         now = time.time()
         if self.last_attempt_time is not None:
-            next_attempt_time = self.last_attempt_time + \
-                                conf.get_autoupdate_frequency()
+            next_attempt_time = self.last_attempt_time + conf.get_autoupdate_frequency()
         else:
             next_attempt_time = now
         if next_attempt_time > now:
@@ -985,6 +1003,52 @@ class UpdateHandler(object):
             is_success=is_success,
             message=msg,
             log_event=False)
+
+    def __upgrade_agent_if_permitted(self):
+        """
+        Check every 4hrs for a Hotfix Upgrade and 24 hours for a Normal upgrade and upgrade the agent if available.
+        raises: ExitException when a new upgrade is available in the relevant time window, else returns
+        """
+
+        def get_next_process_time(last_val, frequency):
+            return now if last_val is None else last_val + frequency
+
+        now = time.time()
+        next_hotfix_time = get_next_process_time(self._last_hotfix_upgrade_time, conf.get_hotfix_upgrade_frequency())
+        next_normal_time = get_next_process_time(self._last_normal_upgrade_time, conf.get_normal_upgrade_frequency())
+
+        # Not permitted to update yet
+        if next_hotfix_time > now and next_normal_time > now:
+            return
+
+        # Update the last upgrade check time even if no new agent is available for upgrade
+        self._last_hotfix_upgrade_time = now if next_hotfix_time <= now else self._last_hotfix_upgrade_time
+        self._last_normal_upgrade_time = now if next_normal_time <= now else self._last_normal_upgrade_time
+
+        available_agent = self.get_latest_agent()
+        if available_agent is None:
+            logger.verbose("No agent upgrade discovered")
+            return
+
+        # We follow semantic versioning for the agent, if <Major>.<Minor> is same, then <Patch>.<Build> has changed.
+        # In this case, we consider it as a Hotfix upgrade. Else we consider it a Normal upgrade.
+        is_hotfix_upgrade = available_agent.version.major == CURRENT_VERSION.major and available_agent.version.minor == CURRENT_VERSION.minor
+        upgrade_message = "{0} Agent upgrade discovered, updating to {1} -- exiting"
+
+        if is_hotfix_upgrade and next_hotfix_time <= now:
+            raise ExitException(upgrade_message.format(AgentUpgradeType.Hotfix, available_agent.name))
+        elif (not is_hotfix_upgrade) and next_normal_time <= now:
+            raise ExitException(upgrade_message.format(AgentUpgradeType.Normal, available_agent.name))
+
+        # Not upgrading the agent as the times don't match for their relevant upgrade, logging it appropriately
+        if is_hotfix_upgrade:
+            upgrade_type, next_time = AgentUpgradeType.Hotfix, next_hotfix_time
+        else:
+            upgrade_type, next_time = AgentUpgradeType.Normal, next_normal_time
+
+        logger.info("Discovered new {0} upgrade {1}; Will upgrade on or after {2}".format(
+            upgrade_type, available_agent.name,
+            datetime.utcfromtimestamp(next_time).strftime(logger.Logger.LogTimeFormatInUTC)))
 
 
 class GuestAgent(object):
