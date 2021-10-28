@@ -134,19 +134,19 @@ class AddFirewallRules(object):
     __CHECK_COMMAND = "-C"
 
     @staticmethod
-    def return_append_command():
+    def get_append_command():
         return AddFirewallRules.__APPEND_COMMAND
 
     @staticmethod
-    def return_insert_command():
+    def get_insert_command():
         return AddFirewallRules.__INSERT_COMMAND
 
     @staticmethod
-    def return_delete_command():
+    def get_delete_command():
         return AddFirewallRules.__DELETE_COMMAND
 
     @staticmethod
-    def return_check_command():
+    def get_check_command():
         return AddFirewallRules.__CHECK_COMMAND
 
     @staticmethod

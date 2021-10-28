@@ -105,15 +105,15 @@ def _get_firewall_delete_conntrack_accept_command(wait, destination):
 
 
 def _get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
-    return AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.return_delete_command(), destination, owner_uid)
+    return AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.get_delete_command(), destination, owner_uid)
 
 
 def _get_firewall_delete_conntrack_drop_command(wait, destination):
-    return AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.return_delete_command(), destination)
+    return AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.get_delete_command(), destination)
 
 
 def _get_firewall_delete_accept_dns_tcp_command(wait, destination):
-    return AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.return_delete_command(), destination)
+    return AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.get_delete_command(), destination)
 
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
