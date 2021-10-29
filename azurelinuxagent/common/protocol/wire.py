@@ -889,6 +889,8 @@ class WireClient(object):
             response_content = self.decode_config(response.read())
             return response_etag, response_content
 
+        except HttpError:
+            raise
         except ProtocolError:
             raise
         except Exception as exception:
@@ -1508,11 +1510,12 @@ class _ErrorReporter(object):
         self._operation = operation
         self._error_count = 0
         self._next_period = datetime.now() + _ErrorReporter._Period
+        self._log_message_prefix = "[{0}] [Informational only, the Agent will continue normal operation]".format(self._operation)
 
     def report_error(self, error):
         self._error_count += 1
         if self._error_count <= _ErrorReporter._MaxErrors:
-            logger.info("[{0}] {1}", self._operation, error)
+            logger.info("{0} {1}", self._log_message_prefix, error)
             add_event(op=self._operation, message=error, is_success=False, log_event=False)
 
     def report_summary(self):
@@ -1520,6 +1523,6 @@ class _ErrorReporter(object):
             self._next_period = datetime.now() + _ErrorReporter._Period
             if self._error_count > 0:
                 message = "{0} errors in the last period".format(self._error_count)
-                logger.info("[{0}] {1}", self._operation, message)
+                logger.info("{0} {1}", self._log_message_prefix, message)
                 add_event(op=self._operation, message=message, is_success=False, log_event=False)
                 self._error_count = 0
