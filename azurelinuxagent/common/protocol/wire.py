@@ -889,10 +889,10 @@ class WireClient(object):
             response_content = self.decode_config(response.read())
             return response_etag, response_content
 
-        except HttpError:
-            raise
         except ProtocolError:
             raise
+        except HttpError as http_error:
+            raise Exception("{0} [correlation ID: {1} eTag: {2}]".format(ustr(http_error), correlation_id, etag))
         except Exception as exception:
             error = textutil.format_exception(exception)  # since this is a generic error, we format the exception to include the traceback
             raise Exception("Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, error))

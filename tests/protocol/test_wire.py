@@ -1272,21 +1272,21 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         def test_error_in_http_request(test_case, mock_response, expected_error):
             def do_mock_request():
                 with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-                    def http_get_handler(url, *_, **__):
-                        if self.is_host_plugin_vm_settings_request(url):
-                            if isinstance(mock_response, Exception):
-                                raise mock_response
-                            return mock_response
-                        return None
-                    protocol.set_http_handlers(http_get_handler=http_get_handler)
+                    protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
 
-                    protocol.client.update_goal_state()
+                    def http_get_vm_settings(_method, _host, _relative_url, **kwargs):
+                        if isinstance(mock_response, Exception):
+                            raise mock_response
+                        return mock_response
+
+                    with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
+                        protocol.client.update_goal_state()
 
             assert_no_exception(test_case, do_mock_request, expected_error)
         #
         # We test errors different kind of errors; none of them should make update_protocol raise an exception, but all of them should be reported
         #
-        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "[Internal error in HostGAPlugin]")  # HostGAPlugin uses 502 for internal errors
+        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "Status Code 502")  # HostGAPlugin uses 502 for internal errors
         test_error_in_http_request("Arbitrary error in the request (BAD_REQUEST)", MockHttpResponse(httpclient.BAD_REQUEST), "[HTTP Failed] [400: None]")
         test_error_in_http_request("ProtocolError during the request", ProtocolError("GENERIC PROTOCOL ERROR"), "GENERIC PROTOCOL ERROR")
         test_error_in_http_request("Generic error in the request", Exception("GENERIC REQUEST ERROR"), "GENERIC REQUEST ERROR")
