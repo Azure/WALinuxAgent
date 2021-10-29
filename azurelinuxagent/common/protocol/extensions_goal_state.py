@@ -105,10 +105,12 @@ class ExtensionsGoalState(object):
             )
             raise GoalStateMismatchError(message)
 
-        if from_extensions_config.get_status_upload_blob() != from_vm_settings.get_status_upload_blob():
-            raise_error("_status_upload_blob")
-        if from_extensions_config.get_status_upload_blob_type() != from_vm_settings.get_status_upload_blob_type():
-            raise_error("_status_upload_blob_type")
+        # TODO: HostGAPlugin 112 does not include the status blob; enable these checks once we can ensure a newer version is available. Also enable parsing
+        #       in the _ExtensionsGoalStateFromVmSettings.compare() method
+        # if from_extensions_config.get_status_upload_blob() != from_vm_settings.get_status_upload_blob():
+        #     raise_error("_status_upload_blob")
+        # if from_extensions_config.get_status_upload_blob_type() != from_vm_settings.get_status_upload_blob_type():
+        #     raise_error("_status_upload_blob_type")
         if from_extensions_config.get_required_features() != from_vm_settings.get_required_features():
             raise_error("_required_features")
 
@@ -546,7 +548,9 @@ class _ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     def _parse_vm_settings(self, json_text):
         vm_settings = _CaseFoldedDict.from_dict(json.loads(json_text))
-        self._parse_status_upload_blob(vm_settings)
+        # TODO: HostGAPlugin 112 does not include the status blob; enable parsing once we can ensure a newer version is available. Also enable the check on
+        #       the ExtensionsGoalState.compare() method
+        # self._parse_status_upload_blob(vm_settings)
         self._parse_required_features(vm_settings)
         # TODO: Parse all atttributes
 
