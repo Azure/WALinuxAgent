@@ -1274,7 +1274,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
                     protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
 
-                    def http_get_vm_settings(_method, _host, _relative_url, **kwargs):
+                    def http_get_vm_settings(_method, _host, _relative_url, **_):
                         if isinstance(mock_response, Exception):
                             raise mock_response
                         return mock_response
