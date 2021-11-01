@@ -43,8 +43,9 @@ class ExtensionsGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json"))
         vm_settings = ExtensionsGoalState.create_from_vm_settings("123", vm_settings_text)
 
-        self.assertEqual("https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w", vm_settings.get_status_upload_blob(), 'statusUploadBlob.value was not parsed correctly')
-        self.assertEqual("BlockBlob", vm_settings.get_status_upload_blob_type(), 'statusBlobType was not parsed correctly')
+        # TODO: HostGAPlugin 112 does not include the status blob; see TODO in ExtensionsGoalState
+        # self.assertEqual("https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w", vm_settings.get_status_upload_blob(), 'statusUploadBlob.value was not parsed correctly')
+        # self.assertEqual("BlockBlob", vm_settings.get_status_upload_blob_type(), 'statusBlobType was not parsed correctly')
         self.assertEqual(["MultipleExtensionsPerHandler"], vm_settings.get_required_features(), 'requiredFeatures was not parsed correctly')
 
 
