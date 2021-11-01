@@ -451,6 +451,8 @@ class UpdateHandler(object):
             # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
             if available_agent is None:
                 raise ExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
+            else:
+                logger.info("Discovered new Agent {0}".format(available_agent.name))
 
         self.__upgrade_agent_if_permitted()
 
@@ -1020,7 +1022,7 @@ class UpdateHandler(object):
         next_hotfix_time = get_next_process_time(self._last_hotfix_upgrade_time, conf.get_hotfix_upgrade_frequency())
         next_normal_time = get_next_process_time(self._last_normal_upgrade_time, conf.get_normal_upgrade_frequency())
 
-        # Not permitted to update yet
+        # Not permitted to update yet for any of the AgentUpgradeModes
         if next_hotfix_time > now and next_normal_time > now:
             return
 
