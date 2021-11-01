@@ -385,6 +385,9 @@ class UpdateHandler(object):
                 time.sleep(self._goal_state_period)
 
         except ExitException as exitException:
+            if exitException.add_event:
+                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, version=CURRENT_VERSION, is_success=True,
+                          message=exitException.reason, log_event=False)
             logger.info(exitException.reason)
         except Exception as error:
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
@@ -401,7 +404,7 @@ class UpdateHandler(object):
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
         if not debug and self._is_orphaned:
-            raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT))
+            raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT), add_event=False)
 
     def _check_threads_running(self, all_thread_handlers):
         # Check that all the threads are still running
@@ -1046,9 +1049,12 @@ class UpdateHandler(object):
         else:
             upgrade_type, next_time = AgentUpgradeType.Normal, next_normal_time
 
-        logger.info("Discovered new {0} upgrade {1}; Will upgrade on or after {2}".format(
+        message = "Discovered new {0} upgrade {1}; Will upgrade on or after {2}".format(
             upgrade_type, available_agent.name,
-            datetime.utcfromtimestamp(next_time).strftime(logger.Logger.LogTimeFormatInUTC)))
+            datetime.utcfromtimestamp(next_time).strftime(logger.Logger.LogTimeFormatInUTC))
+        add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, version=CURRENT_VERSION, is_success=False,
+                  message=message, log_event=False)
+        logger.info(message)
 
 
 class GuestAgent(object):

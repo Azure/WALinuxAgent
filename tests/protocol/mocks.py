@@ -220,6 +220,10 @@ class HttpRequestPredicates(object):
         return url.lower() == 'http://{0}:{1}/vmagentlog'.format(restutil.KNOWN_WIRESERVER_IP,
                                                                  restutil.HOST_PLUGIN_PORT)
 
+    @staticmethod
+    def is_agent_package_request(url):
+        return re.match(r"^http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__([\d.]+)$", url) is not None
+
 
 class MockHttpResponse:
     def __init__(self, status, body=b'', headers=None, reason=None):
