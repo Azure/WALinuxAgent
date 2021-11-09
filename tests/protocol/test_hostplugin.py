@@ -244,7 +244,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         as part of status upload.
         """
         with self.create_mock_protocol() as wire_protocol:
-            wire.HostPluginProtocol.is_default_channel = False
             wire_protocol.update_goal_state()
 
             # act
@@ -277,7 +276,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         When host plugin returns a 503, we should fall back to the direct channel
         """
         with self.create_mock_protocol() as wire_protocol:
-            wire.HostPluginProtocol.is_default_channel = False
             wire_protocol.update_goal_state()
 
             # act
@@ -311,7 +309,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         When host plugin returns a 410, we should force the goal state update and return
         """
         with self.create_mock_protocol() as wire_protocol:
-            wire.HostPluginProtocol.is_default_channel = False
             wire_protocol.update_goal_state()
 
             # act
@@ -345,7 +342,6 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         When host plugin returns a 500, and direct fails, we should raise a ProtocolError
         """
         with self.create_mock_protocol() as wire_protocol:
-            wire.HostPluginProtocol.is_default_channel = False
             wire_protocol.update_goal_state()
 
             # act
