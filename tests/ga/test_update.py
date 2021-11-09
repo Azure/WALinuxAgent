@@ -122,6 +122,7 @@ def _get_update_handler(iterations=1, test_data=None):
     test_data = DATA_FILE if test_data is None else test_data
 
     with mock_wire_protocol(test_data) as protocol:
+        HostPluginProtocol.is_default_channel = False
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
         with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
