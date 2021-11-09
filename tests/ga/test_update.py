@@ -122,29 +122,29 @@ def _get_update_handler(iterations=1, test_data=None):
     test_data = DATA_FILE if test_data is None else test_data
 
     with mock_wire_protocol(test_data) as protocol:
-        HostPluginProtocol.is_default_channel = False
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
         with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
-                update_handler = get_update_handler()
-                # Setup internal state for the object required for testing
-                update_handler._cur_iteration = 0
-                update_handler._iterations = 0
-                update_handler.set_iterations = _set_iterations
-                update_handler.get_iterations = lambda: update_handler._cur_iteration
-                type(update_handler).is_running = PropertyMock(side_effect=check_running)
-                with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
-                    with patch('sys.exit') as exit_mock:
-                        # Setup the initial number of iterations
-                        update_handler.set_iterations(iterations)
-                        update_handler.exit_mock = exit_mock
-                        try:
-                            yield update_handler, protocol
-                        finally:
-                            # Since PropertyMock requires us to mock the type(ClassName).property of the object,
-                            # reverting it back to keep the state of the test clean
-                            type(update_handler).is_running = True
+                with patch.object(HostPluginProtocol, "is_default_channel", False):
+                    update_handler = get_update_handler()
+                    # Setup internal state for the object required for testing
+                    update_handler._cur_iteration = 0
+                    update_handler._iterations = 0
+                    update_handler.set_iterations = _set_iterations
+                    update_handler.get_iterations = lambda: update_handler._cur_iteration
+                    type(update_handler).is_running = PropertyMock(side_effect=check_running)
+                    with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
+                        with patch('sys.exit') as exit_mock:
+                            # Setup the initial number of iterations
+                            update_handler.set_iterations(iterations)
+                            update_handler.exit_mock = exit_mock
+                            try:
+                                yield update_handler, protocol
+                            finally:
+                                # Since PropertyMock requires us to mock the type(ClassName).property of the object,
+                                # reverting it back to keep the state of the test clean
+                                type(update_handler).is_running = True
 
 
 class UpdateTestCase(AgentTestCase):
