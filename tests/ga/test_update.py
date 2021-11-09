@@ -198,10 +198,10 @@ class UpdateTestCase(AgentTestCase):
                     update_handler.get_iterations = lambda: update_handler._cur_iteration
                     type(update_handler).is_running = PropertyMock(side_effect=check_running)
                     with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
-                        with patch('sys.exit') as mock_exit:
+                        with patch('sys.exit') as exit_mock:
                             # Setup the initial number of iterations
                             update_handler.set_iterations(iterations)
-                            update_handler.exit_mock = mock_exit
+                            update_handler.exit_mock = exit_mock
                             try:
                                 yield update_handler, protocol
                             finally:
