@@ -1657,7 +1657,8 @@ class TestUpdate(UpdateTestCase):
         with _get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
-                    update_handler.run(debug=True)
+                    with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
+                        update_handler.run(debug=True)
 
         # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
         self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
@@ -1733,8 +1734,10 @@ class TestAgentUpgrade(UpdateTestCase):
                             yield
 
     @contextlib.contextmanager
-    def __get_update_handler(self, iterations=1, test_data=DATA_FILE, hotfix_frequency=1.0, normal_frequency=2.0,
+    def __get_update_handler(self, iterations=1, test_data=None, hotfix_frequency=1.0, normal_frequency=2.0,
                              reload_conf=None):
+
+        test_data = DATA_FILE if test_data is None else test_data
 
         with _get_update_handler(iterations, test_data) as (update_handler, protocol):
 
@@ -2218,6 +2221,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
 
+
 def _create_update_handler():
     """
     Creates an UpdateHandler in which agent updates are mocked as a no-op.
@@ -2226,6 +2230,7 @@ def _create_update_handler():
     update_handler._check_and_download_agent_if_upgrade_available = Mock(return_value=False)
     return update_handler
 
+
 @contextlib.contextmanager
 def _mock_exthandlers_handler(extension_statuses=None):
     """
@@ -2233,7 +2238,7 @@ def _mock_exthandlers_handler(extension_statuses=None):
     The returned ExtHandlersHandler uses a mock WireProtocol, and both the run() and report_ext_handlers_status() are
     mocked. The mock run() is a no-op. If a list of extension_statuses is given, successive calls to the mock
     report_ext_handlers_status() returns a single extension with each of the statuses in the list. If extension_statuses
-    is ommitted all calls to report_ext_handlers_status() return a single extension with a success status.
+    is omitted all calls to report_ext_handlers_status() return a single extension with a success status.
     """
     def create_vm_status(extension_status):
         vm_status = VMStatus(status="Ready", message="Ready")
