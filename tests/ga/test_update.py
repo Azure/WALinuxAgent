@@ -91,6 +91,61 @@ def faux_logger():
     return DEFAULT
 
 
+@contextlib.contextmanager
+def _get_update_handler(iterations=1, test_data=None):
+    """
+    This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
+    main loop [iterations] no of times.
+    To reuse the same object, be sure to reset the iterations by using the update_handler.set_iterations() function.
+    :param iterations: No of times the UpdateHandler.run() method should run.
+    :return: Mocked object of UpdateHandler() class and object of the MockWireProtocol().
+    """
+
+    def _set_iterations(iterations_):
+        # This will reset the current iteration and the max iterations to run for this test object.
+        update_handler._cur_iteration = 0
+        update_handler._iterations = iterations_
+
+    def check_running(*val, **__):
+        # This method will determine if the current UpdateHandler object is supposed to run or not.
+
+        # There can be scenarios where the UpdateHandler.is_running.setter is called, in that case, return the first
+        # value of the tuple and not increment the cur_iteration
+        if len(val) > 0:
+            return val[0]
+
+        if update_handler._cur_iteration < update_handler._iterations:
+            update_handler._cur_iteration += 1
+            return True
+        return False
+
+    test_data = DATA_FILE if test_data is None else test_data
+
+    with mock_wire_protocol(test_data) as protocol:
+        protocol_util = MagicMock()
+        protocol_util.get_protocol = Mock(return_value=protocol)
+        with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
+            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
+                update_handler = get_update_handler()
+                # Setup internal state for the object required for testing
+                update_handler._cur_iteration = 0
+                update_handler._iterations = 0
+                update_handler.set_iterations = _set_iterations
+                update_handler.get_iterations = lambda: update_handler._cur_iteration
+                type(update_handler).is_running = PropertyMock(side_effect=check_running)
+                with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
+                    with patch('sys.exit') as exit_mock:
+                        # Setup the initial number of iterations
+                        update_handler.set_iterations(iterations)
+                        update_handler.exit_mock = exit_mock
+                        try:
+                            yield update_handler, protocol
+                        finally:
+                            # Since PropertyMock requires us to mock the type(ClassName).property of the object,
+                            # reverting it back to keep the state of the test clean
+                            type(update_handler).is_running = True
+
+
 class UpdateTestCase(AgentTestCase):
     _test_suite_tmp_dir = None
     _agent_zip_dir = None
@@ -156,58 +211,6 @@ class UpdateTestCase(AgentTestCase):
         for gb in READONLY_FILE_GLOBS:
             for path in glob.iglob(os.path.join(conf.get_lib_dir(), gb)):
                 fileutil.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-
-    @contextlib.contextmanager
-    def _get_update_handler(self, iterations=1, test_data=DATA_FILE, http_get_handler=None):
-        """
-        This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
-        main loop [iterations] no of times.
-        To reuse the same object, be sure to reset the iterations by using the update_handler.set_iterations() function.
-        :param iterations: No of times the UpdateHandler.run() method should run.
-        :return: Mocked object of UpdateHandler() class and object of the MockWireProtocol().
-        """
-
-        def _set_iterations(iterations_):
-            # This will reset the current iteration and the max iterations to run for this test object.
-            update_handler._cur_iteration = 0
-            update_handler._iterations = iterations_
-
-        def check_running(*val, **__):
-            # This method will determine if the current UpdateHandler object is supposed to run or not.
-
-            # There can be scenarios where the UpdateHandler.is_running.setter is called, in that case, return the first
-            # value of the tuple and not increment the cur_iteration
-            if len(val) > 0:
-                return val[0]
-
-            if update_handler._cur_iteration < update_handler._iterations:
-                update_handler._cur_iteration += 1
-                return True
-            return False
-
-        with mock_wire_protocol(test_data, http_get_handler=http_get_handler) as protocol:
-            protocol_util = MagicMock()
-            protocol_util.get_protocol = Mock(return_value=protocol)
-            with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
-                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
-                    update_handler = get_update_handler()
-                    # Setup internal state for the object required for testing
-                    update_handler._cur_iteration = 0
-                    update_handler._iterations = 0
-                    update_handler.set_iterations = _set_iterations
-                    update_handler.get_iterations = lambda: update_handler._cur_iteration
-                    type(update_handler).is_running = PropertyMock(side_effect=check_running)
-                    with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
-                        with patch('sys.exit') as exit_mock:
-                            # Setup the initial number of iterations
-                            update_handler.set_iterations(iterations)
-                            update_handler.exit_mock = exit_mock
-                            try:
-                                yield update_handler, protocol
-                            finally:
-                                # Since PropertyMock requires us to mock the type(ClassName).property of the object,
-                                # reverting it back to keep the state of the test clean
-                                type(update_handler).is_running = True
 
     def agent_bin(self, version, suffix):
         return "bin/{0}-{1}{2}.egg".format(AGENT_NAME, version, suffix)
@@ -1591,7 +1594,7 @@ class TestUpdate(UpdateTestCase):
     def test_it_should_recreate_handler_env_on_service_startup(self):
         iterations = 5
 
-        with self._get_update_handler(iterations) as (update_handler, protocol):
+        with _get_update_handler(iterations) as (update_handler, protocol):
             update_handler.run(debug=True)
 
             expected_handler = self._get_test_ext_handler_instance(protocol)
@@ -1608,7 +1611,7 @@ class TestUpdate(UpdateTestCase):
         # re-runnning the update handler. Then,ensure that the HandlerEnvironment file is recreated with eventsFolder
         # flag in HandlerEnvironment.json file.
         self._add_write_permission_to_goal_state_files()
-        with self._get_update_handler(iterations) as (update_handler, protocol):
+        with _get_update_handler(iterations) as (update_handler, protocol):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)
@@ -1631,7 +1634,7 @@ class TestUpdate(UpdateTestCase):
             return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with patch("azurelinuxagent.common.logger.info") as patch_info:
-            with self._get_update_handler(iterations=1) as (update_handler, _):
+            with _get_update_handler(iterations=1) as (update_handler, _):
                 with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
                     with patch('azurelinuxagent.common.conf.enable_firewall', return_value=False):
                         update_handler.run(debug=True)
@@ -1651,7 +1654,7 @@ class TestUpdate(UpdateTestCase):
                 cmd = ["echo", "running"]
             return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
-        with self._get_update_handler(iterations) as (update_handler, _):
+        with _get_update_handler(iterations) as (update_handler, _):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
                     update_handler.run(debug=True)
@@ -1663,11 +1666,10 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
                         "The remaining commands should only be for querying the firewall commands")
 
-
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
         try:
-            with self._get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
+            with _get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT) as (update_handler, protocol):
                 with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                     update_handler.run(debug=True)
                     expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
@@ -1734,7 +1736,7 @@ class TestAgentUpgrade(UpdateTestCase):
     def __get_update_handler(self, iterations=1, test_data=DATA_FILE, hotfix_frequency=1.0, normal_frequency=2.0,
                              reload_conf=None):
 
-        with self._get_update_handler(iterations, test_data) as (update_handler, protocol):
+        with _get_update_handler(iterations, test_data) as (update_handler, protocol):
 
             def get_handler(url, **kwargs):
                 if reload_conf is not None:
@@ -1748,7 +1750,7 @@ class TestAgentUpgrade(UpdateTestCase):
             protocol.set_http_handlers(http_get_handler=get_handler)
             with self.create_conf_mocks(hotfix_frequency, normal_frequency):
                 with patch("azurelinuxagent.ga.update.add_event") as mock_telemetry:
-                    yield update_handler, protocol, mock_telemetry
+                    yield update_handler, mock_telemetry
 
     def __assert_exit_code_successful(self, exit_mock):
         self.assertTrue(exit_mock.called, "The process should have exited")
@@ -1772,7 +1774,7 @@ class TestAgentUpgrade(UpdateTestCase):
                                      'op'] == WALAEventOperation.AgentUpgrade]), "Unwanted upgrade")
 
     def test_it_should_upgrade_agent_on_process_start_if_auto_upgrade_enabled(self):
-        with self.__get_update_handler(iterations=10) as (update_handler, protocol, mock_telemetry):
+        with self.__get_update_handler(iterations=10) as (update_handler, mock_telemetry):
 
             update_handler.run(debug=True)
 
@@ -1799,8 +1801,7 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.call_count = 0
 
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, hotfix_frequency=10,
-                                       normal_frequency=10, reload_conf=reload_conf) as (
-                                       update_handler, protocol, mock_telemetry):
+                                       normal_frequency=10, reload_conf=reload_conf) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
 
             self.assertGreater(reload_conf.call_count, 0, "Ensure the conf reload was called")
@@ -1827,7 +1828,7 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.call_count = 0
         test_normal_frequency = 0.1
         with self.__get_update_handler(iterations=50, test_data=data_file, reload_conf=reload_conf,
-                                       normal_frequency=test_normal_frequency) as (update_handler, protocol, mock_telemetry):
+                                       normal_frequency=test_normal_frequency) as (update_handler, mock_telemetry):
             start_time = time.time()
             update_handler.run(debug=True)
             diff = time.time() - start_time
@@ -1842,7 +1843,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_upgrade_telemetry_emitted(mock_telemetry)
 
     def test_it_should_not_auto_upgrade_if_auto_update_disabled(self):
-        with self.__get_update_handler(iterations=10) as (update_handler, protocol, mock_telemetry):
+        with self.__get_update_handler(iterations=10) as (update_handler, mock_telemetry):
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
                 update_handler.run(debug=True)
 
@@ -1869,8 +1870,7 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.call_count = 0
 
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, hotfix_frequency=0.01,
-                                       normal_frequency=10, reload_conf=reload_conf) as (
-                update_handler, protocol, mock_telemetry):
+                                       normal_frequency=10, reload_conf=reload_conf) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
 
             self.assertGreater(reload_conf.call_count, 0, "Ensure the conf reload was called")
