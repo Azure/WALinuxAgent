@@ -6,7 +6,8 @@ schedules:
     displayName: cleanup build
     branches:
       include:
-        - develop
+      - develop
+    always: true
 
 pool:
   vmImage: ubuntu-latest
