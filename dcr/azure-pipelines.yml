@@ -50,6 +50,14 @@ trigger:
 # no PR triggers
 pr: none
 
+schedules:
+  - cron: "0 */8 * * *" # Run every 8 hours
+    displayName: Daily validation builds
+    branches:
+      include:
+      - develop
+    always: true
+
 variables:
   vmName: 'dcrLinuxVM'
   adminUsername: 'dcr'
