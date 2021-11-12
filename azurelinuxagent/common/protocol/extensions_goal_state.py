@@ -133,6 +133,7 @@ class ExtensionsGoalState(object):
                 as_date_time = datetime.datetime.min + datetime.timedelta(seconds=float(ticks_string) / 10 ** 7)
             except Exception as exception:
                 logger.verbose("Can't parse ticks: {0}", textutil.format_exception(exception))
+        as_date_time = max(as_date_time, minimum)
         if as_date_time < minimum:
             as_date_time = minimum
 
