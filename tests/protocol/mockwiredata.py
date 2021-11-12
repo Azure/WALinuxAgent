@@ -122,6 +122,7 @@ DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf-pr
 DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
 DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
 
+
 class WireProtocolData(object):
     def __init__(self, data_files=None):
         if data_files is None:

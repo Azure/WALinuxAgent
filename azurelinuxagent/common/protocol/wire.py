@@ -36,6 +36,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
@@ -123,12 +124,6 @@ class WireProtocol(DataContract):
     def get_incarnation(self):
         return self.client.get_goal_state().incarnation
 
-    def get_in_vm_gs_metadata(self):
-        return self.client.get_extensions_goal_state().in_vm_gs_metadata
-
-    def get_required_features(self):
-        return self.client.get_extensions_goal_state().get_required_features()
-
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_extensions_goal_state()
@@ -152,9 +147,8 @@ class WireProtocol(DataContract):
         man = self.client.get_ext_manifest(ext_handler)
         return man.pkg_list
 
-    def get_artifacts_profile(self):
-        logger.verbose("Get In-VM Artifacts Profile")
-        return self.client.get_artifacts_profile()
+    def get_extensions_goal_state(self):
+        return self.client.get_extensions_goal_state()
 
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
@@ -807,20 +801,20 @@ class WireClient(object):
                 goal_state.fetch_full_goal_state(self)
                 self._goal_state = goal_state
                 if self._goal_state.extensions_config_uri is None:
-                    self._extensions_goal_state = ExtensionsGoalState.create_empty()
+                    self._extensions_goal_state = ExtensionsGoalStateFactory.create_empty()
                 else:
                     xml_text = self.fetch_config(self._goal_state.extensions_config_uri, self.get_header())
-                    self._extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(goal_state.incarnation, xml_text)
+                    self._extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(goal_state.incarnation, xml_text, self)
                 updated = True
 
             if conf.get_enable_fast_track():
                 # Since currently we query vmSettings only to exercise the HostGAPlugin, errors in this section of the code should not
                 # prevent the agent from processing the goal state; we simply report a summary of those errors.
                 try:
-                    request_etag = None if force_update or self._extensions_goal_state_from_vm_settings is None else self._extensions_goal_state_from_vm_settings.get_id()
+                    request_etag = None if force_update or self._extensions_goal_state_from_vm_settings is None else self._extensions_goal_state_from_vm_settings.id
                     response_etag, vm_settings = self._fetch_vm_settings(request_etag)
                     if vm_settings is not None:  # vmSettings is None when there has not been a new goal state, or the HostGAPlugin does not support FastTrack
-                        self._extensions_goal_state_from_vm_settings = ExtensionsGoalState.create_from_vm_settings(response_etag, vm_settings)
+                        self._extensions_goal_state_from_vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, vm_settings)
                         updated = True
                     # If either goal state was updated, compare them
                     if updated:
@@ -918,16 +912,14 @@ class WireClient(object):
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
             if self._extensions_goal_state is not None:
-                # disable=assignment-from-none: E1128: Assigning result of a function call, where the function returns None
-                text = self._extensions_goal_state.get_redacted_text()  # pylint: disable=assignment-from-none
+                text = self._extensions_goal_state.get_redacted_text()
                 if text != '':
-                    self._save_cache(text, EXT_CONF_FILE_NAME.format(self._extensions_goal_state.get_id()))
+                    self._save_cache(text, EXT_CONF_FILE_NAME.format(self._extensions_goal_state.id))
             # TODO: When Fast Track is fully enabled self._extensions_goal_state_from_vm_settings will go away and this can be deleted
             if self._extensions_goal_state_from_vm_settings is not None:
-                # disable=assignment-from-none: E1128: Assigning result of a function call, where the function returns None
-                text = self._extensions_goal_state_from_vm_settings.get_redacted_text()  # pylint: disable=assignment-from-none
+                text = self._extensions_goal_state_from_vm_settings.get_redacted_text()
                 if text != '':
-                    self._save_cache(text, VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state_from_vm_settings.get_id()))
+                    self._save_cache(text, VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state_from_vm_settings.id))
             # END TODO
 
         except Exception as e:
@@ -1134,15 +1126,15 @@ class WireClient(object):
     def upload_status_blob(self):
         extensions_goal_state = self.get_extensions_goal_state()
 
-        if extensions_goal_state.get_status_upload_blob() is None:
+        if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(force_update=True)
             extensions_goal_state = self.get_extensions_goal_state()
 
-        if extensions_goal_state.get_status_upload_blob() is None:
+        if extensions_goal_state.status_upload_blob is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
 
-        blob_type = extensions_goal_state.get_status_upload_blob_type()
+        blob_type = extensions_goal_state.status_upload_blob_type
 
         try:
             self.status_blob.prepare(blob_type)
@@ -1160,7 +1152,7 @@ class WireClient(object):
         # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob, extensions_goal_state.get_status_upload_blob(), extensions_goal_state.get_status_upload_blob_type())
+            host.put_vm_status(self.status_blob, extensions_goal_state.status_upload_blob, extensions_goal_state.status_upload_blob_type)
             return
         except ResourceGoneError:
             # refresh the host plugin client and try again on the next iteration of the main loop
@@ -1172,7 +1164,7 @@ class WireClient(object):
             self.report_status_event(msg, is_success=True)
 
         try:
-            if self.status_blob.upload(extensions_goal_state.get_status_upload_blob()):
+            if self.status_blob.upload(extensions_goal_state.status_upload_blob):
                 return
         except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
@@ -1343,53 +1335,8 @@ class WireClient(object):
                                                      goal_state.role_config_name))
         return self._host_plugin
 
-    def has_artifacts_profile_blob(self):
-        extensions_goal_state = self.get_extensions_goal_state()
-        return extensions_goal_state and not \
-            textutil.is_str_none_or_whitespace(extensions_goal_state.artifacts_profile_blob)
-
-    def get_artifacts_profile_through_host(self, blob):
-        host = self.get_host_plugin()
-        uri, headers = host.get_artifact_request(blob)
-        profile, _ = self.fetch(uri, headers, use_proxy=False)
-        return profile
-
-    def get_artifacts_profile(self):
-        artifacts_profile = None
-
-        if self.has_artifacts_profile_blob():
-            blob = self.get_extensions_goal_state().artifacts_profile_blob
-            direct_func = lambda: self.fetch(blob)[0]
-            # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
-            # in the lambda.
-            host_func = lambda: self.get_artifacts_profile_through_host(blob)
-
-            logger.verbose("Retrieving the artifacts profile")
-
-            try:
-                profile = self.send_request_using_appropriate_channel(direct_func, host_func)
-                if profile is None:
-                    logger.warn("Failed to fetch artifacts profile from blob {0}", blob)
-                    return None
-            except Exception as error:
-                logger.warn("Exception retrieving artifacts profile from blob {0}. Error: {1}".format(blob, ustr(error)))
-                return None
-
-            if not textutil.is_str_empty(profile):
-                logger.verbose("Artifacts profile downloaded")
-                try:
-                    artifacts_profile = InVMArtifactsProfile(profile)
-                except Exception:
-                    logger.warn("Could not parse artifacts profile blob")
-                    msg = "Content: [{0}]".format(profile)
-                    logger.verbose(msg)
-
-                    report_event(op=WALAEventOperation.ArtifactsProfileBlob,
-                                 is_success=False,
-                                 message=msg,
-                                 log_event=False)
-
-        return artifacts_profile
+    def get_on_hold(self):
+        return self.get_extensions_goal_state().on_hold
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)

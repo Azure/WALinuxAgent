@@ -435,14 +435,7 @@ class TestHandlerStateMigration(AgentTestCase):
             self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))  # pylint: disable=redundant-unittest-assert
         return
 
-# Deprecated. New tests should be added to the TestExtension class
-@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-@patch("azurelinuxagent.common.protocol.wire.CryptUtil")
-@patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestExtension_Deprecated(AgentTestCase):
-    def setUp(self):
-        AgentTestCase.setUp(self)
-
+class TestExtensionBase(AgentTestCase):
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
                                expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None):
@@ -460,6 +453,15 @@ class TestExtension_Deprecated(AgentTestCase):
 
         if expected_msg is not None:
             self.assertIn(expected_msg, handler_status.message)
+
+
+# Deprecated. New tests should be added to the TestExtension class
+@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+@patch("azurelinuxagent.common.protocol.wire.CryptUtil")
+@patch("azurelinuxagent.common.utils.restutil.http_get")
+class TestExtension_Deprecated(TestExtensionBase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
 
     def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
                                     extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
@@ -1378,149 +1380,6 @@ class TestExtension_Deprecated(AgentTestCase):
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
-
-
-    def test_it_should_process_extensions_only_if_allowed(self, mock_get, mock_crypt, *args):
-
-        def assert_extensions_called(exthandlers_handler, expected_call_count=0):
-            extension_name = 'OSTCExtensions.ExampleHandlerLinux'
-            extension_calls = []
-            original_popen = subprocess.Popen
-
-            def mock_popen(*args, **kwargs):
-                if extension_name in args[0]:
-                    extension_calls.append(args[0])
-                return original_popen(*args, **kwargs)
-
-            with patch('subprocess.Popen', side_effect=mock_popen):
-                exthandlers_handler.run()
-                exthandlers_handler.report_ext_handlers_status()
-
-                self.assertEqual(expected_call_count, len(extension_calls), "Call counts dont match")
-
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
-
-        # Extension called once for Install and once for Enable
-        assert_extensions_called(exthandlers_handler, expected_call_count=2)
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-
-        # Update GoalState
-        test_data.set_incarnation(2)
-        protocol.update_goal_state()
-
-        with patch.object(conf, 'get_extensions_enabled', return_value=False):
-            assert_extensions_called(exthandlers_handler, expected_call_count=0)
-
-        # Disabled over-provisioning in configuration
-        # In this case we should process GoalState as incarnation changed
-        with patch.object(conf, 'get_extensions_enabled', return_value=True):
-            with patch.object(conf, 'get_enable_overprovisioning', return_value=False):
-                # 1 expected call count for Enable command
-                assert_extensions_called(exthandlers_handler, expected_call_count=1)
-
-        # Update GoalState
-        test_data.set_incarnation(3)
-        protocol.update_goal_state()
-
-        # Enabled on_hold property in artifact_blob
-        with patch.object(conf, 'get_extensions_enabled', return_value=True):
-            with patch.object(conf, "get_enable_overprovisioning", return_value=True):
-                with patch.object(protocol, "get_artifacts_profile",
-                                  return_value=InVMArtifactsProfile(json.dumps({'onHold': True}))):
-                    assert_extensions_called(exthandlers_handler, expected_call_count=0)
-
-        # Disabled on_hold property in artifact_blob
-        with patch.object(conf, 'get_extensions_enabled', return_value=True):
-            with patch.object(conf, "get_enable_overprovisioning", return_value=True):
-                with patch.object(protocol, "get_artifacts_profile",
-                                  return_value=InVMArtifactsProfile(json.dumps({'onHold': False}))):
-                    # 1 expected call count for Enable command
-                    assert_extensions_called(exthandlers_handler, expected_call_count=1)
-
-    def test_it_should_process_extensions_appropriately_on_artifact_hold(self, mock_get, mock_crypt, *args):
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
-
-        # enable extension handling blocking
-        conf.get_enable_overprovisioning = Mock(return_value=True)
-        mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
-
-        # Test when is_on_hold returns True - should not work
-        mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=True)
-        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        vm_agent_status = protocol.report_vm_status.call_args[0][0].vmAgent
-        self.assertEqual(vm_agent_status.status, "Ready", "Agent should report ready")
-        self.assertEqual(0, len(vm_agent_status.extensionHandlers),
-                         "No extensions should be reported as on_hold is True")
-        self.assertIsNone(vm_agent_status.vm_artifacts_aggregate_status.goal_state_aggregate_status,
-                          "No GS Aggregate status should be reported")
-
-        # Test when is_on_hold returns False - should work
-        mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
-        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self.assertEqual("1", protocol.report_vm_status.call_args[0][
-            0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "Incarnation mismatch")
-
-        # Test when in_vm_artifacts_profile is not available - Should work
-        protocol.get_artifacts_profile = Mock(return_value=None)
-        # Update GoalState
-        test_data.set_incarnation(2)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self.assertEqual("2", protocol.report_vm_status.call_args[0][
-            0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "Incarnation mismatch")
-
-    def test_it_should_parse_valid_in_vm_metadata_properly(self, mock_get, mock_crypt, *args):
-
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_IN_VM_META_DATA)
-        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
-        self.assertEqual(activity_id, "555e551c-600e-4fb4-90ba-8ab8ec28eccc", "Incorrect activity Id")
-        self.assertEqual(correlation_id, "400de90b-522e-491f-9d89-ec944661f531", "Incorrect correlation Id")
-        self.assertEqual(gs_creation_time, '2020-11-09T17:48:50.412125Z', "Incorrect GS Creation time")
-
-    def test_it_should_process_goal_state_even_if_metadata_missing(self, mock_get, mock_crypt, *args):
-
-        # If the data is not provided in ExtensionConfig, it should just be None
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        activity_id, correlation_id, gs_creation_time = exthandlers_handler.get_goal_state_debug_metadata()
-        self.assertEqual(activity_id, "NA", "Activity Id should be NA")
-        self.assertEqual(correlation_id, "NA", "Correlation Id should be NA")
-        self.assertEqual(gs_creation_time, "NA", "GS Creation time should be NA")
-
-    def test_it_should_process_goal_state_even_if_metadata_invalid(self, mock_get, mock_crypt, *args):
-
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_INVALID_VM_META_DATA)
-        exthandlers_handler, protocol = self._create_mock(test_data, mock_get, mock_crypt, *args)
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def _assert_ext_status(self, vm_agent_status, expected_status,
                            expected_seq_no, expected_handler_name="OSTCExtensions.ExampleHandlerLinux", expected_msg=None):
@@ -2589,7 +2448,7 @@ class TestExtension_Deprecated(AgentTestCase):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
         _, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
 
-        required_features = protocol.get_required_features()
+        required_features = protocol.get_extensions_goal_state().required_features
         self.assertEqual(3, len(required_features), "Incorrect features parsed")
         for i, feature in enumerate(required_features):
             self.assertEqual(feature, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
@@ -2625,7 +2484,6 @@ class TestExtensionSequencing(AgentTestCase):
         protocol = WireProtocol(KNOWN_WIRESERVER_IP)
         protocol.detect()
         protocol.report_vm_status = MagicMock()
-        protocol.get_artifacts_profile = MagicMock()
 
         handler = get_exthandlers_handler(protocol)
         handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
@@ -3458,7 +3316,16 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
 
 
 # New test cases should be added here.This class uses mock_wire_protocol
-class TestExtension(AgentTestCase):
+class TestExtension(TestExtensionBase, HttpRequestPredicates):
+    @classmethod
+    def setUpClass(cls):
+        AgentTestCase.setUpClass()
+        cls.mock_sleep = patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+        cls.mock_sleep.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.mock_sleep.stop()
 
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -3609,6 +3476,104 @@ class TestExtension(AgentTestCase):
             protocol.update_goal_state()
             test_subject.archive()
             self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
+
+    def test_it_should_process_extensions_only_if_allowed(self):
+        def assert_extensions_called(exthandlers_handler, expected_call_count=0):
+            extension_name = 'OSTCExtensions.ExampleHandlerLinux'
+            extension_calls = []
+            original_popen = subprocess.Popen
+
+            def mock_popen(*args, **kwargs):
+                if extension_name in args[0]:
+                    extension_calls.append(args[0])
+                return original_popen(*args, **kwargs)
+
+            with patch('subprocess.Popen', side_effect=mock_popen):
+                exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
+                self.assertEqual(expected_call_count, len(extension_calls), "Call counts dont match")
+
+        with patch('time.sleep', side_effect=lambda _: mock_sleep(0.001)):
+            def http_get_handler(url, *_, **kwargs):
+                if self.is_in_vm_artifacts_profile_request(url) or self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
+                    return mock_in_vm_artifacts_profile_response
+                return None
+
+            mock_in_vm_artifacts_profile_response = MockHttpResponse(200, body='{ "onHold": false }'.encode('utf-8'))
+
+            with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE, http_get_handler=http_get_handler) as protocol:
+                protocol.report_vm_status = MagicMock()
+                exthandlers_handler = get_exthandlers_handler(protocol)
+
+                # Extension called once for Install and once for Enable
+                assert_extensions_called(exthandlers_handler, expected_call_count=2)
+                self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+
+                # Update GoalState
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.update_goal_state()
+
+                with patch.object(conf, 'get_extensions_enabled', return_value=False):
+                    assert_extensions_called(exthandlers_handler, expected_call_count=0)
+
+                # Disabled over-provisioning in configuration
+                # In this case we should process GoalState as incarnation changed
+                with patch.object(conf, 'get_extensions_enabled', return_value=True):
+                    with patch.object(conf, 'get_enable_overprovisioning', return_value=False):
+                        # 1 expected call count for Enable command
+                        assert_extensions_called(exthandlers_handler, expected_call_count=1)
+
+                # Enabled on_hold property in artifact_blob
+                mock_in_vm_artifacts_profile_response = MockHttpResponse(200, body='{ "onHold": true }'.encode('utf-8'))
+                protocol.client.update_goal_state(force_update=True)
+
+                with patch.object(conf, 'get_extensions_enabled', return_value=True):
+                    with patch.object(conf, "get_enable_overprovisioning", return_value=True):
+                        assert_extensions_called(exthandlers_handler, expected_call_count=0)
+
+                # Disabled on_hold property in artifact_blob
+                mock_in_vm_artifacts_profile_response = MockHttpResponse(200, body='{ "onHold": false }'.encode('utf-8'))
+                protocol.client.update_goal_state(force_update=True)
+
+                with patch.object(conf, 'get_extensions_enabled', return_value=True):
+                    with patch.object(conf, "get_enable_overprovisioning", return_value=True):
+                        # 1 expected call count for Enable command
+                        assert_extensions_called(exthandlers_handler, expected_call_count=1)
+
+    def test_it_should_process_extensions_appropriately_on_artifact_hold(self):
+        with patch('time.sleep', side_effect=lambda _: mock_sleep(0.001)):
+            with patch("azurelinuxagent.common.conf.get_enable_overprovisioning", return_value=True):
+                with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+                    protocol.report_vm_status = MagicMock()
+                    exthandlers_handler = get_exthandlers_handler(protocol)
+                    #
+                    # The test data sets onHold to True; extensions should not be processed
+                    #
+                    exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
+
+                    vm_agent_status = protocol.report_vm_status.call_args[0][0].vmAgent
+                    self.assertEqual(vm_agent_status.status, "Ready", "Agent should report ready")
+                    self.assertEqual(0, len(vm_agent_status.extensionHandlers), "No extensions should be reported as on_hold is True")
+                    self.assertIsNone(vm_agent_status.vm_artifacts_aggregate_status.goal_state_aggregate_status, "No GS Aggregate status should be reported")
+
+                    #
+                    # Now force onHold to False; extensions should be processed
+                    #
+                    def http_get_handler(url, *_, **kwargs):
+                        if self.is_in_vm_artifacts_profile_request(url) or self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
+                            return MockHttpResponse(200, body='{ "onHold": false }'.encode('utf-8'))
+                        return None
+                    protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+                    protocol.client.update_goal_state(force_update=True)
+
+                    exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
+
+                    self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+                    self.assertEqual("1", protocol.report_vm_status.call_args[0][0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "Incarnation mismatch")
 
 
 if __name__ == '__main__':
