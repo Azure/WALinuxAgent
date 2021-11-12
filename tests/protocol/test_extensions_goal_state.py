@@ -33,7 +33,6 @@ class ExtensionsGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             test_property("required_features",       ['MOCK_REQUIRED_FEATURE'])
             test_property("on_hold",                 True)
 
-
     def test_create_from_extensions_config_should_assume_block_when_blob_type_is_not_valid(self):
         data_file = mockwiredata.DATA_FILE.copy()
         data_file["ext_conf"] = "hostgaplugin/ext_conf-invalid_blob_type.xml"
