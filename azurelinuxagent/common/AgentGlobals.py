@@ -28,7 +28,7 @@ class AgentGlobals(object):
     # Some modules (e.g. telemetry) require an up-to-date container ID. We update this variable each time we
     # fetch the goal state.
     #
-    _container_id = AgentGlobals.GUID_ZERO
+    _container_id = GUID_ZERO
 
     @staticmethod
     def get_container_id():
