@@ -823,7 +823,7 @@ class WireClient(object):
                         self._extensions_goal_state_from_vm_settings = ExtensionsGoalState.create_from_vm_settings(response_etag, vm_settings)
                         updated = True
                     # If either goal state was updated, compare them
-                    if updated:
+                    if updated and self._extensions_goal_state_from_vm_settings is not None:
                         ExtensionsGoalState.compare(self._extensions_goal_state, self._extensions_goal_state_from_vm_settings)
                 except Exception as error:
                     # TODO: Once FastTrack is stable, these exceptions should be rare. Add a traceback to the error message at that point.
