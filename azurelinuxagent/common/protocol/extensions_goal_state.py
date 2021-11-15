@@ -18,6 +18,7 @@
 import datetime
 
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.protocol.restapi import ExtHandlerList, VMAgentManifestList
@@ -140,11 +141,11 @@ class ExtensionsGoalState(object):
     @staticmethod
     def _string_to_id(id_string):
         """
-        Takes 'id', a string indicating an ID, and returns a null GUID is the string is None or empty; otherwise
+        Takes 'id', a string indicating an ID, and returns a null GUID if the string is None or empty; otherwise
         return 'id' unchanged
         """
         if id_string in (None, ""):
-            return "00000000-0000-0000-0000-000000000000"
+            return AgentGlobals.GUID_ZERO
         return id_string
 
 
@@ -155,11 +156,11 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
 
     @property
     def activity_id(self):
-        return "00000000-0000-0000-0000-000000000000"
+        return AgentGlobals.GUID_ZERO
 
     @property
     def correlation_id(self):
-        return "00000000-0000-0000-0000-000000000000"
+        return AgentGlobals.GUID_ZERO
 
     @property
     def created_on_timestamp(self):
