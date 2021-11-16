@@ -1,0 +1,21 @@
+# Template file for the common variables between the 2 pipelines
+
+variables:
+  rgPrefix: 'dcr-v2-test'
+
+  vmName: 'dcrLinuxVM'
+  adminUsername: 'dcr'
+
+  # Public Cloud Data
+  azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+  subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+  location: 'East US 2'
+
+  # ToDo: Create new pipelines for Fairfax and Mooncake
+  fairfaxConn: 'VMGuestAgentAndExtensionsFairfax (8e5abcac-74f0-4955-9dfb-fe3fe36f8d19)'
+  fairfaxSub: '8e5abcac-74f0-4955-9dfb-fe3fe36f8d19'
+  fairfaxLocation: 'usgovarizona'
+
+  mooncakeConn: 'Guest Agent Mooncake ( 557a8daa-8ac8-4caa-88e4-3b6f939978b9 )'
+  mooncakeSub: '557a8daa-8ac8-4caa-88e4-3b6f939978b9'
+  mooncakeLocation: 'china north 2'
