@@ -185,7 +185,9 @@ __INTEGER_OPTIONS__ = {
     #
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 75,
-    "Debug.EtpCollectionPeriod": 300
+    "Debug.EtpCollectionPeriod": 300,
+    "Debug.AutoUpdateHotfixFrequency": 14400,
+    "Debug.AutoUpdateNormalFrequency": 86400
 }
 
 
@@ -577,3 +579,19 @@ def get_etp_collection_period(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.EtpCollectionPeriod", 300)
+
+
+def get_hotfix_upgrade_frequency(conf=__conf__):
+    """
+    Determines the frequency to check for Hotfix upgrades (<Patch>.<Build> version changed in new upgrades).
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AutoUpdateHotfixFrequency", 4 * 60 * 60)
+
+
+def get_normal_upgrade_frequency(conf=__conf__):
+    """
+    Determines the frequency to check for Normal upgrades (<Major>.<Minor> version changed in new upgrades).
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AutoUpdateNormalFrequency", 24 * 60 * 60)

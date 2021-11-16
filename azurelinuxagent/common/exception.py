@@ -31,6 +31,12 @@ class ExitException(BaseException):
         self.reason = reason
 
 
+class AgentUpgradeExitException(ExitException):
+    """
+    Used to exit the agent's process due to Agent Upgrade
+    """
+
+
 class AgentError(Exception):
     """
     Base class of agent error.
