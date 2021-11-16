@@ -46,11 +46,11 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
 from tests.protocol.mocks import mock_wire_protocol
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT, is_ga_manifest_request
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
     clear_singleton_instances, mock_sleep, skip_if_predicate_true
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import HttpRequestPredicates
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -1794,7 +1794,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
         def reload_conf(url, mock_wire_data):
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations/2:
+            if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations/2:
                 reload_conf.call_count += 1
                 # Ensure the first set of versions were downloaded as part of the first manifest
                 self.__assert_agent_directories_available(versions=["1.0.0", "1.1.0", "1.2.0"])
@@ -1821,7 +1821,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
         def reload_conf(url, mock_wire_data):
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= 2:
+            if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= 2:
                 reload_conf.call_count += 1
                 # Ensure no new agent available so far
                 self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")), "New agent directory should not be found")
@@ -1865,7 +1865,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
         def reload_conf(url, mock_wire_data):
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations / 2:
+            if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations / 2:
                 reload_conf.call_count += 1
                 # As per our current agent upgrade model, we don't rely on an incarnation update to upgrade the agent. Mocking the same
                 mock_wire_data.data_files["ga_manifest"] = "wire/ga_manifest.xml"

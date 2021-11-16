@@ -6,7 +6,7 @@ import re
 
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError, _CaseFoldedDict
 from azurelinuxagent.common.utils import fileutil
-from tests.protocol.mocks import HttpRequestPredicates
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import AgentTestCase, data_dir
 
 

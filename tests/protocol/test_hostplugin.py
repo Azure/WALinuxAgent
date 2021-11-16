@@ -32,7 +32,8 @@ from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 

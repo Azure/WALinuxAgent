@@ -45,7 +45,8 @@ from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
 from tests.tools import Mock, patch, AgentTestCase
