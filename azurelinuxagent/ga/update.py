@@ -43,7 +43,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException
+from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -384,10 +384,11 @@ class UpdateHandler(object):
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(self._goal_state_period)
 
+        except AgentUpgradeExitException as exitException:
+            add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, version=CURRENT_VERSION, is_success=True,
+                      message=exitException.reason, log_event=False)
+            logger.info(exitException.reason)
         except ExitException as exitException:
-            if exitException.add_event:
-                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, version=CURRENT_VERSION, is_success=True,
-                          message=exitException.reason, log_event=False)
             logger.info(exitException.reason)
         except Exception as error:
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
@@ -404,7 +405,7 @@ class UpdateHandler(object):
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
         if not debug and self._is_orphaned:
-            raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT), add_event=False)
+            raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT))
 
     def _check_threads_running(self, all_thread_handlers):
         # Check that all the threads are still running
@@ -450,7 +451,7 @@ class UpdateHandler(object):
             # Legacy behavior: The current agent can become unavailable and needs to be reverted.
             # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
             if available_agent is None:
-                raise ExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
+                raise AgentUpgradeExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
             else:
                 logger.info("Discovered new Agent {0}".format(available_agent.name))
 
@@ -1041,9 +1042,9 @@ class UpdateHandler(object):
         upgrade_message = "{0} Agent upgrade discovered, updating to {1} -- exiting"
 
         if is_hotfix_upgrade and next_hotfix_time <= now:
-            raise ExitException(upgrade_message.format(AgentUpgradeType.Hotfix, available_agent.name))
+            raise AgentUpgradeExitException(upgrade_message.format(AgentUpgradeType.Hotfix, available_agent.name))
         elif (not is_hotfix_upgrade) and next_normal_time <= now:
-            raise ExitException(upgrade_message.format(AgentUpgradeType.Normal, available_agent.name))
+            raise AgentUpgradeExitException(upgrade_message.format(AgentUpgradeType.Normal, available_agent.name))
 
         # Not upgrading the agent as the times don't match for their relevant upgrade, logging it appropriately
         if is_hotfix_upgrade:

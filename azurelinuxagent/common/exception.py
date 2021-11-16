@@ -26,10 +26,15 @@ class ExitException(BaseException):
     """
     Used to exit the agent's process
     """
-    def __init__(self, reason, add_event=True):
+    def __init__(self, reason):
         super(ExitException, self).__init__()
         self.reason = reason
-        self.add_event = add_event
+
+
+class AgentUpgradeExitException(ExitException):
+    """
+    Used to exit the agent's process due to Agent Upgrade
+    """
 
 
 class AgentError(Exception):
