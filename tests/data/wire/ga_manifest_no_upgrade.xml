@@ -19,15 +19,6 @@
                 <Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__1.2.0</Uri>
             </Uris>
         </Plugin>
-        <Plugin>
-            <Version>2.0.0</Version><Uris><Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__2.0.0</Uri></Uris>
-        </Plugin>
-        <Plugin>
-            <Version>2.1.0</Version><Uris><Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__2.1.0</Uri></Uris>
-        </Plugin>
-        <Plugin>
-            <Version>99999.0.0.0</Version><Uris><Uri>http://mock-goal-state/ga-manifests/OSTCExtensions.WALinuxAgent__99999.0.0.0</Uri></Uris>
-        </Plugin>
     </Plugins>
 </PluginVersionManifest>
 

@@ -69,6 +69,7 @@ class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
+    AgentUpgrade = "AgentUpgrade"
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsDisabled = "CGroupsDisabled"
@@ -122,7 +123,6 @@ class WALAEventOperation:
     UnhandledError = "UnhandledError"
     UnInstall = "UnInstall"
     Unknown = "Unknown"
-    Upgrade = "Upgrade"
     Update = "Update"
     VmSettings = "VmSettings"
 

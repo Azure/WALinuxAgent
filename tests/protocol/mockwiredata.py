@@ -122,6 +122,11 @@ DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf-pr
 DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
 DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
 
+
+def is_ga_manifest_request(url):
+    return "manifest_of_ga.xml" in url
+
+
 class WireProtocolData(object):
     def __init__(self, data_files=None):
         if data_files is None:
@@ -258,7 +263,7 @@ class WireProtocolData(object):
             if "manifest.xml" in url:
                 content = self.manifest
                 self.call_counts["manifest.xml"] += 1
-            elif "manifest_of_ga.xml" in url:
+            elif is_ga_manifest_request(url):
                 content = self.ga_manifest
                 self.call_counts["manifest_of_ga.xml"] += 1
             elif "ExampleHandlerLinux" in url:
