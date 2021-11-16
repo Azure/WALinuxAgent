@@ -239,10 +239,11 @@ class AgentTestCase(unittest.TestCase):
         self.fail(msg)
 
     class _AssertRaisesContextManager(object):
-        def __init__(self, expected_exception_type, test_case, match_regex=None):
+        def __init__(self, expected_exception_type, test_case, match_regex=None, regex_flags=0):
             self._expected_exception_type = expected_exception_type
             self._test_case = test_case
             self._match_regex = match_regex
+            self._regex_flags = regex_flags
             self.exception = None
 
         def __enter__(self):
@@ -262,7 +263,7 @@ class AgentTestCase(unittest.TestCase):
                 self._test_case.fail("Raised '{0}', but expected '{1}'".format(raised, expected))
             if self._match_regex is not None:
                 exception_text = str(exception)
-                if re.search(self._match_regex, exception_text) is None:
+                if re.search(self._match_regex, exception_text, flags=self._regex_flags) is None:
                     self._test_case.fail("The exception did not match the expected pattern. Expected: r'{0}' Got: '{1}'".format(self._match_regex, exception_text))
             self.exception = exception
             return True
@@ -287,11 +288,11 @@ class AgentTestCase(unittest.TestCase):
                     exception_type, regex, str(e)))
         self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
 
-    def assertRaisesRegexCM(self, exception_type, regex):
+    def assertRaisesRegexCM(self, exception_type, regex, flags=0):
         """
         Similar to assertRaisesRegex, but returns a context manager (mostly needed for Python 2.*, which does not have a assertRaisesRegex)
         """
-        return AgentTestCase._AssertRaisesContextManager(exception_type, self, match_regex=regex)
+        return AgentTestCase._AssertRaisesContextManager(exception_type, self, match_regex=regex, regex_flags=flags)
 
     def emulate_assertDictEqual(self, first, second, msg=None):
         def fail(message):

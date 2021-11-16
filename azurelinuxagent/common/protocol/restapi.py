@@ -19,7 +19,6 @@
 
 import socket
 import time
-from datetime import datetime, timedelta
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
@@ -190,28 +189,10 @@ class InVMGoalStateMetaData(DataContract):
     Object for parsing the GoalState MetaData received from CRP
     Eg: <InVMGoalStateMetaData inSvdSeqNo="2" createdOnTicks="637405409304121230" activityId="555e551c-600e-4fb4-90ba-8ab8ec28eccc" correlationId="400de90b-522e-491f-9d89-ec944661f531" />
     """
-    def __init__(self):
-        self.in_svd_seq_no = None
-        self.created_on_ticks = None
-        self.activity_id = None
-        self.correlation_id = None
-
-    def parse_node(self, in_vm_metadata_node):
-
-        def __ticks_to_datetime(ticks):
-            if ticks in (None, ""):
-                return None
-            try:
-                # C# ticks is a number of ticks since midnight 0001-01-01 00:00:00 (every tick is 1/10000000 of second)
-                # and UNIX timestamp is number of seconds since beginning of the UNIX epoch (1970-01-01 01:00:00).
-                # This function converts the ticks to datetime object that Python recognises.
-                return datetime.min + timedelta(seconds=float(ticks) / 10 ** 7)
-            except Exception:
-                return None
-
+    def __init__(self, in_vm_metadata_node):
         self.correlation_id = getattrib(in_vm_metadata_node, "correlationId")
         self.activity_id = getattrib(in_vm_metadata_node, "activityId")
-        self.created_on_ticks = __ticks_to_datetime(getattrib(in_vm_metadata_node, "createdOnTicks"))
+        self.created_on_ticks = getattrib(in_vm_metadata_node, "createdOnTicks")
         self.in_svd_seq_no = getattrib(in_vm_metadata_node, "inSvdSeqNo")
 
 

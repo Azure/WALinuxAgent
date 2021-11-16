@@ -22,11 +22,13 @@ class AgentGlobals(object):
     This class is used for setting AgentGlobals which can be used all throughout the Agent.
     """
 
+    GUID_ZERO = "00000000-0000-0000-0000-000000000000"
+
     #
     # Some modules (e.g. telemetry) require an up-to-date container ID. We update this variable each time we
     # fetch the goal state.
     #
-    _container_id = "00000000-0000-0000-0000-000000000000"
+    _container_id = GUID_ZERO
 
     @staticmethod
     def get_container_id():

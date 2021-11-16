@@ -293,36 +293,6 @@ class ExtHandlersHandler(object):
                self.__gs_aggregate_status.status == GoalStateStatus.Failed and \
                self.__gs_aggregate_status.code == GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures
 
-    def get_goal_state_debug_metadata(self):
-        """
-        This function fetches metadata fetched from the GoalState for better debuggability
-        :return: Tuple (activity_id, correlation_id, gs_created_timestamp) or "NA" for any property that's not available
-        """
-
-        def format_value(parse_fn, value):
-
-            try:
-                if value not in (None, ""):
-                    return parse_fn(value)
-            except Exception as e:
-                # A failure here isn't a fatal error, because the info we're
-                # trying to retrieve is debug only on linux.
-                error_msg = u"Couldn't parse debug metadata value: {0}".format(e)
-                logger.verbose(error_msg)
-
-            return "NA"
-
-        to_utc = lambda time: time.strftime(logger.Logger.LogTimeFormatInUTC)
-        identity = lambda value: value
-
-        in_vm_gs_metadata = self.protocol.get_in_vm_gs_metadata()
-
-        gs_creation_time = format_value(to_utc, in_vm_gs_metadata.created_on_ticks)
-        activity_id = format_value(identity, in_vm_gs_metadata.activity_id)
-        correlation_id = format_value(identity, in_vm_gs_metadata.correlation_id)
-
-        return activity_id, correlation_id, gs_creation_time
-
     def run(self):
         etag, activity_id, correlation_id, gs_creation_time = None, None, None, None
 
@@ -333,7 +303,11 @@ class ExtHandlersHandler(object):
             if not self._extension_processing_allowed():
                 return
 
-            activity_id, correlation_id, gs_creation_time = self.get_goal_state_debug_metadata()
+            extensions_goal_state = self.protocol.get_extensions_goal_state()
+
+            gs_creation_time = extensions_goal_state.created_on_timestamp
+            activity_id = extensions_goal_state.activity_id
+            correlation_id = extensions_goal_state.correlation_id
         except Exception as error:
             msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
             logger.warn(msg)
@@ -367,7 +341,7 @@ class ExtHandlersHandler(object):
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
 
     def __get_unsupported_features(self):
-        required_features = self.protocol.get_required_features()
+        required_features = self.protocol.client.get_extensions_goal_state().required_features
         supported_features = get_agent_supported_features_list_for_crp()
         return [feature for feature in required_features if feature not in supported_features]
 
@@ -476,8 +450,7 @@ class ExtHandlersHandler(object):
             return False
 
         if conf.get_enable_overprovisioning():
-            artifacts_profile = self.protocol.get_artifacts_profile()
-            if artifacts_profile and artifacts_profile.is_on_hold():
+            if self.protocol.get_extensions_goal_state().on_hold:
                 logger.info("Extension handling is on hold")
                 return False
 
