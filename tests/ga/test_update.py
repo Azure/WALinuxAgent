@@ -1655,14 +1655,15 @@ class TestUpdate(UpdateTestCase):
             return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
         with _get_update_handler(iterations) as (update_handler, _):
-            with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
+            with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen) as mock_popen:
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
                     with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
                         update_handler.run(debug=True)
 
         # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
         self.assertEqual(3, len(executed_commands),
-                         "The number of times firewall-cmd should be called is only 3; {0}".format(executed_commands))
+                         "The number of times firewall-cmd should be called is only 3; Executed firewall commands: {0}; All popen calls: {1}".format(
+                             executed_commands, mock_popen.call_args_list))
         self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),
                          "First command should be to check if firewalld is running")
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
