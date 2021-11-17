@@ -1661,7 +1661,8 @@ class TestUpdate(UpdateTestCase):
                         update_handler.run(debug=True)
 
         # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
-        self.assertEqual(3, len(executed_commands), "The number of times firwall-cmd should be called is only 3")
+        self.assertEqual(3, len(executed_commands),
+                         "The number of times firewall-cmd should be called is only 3; {0}".format(executed_commands))
         self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),
                          "First command should be to check if firewalld is running")
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
