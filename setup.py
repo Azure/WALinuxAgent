@@ -143,6 +143,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/mariner/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/mariner/waagent.service"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
     elif name == 'ubuntu':
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
