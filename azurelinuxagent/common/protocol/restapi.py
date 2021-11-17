@@ -71,9 +71,15 @@ class VMAgentManifestUri(DataContract):
 
 
 class VMAgentManifest(DataContract):
-    def __init__(self, family=None):
+    def __init__(self, family):
         self.family = family
         self.versionsManifestUris = DataContractList(VMAgentManifestUri)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "{{ family: '{0}' uris: {1}}}".format(self.family, self.versionsManifestUris)
 
 
 class VMAgentManifestList(DataContract):

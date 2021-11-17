@@ -36,12 +36,8 @@ class ExtensionsGoalState(object):
     ExtensionsConfig when the goal state is retrieved from the WireServe or from vmSettings when it is retrieved from
     the HostGAPlugin.
 
-    NOTE: Do not instantiate this class directly, use the ExtensionsGoalStateFactory instead.
+    NOTE: This is an abstract class. The corresponding concrete classes can be instantiated using the ExtensionsGoalStateFactory.
     """
-    def __init__(self):
-        self.ext_handlers = ExtHandlerList()
-        self.vmagent_manifests = VMAgentManifestList()
-
     @property
     def id(self):
         """
@@ -79,6 +75,14 @@ class ExtensionsGoalState(object):
 
     @property
     def on_hold(self):
+        raise NotImplementedError()
+
+    @property
+    def agent_manifests(self):
+        raise NotImplementedError()
+
+    @property
+    def ext_handlers(self):
         raise NotImplementedError()
 
     def get_redacted_text(self):
@@ -153,6 +157,10 @@ class ExtensionsGoalState(object):
 
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
+    def __init__(self):
+        self._agent_manifests = VMAgentManifestList()
+        self._ext_handlers = ExtHandlerList()
+
     @property
     def id(self):
         return self._string_to_id(None)
@@ -188,6 +196,13 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
     def on_hold(self):
         return False
 
+    @property
+    def agent_manifests(self):
+        return self._agent_manifests
+
+    @property
+    def ext_handlers(self):
+        return self._ext_handlers
+
     def get_redacted_text(self):
         return ''
-

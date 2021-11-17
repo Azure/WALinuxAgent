@@ -127,7 +127,7 @@ class WireProtocol(DataContract):
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_extensions_goal_state()
-        return ext_conf.vmagent_manifests, goal_state.incarnation
+        return ext_conf.agent_manifests, goal_state.incarnation
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()

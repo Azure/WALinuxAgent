@@ -26,6 +26,16 @@
 </RequiredFeatures>
 <StatusUploadBlob statusBlobType="BlockBlob">https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=KNWgC2%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=w</StatusUploadBlob>
 <Plugins>
+  <Plugin name="Microsoft.Azure.Monitor.AzureMonitorLinuxAgent" version="1.9.1" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://zrdfepirv2cbn09pr02a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent" version="2.15.112" location="https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
   <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.6" location="https://umsavwggj2v40kvqhc0w.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsafwzhkbm1rfrhl0ws.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
     <additionalLocations>
       <additionalLocation>https://umsanh4b5rfz0q0p4pwm.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml</additionalLocation>
@@ -38,6 +48,32 @@
   </Plugin>
 </Plugins>
 <PluginSettings>
+  <Plugin name="Microsoft.Azure.Monitor.AzureMonitorLinuxAgent" version="1.9.1">
+    <RuntimeSettings seqNo="0">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+        "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
+        "publicSettings": {"GCS_AUTO_CONFIG":true}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent" version="2.15.112">
+    <RuntimeSettings seqNo="0">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+        "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
+        "publicSettings": {"enableGenevaUpload":true}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
   <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.6">
     <RuntimeSettings seqNo="0">{
   "runtimeSettings": [

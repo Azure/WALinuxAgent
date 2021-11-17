@@ -115,10 +115,6 @@ DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS = DATA_FILE.copy()
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings-protected_settings.json"
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf-protected_settings.xml"
-
 DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
 DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
 

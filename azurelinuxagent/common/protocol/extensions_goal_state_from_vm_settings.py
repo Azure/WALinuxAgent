@@ -21,6 +21,7 @@ import sys
 
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.restapi import VMAgentManifestList, VMAgentManifest
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
@@ -35,10 +36,12 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._activity_id = None
         self._correlation_id = None
         self._created_on_timestamp = None
+        self._source = None
         self._status_upload_blob = None
         self._status_upload_blob_type = None
         self._required_features = []
         self._on_hold = False
+        self._agent_manifests = VMAgentManifestList()
 
         try:
             self._parse_vm_settings(json_text)
@@ -71,6 +74,13 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._created_on_timestamp
 
     @property
+    def source(self):
+        """
+        Whether the goal state originated from Fabric or Fast Track
+        """
+        return self._source
+
+    @property
     def status_upload_blob(self):
         return self._status_upload_blob
 
@@ -89,6 +99,15 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     def on_hold(self):
         return self._on_hold
 
+    @property
+    def agent_manifests(self):
+        return self._agent_manifests
+
+    @property
+    def ext_handlers(self):
+        # TODO - Implement this
+        raise NotImplementedError()
+
     def get_redacted_text(self):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
 
@@ -97,9 +116,20 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._parse_simple_attributes(vm_settings)
         self._parse_status_upload_blob(vm_settings)
         self._parse_required_features(vm_settings)
-        # TODO: Parse all atttributes
+        self._parse_agent_manifests(vm_settings)
+        self._parse_extensions(vm_settings)
 
     def _parse_simple_attributes(self, vm_settings):
+        # Sample:
+        #     {
+        #         "hostGAPluginVersion": "1.0.8.115",
+        #         "vmSettingsSchemaVersion": "0.0",
+        #         "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
+        #         "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+        #         "extensionsLastModifiedTickCount": 637726657706205217,
+        #         "extensionGoalStatesSource": "Fabric",
+        #         ...
+        #     }
         host_ga_plugin_version = vm_settings.get("hostGAPluginVersion")
         if host_ga_plugin_version is not None:
             self._host_ga_plugin_version = FlexibleVersion(host_ga_plugin_version)
@@ -109,8 +139,20 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._activity_id = self._string_to_id(vm_settings.get("activityId"))
         self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
         self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
+        self._source = vm_settings.get("extensionGoalStatesSource")
+        if self._source is None:
+            self._source = "UNKNOWN"
 
     def _parse_status_upload_blob(self, vm_settings):
+        # Sample:
+        # {
+        #     ...
+        #     "statusUploadBlob": {
+        #         "statusBlobType": "BlockBlob",
+        #         "value": "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+        #     },
+        #     ...
+        # }
         status_upload_blob = vm_settings.get("statusUploadBlob")
         if status_upload_blob is None:
             raise Exception("Missing statusUploadBlob")
@@ -122,6 +164,16 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             raise Exception("Missing statusUploadBlob.statusBlobType")
 
     def _parse_required_features(self, vm_settings):
+        # Sample:
+        # {
+        #     ...
+        #     "requiredFeatures": [
+        #         {
+        #             "name": "MultipleExtensionsPerHandler"
+        #         }
+        #     ],
+        #     ...
+        # }
         required_features = vm_settings.get("requiredFeatures")
         if required_features is not None:
             if not isinstance(required_features, list):
@@ -135,6 +187,46 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                     yield name
 
             self._required_features.extend(get_required_features_names())
+
+    def _parse_agent_manifests(self, vm_settings):
+        # Sample:
+        # {
+        #     ...
+        #     "gaFamilies": [
+        #         {
+        #             "name": "Prod",
+        #             "uris": [
+        #                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
+        #                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
+        #             ]
+        #         },
+        #         {
+        #             "name": "Test",
+        #             "uris": [
+        #                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
+        #                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
+        #             ]
+        #         }
+        #     ],
+        #     ...
+        # }
+        families = vm_settings.get("gaFamilies")
+        if families is None:
+            return
+        if not isinstance(families, list):
+            raise Exception("gaFamilies should be an array")
+
+        for family in families:
+            name = family["name"]
+            uris = family["uris"]
+            manifest = VMAgentManifest(name)
+            for u in uris:
+                manifest.versionsManifestUris.append(u)
+            self._agent_manifests.vmAgentManifests.append(manifest)
+
+    def _parse_extensions(self, vm_settings):
+        # TODO: Implement this
+        pass
 
 
 #
