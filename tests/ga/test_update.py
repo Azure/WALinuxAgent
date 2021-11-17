@@ -46,7 +46,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
-from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
+from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances, mock_sleep, skip_if_predicate_true
 from tests.protocol import mockwiredata
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
