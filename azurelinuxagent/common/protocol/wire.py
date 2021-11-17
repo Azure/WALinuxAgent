@@ -1337,7 +1337,7 @@ class WireClient(object):
                 etag, vm_settings = self._fetch_vm_settings(None)
                 extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(etag, vm_settings)
                 message = "HostGAPlugin version: {0}".format(extensions_goal_state.host_ga_plugin_version)
-                logger.warn(message)
+                logger.info(message)
                 add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
             except Exception as exception:
                 message = "Failed to determine the HostGAPlugin version. Error: {0}".format(textutil.format_exception(exception))
