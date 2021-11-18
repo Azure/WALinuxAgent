@@ -1332,9 +1332,17 @@ class WireClient(object):
     def get_host_plugin(self):
         if self._host_plugin is None:
             goal_state = GoalState(self)
-            self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
-                                                     goal_state.container_id,
-                                                     goal_state.role_config_name))
+            self._set_host_plugin(HostPluginProtocol(self.get_endpoint(), goal_state.container_id, goal_state.role_config_name))
+            try:
+                etag, vm_settings = self._fetch_vm_settings(None)
+                extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(etag, vm_settings)
+                message = "HostGAPlugin version: {0}".format(extensions_goal_state.host_ga_plugin_version)
+                logger.info(message)
+                add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
+            except Exception as exception:
+                message = "Failed to determine the HostGAPlugin version. Error: {0}".format(textutil.format_exception(exception))
+                logger.warn(message)
+                add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=False, log_event=False)
         return self._host_plugin
 
     def get_on_hold(self):

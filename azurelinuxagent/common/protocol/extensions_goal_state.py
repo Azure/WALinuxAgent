@@ -21,6 +21,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.protocol.restapi import ExtHandlerList, VMAgentManifestList
 
 
@@ -108,8 +109,10 @@ class ExtensionsGoalState(object):
         compare_attribute("activity_id")
         compare_attribute("correlation_id")
         compare_attribute("created_on_timestamp")
-        compare_attribute("status_upload_blob")
-        compare_attribute("status_upload_blob_type")
+        # The status blob was added after version 112
+        if from_vm_settings.host_ga_plugin_version > FlexibleVersion("1.0.8.112"):
+            compare_attribute("status_upload_blob")
+            compare_attribute("status_upload_blob_type")
         compare_attribute("required_features")
         compare_attribute("on_hold")
 
