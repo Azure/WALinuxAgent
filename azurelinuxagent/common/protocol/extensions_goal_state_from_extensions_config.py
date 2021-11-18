@@ -24,8 +24,8 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerVersionUri, VMAgentManifest, \
-    VMAgentManifestUri, ExtensionState, ExtHandlerList, VMAgentManifestList, InVMGoalStateMetaData
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, VMAgentManifest, \
+    ExtensionState, ExtHandlerList, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -42,7 +42,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._activity_id = None
         self._correlation_id = None
         self._created_on_timestamp = None
-        self._agent_manifests = VMAgentManifestList()
+        self._agent_manifests = []
         self._ext_handlers = ExtHandlerList()
 
         try:
@@ -63,9 +63,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             uris = findall(uris_list, "Uri")
             manifest = VMAgentManifest(family)
             for uri in uris:
-                manifest_uri = VMAgentManifestUri(uri=gettext(uri))
-                manifest.versionsManifestUris.append(manifest_uri)
-            self._agent_manifests.vmAgentManifests.append(manifest)
+                manifest.uris.append(gettext(uri))
+            self._agent_manifests.append(manifest)
 
         self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
@@ -294,9 +293,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             locations += [gettext(node) for node in nodes_list]
 
         for uri in locations:
-            version_uri = ExtHandlerVersionUri()
-            version_uri.uri = uri
-            ext_handler.versionUris.append(version_uri)
+            ext_handler.versionUris.append(uri)
 
     @staticmethod
     def _parse_plugin_settings(ext_handler, plugin_settings):

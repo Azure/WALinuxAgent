@@ -864,8 +864,7 @@ class UpdateHandler(object):
         try:
             manifest_list, etag = protocol.get_vmagent_manifests()
 
-            manifests = [m for m in manifest_list.vmAgentManifests \
-                         if m.family == family and len(m.versionsManifestUris) > 0]
+            manifests = [m for m in manifest_list if m.family == family and len(m.uris) > 0]
             if len(manifests) == 0:
                 logger.verbose(u"Incarnation {0} has no {1} agent updates",
                                etag, family)
@@ -1190,7 +1189,7 @@ class GuestAgent(object):
         uris_shuffled = self.pkg.uris
         random.shuffle(uris_shuffled)
         for uri in uris_shuffled:
-            if not HostPluginProtocol.is_default_channel and self._fetch(uri.uri):
+            if not HostPluginProtocol.is_default_channel and self._fetch(uri):
                 break
 
             elif self.host is not None and self.host.ensure_initialized():
@@ -1199,7 +1198,7 @@ class GuestAgent(object):
                 else:
                     logger.verbose("Using host plugin as default channel")
 
-                uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
+                uri, headers = self.host.get_artifact_request(uri, self.host.manifest_uri)
                 try:
                     if self._fetch(uri, headers=headers, use_proxy=False):
                         if not HostPluginProtocol.is_default_channel:

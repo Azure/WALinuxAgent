@@ -38,7 +38,6 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateMisma
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _ErrorReporter
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
@@ -484,8 +483,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
             self.assertEqual(0, len(extensions_goal_state.ext_handlers.extHandlers),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
-            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests.vmAgentManifests]
-            self.assertEqual(0, len(extensions_goal_state.agent_manifests.vmAgentManifests),
+            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
+            self.assertEqual(0, len(extensions_goal_state.agent_manifests),
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
             self.assertIsNone(extensions_goal_state.status_upload_blob,
                               "Status upload blob in the extension config is expected to be None")
@@ -504,8 +503,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
             self.assertEqual(1, len(extensions_goal_state.ext_handlers.extHandlers),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
-            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests.vmAgentManifests]
-            self.assertEqual(2, len(extensions_goal_state.agent_manifests.vmAgentManifests),
+            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
+            self.assertEqual(2, len(extensions_goal_state.agent_manifests),
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
             self.assertEqual("https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&sp=rw"
                              "&se=9999-01-01&sk=key1&sv=2014-02-14&sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo",
@@ -646,7 +645,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+            manifest = protocol.client.fetch_manifest([manifest_url])
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -669,7 +668,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
 
             try:
-                manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+                manifest = protocol.client.fetch_manifest([manifest_url])
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -706,7 +705,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.client.get_host_plugin()
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
-                manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+                manifest = protocol.client.fetch_manifest([manifest_url])
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml)
@@ -740,7 +739,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+                protocol.client.fetch_manifest([manifest_url])
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))

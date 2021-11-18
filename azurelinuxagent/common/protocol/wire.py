@@ -40,7 +40,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state_factory import Extens
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
-    ExtHandlerPackageList, ExtHandlerVersionUri, ProvisionStatus, VMInfo, VMStatus
+    ExtHandlerPackageList, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.archive import StateFlusher
@@ -651,7 +651,7 @@ class WireClient(object):
 
         uris_tried = 0
         start_time = datetime.now()
-        for version in version_uris_shuffled:
+        for version_uri in version_uris_shuffled:
 
             if datetime.now() - start_time > timedelta(minutes=timeout_in_minutes, milliseconds=timeout_in_ms):
                 logger.warn("Agent timed-out after {0} minutes while fetching extension manifests. {1}/{2} uris tried.",
@@ -660,23 +660,23 @@ class WireClient(object):
 
             # GA expects a location and failoverLocation in ExtensionsConfig, but
             # this is not always the case. See #1147.
-            if version.uri is None:
+            if version_uri is None:
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri, max_retry=1)[0]  # pylint: disable=W0640
+            direct_func = lambda: self.fetch(version_uri, max_retry=1)[0]  # pylint: disable=W0640
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda: self.fetch_manifest_through_host(version.uri)  # pylint: disable=W0640
+            host_func = lambda: self.fetch_manifest_through_host(version_uri)  # pylint: disable=W0640
 
             try:
                 manifest = self.send_request_using_appropriate_channel(direct_func, host_func)
                 if manifest is not None:
                     host = self.get_host_plugin()
-                    host.update_manifest_uri(version.uri)
+                    host.update_manifest_uri(version_uri)
                     return manifest
             except Exception as error:
-                logger.warn("Failed to fetch manifest from {0}. Error: {1}", version.uri, ustr(error))
+                logger.warn("Failed to fetch manifest from {0}. Error: {1}", version_uri, ustr(error))
 
             uris_tried += 1
 
@@ -978,7 +978,7 @@ class WireClient(object):
         local_file = os.path.join(conf.get_lib_dir(), local_file)
 
         try:
-            xml_text = self.fetch_manifest(vmagent_manifest.versionsManifestUris)
+            xml_text = self.fetch_manifest(vmagent_manifest.uris)
             fileutil.write_file(local_file, xml_text)
             return ExtensionManifest(xml_text)
         except Exception as e:
@@ -1425,9 +1425,7 @@ class ExtensionManifest(object):
             pkg.version = version
             pkg.disallow_major_upgrade = disallow_major_upgrade
             for uri in uri_list:
-                pkg_uri = ExtHandlerVersionUri()
-                pkg_uri.uri = uri
-                pkg.uris.append(pkg_uri)
+                pkg.uris.append(uri)
 
             pkg.isinternal = isinternal
             self.pkg_list.versions.append(pkg)

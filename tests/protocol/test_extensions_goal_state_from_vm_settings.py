@@ -26,10 +26,10 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         assert_property("on_hold", False)
 
         # we check only 1 item in each list (but check the length of each list)
-        self.assertEqual(2, len(vm_settings.agent_manifests.vmAgentManifests), "Incorrect number of agent manifests. Got: {0}".format(vm_settings.agent_manifests.vmAgentManifests))
-        self.assertEqual("Prod", vm_settings.agent_manifests.vmAgentManifests[0].family, "Incorrect agent family.")
-        self.assertEqual(2, len(vm_settings.agent_manifests.vmAgentManifests[0].versionsManifestUris), "Incorrect number of uris.")
-        self.assertEqual("https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml", vm_settings.agent_manifests.vmAgentManifests[0].versionsManifestUris[0], "Incorrect number of uris.")
+        self.assertEqual(2, len(vm_settings.agent_manifests), "Incorrect number of agent manifests. Got: {0}".format(vm_settings.agent_manifests))
+        self.assertEqual("Prod", vm_settings.agent_manifests[0].family, "Incorrect agent family.")
+        self.assertEqual(2, len(vm_settings.agent_manifests[0].uris), "Incorrect number of uris. Got: {0}".format(vm_settings.agent_manifests[0].uris))
+        self.assertEqual("https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml", vm_settings.agent_manifests[0].uris[0], "Incorrect number of uris.")
 
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):

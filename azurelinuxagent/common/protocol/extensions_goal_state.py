@@ -22,7 +22,7 @@ from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.protocol.restapi import ExtHandlerList, VMAgentManifestList
+from azurelinuxagent.common.protocol.restapi import ExtHandlerList
 
 
 class GoalStateMismatchError(AgentError):
@@ -158,7 +158,7 @@ class ExtensionsGoalState(object):
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
     def __init__(self):
-        self._agent_manifests = VMAgentManifestList()
+        self._agent_manifests = []
         self._ext_handlers = ExtHandlerList()
 
     @property

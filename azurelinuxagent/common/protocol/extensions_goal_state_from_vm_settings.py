@@ -21,7 +21,7 @@ import sys
 
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import VMAgentManifestList, VMAgentManifest
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
@@ -41,7 +41,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._status_upload_blob_type = None
         self._required_features = []
         self._on_hold = False
-        self._agent_manifests = VMAgentManifestList()
+        self._agent_manifests = []
 
         try:
             self._parse_vm_settings(json_text)
@@ -221,8 +221,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             uris = family["uris"]
             manifest = VMAgentManifest(name)
             for u in uris:
-                manifest.versionsManifestUris.append(u)
-            self._agent_manifests.vmAgentManifests.append(manifest)
+                manifest.uris.append(u)
+            self._agent_manifests.append(manifest)
 
     def _parse_extensions(self, vm_settings):
         # TODO: Implement this
