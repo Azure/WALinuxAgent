@@ -27,7 +27,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             test_property("status_upload_blob",      'MOCK_UPLOAD_BLOB')
             test_property("status_upload_blob_type", 'MOCK_UPLOAD_BLOB_TYPE')
             test_property("required_features",       ['MOCK_REQUIRED_FEATURE'])
-            test_property("on_hold",                 True)
+            test_property("on_hold",                 False)
 
     def test_compare_should_check_the_status_upload_blob_only_when_the_host_ga_plugin_version_is_greater_then_112(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
