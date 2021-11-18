@@ -69,6 +69,12 @@ class VMAgentManifest(object):
         self.family = family
         self.uris = []
 
+    def __eq__(self, other):
+        return self.family == other.family and self.uris == other.uris
+
+    def __ne__(self, other):
+        return not (self == other)
+
     def __repr__(self):
         return self.__str__()
 

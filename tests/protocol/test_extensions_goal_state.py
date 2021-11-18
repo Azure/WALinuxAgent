@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
+import copy
 import re
 
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
@@ -29,7 +30,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             test_property("required_features",       ['MOCK_REQUIRED_FEATURE'])
             test_property("on_hold",                 True)
 
-            agent_manifests = from_vm_settings.agent_manifests.copy()
+            agent_manifests = copy.deepcopy(from_vm_settings.agent_manifests)
             agent_manifests[0].family = 'MOCK_FAMILY'
             test_property("agent_manifests", agent_manifests)
 
