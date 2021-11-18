@@ -119,6 +119,7 @@ class ExtensionsGoalState(object):
             compare_attribute("status_upload_blob_type")
         compare_attribute("required_features")
         compare_attribute("on_hold")
+        compare_attribute("agent_manifests")
 
     def _do_common_validations(self):
         """

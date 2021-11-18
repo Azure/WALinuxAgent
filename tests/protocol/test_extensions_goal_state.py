@@ -18,7 +18,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
                 full_name = "azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings.ExtensionsGoalStateFromVmSettings.{0}".format(name)
                 with patch(full_name, new_callable=PropertyMock) as property_mock:
                     property_mock.return_value = value
-                    with self.assertRaisesRegexCM(GoalStateMismatchError, r"Attribute: {0}.*{1}".format(name, value), re.DOTALL):
+                    with self.assertRaisesRegexCM(GoalStateMismatchError, r"Attribute: {0}.*{1}".format(name, re.escape(str(value))), re.DOTALL):
                         ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
 
             test_property("activity_id",             'MOCK_ACTIVITY_ID')
@@ -28,6 +28,10 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             test_property("status_upload_blob_type", 'MOCK_UPLOAD_BLOB_TYPE')
             test_property("required_features",       ['MOCK_REQUIRED_FEATURE'])
             test_property("on_hold",                 True)
+
+            agent_manifests = from_vm_settings.agent_manifests.copy()
+            agent_manifests[0].family = 'MOCK_FAMILY'
+            test_property("agent_manifests", agent_manifests)
 
     def test_compare_should_check_the_status_upload_blob_only_when_the_host_ga_plugin_version_is_greater_then_112(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
