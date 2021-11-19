@@ -14,7 +14,8 @@ from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionSta
     GoalStateStatus, ExtHandlerInstance
 from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
 from tests.tools import AgentTestCase, mock_sleep, patch
 

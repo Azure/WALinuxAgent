@@ -28,7 +28,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtCommandEnvVariable
 
 from tests.tools import Mock, patch
-from tests.protocol.mocks import HttpRequestPredicates
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
 
 class ExtensionCommandNames(object):
