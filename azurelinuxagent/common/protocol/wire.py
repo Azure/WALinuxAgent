@@ -814,7 +814,12 @@ class WireClient(object):
                     request_etag = None if force_update or self._extensions_goal_state_from_vm_settings is None else self._extensions_goal_state_from_vm_settings.id
                     response_etag, vm_settings = self._fetch_vm_settings(request_etag)
                     if vm_settings is not None:  # vmSettings is None when there has not been a new goal state, or the HostGAPlugin does not support FastTrack
+                        is_first_vm_settings = self._extensions_goal_state_from_vm_settings is None
                         self._extensions_goal_state_from_vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, vm_settings)
+                        if is_first_vm_settings:
+                            message = "HostGAPlugin version: {0}".format(self._extensions_goal_state_from_vm_settings.host_ga_plugin_version)
+                            logger.info(message)
+                            add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
                         updated = True
                     # If either goal state was updated, compare them
                     if updated and self._extensions_goal_state_from_vm_settings is not None:
@@ -1333,16 +1338,6 @@ class WireClient(object):
         if self._host_plugin is None:
             goal_state = GoalState(self)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(), goal_state.container_id, goal_state.role_config_name))
-            try:
-                etag, vm_settings = self._fetch_vm_settings(None)
-                extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(etag, vm_settings)
-                message = "HostGAPlugin version: {0}".format(extensions_goal_state.host_ga_plugin_version)
-                logger.info(message)
-                add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
-            except Exception as exception:
-                message = "Failed to determine the HostGAPlugin version. Error: {0}".format(textutil.format_exception(exception))
-                logger.warn(message)
-                add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=False, log_event=False)
         return self._host_plugin
 
     def get_on_hold(self):
