@@ -64,21 +64,22 @@ class CertList(DataContract):
         self.certificates = DataContractList(Cert)
 
 
-# TODO: confirm vmagent manifest schema
-class VMAgentManifestUri(DataContract):
-    def __init__(self, uri=None):
-        self.uri = uri
-
-
-class VMAgentManifest(DataContract):
-    def __init__(self, family=None):
+class VMAgentManifest(object):
+    def __init__(self, family):
         self.family = family
-        self.versionsManifestUris = DataContractList(VMAgentManifestUri)
+        self.uris = []
 
+    def __eq__(self, other):
+        return self.family == other.family and self.uris == other.uris
 
-class VMAgentManifestList(DataContract):
-    def __init__(self):
-        self.vmAgentManifests = DataContractList(VMAgentManifest)
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "[family: '{0}' uris: {1}]".format(self.family, self.uris)
 
 
 class ExtensionState(object):
@@ -140,11 +141,6 @@ class ExtHandlerProperties(DataContract):
         self.extensions = DataContractList(Extension)
 
 
-class ExtHandlerVersionUri(DataContract):
-    def __init__(self):
-        self.uri = None
-
-
 class ExtHandler(DataContract):
     """
     The main Plugin/handler specified by the publishers.
@@ -155,7 +151,7 @@ class ExtHandler(DataContract):
     def __init__(self, name=None):
         self.name = name
         self.properties = ExtHandlerProperties()
-        self.versionUris = DataContractList(ExtHandlerVersionUri)
+        self.versionUris = []
         self.__invalid_handler_setting_reason = None
         self.supports_multi_config = False
 
@@ -201,15 +197,10 @@ class ExtHandlerList(DataContract):
         self.extHandlers = DataContractList(ExtHandler)
 
 
-class ExtHandlerPackageUri(DataContract):
-    def __init__(self, uri=None):
-        self.uri = uri
-
-
 class ExtHandlerPackage(DataContract):
     def __init__(self, version=None):
         self.version = version
-        self.uris = DataContractList(ExtHandlerPackageUri)
+        self.uris = []
         # TODO update the naming to align with metadata protocol
         self.isinternal = False
         self.disallow_major_upgrade = False

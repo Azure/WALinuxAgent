@@ -21,16 +21,12 @@ from azurelinuxagent.common.utils import restutil
 from tests.tools import patch
 from tests.protocol import mockwiredata
 
-# regex used to determine whether to use the mock wireserver data
-_USE_MOCK_WIRE_DATA_RE = re.compile(
-    r'https?://(mock-goal-state|{0}).*'.format(restutil.KNOWN_WIRESERVER_IP.replace(r'.', r'\.')), re.IGNORECASE)
-
 
 @contextlib.contextmanager
 def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True):
     """
-    Creates a WireProtocol object that handles requests to the WireServer and the Host GA Plugin (i.e requests on the WireServer endpoint), plus
-    some requests to storage (requests on the fake server 'mock-goal-state').
+    Creates a WireProtocol object that handles requests to the WireServer, the Host GA Plugin, and some requests to storage (requests that provide mock data
+    in mockwiredata.py).
 
     The data returned by those requests is read from the files specified by 'mock_wire_data_file' (which must follow the structure of the data
     files defined in tests/protocol/mockwiredata.py).
@@ -101,15 +97,17 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
                 return return_value
 
         # if the request was not handled try to use the mock wireserver data
-        if _USE_MOCK_WIRE_DATA_RE.match(url) is not None:
+        try:
             if method == 'GET':
                 return protocol.mock_wire_data.mock_http_get(url, **kwargs)
             if method == 'POST':
                 return protocol.mock_wire_data.mock_http_post(url, data, **kwargs)
             if method == 'PUT':
                 return protocol.mock_wire_data.mock_http_put(url, data, **kwargs)
+        except NotImplementedError:
+            pass
 
-        # the request was not handled; fail or call the original resutil.http_request
+        # if there was not a response for the request then fail it or call the original resutil.http_request
         if fail_on_unknown_request:
             raise ValueError('Unknown HTTP request: {0} [{1}]'.format(url, method))
         return original_http_request(method, url, data, **kwargs)

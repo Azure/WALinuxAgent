@@ -1301,7 +1301,7 @@ class ExtHandlerInstance(object):
                 random.shuffle(uris_shuffled)
 
                 for uri in uris_shuffled:
-                    if not self._download_extension_package(uri.uri, destination):
+                    if not self._download_extension_package(uri, destination):
                         continue
 
                     if self._unzip_extension_package(destination, self.get_base_dir()):

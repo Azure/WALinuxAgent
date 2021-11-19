@@ -24,14 +24,14 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerVersionUri, VMAgentManifest, \
-    VMAgentManifestUri, ExtensionState, ExtHandlerList, VMAgentManifestList, InVMGoalStateMetaData
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, VMAgentManifest, \
+    ExtensionState, ExtHandlerList, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
 
 class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
-    def __init__(self, incarnation, xml_text, wire_client=None):
+    def __init__(self, incarnation, xml_text, wire_client):
         super(ExtensionsGoalStateFromExtensionsConfig, self).__init__()
         self._id = incarnation
         self._text = xml_text
@@ -42,9 +42,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._activity_id = None
         self._correlation_id = None
         self._created_on_timestamp = None
-
-        self.ext_handlers = ExtHandlerList()
-        self.vmagent_manifests = VMAgentManifestList()
+        self._agent_manifests = []
+        self._ext_handlers = ExtHandlerList()
 
         try:
             self._parse_extensions_config(xml_text, wire_client)
@@ -62,12 +61,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             family = findtext(ga_family, "Name")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
-            manifest = VMAgentManifest()
-            manifest.family = family
+            manifest = VMAgentManifest(family)
             for uri in uris:
-                manifest_uri = VMAgentManifestUri(uri=gettext(uri))
-                manifest.versionsManifestUris.append(manifest_uri)
-            self.vmagent_manifests.vmAgentManifests.append(manifest)
+                manifest.uris.append(gettext(uri))
+            self._agent_manifests.append(manifest)
 
         self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
@@ -165,9 +162,17 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     def on_hold(self):
         return self._on_hold
 
+    @property
+    def agent_manifests(self):
+        return self._agent_manifests
+
+    @property
+    def ext_handlers(self):
+        return self._ext_handlers
+
     def get_redacted_text(self):
         text = self._text
-        for ext_handler in self.ext_handlers.extHandlers:
+        for ext_handler in self._ext_handlers.extHandlers:
             for extension in ext_handler.properties.extensions:
                 if extension.protectedSettings is not None:
                     text = text.replace(extension.protectedSettings, "*** REDACTED ***")
@@ -231,7 +236,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             except ExtensionsConfigError as error:
                 ext_handler.invalid_setting_reason = ustr(error)
 
-            self.ext_handlers.extHandlers.append(ext_handler)
+            self._ext_handlers.extHandlers.append(ext_handler)
 
     @staticmethod
     def _parse_plugin(ext_handler, plugin):
@@ -288,9 +293,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             locations += [gettext(node) for node in nodes_list]
 
         for uri in locations:
-            version_uri = ExtHandlerVersionUri()
-            version_uri.uri = uri
-            ext_handler.versionUris.append(version_uri)
+            ext_handler.versionUris.append(uri)
 
     @staticmethod
     def _parse_plugin_settings(ext_handler, plugin_settings):
