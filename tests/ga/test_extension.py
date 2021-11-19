@@ -1736,8 +1736,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         ]
 
         _, protocol = self._create_mock(mockwiredata.WireProtocolData(mockwiredata.DATA_FILE), *args)  # pylint: disable=no-value-for-parameter
-        version_uri = Mock()
-        version_uri.uri = 'http://mock-goal-state/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
+        version_uri = 'http://mock-goal-state/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
         for (installed_version, config_version, expected_version) in cases:
             ext_handler = Mock()
