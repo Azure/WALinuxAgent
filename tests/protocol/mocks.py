@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
-import re
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from tests.tools import patch
