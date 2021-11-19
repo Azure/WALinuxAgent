@@ -30,8 +30,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = etag
         self._text = json_text
-        self._host_ga_plugin_version = FlexibleVersion()
-        self._schema_version = FlexibleVersion()
+        self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
+        self._schema_version = FlexibleVersion('0.0.0.0')
         self._activity_id = None
         self._correlation_id = None
         self._created_on_timestamp = None
@@ -100,15 +100,21 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         # TODO: Parse all atttributes
 
     def _parse_simple_attributes(self, vm_settings):
-        host_ga_plugin_version = vm_settings.get("hostGAPluginVersion")
-        if host_ga_plugin_version is not None:
-            self._host_ga_plugin_version = FlexibleVersion(host_ga_plugin_version)
-        schema_version = vm_settings.get("vmSettingsSchemaVersion")
-        if schema_version is not None:
-            self._schema_version = FlexibleVersion(schema_version)
         self._activity_id = self._string_to_id(vm_settings.get("activityId"))
         self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
         self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
+
+        host_ga_plugin_version = vm_settings.get("hostGAPluginVersion")
+        if host_ga_plugin_version is not None:
+            self._host_ga_plugin_version = FlexibleVersion(host_ga_plugin_version)
+
+        schema_version = vm_settings.get("vmSettingsSchemaVersion")
+        if schema_version is not None:
+            self._schema_version = FlexibleVersion(schema_version)
+
+        on_hold = vm_settings.get("onHold")
+        if on_hold is not None:
+            self._on_hold = on_hold
 
     def _parse_status_upload_blob(self, vm_settings):
         status_upload_blob = vm_settings.get("statusUploadBlob")

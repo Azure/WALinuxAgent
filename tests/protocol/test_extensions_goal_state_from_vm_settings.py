@@ -23,7 +23,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         assert_property("status_upload_blob", "https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w")
         assert_property("status_upload_blob_type", "BlockBlob")
         assert_property("required_features", ["MultipleExtensionsPerHandler"])
-        assert_property("on_hold", False)
+        assert_property("on_hold", True)
 
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):

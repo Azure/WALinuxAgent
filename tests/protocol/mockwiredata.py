@@ -114,6 +114,7 @@ DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
+DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
 DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings-protected_settings.json"
@@ -275,7 +276,7 @@ class WireProtocolData(object):
                 content = self.in_vm_artifacts_profile
                 self.call_counts["in_vm_artifacts_profile"] += 1
             else:
-                raise Exception("Bad url {0}".format(url))
+                raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         resp.getheaders = Mock(return_value=response_headers)
@@ -291,7 +292,7 @@ class WireProtocolData(object):
             self.call_counts['/HealthService'] += 1
             content = ''
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
@@ -308,7 +309,7 @@ class WireProtocolData(object):
             self.call_counts['/StatusBlob'] += 1
             self.status_blobs.append(data)
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
