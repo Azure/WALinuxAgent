@@ -5,6 +5,7 @@
     "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
     "extensionsLastModifiedTickCount": 637726657706205217,
     "extensionGoalStatesSource": "Fabric",
+    "onHold": true,
     "statusUploadBlob": {
         "statusBlobType": "BlockBlob",
         "value": "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"

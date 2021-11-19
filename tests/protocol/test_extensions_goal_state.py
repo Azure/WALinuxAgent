@@ -28,7 +28,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             test_property("status_upload_blob",      'MOCK_UPLOAD_BLOB')
             test_property("status_upload_blob_type", 'MOCK_UPLOAD_BLOB_TYPE')
             test_property("required_features",       ['MOCK_REQUIRED_FEATURE'])
-            test_property("on_hold",                 True)
+            test_property("on_hold",                 False)
 
             agent_manifests = copy.deepcopy(from_vm_settings.agent_manifests)
             agent_manifests[0].family = 'MOCK_FAMILY'
