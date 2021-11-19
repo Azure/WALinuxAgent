@@ -265,6 +265,15 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertTrue(isinstance(ret, RedhatOSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")
 
+    def test_get_osutil_it_should_return_uos(self):
+        ret = _get_osutil(distro_name="uos",
+                          distro_code_name="",
+                          distro_version="",
+                          distro_full_name="")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+
     def test_get_osutil_it_should_return_freebsd(self):
         ret = _get_osutil(distro_name="freebsd",
                           distro_code_name="",
