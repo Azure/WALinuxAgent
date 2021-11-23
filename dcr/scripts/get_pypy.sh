@@ -15,4 +15,7 @@ tar xf "$BUILD_SOURCESDIRECTORY/dcr/pypy.tar.bz2" -C "pypy"
 pypy_path=$(ls -d pypy/*/bin/pypy3)
 rm -rf "pypy.tar.bz2"
 popd
+
+# Azure Pipelines adds an extra quote at the end of the variable if we enable bash debugging as it prints an extra line - https://developercommunity.visualstudio.com/t/pipeline-variable-incorrectly-inserts-single-quote/375679
+set +x
 echo "##vso[task.setvariable variable=pypyPath]/home/$ADMINUSERNAME/dcr/$pypy_path"
