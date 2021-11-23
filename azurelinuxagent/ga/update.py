@@ -453,7 +453,15 @@ class UpdateHandler(object):
             if available_agent is None:
                 raise AgentUpgradeExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
             else:
-                logger.info("Discovered new Agent {0}".format(available_agent.name))
+                next_normal_time, next_hotfix_time = self.__get_next_upgrade_times()
+                upgrade_type = self.__get_agent_upgrade_type(available_agent)
+                next_time = next_hotfix_time if upgrade_type == AgentUpgradeType.Hotfix else next_normal_time
+                message = "Discovered new {0} upgrade {1}; Will upgrade on or after {2}".format(
+                    upgrade_type, available_agent.name,
+                    datetime.utcfromtimestamp(next_time).strftime(logger.Logger.LogTimeFormatInUTC))
+                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, version=CURRENT_VERSION, is_success=True,
+                          message=message, log_event=False)
+                logger.info(message)
 
         self.__upgrade_agent_if_permitted()
 
@@ -864,8 +872,7 @@ class UpdateHandler(object):
         try:
             manifest_list, etag = protocol.get_vmagent_manifests()
 
-            manifests = [m for m in manifest_list.vmAgentManifests \
-                         if m.family == family and len(m.versionsManifestUris) > 0]
+            manifests = [m for m in manifest_list if m.family == family and len(m.uris) > 0]
             if len(manifests) == 0:
                 logger.verbose(u"Incarnation {0} has no {1} agent updates",
                                etag, family)
@@ -1010,10 +1017,10 @@ class UpdateHandler(object):
             message=msg,
             log_event=False)
 
-    def __upgrade_agent_if_permitted(self):
+    def __get_next_upgrade_times(self):
         """
-        Check every 4hrs for a Hotfix Upgrade and 24 hours for a Normal upgrade and upgrade the agent if available.
-        raises: ExitException when a new upgrade is available in the relevant time window, else returns
+        Get the next upgrade times
+        return: Next Normal Upgrade Time, Next Hotfix Upgrade Time
         """
 
         def get_next_process_time(last_val, frequency):
@@ -1023,6 +1030,24 @@ class UpdateHandler(object):
         next_hotfix_time = get_next_process_time(self._last_hotfix_upgrade_time, conf.get_hotfix_upgrade_frequency())
         next_normal_time = get_next_process_time(self._last_normal_upgrade_time, conf.get_normal_upgrade_frequency())
 
+        return next_normal_time, next_hotfix_time
+
+    @staticmethod
+    def __get_agent_upgrade_type(available_agent):
+        # We follow semantic versioning for the agent, if <Major>.<Minor> is same, then <Patch>.<Build> has changed.
+        # In this case, we consider it as a Hotfix upgrade. Else we consider it a Normal upgrade.
+        if available_agent.version.major == CURRENT_VERSION.major and available_agent.version.minor == CURRENT_VERSION.minor:
+            return AgentUpgradeType.Hotfix
+        return AgentUpgradeType.Normal
+
+    def __upgrade_agent_if_permitted(self):
+        """
+        Check every 4hrs for a Hotfix Upgrade and 24 hours for a Normal upgrade and upgrade the agent if available.
+        raises: ExitException when a new upgrade is available in the relevant time window, else returns
+        """
+
+        next_normal_time, next_hotfix_time = self.__get_next_upgrade_times()
+        now = time.time()
         # Not permitted to update yet for any of the AgentUpgradeModes
         if next_hotfix_time > now and next_normal_time > now:
             return
@@ -1036,28 +1061,13 @@ class UpdateHandler(object):
             logger.verbose("No agent upgrade discovered")
             return
 
-        # We follow semantic versioning for the agent, if <Major>.<Minor> is same, then <Patch>.<Build> has changed.
-        # In this case, we consider it as a Hotfix upgrade. Else we consider it a Normal upgrade.
-        is_hotfix_upgrade = available_agent.version.major == CURRENT_VERSION.major and available_agent.version.minor == CURRENT_VERSION.minor
-        upgrade_message = "{0} Agent upgrade discovered, updating to {1} -- exiting"
+        upgrade_type = self.__get_agent_upgrade_type(available_agent)
+        upgrade_message = "{0} Agent upgrade discovered, updating to {1} -- exiting".format(upgrade_type,
+                                                                                            available_agent.name)
 
-        if is_hotfix_upgrade and next_hotfix_time <= now:
-            raise AgentUpgradeExitException(upgrade_message.format(AgentUpgradeType.Hotfix, available_agent.name))
-        elif (not is_hotfix_upgrade) and next_normal_time <= now:
-            raise AgentUpgradeExitException(upgrade_message.format(AgentUpgradeType.Normal, available_agent.name))
-
-        # Not upgrading the agent as the times don't match for their relevant upgrade, logging it appropriately
-        if is_hotfix_upgrade:
-            upgrade_type, next_time = AgentUpgradeType.Hotfix, next_hotfix_time
-        else:
-            upgrade_type, next_time = AgentUpgradeType.Normal, next_normal_time
-
-        message = "Discovered new {0} upgrade {1}; Will upgrade on or after {2}".format(
-            upgrade_type, available_agent.name,
-            datetime.utcfromtimestamp(next_time).strftime(logger.Logger.LogTimeFormatInUTC))
-        add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, version=CURRENT_VERSION, is_success=False,
-                  message=message, log_event=False)
-        logger.info(message)
+        if (upgrade_type == AgentUpgradeType.Hotfix and next_hotfix_time <= now) or (
+                upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
+            raise AgentUpgradeExitException(upgrade_message)
 
 
 class GuestAgent(object):
@@ -1190,7 +1200,7 @@ class GuestAgent(object):
         uris_shuffled = self.pkg.uris
         random.shuffle(uris_shuffled)
         for uri in uris_shuffled:
-            if not HostPluginProtocol.is_default_channel and self._fetch(uri.uri):
+            if not HostPluginProtocol.is_default_channel and self._fetch(uri):
                 break
 
             elif self.host is not None and self.host.ensure_initialized():
@@ -1199,7 +1209,7 @@ class GuestAgent(object):
                 else:
                     logger.verbose("Using host plugin as default channel")
 
-                uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
+                uri, headers = self.host.get_artifact_request(uri, self.host.manifest_uri)
                 try:
                     if self._fetch(uri, headers=headers, use_proxy=False):
                         if not HostPluginProtocol.is_default_channel:

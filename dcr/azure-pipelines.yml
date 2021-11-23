@@ -5,7 +5,6 @@ parameters:
       - agent-bvt
       - extension-telemetry-pipeline
       - ext-seq-multiple-dependencies
-      - agent-persist-firewall
 
   - name: distros
     type: object
@@ -43,7 +42,6 @@ parameters:
         version: "latest"
         name: "rhel7Raw"
 
-# ToDo: Setup trigger for scheduled runs for develop
 trigger:
   - develop
 

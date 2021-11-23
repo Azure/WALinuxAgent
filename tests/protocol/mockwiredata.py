@@ -18,6 +18,7 @@
 import re
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
@@ -114,17 +115,10 @@ DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
-
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS = DATA_FILE.copy()
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings-protected_settings.json"
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf-protected_settings.xml"
+DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
 DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
 DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
-
-
-def is_ga_manifest_request(url):
-    return "manifest_of_ga.xml" in url
 
 
 class WireProtocolData(object):
@@ -263,7 +257,7 @@ class WireProtocolData(object):
             if "manifest.xml" in url:
                 content = self.manifest
                 self.call_counts["manifest.xml"] += 1
-            elif is_ga_manifest_request(url):
+            elif HttpRequestPredicates.is_ga_manifest_request(url):
                 content = self.ga_manifest
                 self.call_counts["manifest_of_ga.xml"] += 1
             elif "ExampleHandlerLinux" in url:
@@ -275,7 +269,7 @@ class WireProtocolData(object):
                 content = self.in_vm_artifacts_profile
                 self.call_counts["in_vm_artifacts_profile"] += 1
             else:
-                raise Exception("Bad url {0}".format(url))
+                raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         resp.getheaders = Mock(return_value=response_headers)
@@ -291,7 +285,7 @@ class WireProtocolData(object):
             self.call_counts['/HealthService'] += 1
             content = ''
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
@@ -308,7 +302,7 @@ class WireProtocolData(object):
             self.call_counts['/StatusBlob'] += 1
             self.status_blobs.append(data)
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp

@@ -30,8 +30,8 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
-    VMAgentManifestList, ExtHandlerPackage, ExtHandlerPackageList, ExtHandler, VMStatus, ExtHandlerStatus, ExtensionStatus
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest, \
+    ExtHandlerPackage, ExtHandlerPackageList, ExtHandler, VMStatus, ExtHandlerStatus, ExtensionStatus
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
@@ -45,11 +45,11 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
 from tests.protocol.mocks import mock_wire_protocol
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT, is_ga_manifest_request
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances, mock_sleep, skip_if_predicate_true
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import HttpRequestPredicates
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -622,7 +622,7 @@ class TestGuestAgent(UpdateTestCase):
         mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri())
+        pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
         agent._download()
 
@@ -638,7 +638,7 @@ class TestGuestAgent(UpdateTestCase):
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri())
+        pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
         self.assertRaises(UpdateError, agent._download)
@@ -666,7 +666,7 @@ class TestGuestAgent(UpdateTestCase):
                                        'role_config')
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri(uri=ext_uri))
+        pkg.uris.append(ext_uri)
         agent = GuestAgent(pkg=pkg)
         agent.host = mock_host
 
@@ -715,7 +715,7 @@ class TestGuestAgent(UpdateTestCase):
         mock_http_get.return_value = ResponseMock(response=agent_pkg)
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri())
+        pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
@@ -727,7 +727,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri())
+        pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
         self.assertEqual(1, agent.error.failure_count)
@@ -740,7 +740,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri())
+        pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
         self.assertEqual(1, agent.error.failure_count)
@@ -754,7 +754,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri())
+        pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
         self.assertEqual(1, agent.error.failure_count)
@@ -773,7 +773,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.is_blacklisted)
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(ExtHandlerPackageUri())
+        pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
         self.assertEqual(1, agent.error.failure_count)
@@ -1795,7 +1795,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
         def reload_conf(url, mock_wire_data):
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations/2:
+            if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations/2:
                 reload_conf.call_count += 1
                 # Ensure the first set of versions were downloaded as part of the first manifest
                 self.__assert_agent_directories_available(versions=["1.0.0", "1.1.0", "1.2.0"])
@@ -1822,7 +1822,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
         def reload_conf(url, mock_wire_data):
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= 2:
+            if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= 2:
                 reload_conf.call_count += 1
                 # Ensure no new agent available so far
                 self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")), "New agent directory should not be found")
@@ -1866,7 +1866,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
         def reload_conf(url, mock_wire_data):
             # This function reloads the conf mid-run to mimic an actual customer scenario
-            if is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations / 2:
+            if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations / 2:
                 reload_conf.call_count += 1
                 # As per our current agent upgrade model, we don't rely on an incarnation update to upgrade the agent. Mocking the same
                 mock_wire_data.data_files["ga_manifest"] = "wire/ga_manifest.xml"
@@ -2025,16 +2025,15 @@ class ProtocolMock(object):
         self.goal_state_is_stale = True
 
     def create_manifests(self):
-        self.agent_manifests = VMAgentManifestList()
+        self.agent_manifests = []
         if len(self.versions) <= 0:
             return
 
         if self.family is not None:
             manifest = VMAgentManifest(family=self.family)
             for i in range(0, 10):
-                manifest_uri = "https://nowhere.msft/agent/{0}".format(i)
-                manifest.versionsManifestUris.append(VMAgentManifestUri(uri=manifest_uri))
-            self.agent_manifests.vmAgentManifests.append(manifest)
+                manifest.uris.append("https://nowhere.msft/agent/{0}".format(i))
+            self.agent_manifests.append(manifest)
 
     def create_packages(self):
         self.agent_packages = ExtHandlerPackageList()
@@ -2045,7 +2044,7 @@ class ProtocolMock(object):
             package = ExtHandlerPackage(str(version))
             for i in range(0, 5):
                 package_uri = "https://nowhere.msft/agent_pkg/{0}".format(i)
-                package.uris.append(ExtHandlerPackageUri(uri=package_uri))
+                package.uris.append(package_uri)
             self.agent_packages.versions.append(package)
 
     def get_protocol(self):

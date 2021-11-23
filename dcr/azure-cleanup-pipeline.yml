@@ -9,6 +9,9 @@ schedules:
       - develop
     always: true
 
+# no PR triggers
+pr: none
+
 pool:
   vmImage: ubuntu-latest
 
