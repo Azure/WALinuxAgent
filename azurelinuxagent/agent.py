@@ -28,7 +28,6 @@ import re
 import subprocess
 import sys
 import threading
-import traceback
 from azurelinuxagent.common import cgroupconfigurator, logcollector
 from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 
@@ -38,7 +37,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
@@ -204,37 +203,17 @@ class Agent(object):
 
         # Check the cgroups unit
         if CollectLogsHandler.should_validate_cgroups():
-
-            def validate_cgroup_path(path):
-                if path is None:
-                    return False, False
-
-                regex_match = re.match(r'^(?P<slice>.*)/(?P<unit>.*)$', path)
-                if regex_match is None:
-                    return False, False
-                
-                slice_group, unit_group = regex_match.group("slice", "unit")
-
-                slice_matches = (slice_group == cgroupconfigurator.AZURE_SLICE)
-                unit_matches = (unit_group == logcollector.CGROUPS_UNIT)
-
-                return slice_matches, unit_matches
-
             cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
 
-            cpu_slice_matches, cpu_unit_matches = validate_cgroup_path(cpu_cgroup_path)
-            memory_slice_matches, memory_unit_matches = validate_cgroup_path(memory_cgroup_path)
+            cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
+            memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
 
-            if not all([cpu_slice_matches, cpu_unit_matches, memory_slice_matches, memory_unit_matches]):
+            if not cpu_slice_matches or not memory_slice_matches:
                 print("The Log Collector process is not in the proper cgroups:")
                 if not cpu_slice_matches:
                     print("\tunexpected cpu slice")
-                if not cpu_unit_matches:
-                    print("\tunexpected cpu unit")
                 if not memory_slice_matches:
                     print("\tunexpected memory slice")
-                if not memory_unit_matches:
-                    print("\tunexpected memory unit")
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
@@ -298,10 +277,10 @@ def main(args=None):
                 agent.collect_logs(log_collector_full_mode)
             elif command == AgentCommands.SetupFirewall:
                 agent.setup_firewall(firewall_metadata)
-        except Exception:
+        except Exception as e:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
-                         traceback.format_exc())
+                         textutil.format_exception(e))
 
 
 def parse_args(sys_args):

@@ -28,8 +28,10 @@ import threading
 
 from nose.plugins.attrib import attr
 
-from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD, _AGENT_CPU_QUOTA
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD, \
+    DisableCgroups
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
@@ -74,7 +76,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-            self.assertTrue(any(cg for cg in tracked if cg.name == AGENT_NAME_TELEMETRY and 'cpu' in cg.path),
+            self.assertTrue(any(cg for cg in tracked.values() if cg.name == AGENT_NAME_TELEMETRY and 'cpu' in cg.path),
                 "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
@@ -95,7 +97,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             tracked = CGroupsTelemetry._tracked
 
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
-            self.assertFalse(any(cg for cg in tracked if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
+            self.assertFalse(any(cg for cg in tracked.values() if cg.name == 'walinuxagent.service' and 'memory' in cg.path),
                 "The Agent's memory should not be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present(self):
@@ -180,6 +182,42 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
 
+    def test_setup_extension_slice_should_create_unit_files(self):
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+
+            configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension")
+
+            expected_cpu_accounting = "CPUAccounting=yes"
+
+            self.assertTrue(os.path.exists(extension_slice_unit_file), "{0} was not created".format(extension_slice_unit_file))
+            self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_cpu_accounting),
+                "CPUAccounting was not set correctly. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(
+                    extension_slice_unit_file)))
+
+    def test_remove_extension_slice_should_remove_unit_files(self):
+        with self._get_cgroup_configurator() as configurator:
+            with patch("os.path.exists") as mock_path:
+                mock_path.return_value = True
+                # get the paths to the mocked files
+                extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+
+                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
+                                          'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
+                    CpuCgroup('Microsoft.CPlat.Extension',
+                              '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
+
+                configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
+
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertFalse(
+                    any(cg for cg in tracked.values() if cg.name == 'Microsoft.CPlat.Extension' and 'cpu' in cg.path),
+                    "The extension's CPU is being tracked")
+
+            self.assertFalse(os.path.exists(extension_slice_unit_file), "{0} should not be present".format(extension_slice_unit_file))
+
     def test_enable_should_raise_cgroups_exception_when_cgroups_are_not_supported(self):
         with self._get_cgroup_configurator(enable=False) as configurator:
             with patch.object(configurator, "supported", return_value=False):
@@ -195,7 +233,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             configurator.enable()
 
-            expected_quota = "CPUQuota={0}%".format(_AGENT_CPU_QUOTA)
+            expected_quota = "CPUQuota={0}%".format(conf.get_agent_cpu_quota())
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
             self.assertTrue(
                 fileutil.findre_in_file(agent_drop_in_file_cpu_quota, expected_quota),
@@ -220,7 +258,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             if not CGroupsTelemetry._track_throttled_time:
                 raise Exception("Test setup should have started tracking Throttle Time")
 
-            configurator.disable("UNIT TEST")
+            configurator.disable("UNIT TEST", DisableCgroups.AGENT)
 
             agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
@@ -233,12 +271,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
         with self._get_cgroup_configurator() as configurator:
-            configurator.disable("UNIT TEST")
+            configurator.disable("UNIT TEST", DisableCgroups.ALL)
 
             with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="date",
+                    cmd_name="test",
                     timeout=300,
                     shell=False,
                     cwd=self.tmp_dir,
@@ -258,6 +297,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="the-test-extension-command",
+                    cmd_name="test",
                     timeout=300,
                     shell=False,
                     cwd=self.tmp_dir,
@@ -268,7 +308,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 command_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
                 self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
-                self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", command_calls[0], "The extension should have been invoked using systemd")
+                self.assertIn("systemd-run", command_calls[0], "The extension should have been invoked using systemd")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self, _):
@@ -278,6 +318,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             configurator.start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="test command",
+                cmd_name="test",
                 timeout=300,
                 shell=False,
                 cwd=self.tmp_dir,
@@ -288,7 +329,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         tracked = CGroupsTelemetry._tracked
 
         self.assertTrue(
-            any(cg for cg in tracked if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
+            any(cg for cg in tracked.values() if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
             "The extension's CPU is not being tracked")
 
     def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
@@ -305,6 +346,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     configurator.start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="test command",
+                        cmd_name="test",
                         timeout=300,
                         shell=False,
                         cwd=self.tmp_dir,
@@ -335,6 +377,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         command_output = configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command=command,
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -355,7 +398,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
                         self.assertEqual(2, len(extension_calls), "The extension should have been invoked exactly twice")
-                        self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                        self.assertIn("systemd-run", extension_calls[0],
                                       "The first call to the extension should have used systemd")
                         self.assertEqual(command, extension_calls[1],
                                           "The second call to the extension should not have used systemd")
@@ -380,6 +423,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command="echo 'success'",
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -391,7 +435,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                         extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "echo 'success'" in args[0]]
                         self.assertEqual(2, len(extension_calls), "The extension should have been called twice. Got: {0}".format(extension_calls))
-                        self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0], "The first call to the extension should have used systemd")
+                        self.assertIn("systemd-run", extension_calls[0], "The first call to the extension should have used systemd")
                         self.assertNotIn("systemd-run", extension_calls[1], "The second call to the extension should not have used systemd")
 
                         self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
@@ -413,6 +457,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command=command,
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -423,14 +468,14 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
 
                     self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                    self.assertIn("systemd-run", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
                     self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # The scope name should appear in the process output since systemd-run was invoked and stderr
                     # wasn't truncated.
-                    self.assertIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+                    self.assertIn("Running scope as unit", ustr(context_manager.exception))
 
     @attr('requires_sudo')
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
@@ -451,6 +496,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command=long_stdout_stderr_command,
+                            cmd_name="test",
                             timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
@@ -461,14 +507,14 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if long_stdout_stderr_command in args[0]]
 
                     self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                    self.assertIn("systemd-run --unit=Microsoft.Compute.TestExtension_1.2.3", extension_calls[0],
+                    self.assertIn("systemd-run", extension_calls[0],
                                   "The first call to the extension should have used systemd")
 
                     self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
                     self.assertIn("Non-zero exit code", ustr(context_manager.exception))
                     # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
                     # even though systemd-run ran
-                    self.assertNotIn("Microsoft.Compute.TestExtension_1.2.3", ustr(context_manager.exception))
+                    self.assertNotIn("Running scope as unit", ustr(context_manager.exception))
 
     @attr('requires_sudo')
     def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args):  # pylint: disable=unused-argument
@@ -487,6 +533,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                             configurator.start_extension_command(
                                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                                 command="date",
+                                cmd_name="test",
                                 timeout=300,
                                 shell=True,
                                 cwd=self.tmp_dir,
@@ -518,6 +565,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     process_output = configurator.start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="echo 'very specific test message'",
+                        cmd_name="test",
                         timeout=300,
                         shell=True,
                         cwd=self.tmp_dir,
@@ -526,6 +574,126 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                         stderr=stderr)
 
                     self.assertEqual(expected_output.format("very specific test message"), process_output)
+
+    def test_it_should_set_extension_services_cpu_memory_quota(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system"
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_service_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_accounting)
+
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+            expected_cpu_accounting = "CPUAccounting=yes"
+
+            # create drop in files to set those properties
+            self.assertTrue(os.path.exists(extension_service_cpu_accounting), "{0} was not created".format(extension_service_cpu_accounting))
+            self.assertTrue(
+                fileutil.findre_in_file(extension_service_cpu_accounting, expected_cpu_accounting),
+                "CPUAccounting was not enabled. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(extension_service_cpu_accounting)))
+
+    def test_it_should_set_extension_services_when_quotas_not_defined(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            # get the paths to the mocked files
+            extension_service_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_accounting)
+            extension_service_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_quota)
+
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+
+            self.assertTrue(os.path.exists(extension_service_cpu_accounting),
+                            "{0} was not created".format(extension_service_cpu_accounting))
+            self.assertFalse(os.path.exists(extension_service_cpu_quota),
+                            "{0} should not have been created during setup".format(extension_service_cpu_quota))
+
+    def test_it_should_start_tracking_extension_services_cgroups(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            configurator.start_tracking_extension_services_cgroups(service_list)
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertTrue(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is not being tracked")
+
+    def test_it_should_stop_tracking_extension_services_cgroups(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+
+        with self._get_cgroup_configurator() as configurator:
+            with patch("os.path.exists") as mock_path:
+                mock_path.return_value = True
+                CGroupsTelemetry.track_cgroup(CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
+                configurator.stop_tracking_extension_services_cgroups(service_list)
+
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertFalse(
+                    any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+                    "The extension service's CPU is being tracked")
+
+    def test_it_should_remove_extension_services_drop_in_files(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "path": "/lib/systemd/system",
+            }
+        ]
+        with self._get_cgroup_configurator() as configurator:
+            extension_service_cpu_accounting = configurator.mocks.get_mapped_path(
+            UnitFilePaths.extension_service_cpu_accounting)
+            configurator.remove_extension_services_drop_in_files(service_list)
+            self.assertFalse(os.path.exists(extension_service_cpu_accounting),
+                            "{0} should not have been created".format(extension_service_cpu_accounting))
+
+    def test_it_should_start_tracking_unit_cgroups(self):
+
+        with self._get_cgroup_configurator() as configurator:
+            configurator.start_tracking_unit_cgroups("extension.service")
+
+        tracked = CGroupsTelemetry._tracked
+
+        self.assertTrue(
+            any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+            "The extension service's CPU is not being tracked")
+
+    def test_it_should_stop_tracking_unit_cgroups(self):
+
+        def side_effect(path):
+            if path == '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service':
+                return True
+            return False
+
+        with self._get_cgroup_configurator() as configurator:
+            with patch("os.path.exists") as mock_path:
+                mock_path.side_effect = side_effect
+                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                configurator.stop_tracking_unit_cgroups("extension.service")
+
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertFalse(
+                    any(cg for cg in tracked.values() if cg.name == 'extension.service' and 'cpu' in cg.path),
+                    "The extension service's CPU is being tracked")
 
     def test_check_processes_in_agent_cgroup_should_raise_a_cgroups_exception_when_there_are_unexpected_processes_in_the_agent_cgroup(self):
         with self._get_cgroup_configurator() as configurator:
@@ -609,6 +777,7 @@ exit 0
                                 configurator.start_extension_command(
                                     extension_name="TestExtension",
                                     command="{0} {1} {2}".format(test_script, extension_output, number_of_descendants),
+                                    cmd_name="test",
                                     timeout=30,
                                     shell=True,
                                     cwd=self.tmp_dir,
@@ -697,8 +866,10 @@ exit 0
                         configurator.enable()
 
                         configurator.check_cgroups([])
-
-                        self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                        if method_to_fail == "_check_processes_in_agent_cgroup":
+                            self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
+                        else:
+                            self.assertFalse(configurator.agent_enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
 
                         disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
                         self.assertTrue(

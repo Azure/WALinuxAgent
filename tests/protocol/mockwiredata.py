@@ -18,6 +18,7 @@
 import re
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
@@ -36,7 +37,9 @@ DATA_FILE = {
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip",
         "remote_access": None,
-        "in_vm_artifacts_profile": None
+        "in_vm_artifacts_profile": None,
+        "vm_settings": "hostgaplugin/vm_settings.json",
+        "ETag": "1"
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -109,6 +112,14 @@ DATA_FILE_PLUGIN_SETTINGS_MISMATCH["ext_conf"] = "wire/invalid_config/ext_conf_p
 DATA_FILE_REQUIRED_FEATURES = DATA_FILE.copy()
 DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
+DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
+DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
+DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
+DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
+
+DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
+DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
+
 
 class WireProtocolData(object):
     def __init__(self, data_files=None):
@@ -121,6 +132,7 @@ class WireProtocolData(object):
             "/health": 0,
             "/HealthService": 0,
             "/vmAgentLog": 0,
+            '/StatusBlob': 0,
             "goalstate": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
@@ -131,8 +143,10 @@ class WireProtocolData(object):
             "manifest.xml": 0,
             "manifest_of_ga.xml": 0,
             "ExampleHandlerLinux": 0,
-            "in_vm_artifacts_profile": 0
+            "in_vm_artifacts_profile": 0,
+            "vm_settings": 0
         }
+        self.status_blobs = []
         self.data_files = data_files
         self.version_info = None
         self.goal_state = None
@@ -147,6 +161,8 @@ class WireProtocolData(object):
         self.ext = None
         self.remote_access = None
         self.in_vm_artifacts_profile = None
+        self.vm_settings = None
+        self.etag = None
 
         self.reload()
 
@@ -164,6 +180,8 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
+        self.vm_settings = load_data(self.data_files.get("vm_settings"))
+        self.etag = self.data_files.get("ETag")
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
@@ -173,8 +191,9 @@ class WireProtocolData(object):
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
-    def mock_http_get(self, url, *args, **kwargs):  # pylint: disable=unused-argument
+    def mock_http_get(self, url, *_, **kwargs):
         content = None
+        response_headers = []
 
         resp = MagicMock()
         resp.status = httpclient.OK
@@ -209,6 +228,10 @@ class WireProtocolData(object):
         elif ".vmSettings" in url or ".settings" in url:
             content = self.in_vm_artifacts_profile
             self.call_counts["in_vm_artifacts_profile"] += 1
+        elif "/vmSettings" in url:
+            content = self.vm_settings
+            response_headers = [('ETag', self.etag)]
+            self.call_counts["vm_settings"] += 1
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin
@@ -234,7 +257,7 @@ class WireProtocolData(object):
             if "manifest.xml" in url:
                 content = self.manifest
                 self.call_counts["manifest.xml"] += 1
-            elif "manifest_of_ga.xml" in url:
+            elif HttpRequestPredicates.is_ga_manifest_request(url):
                 content = self.ga_manifest
                 self.call_counts["manifest_of_ga.xml"] += 1
             elif "ExampleHandlerLinux" in url:
@@ -246,12 +269,13 @@ class WireProtocolData(object):
                 content = self.in_vm_artifacts_profile
                 self.call_counts["in_vm_artifacts_profile"] += 1
             else:
-                raise Exception("Bad url {0}".format(url))
+                raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
+        resp.getheaders = Mock(return_value=response_headers)
         return resp
 
-    def mock_http_post(self, url, *args, **kwargs):  # pylint: disable=unused-argument
+    def mock_http_post(self, url, *_, **__):
         content = None
 
         resp = MagicMock()
@@ -261,22 +285,24 @@ class WireProtocolData(object):
             self.call_counts['/HealthService'] += 1
             content = ''
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 
-    def mock_http_put(self, url, *args, **kwargs):  # pylint: disable=unused-argument
-        content = None
+    def mock_http_put(self, url, data, **_):
+        content = ''
 
         resp = MagicMock()
         resp.status = httpclient.OK
 
         if url.endswith('/vmAgentLog'):
             self.call_counts['/vmAgentLog'] += 1
-            content = ''
+        elif url.endswith('/StatusBlob'):
+            self.call_counts['/StatusBlob'] += 1
+            self.status_blobs.append(data)
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
@@ -333,6 +359,12 @@ class WireProtocolData(object):
         if new_xml_document == xml_document:
             raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
         return new_xml_document
+
+    def set_etag(self, etag):
+        '''
+        Sets the ETag for the mock response
+        '''
+        self.etag = etag
 
     def set_incarnation(self, incarnation):
         '''

@@ -21,7 +21,6 @@ import json
 import os
 import re
 import threading
-import traceback
 from collections import defaultdict
 
 import azurelinuxagent.common.logger as logger
@@ -35,6 +34,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -74,7 +74,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
     Periodic operation for collecting extension telemetry events and enqueueing them for the SendTelemetryHandler thread.
     """
 
-    _EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=5)
+    _EXTENSION_EVENT_COLLECTION_PERIOD = datetime.timedelta(seconds=conf.get_etp_collection_period())
     _EXTENSION_EVENT_FILE_NAME_REGEX = re.compile(r"^(\d+)\.json$", re.IGNORECASE)
 
     # Limits
@@ -116,8 +116,8 @@ class _ProcessExtensionEvents(PeriodicOperation):
             # the telemetry service comes back up
             delete_all_event_files = False
         except Exception as error:
-            msg = "Unknown error occurred when trying to collect extension events. Error: {0}, Stack: {1}".format(
-                ustr(error), traceback.format_exc())
+            msg = "Unknown error occurred when trying to collect extension events:{0}".format(
+                textutil.format_exception(error))
             add_event(op=WALAEventOperation.ExtensionTelemetryEventProcessing, message=msg, is_success=False)
         finally:
             # Always ensure that the events directory are being deleted each run except when Telemetry Service is stopped,
@@ -204,8 +204,8 @@ class _ProcessExtensionEvents(PeriodicOperation):
                     # This is a trade-off between data replication vs data loss.
                     raise
                 except Exception as error:
-                    msg = "Failed to process event file {0}: {1}, {2}".format(event_file, ustr(error),
-                                                                              traceback.format_exc())
+                    msg = "Failed to process event file {0}:{1}".format(event_file,
+                                                                              textutil.format_exception(error))
                     logger.warn(msg)
                     add_log_event(level=logger.LogLevel.WARNING, message=msg, forced=True)
                 finally:

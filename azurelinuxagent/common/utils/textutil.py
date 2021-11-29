@@ -24,6 +24,7 @@ import re
 import string
 import struct
 import sys
+import traceback
 import xml.dom.minidom as minidom
 import zlib
 
@@ -430,3 +431,21 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
             return ustr(s)
     # For Py2, explicitly convert the string to unicode with the specified encoding
     return ustr(s, encoding=encoding)
+
+
+def format_exception(exception):
+    # Function to format exception message
+    e = None
+    if sys.version_info[0] == 2:
+        _, e, tb = sys.exc_info()
+    else:
+        tb = exception.__traceback__
+
+    msg = ustr(exception) + "\n"
+    if tb is None or (sys.version_info[0] == 2 and e != exception):
+        msg += "[Traceback not available]"
+    else:
+        msg += ''.join(traceback.format_exception(etype=type(exception), value=exception, tb=tb))
+
+    return msg
+

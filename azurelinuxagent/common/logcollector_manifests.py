@@ -40,6 +40,7 @@ echo,
 
 echo,### Gathering Extension Files ###
 copy,$LIB_DIR/*.xml
+copy,$LIB_DIR/VmSettings.*.json
 copy,$LIB_DIR/waagent_status.*.json
 copy,$LIB_DIR/*/status/*.status
 copy,$LIB_DIR/*/config/*.settings

@@ -95,7 +95,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     systemd_dir_path = osutil.get_systemd_unit_file_install_path()
     agent_bin_path = osutil.get_agent_bin_path()
 
-    if name == 'redhat' or name == 'centos':  # pylint: disable=R1714
+    if name in ('redhat', 'centos', 'almalinux', 'cloudlinux'):  # pylint: disable=R1714
         if version.startswith("8.2"):
             # redhat8+ default to py3
             set_bin_files(data_files, dest=agent_bin_path,
@@ -123,7 +123,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_udev_files(data_files)
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/arch/waagent.service"])
-    elif name == 'coreos':
+    elif name in ('coreos', 'flatcar'):
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/usr/share/oem",
                        src=["config/coreos/waagent.conf"])
@@ -143,6 +143,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/mariner/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/mariner/waagent.service"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
     elif name == 'ubuntu':
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
@@ -300,7 +302,7 @@ setuptools.setup(
     platforms='Linux',
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
-    packages=find_packages(exclude=["tests*"]),
+    packages=find_packages(exclude=["tests*", "dcr*"]),
     py_modules=modules,
     install_requires=requires,
     cmdclass={

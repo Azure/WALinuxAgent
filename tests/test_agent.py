@@ -29,20 +29,28 @@ EXPECTED_CONFIGURATION = \
 AutoUpdate.GAFamily = Prod
 Autoupdate.Frequency = 3600
 DVD.MountPoint = /mnt/cdrom/secure
+Debug.AgentCpuQuota = 75
+Debug.AutoUpdateHotfixFrequency = 14400
+Debug.AutoUpdateNormalFrequency = 86400
 Debug.CgroupCheckPeriod = 300
 Debug.CgroupDisableOnProcessCheckFailure = True
 Debug.CgroupDisableOnQuotaCheckFailure = True
 Debug.CgroupLogMetrics = False
+Debug.CgroupMonitorExpiryTime = 2022-01-31
+Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
+Debug.EnableFastTrack = True
+Debug.EtpCollectionPeriod = 300
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure
 Extensions.Enabled = True
 Extensions.GoalStateHistoryCleanupPeriod = 1800
 Extensions.GoalStatePeriod = 6
+Extensions.InitialGoalStatePeriod = 6
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
-Logs.Collect = False
+Logs.Collect = True
 Logs.CollectPeriod = 3600
 Logs.Console = True
 Logs.Verbose = False
@@ -223,14 +231,14 @@ class TestAgent(AgentTestCase):
             @staticmethod
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
-                    relative_path = "{0}/{1}".format(cgroupconfigurator.AZURE_SLICE, logcollector.CGROUPS_UNIT)
-                    return (relative_path, relative_path)
+                    relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
+                    return (cgroupconfigurator.LOGCOLLECTOR_SLICE, relative_path)
                 return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
 
             with patch.object(SystemdCgroupsApi, "get_process_cgroup_relative_paths", mock_cgroup_paths):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                 agent.collect_logs(is_full_mode=True)
-
+                
                 mock_log_collector.assert_called_once()
         finally:
             CollectLogsHandler.disable_cgroups_validation()

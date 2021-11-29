@@ -21,7 +21,6 @@ import os
 import re
 import threading
 import time
-import traceback
 import socket
 import struct
 
@@ -626,6 +625,6 @@ def read_response_error(resp):
 
             result = textutil.replace_non_ascii(result)
 
-        except Exception:
-            logger.warn(traceback.format_exc())
+        except Exception as e:
+            logger.warn(textutil.format_exception(e))
     return result

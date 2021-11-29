@@ -30,7 +30,8 @@ from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, SendImdsHeartbeat, \
     ResetPeriodicLogMessages, SendHostPluginHeartbeat, PollResourceUsage, \
     ReportNetworkErrors, ReportNetworkConfigurationChanges
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
 
@@ -228,7 +229,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(MemoryCgroup("cgroup_name", "/test/path"))
+        CGroupsTelemetry._tracked["/test/path"] = MemoryCgroup("cgroup_name", "/test/path")
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
@@ -244,7 +245,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked.append(CpuCgroup("cgroup_name", "/test/path"))
+        CGroupsTelemetry._tracked["/test/path"]= CpuCgroup("cgroup_name", "/test/path")
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)

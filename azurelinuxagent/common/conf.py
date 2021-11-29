@@ -49,25 +49,43 @@ class ConfigurationProvider(object):
                 value = parts[1].split('#')[0].strip("\" ").strip()
                 self.values[key] = value if value != "None" else None
 
-    def get(self, key, default_val):
-        val = self.values.get(key)
-        return val if val is not None else default_val
+    @staticmethod
+    def _get_default(default):
+        if hasattr(default, '__call__'):
+            return default()
+        return default
 
-    def get_switch(self, key, default_val):
+    def get(self, key, default_value):
+        """
+        Retrieves a string parameter by key and returns its value. If not found returns the default value,
+        or if the default value is a callable returns the result of invoking the callable.
+        """
+        val = self.values.get(key)
+        return val if val is not None else self._get_default(default_value)
+
+    def get_switch(self, key, default_value):
+        """
+        Retrieves a switch parameter by key and returns its value as a boolean. If not found returns the default value,
+        or if the default value is a callable returns the result of invoking the callable.
+        """
         val = self.values.get(key)
         if val is not None and val.lower() == 'y':
             return True
         elif val is not None and val.lower() == 'n':
             return False
-        return default_val
+        return self._get_default(default_value)
 
-    def get_int(self, key, default_val):
+    def get_int(self, key, default_value):
+        """
+        Retrieves an int parameter by key and returns its value. If not found returns the default value,
+        or if the default value is a callable returns the result of invoking the callable.
+        """
         try:
             return int(self.values.get(key))
         except TypeError:
-            return default_val
+            return self._get_default(default_value)
         except ValueError:
-            return default_val
+            return self._get_default(default_value)
 
 
 __conf__ = ConfigurationProvider()
@@ -118,6 +136,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
+    "Debug.EnableFastTrack": True,
 }
 
 
@@ -140,11 +159,14 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
+    "Debug.CgroupMonitorExpiryTime": "2022-01-31",
+    "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
 }
 
 
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
+    "Extensions.InitialGoalStatePeriod": 6,
     "Extensions.GoalStateHistoryCleanupPeriod": 1800,
     "OS.EnableFirewallPeriod": 30,
     "OS.RemovePersistentNetRulesPeriod": 30,
@@ -162,6 +184,10 @@ __INTEGER_OPTIONS__ = {
     # versions of the Agent.
     #
     "Debug.CgroupCheckPeriod": 300,
+    "Debug.AgentCpuQuota": 75,
+    "Debug.EtpCollectionPeriod": 300,
+    "Debug.AutoUpdateHotfixFrequency": 14400,
+    "Debug.AutoUpdateNormalFrequency": 86400
 }
 
 
@@ -345,6 +371,10 @@ def get_goal_state_period(conf=__conf__):
     return conf.get_int("Extensions.GoalStatePeriod", 6)
 
 
+def get_initial_goal_state_period(conf=__conf__):
+    return conf.get_int("Extensions.InitialGoalStatePeriod", default_value=lambda: get_goal_state_period(conf=conf))
+
+
 def get_goal_state_history_cleanup_period(conf=__conf__):
     return conf.get_int("Extensions.GoalStateHistoryCleanupPeriod", 1800)
 
@@ -507,3 +537,61 @@ def get_cgroup_disable_on_quota_check_failure(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.CgroupDisableOnQuotaCheckFailure", True)
+
+
+def get_agent_cpu_quota(conf=__conf__):
+    """
+    CPU quota for the agent as a percentage of 1 CPU (100% == 1 CPU)
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentCpuQuota", 75)
+
+def get_cgroup_monitor_expiry_time (conf=__conf__):
+    """
+    cgroups monitoring disabled after expiry time
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-01-31")
+
+def get_cgroup_monitor_extension_name (conf=__conf__):
+    """
+    cgroups monitoring extension name
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.CgroupMonitorExtensionName", "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent")
+
+
+def get_enable_fast_track(conf=__conf__):
+    """
+    If True, the agent use FastTrack when retrieving goal states
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableFastTrack", True)
+
+
+def get_etp_collection_period(conf=__conf__):
+    """
+    Determines the frequency to perform ETP collection on extensions telemetry events.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.EtpCollectionPeriod", 300)
+
+
+def get_hotfix_upgrade_frequency(conf=__conf__):
+    """
+    Determines the frequency to check for Hotfix upgrades (<Patch>.<Build> version changed in new upgrades).
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AutoUpdateHotfixFrequency", 4 * 60 * 60)
+
+
+def get_normal_upgrade_frequency(conf=__conf__):
+    """
+    Determines the frequency to check for Normal upgrades (<Major>.<Minor> version changed in new upgrades).
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AutoUpdateNormalFrequency", 24 * 60 * 60)

@@ -15,22 +15,17 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
-import re
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from tests.tools import patch
 from tests.protocol import mockwiredata
 
-# regex used to determine whether to use the mock wireserver data
-_USE_MOCK_WIRE_DATA_RE = re.compile(
-    r'https?://(mock-goal-state|{0}).*'.format(restutil.KNOWN_WIRESERVER_IP.replace(r'.', r'\.')), re.IGNORECASE)
-
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, fail_on_unknown_request=True):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True):
     """
-    Creates a WireProtocol object that handles requests to the WireServer and the Host GA Plugin (i.e requests on the WireServer endpoint), plus
-    some requests to storage (requests on the fake server 'mock-goal-state').
+    Creates a WireProtocol object that handles requests to the WireServer, the Host GA Plugin, and some requests to storage (requests that provide mock data
+    in mockwiredata.py).
 
     The data returned by those requests is read from the files specified by 'mock_wire_data_file' (which must follow the structure of the data
     files defined in tests/protocol/mockwiredata.py).
@@ -39,6 +34,9 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     function is interpreted similarly to the "return_value" argument of patch(): if it is an exception the exception is raised or, if it is
     any object other than None, the value is returned by the mock. If the handler function returns None the call is handled using the mock
     wireserver data or passed to the original to restutil.http_request.
+
+    The 'do_not_mock' lambda can be used to skip the mocks for specific requests; if the lambda returns True, the mocks won't be applied and the
+    original common.utils.restutil.http_request will be invoked instead.
 
     The returned protocol object maintains a list of "tracked" urls. When a handler function returns a value than is not None the url for the
     request is automatically added to the tracked list. The handler function can add other items to this list using the track_url() method on
@@ -73,6 +71,10 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     original_http_request = restutil.http_request
 
     def http_request(method, url, data, **kwargs):
+        # call the original resutil.http_request if the request should be mocked
+        if protocol.do_not_mock(method, url):
+            return original_http_request(method, url, data, **kwargs)
+
         # if there is a handler for the request, use it
         handler = None
         if method == 'GET':
@@ -94,15 +96,17 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
                 return return_value
 
         # if the request was not handled try to use the mock wireserver data
-        if _USE_MOCK_WIRE_DATA_RE.match(url) is not None:
+        try:
             if method == 'GET':
                 return protocol.mock_wire_data.mock_http_get(url, **kwargs)
             if method == 'POST':
                 return protocol.mock_wire_data.mock_http_post(url, data, **kwargs)
             if method == 'PUT':
                 return protocol.mock_wire_data.mock_http_put(url, data, **kwargs)
+        except NotImplementedError:
+            pass
 
-        # the request was not handled; fail or call the original resutil.http_request
+        # if there was not a response for the request then fail it or call the original resutil.http_request
         if fail_on_unknown_request:
             raise ValueError('Unknown HTTP request: {0} [{1}]'.format(url, method))
         return original_http_request(method, url, data, **kwargs)
@@ -138,6 +142,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     protocol.get_tracked_urls = lambda: tracked_urls
     protocol.set_http_handlers = lambda http_get_handler=None, http_post_handler=None, http_put_handler=None:\
         http_handlers(get=http_get_handler, post=http_post_handler, put=http_put_handler)
+    protocol.do_not_mock = do_not_mock
 
     # go do it
     try:
@@ -148,71 +153,15 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
         protocol.stop()
 
 
-class HttpRequestPredicates(object):
-    """
-    Utility functions to check the urls used by tests
-    """
-    @staticmethod
-    def is_goal_state_request(url):
-        return url.lower() == 'http://{0}/machine/?comp=goalstate'.format(restutil.KNOWN_WIRESERVER_IP)
-
-    @staticmethod
-    def is_telemetry_request(url):
-        return url.lower() == 'http://{0}/machine?comp=telemetrydata'.format(restutil.KNOWN_WIRESERVER_IP)
-
-    @staticmethod
-    def is_health_service_request(url):
-        return url.lower() == 'http://{0}:80/healthservice'.format(restutil.KNOWN_WIRESERVER_IP)
-
-    @staticmethod
-    def is_in_vm_artifacts_profile_request(url):
-        return re.match(r'https://.+\.blob\.core\.windows\.net/\$system/.+\.(vmSettings|settings)\?.+', url) is not None
-
-    @staticmethod
-    def _get_host_plugin_request_artifact_location(url, request_kwargs):
-        if 'headers' not in request_kwargs:
-            raise ValueError('Host plugin request is missing HTTP headers ({0})'.format(url))
-        headers = request_kwargs['headers']
-        if 'x-ms-artifact-location' not in headers:
-            raise ValueError('Host plugin request is missing the x-ms-artifact-location header ({0})'.format(url))
-        return headers['x-ms-artifact-location']
-
-    @staticmethod
-    def is_host_plugin_health_request(url):
-        return url.lower() == 'http://{0}:{1}/health'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
-
-    @staticmethod
-    def is_host_plugin_extension_artifact_request(url):
-        return url.lower() == 'http://{0}:{1}/extensionartifact'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
-
-    @staticmethod
-    def is_host_plugin_status_request(url):
-        return url.lower() == 'http://{0}:{1}/status'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
-
-    @staticmethod
-    def is_host_plugin_extension_request(request_url, request_kwargs, extension_url):
-        if not HttpRequestPredicates.is_host_plugin_extension_artifact_request(request_url):
-            return False
-        artifact_location = HttpRequestPredicates._get_host_plugin_request_artifact_location(request_url, request_kwargs)
-        return artifact_location == extension_url
-
-    @staticmethod
-    def is_host_plugin_in_vm_artifacts_profile_request(url, request_kwargs):
-        if not HttpRequestPredicates.is_host_plugin_extension_artifact_request(url):
-            return False
-        artifact_location = HttpRequestPredicates._get_host_plugin_request_artifact_location(url, request_kwargs)
-        return HttpRequestPredicates.is_in_vm_artifacts_profile_request(artifact_location)
-
-    @staticmethod
-    def is_host_plugin_put_logs_request(url):
-        return url.lower() == 'http://{0}:{1}/vmagentlog'.format(restutil.KNOWN_WIRESERVER_IP,
-                                                                 restutil.HOST_PLUGIN_PORT)
-
-
 class MockHttpResponse:
-    def __init__(self, status, body=''):
+    def __init__(self, status, body=b'', headers=None, reason=None):
         self.body = body
         self.status = status
+        self.headers = [] if headers is None else headers
+        self.reason = reason
 
     def read(self, *_):
         return self.body
+
+    def getheaders(self):
+        return self.headers

@@ -69,6 +69,7 @@ class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
+    AgentUpgrade = "AgentUpgrade"
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsDisabled = "CGroupsDisabled"
@@ -87,6 +88,7 @@ class WALAEventOperation:
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
     Firewall = "Firewall"
+    GoalState = "GoalState"
     GoalStateUnsupportedFeatures = "GoalStateUnsupportedFeatures"
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"
@@ -95,6 +97,7 @@ class WALAEventOperation:
     HostPluginHeartbeat = "HostPluginHeartbeat"
     HostPluginHeartbeatExtended = "HostPluginHeartbeatExtended"
     HttpErrors = "HttpErrors"
+    HttpGet = "HttpGet"
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
@@ -120,8 +123,8 @@ class WALAEventOperation:
     UnhandledError = "UnhandledError"
     UnInstall = "UnInstall"
     Unknown = "Unknown"
-    Upgrade = "Upgrade"
     Update = "Update"
+    VmSettings = "VmSettings"
 
 
 SHOULD_ENCODE_MESSAGE_LEN = 80
@@ -491,6 +494,7 @@ class EventLogger(object):
         self.add_common_event_parameters(event, datetime.utcnow())
 
         data = get_properties(event)
+
         try:
             self.save_event(json.dumps(data))
         except EventError as e:

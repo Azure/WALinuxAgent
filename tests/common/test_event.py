@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 
 from mock import MagicMock
 
-import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.utils import textutil, fileutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, report_metric, \
@@ -41,12 +41,18 @@ from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, Gu
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
 from tests.utils.event_logger_tools import EventLoggerTools
 
 
 class TestEvent(HttpRequestPredicates, AgentTestCase):
+    # These are the Operation/Category for events produced by the tests below (as opposed by events produced by the agent itself)
+    _Message = "ThisIsATestEventMessage"
+    _Operation = "ThisIsATestEventOperation"
+    _Category = "ThisIsATestMetricCategory"
+
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -96,12 +102,23 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     @staticmethod
     def _collect_events():
+        def append_event(e):
+            for p in e.parameters:
+                if p.name == 'Operation' and p.value == TestEvent._Operation \
+                    or p.name == 'Category' and p.value == TestEvent._Category \
+                    or p.name == 'Message' and p.value == TestEvent._Message \
+                    or p.name == 'Context1' and p.value == TestEvent._Message:
+                    event_list.append(e)
         event_list = []
         send_telemetry_events = MagicMock()
-        send_telemetry_events.enqueue_event = MagicMock(wraps=event_list.append)
+        send_telemetry_events.enqueue_event = MagicMock(wraps=append_event)
         event_collector = _CollectAndEnqueueEvents(send_telemetry_events)
         event_collector.process_events()
         return event_list
+
+    def _collect_event_files(self):
+        files = [os.path.join(self.event_dir, f) for f in os.listdir(self.event_dir)]
+        return [f for f in files if fileutil.findre_in_file(f, TestEvent._Operation)]
 
     @staticmethod
     def _is_guest_extension_event(event):  # pylint: disable=redefined-outer-name
@@ -127,7 +144,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     def test_add_event_should_use_the_container_id_from_the_most_recent_goal_state(self):
         def create_event_and_return_container_id():  # pylint: disable=inconsistent-return-statements
-            event.add_event(name='Event')
+            event.add_event(name='Event', op=TestEvent._Operation)
             event_list = self._collect_events()
             self.assertEqual(len(event_list), 1, "Could not find the event created by add_event")
 
@@ -156,10 +173,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
     def test_add_event_should_handle_event_errors(self):
         with patch("azurelinuxagent.common.utils.fileutil.mkdir", side_effect=OSError):
             with patch('azurelinuxagent.common.logger.periodic_error') as mock_logger_periodic_error:
-                add_event('test', message='test event')
+                add_event('test', message='test event', op=TestEvent._Operation)
 
                 # The event shouldn't have been created
-                self.assertTrue(len(os.listdir(self.event_dir)) == 0)
+                self.assertTrue(len(self._collect_event_files()) == 0)
 
                 # The exception should have been caught and logged
                 args = mock_logger_periodic_error.call_args
@@ -359,12 +376,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                                                version=str(CURRENT_VERSION))
 
     def test_collect_events_should_delete_event_files(self):
-        add_event(name='Event1')
-        add_event(name='Event1')
-        add_event(name='Event3')
+        add_event(name='Event1', op=TestEvent._Operation)
+        add_event(name='Event1', op=TestEvent._Operation)
+        add_event(name='Event3', op=TestEvent._Operation)
 
-        event_files = os.listdir(self.event_dir)
-        self.assertEqual(len(event_files), 3, "Did not find all the event files that were created")
+        event_files = self._collect_event_files()
+        self.assertEqual(3, len(event_files), "Did not find all the event files that were created")
 
         event_list = self._collect_events()
         event_files = os.listdir(self.event_dir)
@@ -373,8 +390,8 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(len(event_files), 0, "The event files were not deleted")
 
     def test_save_event(self):
-        add_event('test', message='test event')
-        self.assertTrue(len(os.listdir(self.event_dir)) == 1)
+        add_event('test', message='test event', op=TestEvent._Operation)
+        self.assertTrue(len(self._collect_event_files()) == 1)
 
         # checking the extension of the file created.
         for filename in os.listdir(self.event_dir):
@@ -468,24 +485,15 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         for i in range(0, 2000):
             evt = os.path.join(self.event_dir, '{0}.tld'.format(ustr(1491004920536531 + i)))
             with open(evt, 'w') as fh:
-                fh.write('test event {0}'.format(i))
+                fh.write('{0}{1}'.format(TestEvent._Operation, i))
+
+        test_events = self._collect_event_files()
+        self.assertTrue(len(test_events) == 2000, "{0} events found, 2000 expected".format(len(test_events)))
+
+        add_event('test', message='last event', op=TestEvent._Operation)
 
         events = os.listdir(self.event_dir)
-        self.assertTrue(len(events) == 2000, "{0} events found, 2000 expected".format(len(events)))
-        add_event('test', message='last event')
-
-        events = os.listdir(self.event_dir)
-        events.sort()
         self.assertTrue(len(events) == 1000, "{0} events found, 1000 expected".format(len(events)))
-        first_event = os.path.join(self.event_dir, events[0])
-        with open(first_event) as first_fh:
-            first_event_text = first_fh.read()
-            self.assertTrue('test event 1001' in first_event_text)
-
-        last_event = os.path.join(self.event_dir, events[-1])
-        with open(last_event) as last_fh:
-            last_event_text = last_fh.read()
-            self.assertTrue('last event' in last_event_text)
 
     def test_elapsed_milliseconds(self):
         utc_start = datetime.utcnow() + timedelta(days=1)
@@ -550,7 +558,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             create_event_function=lambda:
                 add_event(
                     name="TestEvent",
-                    op=WALAEventOperation.AgentEnabled,
+                    op=TestEvent._Operation,
                     is_success=True,
                     duration=1234,
                     version="1.2.3.4",
@@ -558,7 +566,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             expected_parameters={
                 GuestAgentExtensionEventsSchema.Name: 'TestEvent',
                 GuestAgentExtensionEventsSchema.Version: '1.2.3.4',
-                GuestAgentExtensionEventsSchema.Operation: 'AgentEnabled',
+                GuestAgentExtensionEventsSchema.Operation: TestEvent._Operation,
                 GuestAgentExtensionEventsSchema.OperationSuccess: True,
                 GuestAgentExtensionEventsSchema.Message: 'Test Message',
                 GuestAgentExtensionEventsSchema.Duration: 1234,
@@ -570,7 +578,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 add_periodic(
                     delta=logger.EVERY_MINUTE,
                     name="TestPeriodicEvent",
-                    op=WALAEventOperation.HostPlugin,
+                    op=TestEvent._Operation,
                     is_success=False,
                     duration=4321,
                     version="4.3.2.1",
@@ -578,7 +586,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             expected_parameters={
                 GuestAgentExtensionEventsSchema.Name: 'TestPeriodicEvent',
                 GuestAgentExtensionEventsSchema.Version: '4.3.2.1',
-                GuestAgentExtensionEventsSchema.Operation: 'HostPlugin',
+                GuestAgentExtensionEventsSchema.Operation: TestEvent._Operation,
                 GuestAgentExtensionEventsSchema.OperationSuccess: False,
                 GuestAgentExtensionEventsSchema.Message: 'Test Periodic Message',
                 GuestAgentExtensionEventsSchema.Duration: 4321,
@@ -597,12 +605,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     def test_add_log_event_should_always_create_events_when_forced(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
-            create_event_function=lambda: add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event',
+            create_event_function=lambda: add_log_event(logger.LogLevel.WARNING, TestEvent._Message,
                                                         forced=True),
             expected_parameters={
                 GuestAgentGenericLogsSchema.EventName: 'Log',
                 GuestAgentGenericLogsSchema.CapabilityUsed: 'WARNING',
-                GuestAgentGenericLogsSchema.Context1: 'log event',
+                GuestAgentGenericLogsSchema.Context1: TestEvent._Message,
                 GuestAgentGenericLogsSchema.Context3: ''
             })
 
@@ -613,9 +621,9 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     def test_report_metric_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
-            create_event_function=lambda: report_metric("cpu", "%idle", "total", 12.34),
+            create_event_function=lambda: report_metric(TestEvent._Category, "%idle", "total", 12.34),
             expected_parameters={
-                GuestAgentPerfCounterEventsSchema.Category: 'cpu',
+                GuestAgentPerfCounterEventsSchema.Category: TestEvent._Category,
                 GuestAgentPerfCounterEventsSchema.Counter: '%idle',
                 GuestAgentPerfCounterEventsSchema.Instance: 'total',
                 GuestAgentPerfCounterEventsSchema.Value: 12.34
@@ -646,7 +654,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 GuestAgentExtensionEventsSchema.Name: "WALinuxAgent",
                 GuestAgentExtensionEventsSchema.Version: "9.9.9",
                 GuestAgentExtensionEventsSchema.IsInternal: False,
-                GuestAgentExtensionEventsSchema.Operation: "InitializeCGroups",
+                GuestAgentExtensionEventsSchema.Operation: TestEvent._Operation,
                 GuestAgentExtensionEventsSchema.OperationSuccess: True,
                 GuestAgentExtensionEventsSchema.Message: "The cgroup filesystem is ready to use",
                 GuestAgentExtensionEventsSchema.Duration: 1234,
@@ -676,7 +684,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 GuestAgentExtensionEventsSchema.Name: "WALinuxAgent",
                 GuestAgentExtensionEventsSchema.Version: "9.9.9",
                 GuestAgentExtensionEventsSchema.IsInternal: False,
-                GuestAgentExtensionEventsSchema.Operation: "InitializeCGroups",
+                GuestAgentExtensionEventsSchema.Operation: TestEvent._Operation,
                 GuestAgentExtensionEventsSchema.OperationSuccess: True,
                 GuestAgentExtensionEventsSchema.Message: "The cgroup filesystem is ready to use",
                 GuestAgentExtensionEventsSchema.Duration: 1234,
@@ -707,7 +715,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             expected_parameters={
                 GuestAgentExtensionEventsSchema.Name: 'Microsoft.Azure.Extensions.CustomScript',
                 GuestAgentExtensionEventsSchema.Version: '2.0.4',
-                GuestAgentExtensionEventsSchema.Operation: 'Scenario',
+                GuestAgentExtensionEventsSchema.Operation: TestEvent._Operation,
                 GuestAgentExtensionEventsSchema.OperationSuccess: True,
                 GuestAgentExtensionEventsSchema.Message: 'A test telemetry message.',
                 GuestAgentExtensionEventsSchema.Duration: 150000,
@@ -816,7 +824,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 "Normal string event"
             ]
             for msg in test_messages:
-                add_event('TestEventEncoding', message=msg)
+                add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
                 event_list = self._collect_events()
                 self._report_events(protocol, event_list)
                 # In Py2, encode() produces a str and in py3 it produces a bytes string.
