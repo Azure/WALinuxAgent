@@ -297,14 +297,15 @@ class ExtHandlersHandler(object):
         etag, activity_id, correlation_id, gs_creation_time = None, None, None, None
 
         try:
+            extensions_goal_state = self.protocol.get_extensions_goal_state()
+
             # self.ext_handlers needs to be initialized first, since status reporting depends on it
-            self.ext_handlers, etag = self.protocol.get_ext_handlers()
+            self.ext_handlers = extensions_goal_state.extensions
 
             if not self._extension_processing_allowed():
                 return
 
-            extensions_goal_state = self.protocol.get_extensions_goal_state()
-
+            etag = extensions_goal_state.id
             gs_creation_time = extensions_goal_state.created_on_timestamp
             activity_id = extensions_goal_state.activity_id
             correlation_id = extensions_goal_state.correlation_id
@@ -328,8 +329,8 @@ class ExtHandlersHandler(object):
         try:
             self.__process_and_handle_extensions(etag)
             self._cleanup_outdated_handlers()
-        except Exception as error:
-            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
+        except Exception as e:
+            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(e))
         finally:
             duration = elapsed_milliseconds(utc_start)
             if error is None:
@@ -398,7 +399,7 @@ class ExtHandlersHandler(object):
 
         handlers = []
         pkgs = []
-        ext_handlers_in_gs = [ext_handler.name for ext_handler in self.ext_handlers.extHandlers]
+        ext_handlers_in_gs = [ext_handler.name for ext_handler in self.ext_handlers]
 
         # Build a collection of uninstalled handlers and orphaned packages
         # Note:
@@ -465,7 +466,7 @@ class ExtHandlersHandler(object):
 
     def __get_sorted_extensions_for_processing(self):
         all_extensions = []
-        for handler in self.ext_handlers.extHandlers:
+        for handler in self.ext_handlers:
             if any(handler.properties.extensions):
                 all_extensions.extend([(ext, handler) for ext in handler.properties.extensions])
             else:
@@ -478,7 +479,7 @@ class ExtHandlersHandler(object):
         return all_extensions
 
     def handle_ext_handlers(self, etag=None):
-        if not self.ext_handlers.extHandlers:
+        if not self.ext_handlers:
             logger.info("No extension handlers found, not processing anything.")
             return
 
@@ -904,7 +905,7 @@ class ExtHandlersHandler(object):
 
             # If GoalState supported, report the status of extension handlers that were requested by the GoalState
             elif not self.__last_gs_unsupported() and self.ext_handlers is not None:
-                handlers_to_report = self.ext_handlers.extHandlers
+                handlers_to_report = self.ext_handlers
 
             for ext_handler in handlers_to_report:
                 try:

@@ -24,8 +24,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, VMAgentManifest, \
-    ExtensionState, ExtHandlerList, InVMGoalStateMetaData
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -43,7 +42,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._correlation_id = None
         self._created_on_timestamp = None
         self._agent_manifests = []
-        self._ext_handlers = ExtHandlerList()
+        self._extensions = []
 
         try:
             self._parse_extensions_config(xml_text, wire_client)
@@ -167,12 +166,12 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._agent_manifests
 
     @property
-    def ext_handlers(self):
-        return self._ext_handlers
+    def extensions(self):
+        return self._extensions
 
     def get_redacted_text(self):
         text = self._text
-        for ext_handler in self._ext_handlers.extHandlers:
+        for ext_handler in self._extensions:
             for extension in ext_handler.properties.extensions:
                 if extension.protectedSettings is not None:
                     text = text.replace(extension.protectedSettings, "*** REDACTED ***")
@@ -236,7 +235,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             except ExtensionsConfigError as error:
                 ext_handler.invalid_setting_reason = ustr(error)
 
-            self._ext_handlers.extHandlers.append(ext_handler)
+            self._extensions.append(ext_handler)
 
     @staticmethod
     def _parse_plugin(ext_handler, plugin):

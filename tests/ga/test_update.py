@@ -789,7 +789,6 @@ class TestUpdate(UpdateTestCase):
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
         self.update_handler = get_update_handler()
         protocol = Mock()
-        protocol.get_ext_handlers = Mock(return_value=(Mock(), Mock()))
         self.update_handler.protocol_util = Mock()
         self.update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
 
@@ -1900,7 +1899,6 @@ class MonitorThreadTest(AgentTestCase):
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
         currentThread().setName("ExtHandler")
         protocol = Mock()
-        protocol.get_ext_handlers = Mock(return_value=(Mock(), Mock()))
         self.update_handler = get_update_handler()
         self.update_handler.protocol_util = Mock()
         self.update_handler.protocol_util.get_protocol = Mock(return_value=protocol)

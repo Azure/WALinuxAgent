@@ -192,11 +192,6 @@ class InVMGoalStateMetaData(DataContract):
         self.in_svd_seq_no = getattrib(in_vm_metadata_node, "inSvdSeqNo")
 
 
-class ExtHandlerList(DataContract):
-    def __init__(self):
-        self.extHandlers = DataContractList(ExtHandler)
-
-
 class ExtHandlerPackage(DataContract):
     def __init__(self, version=None):
         self.version = version

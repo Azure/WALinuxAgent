@@ -135,13 +135,6 @@ class WireProtocol(DataContract):
         valid_pkg_list = ga_manifest.pkg_list
         return valid_pkg_list
 
-    def get_ext_handlers(self):
-        logger.verbose("Get extension handler config")
-        goal_state = self.client.get_goal_state()
-        extensions_goal_state = self.client.get_extensions_goal_state()
-        # In wire protocol, incarnation is equivalent to ETag
-        return extensions_goal_state.ext_handlers, goal_state.incarnation
-
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
         man = self.client.get_ext_manifest(ext_handler)

@@ -102,8 +102,8 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             protocol.detect()
             protocol.get_vminfo()
             protocol.get_certs()
-            ext_handlers, etag = protocol.get_ext_handlers()  # pylint: disable=unused-variable
-            for ext_handler in ext_handlers.extHandlers:
+            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            for ext_handler in ext_handlers:
                 protocol.get_ext_handler_pkgs(ext_handler)
 
             crt1 = os.path.join(self.tmp_dir,
@@ -481,8 +481,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_NO_EXT) as protocol:
             extensions_goal_state = protocol.client.get_extensions_goal_state()
 
-            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
-            self.assertEqual(0, len(extensions_goal_state.ext_handlers.extHandlers),
+            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
+            self.assertEqual(0, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
             vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
             self.assertEqual(0, len(extensions_goal_state.agent_manifests),
@@ -501,8 +501,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             wire_protocol_client = protocol.client
             extensions_goal_state = wire_protocol_client.get_extensions_goal_state()
 
-            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
-            self.assertEqual(1, len(extensions_goal_state.ext_handlers.extHandlers),
+            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
+            self.assertEqual(1, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
             vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
             self.assertEqual(2, len(extensions_goal_state.agent_manifests),
@@ -1054,7 +1054,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 else:
                     protocol.client.update_goal_state()
 
-                sequence_number = protocol.client.get_extensions_goal_state().ext_handlers.extHandlers[0].properties.extensions[0].sequenceNumber
+                sequence_number = protocol.client.get_extensions_goal_state().extensions[0].properties.extensions[0].sequenceNumber
 
                 self.assertEqual(protocol.client.get_goal_state().incarnation, new_incarnation)
                 self.assertEqual(protocol.client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
@@ -1156,7 +1156,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             extensions_goal_state = protocol.client.get_extensions_goal_state()
 
             protected_settings = []
-            for ext_handler in extensions_goal_state.ext_handlers.extHandlers:
+            for ext_handler in extensions_goal_state.extensions:
                 for extension in ext_handler.properties.extensions:
                     if extension.protectedSettings is not None:
                         protected_settings.append(extension.protectedSettings)
@@ -1203,8 +1203,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             with open(extensions_config_file, "r") as file_:
                 extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, file_.read(), protocol)
-            self.assertEqual(4, len(extensions_goal_state.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
-            for e in extensions_goal_state.ext_handlers.extHandlers:
+            self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test ExtensionsConfig")
+            for e in extensions_goal_state.extensions:
                 if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
                     self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 

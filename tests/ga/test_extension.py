@@ -889,11 +889,11 @@ class TestExtension_Deprecated(TestExtensionBase):
 
             # check handler list and dependency levels
             self.assertTrue(exthandlers_handler.ext_handlers is not None)
-            self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
-            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertTrue(exthandlers_handler.ext_handlers is not None)
+            self.assertEqual(len(exthandlers_handler.ext_handlers), 2)
+            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_1.name).properties.extensions[0].dependencyLevel)
-            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_2.name).properties.extensions[0].dependencyLevel)
 
             # Ensure the invocation order follows the dependency levels
@@ -928,10 +928,10 @@ class TestExtension_Deprecated(TestExtensionBase):
             self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
             self._assert_ext_status(protocol.report_vm_status, "success", 1)
 
-            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-            self.assertEqual(3, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertEqual(len(exthandlers_handler.ext_handlers), 2)
+            self.assertEqual(3, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_3.name).properties.extensions[0].dependencyLevel)
-            self.assertEqual(4, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertEqual(4, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_4.name).properties.extensions[0].dependencyLevel)
 
             # Ensure the invocation order follows the dependency levels
@@ -955,9 +955,9 @@ class TestExtension_Deprecated(TestExtensionBase):
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
-        self.assertEqual(3, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+        self.assertEqual(3, next(handler for handler in exthandlers_handler.ext_handlers if
                                  handler.name == dep_ext_level_3.name).properties.extensions[0].dependencyLevel)
-        self.assertEqual(4, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+        self.assertEqual(4, next(handler for handler in exthandlers_handler.ext_handlers if
                                  handler.name == dep_ext_level_4.name).properties.extensions[0].dependencyLevel)
 
         # Ensure the invocation order follows the dependency levels
@@ -985,10 +985,10 @@ class TestExtension_Deprecated(TestExtensionBase):
             exthandlers_handler.report_ext_handlers_status()
 
             self._assert_no_handler_status(protocol.report_vm_status)
-            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-            self.assertEqual(5, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertEqual(len(exthandlers_handler.ext_handlers), 2)
+            self.assertEqual(5, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_5.name).properties.extensions[0].dependencyLevel)
-            self.assertEqual(6, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertEqual(6, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_6.name).properties.extensions[0].dependencyLevel)
 
             # Ensure the invocation order follows the dependency levels
@@ -1092,11 +1092,11 @@ class TestExtension_Deprecated(TestExtensionBase):
 
             # check handler list and dependency levels
             self.assertTrue(exthandlers_handler.ext_handlers is not None)
-            self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
-            self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertTrue(exthandlers_handler.ext_handlers is not None)
+            self.assertEqual(len(exthandlers_handler.ext_handlers), 2)
+            self.assertEqual(1, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_1.name).properties.extensions[0].dependencyLevel)
-            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers.extHandlers if
+            self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_2.name).properties.extensions[0].dependencyLevel)
 
             # Ensure the invocation order follows the dependency levels
@@ -1111,8 +1111,8 @@ class TestExtension_Deprecated(TestExtensionBase):
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
+        self.assertEqual(exthandlers_handler.ext_handlers[0].properties.extensions[0].dependencyLevel, 0)
+        self.assertEqual(exthandlers_handler.ext_handlers[0].properties.extensions[0].dependencyLevel, 0)
 
     def test_ext_handler_sequencing_invalid_dependency_level(self, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_SEQUENCING)
@@ -1127,8 +1127,8 @@ class TestExtension_Deprecated(TestExtensionBase):
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
+        self.assertEqual(exthandlers_handler.ext_handlers[0].properties.extensions[0].dependencyLevel, 0)
+        self.assertEqual(exthandlers_handler.ext_handlers[0].properties.extensions[0].dependencyLevel, 0)
 
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
@@ -1252,7 +1252,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                     self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
                     self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
-                    for ext_handler in exthandlers_handler.ext_handlers.extHandlers:
+                    for ext_handler in exthandlers_handler.ext_handlers:
                         ehi = ExtHandlerInstance(ext_handler, protocol)
                         self.assertEqual(enable_extensions, os.path.exists(ehi.get_extension_events_dir()),
                                          "Events directory incorrectly set")
@@ -1284,7 +1284,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
             self._assert_ext_status(protocol.report_vm_status, "success", 0)
 
-            ehi = ExtHandlerInstance(exthandlers_handler.ext_handlers.extHandlers[0], protocol)
+            ehi = ExtHandlerInstance(exthandlers_handler.ext_handlers[0], protocol)
             self.assertTrue(os.path.exists(ehi.get_extension_events_dir()), "Events directory should exist")
 
             # Uninstall extensions now
@@ -1704,9 +1704,9 @@ class TestExtension_Deprecated(TestExtensionBase):
                         datafile = mockwiredata.DATA_FILE
 
                 _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)  # pylint: disable=no-value-for-parameter
-                ext_handlers, _ = protocol.get_ext_handlers()
-                self.assertEqual(1, len(ext_handlers.extHandlers))
-                ext_handler = ext_handlers.extHandlers[0]
+                ext_handlers = protocol.client.get_extensions_goal_state().extensions
+                self.assertEqual(1, len(ext_handlers))
+                ext_handler = ext_handlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
                 self.assertEqual(config_version, ext_handler.properties.version, "config version.")
                 ExtHandlerInstance(ext_handler, protocol).decide_version()
@@ -1933,7 +1933,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         NotInstalled handlers), so we just re-use the existing zip of the new extension.
         """
         test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command, *args)
-        extension_name = exthandlers_handler.ext_handlers.extHandlers[0].name
+        extension_name = exthandlers_handler.ext_handlers[0].name
         extension_calls = []
         original_popen = subprocess.Popen
 
@@ -2486,13 +2486,7 @@ class TestExtensionSequencing(AgentTestCase):
         protocol.report_vm_status = MagicMock()
 
         handler = get_exthandlers_handler(protocol)
-        handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
-        conf.get_enable_overprovisioning = Mock(return_value=False)
 
-        def reset_etag():
-            handler.last_etag = 0
-
-        handler.reset_etag = reset_etag
         return handler
 
     def _set_dependency_levels(self, dependency_levels, exthandlers_handler):
@@ -2514,9 +2508,8 @@ class TestExtensionSequencing(AgentTestCase):
             for ext in handler.properties.extensions:
                 ext.dependencyLevel = level
 
-        exthandlers_handler.ext_handlers.extHandlers = []
-        for handler in all_handlers:
-            exthandlers_handler.ext_handlers.extHandlers.append(handler)
+        exthandlers_handler.protocol.client.get_extensions_goal_state().extensions.clear()
+        exthandlers_handler.protocol.client.get_extensions_goal_state().extensions.extend(all_handlers)
 
     def _validate_extension_sequence(self, expected_sequence, exthandlers_handler):
         installed_extensions = [a[0].ext_handler.name for a, _ in exthandlers_handler.handle_ext_handler.call_args_list]
@@ -2536,7 +2529,6 @@ class TestExtensionSequencing(AgentTestCase):
             return status
 
         exthandlers_handler.handle_ext_handler = MagicMock()
-        exthandlers_handler.reset_etag()
 
         with patch.object(ExtHandlerInstance, "get_ext_handling_status", side_effect=get_ext_handling_status):
             with patch.object(ExtHandlerInstance, "get_handler_status", ExtHandlerStatus):
@@ -3237,7 +3229,8 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    def test_additional_locations_node_is_consumed(self):
+    @patch('time.sleep')
+    def test_additional_locations_node_is_consumed(self, _):
 
         location_uri_pattern = r'https?://mock-goal-state/(?P<location_type>{0})/(?P<manifest_num>\d)/manifest.xml'\
             .format(r'(location)|(failoverlocation)|(additionalLocation)')
@@ -3308,10 +3301,10 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
 
 
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
-            ext_handlers, _ = protocol.get_ext_handlers()
+            ext_handlers = protocol.client.get_extensions_goal_state().extensions
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
+                protocol.client.fetch_manifest(ext_handlers[0].versionUris,
                     timeout_in_minutes=0, timeout_in_ms=200)
 
 
