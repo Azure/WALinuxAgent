@@ -1065,7 +1065,7 @@ class UpdateHandler(object):
         for path in glob.glob(os.path.join(conf.get_lib_dir(), AGENT_DIR_GLOB, AGENT_ERROR_FILE)):
             try:
                 os.remove(path)
-            except:
+            except Exception:
                 # Make a best case effort to delete the the error.json file
                 pass
 

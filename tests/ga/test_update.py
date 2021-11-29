@@ -1351,19 +1351,24 @@ class TestUpdate(UpdateTestCase):
                         "The remaining commands should only be for querying the firewall commands")
 
     def test_it_should_delete_all_existing_error_json_files(self):
-        with _get_update_handler() as (update_handler, _):
-            self.prepare_agents()
-            for agent_path in self.agent_dirs():
-                # Add an error.json file for all agents
-                path = os.path.join(agent_path, AGENT_ERROR_FILE)
-                with open(path, 'a'):
-                    os.utime(path, None)
-            update_handler.run()
+        try:
+            with _get_update_handler() as (update_handler, _):
+                self.prepare_agents()
+                for agent_path in self.agent_dirs():
+                    # Add an error.json file for all agents
+                    path = os.path.join(agent_path, AGENT_ERROR_FILE)
+                    with open(path, 'a'):
+                        os.utime(path, None)
+                update_handler.run()
 
-            self.assertGreater(len(self.agent_dirs()), 0, "No agent directories found")
+                self.assertGreater(len(self.agent_dirs()), 0, "No agent directories found")
+                for agent_path in self.agent_dirs():
+                    path = os.path.join(agent_path, AGENT_ERROR_FILE)
+                    self.assertFalse(os.path.exists(path), "Error.json file should be deleted")
+        finally:
+            # Cleanup the agent_dirs that were created as part of the test
             for agent_path in self.agent_dirs():
-                path = os.path.join(agent_path, AGENT_ERROR_FILE)
-                self.assertFalse(os.path.exists(path), "Error.json file should be deleted")
+                shutil.rmtree(agent_path, ignore_errors=True)
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
