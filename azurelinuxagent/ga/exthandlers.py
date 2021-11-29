@@ -573,8 +573,12 @@ class ExtHandlersHandler(object):
         Check the status of the extension being handled. Wait until it has a terminal state or times out.
         :raises: Exception if it is not handled successfully.
         """
-
         extension_name = handler_i.get_extension_full_name(extension)
+
+        # If the handler had no settings, we should not wait at all for handler to report status.
+        if extension is None:
+            logger.info("No settings found for {0}, not waiting for it's status".format(extension_name))
+            return
 
         try:
             ext_completed, status = False, None
@@ -730,7 +734,12 @@ class ExtHandlersHandler(object):
         # failures back to CRP. If a placeholder for an extension already exists with Transitioning status, we would
         # not override it, hence we only create a placeholder for enable/disable commands but the extensions have the
         # data to create their own if needed.
-        ext_handler_i.create_placeholder_status_file(extension)
+
+        # Note: Due to a bug in multiple extensions, we're only creating a default placeholder for Multi-Config extensions.
+        # A fix will follow soon where we will report transitioning status for extensions by default if no status file
+        # found instead of reporting an error.
+        if ext_handler_i.should_perform_multi_config_op(extension):
+            ext_handler_i.create_placeholder_status_file(extension)
         self.__handle_extension(ext_handler_i, extension, uninstall_exit_code)
 
     @staticmethod
@@ -1658,7 +1667,9 @@ class ExtHandlerInstance(object):
     def collect_ext_status(self, ext):
         self.logger.verbose("Collect extension status for {0}".format(self.get_extension_full_name(ext)))
         seq_no, ext_status_file = self.get_status_file_path(ext)
-        if seq_no == -1:
+
+        # We should never try to read any status file if the handler has no settings, returning None in that case
+        if seq_no == -1 or ext is None:
             return None
 
         data = None
