@@ -49,9 +49,9 @@ from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, \
-    has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
+    has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_DIR_GLOB
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
@@ -275,15 +275,6 @@ class UpdateHandler(object):
                     is_success=False,
                     message=msg)
 
-            if ret is not None and ret > 0:
-                msg = u"Agent {0} launched with command '{1}' returned code: {2}".format(
-                    agent_name,
-                    agent_cmd,
-                    ret)
-                logger.warn(msg)
-                if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
-
         except Exception as e:
             # Ignore child errors during termination
             if self.is_running:
@@ -298,8 +289,6 @@ class UpdateHandler(object):
                     op=WALAEventOperation.Enable,
                     is_success=False,
                     message=detailed_message)
-                if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
 
         self.child_process = None
         return
@@ -358,6 +347,7 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
+            self._ensure_no_error_json_files()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -555,11 +545,8 @@ class UpdateHandler(object):
             return None
 
         self._find_agents()
-        available_agents = [agent for agent in self.agents
-                            if agent.is_available
-                            and agent.version > FlexibleVersion(AGENT_VERSION)]
-
-        return available_agents[0] if len(available_agents) >= 1 else None
+        higher_agents = [agent for agent in self.agents if agent.version > FlexibleVersion(AGENT_VERSION)]
+        return higher_agents[0] if len(higher_agents) >= 1 else None
 
     def _emit_restart_event(self):
         try:
@@ -697,16 +684,16 @@ class UpdateHandler(object):
             raise Exception(msg)
         return
 
-    def _filter_blacklisted_agents(self):
-        self.agents = [agent for agent in self.agents if not agent.is_blacklisted]
+    def _keep_only_available_agents(self):
+        self.agents = [agent for agent in self.agents if agent.is_available]
 
     def _find_agents(self):
         """
-        Load all non-blacklisted agents currently on disk.
+        Load all available agents currently on disk.
         """
         try:
             self._set_agents(self._load_agents())
-            self._filter_blacklisted_agents()
+            self._keep_only_available_agents()
         except Exception as e:
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
@@ -891,7 +878,7 @@ class UpdateHandler(object):
             self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
 
             self._purge_agents()
-            self._filter_blacklisted_agents()
+            self._keep_only_available_agents()
 
             # Return True if current agent is no longer available or an
             # agent with a higher version number is available
@@ -1069,6 +1056,19 @@ class UpdateHandler(object):
                 upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
             raise AgentUpgradeExitException(upgrade_message)
 
+    @staticmethod
+    def _ensure_no_error_json_files():
+        """
+        Older versions of the agent used to maintain an error.json file to blacklist agents if they ever failed to start.
+        We've since deprecated that behavior. Delete any error.json files that might still exist to keep a clean state.
+        """
+        for path in glob.glob(os.path.join(conf.get_lib_dir(), AGENT_DIR_GLOB, AGENT_ERROR_FILE)):
+            try:
+                os.remove(path)
+            except:
+                # Make a best case effort to delete the the error.json file
+                pass
+
 
 class GuestAgent(object):
     def __init__(self, path=None, pkg=None, host=None):
@@ -1090,12 +1090,9 @@ class GuestAgent(object):
         location = u"disk" if path is not None else u"package"
         logger.verbose(u"Loading Agent {0} from {1}", self.name, location)
 
-        self.error = GuestAgentError(self.get_agent_error_file())
-        self.error.load()
-
         try:
             self._ensure_downloaded()
-            self._ensure_loaded()
+            self._load_manifest()
         except Exception as e:
             if isinstance(e, ResourceGoneError):
                 raise
@@ -1107,10 +1104,8 @@ class GuestAgent(object):
             if isinstance(e, IOError):
                 raise
 
-            # Note the failure, blacklist the agent if the package downloaded
-            # - An exception with a downloaded package indicates the package
-            #   is corrupt (e.g., missing the HandlerManifest.json file)
-            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
+            # In case of error, delete the agent directory and zip file to keep a clean state for next run
+            fileutil.clean_ioerror(e, paths=[self.get_agent_dir(), self.get_agent_pkg_path()])
 
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
@@ -1132,47 +1127,20 @@ class GuestAgent(object):
     def get_agent_dir(self):
         return os.path.join(conf.get_lib_dir(), self.name)
 
-    def get_agent_error_file(self):
-        return os.path.join(conf.get_lib_dir(), self.name, AGENT_ERROR_FILE)
-
     def get_agent_manifest_path(self):
         return os.path.join(self.get_agent_dir(), AGENT_MANIFEST_FILE)
 
     def get_agent_pkg_path(self):
         return ".".join((os.path.join(conf.get_lib_dir(), self.name), "zip"))
 
-    def clear_error(self):
-        self.error.clear()
-        self.error.save()
-
     @property
     def is_available(self):
-        return self.is_downloaded and not self.is_blacklisted
-
-    @property
-    def is_blacklisted(self):
-        return self.error is not None and self.error.is_blacklisted
-
-    @property
-    def is_downloaded(self):
-        return self.is_blacklisted or \
-               os.path.isfile(self.get_agent_manifest_path())
-
-    def mark_failure(self, is_fatal=False):
-        try:
-            if not os.path.isdir(self.get_agent_dir()):
-                os.makedirs(self.get_agent_dir())
-            self.error.mark_failure(is_fatal=is_fatal)
-            self.error.save()
-            if self.error.is_blacklisted:
-                logger.warn(u"Agent {0} is permanently blacklisted", self.name)
-        except Exception as e:
-            logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
+        return os.path.isfile(self.get_agent_manifest_path())
 
     def _ensure_downloaded(self):
         logger.verbose(u"Ensuring Agent {0} is downloaded", self.name)
 
-        if self.is_downloaded:
+        if self.is_available:
             logger.verbose(u"Agent {0} was previously downloaded - skipping download", self.name)
             return
 
@@ -1191,10 +1159,6 @@ class GuestAgent(object):
             op=WALAEventOperation.Install,
             is_success=True,
             message=msg)
-
-    def _ensure_loaded(self):
-        self._load_manifest()
-        self._load_error()
 
     def _download(self):
         uris_shuffled = self.pkg.uris
@@ -1269,14 +1233,6 @@ class GuestAgent(object):
 
         return package is not None
 
-    def _load_error(self):
-        try:
-            self.error = GuestAgentError(self.get_agent_error_file())
-            self.error.load()
-            logger.verbose(u"Agent {0} error state: {1}", self.name, ustr(self.error))
-        except Exception as e:
-            logger.warn(u"Agent {0} failed loading error state: {1}", self.name, ustr(e))
-
     def _load_manifest(self):
         path = self.get_agent_manifest_path()
         if not os.path.isfile(path):
@@ -1347,64 +1303,3 @@ class GuestAgent(object):
             self.get_agent_dir())
         return
 
-
-class GuestAgentError(object):
-    def __init__(self, path):
-        if path is None:
-            raise UpdateError(u"GuestAgentError requires a path")
-        self.path = path
-
-        self.clear()
-        return
-
-    def mark_failure(self, is_fatal=False):
-        self.last_failure = time.time()  # pylint: disable=W0201
-        self.failure_count += 1
-        self.was_fatal = is_fatal  # pylint: disable=W0201
-        return
-
-    def clear(self):
-        self.last_failure = 0.0
-        self.failure_count = 0
-        self.was_fatal = False
-        return
-
-    @property
-    def is_blacklisted(self):
-        return self.was_fatal or self.failure_count >= MAX_FAILURE
-
-    def load(self):
-        if self.path is not None and os.path.isfile(self.path):
-            with open(self.path, 'r') as f:
-                self.from_json(json.load(f))
-        return
-
-    def save(self):
-        if os.path.isdir(os.path.dirname(self.path)):
-            with open(self.path, 'w') as f:
-                json.dump(self.to_json(), f)
-        return
-
-    def from_json(self, data):
-        self.last_failure = max(  # pylint: disable=W0201
-            self.last_failure,
-            data.get(u"last_failure", 0.0))
-        self.failure_count = max(  # pylint: disable=W0201
-            self.failure_count,
-            data.get(u"failure_count", 0))
-        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)  # pylint: disable=W0201
-        return
-
-    def to_json(self):
-        data = {
-            u"last_failure": self.last_failure,
-            u"failure_count": self.failure_count,
-            u"was_fatal": self.was_fatal
-        }
-        return data
-
-    def __str__(self):
-        return "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(
-            self.last_failure,
-            self.failure_count,
-            self.was_fatal)
