@@ -64,7 +64,8 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
-from build.lib.azurelinuxagent.common.osutil.default import _get_firewall_accept_dns_tcp_request_command
+from azurelinuxagent.common.osutil.default import _get_firewall_drop_command, \
+    _get_firewall_accept_dns_tcp_command
 
 AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -1048,16 +1049,12 @@ class UpdateHandler(object):
                 return
             else:
                 # DROP rule exists in the ip table chain. Hence checking if the DNS TCP to wireserver rule exists. If not we add it.
-                accept_non_root = _get_firewall_accept_dns_tcp_request_command(wait,
-                                                                               AddFirewallRules.get_check_command(),
-                                                                               dst_ip)
+                accept_non_root = _get_firewall_accept_dns_tcp_command(wait, AddFirewallRules.get_check_command(), dst_ip)
                 if not _execute_run_command(accept_non_root):
                     try:
                         logger.info(
                             "Firewall rule to allow DNS TCP request to wireserver for a non root user unavailable . Setting it now.")
-                        accept_non_root = _get_firewall_accept_dns_tcp_request_command(wait,
-                                                                                       AddFirewallRules.get_insert_command(),
-                                                                                       dst_ip)
+                        accept_non_root = _get_firewall_accept_dns_tcp_command(wait, AddFirewallRules.get_insert_command(), dst_ip)
                         shellutil.run_command(accept_non_root)
                         logger.info(
                             "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver ")
