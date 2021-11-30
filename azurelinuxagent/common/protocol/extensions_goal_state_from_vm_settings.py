@@ -226,7 +226,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         for family in families:
             name = family["name"]
-            version = family["version"]
+            version = family.get("version")
             uris = family["uris"]
             manifest = VMAgentManifest(name, version)
             for u in uris:

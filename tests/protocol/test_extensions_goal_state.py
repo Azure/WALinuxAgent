@@ -73,3 +73,16 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         with mock_wire_protocol(data_file) as protocol:
             actual = protocol.client._extensions_goal_state_from_vm_settings.status_upload_blob_type
             self.assertEqual("BlockBlob", actual, 'Expected BlockBob for an invalid statusBlobType')
+
+    def test_create_from_vm_settings_should_parse_requested_version_properly(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
+            for manifest in ga_manifests:
+                self.assertIsNone(manifest.version, "Requested version should be None")
+
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
+        with mock_wire_protocol(data_file) as protocol:
+            ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
+            for manifest in ga_manifests:
+                self.assertEqual(manifest.version, "9.9.9.9", "Requested version did not match")
