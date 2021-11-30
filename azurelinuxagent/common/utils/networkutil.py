@@ -222,7 +222,7 @@ class AddFirewallRules(object):
     @staticmethod
     def get_firewalld_accept_dns_tcp_command(command, destination):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
-        cmd.extend(['-t', 'security', '-A', 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53', '-j', 'ACCEPT'])
+        cmd.extend(['-t', 'security', '-I', 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53', '-j', 'ACCEPT'])
         return cmd
 
     @staticmethod
