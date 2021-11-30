@@ -273,8 +273,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         ext_handler.name = _log_error_if_none("Extensions.Plugins.Plugin.name", getattrib(plugin, "name"))
         ext_handler.version = _log_error_if_none("Extensions.Plugins.Plugin.version",
                                                             getattrib(plugin, "version"))
-        ext_handler.properties.state = getattrib(plugin, "state")
-        if ext_handler.properties.state in (None, ""):
+        ext_handler.state = getattrib(plugin, "state")
+        if ext_handler.state in (None, ""):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
         def getattrib_wrapped_in_list(node, attr_name):

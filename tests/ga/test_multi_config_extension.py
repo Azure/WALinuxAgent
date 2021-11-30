@@ -56,7 +56,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
                 if ext_handler.name not in expected_handlers:
                     continue
                 expected_handler = expected_handlers.pop(ext_handler.name)
-                self.assertEqual(expected_handler.state, ext_handler.properties.state)
+                self.assertEqual(expected_handler.state, ext_handler.state)
                 self.assertEqual(expected_handler.version, ext_handler.version)
                 self.assertEqual(expected_handler.is_invalid_setting, ext_handler.is_invalid_setting)
                 self.assertEqual(len(expected_handler.extensions), len(ext_handler.properties.extensions))

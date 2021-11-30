@@ -2499,7 +2499,7 @@ class TestExtensionSequencing(AgentTestCase):
             if handler_map.get(handler_name) is None:
                 handler = ExtHandler(name=handler_name)
                 extension = ExtensionSettings(name=handler_name)
-                handler.properties.state = ExtHandlerRequestedState.Enabled
+                handler.state = ExtHandlerRequestedState.Enabled
                 handler.properties.extensions.append(extension)
                 handler_map[handler_name] = handler
                 all_handlers.append(handler)

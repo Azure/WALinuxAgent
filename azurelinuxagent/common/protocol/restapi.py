@@ -136,7 +136,6 @@ class ExtensionSettings(DataContract):
 
 class ExtHandlerProperties(DataContract):
     def __init__(self):
-        self.state = None
         self.extensions = DataContractList(ExtensionSettings)
 
 
@@ -150,6 +149,7 @@ class ExtHandler(DataContract):
     def __init__(self, name=None):
         self.name = name
         self.version = None
+        self.state = None
         self.properties = ExtHandlerProperties()
         self.versionUris = []
         self.__invalid_handler_setting_reason = None
@@ -175,7 +175,7 @@ class ExtHandler(DataContract):
             level = min(levels)
         # Process uninstall or disabled before enabled, in reverse order
         # remap 0 to -1, 1 to -2, 2 to -3, etc
-        if self.properties.state != u"enabled":
+        if self.state != u"enabled":
             level = (0 - level) - 1
         return level
 

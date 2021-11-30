@@ -461,7 +461,7 @@ class ExtHandlersHandler(object):
     def __get_dependency_level(tup):
         (extension, handler) = tup
         if extension is not None:
-            return extension.dependency_level_sort_key(handler.properties.state)
+            return extension.dependency_level_sort_key(handler.state)
         return handler.dependency_level_sort_key()
 
     def __get_sorted_extensions_for_processing(self):
@@ -597,7 +597,7 @@ class ExtHandlersHandler(object):
             if ext_handler_i.ext_handler.is_invalid_setting:
                 raise ExtensionsGoalStateError(ext_handler_i.ext_handler.invalid_setting_reason)
 
-            handler_state = ext_handler_i.ext_handler.properties.state
+            handler_state = ext_handler_i.ext_handler.state
 
             # The Guest Agent currently only supports 1 installed version per extension on the VM.
             # If the extension version is unregistered and the customers wants to uninstall the extension,
@@ -1003,7 +1003,7 @@ class ExtHandlersHandler(object):
         if handler_status is None:
             # We should always have some handler status if requested state != Uninstall irrespective of single or
             # multi-config. If state is != Uninstall, report error
-            if ext_handler.properties.state != ExtHandlerRequestedState.Uninstall:
+            if ext_handler.state != ExtHandlerRequestedState.Uninstall:
                 msg = "No handler status found for {0}. Not reporting anything for it.".format(ext_handler.name)
                 ext_handler_i.report_error_on_incarnation_change(incarnation_changed, log_msg=msg, event_msg=msg)
             return
