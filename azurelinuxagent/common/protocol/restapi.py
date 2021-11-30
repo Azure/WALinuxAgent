@@ -179,8 +179,9 @@ class Extension(object):
         return self.name == other.name and \
             self.version == other.version and \
             self.state == other.state and \
-            self.supports_multi_config == other.supports_multi_config
-            # TODO: Compare manifests and settings
+            self.supports_multi_config == other.supports_multi_config and \
+            self.manifest_uris == other.manifest_uris
+            # TODO: Compare settings
 
     def __ne__(self, other):
         return not (self == other)

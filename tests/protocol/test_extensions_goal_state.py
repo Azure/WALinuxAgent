@@ -34,6 +34,10 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             agent_manifests[0].family = 'MOCK_FAMILY'
             test_property("agent_manifests", agent_manifests)
 
+            extensions = copy.copy(from_vm_settings.extensions)
+            extensions[0].name = 'MOCK_NAME'
+            test_property("extensions", extensions)
+
     def test_compare_should_check_the_status_upload_blob_only_when_the_host_ga_plugin_version_is_greater_then_112(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             from_extensions_config = protocol.client.get_extensions_goal_state()
