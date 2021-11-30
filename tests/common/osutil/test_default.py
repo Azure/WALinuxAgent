@@ -663,7 +663,6 @@ Match host 192.168.1.2\n\
         set_command(osutil._get_firewall_drop_command(wait, "-C", destination))
         set_command(osutil._get_firewall_drop_command(wait, "-A", destination))
         set_command(osutil._get_firewall_accept_command(wait, "-A", destination, uid))
-        set_command(osutil._get_firewall_accept_dns_tcp_command(wait,"-A", destination))
         set_command(osutil._get_firewall_accept_dns_tcp_command(wait, "-I", destination))
         # the agent assumes the rules have been deleted when these commands return 1
         set_command(osutil._get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
@@ -744,7 +743,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
             drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination))
-            accept_dns_tcp_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, "-A", mock_iptables.destination))
+            accept_dns_tcp_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, "-I", mock_iptables.destination))
             accept_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_command(mock_iptables.wait, "-A", mock_iptables.destination, mock_iptables.uid))
             drop_add_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-A", mock_iptables.destination))
 

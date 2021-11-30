@@ -189,8 +189,6 @@ class AddFirewallRules(object):
     @staticmethod
     def get_iptables_accept_dns_tcp_request_command(wait, command, destination):
         cmd = AddFirewallRules.__get_iptables_base_command(wait)
-        if command == AddFirewallRules.get_append_command():
-            cmd.extend(['-t', 'security', '-A', 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53', '-j', 'ACCEPT'])
         if command == AddFirewallRules.get_insert_command():
             cmd.extend(['-t', 'security', '-I', 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53', '-j', 'ACCEPT'])
         if command == AddFirewallRules.get_check_command():
@@ -254,7 +252,7 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        accept_rule_dns_tcp_rule = AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.__APPEND_COMMAND,dst_ip)
+        accept_rule_dns_tcp_rule = AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.__INSERT_COMMAND,dst_ip)
         AddFirewallRules.__execute_cmd(accept_rule_dns_tcp_rule)
 
         accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.__APPEND_COMMAND, dst_ip, uid)
