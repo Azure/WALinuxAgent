@@ -102,6 +102,11 @@ def _get_firewall_delete_conntrack_accept_command(wait, destination):
                       "--ctstate", "INVALID,NEW", "-j", "ACCEPT"])
 
 
+def _get_firewall_delete_accept_dns_tcp_command(wait, destination):
+    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "--destination-port", "53",
+                           "-j", "ACCEPT"])
+
+
 def _get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
     return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
                             "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
@@ -236,6 +241,7 @@ class DefaultOSUtil(object):
             # has aged out, keep this cleanup in place.
             self._delete_rule(_get_firewall_delete_conntrack_accept_command(wait, dst_ip))
 
+            self._delete_rule(_get_firewall_delete_accept_dns_tcp_command(wait, dst_ip))
             self._delete_rule(_get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
             self._delete_rule(_get_firewall_delete_conntrack_drop_command(wait, dst_ip))
 
