@@ -16,8 +16,11 @@ import tempfile
 import time
 import unittest
 import zipfile
+
 from datetime import datetime, timedelta
 from threading import currentThread
+from tests.common.osutil.test_default import TestOSUtil
+import azurelinuxagent.common.osutil.default as osutil
 
 _ORIGINAL_POPEN = subprocess.Popen
 
@@ -36,7 +39,7 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands
+from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
@@ -1660,14 +1663,84 @@ class TestUpdate(UpdateTestCase):
                     with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
                         update_handler.run(debug=True)
 
-        # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
-        self.assertEqual(3, len(executed_commands),
-                         "The number of times firewall-cmd should be called is only 3; Executed firewall commands: {0}; All popen calls: {1}".format(
+        # Firewall-cmd should only be called 4 times - 1st to check if running, 2nd, 3rd and 4th for the QueryPassThrough cmd
+        self.assertEqual(4, len(executed_commands),
+                         "The number of times firewall-cmd should be called is only 4; Executed firewall commands: {0}; All popen calls: {1}".format(
                              executed_commands, mock_popen.call_args_list))
         self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),
                          "First command should be to check if firewalld is running")
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
                         "The remaining commands should only be for querying the firewall commands")
+
+    def test_it_should_set_dns_tcp_iptable_if_drop_available_accept_unavailable(self):
+        osutil._enable_firewall = True
+
+        with TestOSUtil._mock_iptables() as mock_iptables:
+            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                # drop rule is present
+                mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination), exit_code=0)
+                # non root tcp iptable rule is absent
+                mock_iptables.set_command(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination), exit_code=1)
+                update_handler.run(debug=True)
+
+                drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait,AddFirewallRules.get_check_command(), mock_iptables.destination))
+                accept_nonroot_tcp_check_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination))
+                accept_nonroot_tcp_insert_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, AddFirewallRules.get_insert_command(), mock_iptables.destination))
+
+                get_firewall_packets = TestOSUtil._command_to_string(osutil._get_firewall_packets_command(mock_iptables.wait))
+
+                self.assertEqual(len(mock_iptables.command_calls), 4,"Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+                self.assertEqual(mock_iptables.command_calls[0], drop_check_command,
+                                 "The first command should check the drop rule")
+                self.assertEqual(mock_iptables.command_calls[1], accept_nonroot_tcp_check_command,
+                                 "The second command should check the accept rule")
+                self.assertEqual(mock_iptables.command_calls[2], accept_nonroot_tcp_insert_command,
+                                 "The third command should add the accept rule")
+                self.assertEqual(mock_iptables.command_calls[3], get_firewall_packets,
+                                 "The fourth command should be for listing the firewall rules")
+
+    def test_it_should_not_set_dns_tcp_iptable_if_drop_unavailable(self):
+        osutil._enable_firewall = True
+
+        with TestOSUtil._mock_iptables() as mock_iptables:
+            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                #drop rule is not available
+                mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination), exit_code=1)
+
+                update_handler.run(debug=True)
+
+                drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination))
+                get_firewall_packets_command = TestOSUtil._command_to_string(osutil._get_firewall_packets_command(mock_iptables.wait))
+
+                self.assertEqual(len(mock_iptables.command_calls), 2,"Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+                self.assertEqual(mock_iptables.command_calls[0], drop_check_command,
+                                 "The first command should check the drop rule")
+                self.assertEqual(mock_iptables.command_calls[1], get_firewall_packets_command,
+                                 "The fourth command should be for listing the firewall rules")
+
+    def test_it_should_not_set_dns_tcp_iptable_if_drop_and_accept_available(self):
+        osutil._enable_firewall = True
+
+        with TestOSUtil._mock_iptables() as mock_iptables:
+            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                #drop rule is available
+                mock_iptables.set_command(osutil._get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination), exit_code=0)
+                # non root tcp iptable rule is available
+                mock_iptables.set_command(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination), exit_code=0)
+
+                update_handler.run(debug=True)
+
+                drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination))
+                get_firewall_packets_command = TestOSUtil._command_to_string(osutil._get_firewall_packets_command(mock_iptables.wait))
+                accept_nonroot_tcp_check_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, AddFirewallRules.get_check_command(), mock_iptables.destination))
+
+                self.assertEqual(len(mock_iptables.command_calls), 3,"Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+                self.assertEqual(mock_iptables.command_calls[0], drop_check_command,
+                                 "The first command should check the drop rule")
+                self.assertEqual(mock_iptables.command_calls[1], accept_nonroot_tcp_check_command,
+                                 "The second command should check the accept rule")
+                self.assertEqual(mock_iptables.command_calls[2], get_firewall_packets_command,
+                                 "The fourth command should be for listing the firewall rules")
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
