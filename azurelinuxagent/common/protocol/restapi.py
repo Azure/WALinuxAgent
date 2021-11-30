@@ -85,6 +85,7 @@ class VMAgentManifest(object):
 class ExtensionState(object):
     Enabled = ustr("enabled")
     Disabled = ustr("disabled")
+    All = [Enabled, Disabled]
 
 
 class ExtHandlerRequestedState(object):
@@ -98,7 +99,7 @@ class ExtHandlerRequestedState(object):
     Uninstall = ustr("uninstall")
 
 
-class ExtensionSettings(DataContract):
+class ExtensionSettings(object):
     """
     The runtime settings associated with a Handler
     -   Maps to Extension.PluginSettings.Plugin.RuntimeSettings for single config extensions in the ExtensionConfig.xml
@@ -147,8 +148,8 @@ class Extension(object):
         self.state = None
         self.settings = []
         self.manifest_uris = []
-        self.__invalid_handler_setting_reason = None
         self.supports_multi_config = False
+        self.__invalid_handler_setting_reason = None
 
     @property
     def is_invalid_setting(self):
@@ -174,6 +175,21 @@ class Extension(object):
             level = (0 - level) - 1
         return level
 
+    def __eq__(self, other):
+        return self.name == other.name and \
+            self.version == other.version and \
+            self.state == other.state and \
+            self.supports_multi_config == other.supports_multi_config
+            # TODO: Compare manifests and settings
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "{0}-{1}".format(self.name, self.version)
 
 class InVMGoalStateMetaData(DataContract):
     """

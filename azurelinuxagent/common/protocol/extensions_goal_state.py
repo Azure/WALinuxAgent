@@ -119,6 +119,8 @@ class ExtensionsGoalState(object):
         compare_attribute("required_features")
         compare_attribute("on_hold")
         compare_attribute("agent_manifests")
+        equal = from_extensions_config.extensions[0] == from_vm_settings.extensions[0]
+        compare_attribute("extensions")
 
     def _do_common_validations(self):
         """

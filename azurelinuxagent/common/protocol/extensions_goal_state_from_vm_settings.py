@@ -23,7 +23,7 @@ import sys
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionState
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
@@ -110,7 +110,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     @property
     def extensions(self):
-        return self.extensions
+        return self._extensions
 
     def get_redacted_text(self):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
@@ -239,7 +239,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         # Sample (NOTE: The first sample is single-config, the second multi-config):
         # {
         #     ...
-        #     "extension_goal_states": [
+        #     "extensionGoalStates": [
         #         {
         #             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
         #             "version": "1.9.1",
@@ -298,12 +298,33 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #     ]
         #     ...
         # }
-        extension_goal_states = vm_settings.get("extension_goal_states")
+        extension_goal_states = vm_settings.get("extensionGoalStates")
         if extension_goal_states is not None:
             if not isinstance(extension_goal_states, list):
                 raise Exception("extension_goal_states should be an array")
             for extension_gs in extension_goal_states:
                 extension = Extension()
+
+                extension.name = extension_gs['name']
+                extension.version = extension_gs['version']
+                extension.state = extension_gs['state']
+                if extension.state not in ExtensionState.All:
+                    raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
+                is_multi_config = extension_gs.get('isMultiConfig')
+                if is_multi_config is not None:
+                    extension.supports_multi_config = is_multi_config
+                extension.manifest_uris.append(extension_gs['location'])
+                fail_over_location = extension_gs.get('failoverlocation')
+                if fail_over_location is not None:
+                    extension.manifest_uris.append(fail_over_location)
+                additional_locations = extension_gs.get('additionalLocations')
+                if additional_locations is not None:
+                    if not isinstance(additional_locations, list):
+                        raise Exception('additionalLocations should be an array')
+                    extension.manifest_uris.extend(additional_locations)
+
+                # TODO: Add settings
+
                 self._extensions.append(extension)
 
 
