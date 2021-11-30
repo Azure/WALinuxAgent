@@ -105,9 +105,6 @@ jobs:
 
       - script: |
           printenv > $(Build.SourcesDirectory)/dcr/.env
-
-          # This variable is needed in the Cleanup stage to determine whether to cleanup or not
-          echo '##vso[task.setvariable variable=armDeployed;isOutput=true]true'
         displayName: 'Get all environment variables'
         name: 'setOutputVars'
 
