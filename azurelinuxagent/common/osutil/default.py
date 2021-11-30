@@ -74,6 +74,9 @@ def _add_wait(wait, command):
 def _get_iptables_version_command():
     return ["iptables", "--version"]
 
+def _get_firewall_accept_dns_tcp_command(wait, command, destination):
+    return AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, command, destination)
+
 
 def _get_firewall_accept_command(wait, command, destination, owner_uid):
     return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)

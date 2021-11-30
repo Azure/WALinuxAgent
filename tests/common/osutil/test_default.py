@@ -663,6 +663,7 @@ Match host 192.168.1.2\n\
         set_command(osutil._get_firewall_drop_command(wait, "-C", destination))
         set_command(osutil._get_firewall_drop_command(wait, "-A", destination))
         set_command(osutil._get_firewall_accept_command(wait, "-A", destination, uid))
+        set_command(osutil._get_firewall_accept_dns_tcp_command(wait,"-A", destination))
         # the agent assumes the rules have been deleted when these commands return 1
         set_command(osutil._get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
         set_command(osutil._get_firewall_delete_owner_accept_command(wait, destination, uid), exit_code=1)
@@ -741,14 +742,17 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
             drop_check_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination))
+            accept_dns_tcp_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_dns_tcp_command(mock_iptables.wait, "-A", mock_iptables.destination))
             accept_command = TestOSUtil._command_to_string(osutil._get_firewall_accept_command(mock_iptables.wait, "-A", mock_iptables.destination, mock_iptables.uid))
             drop_add_command = TestOSUtil._command_to_string(osutil._get_firewall_drop_command(mock_iptables.wait, "-A", mock_iptables.destination))
 
             self.assertTrue(success, "Enabling the firewall was not successful")
-            self.assertEqual(len(mock_iptables.command_calls), 3, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
+            self.assertEqual(len(mock_iptables.command_calls), 4, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
             self.assertEqual(mock_iptables.command_calls[0], drop_check_command, "The first command should check the drop rule")
-            self.assertEqual(mock_iptables.command_calls[1], accept_command, "The second command should add the accept rule")
-            self.assertEqual(mock_iptables.command_calls[2], drop_add_command, "The third command should add the drop rule")
+            self.assertEqual(mock_iptables.command_calls[1], accept_dns_tcp_command,
+                            "The second command should add the dns tcp accept rule")
+            self.assertEqual(mock_iptables.command_calls[2], accept_command, "The second command should add the accept rule")
+            self.assertEqual(mock_iptables.command_calls[3], drop_add_command, "The third command should add the drop rule")
 
             self.assertTrue(osutil._enable_firewall, "The firewall should not have been disabled")
 
@@ -762,7 +766,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
             self.assertTrue(success, "Enabling the firewall was not successful")
-            self.assertEqual(len(mock_iptables.command_calls), 3, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
+            self.assertEqual(len(mock_iptables.command_calls), 4, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
             for command in mock_iptables.command_calls:
                 self.assertNotIn("-w", command, "The -w option should have been used in {0}".format(command))
 
