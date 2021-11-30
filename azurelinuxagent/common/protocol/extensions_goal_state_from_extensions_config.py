@@ -59,9 +59,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
 
         for ga_family in ga_families:
             family = findtext(ga_family, "Name")
+            version = findtext(ga_family, "Version")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
-            manifest = VMAgentManifest(family)
+            manifest = VMAgentManifest(family, version)
             for uri in uris:
                 manifest.uris.append(gettext(uri))
             self._agent_manifests.append(manifest)

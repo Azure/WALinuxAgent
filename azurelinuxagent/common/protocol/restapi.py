@@ -65,8 +65,9 @@ class CertList(DataContract):
 
 
 class VMAgentManifest(object):
-    def __init__(self, family):
+    def __init__(self, family, version=None):
         self.family = family
+        self.version = version
         self.uris = []
 
     def __eq__(self, other):
