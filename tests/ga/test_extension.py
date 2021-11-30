@@ -2508,7 +2508,7 @@ class TestExtensionSequencing(AgentTestCase):
             for ext in handler.settings:
                 ext.dependencyLevel = level
 
-        exthandlers_handler.protocol.client.get_extensions_goal_state().extensions.clear()
+        exthandlers_handler.protocol.client.get_extensions_goal_state()._extensions *= 0
         exthandlers_handler.protocol.client.get_extensions_goal_state().extensions.extend(all_handlers)
 
     def _validate_extension_sequence(self, expected_sequence, exthandlers_handler):
