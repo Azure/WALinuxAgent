@@ -16,6 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import copy
 import datetime
 import glob
 import json
@@ -46,7 +47,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionsGoalStateError, \
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
-from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, ExtHandler, ExtHandlerStatus, \
+from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
@@ -387,7 +388,7 @@ class ExtHandlersHandler(object):
             # Handler in skip_handlers list, not parsing it
             return None
 
-        eh = ExtHandler(name=handler_name)
+        eh = Extension(name=handler_name)
         eh.version = str(FlexibleVersion(name[separator + 1:]))
 
         return ExtHandlerInstance(eh, protocol)
@@ -467,8 +468,8 @@ class ExtHandlersHandler(object):
     def __get_sorted_extensions_for_processing(self):
         all_extensions = []
         for handler in self.ext_handlers:
-            if any(handler.properties.extensions):
-                all_extensions.extend([(ext, handler) for ext in handler.properties.extensions])
+            if any(handler.settings):
+                all_extensions.extend([(ext, handler) for ext in handler.settings])
             else:
                 # We need to process the Handler even if no settings specified from CRP (legacy behavior)
                 logger.info("No extension/run-time settings settings found for {0}".format(handler.name))
@@ -878,7 +879,7 @@ class ExtHandlersHandler(object):
                         seq_no, _ = handler_instance.get_status_file_path(ext)
                         ext.sequenceNumber = seq_no
                         # Append extension to the list of extensions for the handler
-                        ext_handler.properties.extensions.append(ext)
+                        ext_handler.settings.append(ext)
 
                     handlers_to_report.append(ext_handler)
             except Exception as error:
@@ -1052,7 +1053,7 @@ class ExtHandlerInstance(object):
 
     @property
     def extensions(self):
-        return self.ext_handler.properties.extensions
+        return self.ext_handler.settings
 
     @property
     def enabled_extensions(self):
@@ -1200,8 +1201,7 @@ class ExtHandlerInstance(object):
         if latest_version is None:
             return None
 
-        installed_handler = ExtHandler()
-        set_properties("ExtHandler", installed_handler, get_properties(self.ext_handler))
+        installed_handler = copy.deepcopy(self.ext_handler)
         installed_handler.version = latest_version
         return ExtHandlerInstance(installed_handler, self.protocol)
 

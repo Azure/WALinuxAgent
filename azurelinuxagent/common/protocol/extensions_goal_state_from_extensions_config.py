@@ -24,7 +24,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import ExtensionSettings, ExtHandler, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
+from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -172,7 +172,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     def get_redacted_text(self):
         text = self._text
         for ext_handler in self._extensions:
-            for extension in ext_handler.properties.extensions:
+            for extension in ext_handler.settings:
                 if extension.protectedSettings is not None:
                     text = text.replace(extension.protectedSettings, "*** REDACTED ***")
         return text
@@ -228,7 +228,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         plugin_settings = findall(plugin_settings_list, "Plugin")
 
         for plugin in plugins:
-            ext_handler = ExtHandler()
+            ext_handler = Extension()
             try:
                 ExtensionsGoalStateFromExtensionsConfig._parse_plugin(ext_handler, plugin)
                 ExtensionsGoalStateFromExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
@@ -292,7 +292,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             locations += [gettext(node) for node in nodes_list]
 
         for uri in locations:
-            ext_handler.versionUris.append(uri)
+            ext_handler.manifest_uris.append(uri)
 
     @staticmethod
     def _parse_plugin_settings(ext_handler, plugin_settings):
@@ -510,7 +510,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             # Incase of invalid/no settings, add the name and seqNo of the Extension and treat it as an extension with
             # no settings since we were able to successfully parse those data properly. Without this, we wont report
             # anything for that sequence number and CRP would eventually have to timeout rather than fail fast.
-            ext_handler.properties.extensions.append(
+            ext_handler.settings.append(
                 ExtensionSettings(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
             return
 
@@ -526,7 +526,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             ext.dependencyLevel = depends_on_level
             thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
-            ext_handler.properties.extensions.append(ext)
+            ext_handler.settings.append(ext)
 
 
 # Do not extend this class

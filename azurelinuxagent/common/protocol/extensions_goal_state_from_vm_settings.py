@@ -23,7 +23,7 @@ import sys
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest, ExtHandler
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
@@ -303,7 +303,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             if not isinstance(extension_goal_states, list):
                 raise Exception("extension_goal_states should be an array")
             for extension_gs in extension_goal_states:
-                extension = ExtHandler()
+                extension = Extension()
                 self._extensions.append(extension)
 
 

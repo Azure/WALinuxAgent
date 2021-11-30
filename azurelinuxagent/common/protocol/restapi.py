@@ -134,12 +134,7 @@ class ExtensionSettings(DataContract):
         return level
 
 
-class ExtHandlerProperties(DataContract):
-    def __init__(self):
-        self.extensions = DataContractList(ExtensionSettings)
-
-
-class ExtHandler(DataContract):
+class Extension(object):
     """
     The main Plugin/handler specified by the publishers.
     Maps to Extension.PluginSettings.Plugins.Plugin in the ExtensionConfig.xml file
@@ -150,8 +145,8 @@ class ExtHandler(DataContract):
         self.name = name
         self.version = None
         self.state = None
-        self.properties = ExtHandlerProperties()
-        self.versionUris = []
+        self.settings = []
+        self.manifest_uris = []
         self.__invalid_handler_setting_reason = None
         self.supports_multi_config = False
 
@@ -168,7 +163,7 @@ class ExtHandler(DataContract):
         self.__invalid_handler_setting_reason = value
 
     def dependency_level_sort_key(self):
-        levels = [e.dependencyLevel for e in self.properties.extensions]
+        levels = [e.dependencyLevel for e in self.settings]
         if len(levels) == 0:
             level = 0
         else:

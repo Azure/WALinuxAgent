@@ -31,7 +31,7 @@ from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHa
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, \
-    ExtHandlerPackage, ExtHandlerPackageList, ExtHandler, VMStatus, ExtHandlerStatus, ExtensionStatus
+    ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
@@ -1586,7 +1586,7 @@ class TestUpdate(UpdateTestCase):
 
     @staticmethod
     def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
-        eh = ExtHandler(name=name)
+        eh = Extension(name=name)
         eh.version = version
         return ExtHandlerInstance(eh, protocol)
 

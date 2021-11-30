@@ -24,7 +24,7 @@ import uuid
 from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
-from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSettings, ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSettings, Extension
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil
@@ -218,10 +218,8 @@ class TestExtHandlers(AgentTestCase):
         ext.sequenceNumber = goal_state_sequence_number
         patch_get_largest_seq.return_value = disk_sequence_number
 
-        ext_handler_props = ExtHandlerProperties()
-        ext_handler = ExtHandler(name='foo')
+        ext_handler = Extension(name='foo')
         ext_handler.version = "1.2.3"
-        ext_handler.properties = ext_handler_props
 
         instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
         seq, path = instance.get_status_file_path(ext)
@@ -271,10 +269,8 @@ class TestExtHandlers(AgentTestCase):
         log_dir_path = os.path.join(self.tmp_dir, "log_directory")
         mock_log_dir.return_value = log_dir_path
 
-        ext_handler_props = ExtHandlerProperties()
-        ext_handler = ExtHandler(name='foo')
+        ext_handler = Extension(name='foo')
         ext_handler.version = "1.2.3"
-        ext_handler.properties = ext_handler_props
 
         first_line = "This is the first line!"
         second_line = "This is the second line."
@@ -300,9 +296,7 @@ class LaunchCommandTestCase(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
-        ext_handler_properties = ExtHandlerProperties()
-        self.ext_handler = ExtHandler(name='foo')
-        self.ext_handler.properties = ext_handler_properties
+        self.ext_handler = Extension(name='foo')
         self.ext_handler.version = "1.2.3"
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol("1.2.3.4"))
 

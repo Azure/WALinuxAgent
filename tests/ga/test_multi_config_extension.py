@@ -40,7 +40,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
             self.version = version
             self.state = state
             self.is_invalid_setting = False
-            self.extensions = dict()
+            self.settings = dict()
 
     class _TestExtensionObject:
         def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
@@ -59,29 +59,29 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
                 self.assertEqual(expected_handler.state, ext_handler.state)
                 self.assertEqual(expected_handler.version, ext_handler.version)
                 self.assertEqual(expected_handler.is_invalid_setting, ext_handler.is_invalid_setting)
-                self.assertEqual(len(expected_handler.extensions), len(ext_handler.properties.extensions))
+                self.assertEqual(len(expected_handler.settings), len(ext_handler.settings))
 
-                for extension in ext_handler.properties.extensions:
-                    self.assertIn(extension.name, expected_handler.extensions)
-                    expected_extension = expected_handler.extensions.pop(extension.name)
+                for extension in ext_handler.settings:
+                    self.assertIn(extension.name, expected_handler.settings)
+                    expected_extension = expected_handler.settings.pop(extension.name)
                     self.assertEqual(expected_extension.seq_no, extension.sequenceNumber)
                     self.assertEqual(expected_extension.state, extension.state)
                     self.assertEqual(expected_extension.dependency_level, extension.dependencyLevel)
 
-                self.assertEqual(0, len(expected_handler.extensions), "All extensions not verified for handler")
+                self.assertEqual(0, len(expected_handler.settings), "All extensions not verified for handler")
 
             self.assertEqual(0, len(expected_handlers), "All handlers not verified")
 
     def _get_mock_expected_handler_data(self, rc_extensions, vmaccess_extensions, geneva_extensions):
         # Set expected handler data
         run_command_test_handler = self._TestExtHandlerObject("Microsoft.CPlat.Core.RunCommandHandlerWindows", "2.3.0")
-        run_command_test_handler.extensions.update(rc_extensions)
+        run_command_test_handler.settings.update(rc_extensions)
 
         vm_access_test_handler = self._TestExtHandlerObject("Microsoft.Compute.VMAccessAgent", "2.4.7")
-        vm_access_test_handler.extensions.update(vmaccess_extensions)
+        vm_access_test_handler.settings.update(vmaccess_extensions)
 
         geneva_test_handler = self._TestExtHandlerObject("Microsoft.Azure.Geneva.GenevaMonitoring", "2.20.0.1")
-        geneva_test_handler.extensions.update(geneva_extensions)
+        geneva_test_handler.settings.update(geneva_extensions)
 
         expected_handlers = {
             run_command_test_handler.name: run_command_test_handler,

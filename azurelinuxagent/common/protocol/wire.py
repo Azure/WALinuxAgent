@@ -960,7 +960,7 @@ class WireClient(object):
             raise ProtocolError("Trying to fetch Extension Manifest before initialization!")
 
         try:
-            xml_text = self.fetch_manifest(ext_handler.versionUris)
+            xml_text = self.fetch_manifest(ext_handler.manifest_uris)
             self._save_cache(xml_text, MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation))
             return ExtensionManifest(xml_text)
         except Exception as e:

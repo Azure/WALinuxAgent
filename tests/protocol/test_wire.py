@@ -1054,7 +1054,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 else:
                     protocol.client.update_goal_state()
 
-                sequence_number = protocol.client.get_extensions_goal_state().extensions[0].properties.extensions[0].sequenceNumber
+                sequence_number = protocol.client.get_extensions_goal_state().extensions[0].settings[0].sequenceNumber
 
                 self.assertEqual(protocol.client.get_goal_state().incarnation, new_incarnation)
                 self.assertEqual(protocol.client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
@@ -1157,7 +1157,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             protected_settings = []
             for ext_handler in extensions_goal_state.extensions:
-                for extension in ext_handler.properties.extensions:
+                for extension in ext_handler.settings:
                     if extension.protectedSettings is not None:
                         protected_settings.append(extension.protectedSettings)
             if len(protected_settings) == 0:
@@ -1206,7 +1206,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test ExtensionsConfig")
             for e in extensions_goal_state.extensions:
                 if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
-                    self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
+                    self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
             # TODO: Use azurelinuxagent.common.protocol.ExtensionsGoalState once it implements parsing
             with open(vm_settings_file, "r") as file_:
