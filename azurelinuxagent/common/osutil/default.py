@@ -104,7 +104,7 @@ def _get_firewall_delete_conntrack_accept_command(wait, destination):
 
 def _get_firewall_delete_accept_dns_tcp_command(wait, destination):
     return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "--destination-port", "53",
-                           "-j", "ACCEPT"])
+                            "-j", "ACCEPT"])
 
 
 def _get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
