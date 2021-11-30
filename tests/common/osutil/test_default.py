@@ -664,6 +664,7 @@ Match host 192.168.1.2\n\
         set_command(osutil._get_firewall_drop_command(wait, "-A", destination))
         set_command(osutil._get_firewall_accept_command(wait, "-A", destination, uid))
         set_command(osutil._get_firewall_accept_dns_tcp_command(wait,"-A", destination))
+        set_command(osutil._get_firewall_accept_dns_tcp_command(wait, "-I", destination))
         # the agent assumes the rules have been deleted when these commands return 1
         set_command(osutil._get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
         set_command(osutil._get_firewall_delete_accept_dns_tcp_command(wait, destination), exit_code=1)
