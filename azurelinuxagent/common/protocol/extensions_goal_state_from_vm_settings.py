@@ -23,7 +23,7 @@ import sys
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest, ExtHandler
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
@@ -46,7 +46,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._required_features = []
         self._on_hold = False
         self._agent_manifests = []
-        self.extensions = []
+        self._extensions = []
 
         try:
             self._parse_vm_settings(json_text)
@@ -239,7 +239,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         # Sample (NOTE: The first sample is single-config, the second multi-config):
         # {
         #     ...
-        #     "extensionGoalStates": [
+        #     "extension_goal_states": [
         #         {
         #             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
         #             "version": "1.9.1",
@@ -298,8 +298,13 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #     ]
         #     ...
         # }
-        extensionGoalStates = vm_settings.get("extensionGoalStates")
-
+        extension_goal_states = vm_settings.get("extension_goal_states")
+        if extension_goal_states is not None:
+            if not isinstance(extension_goal_states, list):
+                raise Exception("extension_goal_states should be an array")
+            for extension_gs in extension_goal_states:
+                extension = ExtHandler()
+                self._extensions.append(extension)
 
 
 #

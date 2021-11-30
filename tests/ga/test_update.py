@@ -1587,7 +1587,7 @@ class TestUpdate(UpdateTestCase):
     @staticmethod
     def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
         eh = ExtHandler(name=name)
-        eh.properties.version = version
+        eh.version = version
         return ExtHandlerInstance(eh, protocol)
 
     def test_it_should_recreate_handler_env_on_service_startup(self):

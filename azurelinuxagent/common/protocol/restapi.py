@@ -98,7 +98,7 @@ class ExtHandlerRequestedState(object):
     Uninstall = ustr("uninstall")
 
 
-class Extension(DataContract):
+class ExtensionSettings(DataContract):
     """
     The runtime settings associated with a Handler
     -   Maps to Extension.PluginSettings.Plugin.RuntimeSettings for single config extensions in the ExtensionConfig.xml
@@ -136,9 +136,8 @@ class Extension(DataContract):
 
 class ExtHandlerProperties(DataContract):
     def __init__(self):
-        self.version = None
         self.state = None
-        self.extensions = DataContractList(Extension)
+        self.extensions = DataContractList(ExtensionSettings)
 
 
 class ExtHandler(DataContract):
@@ -150,6 +149,7 @@ class ExtHandler(DataContract):
 
     def __init__(self, name=None):
         self.name = name
+        self.version = None
         self.properties = ExtHandlerProperties()
         self.versionUris = []
         self.__invalid_handler_setting_reason = None

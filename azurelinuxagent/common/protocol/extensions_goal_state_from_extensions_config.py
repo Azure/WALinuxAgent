@@ -24,7 +24,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
+from azurelinuxagent.common.protocol.restapi import ExtensionSettings, ExtHandler, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -271,7 +271,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             return value
 
         ext_handler.name = _log_error_if_none("Extensions.Plugins.Plugin.name", getattrib(plugin, "name"))
-        ext_handler.properties.version = _log_error_if_none("Extensions.Plugins.Plugin.version",
+        ext_handler.version = _log_error_if_none("Extensions.Plugins.Plugin.version",
                                                             getattrib(plugin, "version"))
         ext_handler.properties.state = getattrib(plugin, "state")
         if ext_handler.properties.state in (None, ""):
@@ -333,7 +333,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             return
 
         handler_name = ext_handler.name
-        version = ext_handler.properties.version
+        version = ext_handler.version
 
         def to_lower(str_to_change): return str_to_change.lower() if str_to_change is not None else None
 
@@ -511,12 +511,12 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             # no settings since we were able to successfully parse those data properly. Without this, we wont report
             # anything for that sequence number and CRP would eventually have to timeout rather than fail fast.
             ext_handler.properties.extensions.append(
-                Extension(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
+                ExtensionSettings(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
             return
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
-            ext = Extension()
+            ext = ExtensionSettings()
             # There is no "extension name" for single Handler Settings. Use HandlerName for those
             ext.name = name
             ext.state = state

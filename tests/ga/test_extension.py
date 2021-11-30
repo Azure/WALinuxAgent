@@ -40,7 +40,7 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, P
     AGENT_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
+from azurelinuxagent.common.protocol.restapi import ExtensionSettings, ExtHandler, ExtHandlerStatus, \
     ExtensionStatus, ExtHandlerRequestedState
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
@@ -177,7 +177,7 @@ class TestExtensionCleanup(AgentTestCase):
             # Create random extension directories
             for i in range(no_of_orphaned_packages):
                 eh = ExtHandler(name='Random.Extension.ShouldNot.Be.There')
-                eh.properties.version = FlexibleVersion("9.9.0") + i
+                eh.version = FlexibleVersion("9.9.0") + i
                 handler = ExtHandlerInstance(eh, "unused")
                 os.mkdir(handler.get_base_dir())
 
@@ -306,7 +306,7 @@ class TestHandlerStateMigration(AgentTestCase):
         handler_version = "1.2.3"
 
         self.ext_handler = ExtHandler(handler_name)
-        self.ext_handler.properties.version = handler_version
+        self.ext_handler.version = handler_version
         self.ext_handler_i = ExtHandlerInstance(self.ext_handler, "dummy protocol")
 
         self.handler_state = "Enabled"
@@ -1616,7 +1616,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
-        extension = Extension(name=handler_name)
+        extension = ExtensionSettings(name=handler_name)
         exthandler.properties.extensions.append(extension)
 
         # In the following list of test cases, the first element corresponds to seq_no.
@@ -1659,7 +1659,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
-        extension = Extension(name=handler_name)
+        extension = ExtensionSettings(name=handler_name)
         exthandler.properties.extensions.append(extension)
 
         ext_handler_i = ExtHandlerInstance(exthandler, protocol)
@@ -1708,9 +1708,9 @@ class TestExtension_Deprecated(TestExtensionBase):
                 self.assertEqual(1, len(ext_handlers))
                 ext_handler = ext_handlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
-                self.assertEqual(config_version, ext_handler.properties.version, "config version.")
+                self.assertEqual(config_version, ext_handler.version, "config version.")
                 ExtHandlerInstance(ext_handler, protocol).decide_version()
-                self.assertEqual(decision_version, ext_handler.properties.version, "decision version.")
+                self.assertEqual(decision_version, ext_handler.version, "decision version.")
 
     def test_ext_handler_version_decide_between_minor_versions(self, *args):
         """
@@ -1744,13 +1744,13 @@ class TestExtension_Deprecated(TestExtensionBase):
             ext_handler.properties = Mock()
             ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
             ext_handler.versionUris = [version_uri]
-            ext_handler.properties.version = config_version
+            ext_handler.version = config_version
 
             ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
             ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
 
             ext_handler_instance.decide_version()
-            self.assertEqual(expected_version, ext_handler.properties.version)
+            self.assertEqual(expected_version, ext_handler.version)
 
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
     def test_extensions_disabled(self, _, *args):
@@ -2065,14 +2065,14 @@ class TestExtension_Deprecated(TestExtensionBase):
             old_version_args, old_version_kwargs = patch_report_event.call_args
             new_version_args, new_version_kwargs = patch_report_event.call_args_list[0]
 
-            self.assertEqual(new_version_args[0].ext_handler.properties.version, new_version,
+            self.assertEqual(new_version_args[0].ext_handler.version, new_version,
                              "The first call to report event should be from the new version of the ext-handler "
                              "to report download succeeded")
 
             self.assertEqual(new_version_kwargs['message'], "Download succeeded",
                              "The message should be Download Succedded")
 
-            self.assertEqual(old_version_args[0].ext_handler.properties.version, old_version,
+            self.assertEqual(old_version_args[0].ext_handler.version, old_version,
                              "The last report event call should be from the old version ext-handler "
                              "to report the event from the previous version")
 
@@ -2498,7 +2498,7 @@ class TestExtensionSequencing(AgentTestCase):
         for handler_name, level in dependency_levels:
             if handler_map.get(handler_name) is None:
                 handler = ExtHandler(name=handler_name)
-                extension = Extension(name=handler_name)
+                extension = ExtensionSettings(name=handler_name)
                 handler.properties.state = ExtHandlerRequestedState.Enabled
                 handler.properties.extensions.append(extension)
                 handler_map[handler_name] = handler
@@ -3009,8 +3009,8 @@ class TestCollectExtensionStatus(AgentTestCase):
 
         with mock_wire_protocol(DATA_FILE) as protocol:
             exthandler = ExtHandler(name=handler_name)
-            exthandler.properties.version = handler_version
-            extension = Extension(name=handler_name, sequenceNumber=0)
+            exthandler.version = handler_version
+            extension = ExtensionSettings(name=handler_name, sequenceNumber=0)
             exthandler.properties.extensions.append(extension)
 
             return ExtHandlerInstance(exthandler, protocol), extension
@@ -3144,7 +3144,7 @@ class TestCollectExtensionStatus(AgentTestCase):
         def mock_read_file(file_, *args, **kwargs):
             expected_status_file_path = os.path.join(self.lib_dir,
                                                      ext_handler_i.ext_handler.name + "-" +
-                                                     ext_handler_i.ext_handler. properties.version,
+                                                     ext_handler_i.ext_handler.version,
                                                      "status", "0.status")
             if file_ == expected_status_file_path:
                 raise IOError("No such file or directory: {0}".format(expected_status_file_path))

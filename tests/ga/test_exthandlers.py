@@ -24,7 +24,7 @@ import uuid
 from azurelinuxagent.common.agent_supported_feature import AgentSupportedFeature
 from azurelinuxagent.common.event import AGENT_EVENT_FILE_EXTENSION, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
-from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
+from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSettings, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil
@@ -214,13 +214,13 @@ class TestExtHandlers(AgentTestCase):
                                          goal_state_sequence_number=None,
                                          disk_sequence_number=None,
                                          expected_sequence_number=None):
-        ext = Extension()
+        ext = ExtensionSettings()
         ext.sequenceNumber = goal_state_sequence_number
         patch_get_largest_seq.return_value = disk_sequence_number
 
         ext_handler_props = ExtHandlerProperties()
-        ext_handler_props.version = "1.2.3"
         ext_handler = ExtHandler(name='foo')
+        ext_handler.version = "1.2.3"
         ext_handler.properties = ext_handler_props
 
         instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
@@ -272,8 +272,8 @@ class TestExtHandlers(AgentTestCase):
         mock_log_dir.return_value = log_dir_path
 
         ext_handler_props = ExtHandlerProperties()
-        ext_handler_props.version = "1.2.3"
         ext_handler = ExtHandler(name='foo')
+        ext_handler.version = "1.2.3"
         ext_handler.properties = ext_handler_props
 
         first_line = "This is the first line!"
@@ -301,9 +301,9 @@ class LaunchCommandTestCase(AgentTestCase):
         AgentTestCase.setUp(self)
 
         ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = "1.2.3"
         self.ext_handler = ExtHandler(name='foo')
         self.ext_handler.properties = ext_handler_properties
+        self.ext_handler.version = "1.2.3"
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol("1.2.3.4"))
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
@@ -682,7 +682,7 @@ sys.stderr.write("STDERR")
 
         helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: _DEFAULT_SEQ_NO,
                            ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
-                           ExtCommandEnvVariable.ExtensionVersion: ext_handler_instance.ext_handler.properties.version,
+                           ExtCommandEnvVariable.ExtensionVersion: ext_handler_instance.ext_handler.version,
                            ExtCommandEnvVariable.WireProtocolAddress: wire_ip}
 
         command = """

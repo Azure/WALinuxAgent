@@ -32,9 +32,9 @@ class DownloadExtensionTestCase(AgentTestCase):
         AgentTestCase.setUp(self)
 
         ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = "1.0.0"
         ext_handler = ExtHandler(name='Microsoft.CPlat.Core.RunCommandLinux')
         ext_handler.properties = ext_handler_properties
+        ext_handler.version = "1.0.0"
 
         protocol = WireProtocol("http://Microsoft.CPlat.Core.RunCommandLinux/foo-bar")
 
