@@ -213,7 +213,7 @@ class AddFirewallRules(object):
     def get_firewalld_accept_command(command, destination, uid, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
-            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.__APPEND_COMMAND, destination,
+            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.get_append_command(), destination,
                                                                 uid))
         return cmd
 
