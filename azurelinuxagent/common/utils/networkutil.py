@@ -227,7 +227,7 @@ class AddFirewallRules(object):
     def get_firewalld_drop_command(command, destination, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
-            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.__APPEND_COMMAND, destination))
+            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.get_append_command(), destination))
         return cmd
 
     @staticmethod
@@ -252,13 +252,13 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        accept_rule_dns_tcp_rule = AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.__INSERT_COMMAND,dst_ip)
+        accept_rule_dns_tcp_rule = AddFirewallRules.get_iptables_accept_dns_tcp_request_command(wait, AddFirewallRules.get_insert_command(),dst_ip)
         AddFirewallRules.__execute_cmd(accept_rule_dns_tcp_rule)
 
-        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.__APPEND_COMMAND, dst_ip, uid)
+        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.get_append_command(), dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_rule)
 
-        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.__APPEND_COMMAND, dst_ip)
+        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.get_append_command(), dst_ip)
         AddFirewallRules.__execute_cmd(drop_rule)
 
     @staticmethod
