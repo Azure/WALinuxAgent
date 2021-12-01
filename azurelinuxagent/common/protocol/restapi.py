@@ -67,6 +67,7 @@ class CertList(DataContract):
 class VMAgentManifest(object):
     def __init__(self, family, version=None):
         self.family = family
+        # This is the Requested version as specified by the Goal State. If the GoalState does not include any requested version, set to None
         self.version = version
         self.uris = []
 

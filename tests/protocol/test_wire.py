@@ -515,19 +515,6 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(extensions_goal_state.on_hold,
                               "Extensions On Hold is expected to be False")
 
-    def test_it_should_parse_requested_version_properly(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            manifests, _ = protocol.get_vmagent_manifests()
-            for manifest in manifests:
-                self.assertIsNone(manifest.version, "Version should be None")
-
-        version_ext_conf = DATA_FILE.copy()
-        version_ext_conf["ext_conf"] = "wire/ext_conf_requested_version.xml"
-        with mock_wire_protocol(version_ext_conf) as protocol:
-            manifests, _ = protocol.get_vmagent_manifests()
-            for manifest in manifests:
-                self.assertEqual(manifest.version, "9.9.9.9", "Version should be 9.9.9.9")
-
     def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
