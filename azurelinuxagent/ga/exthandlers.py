@@ -48,7 +48,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
-    VMStatus, GoalStateAggregateStatus, ExtensionState, ExtHandlerRequestedState, ExtensionSettings
+    VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -605,7 +605,7 @@ class ExtHandlersHandler(object):
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
             # If target state is enabled and version not found in manifest, do not process the extension.
             if ext_handler_i.decide_version(target_state=handler_state,
-                                            extension=extension) is None and handler_state == ExtHandlerRequestedState.Enabled:
+                                            extension=extension) is None and handler_state == ExtensionRequestedState.Enabled:
                 handler_version = ext_handler_i.ext_handler.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
@@ -614,11 +614,11 @@ class ExtHandlersHandler(object):
 
             # Handle everything on an extension level rather than Handler level
             ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", handler_state, etag)
-            if handler_state == ExtHandlerRequestedState.Enabled:
+            if handler_state == ExtensionRequestedState.Enabled:
                 self.handle_enable(ext_handler_i, extension)
-            elif handler_state == ExtHandlerRequestedState.Disabled:
+            elif handler_state == ExtensionRequestedState.Disabled:
                 self.handle_disable(ext_handler_i, extension)
-            elif handler_state == ExtHandlerRequestedState.Uninstall:
+            elif handler_state == ExtensionRequestedState.Uninstall:
                 self.handle_uninstall(ext_handler_i, extension=extension)
             else:
                 message = u"Unknown ext handler state:{0}".format(handler_state)
@@ -1004,7 +1004,7 @@ class ExtHandlersHandler(object):
         if handler_status is None:
             # We should always have some handler status if requested state != Uninstall irrespective of single or
             # multi-config. If state is != Uninstall, report error
-            if ext_handler.state != ExtHandlerRequestedState.Uninstall:
+            if ext_handler.state != ExtensionRequestedState.Uninstall:
                 msg = "No handler status found for {0}. Not reporting anything for it.".format(ext_handler.name)
                 ext_handler_i.report_error_on_incarnation_change(incarnation_changed, log_msg=msg, event_msg=msg)
             return
@@ -1159,7 +1159,7 @@ class ExtHandlerInstance(object):
         # Note:
         #  - A downgrade, which will be bound to the same major version,
         #    is allowed if the installed version is no longer available
-        if target_state in (ExtHandlerRequestedState.Uninstall, ExtHandlerRequestedState.Disabled):
+        if target_state in (ExtensionRequestedState.Uninstall, ExtensionRequestedState.Disabled):
             if installed_pkg is None:
                 msg = "Failed to find installed version: {0} of Handler: {1}  in handler manifest to uninstall.".format(
                     installed_version, self.ext_handler.name)

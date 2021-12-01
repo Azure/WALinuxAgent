@@ -23,7 +23,7 @@ import sys
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionState
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
@@ -308,13 +308,13 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 extension.name = extension_gs['name']
                 extension.version = extension_gs['version']
                 extension.state = extension_gs['state']
-                if extension.state not in ExtensionState.All:
+                if extension.state not in ExtensionRequestedState.All:
                     raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
                 is_multi_config = extension_gs.get('isMultiConfig')
                 if is_multi_config is not None:
                     extension.supports_multi_config = is_multi_config
                 extension.manifest_uris.append(extension_gs['location'])
-                fail_over_location = extension_gs.get('failoverlocation')
+                fail_over_location = extension_gs.get('failoverLocation')
                 if fail_over_location is not None:
                     extension.manifest_uris.append(fail_over_location)
                 additional_locations = extension_gs.get('additionalLocations')

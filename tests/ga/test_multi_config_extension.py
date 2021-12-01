@@ -8,7 +8,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState
+from azurelinuxagent.common.protocol.restapi import ExtensionRequestedState, ExtensionState
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionStatusValue, ExtCommandEnvVariable, \
     GoalStateStatus, ExtHandlerInstance
@@ -317,7 +317,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
 
             # Case 3: Uninstall Multi-config handler (with enabled extensions) and single config extension
             protocol.mock_wire_data.set_incarnation(3)
-            protocol.mock_wire_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
+            protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
             protocol.update_goal_state()
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()

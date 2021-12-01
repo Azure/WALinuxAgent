@@ -85,10 +85,9 @@ class VMAgentManifest(object):
 class ExtensionState(object):
     Enabled = ustr("enabled")
     Disabled = ustr("disabled")
-    All = [Enabled, Disabled]
 
 
-class ExtHandlerRequestedState(object):
+class ExtensionRequestedState(object):
     """
     This is the state of the Handler as requested by the Goal State.
     CRP only supports 2 states as of now - Enabled and Uninstall
@@ -97,6 +96,7 @@ class ExtHandlerRequestedState(object):
     Enabled = ustr("enabled")
     Disabled = ustr("disabled")
     Uninstall = ustr("uninstall")
+    All = [Enabled, Disabled, Uninstall]
 
 
 class ExtensionSettings(object):
@@ -129,7 +129,7 @@ class ExtensionSettings(object):
         # Process uninstall or disabled before enabled, in reverse order
         # Prioritize Handler state and Extension state both when sorting extensions
         # remap 0 to -1, 1 to -2, 2 to -3, etc
-        if handler_state != ExtHandlerRequestedState.Enabled or self.state != ExtensionState.Enabled:
+        if handler_state != ExtensionRequestedState.Enabled or self.state != ExtensionState.Enabled:
             level = (0 - level) - 1
 
         return level
