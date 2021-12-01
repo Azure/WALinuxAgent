@@ -706,11 +706,13 @@ class WireClient(object):
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
+        response_headers = None
         response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, ok_codes=ok_codes)
         if response is not None and not restutil.request_failed(response, ok_codes=ok_codes):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
-        return content, response.getheaders()
+            response_headers = response.getheaders()
+        return content, response_headers
 
     def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None, ok_codes=None):
         """
