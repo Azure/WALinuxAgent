@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
 from tests.tools import AgentTestCase
 

@@ -22,7 +22,6 @@ import time
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 
