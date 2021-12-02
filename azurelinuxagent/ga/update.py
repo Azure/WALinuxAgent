@@ -63,8 +63,8 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
-from azurelinuxagent.common.osutil.default import _get_firewall_drop_command, \
-    _get_firewall_accept_dns_tcp_command
+from azurelinuxagent.common.osutil.default import get_firewall_drop_command, \
+    get_firewall_accept_dns_tcp_rule
 
 AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -1024,7 +1024,6 @@ class UpdateHandler(object):
             log_event=False)
 
     def _add_dns_tcp_firewall_rule_if_not_enabled(self, dst_ip):
-
         # Helper to execute a run command, returns True if no exception
         # Here we primarily check if an  iptable rule exist. True if it exits , false if not
         def _execute_run_command(command):
@@ -1041,19 +1040,19 @@ class UpdateHandler(object):
             wait = self.osutil.get_firewall_will_wait()
 
             # "-C" checks if the iptable rule is available in the chain. It throws an exception with return code 1 if the ip table rule doesnt exist
-            drop_rule = _get_firewall_drop_command(wait, AddFirewallRules.get_check_command(), dst_ip)
+            drop_rule = get_firewall_drop_command(wait, AddFirewallRules.get_check_command(), dst_ip)
             if not _execute_run_command(drop_rule):
                 # DROP command doesn't exist indicates then none of the firewall rules are set yet
                 # exiting here as the environment thread will set up all firewall rules
                 return
             else:
                 # DROP rule exists in the ip table chain. Hence checking if the DNS TCP to wireserver rule exists. If not we add it.
-                accept_non_root = _get_firewall_accept_dns_tcp_command(wait, AddFirewallRules.get_check_command(), dst_ip)
+                accept_non_root = get_firewall_accept_dns_tcp_rule(wait, AddFirewallRules.get_check_command(), dst_ip)
                 if not _execute_run_command(accept_non_root):
                     try:
                         logger.info(
                             "Firewall rule to allow DNS TCP request to wireserver for a non root user unavailable . Setting it now.")
-                        accept_non_root = _get_firewall_accept_dns_tcp_command(wait, AddFirewallRules.get_insert_command(), dst_ip)
+                        accept_non_root = get_firewall_accept_dns_tcp_rule(wait, AddFirewallRules.get_insert_command(), dst_ip)
                         shellutil.run_command(accept_non_root)
                         logger.info(
                             "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver ")
