@@ -22,7 +22,6 @@ from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.protocol.restapi import ExtHandlerList
 
 
 class GoalStateMismatchError(AgentError):
@@ -82,7 +81,7 @@ class ExtensionsGoalState(object):
         raise NotImplementedError()
 
     @property
-    def ext_handlers(self):
+    def extensions(self):
         raise NotImplementedError()
 
     def get_redacted_text(self):
@@ -120,6 +119,7 @@ class ExtensionsGoalState(object):
         compare_attribute("required_features")
         compare_attribute("on_hold")
         compare_attribute("agent_manifests")
+        compare_attribute("extensions")
 
     def _do_common_validations(self):
         """
@@ -158,10 +158,6 @@ class ExtensionsGoalState(object):
 
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
-    def __init__(self):
-        self._agent_manifests = []
-        self._ext_handlers = ExtHandlerList()
-
     @property
     def id(self):
         return self._string_to_id(None)
@@ -199,11 +195,11 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
 
     @property
     def agent_manifests(self):
-        return self._agent_manifests
+        return []
 
     @property
-    def ext_handlers(self):
-        return self._ext_handlers
+    def extensions(self):
+        return []
 
     def get_redacted_text(self):
         return ''
