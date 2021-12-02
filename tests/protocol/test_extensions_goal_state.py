@@ -78,11 +78,11 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
             for manifest in ga_manifests:
-                self.assertIsNone(manifest.version, "Requested version should be None")
+                self.assertEqual(manifest.version, FlexibleVersion("0.0.0.0"), "Version should be None")
 
         data_file = mockwiredata.DATA_FILE.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
         with mock_wire_protocol(data_file) as protocol:
             ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
             for manifest in ga_manifests:
-                self.assertEqual(manifest.version, "9.9.9.9", "Requested version did not match")
+                self.assertEqual(manifest.version, FlexibleVersion("9.9.9.9"), "Version should be 9.9.9.9")

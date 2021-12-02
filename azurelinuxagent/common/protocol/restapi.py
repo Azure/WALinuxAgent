@@ -22,6 +22,7 @@ import time
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 
@@ -65,10 +66,10 @@ class CertList(DataContract):
 
 
 class VMAgentManifest(object):
-    def __init__(self, family, version=None):
+    def __init__(self, family, version="0.0.0.0"):
         self.family = family
-        # This is the Requested version as specified by the Goal State. If the GoalState does not include any requested version, set to None
-        self.version = version
+        # This is the Requested version as specified by the Goal State, it defaults to 0.0.0.0 if not specified in GS
+        self.version = FlexibleVersion(version)
         self.uris = []
 
     def __eq__(self, other):

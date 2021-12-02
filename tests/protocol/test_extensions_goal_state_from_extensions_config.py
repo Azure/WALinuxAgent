@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
 from tests.tools import AgentTestCase
 
@@ -31,12 +32,12 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             manifests, _ = protocol.get_vmagent_manifests()
             for manifest in manifests:
-                self.assertIsNone(manifest.version, "Version should be None")
+                self.assertEqual(manifest.version, FlexibleVersion("0.0.0.0"), "Version should be None")
 
         version_ext_conf = mockwiredata.DATA_FILE.copy()
         version_ext_conf["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with mock_wire_protocol(version_ext_conf) as protocol:
             manifests, _ = protocol.get_vmagent_manifests()
             for manifest in manifests:
-                self.assertEqual(manifest.version, "9.9.9.9", "Version should be 9.9.9.9")
+                self.assertEqual(manifest.version, FlexibleVersion("9.9.9.9"), "Version should be 9.9.9.9")
 
