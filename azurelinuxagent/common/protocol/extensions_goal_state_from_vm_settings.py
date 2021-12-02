@@ -206,6 +206,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #     "gaFamilies": [
         #         {
         #             "name": "Prod",
+        #             "version": "9.9.9.9",
         #             "uris": [
         #                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
         #                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
@@ -229,8 +230,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         for family in families:
             name = family["name"]
+            version = family.get("version")
             uris = family["uris"]
-            manifest = VMAgentManifest(name)
+            manifest = VMAgentManifest(name, version)
             for u in uris:
                 manifest.uris.append(u)
             self._agent_manifests.append(manifest)
