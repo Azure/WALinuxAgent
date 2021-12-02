@@ -1,12 +1,17 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
-import copy
 import re
+import sys
 
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
 from tests.tools import AgentTestCase, PropertyMock, patch
+
+import copy
+# deepcopy can't handled compiled regexes < py3.7, patching the copy module for py < 3.7 to fix the case
+if sys.version_info < (3, 7):
+    copy._deepcopy_dispatch[type(re.compile(''))] = lambda r, _: r
 
 
 class ExtensionsGoalStateTestCase(AgentTestCase):
