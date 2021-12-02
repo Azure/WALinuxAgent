@@ -2,14 +2,14 @@
   <GAFamilies>
     <GAFamily>
       <Name>Prod</Name>
-      <Version>9.9.9.9</Version>
+      <Version>9.9.9.10</Version>
       <Uris>
           <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
       </Uris>
     </GAFamily>
     <GAFamily>
       <Name>Test</Name>
-      <Version>9.9.9.9</Version>
+      <Version>9.9.9.10</Version>
       <Uris>
           <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
         </Uris>
