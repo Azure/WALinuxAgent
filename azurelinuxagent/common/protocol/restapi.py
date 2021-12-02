@@ -87,7 +87,7 @@ class ExtensionState(object):
     Disabled = ustr("disabled")
 
 
-class ExtHandlerRequestedState(object):
+class ExtensionRequestedState(object):
     """
     This is the state of the Handler as requested by the Goal State.
     CRP only supports 2 states as of now - Enabled and Uninstall
@@ -96,9 +96,10 @@ class ExtHandlerRequestedState(object):
     Enabled = ustr("enabled")
     Disabled = ustr("disabled")
     Uninstall = ustr("uninstall")
+    All = [Enabled, Disabled, Uninstall]
 
 
-class Extension(DataContract):
+class ExtensionSettings(object):
     """
     The runtime settings associated with a Handler
     -   Maps to Extension.PluginSettings.Plugin.RuntimeSettings for single config extensions in the ExtensionConfig.xml
@@ -128,20 +129,13 @@ class Extension(DataContract):
         # Process uninstall or disabled before enabled, in reverse order
         # Prioritize Handler state and Extension state both when sorting extensions
         # remap 0 to -1, 1 to -2, 2 to -3, etc
-        if handler_state != ExtHandlerRequestedState.Enabled or self.state != ExtensionState.Enabled:
+        if handler_state != ExtensionRequestedState.Enabled or self.state != ExtensionState.Enabled:
             level = (0 - level) - 1
 
         return level
 
 
-class ExtHandlerProperties(DataContract):
-    def __init__(self):
-        self.version = None
-        self.state = None
-        self.extensions = DataContractList(Extension)
-
-
-class ExtHandler(DataContract):
+class Extension(object):
     """
     The main Plugin/handler specified by the publishers.
     Maps to Extension.PluginSettings.Plugins.Plugin in the ExtensionConfig.xml file
@@ -150,10 +144,12 @@ class ExtHandler(DataContract):
 
     def __init__(self, name=None):
         self.name = name
-        self.properties = ExtHandlerProperties()
-        self.versionUris = []
-        self.__invalid_handler_setting_reason = None
+        self.version = None
+        self.state = None
+        self.settings = []
+        self.manifest_uris = []
         self.supports_multi_config = False
+        self.__invalid_handler_setting_reason = None
 
     @property
     def is_invalid_setting(self):
@@ -168,17 +164,33 @@ class ExtHandler(DataContract):
         self.__invalid_handler_setting_reason = value
 
     def dependency_level_sort_key(self):
-        levels = [e.dependencyLevel for e in self.properties.extensions]
+        levels = [e.dependencyLevel for e in self.settings]
         if len(levels) == 0:
             level = 0
         else:
             level = min(levels)
         # Process uninstall or disabled before enabled, in reverse order
         # remap 0 to -1, 1 to -2, 2 to -3, etc
-        if self.properties.state != u"enabled":
+        if self.state != u"enabled":
             level = (0 - level) - 1
         return level
 
+    def __eq__(self, other):
+        return self.name == other.name and \
+            self.version == other.version and \
+            self.state == other.state and \
+            self.supports_multi_config == other.supports_multi_config and \
+            self.manifest_uris == other.manifest_uris
+            # TODO: Compare settings
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "{0}-{1}".format(self.name, self.version)
 
 class InVMGoalStateMetaData(DataContract):
     """
@@ -190,11 +202,6 @@ class InVMGoalStateMetaData(DataContract):
         self.activity_id = getattrib(in_vm_metadata_node, "activityId")
         self.created_on_ticks = getattrib(in_vm_metadata_node, "createdOnTicks")
         self.in_svd_seq_no = getattrib(in_vm_metadata_node, "inSvdSeqNo")
-
-
-class ExtHandlerList(DataContract):
-    def __init__(self):
-        self.extHandlers = DataContractList(ExtHandler)
 
 
 class ExtHandlerPackage(DataContract):
