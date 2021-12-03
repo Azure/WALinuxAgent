@@ -1375,8 +1375,20 @@ class GuestAgentError(object):
 
     def load(self):
         if self.path is not None and os.path.isfile(self.path):
-            with open(self.path, 'r') as f:
-                self.from_json(json.load(f))
+            try:
+                with open(self.path, 'r') as f:
+                    self.from_json(json.load(f))
+            except Exception as error:
+                # The error.json file is only supposed to be written only by the agent.
+                # If for whatever reason the file is malformed, just delete it to reset state of the errors.
+                logger.warn(
+                    "Ran into error when trying to load error file {0}, deleting it to clean state. Error: {1}".format(
+                        self.path, textutil.format_exception(error)))
+                try:
+                    os.remove(self.path)
+                except Exception:
+                    # We try best case efforts to delete the file, ignore error if we're unable to do so
+                    pass
         return
 
     def save(self):
