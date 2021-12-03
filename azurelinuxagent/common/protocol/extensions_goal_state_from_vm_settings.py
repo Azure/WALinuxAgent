@@ -353,7 +353,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                         settings.protectedSettings = s.get('protectedSettings')
                         thumbprint = s.get('protectedSettingsCertThumbprint')
                         if thumbprint is None and settings.protectedSettings is not None:
-                            raise Exception("The certificate thumbprint for protected settings is missing (extension: {0})".name(extension.name))
+                            raise Exception("The certificate thumbprint for protected settings is missing (extension: {0})".format(extension.name))
                         settings.certificateThumbprint = thumbprint
 
                         # in multi-config each settings have their own name, sequence number and state

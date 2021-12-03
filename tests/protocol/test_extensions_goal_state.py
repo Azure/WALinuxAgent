@@ -2,12 +2,17 @@
 # Licensed under the Apache License.
 import copy
 import re
+import sys
 
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils import textutil
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
-from tests.tools import AgentTestCase, PropertyMock, patch
+from tests.tools import AgentTestCase
+
+# Python < 3.7 can't copy regular expressions, this is the recommended patch
+if sys.version_info.major < 3 or sys.version_info.major == 3 and sys.version_info.minor < 7:
+    copy._deepcopy_dispatch[type(re.compile(''))] = lambda r, _: r
 
 
 class ExtensionsGoalStateTestCase(AgentTestCase):
