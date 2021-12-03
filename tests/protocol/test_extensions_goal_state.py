@@ -11,7 +11,7 @@ from tests.protocol.mocks import mockwiredata, mock_wire_protocol
 from tests.tools import AgentTestCase
 
 # Python < 3.7 can't copy regular expressions, this is the recommended patch
-if sys.version_info.major < 3 or sys.version_info.major == 3 and sys.version_info.minor < 7:
+if sys.version_info[0] < 3 or sys.version_info[0] == 3 and sys.version_info[1] < 7:
     copy._deepcopy_dispatch[type(re.compile(''))] = lambda r, _: r
 
 
