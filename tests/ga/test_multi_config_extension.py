@@ -94,18 +94,18 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, "ext_conf_with_multi_config.xml")
 
         rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no="2")
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no="2",
+        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=2)
+        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=2,
                                                                       dependency_level="3")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no="1",
+        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
                                                                      dependency_level="4")
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
-                                                                         seq_no="1", dependency_level="2")}
+                                                                         seq_no=1, dependency_level=2)}
 
         geneva_extensions = {"Microsoft.Azure.Geneva.GenevaMonitoring": self._TestExtensionObject(
-            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no="1")}
+            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no=1)}
 
         expected_handlers = self._get_mock_expected_handler_data(rc_extensions, vmaccess_extensions, geneva_extensions)
         self._mock_and_assert_ext_handlers(expected_handlers)
@@ -115,18 +115,18 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
                                                   "ext_conf_with_disabled_multi_config.xml")
 
         rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no="3")
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no="3",
+        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=3)
+        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=3,
                                                                       dependency_level="1")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no="1",
+        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
                                                                      dependency_level="4", state="disabled")
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
-                                                                         seq_no="2", dependency_level="2")}
+                                                                         seq_no=2, dependency_level="2")}
 
         geneva_extensions = {"Microsoft.Azure.Geneva.GenevaMonitoring": self._TestExtensionObject(
-            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no="2")}
+            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no=2)}
 
         expected_handlers = self._get_mock_expected_handler_data(rc_extensions, vmaccess_extensions, geneva_extensions)
         self._mock_and_assert_ext_handlers(expected_handlers)

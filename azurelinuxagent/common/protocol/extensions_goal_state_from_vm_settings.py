@@ -23,7 +23,7 @@ import sys
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
@@ -258,7 +258,17 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
         #                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
         #                 }
-        #             ]
+        #             ],
+        #             "dependsOn": [
+        #                 {
+        #                     "DependsOnExtension": [
+        #                         {
+        #                             "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
+        #                         }
+        #                     ],
+        #                     "dependencyLevel": 1
+        #                 }
+        #            ]
         #         },
         #         {
         #             "name": "Microsoft.CPlat.Core.RunCommandHandlerLinux",
@@ -325,7 +335,52 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                         raise Exception('additionalLocations should be an array')
                     extension.manifest_uris.extend(additional_locations)
 
-                # TODO: Add settings
+                #
+                # Settings
+                #
+                settings_list = extension_gs.get('settings')
+                if settings_list is not None:
+                    if not isinstance(settings_list, list):
+                        raise Exception("'settings' should be an array (extension: {0})".format(extension.name))
+                    if not extension.supports_multi_config and len(settings_list) > 1:
+                        raise Exception("Single-config extension includes multiple settings (extension: {0})".format(extension.name))
+
+                    for s in settings_list:
+                        settings = ExtensionSettings()
+                        public_settings = s.get('publicSettings')
+                        settings.publicSettings = {} if public_settings is None else json.loads(public_settings)
+                        # Note that protectedSettings and protectedSettingsCertThumbprint can be None (which would be serialized to the extension's settings file as null)
+                        settings.protectedSettings = s.get('protectedSettings')
+                        thumbprint = s.get('protectedSettingsCertThumbprint')
+                        if thumbprint is None and settings.protectedSettings is not None:
+                            raise Exception("The certificate thumbprint for protected settings is missing (extension: {0})".name(extension.name))
+                        settings.certificateThumbprint = thumbprint
+
+                        # in multi-config each settings have their own name, sequence number and state
+                        if extension.supports_multi_config:
+                            settings.name = s['extensionName']
+                            settings.sequenceNumber = s['seqNo']
+                            settings.state = s['extensionState']
+                        else:
+                            settings.name = extension.name
+                            settings.sequenceNumber = extension_gs['settingsSeqNo']
+                            settings.state = extension.state
+                        extension.settings.append(settings)
+
+                #
+                # Dependency level
+                #
+                depends_on = extension_gs.get("dependsOn")
+                if depends_on is not None:
+                    if not isinstance(depends_on, list):
+                        raise Exception('dependsOn should be an array')
+                    if extension.supports_multi_config:
+                        # TODO: Parse dependencies for multi-config extensions
+                        pass
+                    else:
+                        if len(depends_on) != 1:
+                            raise Exception('dependsOn should be an array with exactly one item for single-config extensions')
+                        extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
 
                 self._extensions.append(extension)
 
