@@ -71,12 +71,6 @@ class VMAgentManifest(object):
         self.version = "0.0.0.0" if version is None else version
         self.uris = []
 
-    def __eq__(self, other):
-        return self.family == other.family and self.uris == other.uris
-
-    def __ne__(self, other):
-        return not (self == other)
-
     def __repr__(self):
         return self.__str__()
 
@@ -136,6 +130,12 @@ class ExtensionSettings(object):
 
         return level
 
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        return "{0}".format(self.name)
+
 
 class Extension(object):
     """
@@ -176,17 +176,6 @@ class Extension(object):
         if self.state != u"enabled":
             level = (0 - level) - 1
         return level
-
-    def __eq__(self, other):
-        return self.name == other.name and \
-            self.version == other.version and \
-            self.state == other.state and \
-            self.supports_multi_config == other.supports_multi_config and \
-            self.manifest_uris == other.manifest_uris
-            # TODO: Compare settings
-
-    def __ne__(self, other):
-        return not (self == other)
 
     def __repr__(self):
         return self.__str__()

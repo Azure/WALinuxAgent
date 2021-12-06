@@ -75,6 +75,9 @@
 }</RuntimeSettings>
   </Plugin>
   <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.6">
+    <DependsOn dependencyLevel="1">
+      <DependsOnExtension handler="Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent" />
+    </DependsOn>
     <RuntimeSettings seqNo="0">{
   "runtimeSettings": [
     {

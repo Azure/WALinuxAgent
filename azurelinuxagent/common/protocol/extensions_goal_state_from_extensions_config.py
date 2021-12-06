@@ -521,7 +521,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             # There is no "extension name" for single Handler Settings. Use HandlerName for those
             ext.name = name
             ext.state = state
-            ext.sequenceNumber = seq_no
+            ext.sequenceNumber = int(seq_no)
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
             ext.dependencyLevel = depends_on_level

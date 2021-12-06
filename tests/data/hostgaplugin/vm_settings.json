@@ -100,6 +100,16 @@
                 {
                     "publicSettings": "{\"commandToExecute\":\"echo 'cee174d4-4daa-4b07-9958-53b9649445c2'\"}"
                 }
+            ],
+            "dependsOn": [
+                {
+                    "DependsOnExtension": [
+                        {
+                            "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
+                        }
+                    ],
+                    "dependencyLevel": 1
+                }
             ]
         },
         {
