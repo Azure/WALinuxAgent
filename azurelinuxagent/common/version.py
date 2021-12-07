@@ -103,6 +103,7 @@ def get_checkpoint_platform():
 
 
 def get_distro():
+
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
         osinfo = ['freebsd', release, '', 'freebsd']
@@ -146,6 +147,9 @@ def get_distro():
 
     if os.path.exists("/home/guestshell/azure"):
         osinfo = ['iosxe', 'csr1000v', '', 'Cisco IOSXE Linux']
+
+    if os.path.exists("/etc/photon-release"):
+        osinfo[0] = "photonos"
 
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
