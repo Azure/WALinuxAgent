@@ -18,11 +18,11 @@
 import datetime
 
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.protocol.restapi import ExtHandlerList
 
 
 class GoalStateMismatchError(AgentError):
@@ -82,7 +82,7 @@ class ExtensionsGoalState(object):
         raise NotImplementedError()
 
     @property
-    def ext_handlers(self):
+    def extensions(self):
         raise NotImplementedError()
 
     def get_redacted_text(self):
@@ -98,28 +98,68 @@ class ExtensionsGoalState(object):
 
         NOTE: The order of the two instances is important for the debug info to be logged correctly (ExtensionsConfig first, vmSettings second)
         """
-        def compare_attribute(attribute):
-            from_extensions_config_value = getattr(from_extensions_config, attribute)
-            from_vm_settings_value = getattr(from_vm_settings, attribute)
+        context = []  # used to keep track of the attribute that is being compared
 
-            if from_extensions_config_value != from_vm_settings_value:
-                message = "Mismatch in ExtensionsConfig (incarnation {0}) and vmSettings (etag {1}).\nAttribute: {2}()\n{3} != {4}".format(
-                    from_extensions_config.id, from_vm_settings.id,
-                    attribute,
-                    from_extensions_config_value, from_vm_settings_value
-                )
-                raise GoalStateMismatchError(message)
+        def compare_goal_states(first, second):
+            compare_attributes(first, second, "activity_id")
+            compare_attributes(first, second, "correlation_id")
+            compare_attributes(first, second, "created_on_timestamp")
+            # The status blob was added after version 112
+            if from_vm_settings.host_ga_plugin_version > FlexibleVersion("1.0.8.112"):
+                compare_attributes(first, second, "status_upload_blob")
+                compare_attributes(first, second, "status_upload_blob_type")
+            compare_attributes(first, second, "required_features")
+            compare_attributes(first, second, "on_hold")
+            compare_array(first.agent_manifests, second.agent_manifests, compare_agent_manifests, "agent_manifests")
+            compare_array(first.extensions, second.extensions, compare_extensions, "extensions")
 
-        compare_attribute("activity_id")
-        compare_attribute("correlation_id")
-        compare_attribute("created_on_timestamp")
-        # The status blob was added after version 112
-        if from_vm_settings.host_ga_plugin_version > FlexibleVersion("1.0.8.112"):
-            compare_attribute("status_upload_blob")
-            compare_attribute("status_upload_blob_type")
-        compare_attribute("required_features")
-        compare_attribute("on_hold")
-        compare_attribute("agent_manifests")
+        def compare_agent_manifests(first, second):
+            compare_attributes(first, second, "family")
+            compare_attributes(first, second, "version")
+            compare_attributes(first, second, "uris")
+
+        def compare_extensions(first, second):
+            compare_attributes(first, second, "name")
+            compare_attributes(first, second, "version")
+            compare_attributes(first, second, "state")
+            compare_attributes(first, second, "supports_multi_config")
+            compare_attributes(first, second, "manifest_uris")
+            compare_array(first.settings, second.settings, compare_settings, "settings")
+
+        def compare_settings(first, second):
+            compare_attributes(first, second, "name")
+            compare_attributes(first, second, "sequenceNumber")
+            compare_attributes(first, second, "publicSettings")
+            compare_attributes(first, second, "protectedSettings")
+            compare_attributes(first, second, "certificateThumbprint")
+            compare_attributes(first, second, "dependencyLevel")
+            compare_attributes(first, second, "state")
+
+        def compare_array(first, second, comparer, name):
+            if len(first) != len(second):
+                raise Exception("Number of items in {0} mismatch: {1} != {2}".format(name, len(first), len(second)))
+            for i in range(len(first)):
+                context.append("{0}[{1}]".format(name, i))
+                try:
+                    comparer(first[i], second[i])
+                finally:
+                    context.pop()
+
+        def compare_attributes(first, second, attribute):
+            context.append(attribute)
+            try:
+                first_value = getattr(first, attribute)
+                second_value = getattr(second, attribute)
+
+                if first_value != second_value:
+                    raise Exception("[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context)))
+            finally:
+                context.pop()
+
+        try:
+            compare_goal_states(from_extensions_config, from_vm_settings)
+        except Exception as exception:
+            raise GoalStateMismatchError("Mismatch in Goal States [Incarnation {0}] != [Etag: {1}]: {2}".format(from_extensions_config.id, from_vm_settings.id, ustr(exception)))
 
     def _do_common_validations(self):
         """
@@ -158,10 +198,6 @@ class ExtensionsGoalState(object):
 
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
-    def __init__(self):
-        self._agent_manifests = []
-        self._ext_handlers = ExtHandlerList()
-
     @property
     def id(self):
         return self._string_to_id(None)
@@ -199,11 +235,11 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
 
     @property
     def agent_manifests(self):
-        return self._agent_manifests
+        return []
 
     @property
-    def ext_handlers(self):
-        return self._ext_handlers
+    def extensions(self):
+        return []
 
     def get_redacted_text(self):
         return ''

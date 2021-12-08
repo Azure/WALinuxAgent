@@ -8,7 +8,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState
+from azurelinuxagent.common.protocol.restapi import ExtensionRequestedState, ExtensionState
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionStatusValue, ExtCommandEnvVariable, \
     GoalStateStatus, ExtHandlerInstance
@@ -40,7 +40,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
             self.version = version
             self.state = state
             self.is_invalid_setting = False
-            self.extensions = dict()
+            self.settings = dict()
 
     class _TestExtensionObject:
         def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
@@ -51,37 +51,37 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
 
     def _mock_and_assert_ext_handlers(self, expected_handlers):
         with mock_wire_protocol(self.test_data) as protocol:
-            ext_handlers, _ = protocol.get_ext_handlers()
-            for ext_handler in ext_handlers.extHandlers:
+            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            for ext_handler in ext_handlers:
                 if ext_handler.name not in expected_handlers:
                     continue
                 expected_handler = expected_handlers.pop(ext_handler.name)
-                self.assertEqual(expected_handler.state, ext_handler.properties.state)
-                self.assertEqual(expected_handler.version, ext_handler.properties.version)
+                self.assertEqual(expected_handler.state, ext_handler.state)
+                self.assertEqual(expected_handler.version, ext_handler.version)
                 self.assertEqual(expected_handler.is_invalid_setting, ext_handler.is_invalid_setting)
-                self.assertEqual(len(expected_handler.extensions), len(ext_handler.properties.extensions))
+                self.assertEqual(len(expected_handler.settings), len(ext_handler.settings))
 
-                for extension in ext_handler.properties.extensions:
-                    self.assertIn(extension.name, expected_handler.extensions)
-                    expected_extension = expected_handler.extensions.pop(extension.name)
+                for extension in ext_handler.settings:
+                    self.assertIn(extension.name, expected_handler.settings)
+                    expected_extension = expected_handler.settings.pop(extension.name)
                     self.assertEqual(expected_extension.seq_no, extension.sequenceNumber)
                     self.assertEqual(expected_extension.state, extension.state)
                     self.assertEqual(expected_extension.dependency_level, extension.dependencyLevel)
 
-                self.assertEqual(0, len(expected_handler.extensions), "All extensions not verified for handler")
+                self.assertEqual(0, len(expected_handler.settings), "All extensions not verified for handler")
 
             self.assertEqual(0, len(expected_handlers), "All handlers not verified")
 
     def _get_mock_expected_handler_data(self, rc_extensions, vmaccess_extensions, geneva_extensions):
         # Set expected handler data
         run_command_test_handler = self._TestExtHandlerObject("Microsoft.CPlat.Core.RunCommandHandlerWindows", "2.3.0")
-        run_command_test_handler.extensions.update(rc_extensions)
+        run_command_test_handler.settings.update(rc_extensions)
 
         vm_access_test_handler = self._TestExtHandlerObject("Microsoft.Compute.VMAccessAgent", "2.4.7")
-        vm_access_test_handler.extensions.update(vmaccess_extensions)
+        vm_access_test_handler.settings.update(vmaccess_extensions)
 
         geneva_test_handler = self._TestExtHandlerObject("Microsoft.Azure.Geneva.GenevaMonitoring", "2.20.0.1")
-        geneva_test_handler.extensions.update(geneva_extensions)
+        geneva_test_handler.settings.update(geneva_extensions)
 
         expected_handlers = {
             run_command_test_handler.name: run_command_test_handler,
@@ -94,18 +94,18 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, "ext_conf_with_multi_config.xml")
 
         rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no="2")
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no="2",
+        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=2)
+        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=2,
                                                                       dependency_level="3")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no="1",
+        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
                                                                      dependency_level="4")
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
-                                                                         seq_no="1", dependency_level="2")}
+                                                                         seq_no=1, dependency_level=2)}
 
         geneva_extensions = {"Microsoft.Azure.Geneva.GenevaMonitoring": self._TestExtensionObject(
-            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no="1")}
+            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no=1)}
 
         expected_handlers = self._get_mock_expected_handler_data(rc_extensions, vmaccess_extensions, geneva_extensions)
         self._mock_and_assert_ext_handlers(expected_handlers)
@@ -115,18 +115,18 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
                                                   "ext_conf_with_disabled_multi_config.xml")
 
         rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no="3")
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no="3",
+        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=3)
+        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=3,
                                                                       dependency_level="1")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no="1",
+        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
                                                                      dependency_level="4", state="disabled")
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
-                                                                         seq_no="2", dependency_level="2")}
+                                                                         seq_no=2, dependency_level="2")}
 
         geneva_extensions = {"Microsoft.Azure.Geneva.GenevaMonitoring": self._TestExtensionObject(
-            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no="2")}
+            name="Microsoft.Azure.Geneva.GenevaMonitoring", seq_no=2)}
 
         expected_handlers = self._get_mock_expected_handler_data(rc_extensions, vmaccess_extensions, geneva_extensions)
         self._mock_and_assert_ext_handlers(expected_handlers)
@@ -317,7 +317,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
 
             # Case 3: Uninstall Multi-config handler (with enabled extensions) and single config extension
             protocol.mock_wire_data.set_incarnation(3)
-            protocol.mock_wire_data.set_extensions_config_state(ExtHandlerRequestedState.Uninstall)
+            protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
             protocol.update_goal_state()
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()

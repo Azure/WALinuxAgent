@@ -6,7 +6,7 @@ import time
 import zipfile
 
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
-from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOAD_RETRIES, ExtHandlerState
 from tests.tools import AgentTestCase, patch, mock_sleep
@@ -31,10 +31,8 @@ class DownloadExtensionTestCase(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
-        ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = "1.0.0"
-        ext_handler = ExtHandler(name='Microsoft.CPlat.Core.RunCommandLinux')
-        ext_handler.properties = ext_handler_properties
+        ext_handler = Extension(name='Microsoft.CPlat.Core.RunCommandLinux')
+        ext_handler.version = "1.0.0"
 
         protocol = WireProtocol("http://Microsoft.CPlat.Core.RunCommandLinux/foo-bar")
 

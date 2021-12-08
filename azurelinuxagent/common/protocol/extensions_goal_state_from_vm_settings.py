@@ -15,33 +15,38 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+import datetime
 import json
 import re
 import sys
 
+from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest
+from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import format_exception
 
 
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
+    _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
+
     def __init__(self, etag, json_text):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = etag
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
         self._schema_version = FlexibleVersion('0.0.0.0')
-        self._activity_id = None
-        self._correlation_id = None
-        self._created_on_timestamp = None
+        self._activity_id = AgentGlobals.GUID_ZERO
+        self._correlation_id = AgentGlobals.GUID_ZERO
+        self._created_on_timestamp = self._MINIMUM_TIMESTAMP
         self._source = None
         self._status_upload_blob = None
         self._status_upload_blob_type = None
         self._required_features = []
         self._on_hold = False
         self._agent_manifests = []
+        self._extensions = []
 
         try:
             self._parse_vm_settings(json_text)
@@ -104,9 +109,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._agent_manifests
 
     @property
-    def ext_handlers(self):
-        # TODO - Implement this
-        raise NotImplementedError()
+    def extensions(self):
+        return self._extensions
 
     def get_redacted_text(self):
         return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
@@ -202,6 +206,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #     "gaFamilies": [
         #         {
         #             "name": "Prod",
+        #             "version": "9.9.9.9",
         #             "uris": [
         #                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
         #                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
@@ -225,15 +230,159 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         for family in families:
             name = family["name"]
+            version = family.get("version")
             uris = family["uris"]
-            manifest = VMAgentManifest(name)
+            manifest = VMAgentManifest(name, version)
             for u in uris:
                 manifest.uris.append(u)
             self._agent_manifests.append(manifest)
 
     def _parse_extensions(self, vm_settings):
-        # TODO: Implement this
-        pass
+        # Sample (NOTE: The first sample is single-config, the second multi-config):
+        # {
+        #     ...
+        #     "extensionGoalStates": [
+        #         {
+        #             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
+        #             "version": "1.9.1",
+        #             "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml",
+        #             "state": "enabled",
+        #             "autoUpgrade": true,
+        #             "runAsStartupTask": false,
+        #             "isJson": true,
+        #             "useExactVersion": true,
+        #             "settingsSeqNo": 0,
+        #             "settings": [
+        #                 {
+        #                     "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+        #                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
+        #                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
+        #                 }
+        #             ],
+        #             "dependsOn": [
+        #                 {
+        #                     "DependsOnExtension": [
+        #                         {
+        #                             "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
+        #                         }
+        #                     ],
+        #                     "dependencyLevel": 1
+        #                 }
+        #            ]
+        #         },
+        #         {
+        #             "name": "Microsoft.CPlat.Core.RunCommandHandlerLinux",
+        #             "version": "1.2.0",
+        #             "location": "https://umsavbvncrpzbnxmxzmr.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml",
+        #             "failoverlocation": "https://umsajbjtqrb3zqjvgb2z.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml",
+        #             "additionalLocations": [
+        #                 "https://umsawqtlsshtn5v2nfgh.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml"
+        #             ],
+        #             "state": "enabled",
+        #             "autoUpgrade": true,
+        #             "runAsStartupTask": false,
+        #             "isJson": true,
+        #             "useExactVersion": true,
+        #             "settingsSeqNo": 0,
+        #             "isMultiConfig": true,
+        #             "settings": [
+        #                 {
+        #                     "publicSettings": "{\"source\":{\"script\":\"echo '4abb1e88-f349-41f8-8442-247d9fdfcac5'\"}}",
+        #                     "seqNo": 0,
+        #                     "extensionName": "MCExt1",
+        #                     "extensionState": "enabled"
+        #                 },
+        #                 {
+        #                     "publicSettings": "{\"source\":{\"script\":\"echo 'e865c9bc-a7b3-42c6-9a79-cfa98a1ee8b3'\"}}",
+        #                     "seqNo": 0,
+        #                     "extensionName": "MCExt2",
+        #                     "extensionState": "enabled"
+        #                 },
+        #                 {
+        #                     "publicSettings": "{\"source\":{\"script\":\"echo 'f923e416-0340-485c-9243-8b84fb9930c6'\"}}",
+        #                     "seqNo": 0,
+        #                     "extensionName": "MCExt3",
+        #                     "extensionState": "enabled"
+        #                 }
+        #             ]
+        #         }
+        #         ...
+        #     ]
+        #     ...
+        # }
+        extension_goal_states = vm_settings.get("extensionGoalStates")
+        if extension_goal_states is not None:
+            if not isinstance(extension_goal_states, list):
+                raise Exception("extension_goal_states should be an array")
+            for extension_gs in extension_goal_states:
+                extension = Extension()
+
+                extension.name = extension_gs['name']
+                extension.version = extension_gs['version']
+                extension.state = extension_gs['state']
+                if extension.state not in ExtensionRequestedState.All:
+                    raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
+                is_multi_config = extension_gs.get('isMultiConfig')
+                if is_multi_config is not None:
+                    extension.supports_multi_config = is_multi_config
+                extension.manifest_uris.append(extension_gs['location'])
+                fail_over_location = extension_gs.get('failoverLocation')
+                if fail_over_location is not None:
+                    extension.manifest_uris.append(fail_over_location)
+                additional_locations = extension_gs.get('additionalLocations')
+                if additional_locations is not None:
+                    if not isinstance(additional_locations, list):
+                        raise Exception('additionalLocations should be an array')
+                    extension.manifest_uris.extend(additional_locations)
+
+                #
+                # Settings
+                #
+                settings_list = extension_gs.get('settings')
+                if settings_list is not None:
+                    if not isinstance(settings_list, list):
+                        raise Exception("'settings' should be an array (extension: {0})".format(extension.name))
+                    if not extension.supports_multi_config and len(settings_list) > 1:
+                        raise Exception("Single-config extension includes multiple settings (extension: {0})".format(extension.name))
+
+                    for s in settings_list:
+                        settings = ExtensionSettings()
+                        public_settings = s.get('publicSettings')
+                        settings.publicSettings = {} if public_settings is None else json.loads(public_settings)
+                        # Note that protectedSettings and protectedSettingsCertThumbprint can be None (which would be serialized to the extension's settings file as null)
+                        settings.protectedSettings = s.get('protectedSettings')
+                        thumbprint = s.get('protectedSettingsCertThumbprint')
+                        if thumbprint is None and settings.protectedSettings is not None:
+                            raise Exception("The certificate thumbprint for protected settings is missing (extension: {0})".format(extension.name))
+                        settings.certificateThumbprint = thumbprint
+
+                        # in multi-config each settings have their own name, sequence number and state
+                        if extension.supports_multi_config:
+                            settings.name = s['extensionName']
+                            settings.sequenceNumber = s['seqNo']
+                            settings.state = s['extensionState']
+                        else:
+                            settings.name = extension.name
+                            settings.sequenceNumber = extension_gs['settingsSeqNo']
+                            settings.state = extension.state
+                        extension.settings.append(settings)
+
+                #
+                # Dependency level
+                #
+                depends_on = extension_gs.get("dependsOn")
+                if depends_on is not None:
+                    if not isinstance(depends_on, list):
+                        raise Exception('dependsOn should be an array')
+                    if extension.supports_multi_config:
+                        # TODO: Parse dependencies for multi-config extensions
+                        pass
+                    else:
+                        if len(depends_on) != 1:
+                            raise Exception('dependsOn should be an array with exactly one item for single-config extensions')
+                        extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
+
+                self._extensions.append(extension)
 
 
 #
