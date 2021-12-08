@@ -102,8 +102,8 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             protocol.detect()
             protocol.get_vminfo()
             protocol.get_certs()
-            ext_handlers, etag = protocol.get_ext_handlers()  # pylint: disable=unused-variable
-            for ext_handler in ext_handlers.extHandlers:
+            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            for ext_handler in ext_handlers:
                 protocol.get_ext_handler_pkgs(ext_handler)
 
             crt1 = os.path.join(self.tmp_dir,
@@ -481,8 +481,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_NO_EXT) as protocol:
             extensions_goal_state = protocol.client.get_extensions_goal_state()
 
-            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
-            self.assertEqual(0, len(extensions_goal_state.ext_handlers.extHandlers),
+            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
+            self.assertEqual(0, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
             vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
             self.assertEqual(0, len(extensions_goal_state.agent_manifests),
@@ -501,8 +501,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             wire_protocol_client = protocol.client
             extensions_goal_state = wire_protocol_client.get_extensions_goal_state()
 
-            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
-            self.assertEqual(1, len(extensions_goal_state.ext_handlers.extHandlers),
+            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
+            self.assertEqual(1, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
             vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
             self.assertEqual(2, len(extensions_goal_state.agent_manifests),
@@ -1030,7 +1030,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 new_role_config_name = str(uuid.uuid4())
                 new_hosting_env_deployment_name = str(uuid.uuid4())
                 new_shared_conf = WireProtocolData.replace_xml_attribute_value(protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
-                new_sequence_number = str(uuid.uuid4())
+                new_sequence_number = 12345
 
                 if '<Format>Pkcs7BlobWithPfxContents</Format>' not in protocol.mock_wire_data.certs:
                     raise Exception('This test requires a non-empty certificate list')
@@ -1054,7 +1054,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 else:
                     protocol.client.update_goal_state()
 
-                sequence_number = protocol.client.get_extensions_goal_state().ext_handlers.extHandlers[0].properties.extensions[0].sequenceNumber
+                sequence_number = protocol.client.get_extensions_goal_state().extensions[0].settings[0].sequenceNumber
 
                 self.assertEqual(protocol.client.get_goal_state().incarnation, new_incarnation)
                 self.assertEqual(protocol.client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
@@ -1156,8 +1156,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             extensions_goal_state = protocol.client.get_extensions_goal_state()
 
             protected_settings = []
-            for ext_handler in extensions_goal_state.ext_handlers.extHandlers:
-                for extension in ext_handler.properties.extensions:
+            for ext_handler in extensions_goal_state.extensions:
+                for extension in ext_handler.settings:
                     if extension.protectedSettings is not None:
                         protected_settings.append(extension.protectedSettings)
             if len(protected_settings) == 0:
@@ -1180,42 +1180,38 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                     "Could not find the expected number of redacted settings. Expected {0}.\n{1}".format(len(protected_settings), extensions_config))
 
     def test_update_goal_state_should_save_goal_state(self):
-        # Enable FastTrack to also save the vmSettings
-        with patch("azurelinuxagent.common.protocol.wire.conf.get_enable_fast_track", return_value=True):
-            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-                protocol.mock_wire_data.set_incarnation(999)
-                protocol.mock_wire_data.set_etag(888)
-                protocol.update_goal_state()
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_incarnation(999)
+            protocol.mock_wire_data.set_etag(888)
+            protocol.update_goal_state()
 
-            extensions_config_file = os.path.join(conf.get_lib_dir(), "ExtensionsConfig.999.xml")
-            vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.888.json")
-            expected_files = [
-                os.path.join(conf.get_lib_dir(), "GoalState.999.xml"),
-                os.path.join(conf.get_lib_dir(), "SharedConfig.xml"),
-                os.path.join(conf.get_lib_dir(), "Certificates.xml"),
-                os.path.join(conf.get_lib_dir(), "HostingEnvironmentConfig.xml"),
-                extensions_config_file,
-                vm_settings_file
-            ]
+        extensions_config_file = os.path.join(conf.get_lib_dir(), "ExtensionsConfig.999.xml")
+        vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.888.json")
+        expected_files = [
+            os.path.join(conf.get_lib_dir(), "GoalState.999.xml"),
+            os.path.join(conf.get_lib_dir(), "SharedConfig.xml"),
+            os.path.join(conf.get_lib_dir(), "Certificates.xml"),
+            os.path.join(conf.get_lib_dir(), "HostingEnvironmentConfig.xml"),
+            extensions_config_file,
+            vm_settings_file
+        ]
 
-            for f in expected_files:
-                self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
+        for f in expected_files:
+            self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
 
-            with open(extensions_config_file, "r") as file_:
-                extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, file_.read(), protocol)
-            self.assertEqual(4, len(extensions_goal_state.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
-            for e in extensions_goal_state.ext_handlers.extHandlers:
-                if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
-                    self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
+        with open(extensions_config_file, "r") as file_:
+            extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, file_.read(), protocol)
+        self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test ExtensionsConfig")
+        for e in extensions_goal_state.extensions:
+            if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
+                self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
-            # TODO: Use azurelinuxagent.common.protocol.ExtensionsGoalState once it implements parsing
-            with open(vm_settings_file, "r") as file_:
-                vm_settings = json.load(file_)
-            extensions = vm_settings["extensionGoalStates"]
-            self.assertEqual(4, len(extensions), "Expected 4 extensions in the test vmSettings")
-            for e in extensions:
-                if e["name"] in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
-                    self.assertEqual(e["settings"][0]["protectedSettings"], "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e["name"]))
+        with open(vm_settings_file, "r") as file_:
+            extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(None, file_.read())
+        self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test vmSettings")
+        for e in extensions_goal_state.extensions:
+            if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
+                self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
     def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
         """

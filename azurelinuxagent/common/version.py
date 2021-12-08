@@ -103,6 +103,7 @@ def get_checkpoint_platform():
 
 
 def get_distro():
+
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
         osinfo = ['freebsd', release, '', 'freebsd']
@@ -130,6 +131,9 @@ def get_distro():
     if os.path.exists("/etc/euleros-release"):
         osinfo[0] = "euleros"
 
+    if os.path.exists("/etc/UnionTech-release"):
+        osinfo[0] = "uos"
+
     if os.path.exists("/etc/mariner-release"):
         osinfo[0] = "mariner"
 
@@ -143,6 +147,9 @@ def get_distro():
 
     if os.path.exists("/home/guestshell/azure"):
         osinfo = ['iosxe', 'csr1000v', '', 'Cisco IOSXE Linux']
+
+    if os.path.exists("/etc/photon-release"):
+        osinfo[0] = "photonos"
 
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
@@ -187,7 +194,7 @@ def has_logrotate():
         logrotate_version = shellutil.run_command(["logrotate", "--version"]).split("\n")[0]
         return logrotate_version
     except shellutil.CommandError:
-        # A non-zero return code means that logrotate isn't present on 
+        # A non-zero return code means that logrotate isn't present on
         # the system; --version shouldn't fail otherwise.
         return COMMAND_ABSENT
     except Exception:

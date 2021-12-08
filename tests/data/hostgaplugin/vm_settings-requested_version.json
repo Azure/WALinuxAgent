@@ -27,6 +27,7 @@
     "gaFamilies": [
         {
             "name": "Prod",
+            "version": "9.9.9.9",
             "uris": [
                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
@@ -34,6 +35,7 @@
         },
         {
             "name": "Test",
+            "version": "9.9.9.9",
             "uris": [
                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
@@ -45,8 +47,6 @@
             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
             "version": "1.9.1",
             "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml",
-            "failoverlocation": "https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml",
-            "additionalLocations": ["https://zrdfepirv2cbn09pr02a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml"],
             "state": "enabled",
             "autoUpgrade": true,
             "runAsStartupTask": false,
@@ -65,8 +65,6 @@
             "name": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent",
             "version": "2.15.112",
             "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml",
-            "failoverlocation": "https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml",
-            "additionalLocations": ["https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml"],
             "state": "enabled",
             "autoUpgrade": true,
             "runAsStartupTask": false,
@@ -99,16 +97,6 @@
             "settings": [
                 {
                     "publicSettings": "{\"commandToExecute\":\"echo 'cee174d4-4daa-4b07-9958-53b9649445c2'\"}"
-                }
-            ],
-            "dependsOn": [
-                {
-                    "DependsOnExtension": [
-                        {
-                            "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
-                        }
-                    ],
-                    "dependencyLevel": 1
                 }
             ]
         },

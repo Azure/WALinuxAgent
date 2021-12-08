@@ -28,6 +28,7 @@ from azurelinuxagent.common.osutil.gaia import GaiaOSUtil
 from azurelinuxagent.common.osutil.iosxe import IosxeOSUtil
 from azurelinuxagent.common.osutil.openbsd import OpenBSDOSUtil
 from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
+from azurelinuxagent.common.osutil.photonos import PhotonOSUtil
 from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
 from azurelinuxagent.common.osutil.suse import SUSEOSUtil, SUSE11OSUtil
 from azurelinuxagent.common.osutil.ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
@@ -265,6 +266,15 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertTrue(isinstance(ret, RedhatOSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")
 
+    def test_get_osutil_it_should_return_uos(self):
+        ret = _get_osutil(distro_name="uos",
+                          distro_code_name="",
+                          distro_version="",
+                          distro_full_name="")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+
     def test_get_osutil_it_should_return_freebsd(self):
         ret = _get_osutil(distro_name="freebsd",
                           distro_code_name="",
@@ -311,4 +321,12 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_version="",
                           distro_full_name="")
         self.assertTrue(isinstance(ret, OpenWRTOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+    def test_get_osutil_it_should_return_photonos(self):
+        ret = _get_osutil(distro_name="photonos",
+                          distro_code_name="",
+                          distro_version="",
+                          distro_full_name="")
+        self.assertTrue(isinstance(ret, PhotonOSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")

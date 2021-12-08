@@ -24,8 +24,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
-from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, VMAgentManifest, \
-    ExtensionState, ExtHandlerList, InVMGoalStateMetaData
+from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -43,7 +42,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._correlation_id = None
         self._created_on_timestamp = None
         self._agent_manifests = []
-        self._ext_handlers = ExtHandlerList()
+        self._extensions = []
 
         try:
             self._parse_extensions_config(xml_text, wire_client)
@@ -59,9 +58,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
 
         for ga_family in ga_families:
             family = findtext(ga_family, "Name")
+            version = findtext(ga_family, "Version")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
-            manifest = VMAgentManifest(family)
+            manifest = VMAgentManifest(family, version)
             for uri in uris:
                 manifest.uris.append(gettext(uri))
             self._agent_manifests.append(manifest)
@@ -167,13 +167,13 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._agent_manifests
 
     @property
-    def ext_handlers(self):
-        return self._ext_handlers
+    def extensions(self):
+        return self._extensions
 
     def get_redacted_text(self):
         text = self._text
-        for ext_handler in self._ext_handlers.extHandlers:
-            for extension in ext_handler.properties.extensions:
+        for ext_handler in self._extensions:
+            for extension in ext_handler.settings:
                 if extension.protectedSettings is not None:
                     text = text.replace(extension.protectedSettings, "*** REDACTED ***")
         return text
@@ -229,14 +229,14 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         plugin_settings = findall(plugin_settings_list, "Plugin")
 
         for plugin in plugins:
-            ext_handler = ExtHandler()
+            ext_handler = Extension()
             try:
                 ExtensionsGoalStateFromExtensionsConfig._parse_plugin(ext_handler, plugin)
                 ExtensionsGoalStateFromExtensionsConfig._parse_plugin_settings(ext_handler, plugin_settings)
             except ExtensionsConfigError as error:
                 ext_handler.invalid_setting_reason = ustr(error)
 
-            self._ext_handlers.extHandlers.append(ext_handler)
+            self._extensions.append(ext_handler)
 
     @staticmethod
     def _parse_plugin(ext_handler, plugin):
@@ -272,10 +272,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             return value
 
         ext_handler.name = _log_error_if_none("Extensions.Plugins.Plugin.name", getattrib(plugin, "name"))
-        ext_handler.properties.version = _log_error_if_none("Extensions.Plugins.Plugin.version",
+        ext_handler.version = _log_error_if_none("Extensions.Plugins.Plugin.version",
                                                             getattrib(plugin, "version"))
-        ext_handler.properties.state = getattrib(plugin, "state")
-        if ext_handler.properties.state in (None, ""):
+        ext_handler.state = getattrib(plugin, "state")
+        if ext_handler.state in (None, ""):
             raise ExtensionsConfigError("Received empty Extensions.Plugins.Plugin.state, failing Handler")
 
         def getattrib_wrapped_in_list(node, attr_name):
@@ -293,7 +293,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             locations += [gettext(node) for node in nodes_list]
 
         for uri in locations:
-            ext_handler.versionUris.append(uri)
+            ext_handler.manifest_uris.append(uri)
 
     @staticmethod
     def _parse_plugin_settings(ext_handler, plugin_settings):
@@ -334,7 +334,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             return
 
         handler_name = ext_handler.name
-        version = ext_handler.properties.version
+        version = ext_handler.version
 
         def to_lower(str_to_change): return str_to_change.lower() if str_to_change is not None else None
 
@@ -511,23 +511,23 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             # Incase of invalid/no settings, add the name and seqNo of the Extension and treat it as an extension with
             # no settings since we were able to successfully parse those data properly. Without this, we wont report
             # anything for that sequence number and CRP would eventually have to timeout rather than fail fast.
-            ext_handler.properties.extensions.append(
-                Extension(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
+            ext_handler.settings.append(
+                ExtensionSettings(name=name, sequenceNumber=seq_no, state=state, dependencyLevel=depends_on_level))
             return
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
-            ext = Extension()
+            ext = ExtensionSettings()
             # There is no "extension name" for single Handler Settings. Use HandlerName for those
             ext.name = name
             ext.state = state
-            ext.sequenceNumber = seq_no
+            ext.sequenceNumber = int(seq_no)
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
             ext.dependencyLevel = depends_on_level
             thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
-            ext_handler.properties.extensions.append(ext)
+            ext_handler.settings.append(ext)
 
 
 # Do not extend this class
