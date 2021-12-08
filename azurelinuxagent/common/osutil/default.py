@@ -74,8 +74,9 @@ def _add_wait(wait, command):
 def get_iptables_version_command():
     return ["iptables", "--version"]
 
-def get_firewall_accept_dns_tcp_rule(wait, command, destination):
-    return AddFirewallRules.get_firewall_accept_dns_tcp_rule(wait, command, destination)
+
+def get_accept_tcp_rule(wait, command, destination):
+    return AddFirewallRules.get_accept_tcp_rule(wait, command, destination)
 
 
 def get_firewall_accept_command(wait, command, destination, owner_uid):
@@ -98,22 +99,22 @@ def get_firewall_packets_command(wait):
 # this rule was used <= 2.2.25.  This rule helped to validate our change, and determine impact.
 def get_firewall_delete_conntrack_accept_command(wait, destination):
     return _add_wait(wait,
-                     ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
+                     ["iptables", "-t", "security", AddFirewallRules.DELETE_COMMAND, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
                       "--ctstate", "INVALID,NEW", "-j", "ACCEPT"])
 
 
-def get_firewall_delete_accept_dns_tcp_command(wait, destination):
-    return AddFirewallRules.get_firewall_accept_dns_tcp_rule(wait, AddFirewallRules.get_delete_command(), destination)
+def get_delete_accept_tcp_rule(wait, destination):
+    return AddFirewallRules.get_accept_tcp_rule(wait, AddFirewallRules.DELETE_COMMAND, destination)
 
 
 def get_firewall_delete_owner_accept_command(wait, destination, owner_uid):
-    return _add_wait(wait, ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
+    return _add_wait(wait, ["iptables", "-t", "security", AddFirewallRules.DELETE_COMMAND, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "owner",
                             "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
 
 
 def get_firewall_delete_conntrack_drop_command(wait, destination):
     return _add_wait(wait,
-                     ["iptables", "-t", "security", "-D", "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
+                     ["iptables", "-t", "security", AddFirewallRules.DELETE_COMMAND, "OUTPUT", "-d", destination, "-p", "tcp", "-m", "conntrack",
                       "--ctstate", "INVALID,NEW", "-j", "DROP"])
 
 
@@ -240,7 +241,7 @@ class DefaultOSUtil(object):
             # has aged out, keep this cleanup in place.
             self._delete_rule(get_firewall_delete_conntrack_accept_command(wait, dst_ip))
 
-            self._delete_rule(get_firewall_delete_accept_dns_tcp_command(wait, dst_ip))
+            self._delete_rule(get_delete_accept_tcp_rule(wait, dst_ip))
             self._delete_rule(get_firewall_delete_owner_accept_command(wait, dst_ip, uid))
             self._delete_rule(get_firewall_delete_conntrack_drop_command(wait, dst_ip))
 
@@ -278,7 +279,7 @@ class DefaultOSUtil(object):
 
             # If the DROP rule exists, make no changes
             try:
-                drop_rule = get_firewall_drop_command(wait, "-C", dst_ip)
+                drop_rule = get_firewall_drop_command(wait, AddFirewallRules.CHECK_COMMAND, dst_ip)
                 shellutil.run_command(drop_rule)
                 logger.verbose("Firewall appears established")
                 return True

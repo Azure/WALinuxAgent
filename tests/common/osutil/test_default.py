@@ -33,6 +33,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from tests.common.mock_environment import MockEnvironment
 from tests.tools import AgentTestCase, patch, open_patch, load_data, data_dir
 
@@ -660,14 +661,14 @@ Match host 192.168.1.2\n\
         version_command = set_command(osutil.get_iptables_version_command(), output=str(version))
         list_command = set_command(osutil.get_firewall_list_command(wait), output="Mock Output")
         set_command(osutil.get_firewall_packets_command(wait))
-        set_command(osutil.get_firewall_drop_command(wait, "-C", destination))
-        set_command(osutil.get_firewall_drop_command(wait, "-A", destination))
-        set_command(osutil.get_firewall_accept_command(wait, "-A", destination, uid))
-        set_command(osutil.get_firewall_accept_dns_tcp_rule(wait, "-A", destination))
-        set_command(osutil.get_firewall_accept_dns_tcp_rule(wait, "-I", destination))
+        set_command(osutil.get_firewall_drop_command(wait, AddFirewallRules.CHECK_COMMAND, destination))
+        set_command(osutil.get_firewall_drop_command(wait, AddFirewallRules.APPEND_COMMAND, destination))
+        set_command(osutil.get_firewall_accept_command(wait, AddFirewallRules.APPEND_COMMAND, destination, uid))
+        set_command(osutil.get_accept_tcp_rule("-w" if wait else "", AddFirewallRules.APPEND_COMMAND, destination))
+        set_command(osutil.get_accept_tcp_rule("-w" if wait else "", AddFirewallRules.INSERT_COMMAND, destination))
         # the agent assumes the rules have been deleted when these commands return 1
         set_command(osutil.get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
-        set_command(osutil.get_firewall_delete_accept_dns_tcp_command(wait, destination), exit_code=1)
+        set_command(osutil.get_delete_accept_tcp_rule("-w" if wait else "", destination), exit_code=1)
         set_command(osutil.get_firewall_delete_owner_accept_command(wait, destination, uid), exit_code=1)
         set_command(osutil.get_firewall_delete_conntrack_drop_command(wait, destination), exit_code=1)
 
@@ -739,19 +740,19 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             # fail the rule check to force enable of the firewall
-            mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=1)
+            mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
-            drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination))
-            accept_dns_tcp_command = TestOSUtil._command_to_string(osutil.get_firewall_accept_dns_tcp_rule(mock_iptables.wait, "-A", mock_iptables.destination))
-            accept_command = TestOSUtil._command_to_string(osutil.get_firewall_accept_command(mock_iptables.wait, "-A", mock_iptables.destination, mock_iptables.uid))
-            drop_add_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, "-A", mock_iptables.destination))
+            drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+            accept_tcp_append_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.APPEND_COMMAND, mock_iptables.destination))
+            accept_command = TestOSUtil._command_to_string(osutil.get_firewall_accept_command(mock_iptables.wait, AddFirewallRules.APPEND_COMMAND, mock_iptables.destination, mock_iptables.uid))
+            drop_add_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.APPEND_COMMAND, mock_iptables.destination))
 
             self.assertTrue(success, "Enabling the firewall was not successful")
             self.assertEqual(len(mock_iptables.command_calls), 4, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
             self.assertEqual(mock_iptables.command_calls[0], drop_check_command, "The first command should check the drop rule")
-            self.assertEqual(mock_iptables.command_calls[1], accept_dns_tcp_command,
+            self.assertEqual(mock_iptables.command_calls[1], accept_tcp_append_rule,
                             "The second command should add the dns tcp accept rule")
             self.assertEqual(mock_iptables.command_calls[2], accept_command, "The second command should add the accept rule")
             self.assertEqual(mock_iptables.command_calls[3], drop_add_command, "The third command should add the drop rule")
@@ -763,7 +764,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
         with TestOSUtil._mock_iptables(version=osutil._IPTABLES_LOCKING_VERSION - 1) as mock_iptables:
             # fail the rule check to force enable of the firewall
-            mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=1)
+            mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
@@ -778,7 +779,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         osutil._enable_firewall = True
 
         with TestOSUtil._mock_iptables() as mock_iptables:
-            drop_check_command = mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=0)
+            drop_check_command = mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
@@ -797,12 +798,12 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             #  1 - other errors
             #  2 - errors which appear to be caused by invalid or abused command
             #      line parameters
-            drop_check_command = mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, "-C", mock_iptables.destination), exit_code=2)
+            drop_check_command = mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=2)
 
             success = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
             delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))
-            delete_accept_dns_tcp_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_accept_dns_tcp_command(mock_iptables.wait, mock_iptables.destination))
+            delete_accept_tcp_rule = TestOSUtil._command_to_string(osutil.get_delete_accept_tcp_rule(mock_iptables.wait, mock_iptables.destination))
             delete_owner_accept_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_owner_accept_command(mock_iptables.wait, mock_iptables.destination, mock_iptables.uid))
             delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination))
 
@@ -810,7 +811,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
             self.assertEqual(len(mock_iptables.command_calls), 5, "Incorrect number of calls to iptables: [{0}]". format(mock_iptables.command_calls))
             self.assertEqual(mock_iptables.command_calls[0], drop_check_command, "The first command should check the drop rule: {0}".format(mock_iptables.command_calls[0]))
             self.assertEqual(mock_iptables.command_calls[1], delete_conntrack_accept_command, "The second command should delete the conntrack accept rule: {0}".format(mock_iptables.command_calls[1]))
-            self.assertEqual(mock_iptables.command_calls[2], delete_accept_dns_tcp_command,
+            self.assertEqual(mock_iptables.command_calls[2], delete_accept_tcp_rule,
                              "The third command should delete the dns tcp accept rule: {0}".format(
                                  mock_iptables.command_calls[2]))
             self.assertEqual(mock_iptables.command_calls[3], delete_owner_accept_command, "The forth command should delete the owner accept rule: {0}".format(mock_iptables.command_calls[3]))
@@ -837,7 +838,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
             def mock_popen(command, *args, **kwargs):
                 command_string = TestOSUtil._command_to_string(command)
-                if " -D " in command_string:
+                if AddFirewallRules.DELETE_COMMAND in command_string:
                     # The agent invokes the delete commands continuously until they return 1 to indicate the rules has been removed
                     # The mock returns 0 (success) the first time it is invoked and 1 (rule does not exist) thereafter
                     if command_string not in delete_commands:
@@ -856,16 +857,16 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
                 success = osutil.DefaultOSUtil().remove_firewall(mock_iptables.destination, mock_iptables.uid)
 
                 delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))
-                delete_accept_dns_tcp_command = TestOSUtil._command_to_string(
-                    osutil.get_firewall_delete_accept_dns_tcp_command(mock_iptables.wait, mock_iptables.destination))
+                delete_accept_tcp_rule = TestOSUtil._command_to_string(
+                    osutil.get_delete_accept_tcp_rule(mock_iptables.wait, mock_iptables.destination))
                 delete_owner_accept_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_owner_accept_command(mock_iptables.wait, mock_iptables.destination, mock_iptables.uid))
                 delete_conntrack_drop_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_conntrack_drop_command(mock_iptables.wait, mock_iptables.destination))
 
                 self.assertTrue(success, "Removing the firewall should have succeeded")
                 self.assertEqual(len(delete_commands), 4, "Expected 3 delete commands: [{0}]".format(delete_commands))
                 # delete rules < 2.2.26
-                self.assertIn(delete_accept_dns_tcp_command, delete_commands, "The delete dns tcp accept command was not executed")
-                self.assertEqual(delete_commands[delete_accept_dns_tcp_command], 2, "The delete dns tcp accept command should have been executed twice")
+                self.assertIn(delete_accept_tcp_rule, delete_commands, "The delete dns tcp accept command was not executed")
+                self.assertEqual(delete_commands[delete_accept_tcp_rule], 2, "The delete dns tcp accept command should have been executed twice")
                 self.assertIn(delete_conntrack_accept_command, delete_commands, "The delete conntrack accept command was not executed")
                 self.assertEqual(delete_commands[delete_conntrack_accept_command], 2, "The delete conntrack accept command should have been executed twice")
                 self.assertIn(delete_owner_accept_command, delete_commands, "The delete owner accept command was not executed")

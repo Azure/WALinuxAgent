@@ -122,34 +122,18 @@ class AddFirewallRules(object):
     """
 
     # -A adds the rule to the end of the iptable chain
-    __APPEND_COMMAND = "-A"
+    APPEND_COMMAND = "-A"
 
     # -I inserts the rule at the index specified. If no number specified the rules get added to the top of the chain
     # iptables -t security -I OUTPUT 1 -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w and
     # iptables -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT -w both adds the rule as the first rule of the chain
-    __INSERT_COMMAND = "-I"
+    INSERT_COMMAND = "-I"
 
     # -D deletes the specific rule in the iptable chain
-    __DELETE_COMMAND = "-D"
+    DELETE_COMMAND = "-D"
 
     # -C checks if a specific rule exists
-    __CHECK_COMMAND = "-C"
-
-    @staticmethod
-    def get_append_command():
-        return AddFirewallRules.__APPEND_COMMAND
-
-    @staticmethod
-    def get_insert_command():
-        return AddFirewallRules.__INSERT_COMMAND
-
-    @staticmethod
-    def get_delete_command():
-        return AddFirewallRules.__DELETE_COMMAND
-
-    @staticmethod
-    def get_check_command():
-        return AddFirewallRules.__CHECK_COMMAND
+    CHECK_COMMAND = "-C"
 
     @staticmethod
     def _add_wait(wait, command):
@@ -161,8 +145,8 @@ class AddFirewallRules(object):
         return command
 
     @staticmethod
-    def __get_iptables_base_command(wait=False):
-        if wait:
+    def __get_iptables_base_command(wait=""):
+        if wait != "":
             return ["iptables", "-w"]
         return ["iptables"]
 
@@ -188,11 +172,11 @@ class AddFirewallRules(object):
         return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
-    def get_firewall_accept_dns_tcp_rule(wait, command, destination, firewalldcommand=False):
+    def get_accept_tcp_rule(wait, command, destination, firewalld_command=""):
         # This rule allows DNS TCP request to wireserver ip for non root users
 
-        if firewalldcommand:
-            cmd = AddFirewallRules.__get_firewalld_base_command(firewalldcommand)
+        if firewalld_command != "":
+            cmd = AddFirewallRules.__get_firewalld_base_command(firewalld_command)
         else:
             cmd = AddFirewallRules.__get_iptables_base_command(wait)
         cmd = cmd + ['-t', 'security', command, 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53', '-j', 'ACCEPT']
@@ -214,7 +198,7 @@ class AddFirewallRules(object):
     def get_firewalld_accept_command(command, destination, uid, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
-            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.get_append_command(), destination,
+            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.APPEND_COMMAND, destination,
                                                                 uid))
         return cmd
 
@@ -222,7 +206,7 @@ class AddFirewallRules(object):
     def get_firewalld_drop_command(command, destination, wait=""):
         cmd = AddFirewallRules.__get_firewalld_base_command(command)
         cmd.extend(
-            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.get_append_command(), destination))
+            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.APPEND_COMMAND, destination))
         return cmd
 
     @staticmethod
@@ -247,13 +231,13 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        accept_rule_dns_tcp_rule = AddFirewallRules.get_firewall_accept_dns_tcp_rule(wait, AddFirewallRules.get_append_command(), dst_ip, firewalldcommand=False)
-        AddFirewallRules.__execute_cmd(accept_rule_dns_tcp_rule)
+        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(wait, AddFirewallRules.APPEND_COMMAND, dst_ip, firewalld_command="")
+        AddFirewallRules.__execute_cmd(accept_tcp_rule)
 
-        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.get_append_command(), dst_ip, uid)
+        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.APPEND_COMMAND, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_rule)
 
-        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.get_append_command(), dst_ip)
+        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.APPEND_COMMAND, dst_ip)
         AddFirewallRules.__execute_cmd(drop_rule)
 
     @staticmethod
@@ -261,11 +245,11 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        # Wait is set to false for firewalld commands since it fails
+        # Firwalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
         wait = False
 
-        accept_rule_dns_tcp_rule = AddFirewallRules.get_firewall_accept_dns_tcp_rule(wait, AddFirewallRules.get_insert_command(), dst_ip, firewalldcommand=command)
-        AddFirewallRules.__execute_cmd(accept_rule_dns_tcp_rule)
+        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(wait, AddFirewallRules.INSERT_COMMAND, dst_ip, firewalld_command=command)
+        AddFirewallRules.__execute_cmd(accept_tcp_rule)
 
         accept_cmd = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)
         AddFirewallRules.__execute_cmd(accept_cmd)
@@ -276,6 +260,8 @@ class AddFirewallRules(object):
     @staticmethod
     def add_firewalld_rules(dst_ip, uid):
         # Firwalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
+        # Firewalld.service with the "--permanent" parameter ensures that a firewall rule is set only once even if command is executed multiple times
+
         AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, dst_ip, uid)
 
     @staticmethod
