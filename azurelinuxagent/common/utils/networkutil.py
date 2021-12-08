@@ -260,7 +260,7 @@ class AddFirewallRules(object):
     @staticmethod
     def add_firewalld_rules(dst_ip, uid):
         # Firwalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
-        # Firewalld.service with the "--permanent" parameter ensures that a firewall rule is set only once even if command is executed multiple times
+        # Firewalld.service with the "--permanent --passthrough" parameter ensures that a firewall rule is set only once even if command is executed multiple times
 
         AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, dst_ip, uid)
 
