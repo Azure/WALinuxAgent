@@ -26,7 +26,8 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
-from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
+from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
+    ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil, shellutil
@@ -39,10 +40,12 @@ CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
 EXTENSION_SLICE_PREFIX = "azure-vmextensions"
 
+
 class SystemdRunError(CGroupsException):
     """
     Raised when systemd-run fails
     """
+
     def __init__(self, msg=None):
         super(SystemdRunError, self).__init__(msg)
 
@@ -56,7 +59,8 @@ class CGroupsApi(object):
             distro_version = FlexibleVersion(distro_info[1])
         except ValueError:
             return False
-        return distro_name.lower() == 'ubuntu' and distro_version.major >= 16
+        return ((distro_name.lower() == 'ubuntu' and distro_version.major >= 16) or
+                (distro_name.lower() in ("centos", "redhat") and distro_version.major >= 7))
 
     @staticmethod
     def track_cgroups(extension_cgroups):
@@ -118,6 +122,7 @@ class SystemdCgroupsApi(CGroupsApi):
     """
     Cgroups interface via systemd
     """
+
     def __init__(self):
         self._cgroup_mountpoints = None
         self._agent_unit_name = None
@@ -156,7 +161,7 @@ class SystemdCgroupsApi(CGroupsApi):
                         memory = path
             self._cgroup_mountpoints = {'cpu': cpu, 'memory': memory}
 
-        return self._cgroup_mountpoints['cpu'],  self._cgroup_mountpoints['memory']
+        return self._cgroup_mountpoints['cpu'], self._cgroup_mountpoints['memory']
 
     @staticmethod
     def get_process_cgroup_relative_paths(process_id):
@@ -253,7 +258,8 @@ class SystemdCgroupsApi(CGroupsApi):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return EXTENSION_SLICE_PREFIX + "-" + extension_name.replace('-', '_') + ".slice"
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
+    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
+                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
         extension_slice_name = self.get_extension_slice_name(extension_name)
         with self._systemd_run_commands_lock:
@@ -293,7 +299,8 @@ class SystemdCgroupsApi(CGroupsApi):
 
         # Wait for process completion or timeout
         try:
-            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
+                                             stderr=stderr, error_code=error_code)
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
@@ -309,7 +316,8 @@ class SystemdCgroupsApi(CGroupsApi):
 
             if isinstance(e, ExtensionOperationError):
                 # no-member: Instance of 'ExtensionError' has no 'exit_code' member (no-member) - Disabled: e is actually an ExtensionOperationError
-                err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output)  # pylint: disable=no-member
+                err_msg = 'Systemd process exited with code %s and output %s' % (
+                    e.exit_code, process_output)  # pylint: disable=no-member
             else:
                 err_msg = "Systemd timed-out, output: %s" % process_output
             raise SystemdRunError(err_msg)
