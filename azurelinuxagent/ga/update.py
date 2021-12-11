@@ -1059,7 +1059,7 @@ class UpdateHandler(object):
                             "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver")
                     except CommandError as error:
                         msg = "Unable to set the non root tcp access firewall rule :{0}." \
-                              "Run command execution for {1} failed with error:{2}.Return Code:{2}"\
+                              "Run command execution for {1} failed with error:{2}.Return Code:{3}"\
                             .format(accept_tcp_rule, error.command, error.stderr, error.returncode)
                         logger.error(msg)
                 else:
