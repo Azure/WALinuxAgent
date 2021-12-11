@@ -76,7 +76,7 @@ def get_iptables_version_command():
 
 
 def get_accept_tcp_rule(wait, command, destination):
-    return AddFirewallRules.get_accept_tcp_rule(wait, command, destination)
+    return AddFirewallRules.get_accept_tcp_rule(command, destination, wait=wait)
 
 
 def get_firewall_accept_command(wait, command, destination, owner_uid):
@@ -104,7 +104,7 @@ def get_firewall_delete_conntrack_accept_command(wait, destination):
 
 
 def get_delete_accept_tcp_rule(wait, destination):
-    return AddFirewallRules.get_accept_tcp_rule(wait, AddFirewallRules.DELETE_COMMAND, destination)
+    return AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.DELETE_COMMAND, destination, wait=wait)
 
 
 def get_firewall_delete_owner_accept_command(wait, destination, owner_uid):

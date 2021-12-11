@@ -172,7 +172,7 @@ class AddFirewallRules(object):
         return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
-    def get_accept_tcp_rule(wait, command, destination, firewalld_command=""):
+    def get_accept_tcp_rule(command, destination, firewalld_command="", wait=""):
         # This rule allows DNS TCP request to wireserver ip for non root users
 
         if firewalld_command != "":
@@ -231,7 +231,7 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(wait, AddFirewallRules.APPEND_COMMAND, dst_ip, firewalld_command="")
+        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.APPEND_COMMAND, dst_ip, wait=wait)
         AddFirewallRules.__execute_cmd(accept_tcp_rule)
 
         accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.APPEND_COMMAND, dst_ip, uid)
@@ -246,9 +246,8 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
         # Firwalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
-        wait = False
 
-        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(wait, AddFirewallRules.INSERT_COMMAND, dst_ip, firewalld_command=command)
+        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, dst_ip, firewalld_command=command)
         AddFirewallRules.__execute_cmd(accept_tcp_rule)
 
         accept_cmd = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)

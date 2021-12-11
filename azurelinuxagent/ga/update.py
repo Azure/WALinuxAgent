@@ -1030,9 +1030,9 @@ class UpdateHandler(object):
             try:
                 shellutil.run_command(command)
                 return True
-            except CommandError as e:
+            except CommandError as err:
                 # return code 1 is expected while using the check command. Raise if encounter any other return code
-                if e.returncode != 1:
+                if err.returncode != 1:
                     raise
             return False
 
@@ -1044,6 +1044,7 @@ class UpdateHandler(object):
             if not _execute_run_command(drop_rule):
                 # DROP command doesn't exist indicates then none of the firewall rules are set yet
                 # exiting here as the environment thread will set up all firewall rules
+                logger.info("DROP rule is not available which implies no firewall rules are set yet. Environment thread will set it up.")
                 return
             else:
                 # DROP rule exists in the ip table chain. Hence checking if the DNS TCP to wireserver rule exists. If not we add it.
@@ -1051,13 +1052,15 @@ class UpdateHandler(object):
                 if not _execute_run_command(accept_tcp_rule):
                     try:
                         logger.info(
-                            "Firewall rule to allow DNS TCP request to wireserver for a non root user unavailable . Setting it now.")
+                            "Firewall rule to allow DNS TCP request to wireserver for a non root user unavailable. Setting it now.")
                         accept_tcp_rule = get_accept_tcp_rule(wait, AddFirewallRules.INSERT_COMMAND, dst_ip)
                         shellutil.run_command(accept_tcp_rule)
                         logger.info(
-                            "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver ")
-                    except Exception as e:
-                        msg = "Unable to set the non root tcp access firewall rule:{0}".format(ustr(e))
+                            "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver")
+                    except CommandError as error:
+                        msg = "Unable to set the non root tcp access firewall rule :{0}." \
+                              "Run command execution for {1} failed with error:{2}.Return Code:{2}"\
+                            .format(accept_tcp_rule, error.command, error.stderr, error.returncode)
                         logger.error(msg)
                 else:
                     logger.info(
