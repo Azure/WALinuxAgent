@@ -195,7 +195,7 @@ ResourceDisk.EnableSwap=n
 ResourceDisk.EnableSwapEncryption=n
 ResourceDisk.SwapSizeMB=0
 Logs.Verbose=n
-Logs.Collect=n
+Logs.Collect=y
 Logs.CollectPeriod=3600
 OS.AllowHTTP=n
 OS.RootDeviceScsiTimeout=300
@@ -461,7 +461,7 @@ leverages the system logrotate functionality to rotate logs.
 #### __Logs.Collect__
 
 _Type: Boolean_  
-_Default: n_
+_Default: y_
 
 If set, agent logs will be periodically collected and uploaded to a secure location for improved supportability.
 
