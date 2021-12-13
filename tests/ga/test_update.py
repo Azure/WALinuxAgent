@@ -1646,12 +1646,17 @@ class TestUpdate(UpdateTestCase):
                 cmd = ["echo", "running"]
             return _ORIGINAL_POPEN(cmd, *args, **kwargs)
 
-        with patch("azurelinuxagent.common.logger.info") as patch_info:
-            with _get_update_handler(iterations=1) as (update_handler, _):
+        with _get_update_handler(iterations=1) as (update_handler, _):
+            with patch("azurelinuxagent.common.logger.info") as patch_info:
                 with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
                     with patch('azurelinuxagent.common.conf.enable_firewall', return_value=False):
-                        update_handler.run(debug=True)
+                        with patch("azurelinuxagent.common.logger.warn") as patch_warn:
+                            update_handler.run(debug=True)
 
+        self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
+        exit_args, _ = update_handler.exit_mock.call_args
+        self.assertEqual(exit_args[0], 0, "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+            patch_warn.call_args_list))
         self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
         self.assertTrue(any(
             "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
@@ -1671,7 +1676,13 @@ class TestUpdate(UpdateTestCase):
             with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen) as mock_popen:
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
                     with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-                        update_handler.run(debug=True)
+                        with patch("azurelinuxagent.common.logger.warn") as patch_warn:
+                            update_handler.run(debug=True)
+
+        self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
+        exit_args, _ = update_handler.exit_mock.call_args
+        self.assertEqual(exit_args[0], 0, "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+            patch_warn.call_args_list))
 
         # Firewall-cmd should only be called 4 times - 1st to check if running, 2nd, 3rd and 4th for the QueryPassThrough cmd
         self.assertEqual(4, len(executed_commands),
