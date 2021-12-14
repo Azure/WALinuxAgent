@@ -1743,53 +1743,59 @@ class TestUpdate(UpdateTestCase):
 
     def test_it_should_report_update_status_in_status_blob(self):
         with _get_update_handler(iterations=1) as (update_handler, protocol):
+            with patch("azurelinuxagent.common.logger.warn") as patch_warn:
 
-            protocol.aggregate_status = None
+                protocol.aggregate_status = None
 
-            def mock_http_put(url, *args, **_):
-                if HttpRequestPredicates.is_host_plugin_status_request(url):
-                    # Skip reading the HostGA request data as its encoded
-                    return MockHttpResponse(status=500)
-                protocol.aggregate_status = json.loads(args[0])
-                return MockHttpResponse(status=201)
+                def mock_http_put(url, *args, **_):
+                    if HttpRequestPredicates.is_host_plugin_status_request(url):
+                        # Skip reading the HostGA request data as its encoded
+                        return MockHttpResponse(status=500)
+                    protocol.aggregate_status = json.loads(args[0])
+                    return MockHttpResponse(status=201)
 
-            def update_goal_state_and_run_handler():
-                self._add_write_permission_to_goal_state_files()
-                update_handler.set_iterations(1)
+                def update_goal_state_and_run_handler():
+                    self._add_write_permission_to_goal_state_files()
+                    update_handler.set_iterations(1)
+                    update_handler.run(debug=True)
+                    self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
+                    exit_args, _ = update_handler.exit_mock.call_args
+                    self.assertEqual(exit_args[0], 0,
+                                     "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+                                         patch_warn.call_args_list))
+
+                protocol.set_http_handlers(http_put_handler=mock_http_put)
+
+                # Case 1: No requested version in GS; updateStatus should not be reported
                 update_handler.run(debug=True)
+                self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                 "updateStatus should not be reported if not asked in GS")
 
-            protocol.set_http_handlers(http_put_handler=mock_http_put)
+                # Case 2: Requested version in GS != Current Version; updateStatus should not be error
+                protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
+                update_goal_state_and_run_handler()
+                self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                "updateStatus should be reported if asked in GS")
+                update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
+                self.assertEqual(update_status['expectedVersion'], "9.9.9.10", "incorrect version reported")
+                self.assertEqual(update_status['code'], -1, "incorrect code reported")
 
-            # Case 1: No requested version in GS; updateStatus should not be reported
-            update_handler.run(debug=True)
-            self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                             "updateStatus should not be reported if not asked in GS")
+                # Case 3: Requested version in GS == Current Version; updateStatus should not be Success
+                protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+                update_goal_state_and_run_handler()
+                self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                "updateStatus should be reported if asked in GS")
+                update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                self.assertEqual(VMAgentUpdateStatuses.Success, update_status['status'], "Status should be successful")
+                self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
+                self.assertEqual(update_status['code'], 0, "incorrect code reported")
 
-            # Case 2: Requested version in GS != Current Version; updateStatus should not be error
-            protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
-            update_goal_state_and_run_handler()
-            self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                            "updateStatus should be reported if asked in GS")
-            update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
-            self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-            self.assertEqual(update_status['expectedVersion'], "9.9.9.10", "incorrect version reported")
-            self.assertEqual(update_status['code'], -1, "incorrect code reported")
-
-            # Case 3: Requested version in GS == Current Version; updateStatus should not be Success
-            protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
-            update_goal_state_and_run_handler()
-            self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                            "updateStatus should be reported if asked in GS")
-            update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
-            self.assertEqual(VMAgentUpdateStatuses.Success, update_status['status'], "Status should be successful")
-            self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
-            self.assertEqual(update_status['code'], 0, "incorrect code reported")
-
-            # Case 4: Requested version removed in GS; no updateStatus should be reported
-            protocol.mock_wire_data.reload()
-            update_goal_state_and_run_handler()
-            self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                             "updateStatus should not be reported if not asked in GS")
+                # Case 4: Requested version removed in GS; no updateStatus should be reported
+                protocol.mock_wire_data.reload()
+                update_goal_state_and_run_handler()
+                self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                 "updateStatus should not be reported if not asked in GS")
 
 
 class TestAgentUpgrade(UpdateTestCase):

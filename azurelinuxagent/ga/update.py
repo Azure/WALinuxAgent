@@ -489,28 +489,40 @@ class UpdateHandler(object):
             self.last_incarnation = incarnation
 
     @staticmethod
-    def __get_vmagent_upgrade_status(protocol):
+    def __get_vmagent_upgrade_status(protocol, incarnation_changed):
         """
         This function gets the VMAgent upgrade status as per the last GoalState.
         Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
         """
-        agent_manifests, _ = protocol.get_vmagent_manifests()
-        # Expectation here is that there will only be one manifest per family passed down from CRP.
-        # If there are multiple, we pick the first one
-        manifest = next(m for m in agent_manifests if m.family == conf.get_autoupdate_gafamily())
         upgrade_status = None
-        if manifest.is_requested_version_available:
-            if CURRENT_VERSION == manifest.requested_version:
-                status = VMAgentUpdateStatuses.Success
-                code = 0
-            else:
-                status = VMAgentUpdateStatuses.Error
-                code = -1
-            upgrade_status = VMAgentUpdateStatus(expected_version=manifest.version, status=status, code=code)
+
+        try:
+            agent_manifests, _ = protocol.get_vmagent_manifests()
+            # Expectation here is that there will only be one manifest per family passed down from CRP.
+            # If there are multiple, we pick the first one
+            manifest = next(m for m in agent_manifests if m.family == conf.get_autoupdate_gafamily())
+            if manifest.is_requested_version_available:
+                if CURRENT_VERSION == manifest.requested_version:
+                    status = VMAgentUpdateStatuses.Success
+                    code = 0
+                else:
+                    status = VMAgentUpdateStatuses.Error
+                    code = -1
+                upgrade_status = VMAgentUpdateStatus(expected_version=manifest.version, status=status, code=code)
+        except StopIteration:
+            logger.verbose("No matching manifest found for family: {0}".format(conf.get_autoupdate_gafamily()))
+        except Exception as error:
+            if incarnation_changed:
+                err_msg = "[This error will only be logged once per incarnation] " \
+                          "Ran into error when trying to fetch updateStatus for the agent, skipping reporting update satus. Error: {0}".format(
+                           textutil.format_exception(error))
+                logger.error(err_msg)
+                add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=err_msg, log_event=False)
+
         return upgrade_status
 
     def _report_status(self, exthandlers_handler, incarnation_changed):
-        vm_agent_upgrade_status = self.__get_vmagent_upgrade_status(exthandlers_handler.protocol)
+        vm_agent_upgrade_status = self.__get_vmagent_upgrade_status(exthandlers_handler.protocol, incarnation_changed)
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed,
                                                                    vm_agent_upgrade_status=vm_agent_upgrade_status)
