@@ -516,7 +516,7 @@ class UpdateHandler(object):
                 err_msg = "[This error will only be logged once per incarnation] " \
                           "Ran into error when trying to fetch updateStatus for the agent, skipping reporting update satus. Error: {0}".format(
                            textutil.format_exception(error))
-                logger.error(err_msg)
+                logger.warn(err_msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=err_msg, log_event=False)
 
         return upgrade_status
