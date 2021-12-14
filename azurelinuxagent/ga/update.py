@@ -46,6 +46,7 @@ from azurelinuxagent.common.event import add_event, initialize_event_logger_vmin
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
+from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -487,9 +488,32 @@ class UpdateHandler(object):
         finally:
             self.last_incarnation = incarnation
 
+    @staticmethod
+    def __get_vmagent_upgrade_status(protocol):
+        """
+        This function gets the VMAgent upgrade status as per the last GoalState.
+        Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
+        """
+        agent_manifests, _ = protocol.get_vmagent_manifests()
+        # Expectation here is that there will only be one manifest per family passed down from CRP.
+        # If there are multiple, we pick the first one
+        manifest = next(m for m in agent_manifests if m.family == conf.get_autoupdate_gafamily())
+        upgrade_status = None
+        if manifest.is_requested_version_available:
+            if CURRENT_VERSION == manifest.requested_version:
+                status = VMAgentUpdateStatuses.Success
+                code = 0
+            else:
+                status = VMAgentUpdateStatuses.Error
+                code = -1
+            upgrade_status = VMAgentUpdateStatus(expected_version=manifest.version, status=status, code=code)
+        return upgrade_status
+
     def _report_status(self, exthandlers_handler, incarnation_changed):
+        vm_agent_upgrade_status = self.__get_vmagent_upgrade_status(exthandlers_handler.protocol)
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
-        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed)
+        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed,
+                                                                   vm_agent_upgrade_status=vm_agent_upgrade_status)
         if vm_status is None:
             return
 

@@ -31,7 +31,8 @@ from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHa
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, \
-    ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus
+    ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
+    VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
@@ -44,7 +45,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
-from tests.protocol.mocks import mock_wire_protocol
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances, mock_sleep, skip_if_predicate_true
@@ -1739,6 +1740,56 @@ class TestUpdate(UpdateTestCase):
                 update_handler.run(debug=True)
                 for ext_dir in expected_events_dirs:
                     self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
+
+    def test_it_should_report_update_status_in_status_blob(self):
+        with _get_update_handler(iterations=1) as (update_handler, protocol):
+
+            protocol.aggregate_status = None
+
+            def mock_http_put(url, *args, **_):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
+
+            def update_goal_state_and_run_handler():
+                self._add_write_permission_to_goal_state_files()
+                update_handler.set_iterations(1)
+                update_handler.run(debug=True)
+
+            protocol.set_http_handlers(http_put_handler=mock_http_put)
+
+            # Case 1: No requested version in GS; updateStatus should not be reported
+            update_handler.run(debug=True)
+            self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                             "updateStatus should not be reported if not asked in GS")
+
+            # Case 2: Requested version in GS != Current Version; updateStatus should not be error
+            protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
+            update_goal_state_and_run_handler()
+            self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                            "updateStatus should be reported if asked in GS")
+            update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+            self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
+            self.assertEqual(update_status['expectedVersion'], "9.9.9.10", "incorrect version reported")
+            self.assertEqual(update_status['code'], -1, "incorrect code reported")
+
+            # Case 3: Requested version in GS == Current Version; updateStatus should not be Success
+            protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+            update_goal_state_and_run_handler()
+            self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                            "updateStatus should be reported if asked in GS")
+            update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+            self.assertEqual(VMAgentUpdateStatuses.Success, update_status['status'], "Status should be successful")
+            self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
+            self.assertEqual(update_status['code'], 0, "incorrect code reported")
+
+            # Case 4: Requested version removed in GS; no updateStatus should be reported
+            protocol.mock_wire_data.reload()
+            update_goal_state_and_run_handler()
+            self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                             "updateStatus should not be reported if not asked in GS")
 
 
 class TestAgentUpgrade(UpdateTestCase):
