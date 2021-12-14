@@ -1775,7 +1775,7 @@ class TestUpdate(UpdateTestCase):
                 protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
                 update_goal_state_and_run_handler()
                 self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                                "updateStatus should be reported if asked in GS")
+                                "updateStatus should be reported if asked in GS: {0}".format(protocol.aggregate_status))
                 update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                 self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
                 self.assertEqual(update_status['expectedVersion'], "9.9.9.10", "incorrect version reported")
