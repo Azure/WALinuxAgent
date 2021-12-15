@@ -47,7 +47,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             assert_compare_raises(lambda c: setattr(c, "_on_hold",                  False),                     "on_hold")
 
             assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "family",  'MOCK_FAMILY'),  r"agent_manifests[0].family")
-            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "version", 'MOCK_VERSION'), r"agent_manifests[0].version")
+            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "requested_version_string", 'MOCK_VERSION'), r"agent_manifests[0].requested_version_string")
             assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "uris",    ['MOCK_URI']),   r"agent_manifests[0].uris")
 
             assert_compare_raises(lambda c: setattr(c.extensions[0], "version",  'MOCK_NAME'),         r"extensions[0].version")

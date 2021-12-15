@@ -1747,7 +1747,7 @@ class TestUpdate(UpdateTestCase):
                 with patch("azurelinuxagent.common.logger.warn") as patch_warn:
 
                     protocol.aggregate_status = None
-                    protocol.incarnation = 0
+                    protocol.incarnation = 1
 
                     def mock_http_put(url, *args, **_):
                         if HttpRequestPredicates.is_host_plugin_status_request(url):

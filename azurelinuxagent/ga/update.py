@@ -507,7 +507,7 @@ class UpdateHandler(object):
                 if incarnation_changed:
                     logger.info("Unable to report update status as no matching manifest found for family: {0}".format(
                         conf.get_autoupdate_gafamily()))
-                return
+                return None
 
             if manifest.is_requested_version_specified:
                 if CURRENT_VERSION == manifest.requested_version:
