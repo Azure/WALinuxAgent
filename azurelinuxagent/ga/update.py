@@ -1024,9 +1024,10 @@ class UpdateHandler(object):
             log_event=False)
 
     def _add_accept_tcp_firewall_rule_if_not_enabled(self, dst_ip):
-        # Helper to execute a run command, returns True if no exception
-        # Here we primarily check if an  iptable rule exist. True if it exits , false if not
+
         def _execute_run_command(command):
+            # Helper to execute a run command, returns True if no exception
+            # Here we primarily check if an  iptable rule exist. True if it exits , false if not
             try:
                 shellutil.run_command(command)
                 return True
@@ -1058,9 +1059,9 @@ class UpdateHandler(object):
                         logger.info(
                             "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver")
                     except CommandError as error:
-                        msg = "Unable to set the non root tcp access firewall rule :{0}." \
-                              "Run command execution for {1} failed with error:{2}.Return Code:{3}"\
-                            .format(accept_tcp_rule, error.command, error.stderr, error.returncode)
+                        msg = "Unable to set the non root tcp access firewall rule :" \
+                              "Run command execution for {0} failed with error:{1}.Return Code:{2}"\
+                            .format(error.command, error.stderr, error.returncode)
                         logger.error(msg)
                 else:
                     logger.info(

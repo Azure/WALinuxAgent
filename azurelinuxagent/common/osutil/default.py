@@ -290,7 +290,7 @@ class DefaultOSUtil(object):
                     logger.warn(msg)
                     raise Exception(msg)
 
-            # Otherwise, append both rules
+            # Otherwise, append all rules
             try:
                 AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
             except Exception as error:

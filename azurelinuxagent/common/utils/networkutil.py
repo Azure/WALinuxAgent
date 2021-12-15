@@ -245,7 +245,7 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        # Firwalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
+        # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
 
         accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, dst_ip, firewalld_command=command)
         AddFirewallRules.__execute_cmd(accept_tcp_rule)
@@ -258,7 +258,7 @@ class AddFirewallRules(object):
 
     @staticmethod
     def add_firewalld_rules(dst_ip, uid):
-        # Firwalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
+        # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
         # Firewalld.service with the "--permanent --passthrough" parameter ensures that a firewall rule is set only once even if command is executed multiple times
 
         AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, dst_ip, uid)
