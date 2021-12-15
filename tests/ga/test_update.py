@@ -1747,7 +1747,7 @@ class TestUpdate(UpdateTestCase):
                 with patch("azurelinuxagent.common.logger.warn") as patch_warn:
 
                     protocol.aggregate_status = None
-                    protocol.incarnation = 1
+                    protocol.incarnation = 0
 
                     def mock_http_put(url, *args, **_):
                         if HttpRequestPredicates.is_host_plugin_status_request(url):
@@ -1771,11 +1771,11 @@ class TestUpdate(UpdateTestCase):
                     protocol.set_http_handlers(http_put_handler=mock_http_put)
 
                     # Case 1: No requested version in GS; updateStatus should not be reported
-                    update_handler.run(debug=True)
+                    update_goal_state_and_run_handler()
                     self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
                                      "updateStatus should not be reported if not asked in GS")
 
-                    # Case 2: Requested version in GS != Current Version; updateStatus should not be error
+                    # Case 2: Requested version in GS != Current Version; updateStatus should be error
                     protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
                     update_goal_state_and_run_handler()
                     self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
@@ -1785,7 +1785,7 @@ class TestUpdate(UpdateTestCase):
                     self.assertEqual(update_status['expectedVersion'], "9.9.9.10", "incorrect version reported")
                     self.assertEqual(update_status['code'], -1, "incorrect code reported")
 
-                    # Case 3: Requested version in GS == Current Version; updateStatus should not be Success
+                    # Case 3: Requested version in GS == Current Version; updateStatus should be Success
                     protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
                     update_goal_state_and_run_handler()
                     self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],

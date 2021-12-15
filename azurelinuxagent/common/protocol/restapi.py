@@ -72,15 +72,15 @@ class VMAgentManifest(object):
     def __init__(self, family, version=None):
         self.family = family
         # This is the Requested version as specified by the Goal State, it defaults to 0.0.0.0 if not specified in GS
-        self.version = VERSION_0 if version is None else version
+        self.requested_version_string = VERSION_0 if version is None else version
         self.uris = []
 
     @property
     def requested_version(self):
-        return FlexibleVersion(self.version)
+        return FlexibleVersion(self.requested_version_string)
 
     @property
-    def is_requested_version_available(self):
+    def is_requested_version_specified(self):
         """
         If we don't get any requested_version from the GS, we default it to 0.0.0.0.
         This property identifies if a requested Version was passed in the GS or not.

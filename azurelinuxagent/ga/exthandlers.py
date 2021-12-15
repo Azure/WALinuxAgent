@@ -889,7 +889,7 @@ class ExtHandlersHandler(object):
 
         return handlers_to_report
 
-    def report_ext_handlers_status(self, incarnation_changed=False, vm_agent_upgrade_status=None):
+    def report_ext_handlers_status(self, incarnation_changed=False, vm_agent_update_status=None):
         """
         Go through handler_state dir, collect and report status.
         Returns the status it reported, or None if an error occurred.
@@ -897,7 +897,7 @@ class ExtHandlersHandler(object):
         try:
             vm_status = VMStatus(status="Ready", message="Guest Agent is running",
                                  gs_aggregate_status=self.__gs_aggregate_status,
-                                 vm_agent_update_status=vm_agent_upgrade_status)
+                                 vm_agent_update_status=vm_agent_update_status)
             handlers_to_report = []
 
             # In case of Unsupported error, report the status of the handlers in the VM
