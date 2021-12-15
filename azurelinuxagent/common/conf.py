@@ -115,7 +115,7 @@ __SWITCH_OPTIONS__ = {
     "OS.CheckRdmaDriver": False,
     "Logs.Verbose": False,
     "Logs.Console": True,
-    "Logs.Collect": False,
+    "Logs.Collect": True,
     "Extensions.Enabled": True,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
@@ -262,7 +262,7 @@ def get_logs_console(conf=__conf__):
 
 
 def get_collect_logs(conf=__conf__):
-    return conf.get_switch("Logs.Collect", False)
+    return conf.get_switch("Logs.Collect", True)
 
 
 def get_collect_logs_period(conf=__conf__):
