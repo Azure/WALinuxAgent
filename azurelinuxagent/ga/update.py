@@ -48,7 +48,10 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.networkutil import AddFirewallRules
+from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
@@ -60,6 +63,8 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, 
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
+from azurelinuxagent.common.osutil.default import get_firewall_drop_command, \
+    get_accept_tcp_rule
 
 AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -358,6 +363,7 @@ class UpdateHandler(object):
             self._ensure_cgroups_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
+            self._add_accept_tcp_firewall_rule_if_not_enabled(dst_ip=protocol.get_endpoint())
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -1016,6 +1022,53 @@ class UpdateHandler(object):
             is_success=is_success,
             message=msg,
             log_event=False)
+
+    def _add_accept_tcp_firewall_rule_if_not_enabled(self, dst_ip):
+
+        def _execute_run_command(command):
+            # Helper to execute a run command, returns True if no exception
+            # Here we primarily check if an  iptable rule exist. True if it exits , false if not
+            try:
+                shellutil.run_command(command)
+                return True
+            except CommandError as err:
+                # return code 1 is expected while using the check command. Raise if encounter any other return code
+                if err.returncode != 1:
+                    raise
+            return False
+
+        try:
+            wait = self.osutil.get_firewall_will_wait()
+
+            # "-C" checks if the iptable rule is available in the chain. It throws an exception with return code 1 if the ip table rule doesnt exist
+            drop_rule = get_firewall_drop_command(wait, AddFirewallRules.CHECK_COMMAND, dst_ip)
+            if not _execute_run_command(drop_rule):
+                # DROP command doesn't exist indicates then none of the firewall rules are set yet
+                # exiting here as the environment thread will set up all firewall rules
+                logger.info("DROP rule is not available which implies no firewall rules are set yet. Environment thread will set it up.")
+                return
+            else:
+                # DROP rule exists in the ip table chain. Hence checking if the DNS TCP to wireserver rule exists. If not we add it.
+                accept_tcp_rule = get_accept_tcp_rule(wait, AddFirewallRules.CHECK_COMMAND, dst_ip)
+                if not _execute_run_command(accept_tcp_rule):
+                    try:
+                        logger.info(
+                            "Firewall rule to allow DNS TCP request to wireserver for a non root user unavailable. Setting it now.")
+                        accept_tcp_rule = get_accept_tcp_rule(wait, AddFirewallRules.INSERT_COMMAND, dst_ip)
+                        shellutil.run_command(accept_tcp_rule)
+                        logger.info(
+                            "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver")
+                    except CommandError as error:
+                        msg = "Unable to set the non root tcp access firewall rule :" \
+                              "Run command execution for {0} failed with error:{1}.Return Code:{2}"\
+                            .format(error.command, error.stderr, error.returncode)
+                        logger.error(msg)
+                else:
+                    logger.info(
+                        "Not setting the firewall rule to allow DNS TCP request to wireserver for a non root user since it already exists")
+        except Exception as e:
+            msg = "Error while checking ip table rules:{0}".format(ustr(e))
+            logger.error(msg)
 
     def __get_next_upgrade_times(self):
         """
