@@ -500,8 +500,8 @@ class UpdateHandler(object):
             agent_manifests, _ = protocol.get_vmagent_manifests()
 
             try:
-                # Expectation here is that there will only be one manifest per family passed down from CRP.
-                # If there are multiple, we pick the first one
+                # Expectation here is that there will only be one manifest per family passed down from CRP
+                # (already verified during validations), we pick the first matching one here.
                 manifest = next(m for m in agent_manifests if m.family == conf.get_autoupdate_gafamily())
             except StopIteration:
                 if incarnation_changed:
