@@ -314,10 +314,14 @@ class UpdateHandler(object):
 
             #
             # Initialize the goal state; some components depend on information provided by the goal state and this
-            # call ensures the required info is initialized (e.g telemetry depends on the container ID.)
+            # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
             #
             protocol = self.protocol_util.get_protocol()
-            protocol.client.update_goal_state(force_update=True)
+
+            while not self._try_update_goal_state(protocol, force_update=True):
+                # Don't proceed with processing anything until we're able to fetch the first goal state.
+                # self._try_update_goal_state() has its own logging and error handling so not adding anything here.
+                time.sleep(conf.get_goal_state_period())
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
@@ -414,12 +418,12 @@ class UpdateHandler(object):
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 
-    def _try_update_goal_state(self, protocol):
+    def _try_update_goal_state(self, protocol, force_update=False):
         """
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
         """
         try:
-            protocol.update_goal_state()
+            protocol.client.update_goal_state(force_update=force_update)
 
             if self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = False
