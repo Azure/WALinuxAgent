@@ -655,23 +655,23 @@ Match host 192.168.1.2\n\
             mocked_commands[command_string] = (output.replace("'", "'\"'\"'"), exit_code)
             return command_string
 
-        wait = FlexibleVersion(version) >= osutil._IPTABLES_LOCKING_VERSION
+        wait = "-w" if FlexibleVersion(version) >= osutil._IPTABLES_LOCKING_VERSION else ""
         uid = 42
 
         version_command = set_command(osutil.get_iptables_version_command(), output=str(version))
-        list_command = set_command(osutil.get_firewall_list_command("-w" if wait else ""), output="Mock Output")
-        set_command(osutil.get_firewall_packets_command("-w" if wait else ""))
-        set_command(osutil.get_firewall_drop_command("-w" if wait else "", AddFirewallRules.CHECK_COMMAND, destination))
-        set_command(osutil.get_firewall_drop_command("-w" if wait else "", AddFirewallRules.APPEND_COMMAND, destination))
-        set_command(osutil.get_firewall_accept_command("-w" if wait else "", AddFirewallRules.APPEND_COMMAND, destination, uid))
-        set_command(osutil.get_accept_tcp_rule("-w" if wait else "", AddFirewallRules.APPEND_COMMAND, destination))
-        set_command(osutil.get_accept_tcp_rule("-w" if wait else "", AddFirewallRules.INSERT_COMMAND, destination))
-        set_command(osutil.get_accept_tcp_rule("-w" if wait else "", AddFirewallRules.CHECK_COMMAND, destination))
+        list_command = set_command(osutil.get_firewall_list_command(wait), output="Mock Output")
+        set_command(osutil.get_firewall_packets_command(wait))
+        set_command(osutil.get_firewall_drop_command(wait, AddFirewallRules.CHECK_COMMAND, destination))
+        set_command(osutil.get_firewall_drop_command(wait, AddFirewallRules.APPEND_COMMAND, destination))
+        set_command(osutil.get_firewall_accept_command(wait, AddFirewallRules.APPEND_COMMAND, destination, uid))
+        set_command(osutil.get_accept_tcp_rule(wait, AddFirewallRules.APPEND_COMMAND, destination))
+        set_command(osutil.get_accept_tcp_rule(wait, AddFirewallRules.INSERT_COMMAND, destination))
+        set_command(osutil.get_accept_tcp_rule(wait, AddFirewallRules.CHECK_COMMAND, destination))
         # the agent assumes the rules have been deleted when these commands return 1
-        set_command(osutil.get_firewall_delete_conntrack_accept_command("-w" if wait else "", destination), exit_code=1)
-        set_command(osutil.get_delete_accept_tcp_rule("-w" if wait else "", destination), exit_code=1)
-        set_command(osutil.get_firewall_delete_owner_accept_command("-w" if wait else "", destination, uid), exit_code=1)
-        set_command(osutil.get_firewall_delete_conntrack_drop_command("-w" if wait else "", destination), exit_code=1)
+        set_command(osutil.get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
+        set_command(osutil.get_delete_accept_tcp_rule(wait, destination), exit_code=1)
+        set_command(osutil.get_firewall_delete_owner_accept_command(wait, destination, uid), exit_code=1)
+        set_command(osutil.get_firewall_delete_conntrack_drop_command(wait, destination), exit_code=1)
 
         command_calls = []
 
