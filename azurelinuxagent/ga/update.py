@@ -494,6 +494,9 @@ class UpdateHandler(object):
         This function gets the VMAgent update status as per the last GoalState.
         Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
         """
+        if not conf.get_enable_ga_versioning():
+            return None
+
         update_status = None
 
         try:
@@ -515,7 +518,7 @@ class UpdateHandler(object):
                     code = 0
                 else:
                     status = VMAgentUpdateStatuses.Error
-                    code = -1
+                    code = 1
                 update_status = VMAgentUpdateStatus(expected_version=manifest.requested_version_string, status=status,
                                                     code=code)
         except Exception as error:
