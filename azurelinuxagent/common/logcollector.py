@@ -350,7 +350,6 @@ class LogCollector(object):
 
             try:
                 compressed_archive = zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED)
-                compressed_archive.__enter__()
 
                 for file_to_collect in files_to_collect:
                     archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
@@ -367,7 +366,7 @@ class LogCollector(object):
 
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
             finally:
-                compressed_archive.__exit__()
+                compressed_archive.close()
 
             # with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
             #     for file_to_collect in files_to_collect:
