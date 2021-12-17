@@ -181,7 +181,7 @@ class SystemdCgroupsApi(CGroupsApi):
         memory_path = None
         retry = 0
         while not cpu_path or not memory_path and retry < 3:
-            for line in fileutil.read_file("/proc/{0}/cgroup".format(process_id)).splitlines():
+            for line in shellutil.run_command(["cat", "/proc/{0}/cgroup".format(process_id)]).splitlines():
                 logger.info("cgroup line {0}".format(line))
                 match = re.match(r'\d+:(?P<controller>(memory|.*cpuacct.*)):(?P<path>.+)', line)
                 if match is not None:
@@ -193,9 +193,9 @@ class SystemdCgroupsApi(CGroupsApi):
                         cpu_path = path
 
             if not cpu_path or not memory_path:
-                logger.info("Waiting 30s to retry...")
+                logger.info("Waiting 2s to retry...")
                 retry += 1
-                time.sleep(30)
+                time.sleep(2)
             else:
                 break
 
