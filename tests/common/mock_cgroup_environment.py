@@ -63,6 +63,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
     MockCommand(r"^systemctl daemon-reload", ""),
 
+    MockCommand(r"^systemctl stop ([^\s]+)"),
+
     MockCommand(r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
 ''' 
 Running scope as unit: TEST_UNIT.scope
@@ -87,6 +89,7 @@ class UnitFilePaths:
     walinuxagent = "/lib/systemd/system/walinuxagent.service"
     azure = "/lib/systemd/system/azure.slice"
     vmextensions = "/lib/systemd/system/azure-vmextensions.slice"
+    extensionslice = "/lib/systemd/system/azure-vmextensions-Microsoft.CPlat.Extension.slice"
     slice = "/lib/systemd/system/walinuxagent.service.d/10-Slice.conf"
     cpu_accounting = "/lib/systemd/system/walinuxagent.service.d/11-CPUAccounting.conf"
     cpu_quota = "/lib/systemd/system/walinuxagent.service.d/12-CPUQuota.conf"

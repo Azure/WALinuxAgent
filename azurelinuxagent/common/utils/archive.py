@@ -41,9 +41,11 @@ ARCHIVE_DIRECTORY_NAME = 'history'
 _MAX_ARCHIVED_STATES = 50
 
 _CACHE_PATTERNS = [
+    re.compile(r"^VmSettings.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
+    re.compile(r"waagent_status\.(\d+)\.json$")
 ]
 
 _GOAL_STATE_PATTERN = re.compile(r"^(.*)/GoalState\.(\d+)\.xml$", re.IGNORECASE)

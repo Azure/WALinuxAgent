@@ -27,7 +27,6 @@ import stat
 import subprocess
 import sys
 import time
-import traceback
 import uuid
 import zipfile
 
@@ -57,7 +56,7 @@ from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_col
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, get_traceback, ExtHandlersHandler, list_agent_lib_directory
+from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, ValidHandlerStatus, HandlerStatus
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
@@ -73,12 +72,17 @@ CHILD_POLL_INTERVAL = 60
 
 MAX_FAILURE = 3  # Max failure allowed for agent before blacklisted
 
-GOAL_STATE_INTERVAL_DISABLED = 5 * 60
+GOAL_STATE_PERIOD_EXTENSIONS_DISABLED = 5 * 60
 
 ORPHAN_POLL_INTERVAL = 3
 ORPHAN_WAIT_INTERVAL = 15 * 60
 
 AGENT_SENTINEL_FILE = "current_version"
+
+# This file marks that the first goal state (after provisioning) has been completed, either because it converged or because we received another goal
+# state before it converged. The contents will be an instance of ExtensionsSummary. If the file does not exist then we have not finished processing
+# the goal state.
+INITIAL_GOAL_STATE_FILE = "initial_goal_state"
 
 READONLY_FILE_GLOBS = [
     "*.crt",
@@ -87,6 +91,33 @@ READONLY_FILE_GLOBS = [
     "*.prv",
     "ovf-env.xml"
 ]
+
+
+class ExtensionsSummary(object):
+    """
+    The extensions summary is a list of (extension name, extension status) tuples for the current goal state; it is
+    used to report changes in the status of extensions and to keep track of when the goal state converges (i.e. when
+    all extensions in the goal state reach a terminal state: success or error.)
+    The summary is computed from the VmStatus reported to blob storage.
+    """
+    def __init__(self, vm_status=None):
+        if vm_status is None:
+            self.summary = []
+            self.converged = True
+        else:
+            # take the name and status of the extension if is it not None, else use the handler's
+            self.summary = [(o.name, o.status) for o in map(lambda h: h.extension_status if h.extension_status is not None else h, vm_status.vmAgent.extensionHandlers)]
+            self.summary.sort(key=lambda s: s[0])  # sort by extension name to make comparisons easier
+            self.converged = all(status in (ValidHandlerStatus.success, ValidHandlerStatus.error, HandlerStatus.ready, HandlerStatus.not_ready) for _, status in self.summary)
+
+    def __eq__(self, other):
+        return self.summary == other.summary
+
+    def __ne__(self, other):
+        return not (self.summary == other.summary)
+
+    def __str__(self):
+        return ustr(self.summary)
 
 
 def get_update_handler():
@@ -115,9 +146,25 @@ class UpdateHandler(object):
         self._last_telemetry_heartbeat = None
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
+
+        # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
+        self._last_try_update_goal_state_failed = False
+        self._report_status_last_failed_incarnation = -1
 
         self.last_incarnation = None
+
+        self._extensions_summary = ExtensionsSummary()
+
+        self._is_initial_goal_state = not os.path.exists(self._initial_goal_state_file_path())
+
+        if not conf.get_extensions_enabled():
+            self._goal_state_period = GOAL_STATE_PERIOD_EXTENSIONS_DISABLED
+        else:
+            if self._is_initial_goal_state:
+                self._goal_state_period = conf.get_initial_goal_state_period()
+            else:
+                self._goal_state_period = conf.get_goal_state_period()
 
     def run_latest(self, child_args=None):
         """
@@ -228,12 +275,11 @@ class UpdateHandler(object):
         except Exception as e:
             # Ignore child errors during termination
             if self.is_running:
-                msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
+                msg = u"Agent {0} launched with command '{1}' failed with exception: \n".format(
                     agent_name,
-                    agent_cmd,
-                    ustr(e))
+                    agent_cmd)
                 logger.warn(msg)
-                detailed_message = '{0} {1}'.format(msg, traceback.format_exc())
+                detailed_message = '{0} {1}'.format(msg, textutil.format_exception(e))
                 add_event(
                     AGENT_NAME,
                     version=agent_version,
@@ -317,14 +363,14 @@ class UpdateHandler(object):
             for thread_handler in all_thread_handlers:
                 thread_handler.run()
 
-            goal_state_interval = conf.get_goal_state_period() if conf.get_extensions_enabled() else GOAL_STATE_INTERVAL_DISABLED
+            logger.info("Goal State Period: {0} sec. This indicates how often the agent checks for new goal states and reports status.", self._goal_state_period)
 
             while self.is_running:
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
-                self._process_goal_state(protocol, exthandlers_handler, remote_access_handler)
+                self._process_goal_state(exthandlers_handler, remote_access_handler)
                 self._send_heartbeat_telemetry(protocol)
-                time.sleep(goal_state_interval)
+                time.sleep(self._goal_state_period)
 
         except ExitException as exitException:
             logger.info(exitException.reason)
@@ -332,7 +378,7 @@ class UpdateHandler(object):
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(error))
             self._set_sentinel(msg=msg)
             logger.warn(msg)
-            logger.warn(traceback.format_exc())
+            logger.warn(textutil.format_exception(error))
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
             return
@@ -352,8 +398,33 @@ class UpdateHandler(object):
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 
-    def _process_goal_state(self, protocol, exthandlers_handler, remote_access_handler):
-        if not protocol.try_update_goal_state():
+    def _try_update_goal_state(self, protocol):
+        """
+        Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
+        """
+        try:
+            protocol.update_goal_state()
+
+            if self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = False
+                message = u"Retrieving the goal state recovered from previous errors"
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
+                logger.info(message)
+
+        except Exception as e:
+            if not self._last_try_update_goal_state_failed:
+                self._last_try_update_goal_state_failed = True
+                message = u"An error occurred while retrieving the goal state: {0}".format(textutil.format_exception(e))
+                logger.warn(message)
+                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
+            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
+            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            return False
+        return True
+
+    def _process_goal_state(self, exthandlers_handler, remote_access_handler):
+        protocol = exthandlers_handler.protocol
+        if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
             return
 
@@ -368,17 +439,58 @@ class UpdateHandler(object):
         incarnation = protocol.get_incarnation()
 
         try:
-            if incarnation != self.last_incarnation:
+            if incarnation != self.last_incarnation:  # TODO: This check should be based in the etag for the extensions goal state
+                if not self._extensions_summary.converged:
+                    message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
+                    logger.warn(message)
+                    add_event(op=WALAEventOperation.GoalState, message=message, is_success=False, log_event=False)
+                    if self._is_initial_goal_state:
+                        self._on_initial_goal_state_completed(self._extensions_summary)
+                self._extensions_summary = ExtensionsSummary()
                 exthandlers_handler.run()
 
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
-            exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation != self.last_incarnation)
+            self._report_status(exthandlers_handler, incarnation_changed=incarnation != self.last_incarnation)
 
             if incarnation != self.last_incarnation:
                 remote_access_handler.run()
         finally:
             self.last_incarnation = incarnation
+
+    def _report_status(self, exthandlers_handler, incarnation_changed):
+        # report_ext_handlers_status does its own error handling and returns None if an error occurred
+        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed)
+        if vm_status is None:
+            return
+
+        try:
+            extensions_summary = ExtensionsSummary(vm_status)
+            if self._extensions_summary != extensions_summary:
+                self._extensions_summary = extensions_summary
+                message = "Extension status: {0}".format(self._extensions_summary)
+                logger.info(message)
+                add_event(op=WALAEventOperation.GoalState, message=message)
+                if self._extensions_summary.converged:
+                    message = "All extensions in the goal state have reached a terminal state: {0}".format(extensions_summary)
+                    logger.info(message)
+                    add_event(op=WALAEventOperation.GoalState, message=message)
+                    if self._is_initial_goal_state:
+                        self._on_initial_goal_state_completed(self._extensions_summary)
+        except Exception as error:
+            # report errors only once per incarnation
+            if self._report_status_last_failed_incarnation != exthandlers_handler.protocol.get_incarnation():
+                self._report_status_last_failed_incarnation = exthandlers_handler.protocol.get_incarnation()
+                msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
+                logger.warn(msg)
+                add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
+
+    def _on_initial_goal_state_completed(self, extensions_summary):
+        fileutil.write_file(self._initial_goal_state_file_path(), ustr(extensions_summary))
+        if conf.get_extensions_enabled() and self._goal_state_period != conf.get_goal_state_period():
+            self._goal_state_period = conf.get_goal_state_period()
+            logger.info("Initial goal state completed, switched the goal state period to {0}", self._goal_state_period)
+        self._is_initial_goal_state = False
 
     def forward_signal(self, signum, frame):
         if signum == signal.SIGTERM:
@@ -441,19 +553,22 @@ class UpdateHandler(object):
     def _emit_changes_in_default_configuration():
         try:
             def log_event(msg):
-                logger.info(msg)
+                logger.info("******** {0} ********", msg)
                 add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
 
-            def log_if_int_changed_from_default(name, current):
+            def log_if_int_changed_from_default(name, current, message=""):
                 default = conf.get_int_default_value(name)
                 if default != current:
-                    log_event("{0} changed from its default: {1}. New value: {2}".format(name, default, current))
+                    log_event("{0} changed from its default: {1}. New value: {2}. {3}".format(name, default, current, message))
 
             def log_if_op_disabled(name, value):
                 if not value:
                     log_event("{0} is set to False, not processing the operation".format(name))
 
-            log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period())
+            log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period(),
+                "Changing this value affects how often extensions are processed and status for the VM is reported. Too small a value may report the VM as unresponsive")
+            log_if_int_changed_from_default("Extensions.InitialGoalStatePeriod", conf.get_initial_goal_state_period(),
+                "Changing this value affects how often extensions are processed and status for the VM is reported. Too small a value may report the VM as unresponsive")
             log_if_op_disabled("OS.EnableFirewall", conf.enable_firewall())
             log_if_op_disabled("Extensions.Enabled", conf.get_extensions_enabled())
 
@@ -676,6 +791,10 @@ class UpdateHandler(object):
     def _sentinel_file_path(self):
         return os.path.join(conf.get_lib_dir(), AGENT_SENTINEL_FILE)
 
+    @staticmethod
+    def _initial_goal_state_file_path():
+        return os.path.join(conf.get_lib_dir(), INITIAL_GOAL_STATE_FILE)
+
     def _shutdown(self):
         # Todo: Ensure all threads stopped when shutting down the main extension handler to ensure that the state of
         # all threads is clean.
@@ -743,7 +862,7 @@ class UpdateHandler(object):
                    or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as e:  # pylint: disable=W0612
-            msg = u"Exception retrieving agent manifests: {0}".format(ustr(traceback.format_exc()))
+            msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(e))
             add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False,
                       message=msg)
             return False
@@ -899,9 +1018,9 @@ class GuestAgent(object):
             #   is corrupt (e.g., missing the HandlerManifest.json file)
             self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
-            msg = u"Agent {0} install failed with exception: {1}".format(
-                self.name, ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+            msg = u"Agent {0} install failed with exception:".format(
+                self.name)
+            detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
             add_event(
                 AGENT_NAME,
                 version=self.version,

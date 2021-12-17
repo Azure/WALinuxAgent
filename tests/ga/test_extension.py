@@ -27,16 +27,17 @@ import time
 import unittest
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, \
-    get_agent_supported_features_list_for_extensions
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
+    get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
-    GOAL_STATE_AGENT_VERSION, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
+    AGENT_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandler, ExtHandlerStatus, \
@@ -54,6 +55,7 @@ from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCA
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
+from tests.utils.test_archive import TestArchive
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -433,11 +435,11 @@ class TestHandlerStateMigration(AgentTestCase):
             self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))  # pylint: disable=redundant-unittest-assert
         return
 
-
+# Deprecated. New tests should be added to the TestExtension class
 @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestExtension(AgentTestCase):
+class TestExtension_Deprecated(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -1125,63 +1127,6 @@ class TestExtension(AgentTestCase):
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 0)
 
-    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
-    def test_ext_handler_reporting_status_file(self, *args):
-
-        expected_status = {
-            "agent_name": AGENT_NAME,
-            "current_version": str(CURRENT_VERSION),
-            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
-            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
-            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "crp_supported_features": [name for name, _ in get_agent_supported_features_list_for_crp().items()],
-            "extension_supported_features": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
-            "extensions_status": [
-                {
-                    "name": "OSTCExtensions.ExampleHandlerLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.Powershell.ExampleExtension",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.EnterpriseCloud.Monitoring.ExampleHandlerLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.CPlat.Core.ExampleExtensionLinux",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                },
-                {
-                    "name": "Microsoft.OSTCExtensions.Edp.ExampleExtensionLinuxInTest",
-                    "version": "1.0.0",
-                    "status": "Ready",
-                    "supports_multi_config": False
-                }
-            ]
-        }
-
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_MULTIPLE_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=unused-variable,no-value-for-parameter
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
-        actual_status_json = json.loads(fileutil.read_file(status_path))
-
-        self.assertEqual(expected_status, actual_status_json)
-
     def test_ext_handler_rollingupgrade(self, *args):
         # Test enable scenario.
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_ROLLINGUPGRADE)
@@ -1622,7 +1567,9 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.report_ext_handlers_status()
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0)
+        self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.transitioning, 0,
+                                expected_msg="This status is being reported by the Guest Agent since no status "
+                                             "file was reported by extension OSTCExtensions.ExampleHandlerLinux")
 
     def test_wait_for_handler_completion_no_status(self, mock_http_get, mock_crypt_util, *args):
         """
@@ -1649,14 +1596,14 @@ class TestExtension(AgentTestCase):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
-
                 # The Handler Status for the base extension should be ready as it was executed successfully by the agent
                 self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
                                             expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
-                # The extension status reported by the Handler should be an error since no status file was found
-                self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.error, 0,
+                # The extension status reported by the Handler should be transitioning since no status file was found
+                self._assert_ext_status(protocol.report_vm_status, ValidHandlerStatus.transitioning, 0,
                                         expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
-                                        expected_msg="No such file or directory: '{0}'".format(mock_popen.deleted_status_file))
+                                        expected_msg="This status is being reported by the Guest Agent since no status "
+                                                     "file was reported by extension OSTCExtensions.OtherExampleHandlerLinux")
 
                 # The Handler Status for the dependent extension should be NotReady as it was not executed at all
                 # And since it was not executed, it should not report any extension status either
@@ -3190,22 +3137,29 @@ class TestExtensionUpdateOnFailure(AgentTestCase):
             "UninstallAction's return code in installAction's env should be 0.")
 
 
-@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 class TestCollectExtensionStatus(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
         self.lib_dir = tempfile.mkdtemp()
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.001))
+        self.mock_sleep.start()
 
-    def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file, *args):  # pylint: disable=unused-argument
+    def tearDown(self):
+        self.mock_sleep.stop()
+        AgentTestCase.tearDown(self)
+
+    def _setup_extension_for_validating_collect_ext_status(self, mock_lib_dir, status_file=None):
         handler_name = "TestHandler"
         handler_version = "1.0.0"
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(os.path.join(self.lib_dir, handler_name + "-" + handler_version, "config"))
         fileutil.mkdir(os.path.join(self.lib_dir, handler_name + "-" + handler_version, "status"))
-        shutil.copy(os.path.join(data_dir, "ext", status_file),
-                    os.path.join(self.lib_dir, handler_name + "-" + handler_version, "status", "0.status"))
         shutil.copy(tempfile.mkstemp(prefix="test-file")[1],
                     os.path.join(self.lib_dir, handler_name + "-" + handler_version, "config", "0.settings"))
+
+        if status_file is not None:
+            shutil.copy(os.path.join(data_dir, "ext", status_file),
+                        os.path.join(self.lib_dir, handler_name + "-" + handler_version, "status", "0.status"))
 
         with mock_wire_protocol(DATA_FILE) as protocol:
             exthandler = ExtHandler(name=handler_name)
@@ -3216,13 +3170,13 @@ class TestCollectExtensionStatus(AgentTestCase):
             return ExtHandlerInstance(exthandler, protocol), extension
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_ext_status(self, mock_lib_dir, *args):
+    def test_collect_ext_status(self, mock_lib_dir):
         """
         This test validates that collect_ext_status correctly picks up the status file (sample-status.json) and then
         parses it correctly.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                                                                           "sample-status.json", *args)
+                                                                                           "sample-status.json")
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
@@ -3240,14 +3194,14 @@ class TestCollectExtensionStatus(AgentTestCase):
         self.assertEqual(sub_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_ext_status_for_invalid_json(self, mock_lib_dir, *args):
+    def test_collect_ext_status_for_invalid_json(self, mock_lib_dir):
         """
         This test validates that collect_ext_status correctly picks up the status file (sample-status-invalid-json-format.json)
         and then since the Json cannot be parsed correctly it extension status message should include 2000 bytes of status file
         and the line number in which it failed to parse. The uniqueMachineId tag comes from status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                                                                           "sample-status-invalid-json-format.json", *args)
+                                                                                           "sample-status-invalid-json-format.json")
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
@@ -3257,15 +3211,15 @@ class TestCollectExtensionStatus(AgentTestCase):
         self.assertRegex(ext_status.message, r".*The status reported by the extension TestHandler-1.0.0\(Sequence number 0\), "
                                              r"was in an incorrect format and the agent could not parse it correctly."
                                              r" Failed due to.*")
-        self.assertIn("\"uniqueMachineId\": \"e5e5602b-48a6-4c35-9f96-752043777af1\"",ext_status.message)
+        self.assertIn("\"uniqueMachineId\": \"e5e5602b-48a6-4c35-9f96-752043777af1\"", ext_status.message)
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_it_should_collect_ext_status_even_when_config_dir_deleted(self, mock_lib_dir, *args):
+    def test_it_should_collect_ext_status_even_when_config_dir_deleted(self, mock_lib_dir):
 
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                                                                           "sample-status.json", *args)
+                                                                                           "sample-status.json")
 
         shutil.rmtree(ext_handler_i.get_conf_dir(), ignore_errors=True)
         ext_status = ext_handler_i.collect_ext_status(extension)
@@ -3279,14 +3233,13 @@ class TestCollectExtensionStatus(AgentTestCase):
         self.assertEqual(ext_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_ext_status_very_large_status_message(self, mock_lib_dir, *args):
+    def test_collect_ext_status_very_large_status_message(self, mock_lib_dir):
         """
         Testing collect_ext_status() with a very large status file (>128K) to see if it correctly parses the status
         without generating a really large message.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                                                                           "sample-status-very-large.json",
-                                                                                           *args)
+                                                                                           "sample-status-very-large.json")
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
@@ -3308,14 +3261,14 @@ class TestCollectExtensionStatus(AgentTestCase):
             self.assertEqual(sub_status.status, ValidHandlerStatus.success)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_ext_status_very_large_status_file_with_multiple_substatus_nodes(self, mock_lib_dir, *args):
+    def test_collect_ext_status_very_large_status_file_with_multiple_substatus_nodes(self, mock_lib_dir):
         """
         Testing collect_ext_status() with a very large status file (>128K) to see if it correctly parses the status
         without generating a really large message. This checks if the multiple substatus messages are correctly parsed
         and truncated.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(
-            mock_lib_dir, "sample-status-very-large-multiple-substatuses.json", *args)  # ~470K bytes.
+            mock_lib_dir, "sample-status-very-large-multiple-substatuses.json")  # ~470K bytes.
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, SUCCESS_CODE_FROM_STATUS_FILE)
@@ -3335,25 +3288,24 @@ class TestCollectExtensionStatus(AgentTestCase):
             self.assertEqual(ValidHandlerStatus.success, sub_status.status)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_ext_status_read_file_read_exceptions(self, mock_lib_dir, *args):
+    def test_collect_ext_status_read_file_read_exceptions(self, mock_lib_dir):
         """
         Testing collect_ext_status to validate the readfile exceptions.
         """
-        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                                                                           "sample-status.json", *args)
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir, "sample-status.json")
         original_read_file = read_file
 
-        def mock_read_file(file, *args, **kwargs):  # pylint: disable=redefined-builtin
+        def mock_read_file(file_, *args, **kwargs):
             expected_status_file_path = os.path.join(self.lib_dir,
                                                      ext_handler_i.ext_handler.name + "-" +
                                                      ext_handler_i.ext_handler. properties.version,
                                                      "status", "0.status")
-            if file == expected_status_file_path:
+            if file_ == expected_status_file_path:
                 raise IOError("No such file or directory: {0}".format(expected_status_file_path))
             else:
-                original_read_file(file, *args, **kwargs)
+                original_read_file(file_, *args, **kwargs)
 
-        with patch('azurelinuxagent.common.utils.fileutil.read_file', mock_read_file) as patch_read_file:  # pylint: disable=unused-variable
+        with patch('azurelinuxagent.common.utils.fileutil.read_file', mock_read_file):
             ext_status = ext_handler_i.collect_ext_status(extension)
 
             self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginUnknownFailure)
@@ -3367,12 +3319,12 @@ class TestCollectExtensionStatus(AgentTestCase):
             self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_ext_status_json_exceptions(self, mock_lib_dir, *args):
+    def test_collect_ext_status_json_exceptions(self, mock_lib_dir):
         """
         Testing collect_ext_status() with a malformed json status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                        "sample-status-invalid-format-emptykey-line7.json", *args)
+                                        "sample-status-invalid-format-emptykey-line7.json")
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
@@ -3387,12 +3339,12 @@ class TestCollectExtensionStatus(AgentTestCase):
         self.assertEqual(len(ext_status.substatusList), 0)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_ext_status_parse_ext_status_exceptions(self, mock_lib_dir, *args):
+    def test_collect_ext_status_parse_ext_status_exceptions(self, mock_lib_dir):
         """
         Testing collect_ext_status() with a malformed json status file.
         """
         ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir,
-                                        "sample-status-invalid-status-no-status-status-key.json", *args)
+                                        "sample-status-invalid-status-no-status-status-key.json")
         ext_status = ext_handler_i.collect_ext_status(extension)
 
         self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSettingsStatusInvalid)
@@ -3403,6 +3355,24 @@ class TestCollectExtensionStatus(AgentTestCase):
                                              "Encountered the following error".format("TestHandler", "1.0.0"))
         self.assertEqual(ext_status.status, ValidHandlerStatus.error)
         self.assertEqual(len(ext_status.substatusList), 0)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_it_should_report_transitioning_if_status_file_not_found(self, mock_lib_dir):
+        """
+        Testing collect_ext_status() with a missing status file.
+        """
+        ext_handler_i, extension = self._setup_extension_for_validating_collect_ext_status(mock_lib_dir)
+        ext_status = ext_handler_i.collect_ext_status(extension)
+
+        self.assertEqual(ext_status.code, ExtensionErrorCodes.PluginSuccess)
+        self.assertEqual(ext_status.configurationAppliedTime, None)
+        self.assertEqual(ext_status.operation, None)
+        self.assertEqual(ext_status.sequenceNumber, 0)
+        self.assertIn("This status is being reported by the Guest Agent since no status file was reported by extension {0}".
+                      format("TestHandler"), ext_status.message)
+        self.assertEqual(ext_status.status, ValidHandlerStatus.transitioning)
+        self.assertEqual(len(ext_status.substatusList), 0)
+
 
 class TestAdditionalLocationsExtensions(AgentTestCase):
 
@@ -3489,6 +3459,160 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
             with self.assertRaises(ExtensionDownloadError):
                 protocol.client.fetch_manifest(ext_handlers.extHandlers[0].versionUris,
                     timeout_in_minutes=0, timeout_in_ms=200)
+
+
+# New test cases should be added here.This class uses mock_wire_protocol
+class TestExtension(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+
+    @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
+    def test_ext_handler_reporting_status_file(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+
+            def mock_http_put(url, *args, **_):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
+
+            protocol.aggregate_status = None
+            protocol.set_http_handlers(http_put_handler=mock_http_put)
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            # creating supported features list that is sent to crp
+            supported_features = []
+            for _, feature in get_agent_supported_features_list_for_crp().items():
+                supported_features.append(
+                    {
+                        "Key": feature.name,
+                        "Value": feature.version
+                    }
+                )
+
+            expected_status = {
+                "version": "1.1",
+                "timestampUTC": "1970-01-01T00:00:00Z",
+                "aggregateStatus": {
+                    "guestAgentStatus": {
+                        "version": AGENT_VERSION,
+                        "status": "Ready",
+                        "formattedMessage": {
+                            "lang": "en-US",
+                            "message": "Guest Agent is running"
+                        }
+                    },
+                    "handlerAggregateStatus": [
+                        {
+                            "handlerVersion": "1.0.0",
+                            "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                            "status": "Ready",
+                            "code": 0,
+                            "useExactVersion": True,
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "Plugin enabled"
+                            },
+                            "runtimeSettingsStatus": {
+                                "settingsStatus": {
+                                    "status": {
+                                        "name": "OSTCExtensions.ExampleHandlerLinux",
+                                        "configurationAppliedTime": None,
+                                        "operation": None,
+                                        "status": "success",
+                                        "code": 0
+                                    },
+                                    "version": 1,
+                                    "timestampUTC": "1970-01-01T00:00:00Z"
+                                },
+                                "sequenceNumber": 0
+                            },
+                            "supportsMultiConfig": False
+                        }
+                    ],
+                    "vmArtifactsAggregateStatus": {
+                        "goalStateAggregateStatus": {
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "GoalState executed successfully"
+                            },
+                            "timestampUTC": "1970-01-01T00:00:00Z",
+                            "inSvdSeqNo": "1",
+                            "status": "Success",
+                            "code": 0
+                        }
+                    }
+                },
+                "supportedFeatures": supported_features,
+                "_metadataNotSentToCRP": {
+                    "agentName": AGENT_NAME,
+                    "daemonVersion": "0.0.0.0",
+                    "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+                    "extensionSupportedFeatures": [name for name, _ in
+                                                   get_agent_supported_features_list_for_extensions().items()]
+
+                }
+
+            }
+
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
+            actual_status_json = json.loads(fileutil.read_file(status_path))
+
+            # Popping run time attributes
+            actual_status_json.pop('guestOSInfo', None)
+
+            self.assertEqual(expected_status, actual_status_json)
+
+    def test_it_should_zip_waagent_status_when_incarnation_changes(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+
+            # This test checks when the incarnation changes the waagent_status file for the previous incarnation
+            # is added into the history folder for the previous incarnation and gets zipped
+
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            temp_files = [
+                'ExtensionsConfig.1.xml',
+                'GoalState.1.xml',
+                'OSTCExtensions.ExampleHandlerLinux.1.manifest.xml',
+                'waagent_status.1.json'
+            ]
+
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Updating incarnation to 2 , hence the history folder should have waaagent_status.1.json added under
+            # incarnation 1
+            protocol.mock_wire_data.set_incarnation(2)
+            protocol.update_goal_state()
+
+            test_subject = StateArchiver(self.tmp_dir)
+            test_subject.archive()
+
+            timestamp_zips = os.listdir(os.path.join(self.tmp_dir, "history"))
+            self.assertEqual(1, len(timestamp_zips), "Expected number of zips in history is 1 for"
+                                                     " incarnation 1(previous incarnation)")
+
+            zip_fn = timestamp_zips[0]
+            zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
+            self.assertEqual(TestArchive.assert_zip_contains(zip_fullname, temp_files), None)
+            exthandlers_handler.run()
+            exthandlers_handler.report_ext_handlers_status()
+
+            # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation
+            # 1 and 2
+            protocol.mock_wire_data.set_incarnation(3)
+            protocol.update_goal_state()
+            test_subject.archive()
+            self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
 
 
 if __name__ == '__main__':
