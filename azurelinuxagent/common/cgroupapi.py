@@ -193,9 +193,9 @@ class SystemdCgroupsApi(CGroupsApi):
                         cpu_path = path
 
             if not cpu_path or not memory_path:
-                logger.info("Waiting 2s to retry...")
+                logger.info("Waiting 30s to retry...")
                 retry += 1
-                time.sleep(2)
+                time.sleep(30)
             else:
                 break
 
