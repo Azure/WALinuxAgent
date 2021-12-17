@@ -517,17 +517,17 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
-            ext = ExtensionSettings()
+            extension_settings = ExtensionSettings()
             # There is no "extension name" for single Handler Settings. Use HandlerName for those
-            ext.name = name
-            ext.state = state
-            ext.sequenceNumber = int(seq_no)
-            ext.publicSettings = handler_settings.get("publicSettings")
-            ext.protectedSettings = handler_settings.get("protectedSettings")
-            ext.dependencyLevel = depends_on_level
+            extension_settings.name = name
+            extension_settings.state = state
+            extension_settings.sequenceNumber = int(seq_no)
+            extension_settings.publicSettings = handler_settings.get("publicSettings")
+            extension_settings.protectedSettings = handler_settings.get("protectedSettings")
+            extension_settings.dependencyLevel = depends_on_level
             thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
-            ext.certificateThumbprint = thumbprint
-            extension.settings.append(ext)
+            extension_settings.certificateThumbprint = thumbprint
+            extension.settings.append(extension_settings)
 
 
 # Do not extend this class
