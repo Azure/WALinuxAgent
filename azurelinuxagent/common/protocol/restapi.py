@@ -22,8 +22,12 @@ import time
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
+
+
+VERSION_0 = "0.0.0.0"
 
 
 class VMInfo(DataContract):
@@ -68,8 +72,20 @@ class VMAgentManifest(object):
     def __init__(self, family, version=None):
         self.family = family
         # This is the Requested version as specified by the Goal State, it defaults to 0.0.0.0 if not specified in GS
-        self.version = "0.0.0.0" if version is None else version
+        self.requested_version_string = VERSION_0 if version is None else version
         self.uris = []
+
+    @property
+    def requested_version(self):
+        return FlexibleVersion(self.requested_version_string)
+
+    @property
+    def is_requested_version_specified(self):
+        """
+        If we don't get any requested_version from the GS, we default it to 0.0.0.0.
+        This property identifies if a requested Version was passed in the GS or not.
+        """
+        return self.requested_version > FlexibleVersion(VERSION_0)
 
     def __repr__(self):
         return self.__str__()
@@ -267,7 +283,7 @@ class ExtHandlerStatus(DataContract):
 
 
 class VMAgentStatus(DataContract):
-    def __init__(self, status=None, message=None, gs_aggregate_status=None):
+    def __init__(self, status=None, message=None, gs_aggregate_status=None, update_status=None):
         self.status = status
         self.message = message
         self.hostname = socket.gethostname()
@@ -276,11 +292,13 @@ class VMAgentStatus(DataContract):
         self.osversion = DISTRO_VERSION
         self.extensionHandlers = DataContractList(ExtHandlerStatus)
         self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus(gs_aggregate_status)
+        self.update_status = update_status
 
 
 class VMStatus(DataContract):
-    def __init__(self, status, message, gs_aggregate_status=None):
-        self.vmAgent = VMAgentStatus(status=status, message=message, gs_aggregate_status=gs_aggregate_status)
+    def __init__(self, status, message, gs_aggregate_status=None, vm_agent_update_status=None):
+        self.vmAgent = VMAgentStatus(status=status, message=message, gs_aggregate_status=gs_aggregate_status,
+                                     update_status=vm_agent_update_status)
 
 
 class GoalStateAggregateStatus(DataContract):
@@ -311,3 +329,18 @@ class RemoteAccessUser(DataContract):
 class RemoteAccessUsersList(DataContract):
     def __init__(self):
         self.users = DataContractList(RemoteAccessUser)
+
+
+class VMAgentUpdateStatuses(object):
+    Success = ustr("Success")
+    Transitioning = ustr("Transitioning")
+    Error = ustr("Error")
+    Unknown = ustr("Unknown")
+
+
+class VMAgentUpdateStatus(object):
+    def __init__(self, expected_version, status=VMAgentUpdateStatuses.Success, message="", code=0):
+        self.expected_version = expected_version
+        self.status = status
+        self.message = message
+        self.code = code

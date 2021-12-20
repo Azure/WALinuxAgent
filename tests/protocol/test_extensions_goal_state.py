@@ -47,7 +47,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             assert_compare_raises(lambda c: setattr(c, "_on_hold",                  False),                     "on_hold")
 
             assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "family",  'MOCK_FAMILY'),  r"agent_manifests[0].family")
-            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "version", 'MOCK_VERSION'), r"agent_manifests[0].version")
+            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "requested_version_string", 'MOCK_VERSION'), r"agent_manifests[0].requested_version_string")
             assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "uris",    ['MOCK_URI']),   r"agent_manifests[0].uris")
 
             assert_compare_raises(lambda c: setattr(c.extensions[0], "version",  'MOCK_NAME'),         r"extensions[0].version")
@@ -107,11 +107,11 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
-                self.assertEqual(manifest.version, "0.0.0.0", "Version should be None")
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
             vm_settings_ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
             for manifest in vm_settings_ga_manifests:
-                self.assertEqual(manifest.version, "0.0.0.0", "Version should be None")
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
         data_file = mockwiredata.DATA_FILE.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
@@ -119,8 +119,8 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         with mock_wire_protocol(data_file) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
-                self.assertEqual(manifest.version, "9.9.9.10", "Version should be 9.9.9.10")
+                self.assertEqual(manifest.requested_version_string, "9.9.9.10", "Version should be 9.9.9.10")
 
             vm_settings_ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
             for manifest in vm_settings_ga_manifests:
-                self.assertEqual(manifest.version, "9.9.9.9", "Version should be 9.9.9.9")
+                self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
