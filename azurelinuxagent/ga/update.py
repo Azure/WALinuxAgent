@@ -319,14 +319,10 @@ class UpdateHandler(object):
             #
             protocol = self.protocol_util.get_protocol()
 
-            # Try fetching the goal state as best case effort but don't ext the process in case we're not able to as
-            # the dependencies on the first GS have already been fulfilled by get_protocol().
-            try:
-                # Note: This is not the first GS fetch. The first fetch is inside the protocol.detect() function
-                # which we call as part of self.protocol_util.get_protocol().
-                protocol.client.update_goal_state(force_update=True)
-            except ProtocolError as err:
-                logger.warn("Unable to fetch GS: {0}".format(ustr(err)))
+            while not self._try_update_goal_state(protocol):
+                # Don't proceed with processing anything until we're able to fetch the first goal state.
+                # self._try_update_goal_state() has its own logging and error handling so not adding anything here.
+                time.sleep(conf.get_goal_state_period())
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
@@ -423,12 +419,12 @@ class UpdateHandler(object):
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 
-    def _try_update_goal_state(self, protocol, force_update=False):
+    def _try_update_goal_state(self, protocol):
         """
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
         """
         try:
-            protocol.client.update_goal_state(force_update=force_update)
+            protocol.update_goal_state()
 
             if self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = False
