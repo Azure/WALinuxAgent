@@ -116,6 +116,7 @@ class ExtensionsGoalState(object):
         def compare_agent_manifests(first, second):
             compare_attributes(first, second, "family")
             compare_attributes(first, second, "version")
+            compare_attributes(first, second, "requested_version_string")
             compare_attributes(first, second, "uris", ignore_order=True)
 
         def compare_extensions(first, second):
