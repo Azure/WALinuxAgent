@@ -46,6 +46,7 @@ from azurelinuxagent.common.event import add_event, initialize_event_logger_vmin
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
+from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils import shellutil
@@ -493,9 +494,54 @@ class UpdateHandler(object):
         finally:
             self.last_incarnation = incarnation
 
+    @staticmethod
+    def __get_vmagent_update_status(protocol, incarnation_changed):
+        """
+        This function gets the VMAgent update status as per the last GoalState.
+        Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
+        """
+        if not conf.get_enable_ga_versioning():
+            return None
+
+        update_status = None
+
+        try:
+            agent_manifests, _ = protocol.get_vmagent_manifests()
+
+            try:
+                # Expectation here is that there will only be one manifest per family passed down from CRP
+                # (already verified during validations), we pick the first matching one here.
+                manifest = next(m for m in agent_manifests if m.family == conf.get_autoupdate_gafamily())
+            except StopIteration:
+                if incarnation_changed:
+                    logger.info("Unable to report update status as no matching manifest found for family: {0}".format(
+                        conf.get_autoupdate_gafamily()))
+                return None
+
+            if manifest.is_requested_version_specified:
+                if CURRENT_VERSION == manifest.requested_version:
+                    status = VMAgentUpdateStatuses.Success
+                    code = 0
+                else:
+                    status = VMAgentUpdateStatuses.Error
+                    code = 1
+                update_status = VMAgentUpdateStatus(expected_version=manifest.requested_version_string, status=status,
+                                                    code=code)
+        except Exception as error:
+            if incarnation_changed:
+                err_msg = "[This error will only be logged once per incarnation] " \
+                          "Ran into error when trying to fetch updateStatus for the agent, skipping reporting update satus. Error: {0}".format(
+                           textutil.format_exception(error))
+                logger.warn(err_msg)
+                add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=err_msg, log_event=False)
+
+        return update_status
+
     def _report_status(self, exthandlers_handler, incarnation_changed):
+        vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, incarnation_changed)
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
-        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed)
+        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed,
+                                                                   vm_agent_update_status=vm_agent_update_status)
         if vm_status is None:
             return
 
