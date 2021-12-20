@@ -344,8 +344,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                     for s in settings_list:
                         settings = ExtensionSettings()
                         public_settings = s.get('publicSettings')
-                        settings.publicSettings = {} if public_settings is None else json.loads(public_settings)
-                        # Note that protectedSettings and protectedSettingsCertThumbprint can be None (which would be serialized to the extension's settings file as null)
+                        # Note that publicSettings, protectedSettings and protectedSettingsCertThumbprint can be None; do not change this to, for example,
+                        # empty, since those values are serialized to the extension's status file and extensions may depend on the current implementation
+                        # (for example, no public settings would currently be serialized as '"publicSettings": null')
+                        settings.publicSettings = None if public_settings is None else json.loads(public_settings)
                         settings.protectedSettings = s.get('protectedSettings')
                         thumbprint = s.get('protectedSettingsCertThumbprint')
                         if thumbprint is None and settings.protectedSettings is not None:

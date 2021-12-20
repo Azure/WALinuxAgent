@@ -173,6 +173,28 @@
                     "name": "MCExt2"
                 }
             ]
+        },
+        {
+            "name": "Microsoft.OSTCExtensions.VMAccessForLinux",
+            "version": "1.5.11",
+            "location": "https://umsasc25p0kjg0c1dg4b.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "failoverlocation": "https://umsamfwlmfshvxx2lsjm.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "additionalLocations": [
+                "https://umsah3cwjlctnmhsvzqv.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": false,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "59A10F50FFE2A0408D3F03FE336C8FD5716CF25C",
+                    "protectedSettings": "*** REDACTED ***"
+                }
+            ]
         }
     ]
 }
