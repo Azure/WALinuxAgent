@@ -8,10 +8,10 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import GoalStateAggregateStatusCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState, ExtensionStatus
+from azurelinuxagent.common.protocol.restapi import ExtHandlerRequestedState, ExtensionState
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ValidHandlerStatus, ExtCommandEnvVariable, \
-    parse_ext_status, GoalStateStatus, ExtHandlerInstance
+    GoalStateStatus, ExtHandlerInstance
 from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
 from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
@@ -894,29 +894,12 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                         fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
                         kwargs['name'] == third_ext.name), "Error not reported")
 
-    def test_it_should_always_create_placeholder_for_multi_config_extensions(self):
+    def test_it_should_report_transitioning_if_status_file_not_found(self):
         original_popen = subprocess.Popen
-        handler_statuses = {}
-
-        def __assert_status_file_in_handlers():
-            for handler in mc_handlers:
-                file_name = "{0}.{1}.status".format(handler['runtimeSettingsStatus']['extensionName'],
-                                                    handler['runtimeSettingsStatus']['sequenceNumber'])
-                __assert_status_file(handler['handlerName'], status_file=file_name)
-
-        def __assert_status_file(handler_name, status_file):
-            status = handler_statuses["{0}.{1}.enable".format(handler_name, status_file)]
-            self.assertIsNotNone(status, "No status found")
-            # Assert the format of the placeholder is correct
-            ext_status = ExtensionStatus()
-            # If the format is wrong or unexpected, this would throw and fail the test
-            parse_ext_status(ext_status, status)
-            self.assertIn(ext_status.status, [ValidHandlerStatus.success, ValidHandlerStatus.transitioning],
-                          "Incorrect status")
 
         def mock_popen(cmd, *_, **kwargs):
             if 'env' in kwargs:
-                handler_name, handler_version, command_name = extract_extension_info_from_command(cmd)
+                handler_name, handler_version, __ = extract_extension_info_from_command(cmd)
                 ext_name = None
                 if ExtCommandEnvVariable.ExtensionName in kwargs['env']:
                     ext_name = kwargs['env'][ExtCommandEnvVariable.ExtensionName]
@@ -924,34 +907,43 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 status_file_name = "{0}.status".format(seq_no)
                 status_file_name = "{0}.{1}".format(ext_name, status_file_name) if ext_name is not None else status_file_name
                 status_file = os.path.join(self.tmp_dir, "{0}-{1}".format(handler_name, handler_version), "status", status_file_name)
-                contents = None
                 if os.path.exists(status_file):
-                    contents = json.loads(fileutil.read_file(status_file))
-                handler_statuses["{0}.{1}.{2}".format(handler_name, status_file_name, command_name)] = contents
+                    os.remove(status_file)
 
-            return original_popen(cmd, *_, **kwargs)
+            return original_popen("echo " + cmd, *_, **kwargs)
 
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
             with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
-                mc_handlers, _ = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
-                                                                             no_of_extensions)
+                exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+                self.assertEqual(no_of_extensions,
+                                 len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
+                                 "incorrect extensions reported")
+                mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                  handler_name="OSTCExtensions.ExampleHandlerLinux",
+                                                                  expected_count=3)
+                agent_status_message = "This status is being reported by the Guest Agent since no status file was " \
+                                       "reported by extension {0}: " \
+                                       "[ExtensionStatusError] Status file"
+                expected_extensions = {
+                    "firstExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 1,
+                                       "message": agent_status_message.format("OSTCExtensions.ExampleHandlerLinux.firstExtension")},
+                    "secondExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 2,
+                                        "message": agent_status_message.format("OSTCExtensions.ExampleHandlerLinux.secondExtension")},
+                    "thirdExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 3,
+                                       "message": agent_status_message.format("OSTCExtensions.ExampleHandlerLinux.thirdExtension")},
+                }
+                self._assert_extension_status(mc_handlers[:], expected_extensions, multi_config=True)
 
-                # Ensure we dont create a placeholder for Install command
-                self.assertTrue(
-                    all(handler_statuses[status] is None for status in handler_statuses if "install" in status),
-                    "Incorrect status file found for install")
-
-                # Ensure we create a valid status file for Enable
-                # Note: As part of our test, the sample-ext creates a status file after install due to which a placeholder
-                # is not created. We will verify a valid status file exists for all extensions instead since that's the
-                # main scenario.
-                __assert_status_file_in_handlers()
-
-                # Update GS, remove 2 extensions and add 3
-                mc_handlers, _ = self.__setup_and_assert_disable_scenario(exthandlers_handler, protocol)
-                __assert_status_file_in_handlers()
+                sc_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                 handler_name="Microsoft.Powershell.ExampleExtension")
+                expected_extensions = {
+                    "Microsoft.Powershell.ExampleExtension": {"status": ValidHandlerStatus.transitioning, "seq_no": 9,
+                                                              "message": agent_status_message.format("Microsoft.Powershell.ExampleExtension")}
+                }
+                self._assert_extension_status(sc_handler[:], expected_extensions)
 
     def test_it_should_report_status_correctly_for_unsupported_goal_state(self):
         with self.__setup_generic_test_env() as (exthandlers_handler, protocol, _):

@@ -22,7 +22,7 @@ import subprocess
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError
+from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -32,14 +32,14 @@ from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
-_AZURE_SLICE = "azure.slice"
+AZURE_SLICE = "azure.slice"
 _AZURE_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Agent and Extensions
 DefaultDependencies=no
 Before=slices.target
 """
-_VMEXTENSIONS_SLICE = "azure-vmextensions.slice"
+_VMEXTENSIONS_SLICE = EXTENSION_SLICE_PREFIX + ".slice"
 _VMEXTENSIONS_SLICE_CONTENTS = """
 [Unit]
 Description=Slice for Azure VM Extensions
@@ -48,6 +48,31 @@ Before=slices.target
 [Slice]
 CPUAccounting=yes
 """
+_EXTENSION_SLICE_CONTENTS = """
+[Unit]
+Description=Slice for Azure VM extension {extension_name}
+DefaultDependencies=no
+Before=slices.target
+[Slice]
+CPUAccounting=yes
+"""
+LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
+# More info on resource limits properties in systemd here:
+# https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
+_LOGCOLLECTOR_SLICE_CONTENTS_FMT = """
+[Unit]
+Description=Slice for Azure VM Agent Periodic Log Collector
+DefaultDependencies=no
+Before=slices.target
+[Slice]
+CPUAccounting=yes
+CPUQuota={cpu_quota}
+MemoryAccounting=yes
+MemoryLimit={memory_limit}
+"""
+_LOGCOLLECTOR_CPU_QUOTA = "5%"
+_LOGCOLLECTOR_MEMORY_LIMIT = "30M"  # K for kb, M for mb
+
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
 # This drop-in unit file was created by the Azure VM Agent.
@@ -129,7 +154,7 @@ class CGroupConfigurator(object):
 
                 agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
-                if agent_slice not in (_AZURE_SLICE, "system.slice"):
+                if agent_slice not in (AZURE_SLICE, "system.slice"):
                     _log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
                     return
 
@@ -275,8 +300,9 @@ class CGroupConfigurator(object):
             CGroupConfigurator._Impl.__cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
             unit_file_install_path = systemd.get_unit_file_install_path()
-            azure_slice = os.path.join(unit_file_install_path, _AZURE_SLICE)
+            azure_slice = os.path.join(unit_file_install_path, AZURE_SLICE)
             vmextensions_slice = os.path.join(unit_file_install_path, _VMEXTENSIONS_SLICE)
+            logcollector_slice = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
             agent_unit_file = systemd.get_agent_unit_file()
             agent_drop_in_path = systemd.get_agent_drop_in_path()
             agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
@@ -289,6 +315,12 @@ class CGroupConfigurator(object):
 
             if not os.path.exists(vmextensions_slice):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
+
+            if not os.path.exists(logcollector_slice):
+                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA,
+                    memory_limit=_LOGCOLLECTOR_MEMORY_LIMIT)
+
+                files_to_create.append((logcollector_slice, slice_contents))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
                 CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_slice)
@@ -500,39 +532,50 @@ class CGroupConfigurator(object):
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
                 for process in agent_cgroup:
-                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't
+                    # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't.
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
+                        continue
+                    # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
+                    if self._get_parent(process) in systemd_run_commands and self._get_command(process) == 'systemd-run':
                         continue
                     # check if the process is a command started by the agent or a descendant of one of those commands
                     current = process
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
                     if current == 0:
-                        unexpected.append(process)
+                        unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
             except Exception as exception:
                 _log_cgroup_warning("Error checking the processes in the agent's cgroup: {0}".format(ustr(exception)))
 
             if len(unexpected) > 0:
-                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(self.__format_processes(unexpected)))
+                raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(unexpected))
 
         @staticmethod
-        def __format_processes(pid_list):
-            """
-            Formats the given PIDs as a sequence of strings containing the PIDs and their corresponding command line (truncated to 40 chars)
-            """
-            def get_command_line(pid):
-                try:
-                    cmdline = '/proc/{0}/cmdline'.format(pid)
-                    if os.path.exists(cmdline):
-                        with open(cmdline, "r") as cmdline_file:
-                            return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
-                except Exception:
-                    pass
-                return "[PID: {0}] UNKNOWN".format(pid)
+        def _get_command(pid):
+            try:
+                with open('/proc/{0}/comm'.format(pid), "r") as file_:
+                    comm = file_.read()
+                    if comm and comm[-1] == '\x00':  # if null-terminated, remove the null
+                        comm = comm[:-1]
+                    return comm.rstrip()
+            except Exception:
+                return "UNKNOWN"
 
-            return [get_command_line(pid) for pid in pid_list]
+        @staticmethod
+        def __format_process(pid):
+            """
+            Formats the given PID as a string containing the PID and the corresponding command line truncated to 64 chars
+            """
+            try:
+                cmdline = '/proc/{0}/cmdline'.format(pid)
+                if os.path.exists(cmdline):
+                    with open(cmdline, "r") as cmdline_file:
+                        return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
+            except Exception:
+                pass
+            return "[PID: {0}] UNKNOWN".format(pid)
 
         @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
@@ -555,11 +598,12 @@ class CGroupConfigurator(object):
                 pass
             return 0
 
-        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
             :param command: The command to invoke
+            :param cmd_name: The type of the command(enable, install, etc.)
             :param timeout: Number of seconds to wait for command completion
             :param cwd: The working directory for the command
             :param env:  The environment to pass to the command's process
@@ -570,7 +614,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 try:
-                    return self._cgroups_api.start_extension_command(extension_name, command, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
+                    return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
                     reason = 'Failed to start {0} using systemd-run, will try invoking the extension directly. Error: {1}'.format(extension_name, ustr(exception))
                     self.disable(reason)
@@ -579,6 +623,45 @@ class CGroupConfigurator(object):
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
+
+        def setup_extension_slice(self, extension_name):
+            """
+            Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
+            extensions are grouped under "azure-vmextensions.slice.
+
+            This method ensures that the extension slice is created. Setup should create
+            under /lib/systemd/system if it is not exist.
+            """
+            if self.enabled():
+                unit_file_install_path = systemd.get_unit_file_install_path()
+                extension_slice_path = os.path.join(unit_file_install_path,
+                                                     SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice")
+                if not os.path.exists(extension_slice_path):
+                    try:
+                        slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name = extension_name)
+                        CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
+                    except Exception as exception:
+                        _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
+                        CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+
+        def remove_extension_slice(self, extension_name):
+            """
+            This method ensures that the extension slice gets removed from /lib/systemd/system if it exist
+            Lastly stop the unit. This would ensure the cleanup the /sys/fs/cgroup controller paths
+            """
+            if self.enabled():
+                unit_file_install_path = systemd.get_unit_file_install_path()
+                extension_slice_name = SystemdCgroupsApi.get_extension_cgroup_name(extension_name) + ".slice"
+                extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
+                if os.path.exists(extension_slice_path):
+                    CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
+                # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
+                try:
+                    logger.info("Executing systemctl stop {0}".format(extension_slice_name))
+                    shellutil.run_command(["systemctl", "stop", extension_slice_name])
+                except Exception as exception:
+                    _log_cgroup_warning("systemctl stop failed (remove slice): {0}", ustr(exception))
+
 
     # unique instance for the singleton
     _instance = None
