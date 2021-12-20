@@ -516,8 +516,7 @@ class CGroupConfigurator(object):
             over this setting.
             """
             logger.info("Resetting agent's CPUQuota")
-            if CGroupConfigurator._Impl.__try_set_cpu_quota(
-                    ''):  # setting an empty value resets to the default (infinity)
+            if CGroupConfigurator._Impl.__try_set_cpu_quota(''):  # setting an empty value resets to the default (infinity)
                 CGroupsTelemetry.set_track_throttled_time(False)
 
         @staticmethod
@@ -734,10 +733,8 @@ class CGroupConfigurator(object):
                     # fall-through and re-invoke the extension
 
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
-            process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr,
-                                       preexec_fn=os.setsid)  # pylint: disable=W1509
-            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
-                                             stderr=stderr, error_code=error_code)
+            process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
+            return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
         def setup_extension_slice(self, extension_name):
             """
@@ -771,12 +768,6 @@ class CGroupConfigurator(object):
                 if os.path.exists(extension_slice_path):
                     self.stop_tracking_extension_cgroups(extension_name)
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
-                # stop the unit gracefully; the extensions slices will be removed from /sys/fs/cgroup path
-                try:
-                    logger.info("Executing systemctl stop {0}".format(extension_slice_name))
-                    shellutil.run_command(["systemctl", "stop", extension_slice_name])
-                except Exception as exception:
-                    _log_cgroup_warning("systemctl stop failed (remove slice): {0}", ustr(exception))
 
         def set_extension_services_cpu_memory_quota(self, services_list):
             """

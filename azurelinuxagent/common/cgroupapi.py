@@ -20,7 +20,6 @@ import re
 import shutil
 import subprocess
 import threading
-import time
 import uuid
 
 from azurelinuxagent.common import logger
@@ -179,25 +178,15 @@ class SystemdCgroupsApi(CGroupsApi):
         #    etc
         cpu_path = None
         memory_path = None
-        retry = 0
-        while not cpu_path or not memory_path and retry < 3:
-            for line in shellutil.run_command(["cat", "/proc/{0}/cgroup".format(process_id)]).splitlines():
-                logger.info("cgroup line {0}".format(line))
-                match = re.match(r'\d+:(?P<controller>(memory|.*cpuacct.*)):(?P<path>.+)', line)
-                if match is not None:
-                    controller = match.group('controller')
-                    path = match.group('path').lstrip('/') if match.group('path') != '/' else None
-                    if controller == 'memory':
-                        memory_path = path
-                    else:
-                        cpu_path = path
-
-            if not cpu_path or not memory_path:
-                logger.info("Waiting 2s to retry...")
-                retry += 1
-                time.sleep(2)
-            else:
-                break
+        for line in fileutil.read_file("/proc/{0}/cgroup".format(process_id)).splitlines():
+            match = re.match(r'\d+:(?P<controller>(memory|.*cpuacct.*)):(?P<path>.+)', line)
+            if match is not None:
+                controller = match.group('controller')
+                path = match.group('path').lstrip('/') if match.group('path') != '/' else None
+                if controller == 'memory':
+                    memory_path = path
+                else:
+                    cpu_path = path
 
         return cpu_path, memory_path
 
