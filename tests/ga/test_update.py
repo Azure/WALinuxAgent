@@ -16,8 +16,11 @@ import tempfile
 import time
 import unittest
 import zipfile
+
 from datetime import datetime, timedelta
 from threading import currentThread
+from tests.common.osutil.test_default import TestOSUtil
+import azurelinuxagent.common.osutil.default as osutil
 
 _ORIGINAL_POPEN = subprocess.Popen
 
@@ -31,12 +34,13 @@ from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHa
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, \
-    ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus
+    ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
+    VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands
+from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
@@ -1680,14 +1684,87 @@ class TestUpdate(UpdateTestCase):
         exit_args, _ = update_handler.exit_mock.call_args
         self.assertEqual(exit_args[0], 0, "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
             patch_warn.call_args_list))
-        # Firewall-cmd should only be called 3 times - 1st to check if running, 2nd & 3rd for the QueryPassThrough cmd
-        self.assertEqual(3, len(executed_commands),
-                         "The number of times firewall-cmd should be called is only 3; Executed firewall commands: {0}; All popen calls: {1}".format(
+
+        # Firewall-cmd should only be called 4 times - 1st to check if running, 2nd, 3rd and 4th for the QueryPassThrough cmd
+        self.assertEqual(4, len(executed_commands),
+                         "The number of times firewall-cmd should be called is only 4; Executed firewall commands: {0}; All popen calls: {1}".format(
                              executed_commands, mock_popen.call_args_list))
         self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),
                          "First command should be to check if firewalld is running")
         self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
                         "The remaining commands should only be for querying the firewall commands")
+
+    def test_it_should_set_dns_tcp_iptable_if_drop_available_accept_unavailable(self):
+
+        with TestOSUtil._mock_iptables() as mock_iptables:
+            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                with patch.object(osutil, '_enable_firewall', True):
+                    # drop rule is present
+                    mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+                    # non root tcp iptable rule is absent
+                    mock_iptables.set_command(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
+                    update_handler.run(debug=True)
+
+                    drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+                    accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+                    accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+
+                    # Filtering the mock iptable command calls with only the once related to this test.
+                    filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+
+                    self.assertEqual(len(filtered_mock_iptable_calls), 3, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+                    self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
+                                     "The first command should check the drop rule")
+                    self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
+                                     "The second command should check the accept rule")
+                    self.assertEqual(filtered_mock_iptable_calls[2], accept_tcp_insert_rule,
+                                     "The third command should add the accept rule")
+
+    def test_it_should_not_set_dns_tcp_iptable_if_drop_unavailable(self):
+
+        with TestOSUtil._mock_iptables() as mock_iptables:
+            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                with patch.object(osutil, '_enable_firewall', True):
+                    # drop rule is not available
+                    mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
+
+                    update_handler.run(debug=True)
+
+                    drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+                    accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+                    accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+
+                    # Filtering the mock iptable command calls with only the once related to this test.
+                    filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+
+                    self.assertEqual(len(filtered_mock_iptable_calls), 1, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+                    self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
+                                     "The first command should check the drop rule")
+
+    def test_it_should_not_set_dns_tcp_iptable_if_drop_and_accept_available(self):
+
+        with TestOSUtil._mock_iptables() as mock_iptables:
+            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                with patch.object(osutil, '_enable_firewall', True):
+                    # drop rule is available
+                    mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+                    # non root tcp iptable rule is available
+                    mock_iptables.set_command(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+
+                    update_handler.run(debug=True)
+
+                    drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+                    accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+                    accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+
+                    # Filtering the mock iptable command calls with only the once related to this test.
+                    filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+
+                    self.assertEqual(len(filtered_mock_iptable_calls), 2, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+                    self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
+                                     "The first command should check the drop rule")
+                    self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
+                                     "The second command should check the accept rule")
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
@@ -1740,11 +1817,71 @@ class TestUpdate(UpdateTestCase):
                 for ext_dir in expected_events_dirs:
                     self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
+    def test_it_should_report_update_status_in_status_blob(self):
+        with _get_update_handler(iterations=1) as (update_handler, protocol):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                with patch.object(conf, "get_autoupdate_gafamily", return_value="Prod"):
+                    with patch("azurelinuxagent.common.logger.warn") as patch_warn:
+
+                        protocol.aggregate_status = None
+                        protocol.incarnation = 1
+
+                        def mock_http_put(url, *args, **_):
+                            if HttpRequestPredicates.is_host_plugin_status_request(url):
+                                # Skip reading the HostGA request data as its encoded
+                                return MockHttpResponse(status=500)
+                            protocol.aggregate_status = json.loads(args[0])
+                            return MockHttpResponse(status=201)
+
+                        def update_goal_state_and_run_handler():
+                            protocol.incarnation += 1
+                            protocol.mock_wire_data.set_incarnation(protocol.incarnation)
+                            self._add_write_permission_to_goal_state_files()
+                            update_handler.set_iterations(1)
+                            update_handler.run(debug=True)
+                            self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
+                            exit_args, _ = update_handler.exit_mock.call_args
+                            self.assertEqual(exit_args[0], 0,
+                                             "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+                                                 patch_warn.call_args_list))
+
+                        protocol.set_http_handlers(http_put_handler=mock_http_put)
+
+                        # Case 1: No requested version in GS; updateStatus should not be reported
+                        update_goal_state_and_run_handler()
+                        self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                         "updateStatus should not be reported if not asked in GS")
+
+                        # Case 2: Requested version in GS != Current Version; updateStatus should be error
+                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
+                        update_goal_state_and_run_handler()
+                        self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                        "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
+                        update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                        self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
+                        self.assertEqual(update_status['expectedVersion'], "9.9.9.10", "incorrect version reported")
+                        self.assertEqual(update_status['code'], 1, "incorrect code reported")
+
+                        # Case 3: Requested version in GS == Current Version; updateStatus should be Success
+                        protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+                        update_goal_state_and_run_handler()
+                        self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                        "updateStatus should be reported if asked in GS")
+                        update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                        self.assertEqual(VMAgentUpdateStatuses.Success, update_status['status'], "Status should be successful")
+                        self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
+                        self.assertEqual(update_status['code'], 0, "incorrect code reported")
+
+                        # Case 4: Requested version removed in GS; no updateStatus should be reported
+                        protocol.mock_wire_data.reload()
+                        update_goal_state_and_run_handler()
+                        self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                         "updateStatus should not be reported if not asked in GS")
+
     def test_it_should_wait_to_fetch_first_goal_state(self):
         with _get_update_handler() as (update_handler, protocol):
             with patch("azurelinuxagent.common.logger.warn") as patch_warn:
                 with patch("azurelinuxagent.common.logger.info") as patch_info:
-
                     # Fail GS fetching for the 1st 5 times the agent asks for it
                     update_handler._fail_gs_count = 5
 

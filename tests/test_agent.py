@@ -39,6 +39,7 @@ Debug.CgroupLogMetrics = False
 Debug.CgroupMonitorExpiryTime = 2022-01-31
 Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
 Debug.EnableFastTrack = True
+Debug.EnableGAVersioning = False
 Debug.EtpCollectionPeriod = 300
 DetectScvmmEnv = False
 EnableOverProvisioning = True
