@@ -43,7 +43,8 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
+from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException, \
+    ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -318,10 +319,14 @@ class UpdateHandler(object):
             #
             protocol = self.protocol_util.get_protocol()
 
-            while not self._try_update_goal_state(protocol, force_update=True):
-                # Don't proceed with processing anything until we're able to fetch the first goal state.
-                # self._try_update_goal_state() has its own logging and error handling so not adding anything here.
-                time.sleep(conf.get_goal_state_period())
+            # Try fetching the goal state as best case effort but don't ext the process in case we're not able to as
+            # the dependencies on the first GS have already been fulfilled by get_protocol().
+            try:
+                # Note: This is not the first GS fetch. The first fetch is inside the protocol.detect() function
+                # which we call as part of self.protocol_util.get_protocol().
+                protocol.client.update_goal_state(force_update=True)
+            except ProtocolError as err:
+                logger.warn("Unable to fetch GS: {0}".format(ustr(err)))
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
@@ -339,7 +344,7 @@ class UpdateHandler(object):
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
                     py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
-            )
+                )
 
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
