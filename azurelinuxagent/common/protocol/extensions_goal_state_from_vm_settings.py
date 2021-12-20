@@ -260,15 +260,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #                 }
         #             ],
         #             "dependsOn": [
-        #                 {
-        #                     "DependsOnExtension": [
-        #                         {
-        #                             "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
-        #                         }
-        #                     ],
-        #                     "dependencyLevel": 1
-        #                 }
-        #            ]
+        #                 ...
+        #             ]
         #         },
         #         {
         #             "name": "Microsoft.CPlat.Core.RunCommandHandlerLinux",
@@ -304,7 +297,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #                     "extensionName": "MCExt3",
         #                     "extensionState": "enabled"
         #                 }
-        #             ]
+        #             ],
+        #             "dependsOn": [
+        #                 ...
+        #            ]
         #         }
         #         ...
         #     ]
@@ -374,17 +370,100 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 #
                 depends_on = extension_gs.get("dependsOn")
                 if depends_on is not None:
-                    if not isinstance(depends_on, list):
-                        raise Exception('dependsOn should be an array')
-                    if extension.supports_multi_config:
-                        # TODO: Parse dependencies for multi-config extensions
-                        pass
-                    else:
-                        if len(depends_on) != 1:
-                            raise Exception('dependsOn should be an array with exactly one item for single-config extensions')
-                        extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
+                    self._parse_dependency_level(depends_on, extension)
 
                 self._extensions.append(extension)
+
+
+    @staticmethod
+    def _parse_dependency_level(depends_on, extension):
+        # Sample (NOTE: The first sample is single-config, the second multi-config):
+        # {
+        #     ...
+        #     "extensionGoalStates": [
+        #         {
+        #             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
+        #             ...
+        #             "settings": [
+        #                 ...
+        #             ],
+        #             "dependsOn": [
+        #                 {
+        #                     "DependsOnExtension": [
+        #                         {
+        #                             "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
+        #                         }
+        #                     ],
+        #                     "dependencyLevel": 1
+        #                 }
+        #             ]
+        #         },
+        #         {
+        #             "name": "Microsoft.CPlat.Core.RunCommandHandlerLinux",
+        #             ...
+        #             "isMultiConfig": true,
+        #             "settings": [
+        #                 {
+        #                     ...
+        #                     "extensionName": "MCExt1",
+        #                 },
+        #                 {
+        #                     ...
+        #                     "extensionName": "MCExt2",
+        #                 },
+        #                 {
+        #                     ...
+        #                     "extensionName": "MCExt3",
+        #                 }
+        #             ],
+        #             "dependsOn": [
+        #                 {
+        #                     "dependsOnExtension": [
+        #                         {
+        #                             "extension": "...",
+        #                             "handler": "..."
+        #                         },
+        #                         {
+        #                             "extension": "...",
+        #                             "handler": "..."
+        #                         }
+        #                     ],
+        #                     "dependencyLevel": 2,
+        #                     "name": "MCExt1"
+        #                 },
+        #                 {
+        #                     "dependsOnExtension": [
+        #                         {
+        #                             "extension": "...",
+        #                             "handler": "..."
+        #                         }
+        #                     ],
+        #                     "dependencyLevel": 1,
+        #                     "name": "MCExt2"
+        #                 }
+        #                 ...
+        #             ]
+        #     ...
+        # }
+        if not isinstance(depends_on, list):
+            raise Exception('dependsOn should be an array')
+
+        if not extension.supports_multi_config:
+            # single-config
+            if len(depends_on) != 1:
+                raise Exception('dependsOn should be an array with exactly one item for single-config extensions')
+            extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
+        else:
+            # multi-config
+            settings_by_name = {}
+            for settings in extension.settings:
+                settings_by_name[settings.name] = settings
+
+            for dependency in depends_on:
+                settings = settings_by_name.get(dependency["name"])
+                if settings is None:
+                    raise Exception("Dependency '{0}' does not correspond to any of the settings in the extension (settings: {1})".format(dependency["name"], settings_by_name.keys()))
+                settings.dependencyLevel = dependency["dependencyLevel"]
 
 
 #

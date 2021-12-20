@@ -146,6 +146,32 @@
                     "extensionName": "MCExt3",
                     "extensionState": "enabled"
                 }
+            ],
+            "dependsOn": [
+                {
+                    "dependsOnExtension": [
+                        {
+                            "extension": "...",
+                            "handler": "..."
+                        },
+                        {
+                            "extension": "...",
+                            "handler": "..."
+                        }
+                    ],
+                    "dependencyLevel": 2,
+                    "name": "MCExt1"
+                },
+                {
+                    "dependsOnExtension": [
+                        {
+                            "extension": "...",
+                            "handler": "..."
+                        }
+                    ],
+                    "dependencyLevel": 1,
+                    "name": "MCExt2"
+                }
             ]
         },
         {
