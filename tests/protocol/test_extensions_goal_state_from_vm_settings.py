@@ -36,7 +36,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         self.assertEqual("https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml", vm_settings.agent_manifests[0].uris[0], "Incorrect number of uris.")
 
         # extensions
-        self.assertEqual(4, len(vm_settings.extensions), "Incorrect number of extensions. Got: {0}".format(vm_settings.extensions))
+        self.assertEqual(5, len(vm_settings.extensions), "Incorrect number of extensions. Got: {0}".format(vm_settings.extensions))
         self.assertEqual('Microsoft.Azure.Monitor.AzureMonitorLinuxAgent', vm_settings.extensions[0].name, "Incorrect extension name")
         self.assertEqual(1, len(vm_settings.extensions[0].settings[0].publicSettings), "Incorrect number of public settings")
         self.assertEqual(True, vm_settings.extensions[0].settings[0].publicSettings["GCS_AUTO_CONFIG"], "Incorrect public settings")
