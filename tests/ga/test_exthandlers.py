@@ -257,7 +257,7 @@ class TestExtHandlers(AgentTestCase):
                                                  kw['op'] == WALAEventOperation.PluginSettingsVersionMismatch]
                 self.assertEqual(1, len(plugin_setting_mismatch_calls),
                                  "PluginSettingsMismatch event should be reported once")
-                self.assertIn('ExtHandler PluginSettings Version Mismatch! Expected PluginSettings version: 1.0.0 for Handler: OSTCExtensions.ExampleHandlerLinux'
+                self.assertIn('Extension PluginSettings Version Mismatch! Expected PluginSettings version: 1.0.0 for Extension: OSTCExtensions.ExampleHandlerLinux'
                               , plugin_setting_mismatch_calls[0]['message'],
                     "Invalid error message with incomplete data detected for PluginSettingsVersionMismatch")
                 self.assertTrue("1.0.2" in plugin_setting_mismatch_calls[0]['message'] and "1.0.1" in plugin_setting_mismatch_calls[0]['message'],
