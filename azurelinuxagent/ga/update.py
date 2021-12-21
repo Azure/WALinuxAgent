@@ -1451,7 +1451,7 @@ class GuestAgentError(object):
     def __init__(self, path):
         self.failure_count = 0
         self.was_fatal = False
-        self.last_failure = time.time()
+        self.last_failure = 0.0
         if path is None:
             raise UpdateError(u"GuestAgentError requires a path")
         self.path = path
@@ -1460,7 +1460,7 @@ class GuestAgentError(object):
         return
 
     def mark_failure(self, is_fatal=False):
-        self.last_failure = 0.0
+        self.last_failure = time.time()
         self.failure_count += 1
         self.was_fatal = is_fatal
         return
