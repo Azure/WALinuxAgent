@@ -25,12 +25,27 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         assert_property("required_features", ["MultipleExtensionsPerHandler"])
         assert_property("on_hold", True)
 
-        # we check only 1 item in each list (but check the length of each list)
+        #
+        # for the rest of the attributes, we check only 1 item in each container (but check the length of the container)
+        #
+
+        # agent manifests
         self.assertEqual(2, len(vm_settings.agent_manifests), "Incorrect number of agent manifests. Got: {0}".format(vm_settings.agent_manifests))
         self.assertEqual("Prod", vm_settings.agent_manifests[0].family, "Incorrect agent family.")
         self.assertEqual(2, len(vm_settings.agent_manifests[0].uris), "Incorrect number of uris. Got: {0}".format(vm_settings.agent_manifests[0].uris))
         self.assertEqual("https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml", vm_settings.agent_manifests[0].uris[0], "Incorrect number of uris.")
 
+        # extensions
+        self.assertEqual(5, len(vm_settings.extensions), "Incorrect number of extensions. Got: {0}".format(vm_settings.extensions))
+        self.assertEqual('Microsoft.Azure.Monitor.AzureMonitorLinuxAgent', vm_settings.extensions[0].name, "Incorrect extension name")
+        self.assertEqual(1, len(vm_settings.extensions[0].settings[0].publicSettings), "Incorrect number of public settings")
+        self.assertEqual(True, vm_settings.extensions[0].settings[0].publicSettings["GCS_AUTO_CONFIG"], "Incorrect public settings")
+
+        # dependency level (single-config)
+        self.assertEqual(1, vm_settings.extensions[2].settings[0].dependencyLevel, "Incorrect dependency level (single-config)")
+
+        # dependency level (multi-config)
+        self.assertEqual(1, vm_settings.extensions[3].settings[1].dependencyLevel, "Incorrect dependency level (multi-config)")
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):
     def test_it_should_retrieve_items_ignoring_case(self):

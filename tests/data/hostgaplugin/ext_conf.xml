@@ -94,6 +94,13 @@
 }</RuntimeSettings>
   </Plugin>
   <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerLinux" version="1.2.0">
+    <DependsOn dependencyLevel="2" name="MCExt1">
+      <DependsOnExtension extension="..." handler="..." />
+      <DependsOnExtension extension="..." handler="..." />
+    </DependsOn>
+    <DependsOn dependencyLevel="1" name="MCExt2">
+      <DependsOnExtension extension="..." handler="..." />
+    </DependsOn>
     <ExtensionRuntimeSettings seqNo="0" name="MCExt1" state="enabled">{
   "runtimeSettings": [
     {
