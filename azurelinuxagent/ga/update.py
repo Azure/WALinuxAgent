@@ -1254,8 +1254,7 @@ class GuestAgent(object):
 
     @property
     def is_downloaded(self):
-        return self.is_blacklisted or \
-               os.path.isfile(self.get_agent_manifest_path())
+        return self.is_blacklisted or os.path.isfile(self.get_agent_manifest_path())
 
     def mark_failure(self, is_fatal=False):
         try:
@@ -1264,7 +1263,10 @@ class GuestAgent(object):
             self.error.mark_failure(is_fatal=is_fatal)
             self.error.save()
             if self.error.is_blacklisted:
-                logger.warn(u"Agent {0} is permanently blacklisted", self.name)
+                err_msg = u"Agent {0} is permanently blacklisted", self.name
+                logger.warn(err_msg)
+                add_event(op=WALAEventOperation.AgentBlacklisted, is_success=False, version=self.version,
+                          log_event=False, message=err_msg)
         except Exception as e:
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
 
