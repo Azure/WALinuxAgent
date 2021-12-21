@@ -1449,6 +1449,9 @@ class GuestAgent(object):
 
 class GuestAgentError(object):
     def __init__(self, path):
+        self.failure_count = 0
+        self.was_fatal = False
+        self.last_failure = time.time()
         if path is None:
             raise UpdateError(u"GuestAgentError requires a path")
         self.path = path
@@ -1457,9 +1460,9 @@ class GuestAgentError(object):
         return
 
     def mark_failure(self, is_fatal=False):
-        self.last_failure = time.time()  # pylint: disable=W0201
+        self.last_failure = 0.0
         self.failure_count += 1
-        self.was_fatal = is_fatal  # pylint: disable=W0201
+        self.was_fatal = is_fatal
         return
 
     def clear(self):
@@ -1497,13 +1500,9 @@ class GuestAgentError(object):
         return
 
     def from_json(self, data):
-        self.last_failure = max(  # pylint: disable=W0201
-            self.last_failure,
-            data.get(u"last_failure", 0.0))
-        self.failure_count = max(  # pylint: disable=W0201
-            self.failure_count,
-            data.get(u"failure_count", 0))
-        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)  # pylint: disable=W0201
+        self.last_failure = max(self.last_failure, data.get(u"last_failure", 0.0))
+        self.failure_count = max(self.failure_count, data.get(u"failure_count", 0))
+        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)
         return
 
     def to_json(self):
