@@ -320,10 +320,14 @@ class UpdateHandler(object):
 
             #
             # Initialize the goal state; some components depend on information provided by the goal state and this
-            # call ensures the required info is initialized (e.g telemetry depends on the container ID.)
+            # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
             #
             protocol = self.protocol_util.get_protocol()
-            protocol.client.update_goal_state(force_update=True)
+
+            while not self._try_update_goal_state(protocol):
+                # Don't proceed with processing anything until we're able to fetch the first goal state.
+                # self._try_update_goal_state() has its own logging and error handling so not adding anything here.
+                time.sleep(conf.get_goal_state_period())
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
@@ -341,7 +345,7 @@ class UpdateHandler(object):
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
                     py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
-            )
+                )
 
             logger.info(os_info_msg)
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)

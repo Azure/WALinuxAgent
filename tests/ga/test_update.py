@@ -1878,6 +1878,33 @@ class TestUpdate(UpdateTestCase):
                         self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
                                          "updateStatus should not be reported if not asked in GS")
 
+    def test_it_should_wait_to_fetch_first_goal_state(self):
+        with _get_update_handler() as (update_handler, protocol):
+            with patch("azurelinuxagent.common.logger.warn") as patch_warn:
+                with patch("azurelinuxagent.common.logger.info") as patch_info:
+                    # Fail GS fetching for the 1st 5 times the agent asks for it
+                    update_handler._fail_gs_count = 5
+
+                    def get_handler(url, **kwargs):
+                        if HttpRequestPredicates.is_goal_state_request(url) and update_handler._fail_gs_count > 0:
+                            update_handler._fail_gs_count -= 1
+                            return MockHttpResponse(status=500)
+                        return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+
+                    protocol.set_http_handlers(http_get_handler=get_handler)
+                    update_handler.run(debug=True)
+
+        self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
+        exit_args, _ = update_handler.exit_mock.call_args
+        self.assertEqual(exit_args[0], 0, "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+            patch_warn.call_args_list))
+        warn_msgs = [args[0] for (args, _) in patch_warn.call_args_list if
+                     "An error occurred while retrieving the goal state" in args[0]]
+        self.assertTrue(len(warn_msgs) > 0, "Error should've been reported when failed to retrieve GS")
+        info_msgs = [args[0] for (args, _) in patch_info.call_args_list if
+                     "Retrieving the goal state recovered from previous errors" in args[0]]
+        self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
+
 
 class TestAgentUpgrade(UpdateTestCase):
 
