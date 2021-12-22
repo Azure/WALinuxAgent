@@ -139,6 +139,10 @@ def get_update_handler():
     return UpdateHandler()
 
 
+def get_agent_update_signal_file():
+    return os.path.join(conf.get_lib_dir(), AGENT_UPDATE_SIGNAL_FILE)
+
+
 class UpdateHandler(object):
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
 
@@ -170,6 +174,7 @@ class UpdateHandler(object):
         self._heartbeat_update_goal_state_error_count = 0
         self._last_try_update_goal_state_failed = False
         self._report_status_last_failed_incarnation = -1
+        self._try_count_for_removing_update_signal_file = 0
 
         self.last_incarnation = None
 
@@ -184,6 +189,12 @@ class UpdateHandler(object):
                 self._goal_state_period = conf.get_initial_goal_state_period()
             else:
                 self._goal_state_period = conf.get_goal_state_period()
+
+    @property
+    def process_agent_update_signal_file(self):
+        # Only process any operation with the agent update signal file if the file is present and we're able to
+        # delete the signal file. If not, do not process anything.
+        return os.path.exists(get_agent_update_signal_file()) and self._try_count_for_removing_update_signal_file < 5
 
     def run_latest(self, child_args=None):
         """
@@ -289,7 +300,8 @@ class UpdateHandler(object):
                     ret)
                 logger.warn(msg)
                 if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
+                    latest_agent.mark_failure(is_fatal=True,
+                                              process_agent_update_signal_file=self.process_agent_update_signal_file)
 
         except Exception as e:
             # Ignore child errors during termination
@@ -306,7 +318,8 @@ class UpdateHandler(object):
                     is_success=False,
                     message=detailed_message)
                 if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
+                    latest_agent.mark_failure(is_fatal=True,
+                                              process_agent_update_signal_file=self.process_agent_update_signal_file)
 
         self.child_process = None
         return
@@ -410,7 +423,7 @@ class UpdateHandler(object):
             logger.warn(msg)
             logger.warn(textutil.format_exception(error))
 
-            if os.path.exists(os.path.join(conf.get_lib_dir(), AGENT_UPDATE_SIGNAL_FILE)):
+            if self.process_agent_update_signal_file:
                 # If the Agent update signal file exists then we still haven't verified the stability of the current agent version.
                 # Since this version will be blacklisted once it exits with an error,
                 # resetting the signal file to give the next version 15 mins to ensure its stability.
@@ -954,15 +967,24 @@ class UpdateHandler(object):
             #  so as to preserve the state. Otherwise, those agents could be
             #  again downloaded and inappropriately retried.
             host = self._get_host_plugin(protocol=protocol)
-            self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
+            self._set_agents(
+                [GuestAgent(pkg=pkg, host=host, process_agent_update_signal_file=self.process_agent_update_signal_file)
+                 for pkg in pkg_list.versions])
 
+            # When we're checking for new versions for auto-update, the agent blacklists the errors if anything goes wrong.
+            # We should remove the agents which only have the errors blacklisted from directory to keep the state clean.
+            # Keeping this in mind, we should filter out the agents that are not blacklisted but have the errors blacklisted.
+
+            # This line keeps only the agents that we should keep on the file.
+            # The self._purge_agents() function will purge out the agents we need to delete as per the comments above
+            self.agents = [agent for agent in self.agents if agent.is_blacklisted or not agent.is_error_blacklisted]
             self._purge_agents()
             self._filter_blacklisted_agents()
 
             # Return True if current agent is no longer available or an
             # agent with a higher version number is available
-            return not self._is_version_eligible(base_version) \
-                   or (len(self.agents) > 0 and self.agents[0].version > base_version)
+            return not self._is_version_eligible(base_version) or (
+                        len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as e:  # pylint: disable=W0612
             msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(e))
@@ -1188,7 +1210,7 @@ class UpdateHandler(object):
         try:
             # Set the Agent Update signal file to mark beginning of auto-upgrade of the agent
             upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(logger.Logger.LogTimeFormatInUTC)
-            fileutil.write_file(os.path.join(conf.get_lib_dir(), AGENT_UPDATE_SIGNAL_FILE), upgrade_time)
+            fileutil.write_file(get_agent_update_signal_file(), upgrade_time)
         except Exception as err:
             logger.warn("Unable to set upgrade signal file: {0}".format(err))
 
@@ -1204,23 +1226,26 @@ class UpdateHandler(object):
         except Exception as err:
             logger.warn("Unable to reset legacy blacklisted agents due to: {0}".format(err))
 
-    @staticmethod
-    def _clean_auto_update_state():
+    def _clean_auto_update_state(self):
         # Check and remove the auto-update signal file if 15 mins have elapsed.
         # We would consider the update successful if the agent has been running successfully for 15 mins.
-        signal_file = os.path.join(conf.get_lib_dir(), AGENT_UPDATE_SIGNAL_FILE)
-        if not os.path.exists(signal_file):
+        if not self.process_agent_update_signal_file:
             return
+
+        signal_file = get_agent_update_signal_file()
 
         # ToDo: Add error handling in case the agent is unable to delete this file (we should not go in an infinite loop
         #  trying to delete it again and again)
         def remove_signal_file():
             try:
                 os.remove(signal_file)
+                # Reset count to 0 once we're able to delete the file
+                self._try_count_for_removing_update_signal_file = 0
             except Exception as err_:
                 # Make best case effort to delete it, if can't then ignore
-                logger.warn("Unable to delete signal file {0}: {1}".format(signal_file, err_))
-                return
+                logger.warn("[Retry {0}/5] Unable to delete signal file {1}: {2}".format(
+                    self._try_count_for_removing_update_signal_file + 1, signal_file, err_))
+                self._try_count_for_removing_update_signal_file += 1
 
         # Since the Agent Update Signal file exists, we still haven't verified the stability of the current version.
         period = timedelta(minutes=15)
@@ -1237,6 +1262,7 @@ class UpdateHandler(object):
         if update_time is None:
             logger.warn("Unable to read from agent update signal file, deleting it to clean state")
             remove_signal_file()
+            return
 
         update_time_obj = datetime.strptime(update_time, logger.Logger.LogTimeFormatInUTC)
         if datetime.utcnow() >= (update_time_obj + period):
@@ -1245,7 +1271,7 @@ class UpdateHandler(object):
 
 
 class GuestAgent(object):
-    def __init__(self, path=None, pkg=None, host=None):
+    def __init__(self, path=None, pkg=None, host=None, process_agent_update_signal_file=False):
         self.pkg = pkg
         self.host = host
         version = None
@@ -1284,7 +1310,8 @@ class GuestAgent(object):
             # Note the failure, blacklist the agent if the package downloaded
             # - An exception with a downloaded package indicates the package
             #   is corrupt (e.g., missing the HandlerManifest.json file)
-            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
+            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()),
+                              process_agent_update_signal_file=process_agent_update_signal_file)
 
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
@@ -1315,7 +1342,7 @@ class GuestAgent(object):
     def get_agent_pkg_path(self):
         return ".".join((os.path.join(conf.get_lib_dir(), self.name), "zip"))
 
-    def get_agent_upgrade_signal_file(self):
+    def get_agent_update_signal_file(self):
         return os.path.join(self.get_agent_dir(), AGENT_UPDATE_SIGNAL_FILE)
 
     def clear_error(self):
@@ -1334,37 +1361,38 @@ class GuestAgent(object):
     @property
     def is_blacklisted(self):
         # Blacklist the agent only if the error is blacklisted and the update signal file exists in agent directory
-        return self.is_error_blacklisted and os.path.exists(self.get_agent_upgrade_signal_file())
+        return self.is_error_blacklisted and os.path.exists(self.get_agent_update_signal_file())
 
     @property
     def is_downloaded(self):
         return self.is_blacklisted or os.path.isfile(self.get_agent_manifest_path())
 
-    def __copy_agent_update_signal_file_if_exists(self):
+    def __copy_agent_update_signal_file_if_exists(self, process_agent_update_signal_file):
         """
         Copy the AGENT_UPDATE_SIGNAL_FILE to the agent directory if exists. This is to ensure that we only blacklist
         during agent updates and also to differentiate blacklisting the older agents that might blacklist due to other
         unsupported scenarios.
         return: True if copy successful else False
         """
-        signal_file = os.path.join(conf.get_lib_dir(), AGENT_UPDATE_SIGNAL_FILE)
-        if not os.path.exists(signal_file):
+        global_update_signal_file = get_agent_update_signal_file()
+        # Only try copying the global signal file if we're allowed to process it (i.e. global signal file exists and we're able to delete it)
+        if process_agent_update_signal_file:
             try:
-                shutil.copy2(signal_file, self.get_agent_upgrade_signal_file())
+                shutil.copy2(global_update_signal_file, self.get_agent_update_signal_file())
                 return True
             except Exception as err:
-                logger.warn("Unable to copy update signal file {0} to {1}; Error: {2}".format(signal_file,
-                                                                                              self.get_agent_upgrade_signal_file(),
+                logger.warn("Unable to copy update signal file {0} to {1}; Error: {2}".format(global_update_signal_file,
+                                                                                              self.get_agent_update_signal_file(),
                                                                                               ustr(err)))
         return False
 
-    def mark_failure(self, is_fatal=False):
+    def mark_failure(self, is_fatal=False, process_agent_update_signal_file=False):
         try:
             if not os.path.isdir(self.get_agent_dir()):
                 os.makedirs(self.get_agent_dir())
             self.error.mark_failure(is_fatal=is_fatal)
             self.error.save()
-            if self.is_error_blacklisted and self.__copy_agent_update_signal_file_if_exists():
+            if self.is_error_blacklisted and self.__copy_agent_update_signal_file_if_exists(process_agent_update_signal_file):
                 # Blacklist the agent only if the error is blacklisted and the update signal file exists
                 err_msg = u"Agent {0} is permanently blacklisted", self.name
                 logger.warn(err_msg)
