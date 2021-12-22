@@ -292,7 +292,21 @@ def ga_status_to_v1(ga_status):
         "status": ga_status.status,
         "formattedMessage": __get_formatted_msg_for_status_reporting(ga_status.message)
     }
+
+    if ga_status.update_status is not None:
+        v1_ga_status["updateStatus"] = get_ga_update_status_to_v1(ga_status.update_status)
+
     return v1_ga_status
+
+
+def get_ga_update_status_to_v1(update_status):
+    v1_ga_update_status = {
+        "expectedVersion": update_status.expected_version,
+        "status": update_status.status,
+        "code": update_status.code,
+        "formattedMessage": __get_formatted_msg_for_status_reporting(update_status.message)
+    }
+    return v1_ga_update_status
 
 
 def ext_substatus_to_v1(sub_status_list):

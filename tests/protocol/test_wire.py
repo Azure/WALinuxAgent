@@ -1201,14 +1201,14 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
         with open(extensions_config_file, "r") as file_:
             extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, file_.read(), protocol)
-        self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test ExtensionsConfig")
+        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in ExtensionsConfig")
         for e in extensions_goal_state.extensions:
             if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
                 self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
         with open(vm_settings_file, "r") as file_:
             extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(None, file_.read())
-        self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test vmSettings")
+        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in vmSettings")
         for e in extensions_goal_state.extensions:
             if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
                 self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
