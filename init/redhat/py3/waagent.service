@@ -11,8 +11,11 @@ Type=simple
 ExecStart=/usr/bin/python3 -u /usr/sbin/waagent -daemon
 Restart=always
 RestartSec=5
+<<<<<<< HEAD
 Slice=azure.slice
 CPUAccounting=yes
+=======
+>>>>>>> 1378325da3d37c68496028998f371ba6008fbc7d
 
 [Install]
 WantedBy=multi-user.target
