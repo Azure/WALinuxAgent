@@ -62,6 +62,8 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             (['centos', '8.1', 'Source'], True),
             (['redhat', '8.2', 'Maipo'], True),
             (['redhat', '8.2.2111', 'Core'], True),
+            (['centos', '7.1', 'Source'], False),
+            (['redhat', '7.1', 'Maipo'], False),
             (['bigip', '15.0.1', 'Final'], False),
             (['gaia', '273.562', 'R80.30'], False),
             (['debian', '9.1', ''], False),
