@@ -425,11 +425,11 @@ class CGroupConfigurator(object):
                     _log_cgroup_info('CPUAccounting: {0}', systemd.get_unit_property(agent_unit_name, "CPUAccounting"))
                     _log_cgroup_info('CPUQuota: {0}', systemd.get_unit_property(agent_unit_name, "CPUQuotaPerSecUSec"))
                 else:
-                    cpu_cgroup_relative_path = None  # Set the path to None to prevent monitoring
                     _log_cgroup_warning(
                         "The Agent is not in the expected CPU cgroup; will not enable monitoring. Cgroup:[{0}] Expected:[{1}]",
                         cpu_cgroup_relative_path,
                         expected_relative_path)
+                    cpu_cgroup_relative_path = None  # Set the path to None to prevent monitoring
 
             if memory_cgroup_relative_path is None:
                 _log_cgroup_warning("The agent's process is not within a memory cgroup")
@@ -438,11 +438,11 @@ class CGroupConfigurator(object):
                     memory_accounting = systemd.get_unit_property(agent_unit_name, "MemoryAccounting")
                     _log_cgroup_info('MemoryAccounting: {0}', memory_accounting)
                 else:
-                    memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
                     _log_cgroup_info(
                         "The Agent is not in the expected memory cgroup; will not enable monitoring. CGroup:[{0}] Expected:[{1}]",
                         memory_cgroup_relative_path,
                         expected_relative_path)
+                    memory_cgroup_relative_path = None  # Set the path to None to prevent monitoring
 
             if cpu_controller_root is not None and cpu_cgroup_relative_path is not None:
                 agent_cpu_cgroup_path = os.path.join(cpu_controller_root, cpu_cgroup_relative_path)
