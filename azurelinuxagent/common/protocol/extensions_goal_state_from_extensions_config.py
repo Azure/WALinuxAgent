@@ -33,6 +33,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     def __init__(self, incarnation, xml_text, wire_client):
         super(ExtensionsGoalStateFromExtensionsConfig, self).__init__()
         self._id = incarnation
+        self._incarnation = incarnation
         self._text = xml_text
         self._status_upload_blob = None
         self._status_upload_blob_type = None
@@ -130,6 +131,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     @property
     def id(self):
         return self._id
+
+    @property
+    def incarnation(self):
+        return self._incarnation
 
     @property
     def activity_id(self):
