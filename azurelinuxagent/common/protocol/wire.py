@@ -804,7 +804,10 @@ class WireClient(object):
                 goal_state_updated = True
 
             vm_settings_goal_state_updated = False
-            if conf.get_enable_fast_track():
+            if not conf.get_enable_fast_track():
+                # if Fast Track is not enabled then use extensionsConfig
+                self._extensions_goal_state = self._goal_state.extensions_config
+            else:
                 try:
                     vm_settings_goal_state = self._fetch_vm_settings_goal_state(force_update=force_update)
                     if vm_settings_goal_state is None:  # if vmSettings are None, Fast Track is not supported; use extensionsConfig
@@ -877,7 +880,6 @@ class WireClient(object):
             else:  # since the vmSettings were updated, the response must include an etag
                 raise ProtocolError("The vmSettings do no include an Etag [correlation ID: {0}]".format(correlation_id))
 
-            logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
             response_content = self.decode_config(response.read())
             vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, response_content)
 
@@ -891,6 +893,8 @@ class WireClient(object):
             # Don't support HostGAPlugin versions older than 115
             if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.115"):
                 return None
+
+            logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
 
             return vm_settings
 
@@ -966,7 +970,13 @@ class WireClient(object):
     def get_extensions_goal_state(self):
         if self._extensions_goal_state is None:
             raise ProtocolError("Trying to fetch ExtensioalState before initialization!")
-        return self._extensions_goal_state
+
+        try:
+            ExtensionsGoalState.compare(self._goal_state.extensions_config,  self._extensions_goal_state)
+        except Exception as e:
+            logger.info("{0}", textutil.format_exception(e))
+
+        return self._extensions_goal_state  # self._goal_state.extensions_config  # self._extensions_goal_state
 
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:
