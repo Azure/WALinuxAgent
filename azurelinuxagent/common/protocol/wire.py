@@ -969,14 +969,9 @@ class WireClient(object):
 
     def get_extensions_goal_state(self):
         if self._extensions_goal_state is None:
-            raise ProtocolError("Trying to fetch ExtensioalState before initialization!")
+            raise ProtocolError("Trying to fetch ExtensionsGoalState before initialization!")
 
-        try:
-            ExtensionsGoalState.compare(self._goal_state.extensions_config,  self._extensions_goal_state)
-        except Exception as e:
-            logger.info("{0}", textutil.format_exception(e))
-
-        return self._extensions_goal_state  # self._goal_state.extensions_config  # self._extensions_goal_state
+        return self._extensions_goal_state
 
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:
