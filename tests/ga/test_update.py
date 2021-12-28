@@ -19,6 +19,8 @@ import zipfile
 
 from datetime import datetime, timedelta
 from threading import currentThread
+
+from azurelinuxagent.common.logger import Logger
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
 
@@ -26,7 +28,7 @@ _ORIGINAL_POPEN = subprocess.Popen
 
 from mock import PropertyMock
 
-from azurelinuxagent.common import conf, logger
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -314,7 +316,7 @@ class UpdateTestCase(AgentTestCase):
         src_v = FlexibleVersion(str(versions[0]))
 
         if not is_available:
-            upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(logger.Logger.LogTimeFormatInUTC)
+            upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(Logger.LogTimeFormatInUTC)
             fileutil.write_file(get_agent_global_update_signal_file(), upgrade_time)
 
         # Create agent packages and directories
