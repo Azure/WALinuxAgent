@@ -26,7 +26,7 @@ _ORIGINAL_POPEN = subprocess.Popen
 
 from mock import PropertyMock
 
-from azurelinuxagent.common import conf
+from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -47,7 +47,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstanc
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
-    READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
+    READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType, get_agent_global_update_signal_file
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
@@ -313,6 +313,10 @@ class UpdateTestCase(AgentTestCase):
         versions = self.agent_versions()
         src_v = FlexibleVersion(str(versions[0]))
 
+        if not is_available:
+            upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(logger.Logger.LogTimeFormatInUTC)
+            fileutil.write_file(get_agent_global_update_signal_file(), upgrade_time)
+
         # Create agent packages and directories
         return self.replicate_agents(
             src_v=src_v,
@@ -337,14 +341,14 @@ class UpdateTestCase(AgentTestCase):
                          increment=1):
         from_path = self.agent_dir(src_v)
         dst_v = FlexibleVersion(str(src_v))
-        for i in range(0, count):  # pylint: disable=unused-variable
+        for _ in range(0, count):
             dst_v += increment
             to_path = self.agent_dir(dst_v)
             shutil.copyfile(from_path + ".zip", to_path + ".zip")
             shutil.copytree(from_path, to_path)
             self.rename_agent_bin(to_path, dst_v)
             if not is_available:
-                GuestAgent(to_path).mark_failure(is_fatal=True)
+                GuestAgent(to_path).mark_failure(is_fatal=True, process_agent_update_signal_file=True)
         return dst_v
 
 
@@ -462,7 +466,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.is_available)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    def test_clear_error(self, mock_downloaded):  # pylint: disable=unused-argument
+    def test_clear_error(self, _):
         self.expand_agents()
 
         agent = GuestAgent(path=self.agent_path)
@@ -470,18 +474,20 @@ class TestGuestAgent(UpdateTestCase):
 
         self.assertTrue(agent.error.last_failure > 0.0)
         self.assertEqual(1, agent.error.failure_count)
-        self.assertTrue(agent.is_blacklisted)
-        self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
+        self.assertTrue(agent.is_error_blacklisted)
+        self.assertFalse(agent.is_blacklisted)
+        self.assertEqual(agent.is_error_blacklisted, agent.error.is_blacklisted)
 
         agent.clear_error()
         self.assertEqual(0.0, agent.error.last_failure)
         self.assertEqual(0, agent.error.failure_count)
+        self.assertFalse(agent.is_error_blacklisted)
         self.assertFalse(agent.is_blacklisted)
-        self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
+        self.assertEqual(agent.is_error_blacklisted, agent.error.is_blacklisted)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_is_available(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
+    def test_is_available(self, *_):
         agent = GuestAgent(path=self.agent_path)
 
         self.assertFalse(agent.is_available)
@@ -489,11 +495,12 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.is_available)
 
         agent.mark_failure(is_fatal=True)
-        self.assertFalse(agent.is_available)
+        self.assertTrue(agent.is_error_blacklisted)
+        self.assertTrue(agent.is_available)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_is_blacklisted(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
+    def test_is_blacklisted(self, *_):
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_blacklisted)
 
@@ -502,8 +509,9 @@ class TestGuestAgent(UpdateTestCase):
         self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
 
         agent.mark_failure(is_fatal=True)
-        self.assertTrue(agent.is_blacklisted)
-        self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
+        self.assertTrue(agent.is_error_blacklisted)
+        self.assertFalse(agent.is_blacklisted)
+        self.assertEqual(agent.is_error_blacklisted, agent.error.is_blacklisted)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
@@ -539,7 +547,7 @@ class TestGuestAgent(UpdateTestCase):
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    def test_mark_failure(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
+    def test_mark_failure(self, *_):
         agent = GuestAgent(path=self.agent_path)
 
         agent.mark_failure()
@@ -547,7 +555,8 @@ class TestGuestAgent(UpdateTestCase):
 
         agent.mark_failure(is_fatal=True)
         self.assertEqual(2, agent.error.failure_count)
-        self.assertTrue(agent.is_blacklisted)
+        self.assertTrue(agent.is_error_blacklisted)
+        self.assertFalse(agent.is_blacklisted)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
@@ -740,7 +749,7 @@ class TestGuestAgent(UpdateTestCase):
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack", side_effect=UpdateError)
-    def test_ensure_downloaded_unpack_fails(self, mock_unpack, mock_download):  # pylint: disable=unused-argument
+    def test_ensure_downloaded_unpack_fails(self, *_):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
@@ -749,12 +758,13 @@ class TestGuestAgent(UpdateTestCase):
 
         self.assertEqual(1, agent.error.failure_count)
         self.assertTrue(agent.error.was_fatal)
-        self.assertTrue(agent.is_blacklisted)
+        self.assertTrue(agent.is_error_blacklisted)
+        self.assertFalse(agent.is_blacklisted)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
     @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest", side_effect=UpdateError)
-    def test_ensure_downloaded_load_manifest_fails(self, mock_manifest, mock_unpack, mock_download):  # pylint: disable=unused-argument
+    def test_ensure_downloaded_load_manifest_fails(self, *_):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
@@ -763,17 +773,20 @@ class TestGuestAgent(UpdateTestCase):
 
         self.assertEqual(1, agent.error.failure_count)
         self.assertTrue(agent.error.was_fatal)
-        self.assertTrue(agent.is_blacklisted)
+        self.assertTrue(agent.is_error_blacklisted)
+        self.assertFalse(agent.is_blacklisted)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
     @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest")
-    def test_ensure_download_skips_blacklisted(self, mock_manifest, mock_unpack, mock_download):  # pylint: disable=unused-argument
+    def test_ensure_download_skips_blacklisted(self, _, mock_unpack, mock_download):
         agent = GuestAgent(path=self.agent_path)
         self.assertEqual(0, mock_download.call_count)
 
         agent.clear_error()
-        agent.mark_failure(is_fatal=True)
+        upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(logger.Logger.LogTimeFormatInUTC)
+        fileutil.write_file(get_agent_global_update_signal_file(), upgrade_time)
+        agent.mark_failure(is_fatal=True, process_agent_update_signal_file=True)
         self.assertTrue(agent.is_blacklisted)
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
@@ -785,6 +798,9 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.is_blacklisted)
         self.assertEqual(0, mock_download.call_count)
         self.assertEqual(0, mock_unpack.call_count)
+
+    def test_it_should_only_blacklist_during_agent_update(self):
+        raise NotImplementedError
 
 
 class TestUpdate(UpdateTestCase):
@@ -987,8 +1003,9 @@ class TestUpdate(UpdateTestCase):
 
         kept_agents = self.update_handler.agents[::2]
         blacklisted_agents = self.update_handler.agents[1::2]
+        self.update_handler._set_agent_update_signal_file()
         for agent in blacklisted_agents:
-            agent.mark_failure(is_fatal=True)
+            agent.mark_failure(is_fatal=True, process_agent_update_signal_file=self.update_handler.process_agent_update_signal_file)
         self.update_handler._filter_blacklisted_agents()
         self.assertEqual(kept_agents, self.update_handler.agents)
 
@@ -1108,11 +1125,13 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(self.update_handler._is_version_eligible(agent.version))
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
-    def test_is_version_available_rejects(self, mock_current):  # pylint: disable=unused-argument
+    def test_is_version_available_rejects(self, _):
         self.prepare_agents(is_available=True)
         self.update_handler.agents = self.agents()
 
-        self.update_handler.agents[0].mark_failure(is_fatal=True)
+        self.update_handler._set_agent_update_signal_file()
+        self.update_handler.agents[0].mark_failure(is_fatal=True,
+                                                   process_agent_update_signal_file=self.update_handler.process_agent_update_signal_file)
         self.assertFalse(self.update_handler._is_version_eligible(self.agents()[0].version))
 
     @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=True)
@@ -1293,6 +1312,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, latest_agent.error.failure_count)
 
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+            self.update_handler._set_agent_update_signal_file()
             self._test_run_latest(mock_child=ChildMock(return_value=1))
 
         self.assertTrue(latest_agent.is_blacklisted)
@@ -1309,6 +1329,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, latest_agent.error.failure_count)
 
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+            self.update_handler._set_agent_update_signal_file()
             self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Force blacklisting")))
 
         self.assertFalse(latest_agent.is_available)
@@ -1904,6 +1925,18 @@ class TestUpdate(UpdateTestCase):
         info_msgs = [args[0] for (args, _) in patch_info.call_args_list if
                      "Retrieving the goal state recovered from previous errors" in args[0]]
         self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
+
+    def test_it_should_clean_agent_update_file_timely(self):
+        raise NotImplementedError
+
+    def test_it_should_create_signal_file_during_update(self):
+        raise NotImplementedError
+
+    def test_it_should_reset_legacy_blacklisted_agents_on_process_start(self):
+        raise NotImplementedError
+
+    def test_it_should_not_create_update_file_if_not_permitted(self):
+        raise NotImplementedError
 
 
 class TestAgentUpgrade(UpdateTestCase):

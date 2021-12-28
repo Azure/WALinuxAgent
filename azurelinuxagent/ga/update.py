@@ -139,7 +139,7 @@ def get_update_handler():
     return UpdateHandler()
 
 
-def get_agent_update_signal_file():
+def get_agent_global_update_signal_file():
     return os.path.join(conf.get_lib_dir(), AGENT_UPDATE_SIGNAL_FILE)
 
 
@@ -194,7 +194,7 @@ class UpdateHandler(object):
     def process_agent_update_signal_file(self):
         # Only process any operation with the agent update signal file if the file is present and we're able to
         # delete the signal file. If not, do not process anything.
-        return os.path.exists(get_agent_update_signal_file()) and self._try_count_for_removing_update_signal_file < 5
+        return os.path.exists(get_agent_global_update_signal_file()) and self._try_count_for_removing_update_signal_file < 5
 
     def run_latest(self, child_args=None):
         """
@@ -1210,7 +1210,7 @@ class UpdateHandler(object):
         try:
             # Set the Agent Update signal file to mark beginning of auto-upgrade of the agent
             upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(logger.Logger.LogTimeFormatInUTC)
-            fileutil.write_file(get_agent_update_signal_file(), upgrade_time)
+            fileutil.write_file(get_agent_global_update_signal_file(), upgrade_time)
         except Exception as err:
             logger.warn("Unable to set upgrade signal file: {0}".format(err))
 
@@ -1219,7 +1219,8 @@ class UpdateHandler(object):
 
         # Filter legacy agents who have the error.json blacklisted but do not contain a corresponding update signal file
         try:
-            legacy_blacklisted_agents = [agent for agent in self._load_agents if
+            agents = self._load_agents()
+            legacy_blacklisted_agents = [agent for agent in agents if
                                          agent.is_error_blacklisted and not agent.is_blacklisted]
             for agent in legacy_blacklisted_agents:
                 agent.clear_error()
@@ -1232,7 +1233,7 @@ class UpdateHandler(object):
         if not self.process_agent_update_signal_file:
             return
 
-        signal_file = get_agent_update_signal_file()
+        signal_file = get_agent_global_update_signal_file()
 
         # ToDo: Add error handling in case the agent is unable to delete this file (we should not go in an infinite loop
         #  trying to delete it again and again)
@@ -1374,7 +1375,7 @@ class GuestAgent(object):
         unsupported scenarios.
         return: True if copy successful else False
         """
-        global_update_signal_file = get_agent_update_signal_file()
+        global_update_signal_file = get_agent_global_update_signal_file()
         # Only try copying the global signal file if we're allowed to process it (i.e. global signal file exists and we're able to delete it)
         if process_agent_update_signal_file:
             try:
