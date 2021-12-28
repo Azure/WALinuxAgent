@@ -1371,8 +1371,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with mock_wire_protocol(data_file) as protocol:
                 self._assert_is_extensions_goal_state_from_extesions_config(protocol.get_extensions_goal_state())
 
-                reported = [call for call in add_event_patcher.call_args_list if call.kwargs['op'] == "VmSettings" and "GoalStateMismatchError" in call.kwargs['message']]
-                self.assertEqual(1, len(reported), "The goal state mismatch should have been reported exactly once; got: {0}".format([call.kwargs['message'] for call in add_event_patcher.call_args_list]))
+                reported = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == "VmSettings" and "GoalStateMismatchError" in kwargs['message']]
+                self.assertEqual(1, len(reported), "The goal state mismatch should have been reported exactly once; got: {0}".format([kwargs['message'] for _, kwargs in add_event_patcher.call_args_list]))
 
     def test_it_should_compare_goal_states_when_vm_settings_change(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
