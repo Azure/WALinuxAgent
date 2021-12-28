@@ -786,7 +786,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertEqual(0, mock_download.call_count)
 
         agent.clear_error()
-        upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(logger.Logger.LogTimeFormatInUTC)
+        upgrade_time = datetime.utcfromtimestamp(time.time()).strftime(Logger.LogTimeFormatInUTC)
         fileutil.write_file(get_agent_global_update_signal_file(), upgrade_time)
         agent.mark_failure(is_fatal=True, process_agent_update_signal_file=True)
         self.assertTrue(agent.is_blacklisted)
