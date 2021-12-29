@@ -37,6 +37,7 @@ from azurelinuxagent.common.protocol import hostplugin
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateMismatchError
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
+from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _ErrorReporter
@@ -1201,14 +1202,14 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
         with open(extensions_config_file, "r") as file_:
             extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, file_.read(), protocol)
-        self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test ExtensionsConfig")
+        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in ExtensionsConfig")
         for e in extensions_goal_state.extensions:
             if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
                 self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
         with open(vm_settings_file, "r") as file_:
             extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(None, file_.read())
-        self.assertEqual(4, len(extensions_goal_state.extensions), "Expected 4 extensions in the test vmSettings")
+        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in vmSettings")
         for e in extensions_goal_state.extensions:
             if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
                 self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
@@ -1313,10 +1314,89 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
                 self.assertEqual(3, len(messages), "Expected additional errors to be reported in the next period (got: {0})".format(messages))
 
+    def test_it_should_use_vm_settings_by_default(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            extensions_goal_state = protocol.get_extensions_goal_state()
+            self.assertTrue(
+                isinstance(extensions_goal_state, ExtensionsGoalStateFromVmSettings),
+                'The extensions goal state should have been created from the vmSettings (got: {0})'.format(type(extensions_goal_state)))
+
+    def _assert_is_extensions_goal_state_from_extensions_config(self, extensions_goal_state):
+        self.assertTrue(
+            isinstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig),
+            'The extensions goal state should have been created from the extensionsConfig (got: {0})'.format(type(extensions_goal_state)))
+
+    def test_it_should_use_extensions_config_when_fast_track_is_disabled(self):
+        with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
+            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+                self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_fast_track_is_not_supported(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.NOT_FOUND)
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_the_vm_settings_request_fails(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR)
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_the_host_ga_plugin_version_is_not_supported(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-unsupported_version.json"
+
+        with mock_wire_protocol(data_file) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_vm_settings_can_not_be_parsed(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-parse_error.json"
+
+        with mock_wire_protocol(data_file) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_vm_settings_do_not_match_extensions_config(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-difference_in_required_features.json"
+
+        with patch('azurelinuxagent.common.event.EventLogger.add_event') as add_event_patcher:
+            with mock_wire_protocol(data_file) as protocol:
+                self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+                reported = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == "VmSettings" and "GoalStateMismatchError" in kwargs['message']]
+                self.assertEqual(1, len(reported), "The goal state mismatch should have been reported exactly once; got: {0}".format([kwargs['message'] for _, kwargs in add_event_patcher.call_args_list]))
+
+    def test_it_should_compare_goal_states_when_vm_settings_change(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_etag("aNewEtag")
+
+            with patch('azurelinuxagent.common.protocol.extensions_goal_state.ExtensionsGoalState.compare') as compare_patcher:
+                protocol.update_goal_state()
+
+            self.assertEqual(1, compare_patcher.call_count, "ExtensionsGoalState.compare() should have been called exactly once")
+
+    def test_it_should_compare_goal_states_when_extensions_config_change(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_incarnation(468753)
+
+            with patch('azurelinuxagent.common.protocol.extensions_goal_state.ExtensionsGoalState.compare') as compare_patcher:
+                protocol.update_goal_state()
+
+            self.assertEqual(1, compare_patcher.call_count, "ExtensionsGoalState.compare() should have been called exactly once")
+
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
     Tests for WireClient.update_host_plugin_from_goal_state()
+
     """
 
     def test_it_should_update_the_host_plugin_with_or_without_incarnation_changes(self):

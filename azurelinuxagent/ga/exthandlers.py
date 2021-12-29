@@ -300,13 +300,13 @@ class ExtHandlersHandler(object):
         try:
             extensions_goal_state = self.protocol.get_extensions_goal_state()
 
-            # self.ext_handlers needs to be initialized first, since status reporting depends on it
+            # self.ext_handlers and etag need to be initialized first, since status reporting depends on them
             self.ext_handlers = extensions_goal_state.extensions
+            etag = self.protocol.client.get_goal_state().incarnation
 
             if not self._extension_processing_allowed():
                 return
 
-            etag = extensions_goal_state.id
             gs_creation_time = extensions_goal_state.created_on_timestamp
             activity_id = extensions_goal_state.activity_id
             correlation_id = extensions_goal_state.correlation_id
@@ -889,15 +889,15 @@ class ExtHandlersHandler(object):
 
         return handlers_to_report
 
-    def report_ext_handlers_status(self, incarnation_changed=False):
+    def report_ext_handlers_status(self, incarnation_changed=False, vm_agent_update_status=None):
         """
         Go through handler_state dir, collect and report status.
         Returns the status it reported, or None if an error occurred.
         """
         try:
             vm_status = VMStatus(status="Ready", message="Guest Agent is running",
-                                 gs_aggregate_status=self.__gs_aggregate_status)
-
+                                 gs_aggregate_status=self.__gs_aggregate_status,
+                                 vm_agent_update_status=vm_agent_update_status)
             handlers_to_report = []
 
             # In case of Unsupported error, report the status of the handlers in the VM
