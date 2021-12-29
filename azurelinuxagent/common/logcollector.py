@@ -348,7 +348,11 @@ class LogCollector(object):
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
 
-            with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
+            compressed_archive = None
+
+            try:
+                compressed_archive = zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED)
+
                 for file_to_collect in files_to_collect:
                     archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
                     compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
@@ -363,6 +367,9 @@ class LogCollector(object):
                 _LOGGER.info("Elapsed time: %s ms", elapsed_ms)
 
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
+            finally:
+                if compressed_archive is not None:
+                    compressed_archive.close()
 
             return COMPRESSED_ARCHIVE_PATH
         except Exception as e:
