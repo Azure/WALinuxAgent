@@ -145,6 +145,7 @@ def get_agent_global_update_signal_file():
 
 class UpdateHandler(object):
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
+    CLEAN_UPDATE_SIGNAL_PERIOD = timedelta(minutes=15)
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -1249,7 +1250,6 @@ class UpdateHandler(object):
                 self._try_count_for_removing_update_signal_file += 1
 
         # Since the Agent Update Signal file exists, we still haven't verified the stability of the current version.
-        period = timedelta(minutes=15)
         update_time = None
         max_try = 3
         for retry in range(1, max_try+1):
@@ -1258,7 +1258,7 @@ class UpdateHandler(object):
                 break
             except Exception as err:
                 logger.warn("[Try {0}/{1}] Unable to read signal file due to: {2}".format(retry, max_try, err))
-            time.sleep(10)
+            time.sleep(5)
 
         if update_time is None:
             logger.warn("Unable to read from agent update signal file, deleting it to clean state")
@@ -1266,7 +1266,7 @@ class UpdateHandler(object):
             return
 
         update_time_obj = datetime.strptime(update_time, logger.Logger.LogTimeFormatInUTC)
-        if datetime.utcnow() >= (update_time_obj + period):
+        if datetime.utcnow() >= (update_time_obj + self.CLEAN_UPDATE_SIGNAL_PERIOD):
             logger.info("15 mins have elapsed since the update began on {0}, deleting signal file".format(update_time))
             remove_signal_file()
 

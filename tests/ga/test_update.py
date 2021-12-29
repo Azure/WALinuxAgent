@@ -23,6 +23,7 @@ from threading import currentThread
 from azurelinuxagent.common.logger import Logger
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
+from tests.ga.test_exthandlers_download_extension import DownloadExtensionTestCase
 
 _ORIGINAL_POPEN = subprocess.Popen
 
@@ -1929,16 +1930,116 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
 
     def test_it_should_clean_agent_update_file_timely(self):
-        raise NotImplementedError
+        data_file = DATA_FILE.copy()
+        data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
 
-    def test_it_should_create_signal_file_during_update(self):
-        raise NotImplementedError
+        with _get_update_handler(iterations=100, test_data=data_file) as (update_handler, protocol):
+            with patch.object(update_handler, "CLEAN_UPDATE_SIGNAL_PERIOD", timedelta(seconds=1)):
+
+                start_time = time.time()
+                protocol.end_time = None
+
+                def get_handler(url, **kwargs):
+                    if not os.path.exists(get_agent_global_update_signal_file()) and protocol.end_time is None:
+                        protocol.end_time = time.time()
+                        update_handler.set_iterations(0)
+                    return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+
+                protocol.set_http_handlers(http_get_handler=get_handler)
+
+                # Create the update signal file to mimic the scenario of agent update
+                update_handler._set_agent_update_signal_file()
+                update_handler.run(debug=True)
+
+                self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
+                exit_args, _ = update_handler.exit_mock.call_args
+                self.assertEqual(exit_args[0], 0, "Exit code should be 0")
+                self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
+                                 "Global signal file should be deleted")
+                self.assertTrue(1 < (protocol.end_time - start_time) < 2,
+                                "The signal file was deleted before time: {0} secs".format(
+                                    protocol.end_time - start_time))
 
     def test_it_should_reset_legacy_blacklisted_agents_on_process_start(self):
+        # Add test agents to blacklist their errors
+        self.prepare_agents(count=10)
+        legacy_blacklisted_agents = [agent.name for agent in self.agents()]
+
+        # Add another set of agents and blacklist them completely, not just their errors
+        self.prepare_agents(count=20, is_available=False)
+        for agent in self.agents():
+            if agent.name in legacy_blacklisted_agents:
+                agent.mark_failure(is_fatal=True)
+                self.assertTrue(agent.is_error_blacklisted, "Error should be blacklisted for agent: {0}".format(agent.name))
+                self.assertFalse(agent.is_blacklisted, "Agent {0} should not be blacklisted".format(agent.name))
+            else:
+                self.assertTrue(agent.is_error_blacklisted, "Error should be blacklisted for agent: {0}".format(agent.name))
+                self.assertTrue(agent.is_blacklisted, "Agent {0} should be blacklisted".format(agent.name))
+
+        with _get_update_handler() as (update_handler, protocol):
+            update_handler.run(debug=True)
+            self.assertEqual(20, self.agent_count(), "Only the non-blacklisted agents should be remaining")
+            for agent in self.agents():
+                if agent.name in legacy_blacklisted_agents:
+                    legacy_blacklisted_agents.remove(agent.name)
+                    self.assertFalse(agent.is_blacklisted, "Legacy Agent should not be blacklisted")
+                    self.assertFalse(agent.is_error_blacklisted, "Legacy Agent's error should be clean")
+                else:
+                    self.assertTrue(agent.is_blacklisted, "Agent should be blacklisted")
+                    self.assertTrue(agent.is_error_blacklisted, "Agent's error should be clean")
+            self.assertEqual(0, len(legacy_blacklisted_agents), "All legacy agents should be un-blacklisted")
+
+    @contextlib.contextmanager
+    def __setup_invalid_ga_install_and_get_update_handler(self):
+        with _get_update_handler() as (update_handler, protocol):
+            with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
+                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
+                    invalid_zip = os.path.join(self.tmp_dir, "invalid.zip")
+                    DownloadExtensionTestCase.create_invalid_zip_file(filename=invalid_zip)
+
+                    def get_handler(url, **kwargs):
+                        if HttpRequestPredicates.is_agent_package_request(url):
+                            agent_pkg = load_bin_data(invalid_zip)
+                            # Returning an invalid zip here since invalid zips are considered fatal errors
+                            return ResponseMock(response=agent_pkg)
+                        return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+
+                    protocol.set_http_handlers(http_get_handler=get_handler)
+                    yield update_handler
+
+    def test_it_should_not_blacklist_agents_if_not_permitted(self):
+        # Case 1: Signal file not present
+        # Case 2: Unable to delete signal file
         raise NotImplementedError
 
-    def test_it_should_not_create_update_file_if_not_permitted(self):
+    def test_it_should_not_clean_update_signal_file_if_not_permitted(self):
+        # Case 1:
         raise NotImplementedError
+
+    def test_it_should_retry_and_reset_signal_file_remove_retry_count_if_succeeds(self):
+        raise NotImplementedError
+
+    def test_it_should_update_global_signal_file_on_error_if_exists(self):
+        raise NotImplementedError
+
+    def test_it_should_delete_agent_packages_if_invalid_guest_agent_install_instead_of_blacklist(self):
+        # Legacy behavior is to blacklist instead of delete
+        with self.__setup_invalid_ga_install_and_get_update_handler() as update_handler:
+            update_handler.run(debug=True)
+
+            # There are 6 agents in the DATA_FILE we use for this test, but since they were all invalid, we should not have even a single agent in directory
+            self.assertEqual(0, self.agent_count(), "No agents should be found")
+
+    def test_it_should_blacklist_agent_if_invalid_guest_agent_install_during_auto_update(self):
+        with self.__setup_invalid_ga_install_and_get_update_handler() as update_handler:
+            # Set the signal file to specify agent update
+            update_handler._set_agent_update_signal_file()
+            update_handler.run(debug=True)
+
+            # There are 6 agents in the DATA_FILE we use for this test
+            self.assertEqual(6, self.agent_count(), "All agents not found")
+            for agent in self.agents():
+                self.assertTrue(agent.is_blacklisted, "Agent should be blacklisted")
 
 
 class TestAgentUpgrade(UpdateTestCase):
@@ -1989,6 +2090,9 @@ class TestAgentUpgrade(UpdateTestCase):
                                   'op'] == WALAEventOperation.AgentUpgrade]
         self.assertEqual(1, len(upgrade_event_msgs), "Agent not upgraded properly")
 
+        # Ensure signal file created on agent update
+        self.assertTrue(os.path.exists(get_agent_global_update_signal_file()), "Signal file should have been created")
+
     def __assert_agent_directories_available(self, versions):
         for version in versions:
             self.assertTrue(os.path.exists(self.agent_dir(version)), "Agent directory {0} not found".format(version))
@@ -1997,6 +2101,9 @@ class TestAgentUpgrade(UpdateTestCase):
         self.assertEqual(0, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
                                  "Agent upgrade discovered, updating to" in kwarg['message'] and kwarg[
                                      'op'] == WALAEventOperation.AgentUpgrade]), "Unwanted upgrade")
+
+        # Ensure signal file not created if not auto-updated
+        self.assertFalse(os.path.exists(get_agent_global_update_signal_file()), "Signal file should not have been created")
 
     def test_it_should_upgrade_agent_on_process_start_if_auto_upgrade_enabled(self):
         with self.__get_update_handler(iterations=10) as (update_handler, mock_telemetry):

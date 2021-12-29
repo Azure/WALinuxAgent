@@ -81,9 +81,9 @@ class DownloadExtensionTestCase(AgentTestCase):
                 file.close()
 
     @staticmethod
-    def _create_invalid_zip_file(filename):
-        with open(filename, "w") as file:  # pylint: disable=redefined-builtin
-            file.write("An invalid ZIP file\n")
+    def create_invalid_zip_file(filename):
+        with open(filename, "w") as file_:
+            file_.write("An invalid ZIP file\n")
 
     def _get_extension_package_file(self):
         return os.path.join(self.agent_dir, self.ext_handler_instance.get_extension_package_zipfile_name())
@@ -127,7 +127,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
-        DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
+        DownloadExtensionTestCase.create_invalid_zip_file(self._get_extension_package_file())
 
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
             self.ext_handler_instance.download()
@@ -151,7 +151,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
-        DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
+        DownloadExtensionTestCase.create_invalid_zip_file(self._get_extension_package_file())
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
 
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg",
@@ -166,7 +166,7 @@ class DownloadExtensionTestCase(AgentTestCase):
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
     def test_it_should_maintain_extension_handler_state_when_it_downloads_bad_zips(self, _):
         def download_ext_handler_pkg(_uri, destination):
-            DownloadExtensionTestCase._create_invalid_zip_file(destination)
+            DownloadExtensionTestCase.create_invalid_zip_file(destination)
             return True
 
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
@@ -226,7 +226,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             # fail a few times, then succeed
             if self.download_failures < 3:
                 self.download_failures += 1
-                DownloadExtensionTestCase._create_invalid_zip_file(destination)
+                DownloadExtensionTestCase.create_invalid_zip_file(destination)
             else:
                 DownloadExtensionTestCase._create_zip_file(destination)
             return True
@@ -240,7 +240,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
     def test_it_should_raise_an_exception_when_all_downloads_fail(self):
         def download_ext_handler_pkg(_uri, _destination):
-            DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
+            DownloadExtensionTestCase.create_invalid_zip_file(self._get_extension_package_file())
             return True
 
         with patch("time.sleep", lambda *_: None):
