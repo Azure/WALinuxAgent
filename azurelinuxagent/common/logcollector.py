@@ -348,6 +348,8 @@ class LogCollector(object):
             files_to_collect = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
 
+            compressed_archive = None
+
             try:
                 compressed_archive = zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED)
 
