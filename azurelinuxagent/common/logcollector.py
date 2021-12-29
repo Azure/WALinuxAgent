@@ -366,7 +366,8 @@ class LogCollector(object):
 
                 compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
             finally:
-                compressed_archive.close()
+                if compressed_archive is not None:
+                    compressed_archive.close()
 
             return COMPRESSED_ARCHIVE_PATH
         except Exception as e:
