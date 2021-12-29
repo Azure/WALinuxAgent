@@ -22,7 +22,6 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 
 class GoalStateMismatchError(AgentError):
@@ -104,10 +103,8 @@ class ExtensionsGoalState(object):
             compare_attributes(first, second, "activity_id")
             compare_attributes(first, second, "correlation_id")
             compare_attributes(first, second, "created_on_timestamp")
-            # The status blob was added after version 112
-            if from_vm_settings.host_ga_plugin_version > FlexibleVersion("1.0.8.112"):
-                compare_attributes(first, second, "status_upload_blob")
-                compare_attributes(first, second, "status_upload_blob_type")
+            compare_attributes(first, second, "status_upload_blob")
+            compare_attributes(first, second, "status_upload_blob_type")
             compare_attributes(first, second, "required_features")
             compare_attributes(first, second, "on_hold")
             compare_array(first.agent_manifests, second.agent_manifests, compare_agent_manifests, "agent_manifests")
@@ -115,15 +112,15 @@ class ExtensionsGoalState(object):
 
         def compare_agent_manifests(first, second):
             compare_attributes(first, second, "family")
-            compare_attributes(first, second, "version")
-            compare_attributes(first, second, "uris")
+            compare_attributes(first, second, "requested_version_string")
+            compare_attributes(first, second, "uris", ignore_order=True)
 
         def compare_extensions(first, second):
             compare_attributes(first, second, "name")
             compare_attributes(first, second, "version")
             compare_attributes(first, second, "state")
             compare_attributes(first, second, "supports_multi_config")
-            compare_attributes(first, second, "manifest_uris")
+            compare_attributes(first, second, "manifest_uris", ignore_order=True)
             compare_array(first.settings, second.settings, compare_settings, "settings")
 
         def compare_settings(first, second):
@@ -145,11 +142,16 @@ class ExtensionsGoalState(object):
                 finally:
                     context.pop()
 
-        def compare_attributes(first, second, attribute):
+        def compare_attributes(first, second, attribute, ignore_order=False):
             context.append(attribute)
             try:
                 first_value = getattr(first, attribute)
                 second_value = getattr(second, attribute)
+                if ignore_order:
+                    first_value = first_value[:]
+                    first_value.sort()
+                    second_value = second_value[:]
+                    second_value.sort()
 
                 if first_value != second_value:
                     raise Exception("[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context)))

@@ -21,7 +21,7 @@
     },
     "requiredFeatures": [
         {
-            "name": "MultipleExtensionsPerHandler"
+            "name": "A_NON_EXISTING_FEATURE_USED_TO_PRODUCE_AN_ERROR"
         }
     ],
     "gaFamilies": [

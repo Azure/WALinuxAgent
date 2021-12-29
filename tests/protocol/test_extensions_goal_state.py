@@ -5,10 +5,10 @@ import re
 import sys
 
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.utils import textutil
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
-from tests.tools import AgentTestCase
+from tests.tools import AgentTestCase, load_data
 
 # Python < 3.7 can't copy regular expressions, this is the recommended patch
 if sys.version_info[0] < 3 or sys.version_info[0] == 3 and sys.version_info[1] < 7:
@@ -19,7 +19,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
     def test_compare_should_succeed_when_extensions_config_and_vm_settings_are_equal(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             from_extensions_config = protocol.client.get_extensions_goal_state()
-            from_vm_settings = protocol.client._extensions_goal_state_from_vm_settings
+            from_vm_settings = protocol.client._vm_settings_goal_state
 
             try:
                 ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
@@ -29,7 +29,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
     def test_compare_should_report_mismatches_between_extensions_config_and_vm_settings(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             from_extensions_config = protocol.client.get_extensions_goal_state()
-            from_vm_settings = protocol.client._extensions_goal_state_from_vm_settings
+            from_vm_settings = protocol.client._vm_settings_goal_state
 
             def assert_compare_raises(setup_copy, failing_attribute):
                 from_vm_settings_copy = copy.deepcopy(from_vm_settings)
@@ -47,7 +47,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             assert_compare_raises(lambda c: setattr(c, "_on_hold",                  False),                     "on_hold")
 
             assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "family",  'MOCK_FAMILY'),  r"agent_manifests[0].family")
-            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "version", 'MOCK_VERSION'), r"agent_manifests[0].version")
+            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "requested_version_string", 'MOCK_VERSION'), r"agent_manifests[0].requested_version_string")
             assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "uris",    ['MOCK_URI']),   r"agent_manifests[0].uris")
 
             assert_compare_raises(lambda c: setattr(c.extensions[0], "version",  'MOCK_NAME'),         r"extensions[0].version")
@@ -63,55 +63,26 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "dependencyLevel",       56789),                       r"extensions[0].settings[0].dependencyLevel")
             assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "state",                 'MOCK_STATE'),                r"extensions[0].settings[0].state")
 
-    def test_compare_should_check_the_status_upload_blob_only_when_the_host_ga_plugin_version_is_greater_then_112(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-            from_extensions_config = protocol.client.get_extensions_goal_state()
-            from_vm_settings = protocol.client._extensions_goal_state_from_vm_settings
-
-            # we set the status upload value to a dummy value to verify whether the compare() method is checking it or not
-            from_vm_settings._status_upload_blob = "A DUMMY VALUE FOR THE STATUS UPLOAD BLOB"
-
-            #
-            # 112 and below should not check the status blob
-            #
-            from_vm_settings._host_ga_plugin_version = FlexibleVersion("1.0.8.112")
-
-            try:
-                ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
-            except GoalStateMismatchError as error:
-                self.fail("The status upload blob should not have been checked when the Host GA Plugin version is 112 or below (Got error: {0})".format(error))
-
-            #
-            # 113 and above should check the status blob
-            #
-            from_vm_settings._host_ga_plugin_version = FlexibleVersion("1.0.8.113")
-
-            with self.assertRaisesRegexCM(GoalStateMismatchError, r"\(Attribute: status_upload_blob\)"):
-                ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
-
     def test_create_from_extensions_config_should_assume_block_when_blob_type_is_not_valid(self):
         data_file = mockwiredata.DATA_FILE.copy()
-        data_file["ext_conf"] = "hostgaplugin/ext_conf-invalid_blob_type.xml"
+        data_file["vm_settings"] = "hostgaplugin/ext_conf-invalid_blob_type.xml"
         with mock_wire_protocol(data_file) as protocol:
-            actual = protocol.client.get_extensions_goal_state().status_upload_blob_type
-            self.assertEqual("BlockBlob", actual, 'Expected BlockBob for an invalid statusBlobType')
+            extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, load_data("hostgaplugin/ext_conf-invalid_blob_type.xml"), protocol)
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 
     def test_create_from_vm_settings_should_assume_block_when_blob_type_is_not_valid(self):
-        data_file = mockwiredata.DATA_FILE.copy()
-        data_file["vm_settings"] = "hostgaplugin/vm_settings-invalid_blob_type.json"
-        with mock_wire_protocol(data_file) as protocol:
-            actual = protocol.client._extensions_goal_state_from_vm_settings.status_upload_blob_type
-            self.assertEqual("BlockBlob", actual, 'Expected BlockBob for an invalid statusBlobType')
+        extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(1234567890, load_data("hostgaplugin/vm_settings-invalid_blob_type.json"))
+        self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 
     def test_extension_goal_state_should_parse_requested_version_properly(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
-                self.assertEqual(manifest.version, "0.0.0.0", "Version should be None")
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
-            vm_settings_ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
+            vm_settings_ga_manifests = protocol.client._vm_settings_goal_state.agent_manifests
             for manifest in vm_settings_ga_manifests:
-                self.assertEqual(manifest.version, "0.0.0.0", "Version should be None")
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
         data_file = mockwiredata.DATA_FILE.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
@@ -119,8 +90,8 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         with mock_wire_protocol(data_file) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
-                self.assertEqual(manifest.version, "9.9.9.10", "Version should be 9.9.9.10")
+                self.assertEqual(manifest.requested_version_string, "9.9.9.10", "Version should be 9.9.9.10")
 
-            vm_settings_ga_manifests = protocol.client._extensions_goal_state_from_vm_settings.agent_manifests
+            vm_settings_ga_manifests = protocol.client._vm_settings_goal_state.agent_manifests
             for manifest in vm_settings_ga_manifests:
-                self.assertEqual(manifest.version, "9.9.9.9", "Version should be 9.9.9.9")
+                self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
