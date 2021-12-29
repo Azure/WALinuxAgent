@@ -1321,7 +1321,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 isinstance(extensions_goal_state, ExtensionsGoalStateFromVmSettings),
                 'The extensions goal state should have been created from the vmSettings (got: {0})'.format(type(extensions_goal_state)))
 
-    def _assert_is_extensions_goal_state_from_extesions_config(self, extensions_goal_state):
+    def _assert_is_extensions_goal_state_from_extensions_config(self, extensions_goal_state):
         self.assertTrue(
             isinstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig),
             'The extensions goal state should have been created from the extensionsConfig (got: {0})'.format(type(extensions_goal_state)))
@@ -1329,7 +1329,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     def test_it_should_use_extensions_config_when_fast_track_is_disabled(self):
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
             with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-                self._assert_is_extensions_goal_state_from_extesions_config(protocol.get_extensions_goal_state())
+                self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
 
     def test_it_should_use_extensions_config_when_fast_track_is_not_supported(self):
         def http_get_handler(url, *_, **__):
@@ -1338,7 +1338,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
-            self._assert_is_extensions_goal_state_from_extesions_config(protocol.get_extensions_goal_state())
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
 
     def test_it_should_use_extensions_config_when_the_vm_settings_request_fails(self):
         def http_get_handler(url, *_, **__):
@@ -1347,21 +1347,21 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
-            self._assert_is_extensions_goal_state_from_extesions_config(protocol.get_extensions_goal_state())
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
 
     def test_it_should_use_extensions_config_when_the_host_ga_plugin_version_is_not_supported(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-unsupported_version.json"
 
         with mock_wire_protocol(data_file) as protocol:
-            self._assert_is_extensions_goal_state_from_extesions_config(protocol.get_extensions_goal_state())
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
 
     def test_it_should_use_extensions_config_when_vm_settings_can_not_be_parsed(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-parse_error.json"
 
         with mock_wire_protocol(data_file) as protocol:
-            self._assert_is_extensions_goal_state_from_extesions_config(protocol.get_extensions_goal_state())
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
 
     def test_it_should_use_extensions_config_when_vm_settings_do_not_match_extensions_config(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
@@ -1369,7 +1369,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
         with patch('azurelinuxagent.common.event.EventLogger.add_event') as add_event_patcher:
             with mock_wire_protocol(data_file) as protocol:
-                self._assert_is_extensions_goal_state_from_extesions_config(protocol.get_extensions_goal_state())
+                self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
 
                 reported = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == "VmSettings" and "GoalStateMismatchError" in kwargs['message']]
                 self.assertEqual(1, len(reported), "The goal state mismatch should have been reported exactly once; got: {0}".format([kwargs['message'] for _, kwargs in add_event_patcher.call_args_list]))
