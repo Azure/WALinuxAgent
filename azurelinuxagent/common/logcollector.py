@@ -368,22 +368,6 @@ class LogCollector(object):
             finally:
                 compressed_archive.close()
 
-            # with zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED) as compressed_archive:
-            #     for file_to_collect in files_to_collect:
-            #         archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
-            #         compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
-
-            #     compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
-            #     _LOGGER.info("Successfully compressed files. Compressed archive size is %s b", compressed_archive_size)
-
-            #     end_time = datetime.utcnow()
-            #     duration = end_time - start_time
-            #     elapsed_ms = int(((duration.days * 24 * 60 * 60 + duration.seconds) * 1000) + (duration.microseconds / 1000.0))
-            #     _LOGGER.info("Finishing log collection at %s", end_time.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"))
-            #     _LOGGER.info("Elapsed time: %s ms", elapsed_ms)
-
-            #     compressed_archive.write(OUTPUT_RESULTS_FILE_PATH.encode("utf-8"), arcname="results.txt")
-
             return COMPRESSED_ARCHIVE_PATH
         except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
