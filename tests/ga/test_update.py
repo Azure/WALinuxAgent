@@ -1955,7 +1955,7 @@ class TestUpdate(UpdateTestCase):
         with patch.object(update_handler, "CLEAN_UPDATE_SIGNAL_PERIOD", timedelta(seconds=0.2)):
             with patch.object(os, "remove", wraps=mock_remove):
                 # Create the update signal file to mimic the scenario of agent update
-                update_handler.signal_file_creation_time = time.time()
+                mock_remove.signal_file_creation_time = time.time()
                 update_handler._set_agent_update_signal_file()
                 self.assertTrue(update_handler.process_agent_update_signal_file,
                                 "We should be allowed to process update signal file")
@@ -1999,11 +1999,12 @@ class TestUpdate(UpdateTestCase):
                     # Stop processing the update_handler.run() loop
                     update_handler.set_iterations(0)
                 return original_remove(file_name)
+            mock_remove.signal_file_creation_time = 0
 
             with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
                 self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
                                  "Global signal file should be deleted")
-                self.assertTrue((protocol.delete_time['time'] - update_handler.signal_file_creation_time) > 0.2,
+                self.assertTrue((protocol.delete_time['time'] - mock_remove.signal_file_creation_time) > 0.2,
                                 "The signal file should've been deleted at least after 0.2 seconds as per the mock")
                 self.assertEqual(1, protocol.delete_time['count'], "The file should be deleted only 1 time")
 
@@ -2097,7 +2098,7 @@ class TestUpdate(UpdateTestCase):
 
     def test_it_should_update_global_signal_file_on_error_if_exists(self):
 
-        def __ensure_exit_failed(exit_mock):
+        def _ensure_exit_failed(exit_mock):
             self.assertTrue(exit_mock.called, "The process should have exited")
             exit_args, _ = exit_mock.call_args
             self.assertEqual(exit_args[0], 1, "Exit code should be 1")
@@ -2109,7 +2110,7 @@ class TestUpdate(UpdateTestCase):
 
                 # Case 1: If no update signal file exists, don't create it
                 update_handler.run(debug=True)
-                __ensure_exit_failed(update_handler.exit_mock)
+                _ensure_exit_failed(update_handler.exit_mock)
                 self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
                                  "Signal file should not be present")
 
@@ -2117,7 +2118,7 @@ class TestUpdate(UpdateTestCase):
                 update_handler._set_agent_update_signal_file()
                 start_time = fileutil.read_file(get_agent_global_update_signal_file())
                 update_handler.run(debug=True)
-                __ensure_exit_failed(update_handler.exit_mock)
+                _ensure_exit_failed(update_handler.exit_mock)
                 self.assertTrue(os.path.exists(get_agent_global_update_signal_file()),
                                 "Signal file should be present")
                 end_time = fileutil.read_file(get_agent_global_update_signal_file())
