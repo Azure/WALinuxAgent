@@ -2008,7 +2008,9 @@ class TestUpdate(UpdateTestCase):
                                 "The signal file should've been deleted at least after 0.2 seconds as per the mock")
                 self.assertEqual(1, protocol.delete_time['count'], "The file should be deleted only 1 time")
 
-    def test_it_should_retry_signal_file_removal_and_mark_not_permitted_if_cant(self):
+    @patch("azurelinuxagent.common.logger.info")
+    @patch("azurelinuxagent.common.logger.warn")
+    def test_it_should_retry_signal_file_removal_and_mark_not_permitted_if_cant(self, mock_warn, mock_info):
         data_file = DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
 
@@ -2023,15 +2025,22 @@ class TestUpdate(UpdateTestCase):
                 return original_remove(file_name)
 
             with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
-                self.assertTrue(os.path.exists(get_agent_global_update_signal_file()), "Global signal file should exist")
-                self.assertEqual(5, protocol.delete_count, "We should only try deleting a max of 5 times")
-                self.assertFalse(update_handler.process_agent_update_signal_file,
-                                 "We should not be allowed to process update signal file")
+                try:
+                    self.assertTrue(os.path.exists(get_agent_global_update_signal_file()), "Global signal file should exist")
+                    self.assertEqual(5, protocol.delete_count, "We should only try deleting a max of 5 times")
+                    self.assertFalse(update_handler.process_agent_update_signal_file,
+                                     "We should not be allowed to process update signal file")
+                except AssertionError:
+                    print("Info calls: {0}".format(mock_info.call_args_list))
+                    print("Warn calls: {0}".format(mock_warn.call_args_list))
+                    raise
 
             # We should be unable to blacklist agents if not permitted to process agent update signal file
             self.__ensure_it_can_not_blacklist_if_not_permitted(update_handler)
 
-    def test_it_should_reset_signal_file_remove_retry_count_if_succeeds(self):
+    @patch("azurelinuxagent.common.logger.info")
+    @patch("azurelinuxagent.common.logger.warn")
+    def test_it_should_reset_signal_file_remove_retry_count_if_succeeds(self, mock_warn, mock_info):
         data_file = DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
 
@@ -2049,19 +2058,25 @@ class TestUpdate(UpdateTestCase):
 
             update_handler.set_iterations(10)
             with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
-                self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
-                                 "Global signal file should not exist")
-                self.assertEqual(4, protocol.delete_count, "We should only try deleting 4 times")
-                self.assertFalse(update_handler.process_agent_update_signal_file,
-                                 "We should not be allowed to process update signal file since we were able to delete signal file")
-                self.__ensure_it_can_not_blacklist_if_not_permitted(update_handler)
-                self.assertEqual(10, update_handler.get_iterations(), "Update handler should've run 10 times")
+                try:
+                    self.assertEqual(4, protocol.delete_count, "We should only try deleting 4 times")
+                    self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
+                                     "Global signal file should not exist")
+                    self.assertFalse(update_handler.process_agent_update_signal_file,
+                                     "We should not be allowed to process update signal file since we were able to delete signal file")
+                    self.__ensure_it_can_not_blacklist_if_not_permitted(update_handler)
+                    self.assertEqual(10, update_handler.get_iterations(), "Update handler should've run 10 times")
+                except AssertionError:
+                    print("Info calls: {0}".format(mock_info.call_args_list))
+                    print("Warn calls: {0}".format(mock_warn.call_args_list))
+                    raise
 
             update_handler.set_iterations(10)
             with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
-                self.assertTrue(os.path.exists(get_agent_global_update_signal_file()), "Global signal file should exist")
                 self.assertEqual(9, protocol.delete_count,
                                  "We should only try deleting max 10 times (since the count got reset after the last success)")
+                self.assertTrue(os.path.exists(get_agent_global_update_signal_file()),
+                                "Global signal file should exist")
                 self.assertFalse(update_handler.process_agent_update_signal_file,
                                  "We should not be allowed to process update signal file since retry count >= 5")
                 self.assertEqual(10, update_handler.get_iterations(), "Update handler should've run 10 times")
