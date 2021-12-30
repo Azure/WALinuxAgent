@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from threading import currentThread
 
 from azurelinuxagent.common.logger import Logger
+from azurelinuxagent.common.osutil import systemd
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
 from tests.ga.test_exthandlers_download_extension import DownloadExtensionTestCase
@@ -802,9 +803,6 @@ class TestGuestAgent(UpdateTestCase):
         self.assertEqual(0, mock_download.call_count)
         self.assertEqual(0, mock_unpack.call_count)
 
-    def test_it_should_only_blacklist_during_agent_update(self):
-        raise NotImplementedError
-
 
 class TestUpdate(UpdateTestCase):
     def setUp(self):
@@ -1192,16 +1190,18 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(os.path.exists(agent_path))
             self.assertTrue(os.path.exists(agent_path + ".zip"))
 
-    def _test_run_latest(self, mock_child=None, mock_time=None, child_args=None):
+    def _test_run_latest(self, mock_child=None, mock_time=None, child_args=None, update_handler=None):
         if mock_child is None:
             mock_child = ChildMock()
         if mock_time is None:
             mock_time = TimeMock()
+        if update_handler is None:
+            update_handler = self.update_handler
 
         with patch('azurelinuxagent.ga.update.subprocess.Popen', return_value=mock_child) as mock_popen:
             with patch('time.time', side_effect=mock_time.time):
                 with patch('time.sleep', side_effect=mock_time.sleep):
-                    self.update_handler.run_latest(child_args=child_args)
+                    update_handler.run_latest(child_args=child_args)
                     agent_calls = [args[0] for (args, _) in mock_popen.call_args_list if
                                    "run-exthandlers" in ''.join(args[0])]
                     self.assertEqual(1, len(agent_calls),
@@ -1929,36 +1929,140 @@ class TestUpdate(UpdateTestCase):
                      "Retrieving the goal state recovered from previous errors" in args[0]]
         self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
 
-    def test_it_should_clean_agent_update_file_timely(self):
-        data_file = DATA_FILE.copy()
-        data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
+    @contextlib.contextmanager
+    def __setup_invalid_ga_install_and_get_update_handler(self):
+        with _get_update_handler() as (update_handler, protocol):
+            with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
+                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
+                    invalid_zip = os.path.join(self.tmp_dir, "invalid.zip")
+                    DownloadExtensionTestCase.create_invalid_zip_file(filename=invalid_zip)
 
-        with _get_update_handler(iterations=100, test_data=data_file) as (update_handler, protocol):
-            with patch.object(update_handler, "CLEAN_UPDATE_SIGNAL_PERIOD", timedelta(seconds=1)):
+                    def get_handler(url, **kwargs):
+                        if HttpRequestPredicates.is_agent_package_request(url):
+                            agent_pkg = load_bin_data(invalid_zip)
+                            # Returning an invalid zip here since invalid zips are considered fatal errors
+                            return ResponseMock(response=agent_pkg)
+                        return protocol.mock_wire_data.mock_http_get(url, **kwargs)
 
-                start_time = time.time()
-                protocol.end_time = None
+                    protocol.set_http_handlers(http_get_handler=get_handler)
+                    yield update_handler
 
-                def get_handler(url, **kwargs):
-                    if not os.path.exists(get_agent_global_update_signal_file()) and protocol.end_time is None:
-                        protocol.end_time = time.time()
-                        update_handler.set_iterations(0)
-                    return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+    @contextlib.contextmanager
+    def __setup_environment_for_update_signal_removal(self, update_handler, mock_remove):
 
-                protocol.set_http_handlers(http_get_handler=get_handler)
-
+        with patch.object(update_handler, "CLEAN_UPDATE_SIGNAL_PERIOD", timedelta(seconds=0.2)):
+            with patch.object(os, "remove", wraps=mock_remove):
                 # Create the update signal file to mimic the scenario of agent update
+                update_handler.signal_file_creation_time = time.time()
                 update_handler._set_agent_update_signal_file()
+                self.assertTrue(update_handler.process_agent_update_signal_file,
+                                "We should be allowed to process update signal file")
                 update_handler.run(debug=True)
 
                 self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
                 exit_args, _ = update_handler.exit_mock.call_args
                 self.assertEqual(exit_args[0], 0, "Exit code should be 0")
+                yield
+
+    def __ensure_it_can_not_blacklist_if_not_permitted(self, update_handler):
+        with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
+            self.prepare_agents()
+            latest_agent = update_handler.get_latest_agent()
+            latest_agent_name = latest_agent.name
+            self.assertTrue(latest_agent.is_available, "The latest agent should be available and not be blacklisted")
+
+            self._test_run_latest(mock_child=ChildMock(return_value=1), update_handler=update_handler)
+            latest_agent = update_handler.get_latest_agent()
+            self.assertEqual(latest_agent_name, latest_agent.name, "Invalid latest agent")
+            self.assertFalse(latest_agent.is_blacklisted, "Agent should not be blacklisted")
+            self.assertTrue(latest_agent.is_available, "Agent should be available")
+            self.assertTrue(latest_agent.is_error_blacklisted, "Agent error should be blacklisted")
+
+            # Clean state of test
+            for agent_dir in self.agent_dirs():
+                shutil.rmtree(agent_dir, ignore_errors=True)
+
+    def test_it_should_remove_agent_update_file_after_time_elapsed(self):
+        data_file = DATA_FILE.copy()
+        data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
+
+        with _get_update_handler(iterations=100, test_data=data_file) as (update_handler, protocol):
+            protocol.delete_time = {'time': 0.0, 'count': 0}
+            original_remove = os.remove
+
+            def mock_remove(file_name):
+                if file_name == get_agent_global_update_signal_file():
+                    protocol.delete_time['time'] = time.time()
+                    protocol.delete_time['count'] += 1
+                    # Stop processing the update_handler.run() loop
+                    update_handler.set_iterations(0)
+                return original_remove(file_name)
+
+            with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
                 self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
                                  "Global signal file should be deleted")
-                self.assertTrue(1 < (protocol.end_time - start_time) < 2,
-                                "The signal file was deleted before time: {0} secs".format(
-                                    protocol.end_time - start_time))
+                self.assertTrue((protocol.delete_time['time'] - update_handler.signal_file_creation_time) > 0.2,
+                                "The signal file should've been deleted at least after 0.2 seconds as per the mock")
+                self.assertEqual(1, protocol.delete_time['count'], "The file should be deleted only 1 time")
+
+    def test_it_should_retry_signal_file_removal_and_mark_not_permitted_if_cant(self):
+        data_file = DATA_FILE.copy()
+        data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
+
+        with _get_update_handler(iterations=10, test_data=data_file) as (update_handler, protocol):
+            protocol.delete_count = 0
+            original_remove = os.remove
+
+            def mock_remove(file_name):
+                if file_name == get_agent_global_update_signal_file():
+                    protocol.delete_count += 1
+                    raise Exception("Unable to delete signal file")
+                return original_remove(file_name)
+
+            with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
+                self.assertTrue(os.path.exists(get_agent_global_update_signal_file()), "Global signal file should exist")
+                self.assertEqual(5, protocol.delete_count, "We should only try deleting a max of 5 times")
+                self.assertFalse(update_handler.process_agent_update_signal_file,
+                                 "We should not be allowed to process update signal file")
+
+            # We should be unable to blacklist agents if not permitted to process agent update signal file
+            self.__ensure_it_can_not_blacklist_if_not_permitted(update_handler)
+
+    def test_it_should_reset_signal_file_remove_retry_count_if_succeeds(self):
+        data_file = DATA_FILE.copy()
+        data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
+
+        with _get_update_handler(iterations=10, test_data=data_file) as (update_handler, protocol):
+            protocol.delete_count = 0
+            original_remove = os.remove
+
+            def mock_remove(file_name):
+                if file_name == get_agent_global_update_signal_file():
+                    protocol.delete_count += 1
+                    # Raise exception except for the 5th retry
+                    if protocol.delete_count != 4:
+                        raise Exception("Unable to delete signal file")
+                return original_remove(file_name)
+
+            update_handler.set_iterations(10)
+            with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
+                self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
+                                 "Global signal file should not exist")
+                self.assertEqual(4, protocol.delete_count, "We should only try deleting 4 times")
+                self.assertFalse(update_handler.process_agent_update_signal_file,
+                                 "We should not be allowed to process update signal file since we were able to delete signal file")
+                self.__ensure_it_can_not_blacklist_if_not_permitted(update_handler)
+                self.assertEqual(10, update_handler.get_iterations(), "Update handler should've run 10 times")
+
+            update_handler.set_iterations(10)
+            with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
+                self.assertTrue(os.path.exists(get_agent_global_update_signal_file()), "Global signal file should exist")
+                self.assertEqual(9, protocol.delete_count,
+                                 "We should only try deleting max 10 times (since the count got reset after the last success)")
+                self.assertFalse(update_handler.process_agent_update_signal_file,
+                                 "We should not be allowed to process update signal file since retry count >= 5")
+                self.assertEqual(10, update_handler.get_iterations(), "Update handler should've run 10 times")
+                self.__ensure_it_can_not_blacklist_if_not_permitted(update_handler)
 
     def test_it_should_reset_legacy_blacklisted_agents_on_process_start(self):
         # Add test agents to blacklist their errors
@@ -1989,45 +2093,41 @@ class TestUpdate(UpdateTestCase):
                     self.assertTrue(agent.is_error_blacklisted, "Agent's error should be clean")
             self.assertEqual(0, len(legacy_blacklisted_agents), "All legacy agents should be un-blacklisted")
 
-    @contextlib.contextmanager
-    def __setup_invalid_ga_install_and_get_update_handler(self):
-        with _get_update_handler() as (update_handler, protocol):
-            with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
-                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
-                    invalid_zip = os.path.join(self.tmp_dir, "invalid.zip")
-                    DownloadExtensionTestCase.create_invalid_zip_file(filename=invalid_zip)
-
-                    def get_handler(url, **kwargs):
-                        if HttpRequestPredicates.is_agent_package_request(url):
-                            agent_pkg = load_bin_data(invalid_zip)
-                            # Returning an invalid zip here since invalid zips are considered fatal errors
-                            return ResponseMock(response=agent_pkg)
-                        return protocol.mock_wire_data.mock_http_get(url, **kwargs)
-
-                    protocol.set_http_handlers(http_get_handler=get_handler)
-                    yield update_handler
-
-    def test_it_should_not_blacklist_agents_if_not_permitted(self):
-        # Case 1: Signal file not present
-        # Case 2: Unable to delete signal file
-        raise NotImplementedError
-
-    def test_it_should_not_clean_update_signal_file_if_not_permitted(self):
-        # Case 1:
-        raise NotImplementedError
-
-    def test_it_should_retry_and_reset_signal_file_remove_retry_count_if_succeeds(self):
-        raise NotImplementedError
-
     def test_it_should_update_global_signal_file_on_error_if_exists(self):
-        raise NotImplementedError
+
+        def __ensure_exit_failed(exit_mock):
+            self.assertTrue(exit_mock.called, "The process should have exited")
+            exit_args, _ = exit_mock.call_args
+            self.assertEqual(exit_args[0], 1, "Exit code should be 1")
+
+        with _get_update_handler() as (update_handler, protocol):
+            # To mimic a failure in update_handler.run(), raising an exception when we call systemd.is_systemd()
+            # function which is one of the first things that we do to send telemetry out about the VM
+            with patch.object(systemd, "is_systemd", side_effect=Exception("invalid distro")):
+
+                # Case 1: If no update signal file exists, don't create it
+                update_handler.run(debug=True)
+                __ensure_exit_failed(update_handler.exit_mock)
+                self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
+                                 "Signal file should not be present")
+
+                # Case 2: If update signal file exists, it should get updated
+                update_handler._set_agent_update_signal_file()
+                start_time = fileutil.read_file(get_agent_global_update_signal_file())
+                update_handler.run(debug=True)
+                __ensure_exit_failed(update_handler.exit_mock)
+                self.assertTrue(os.path.exists(get_agent_global_update_signal_file()),
+                                "Signal file should be present")
+                end_time = fileutil.read_file(get_agent_global_update_signal_file())
+                self.assertGreater(end_time, start_time, "The signal file should have been updated")
 
     def test_it_should_delete_agent_packages_if_invalid_guest_agent_install_instead_of_blacklist(self):
         # Legacy behavior is to blacklist instead of delete
         with self.__setup_invalid_ga_install_and_get_update_handler() as update_handler:
             update_handler.run(debug=True)
 
-            # There are 6 agents in the DATA_FILE we use for this test, but since they were all invalid, we should not have even a single agent in directory
+            # There are 6 agents in the DATA_FILE we use for this test, but since they were all invalid,
+            # we should not have even a single agent in directory
             self.assertEqual(0, self.agent_count(), "No agents should be found")
 
     def test_it_should_blacklist_agent_if_invalid_guest_agent_install_during_auto_update(self):

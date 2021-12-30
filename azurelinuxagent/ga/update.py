@@ -1236,8 +1236,6 @@ class UpdateHandler(object):
 
         signal_file = get_agent_global_update_signal_file()
 
-        # ToDo: Add error handling in case the agent is unable to delete this file (we should not go in an infinite loop
-        #  trying to delete it again and again)
         def remove_signal_file():
             try:
                 os.remove(signal_file)
