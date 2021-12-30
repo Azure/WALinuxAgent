@@ -40,7 +40,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_confi
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _ErrorReporter
+    StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _VmSettingsErrorReporter
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil, textutil
@@ -1215,10 +1215,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
     def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
-        """
-        Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
-        needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
-        """
+        # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
+        # needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             # Do not mock the vmSettings request at the level of azurelinuxagent.common.utils.restutil.http_request. The GONE status is handled
             # in the internal _http_request, which we mock below.
@@ -1256,22 +1254,21 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
         def test_error_in_http_request(test_case, mock_response, expected_error):
             def do_mock_request():
-                with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-                    protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
-
-                    def http_get_vm_settings(_method, _host, _relative_url, **_):
+                def http_get_handler(url, *_, **__):
+                    if self.is_host_plugin_vm_settings_request(url):
                         if isinstance(mock_response, Exception):
                             raise mock_response
                         return mock_response
+                    return None
 
-                    with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                        protocol.client.update_goal_state()
+                with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+                    protocol.client.update_goal_state()
 
             assert_no_exception(test_case, do_mock_request, expected_error)
         #
         # We test errors different kind of errors; none of them should make update_protocol raise an exception, but all of them should be reported
         #
-        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "Status Code 502")  # HostGAPlugin uses 502 for internal errors
+        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "[Internal error in HostGAPlugin] [HTTP Failed] [502: None]")
         test_error_in_http_request("Arbitrary error in the request (BAD_REQUEST)", MockHttpResponse(httpclient.BAD_REQUEST), "[HTTP Failed] [400: None]")
         test_error_in_http_request("ProtocolError during the request", ProtocolError("GENERIC PROTOCOL ERROR"), "GENERIC PROTOCOL ERROR")
         test_error_in_http_request("Generic error in the request", Exception("GENERIC REQUEST ERROR"), "GENERIC REQUEST ERROR")
@@ -1296,12 +1293,12 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                for _ in range(_ErrorReporter._MaxErrors + 3):
+                for _ in range(_VmSettingsErrorReporter._MaxErrors + 3):
                     protocol.client.update_goal_state()
 
                 messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
 
-                self.assertEqual(_ErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
+                self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
 
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
                 # Reset the error reporter and verify that additional errors are reported
