@@ -1270,7 +1270,6 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         #
         test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "[Internal error in HostGAPlugin] [HTTP Failed] [502: None]")
         test_error_in_http_request("Arbitrary error in the request (BAD_REQUEST)", MockHttpResponse(httpclient.BAD_REQUEST), "[HTTP Failed] [400: None]")
-        test_error_in_http_request("ProtocolError during the request", ProtocolError("GENERIC PROTOCOL ERROR"), "GENERIC PROTOCOL ERROR")
         test_error_in_http_request("Generic error in the request", Exception("GENERIC REQUEST ERROR"), "GENERIC REQUEST ERROR")
         test_error_in_http_request("Response headers with no Etag", MockHttpResponse(200, b""), "The vmSettings do no include an Etag")
         test_error_in_http_request("Invalid response (bad json)", MockHttpResponse(200, b"{ INVALID JSON ]", headers=[("Etag", 123)]), "Error parsing vmSettings")
@@ -1300,10 +1299,11 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
                 self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
 
-            with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                # Reset the error reporter and verify that additional errors are reported
-                protocol.client._vm_settings_error_reporter._next_period = datetime.now()
+            # Reset the error reporter and verify that additional errors are reported
+            protocol.client._vm_settings_error_reporter._next_period = datetime.now()
+            protocol.client.update_goal_state()  # this triggers the reset
 
+            with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
                 for _ in range(3):
                     protocol.client.update_goal_state()
 

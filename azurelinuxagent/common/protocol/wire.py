@@ -818,7 +818,7 @@ class WireClient(object):
                             self._extensions_goal_state = vm_settings_goal_state
                             vm_settings_goal_state_updated = True
 
-                    if goal_state_updated or vm_settings_goal_state_updated:
+                    if goal_state_updated or vm_settings_goal_state_updated and self._vm_settings_goal_state is not None:
                         # compare() raises a GoalStateMismatchError if the goal states don't match
                         ExtensionsGoalState.compare(self._goal_state.extensions_config, self._vm_settings_goal_state)
                 except Exception as error:
@@ -1529,7 +1529,7 @@ class _VmSettingsErrorReporter(object):
                 }
                 message = json.dumps(summary)
                 logger.info("[VmSettingsSummary] {0}", message)
-                add_event(WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+                add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
             self._error_count = 0
             self._request_count = 0
             self._error_count = 0
