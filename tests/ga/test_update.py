@@ -1931,21 +1931,23 @@ class TestUpdate(UpdateTestCase):
 
     @contextlib.contextmanager
     def __setup_invalid_ga_install_and_get_update_handler(self):
+        invalid_zip = os.path.join(self.tmp_dir, "invalid.zip")
+        DownloadExtensionTestCase.create_invalid_zip_file(filename=invalid_zip)
+
         with _get_update_handler() as (update_handler, protocol):
             with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
-                    invalid_zip = os.path.join(self.tmp_dir, "invalid.zip")
-                    DownloadExtensionTestCase.create_invalid_zip_file(filename=invalid_zip)
+                    with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
 
-                    def get_handler(url, **kwargs):
-                        if HttpRequestPredicates.is_agent_package_request(url):
-                            agent_pkg = load_bin_data(invalid_zip)
-                            # Returning an invalid zip here since invalid zips are considered fatal errors
-                            return ResponseMock(response=agent_pkg)
-                        return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+                        def get_handler(url, **kwargs):
+                            if HttpRequestPredicates.is_agent_package_request(url):
+                                agent_pkg = load_bin_data(invalid_zip)
+                                # Returning an invalid zip here since invalid zips are considered fatal errors
+                                return ResponseMock(response=agent_pkg)
+                            return protocol.mock_wire_data.mock_http_get(url, **kwargs)
 
-                    protocol.set_http_handlers(http_get_handler=get_handler)
-                    yield update_handler
+                        protocol.set_http_handlers(http_get_handler=get_handler)
+                        yield update_handler
 
     @contextlib.contextmanager
     def __setup_environment_for_update_signal_removal(self, update_handler, mock_remove):
@@ -2080,7 +2082,7 @@ class TestUpdate(UpdateTestCase):
                 self.assertTrue(agent.is_error_blacklisted, "Error should be blacklisted for agent: {0}".format(agent.name))
                 self.assertTrue(agent.is_blacklisted, "Agent {0} should be blacklisted".format(agent.name))
 
-        with _get_update_handler() as (update_handler, protocol):
+        with _get_update_handler() as (update_handler, _):
             update_handler.run(debug=True)
             self.assertEqual(20, self.agent_count(), "Only the non-blacklisted agents should be remaining")
             for agent in self.agents():
@@ -2100,7 +2102,7 @@ class TestUpdate(UpdateTestCase):
             exit_args, _ = exit_mock.call_args
             self.assertEqual(exit_args[0], 1, "Exit code should be 1")
 
-        with _get_update_handler() as (update_handler, protocol):
+        with _get_update_handler() as (update_handler, _):
             # To mimic a failure in update_handler.run(), raising an exception when we call systemd.is_systemd()
             # function which is one of the first things that we do to send telemetry out about the VM
             with patch.object(systemd, "is_systemd", side_effect=Exception("invalid distro")):
