@@ -1952,7 +1952,7 @@ class TestUpdate(UpdateTestCase):
     @contextlib.contextmanager
     def __setup_environment_for_update_signal_removal(self, update_handler, mock_remove):
 
-        with patch.object(update_handler, "CLEAN_UPDATE_SIGNAL_PERIOD", timedelta(seconds=0.2)):
+        with patch.object(update_handler, "CLEAN_UPDATE_SIGNAL_PERIOD", timedelta(seconds=0.01)):
             with patch.object(os, "remove", wraps=mock_remove):
                 # Create the update signal file to mimic the scenario of agent update
                 mock_remove.signal_file_creation_time = time.time()
@@ -1988,7 +1988,7 @@ class TestUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
 
-        with _get_update_handler(iterations=100, test_data=data_file) as (update_handler, protocol):
+        with _get_update_handler(iterations=10, test_data=data_file) as (update_handler, protocol):
             protocol.delete_time = {'time': 0.0, 'count': 0}
             original_remove = os.remove
 
@@ -2004,7 +2004,7 @@ class TestUpdate(UpdateTestCase):
             with self.__setup_environment_for_update_signal_removal(update_handler, mock_remove):
                 self.assertFalse(os.path.exists(get_agent_global_update_signal_file()),
                                  "Global signal file should be deleted")
-                self.assertTrue((protocol.delete_time['time'] - mock_remove.signal_file_creation_time) > 0.2,
+                self.assertTrue((protocol.delete_time['time'] - mock_remove.signal_file_creation_time) > 0.01,
                                 "The signal file should've been deleted at least after 0.2 seconds as per the mock")
                 self.assertEqual(1, protocol.delete_time['count'], "The file should be deleted only 1 time")
 
@@ -2067,7 +2067,7 @@ class TestUpdate(UpdateTestCase):
                     self.__ensure_it_can_not_blacklist_if_not_permitted(update_handler)
                     self.assertEqual(10, update_handler.get_iterations(), "Update handler should've run 10 times")
                 except AssertionError:
-                    print("Info calls: {0}".format(mock_info.call_args_list))
+                    print("Info calls: {0}\n".format(mock_info.call_args_list))
                     print("Warn calls: {0}".format(mock_warn.call_args_list))
                     raise
 
