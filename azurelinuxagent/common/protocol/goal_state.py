@@ -27,6 +27,7 @@ from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.exception import IncompleteGoalStateError
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -80,9 +81,12 @@ class GoalState(object):
             self.shared_conf = None
             self._certs_uri = findtext(xml_doc, "Certificates")
             self.certs = None
-            self.extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
             self._remote_access_uri = findtext(container, "RemoteAccessInfo")
             self.remote_access = None
+            # TODO: extensions_config is an instance member only temporarily. Once we stop comparing extensionsConfig with
+            # vmSettings, it will be replaced with the extensions goal state
+            self.extensions_config = None
+            self._extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
 
         except Exception as exception:
             # We don't log the error here since fetching the goal state is done every few seconds
@@ -105,6 +109,12 @@ class GoalState(object):
             if self._remote_access_uri is not None:
                 xml_text = wire_client.fetch_config(self._remote_access_uri, wire_client.get_header_for_cert())
                 self.remote_access = RemoteAccess(xml_text)
+
+            if self._extensions_config_uri is None:
+                self.extensions_config = ExtensionsGoalStateFactory.create_empty()
+            else:
+                xml_text = wire_client.fetch_config(self._extensions_config_uri, wire_client.get_header())
+                self.extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self.incarnation, xml_text, wire_client)
         except Exception as exception:
             logger.warn("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)

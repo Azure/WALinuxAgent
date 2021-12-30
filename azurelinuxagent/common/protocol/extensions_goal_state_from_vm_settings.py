@@ -34,6 +34,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     def __init__(self, etag, json_text):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = etag
+        self._etag = etag
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
         self._schema_version = FlexibleVersion('0.0.0.0')
@@ -57,6 +58,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     @property
     def id(self):
         return self._id
+
+    @property
+    def etag(self):
+        return self._etag
 
     @property
     def host_ga_plugin_version(self):
