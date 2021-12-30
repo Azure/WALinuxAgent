@@ -579,6 +579,9 @@ class WireClient(object):
         self._extensions_goal_state = None  # The goal state to use for extensions; can be an ExtensionsGoalStateFromVmSettings or ExtensionsGoalStateFromExtensionsConfig
         self._vm_settings_goal_state = None  # Cached value of the most recent ExtensionsGoalStateFromVmSettings
         self._host_plugin = None
+        self._host_plugin_version = FlexibleVersion("0.0.0.0")  # Version 0 means "unknown"
+        self._host_plugin_supports_vm_settings = False
+        self._host_plugin_supports_vm_settings_next_check = datetime.now()
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
         self._vm_settings_error_reporter = _VmSettingsErrorReporter()
@@ -805,29 +808,40 @@ class WireClient(object):
 
             vm_settings_goal_state_updated = False
             if not conf.get_enable_fast_track():
-                # if Fast Track is not enabled then use extensionsConfig
+                # if Fast Track is not enabled use extensionsConfig
                 self._extensions_goal_state = self._goal_state.extensions_config
             else:
-                try:
-                    vm_settings_goal_state = self._fetch_vm_settings_goal_state(force_update=force_update)
-                    if vm_settings_goal_state is None:  # if vmSettings are None, Fast Track is not supported; use extensionsConfig
-                        self._extensions_goal_state = self._goal_state.extensions_config
-                    else:
+                if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.now():
+                    # if vmSettings are not supported use extensionsConfig
+                    self._extensions_goal_state = self._goal_state.extensions_config
+                else:
+                    try:
+                        vm_settings_goal_state = self._fetch_vm_settings_goal_state(force_update=force_update)
+
+                        self._host_plugin_supports_vm_settings = True
+
                         if self._vm_settings_goal_state is None or self._vm_settings_goal_state.etag != vm_settings_goal_state.etag:
                             self._vm_settings_goal_state = vm_settings_goal_state
                             self._extensions_goal_state = vm_settings_goal_state
                             vm_settings_goal_state_updated = True
 
-                    if goal_state_updated or vm_settings_goal_state_updated and self._vm_settings_goal_state is not None:
-                        # compare() raises a GoalStateMismatchError if the goal states don't match
-                        ExtensionsGoalState.compare(self._goal_state.extensions_config, self._vm_settings_goal_state)
-                except Exception as error:
-                    # if there is any error on vmSettings then use extensionsConfig
-                    self._extensions_goal_state = self._goal_state.extensions_config
-                    # _fetch_vm_settings_goal_state() does its own detailed error reporting and raises ProtocolError; do not report those
-                    if not isinstance(error, ProtocolError):
-                        self._vm_settings_error_reporter.report_error(format_exception(error))
-                self._vm_settings_error_reporter.report_summary()
+                        if goal_state_updated or vm_settings_goal_state_updated:
+                            # compare() raises a GoalStateMismatchError if the goal states don't match
+                            ExtensionsGoalState.compare(self._goal_state.extensions_config, self._vm_settings_goal_state)
+
+                    except _VmSettingsNotSupportedError:
+                        # if vmSettings are not supported use extensionsConfig
+                        self._extensions_goal_state = self._goal_state.extensions_config
+                        # mark vmSettings as not supported for the next 6 hours
+                        self._host_plugin_supports_vm_settings = False
+                        self._host_plugin_supports_vm_settings_next_check = datetime.now() + timedelta(hours=6)
+                    except Exception as error:
+                        # if there is any errors on vmSettings then use extensionsConfig
+                        self._extensions_goal_state = self._goal_state.extensions_config
+                        # _fetch_vm_settings_goal_state() does its own detailed error reporting and raises ProtocolError; do not report those
+                        if not isinstance(error, ProtocolError):
+                            self._vm_settings_error_reporter.report_error(format_exception(error))
+                    self._vm_settings_error_reporter.report_summary()
 
             # If either goal state changed (goal_state or vm_settings_goal_state) save them
             if goal_state_updated or vm_settings_goal_state_updated:
@@ -841,7 +855,7 @@ class WireClient(object):
     def _fetch_vm_settings_goal_state(self, force_update):
         """
         Queries the vmSettings from the HostGAPlugin and returns an instance of ExtensionsGoalStateFromVmSettings.
-        Returns None if the HostGAPlugin does not support FastTrack; raises ProtocolError on error.
+        Raises _VmSettingsNotSupportedError if the HostGAPlugin does not support FastTrack or ProtocolError on other kinds of errors.
         """
         etag = None if force_update or self._vm_settings_goal_state is None else self._vm_settings_goal_state.etag
         correlation_id = str(uuid.uuid4())
@@ -860,7 +874,7 @@ class WireClient(object):
                 response = get_vm_settings()
 
             if response.status == httpclient.NOT_FOUND:  # the HostGAPlugin does not support FastTrack
-                return None
+                raise _VmSettingsNotSupportedError()
 
             if response.status == httpclient.NOT_MODIFIED:  # The goal state hasn't changed, return the current instance
                 return self._vm_settings_goal_state
@@ -894,16 +908,16 @@ class WireClient(object):
             response_content = self.decode_config(response.read())
             vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, response_content)
 
-            # log the HostGAPlugin version when we fetch the vmSettings for the first time
-            is_first_vm_settings = self._vm_settings_goal_state is None
-            if is_first_vm_settings:
+            # log the HostGAPlugin version
+            if vm_settings.host_ga_plugin_version != self._host_plugin_version:
+                self._host_plugin_version = vm_settings.host_ga_plugin_version
                 message = "HostGAPlugin version: {0}".format(vm_settings.host_ga_plugin_version)
                 logger.info(message)
                 add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
 
             # Don't support HostGAPlugin versions older than 115
             if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.115"):
-                return None
+                raise _VmSettingsNotSupportedError()
 
             logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
 
@@ -1538,3 +1552,6 @@ class _VmSettingsErrorReporter(object):
             self._timeout_count = 0
             self._request_failure_count = 0
 
+
+class _VmSettingsNotSupportedError(ProtocolError):
+    pass
