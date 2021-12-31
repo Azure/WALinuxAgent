@@ -867,6 +867,8 @@ class WireClient(object):
                     headers['if-none-match'] = etag
                 return restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1, return_raw_response=True)
 
+            self._vm_settings_error_reporter.report_request()
+
             response = get_vm_settings()
 
             if response.status == httpclient.GONE:  # retry after refreshing the HostGAPlugin
@@ -1501,14 +1503,16 @@ class _VmSettingsErrorReporter(object):
     _Period = timedelta(hours=1)  # How often to report the summary
 
     def __init__(self):
-        self._next_period = datetime.now() + _VmSettingsErrorReporter._Period
-        # These following counters are reset each reporting period
+        self._reset()
+
+    def _reset(self):
         self._request_count = 0  # Total number of vmSettings HTTP requests
         self._error_count = 0   # Total number of errors issuing vmSettings requests (includes all kinds of errors)
         self._server_error_count = 0  # Count of server side errors (HTTP status in the 500s)
         self._client_error_count = 0  # Count of client side errors (HTTP status in the 400s)
         self._timeout_count = 0  # Count of timeouts on vmSettings requests
         self._request_failure_count = 0  # Total count of requests that could not be issued (does not include requests that were actually issued and failed, for example, with 500 or 400 statuses)
+        self._next_period = datetime.now() + _VmSettingsErrorReporter._Period
 
     def report_request(self):
         self._request_count += 1
@@ -1527,11 +1531,10 @@ class _VmSettingsErrorReporter(object):
         elif category == _VmSettingsError.Timeout:
             self._timeout_count += 1
         elif category == _VmSettingsError.RequestFailed:
-            self._request_count += 1
+            self._request_failure_count += 1
 
     def report_summary(self):
         if datetime.now() >= self._next_period:
-            self._next_period = datetime.now() + _VmSettingsErrorReporter._Period
             if self._error_count > 0:
                 summary = {
                     "requests":       self._request_count,
@@ -1544,13 +1547,7 @@ class _VmSettingsErrorReporter(object):
                 message = json.dumps(summary)
                 logger.info("[VmSettingsSummary] {0}", message)
                 add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
-            self._error_count = 0
-            self._request_count = 0
-            self._error_count = 0
-            self._server_error_count = 0
-            self._client_error_count = 0
-            self._timeout_count = 0
-            self._request_failure_count = 0
+            self._reset()
 
 
 class _VmSettingsNotSupportedError(ProtocolError):
