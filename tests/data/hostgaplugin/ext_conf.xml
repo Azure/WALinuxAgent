@@ -46,6 +46,11 @@
       <additionalLocation>https://umsawqtlsshtn5v2nfgh.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml</additionalLocation>
     </additionalLocations>
   </Plugin>
+  <Plugin name="Microsoft.OSTCExtensions.VMAccessForLinux" version="1.5.11" location="https://umsasc25p0kjg0c1dg4b.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://umsamfwlmfshvxx2lsjm.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsah3cwjlctnmhsvzqv.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
 </Plugins>
 <PluginSettings>
   <Plugin name="Microsoft.Azure.Monitor.AzureMonitorLinuxAgent" version="1.9.1">
@@ -89,6 +94,13 @@
 }</RuntimeSettings>
   </Plugin>
   <Plugin name="Microsoft.CPlat.Core.RunCommandHandlerLinux" version="1.2.0">
+    <DependsOn dependencyLevel="2" name="MCExt1">
+      <DependsOnExtension extension="..." handler="..." />
+      <DependsOnExtension extension="..." handler="..." />
+    </DependsOn>
+    <DependsOn dependencyLevel="1" name="MCExt2">
+      <DependsOnExtension extension="..." handler="..." />
+    </DependsOn>
     <ExtensionRuntimeSettings seqNo="0" name="MCExt1" state="enabled">{
   "runtimeSettings": [
     {
@@ -116,6 +128,18 @@
     }
   ]
 }</ExtensionRuntimeSettings>
+  </Plugin>
+  <Plugin name="Microsoft.OSTCExtensions.VMAccessForLinux" version="1.5.11">
+    <RuntimeSettings seqNo="0">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "59A10F50FFE2A0408D3F03FE336C8FD5716CF25C",
+        "protectedSettings": "*** REDACTED ***"
+      }
+    }
+  ]
+}</RuntimeSettings>
   </Plugin>
 </PluginSettings>
 <InVMArtifactsProfileBlob>https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=PaiLic%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>

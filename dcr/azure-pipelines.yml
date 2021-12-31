@@ -4,7 +4,6 @@ parameters:
     default:
       - agent-bvt
       - extension-telemetry-pipeline
-      - ext-seq-multiple-dependencies
 
   - name: distros
     type: object

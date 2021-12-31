@@ -84,7 +84,7 @@ class TestAddFirewallRules(AgentTestCase):
 
         self.assertTrue(all(test_dst_ip in cmd for cmd in commands_called), "Dest IP was not set correctly in iptables")
         self.assertTrue(all(test_wait in cmd for cmd in commands_called), "The wait was not set properly")
-        self.assertTrue(all(str(test_uid) in cmd for cmd in commands_called if "ACCEPT" in cmd),
+        self.assertTrue(all(str(test_uid) in cmd for cmd in commands_called if ("ACCEPT" in cmd and "--uid-owner" in cmd)),
                         "The UID is not set for the accept command")
 
     def test_it_should_raise_if_invalid_data(self):
