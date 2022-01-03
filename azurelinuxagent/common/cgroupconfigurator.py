@@ -519,6 +519,7 @@ class CGroupConfigurator(object):
             if CGroupConfigurator._Impl.__try_set_cpu_quota(''):  # setting an empty value resets to the default (infinity)
                 CGroupsTelemetry.set_track_throttled_time(False)
                 _log_cgroup_info('CPUQuota: {0}', systemd.get_unit_property(systemd.get_agent_unit_name(), "CPUQuotaPerSecUSec"))
+
         @staticmethod
         def __try_set_cpu_quota(quota):
             try:

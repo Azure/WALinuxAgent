@@ -109,7 +109,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         if version.startswith("8.2"):
             # redhat 8+ uses systemd and python3
             set_systemd_files(data_files, dest=systemd_dir_path,
-                              src=["init/redhat/py3/waagent.service",
+                              src=["init/redhat/waagent.service",
                               "init/azure.slice",
                               "init/azure-vmextensions.slice"
                                    ])
@@ -120,7 +120,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
             # redhat7.0+ use systemd
             set_systemd_files(data_files, dest=systemd_dir_path,
                               src=[
-                                  "init/redhat/waagent.service",
+                                  "init/redhat/py2/waagent.service",
                                   "init/azure.slice",
                                   "init/azure-vmextensions.slice"
                               ])
