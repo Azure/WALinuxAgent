@@ -36,6 +36,8 @@ from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 
+_INITIAL_LOG_COLLECTION_DELAY = 5 * 60 # Five minutes of delay
+
 def get_collect_logs_handler():
     return CollectLogsHandler()
 
@@ -47,7 +49,7 @@ def is_log_collection_allowed():
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
     cgroups_enabled = CGroupConfigurator.get_instance().enabled()
-    supported_python = PY_VERSION_MINOR >= 7 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
+    supported_python = PY_VERSION_MINOR >= 6 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
     is_allowed = conf_enabled and cgroups_enabled and supported_python
 
     msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
@@ -133,6 +135,10 @@ class CollectLogsHandler(ThreadHandlerInterface):
         self.protocol = self.protocol_util.get_protocol()
 
     def daemon(self):
+        # Delay the first collector on start up to give short lived VMs (that might be dead before the second 
+        # collection has a chance to run) an opportunity to do produce meaningful logs to collect.
+        time.sleep(_INITIAL_LOG_COLLECTION_DELAY)
+
         try:
             CollectLogsHandler.enable_cgroups_validation()
             if self.protocol_util is None or self.protocol is None:

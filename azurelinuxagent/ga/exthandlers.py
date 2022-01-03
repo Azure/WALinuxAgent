@@ -300,13 +300,13 @@ class ExtHandlersHandler(object):
         try:
             extensions_goal_state = self.protocol.get_extensions_goal_state()
 
-            # self.ext_handlers needs to be initialized first, since status reporting depends on it
+            # self.ext_handlers and etag need to be initialized first, since status reporting depends on them
             self.ext_handlers = extensions_goal_state.extensions
+            etag = self.protocol.client.get_goal_state().incarnation
 
             if not self._extension_processing_allowed():
                 return
 
-            etag = extensions_goal_state.id
             gs_creation_time = extensions_goal_state.created_on_timestamp
             activity_id = extensions_goal_state.activity_id
             correlation_id = extensions_goal_state.correlation_id
