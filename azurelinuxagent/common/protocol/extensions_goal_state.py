@@ -22,7 +22,6 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 
 class GoalStateMismatchError(AgentError):
@@ -104,10 +103,8 @@ class ExtensionsGoalState(object):
             compare_attributes(first, second, "activity_id")
             compare_attributes(first, second, "correlation_id")
             compare_attributes(first, second, "created_on_timestamp")
-            # The status blob was added after version 112
-            if from_vm_settings.host_ga_plugin_version > FlexibleVersion("1.0.8.112"):
-                compare_attributes(first, second, "status_upload_blob")
-                compare_attributes(first, second, "status_upload_blob_type")
+            compare_attributes(first, second, "status_upload_blob")
+            compare_attributes(first, second, "status_upload_blob_type")
             compare_attributes(first, second, "required_features")
             compare_attributes(first, second, "on_hold")
             compare_array(first.agent_manifests, second.agent_manifests, compare_agent_manifests, "agent_manifests")
