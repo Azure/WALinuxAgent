@@ -125,6 +125,7 @@ class WALAEventOperation:
     Unknown = "Unknown"
     Update = "Update"
     VmSettings = "VmSettings"
+    VmSettingsSummary = "VmSettingsSummary"
 
 
 SHOULD_ENCODE_MESSAGE_LEN = 80
