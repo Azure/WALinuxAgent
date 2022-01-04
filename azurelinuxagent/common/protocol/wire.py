@@ -860,6 +860,9 @@ class WireClient(object):
         etag = None if force_update or self._vm_settings_goal_state is None else self._vm_settings_goal_state.etag
         correlation_id = str(uuid.uuid4())
 
+        def format_message(msg):
+            return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
+
         try:
             def get_vm_settings():
                 url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
@@ -888,6 +891,7 @@ class WireClient(object):
                 # clear any confusion produced by the poor choice of status code.
                 if response.status == httpclient.BAD_GATEWAY:
                     error_description = "[Internal error in HostGAPlugin] {0}".format(error_description)
+                error_description = format_message(error_description)
 
                 if 400 <= response.status <= 499:
                     self._vm_settings_error_reporter.report_error(error_description, _VmSettingsError.ClientError)
@@ -896,14 +900,14 @@ class WireClient(object):
                 else:
                     self._vm_settings_error_reporter.report_error(error_description)
 
-                raise ProtocolError("GET vmSettings [correlation ID: {0}]: {1} ({2})".format(correlation_id, response.status, error_description))
+                raise ProtocolError(error_description)
 
             for h in response.getheaders():
                 if h[0].lower() == 'etag':
                     response_etag = h[1]
                     break
             else:  # since the vmSettings were updated, the response must include an etag
-                message = "The vmSettings do no include an Etag [correlation ID: {0}]".format(correlation_id)
+                message = format_message("The vmSettings response does no include an Etag header")
                 self._vm_settings_error_reporter.report_error(message)
                 raise ProtocolError(message)
 
@@ -929,10 +933,10 @@ class WireClient(object):
             raise
         except Exception as exception:
             if isinstance(exception, IOError) and "timed out" in ustr(exception):
-                message = "vmSettings timeout [correlation ID: {0} eTag: {1}]".format(correlation_id, etag)
+                message = format_message("Timeout")
                 self._vm_settings_error_reporter.report_error(message, _VmSettingsError.Timeout)
             else:
-                message = "Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, textutil.format_exception(exception))
+                message = format_message("Request failed: {0}".format(textutil.format_exception(exception)))
                 self._vm_settings_error_reporter.report_error(message, _VmSettingsError.RequestFailed)
             raise ProtocolError(message)
 
@@ -1511,7 +1515,7 @@ class _VmSettingsErrorReporter(object):
         self._server_error_count = 0  # Count of server side errors (HTTP status in the 500s)
         self._client_error_count = 0  # Count of client side errors (HTTP status in the 400s)
         self._timeout_count = 0  # Count of timeouts on vmSettings requests
-        self._request_failure_count = 0  # Total count of requests that could not be issued (does not include requests that were actually issued and failed, for example, with 500 or 400 statuses)
+        self._request_failure_count = 0  # Total count of requests that could not be issued (does not include timeouts or requests that were actually issued and failed, for example, with 500 or 400 statuses)
         self._next_period = datetime.now() + _VmSettingsErrorReporter._Period
 
     def report_request(self):
