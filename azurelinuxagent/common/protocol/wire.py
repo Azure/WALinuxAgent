@@ -47,7 +47,7 @@ from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
+    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, format_exception
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
@@ -579,9 +579,12 @@ class WireClient(object):
         self._extensions_goal_state = None  # The goal state to use for extensions; can be an ExtensionsGoalStateFromVmSettings or ExtensionsGoalStateFromExtensionsConfig
         self._vm_settings_goal_state = None  # Cached value of the most recent ExtensionsGoalStateFromVmSettings
         self._host_plugin = None
+        self._host_plugin_version = FlexibleVersion("0.0.0.0")  # Version 0 means "unknown"
+        self._host_plugin_supports_vm_settings = False
+        self._host_plugin_supports_vm_settings_next_check = datetime.now()
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
-        self._vm_settings_error_reporter = _ErrorReporter(WALAEventOperation.VmSettings)
+        self._vm_settings_error_reporter = _VmSettingsErrorReporter()
 
     def get_endpoint(self):
         return self._endpoint
@@ -805,28 +808,40 @@ class WireClient(object):
 
             vm_settings_goal_state_updated = False
             if not conf.get_enable_fast_track():
-                # if Fast Track is not enabled then use extensionsConfig
+                # if Fast Track is not enabled use extensionsConfig
                 self._extensions_goal_state = self._goal_state.extensions_config
             else:
-                try:
-                    vm_settings_goal_state = self._fetch_vm_settings_goal_state(force_update=force_update)
-                    if vm_settings_goal_state is None:  # if vmSettings are None, Fast Track is not supported; use extensionsConfig
-                        self._extensions_goal_state = self._goal_state.extensions_config
-                    else:
+                if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.now():
+                    # if vmSettings are not supported use extensionsConfig
+                    self._extensions_goal_state = self._goal_state.extensions_config
+                else:
+                    try:
+                        vm_settings_goal_state = self._fetch_vm_settings_goal_state(force_update=force_update)
+
+                        self._host_plugin_supports_vm_settings = True
+
                         if self._vm_settings_goal_state is None or self._vm_settings_goal_state.etag != vm_settings_goal_state.etag:
                             self._vm_settings_goal_state = vm_settings_goal_state
                             self._extensions_goal_state = vm_settings_goal_state
                             vm_settings_goal_state_updated = True
 
-                    if goal_state_updated or vm_settings_goal_state_updated:
-                        # compare() raises a GoalStateMismatchError if the goal states don't match
-                        ExtensionsGoalState.compare(self._goal_state.extensions_config, self._vm_settings_goal_state)
-                except Exception as error:
-                    # if there is any error on vmSettings then use extensionsConfig
-                    self._extensions_goal_state = self._goal_state.extensions_config
-                    # TODO: Once FastTrack is stable, these exceptions should be rare. Add a traceback to the error message at that point.
-                    self._vm_settings_error_reporter.report_error(ustr(error))
-                self._vm_settings_error_reporter.report_summary()
+                        if goal_state_updated or vm_settings_goal_state_updated:
+                            # compare() raises a GoalStateMismatchError if the goal states don't match
+                            ExtensionsGoalState.compare(self._goal_state.extensions_config, self._vm_settings_goal_state)
+
+                    except _VmSettingsNotSupportedError:
+                        # if vmSettings are not supported use extensionsConfig
+                        self._extensions_goal_state = self._goal_state.extensions_config
+                        # mark vmSettings as not supported for the next 6 hours
+                        self._host_plugin_supports_vm_settings = False
+                        self._host_plugin_supports_vm_settings_next_check = datetime.now() + timedelta(hours=6)
+                    except Exception as error:
+                        # if there is any errors on vmSettings then use extensionsConfig
+                        self._extensions_goal_state = self._goal_state.extensions_config
+                        # _fetch_vm_settings_goal_state() does its own detailed error reporting and raises ProtocolError; do not report those
+                        if not isinstance(error, ProtocolError):
+                            self._vm_settings_error_reporter.report_error(format_exception(error))
+                    self._vm_settings_error_reporter.report_summary()
 
             # If either goal state changed (goal_state or vm_settings_goal_state) save them
             if goal_state_updated or vm_settings_goal_state_updated:
@@ -840,26 +855,31 @@ class WireClient(object):
     def _fetch_vm_settings_goal_state(self, force_update):
         """
         Queries the vmSettings from the HostGAPlugin and returns an instance of ExtensionsGoalStateFromVmSettings.
-        Returns None if the HostGAPlugin does not support FastTrack.
+        Raises _VmSettingsNotSupportedError if the HostGAPlugin does not support FastTrack or ProtocolError on other kinds of errors.
         """
         etag = None if force_update or self._vm_settings_goal_state is None else self._vm_settings_goal_state.etag
         correlation_id = str(uuid.uuid4())
+
+        def format_message(msg):
+            return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
 
         try:
             def get_vm_settings():
                 url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
                 if etag is not None:
                     headers['if-none-match'] = etag
-                return restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1)
+                return restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1, return_raw_response=True)
 
-            try:
-                response = get_vm_settings()
-            except ResourceGoneError:  # retry after refreshing the HostGAPlugin
+            self._vm_settings_error_reporter.report_request()
+
+            response = get_vm_settings()
+
+            if response.status == httpclient.GONE:  # retry after refreshing the HostGAPlugin
                 self.update_host_plugin_from_goal_state()
                 response = get_vm_settings()
 
             if response.status == httpclient.NOT_FOUND:  # the HostGAPlugin does not support FastTrack
-                return None
+                raise _VmSettingsNotSupportedError()
 
             if response.status == httpclient.NOT_MODIFIED:  # The goal state hasn't changed, return the current instance
                 return self._vm_settings_goal_state
@@ -871,28 +891,39 @@ class WireClient(object):
                 # clear any confusion produced by the poor choice of status code.
                 if response.status == httpclient.BAD_GATEWAY:
                     error_description = "[Internal error in HostGAPlugin] {0}".format(error_description)
-                raise ProtocolError("GET vmSettings [correlation ID: {0}]: {1} ({2})".format(correlation_id, response.status, error_description))
+                error_description = format_message(error_description)
+
+                if 400 <= response.status <= 499:
+                    self._vm_settings_error_reporter.report_error(error_description, _VmSettingsError.ClientError)
+                elif 500 <= response.status <= 599:
+                    self._vm_settings_error_reporter.report_error(error_description, _VmSettingsError.ServerError)
+                else:
+                    self._vm_settings_error_reporter.report_error(error_description)
+
+                raise ProtocolError(error_description)
 
             for h in response.getheaders():
                 if h[0].lower() == 'etag':
                     response_etag = h[1]
                     break
             else:  # since the vmSettings were updated, the response must include an etag
-                raise ProtocolError("The vmSettings do no include an Etag [correlation ID: {0}]".format(correlation_id))
+                message = format_message("The vmSettings response does not include an Etag header")
+                self._vm_settings_error_reporter.report_error(message)
+                raise ProtocolError(message)
 
             response_content = self.decode_config(response.read())
             vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, response_content)
 
-            # log the HostGAPlugin version when we fetch the vmSettings for the first time
-            is_first_vm_settings = self._vm_settings_goal_state is None
-            if is_first_vm_settings:
+            # log the HostGAPlugin version
+            if vm_settings.host_ga_plugin_version != self._host_plugin_version:
+                self._host_plugin_version = vm_settings.host_ga_plugin_version
                 message = "HostGAPlugin version: {0}".format(vm_settings.host_ga_plugin_version)
                 logger.info(message)
                 add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
 
             # Don't support HostGAPlugin versions older than 115
             if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.115"):
-                return None
+                raise _VmSettingsNotSupportedError()
 
             logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
 
@@ -900,11 +931,14 @@ class WireClient(object):
 
         except ProtocolError:
             raise
-        except HttpError as http_error:
-            raise Exception("{0} [correlation ID: {1} eTag: {2}]".format(ustr(http_error), correlation_id, etag))
         except Exception as exception:
-            error = textutil.format_exception(exception)  # since this is a generic error, we format the exception to include the traceback
-            raise Exception("Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, error))
+            if isinstance(exception, IOError) and "timed out" in ustr(exception):
+                message = format_message("Timeout")
+                self._vm_settings_error_reporter.report_error(message, _VmSettingsError.Timeout)
+            else:
+                message = format_message("Request failed: {0}".format(textutil.format_exception(exception)))
+                self._vm_settings_error_reporter.report_error(message, _VmSettingsError.RequestFailed)
+            raise ProtocolError(message)
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
@@ -1461,27 +1495,64 @@ class InVMArtifactsProfile(object):
         return False
 
 
-class _ErrorReporter(object):
+class _VmSettingsError(object):
+    ServerError   = 'ServerError'
+    ClientError   = 'ClientError'
+    Timeout       = 'Timeout'
+    RequestFailed = 'RequestFailed'
+
+
+class _VmSettingsErrorReporter(object):
     _MaxErrors = 5  # Max number of error reported by period
-    _Period = timedelta(hours=1)  # How often to report _errors
+    _Period = timedelta(hours=1)  # How often to report the summary
 
-    def __init__(self, operation):
-        self._operation = operation
-        self._error_count = 0
-        self._next_period = datetime.now() + _ErrorReporter._Period
-        self._log_message_prefix = "[{0}] [Informational only, the Agent will continue normal operation]".format(self._operation)
+    def __init__(self):
+        self._reset()
 
-    def report_error(self, error):
+    def _reset(self):
+        self._request_count = 0  # Total number of vmSettings HTTP requests
+        self._error_count = 0   # Total number of errors issuing vmSettings requests (includes all kinds of errors)
+        self._server_error_count = 0  # Count of server side errors (HTTP status in the 500s)
+        self._client_error_count = 0  # Count of client side errors (HTTP status in the 400s)
+        self._timeout_count = 0  # Count of timeouts on vmSettings requests
+        self._request_failure_count = 0  # Total count of requests that could not be issued (does not include timeouts or requests that were actually issued and failed, for example, with 500 or 400 statuses)
+        self._next_period = datetime.now() + _VmSettingsErrorReporter._Period
+
+    def report_request(self):
+        self._request_count += 1
+
+    def report_error(self, error, category=None):
         self._error_count += 1
-        if self._error_count <= _ErrorReporter._MaxErrors:
-            logger.info("{0} {1}", self._log_message_prefix, error)
-            add_event(op=self._operation, message=error, is_success=False, log_event=False)
+
+        if self._error_count <= _VmSettingsErrorReporter._MaxErrors:
+            logger.info("[VmSettings] [Informational only, the Agent will continue normal operation] {0}", error)
+            add_event(op=WALAEventOperation.VmSettings, message=error, is_success=False, log_event=False)
+
+        if category == _VmSettingsError.ServerError:
+            self._server_error_count += 1
+        elif category == _VmSettingsError.ClientError:
+            self._client_error_count += 1
+        elif category == _VmSettingsError.Timeout:
+            self._timeout_count += 1
+        elif category == _VmSettingsError.RequestFailed:
+            self._request_failure_count += 1
 
     def report_summary(self):
         if datetime.now() >= self._next_period:
-            self._next_period = datetime.now() + _ErrorReporter._Period
             if self._error_count > 0:
-                message = "{0} errors in the last period".format(self._error_count)
-                logger.info("{0} {1}", self._log_message_prefix, message)
-                add_event(op=self._operation, message=message, is_success=False, log_event=False)
-                self._error_count = 0
+                summary = {
+                    "requests":       self._request_count,
+                    "errors":         self._error_count,
+                    "serverErrors":   self._server_error_count,
+                    "clientErrors":   self._client_error_count,
+                    "timeouts":       self._timeout_count,
+                    "failedRequests": self._request_failure_count
+                }
+                message = json.dumps(summary)
+                logger.info("[VmSettingsSummary] {0}", message)
+                add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+            self._reset()
+
+
+class _VmSettingsNotSupportedError(ProtocolError):
+    pass
