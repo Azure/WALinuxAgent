@@ -21,7 +21,6 @@ from datetime import datetime, timedelta
 from threading import currentThread
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
-from tests.tools import skip_if_predicate_true
 
 _ORIGINAL_POPEN = subprocess.Popen
 
