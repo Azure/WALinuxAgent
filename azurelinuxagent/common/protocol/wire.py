@@ -907,7 +907,7 @@ class WireClient(object):
                     response_etag = h[1]
                     break
             else:  # since the vmSettings were updated, the response must include an etag
-                message = format_message("The vmSettings response does no include an Etag header")
+                message = format_message("The vmSettings response does not include an Etag header")
                 self._vm_settings_error_reporter.report_error(message)
                 raise ProtocolError(message)
 

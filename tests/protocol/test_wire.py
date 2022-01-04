@@ -1271,7 +1271,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "[Internal error in HostGAPlugin] [HTTP Failed] [502: None]")
         test_error_in_http_request("Arbitrary error in the request (BAD_REQUEST)", MockHttpResponse(httpclient.BAD_REQUEST), "[HTTP Failed] [400: None]")
         test_error_in_http_request("Generic error in the request", Exception("GENERIC REQUEST ERROR"), "GENERIC REQUEST ERROR")
-        test_error_in_http_request("Response headers with no Etag", MockHttpResponse(200, b""), "The vmSettings response does no include an Etag header")
+        test_error_in_http_request("Response headers with no Etag", MockHttpResponse(200, b""), "The vmSettings response does not include an Etag header")
         test_error_in_http_request("Invalid response (bad json)", MockHttpResponse(200, b"{ INVALID JSON ]", headers=[("Etag", 123)]), "Error parsing vmSettings")
 
         # Lastly, test the goal state comparison
