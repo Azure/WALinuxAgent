@@ -1539,18 +1539,20 @@ class _VmSettingsErrorReporter(object):
 
     def report_summary(self):
         if datetime.now() >= self._next_period:
+            summary = {
+                "requests":       self._request_count,
+                "errors":         self._error_count,
+                "serverErrors":   self._server_error_count,
+                "clientErrors":   self._client_error_count,
+                "timeouts":       self._timeout_count,
+                "failedRequests": self._request_failure_count
+            }
+            # always send telemetry, but log errors only
+            message = json.dumps(summary)
+            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
             if self._error_count > 0:
-                summary = {
-                    "requests":       self._request_count,
-                    "errors":         self._error_count,
-                    "serverErrors":   self._server_error_count,
-                    "clientErrors":   self._client_error_count,
-                    "timeouts":       self._timeout_count,
-                    "failedRequests": self._request_failure_count
-                }
-                message = json.dumps(summary)
                 logger.info("[VmSettingsSummary] {0}", message)
-                add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+
             self._reset()
 
 
