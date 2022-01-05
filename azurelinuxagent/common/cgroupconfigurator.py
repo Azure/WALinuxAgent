@@ -780,7 +780,7 @@ class CGroupConfigurator(object):
             if self.enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
-                    unit_file_path = service.get('path', None)
+                    unit_file_path = systemd.get_unit_file_install_path()
                     if service_name is not None and unit_file_path is not None:
                         files_to_create = []
                         drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
@@ -804,7 +804,7 @@ class CGroupConfigurator(object):
             if services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
-                    unit_file_path = service.get('path', None)
+                    unit_file_path = systemd.get_unit_file_install_path()
                     if service_name is not None and unit_file_path is not None:
                         files_to_cleanup = []
                         drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
