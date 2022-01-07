@@ -1345,7 +1345,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, mock_signal.call_count)
 
     def test_get_latest_agent_should_return_latest_agent_even_on_bad_error_json(self):
-        self.prepare_agents()
+        dst_ver = self.prepare_agents()
         # Add a malformed error.json file in all existing agents
         for agent_dir in self.agent_dirs():
             error_file_path = os.path.join(agent_dir, AGENT_ERROR_FILE)
@@ -1353,7 +1353,7 @@ class TestUpdate(UpdateTestCase):
                 f.write("")
 
         latest_agent = self.update_handler.get_latest_agent()
-        self.assertEqual(latest_agent.name, 'WALinuxAgent-9.9.9.28', "Latest agent is invalid")
+        self.assertEqual(latest_agent.version, dst_ver, "Latest agent version is invalid")
 
     def _test_run(self, invocations=1, calls=1, enable_updates=False, sleep_interval=(6,)):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)

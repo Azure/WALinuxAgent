@@ -40,7 +40,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_confi
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _ErrorReporter
+    StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _VmSettingsErrorReporter
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil, textutil
@@ -1215,10 +1215,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
     def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
-        """
-        Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
-        needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
-        """
+        # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
+        # needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             # Do not mock the vmSettings request at the level of azurelinuxagent.common.utils.restutil.http_request. The GONE status is handled
             # in the internal _http_request, which we mock below.
@@ -1256,26 +1254,24 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
         def test_error_in_http_request(test_case, mock_response, expected_error):
             def do_mock_request():
-                with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-                    protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
-
-                    def http_get_vm_settings(_method, _host, _relative_url, **_):
+                def http_get_handler(url, *_, **__):
+                    if self.is_host_plugin_vm_settings_request(url):
                         if isinstance(mock_response, Exception):
                             raise mock_response
                         return mock_response
+                    return None
 
-                    with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                        protocol.client.update_goal_state()
+                with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+                    protocol.client.update_goal_state()
 
             assert_no_exception(test_case, do_mock_request, expected_error)
         #
         # We test errors different kind of errors; none of them should make update_protocol raise an exception, but all of them should be reported
         #
-        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "Status Code 502")  # HostGAPlugin uses 502 for internal errors
+        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "[Internal error in HostGAPlugin] [HTTP Failed] [502: None]")
         test_error_in_http_request("Arbitrary error in the request (BAD_REQUEST)", MockHttpResponse(httpclient.BAD_REQUEST), "[HTTP Failed] [400: None]")
-        test_error_in_http_request("ProtocolError during the request", ProtocolError("GENERIC PROTOCOL ERROR"), "GENERIC PROTOCOL ERROR")
         test_error_in_http_request("Generic error in the request", Exception("GENERIC REQUEST ERROR"), "GENERIC REQUEST ERROR")
-        test_error_in_http_request("Response headers with no Etag", MockHttpResponse(200, b""), "The vmSettings do no include an Etag")
+        test_error_in_http_request("Response headers with no Etag", MockHttpResponse(200, b""), "The vmSettings response does not include an Etag header")
         test_error_in_http_request("Invalid response (bad json)", MockHttpResponse(200, b"{ INVALID JSON ]", headers=[("Etag", 123)]), "Error parsing vmSettings")
 
         # Lastly, test the goal state comparison
@@ -1296,17 +1292,18 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                for _ in range(_ErrorReporter._MaxErrors + 3):
+                for _ in range(_VmSettingsErrorReporter._MaxErrors + 3):
                     protocol.client.update_goal_state()
 
                 messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
 
-                self.assertEqual(_ErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
+                self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
+
+            # Reset the error reporter and verify that additional errors are reported
+            protocol.client._vm_settings_error_reporter._next_period = datetime.now()
+            protocol.client.update_goal_state()  # this triggers the reset
 
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                # Reset the error reporter and verify that additional errors are reported
-                protocol.client._vm_settings_error_reporter._next_period = datetime.now()
-
                 for _ in range(3):
                     protocol.client.update_goal_state()
 
@@ -1392,13 +1389,82 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             self.assertEqual(1, compare_patcher.call_count, "ExtensionsGoalState.compare() should have been called exactly once")
 
+    def test_it_should_keep_track_of_errors_in_vm_settings_requests(self):
+        mock_response = None
+
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                if isinstance(mock_response, Exception):
+                    # E0702: Raising NoneType while only classes or instances are allowed (raising-bad-type) - Disabled: we never raise None
+                    raise mock_response  # pylint: disable=raising-bad-type
+                return mock_response
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            mock_response = MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR)
+            protocol.client.update_goal_state()
+
+            mock_response = MockHttpResponse(httpclient.BAD_REQUEST)
+            protocol.client.update_goal_state()
+            protocol.client.update_goal_state()
+
+            mock_response = IOError("timed out")
+            protocol.client.update_goal_state()
+
+            mock_response = httpclient.HTTPException()
+            protocol.client.update_goal_state()
+            protocol.client.update_goal_state()
+
+            # force the summary by resetting its period and calling update_goal_state
+            with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
+                mock_response = None  # stop producing errors
+                protocol.client._vm_settings_error_reporter._next_period = datetime.now()
+                protocol.client.update_goal_state()
+            summary_text = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettingsSummary"]
+
+            self.assertEqual(1, len(summary_text), "Exactly 1 summary should have been produced. Got: {0} ".format(summary_text))
+
+            summary = json.loads(summary_text[0])
+
+            expected = {
+                "requests":       6 + 2,  # two extra calls to update_goal_state (when creating the mock protocol and when forcing the summary)
+                "errors":         6,
+                "serverErrors":   1,
+                "clientErrors":   2,
+                "timeouts":       1,
+                "failedRequests": 2
+            }
+
+            self.assertEqual(expected, summary, "The count of errors is incorrect")
+
+    def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            def http_get_handler(url, *_, **__):
+                if self.is_host_plugin_vm_settings_request(url):
+                    return MockHttpResponse(httpclient.NOT_FOUND)  # HostGAPlugin returns 404 if the API is not supported
+                return None
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            def get_vm_settings_call_count():
+                return len([url for url in protocol.get_tracked_urls() if "vmSettings" in url])
+
+            protocol.client.update_goal_state()
+            self.assertEqual(1, get_vm_settings_call_count(), "There should have been an initial call to vmSettings.")
+
+            protocol.client.update_goal_state()
+            protocol.client.update_goal_state()
+            self.assertEqual(1, get_vm_settings_call_count(), "Additional calls to update_goal_state should not have produced extra calls to vmSettings.")
+
+            # reset the vmSettings check period; this should restart the calls to the API
+            protocol.client._host_plugin_supports_vm_settings_next_check = datetime.now()
+            protocol.client.update_goal_state()
+            self.assertEqual(2, get_vm_settings_call_count(), "A second call to vmSettings was expecting after the check period has elapsed.")
+
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
     Tests for WireClient.update_host_plugin_from_goal_state()
-
     """
-
     def test_it_should_update_the_host_plugin_with_or_without_incarnation_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
