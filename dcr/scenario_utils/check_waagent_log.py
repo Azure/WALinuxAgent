@@ -93,6 +93,12 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         {
             'message': r"WARNING EnvHandler ExtHandler Dhcp client is not running."
         },
+        # 2021-12-20T07:46:23.020197Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a memory cgroup
+        {
+            'message': r"The agent's process is not within a memory cgroup",
+            'if': lambda log_line: re.match(r"((centos7\.8)|(redhat7\.8)|(redhat8\.2))\D*", distro,
+                                            flags=re.IGNORECASE)
+        }
     ]
 
     if ignore is not None:

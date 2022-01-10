@@ -258,6 +258,13 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertTrue(isinstance(ret, RedhatOSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")
 
+        ret = _get_osutil(distro_name="rocky",
+                          distro_code_name="",
+                          distro_full_name="",
+                          distro_version="8")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
     def test_get_osutil_it_should_return_euleros(self):
         ret = _get_osutil(distro_name="euleros",
                           distro_code_name="",
