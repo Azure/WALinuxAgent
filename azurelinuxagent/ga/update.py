@@ -46,7 +46,7 @@ from azurelinuxagent.common.event import add_event, initialize_event_logger_vmin
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
-from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses
+from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses, ExtHandlerPackageList
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils import shellutil
@@ -910,7 +910,9 @@ class UpdateHandler(object):
 
     def _check_and_download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         """
-        This function periodically (1hr by default) checks if new Agent upgrade is available and downloads it on filesystem if it is.
+        This function downloads the new agent if an update is available.
+        If a requested version is available in goal state, then only that version is downloaded.
+        Else, we periodically (1hr by default) checks if new Agent upgrade is available and download it on filesystem if available.
         rtype: Boolean
         return: True if current agent is no longer available or an agent with a higher version number is available
         else False
@@ -948,13 +950,18 @@ class UpdateHandler(object):
                 # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
                 # If there's no new incarnation, don't proceed with anything
                 requested_version = manifests[0].requested_version
-                logger.info("Found requested version in manifest: {0} for incarnation: {1}".format(
-                    requested_version, incarnation))
+                msg = "Found requested version in manifest: {0} for incarnation: {1}".format(
+                    requested_version, incarnation)
+                logger.info(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg)
             else:
                 # If incarnation didn't change, don't process anything.
                 return False
         else:
             # If no requested version specified in the Goal State, follow the old auto-update logic
+            # Note: If the first Goal State contains a requested version, this timer won't start (i.e. self.last_attempt_time won't be updated).
+            # If any subsequent goal state does not contain requested version, this timer will start then, and we will
+            # download all versions available in PIR and auto-update to the highest available version on that goal state.
             now = time.time()
             if self.last_attempt_time is not None:
                 next_attempt_time = self.last_attempt_time + conf.get_autoupdate_frequency()
@@ -970,20 +977,24 @@ class UpdateHandler(object):
         try:
             # If we make it to this point, then either there is a requested version in a new GS (new auto-update model),
             # or the 1hr time limit has elapsed for us to check the agent manifest for updates (old auto-update model).
-            pkg_list = protocol.get_vmagent_pkgs(manifests[0])
-            packages_to_download = pkg_list.versions
+            pkg_list = ExtHandlerPackageList()
 
-            # Verify the requested version is in agent manifest (if specified)
-            if requested_version is not None:
-                if requested_version == CURRENT_VERSION:
-                    # If the requested version is the current version, don't download anything and delete all other agents from disk
-                    packages_to_download = []
-                else:
-                    for pkg in pkg_list.versions:
-                        if FlexibleVersion(pkg.version) == requested_version:
-                            # Found a matching package, only download that one
-                            packages_to_download = [pkg]
-                            break
+            # If the requested version is the current version, don't download anything and delete all other agents from disk
+            # In this case, no need to even fetch the GA family manifest as we don't need to download any agent.
+            if requested_version is not None and requested_version == CURRENT_VERSION:
+                packages_to_download = []
+                logger.info("The requested version is running as the current version: {0}".format(requested_version))
+            else:
+                pkg_list = protocol.get_vmagent_pkgs(manifests[0])
+                packages_to_download = pkg_list.versions
+
+            # Verify the requested version is in GA family manifest (if specified)
+            if requested_version is not None and requested_version != CURRENT_VERSION:
+                for pkg in pkg_list.versions:
+                    if FlexibleVersion(pkg.version) == requested_version:
+                        # Found a matching package, only download that one
+                        packages_to_download = [pkg]
+                        break
 
                 if packages_to_download == pkg_list.versions:
                     msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
@@ -1002,9 +1013,8 @@ class UpdateHandler(object):
             # If requested version is provided, this would delete all other agents present on the VM except the
             # current one and the requested one if they're different, and only the current one if same.
             # Note:
-            #  The code leaves on disk available, but blacklisted, agents so as to preserve the state.
+            #  The code leaves on disk available, but blacklisted, agents to preserve the state.
             #  Otherwise, those agents could be downloaded again and inappropriately retried.
-            # ToDo: Don't blacklist agents if unable to download/unzip (as per the comment above).
             self._purge_agents()
             self._filter_blacklisted_agents()
 
