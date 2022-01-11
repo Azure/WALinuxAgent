@@ -2110,8 +2110,10 @@ class TestAgentUpgrade(UpdateTestCase):
                 update_handler.run(debug=True)
 
             self.__assert_exit_code_successful(update_handler.exit_mock)
-            requested_agent = self.agent_dir("9.9.9.10")
-            current_agent = self.agent_dir(CURRENT_VERSION)
+            upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                  'Agent upgrade discovered, updating to WALinuxAgent-9.9.9.10 -- exiting' in kwarg[
+                                      'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
+            self.assertEqual(1, len(upgrade_event_msgs), "Agent not upgraded properly")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
 
     def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
@@ -2166,7 +2168,7 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file = mockwiredata.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
-                                       normal_frequency=0.2, hotfix_frequency=0.5) as (update_handler, mock_telemetry):
+                                       normal_frequency=0.01, hotfix_frequency=0.01) as (update_handler, mock_telemetry):
             with patch.object(conf, "get_enable_ga_versioning", return_value=True):
                 update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
                 update_handler._protocol.mock_wire_data.set_incarnation(2)
