@@ -3451,10 +3451,12 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                     .format(extension.status_blobs))
 
                 extension_status_msg = get_keypath_or_throw(extension.status_blobs[0],
-                    "runtimeSettingsStatus/settingsStatus/status/formattedMessage/message")
+                    "runtimeSettingsStatus/settingsStatus/status/formattedMessage/message",
+                    msg="SC extension '{0}' did not report extension status when its dependency failed."\
+                        .format(extension.name))
+
                 expected_extension_status_msg = "Skipping processing of extensions since execution of dependent extension {0} failed"\
                     .format("OSTCExtensions.OtherExampleHandlerLinux")
-
                 self.assertEqual(extension_status_msg, expected_extension_status_msg, 
                     "Expected the extension status to match {0}, but got '{1}' instead."\
                         .format(expected_extension_status_msg, extension_status_msg))
