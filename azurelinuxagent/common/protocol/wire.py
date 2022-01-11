@@ -785,6 +785,13 @@ class WireClient(object):
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
+            #
+            # The entire goal state needs to be retrieved from the WireServer (via the GoalState class), and the HostGAPlugin
+            # (via the self._fetch_vm_settings_goal_state method.)
+            #
+            # Start by fetching the goal state from the WireServer; if fetch_full_goal_state becomes True this will also
+            # update the ExtensionsConfig instance in GoalState.
+            #
             goal_state = GoalState(self)
 
             # Always update the hostgaplugin, since the agent may issue requests to it even if there are no other changes
@@ -806,6 +813,9 @@ class WireClient(object):
                 self._goal_state = goal_state
                 goal_state_updated = True
 
+            #
+            # Now fetch the vmSettings (which contain the extensions goal state) from the HostGAPlugin
+            #
             vm_settings_goal_state, vm_settings_goal_state_updated = (None, False)
             vm_settings_goal_state_is_valid = False
 
@@ -825,6 +835,9 @@ class WireClient(object):
                         self._vm_settings_error_reporter.report_error(format_exception(error))
                 self._vm_settings_error_reporter.report_summary()
 
+            #
+            # If we fetched a valid vmSettings, use that for the extensions goal state. Otherwise use ExtensionsConfig
+            #
             if vm_settings_goal_state_is_valid:
                 self._extensions_goal_state = vm_settings_goal_state
             else:
