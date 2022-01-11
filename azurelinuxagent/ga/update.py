@@ -166,6 +166,9 @@ class UpdateHandler(object):
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
 
+        # VM Size is reported via the heartbeat, default it here.
+        self._vm_size = "unknown"
+
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
         self._last_try_update_goal_state_failed = False
@@ -426,8 +429,6 @@ class UpdateHandler(object):
             err_msg = "Failed to reach IMDS while retrieving VM size information. Error was: {0}"\
                 .format(e)
             logger.warn(err_msg)
-
-            self._vm_size = "unknown"
 
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
