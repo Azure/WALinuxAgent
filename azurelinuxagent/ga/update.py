@@ -19,7 +19,6 @@
 import glob
 import json
 import os
-import platform
 import random
 import re
 import shutil
@@ -35,6 +34,7 @@ from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.protocol.imds import get_imds_client
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
@@ -44,7 +44,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses
@@ -333,6 +333,8 @@ class UpdateHandler(object):
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
 
+            self._initialize_heartbeat_parameters(protocol)
+
             # Log OS-specific info.
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; AgentService: {service_name}; "\
@@ -413,6 +415,19 @@ class UpdateHandler(object):
 
         self._shutdown()
         sys.exit(0)
+
+    def _initialize_heartbeat_parameters(self, protocol):
+        imds_client = get_imds_client(protocol.get_endpoint())
+        
+        try:
+            imds_info = imds_client.get_compute()
+            self._vm_size = imds_info.vmSize
+        except HttpError as he:
+            err_msg = "Failed to reach IMDS while retrieving VM size information. Error was: {0}"\
+                .format(he)
+            logger.warn(err_msg)
+
+            self._vm_size = "unknown"
 
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
@@ -992,11 +1007,10 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
-            arch = platform.processor()
 
             telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled, arch)
+                                                         auto_update_enabled, self._vm_size)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
