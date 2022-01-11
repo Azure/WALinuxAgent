@@ -422,9 +422,9 @@ class UpdateHandler(object):
         try:
             imds_info = imds_client.get_compute()
             self._vm_size = imds_info.vmSize
-        except HttpError as he:
+        except Exception as e:
             err_msg = "Failed to reach IMDS while retrieving VM size information. Error was: {0}"\
-                .format(he)
+                .format(e)
             logger.warn(err_msg)
 
             self._vm_size = "unknown"
