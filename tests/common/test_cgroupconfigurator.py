@@ -578,8 +578,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_set_extension_services_cpu_memory_quota(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system"
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:
@@ -598,8 +597,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_set_extension_services_when_quotas_not_defined(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:
@@ -617,8 +615,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_start_tracking_extension_services_cgroups(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:
@@ -633,8 +630,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_stop_tracking_extension_services_cgroups(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
 
@@ -653,8 +649,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_remove_extension_services_drop_in_files(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:

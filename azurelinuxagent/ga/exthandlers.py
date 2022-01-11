@@ -2312,8 +2312,7 @@ class HandlerManifest(object):
                     "resourceLimits": {
                         "services": [
                             {
-                                "name": "mdsd.service",
-                                "path": "/lib/systemd/system"
+                                "name": "mdsd.service"
                             }
                         ]
                     }
@@ -2324,8 +2323,7 @@ class HandlerManifest(object):
                     "resourceLimits": {
                         "services": [
                             {
-                                "name": "azuremonitoragent.service",
-                                "path": "/lib/systemd/system"
+                                "name": "azuremonitoragent.service"
                             }
                         ]
                     }
