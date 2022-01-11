@@ -895,7 +895,6 @@ class WireClient(object):
 
             if response.status == httpclient.NOT_FOUND:  # the HostGAPlugin does not support FastTrack
                 raise_not_supported(reset_state=True)
-            self._host_plugin_supports_vm_settings = True
 
             if response.status == httpclient.NOT_MODIFIED:  # The goal state hasn't changed, return the current instance
                 return self._cached_vm_settings, False
@@ -942,6 +941,7 @@ class WireClient(object):
                 raise_not_supported(reset_state=True)
 
             logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
+            self._host_plugin_supports_vm_settings = True
             self._cached_vm_settings = vm_settings
             return vm_settings, True
 
