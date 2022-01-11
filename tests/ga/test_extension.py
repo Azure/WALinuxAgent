@@ -53,7 +53,7 @@ from tests.protocol import mockwiredata
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCATIONS
-from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
+from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep, get_keypath_or_throw
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
 from tests.utils.test_archive import TestArchive
@@ -1466,8 +1466,8 @@ class TestExtension_Deprecated(TestExtensionBase):
                                                      "file was reported by extension OSTCExtensions.OtherExampleHandlerLinux")
 
                 # The Handler Status for the dependent extension should be NotReady as it was not executed at all
-                # And since it was not executed, it should not report any extension status either
-                self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+                # It should report an extension status saying why it did not run.
+                self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                             expected_msg="Dependent Extension OSTCExtensions.OtherExampleHandlerLinux did not reach a terminal state within the allowed timeout. Last status was {0}".format(
                                                 ExtensionStatusValue.warning))
 
@@ -1602,8 +1602,8 @@ class TestExtension_Deprecated(TestExtensionBase):
                                         expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
 
             # The Handler Status for the dependent extension should be NotReady as it was not executed at all
-            # And since it was not executed, it should not report any extension status either
-            self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+            # It should report an extension status saying why it did not run.
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                         expected_msg='Skipping processing of extensions since execution of dependent extension OSTCExtensions.OtherExampleHandlerLinux failed')
 
     def test_get_ext_handling_status(self, *args):
@@ -3424,6 +3424,40 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
             actual_status_json.pop('guestOSInfo', None)
 
             self.assertEqual(expected_status, actual_status_json)
+
+    def test_report_status_for_single_config_even_if_dependency_fails(self):
+
+        _, dependency_fail_enable = Actions.generate_unique_fail()
+
+        extension = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
+        dependency = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux",
+            enable_action=dependency_fail_enable)
+
+        put_handler = generate_put_handler(extension, dependency)
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_EXT_SEQUENCING, http_put_handler=put_handler) as protocol:
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            with enable_invocations(extension, dependency) as invocation_record:
+                exthandlers_handler.run()
+                invocation_record.compare(
+                    (dependency, ExtensionCommandNames.INSTALL),
+                    (dependency, ExtensionCommandNames.ENABLE)
+                )
+            
+                exthandlers_handler.report_ext_handlers_status()
+            
+                self.assertEqual(len(extension.status_blobs), 1, "Expected a single extension status uploaded, got: {0}"\
+                    .format(extension.status_blobs))
+
+                extension_status_msg = get_keypath_or_throw(extension.status_blobs[0],
+                    "runtimeSettingsStatus/settingsStatus/status/formattedMessage/message")
+                expected_extension_status_msg = "Skipping processing of extensions since execution of dependent extension {0} failed"\
+                    .format("OSTCExtensions.OtherExampleHandlerLinux")
+
+                self.assertEqual(extension_status_msg, expected_extension_status_msg, 
+                    "Expected the extension status to match {0}, but got '{1}' instead."\
+                        .format(expected_extension_status_msg, extension_status_msg))
 
     def test_it_should_zip_waagent_status_when_incarnation_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:

@@ -120,6 +120,22 @@ def i_am_root():
 def is_python_version_26():
     return sys.version_info[0] == 2 and sys.version_info[1] == 6
 
+def get_keypath_or_throw(obj, keypath, msg=None):
+    keys = keypath.split('/')
+
+    cur_loc = obj
+    for key in keys:
+        if isinstance(cur_loc, dict) and (key in cur_loc):
+            cur_loc = cur_loc[key]
+            continue
+
+        if msg is None:
+            msg = "Expected Key path '{0}' in {1}"\
+                .format(keypath, obj)
+        raise AttributeError(msg)
+    
+    return cur_loc
+
 
 class AgentTestCase(unittest.TestCase):
     @classmethod

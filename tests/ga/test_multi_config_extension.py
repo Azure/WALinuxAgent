@@ -17,7 +17,7 @@ from tests.ga.extension_emulator import enable_invocations, extension_emulator, 
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
-from tests.tools import AgentTestCase, mock_sleep, patch
+from tests.tools import AgentTestCase, get_keypath_or_throw, mock_sleep, patch
 
 
 class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
@@ -1129,12 +1129,22 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
         sc_dependent_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                    handler_name="Microsoft.Powershell.ExampleExtension",
                                                                    status="NotReady", message=err_msg)
-        self.assertTrue(all('runtimeSettingsStatus' not in handler for handler in sc_dependent_handler))
+        for handler in sc_dependent_handler:
+            extension_status_msg = get_keypath_or_throw(handler, "runtimeSettingsStatus/settingsStatus/status/formattedMessage/message",
+                msg="SC extension '{0}' did not report extension status when its dependency failed.".format(handler['handlerName']))
+            
+            self.assertEqual(err_msg, extension_status_msg, "Expected the dependent extension's status to match {0}, but got '{1}' instead.")
 
-        sc_independent_handler = self._assert_and_get_handler_status(
-            aggregate_status=protocol.aggregate_status, handler_name="Microsoft.Azure.Geneva.GenevaMonitoring",
-            handler_version="1.1.0", status="NotReady", message=err_msg)
-        self.assertTrue(all('runtimeSettingsStatus' not in handler for handler in sc_independent_handler))
+        sc_independent_handler = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
+                                                                    handler_name="Microsoft.Azure.Geneva.GenevaMonitoring",
+                                                                    handler_version="1.1.0", status="NotReady", message=err_msg)
+        for handler in sc_independent_handler:
+            extension_status_msg = get_keypath_or_throw(handler, "runtimeSettingsStatus/settingsStatus/status/formattedMessage/message",
+                msg="SC extension '{0}' did not report extension status even though it is independent.".format(handler['handlerName']))
+            
+            # TODO: This might be a bug; independent extensions probably should not fail when 
+            # other extensions do, but that's what is happening here.
+            self.assertEqual(err_msg, extension_status_msg, "Expected the independent extension's status to match {0}, but got '{1}' instead.")
 
     def test_it_should_report_extension_status_failures_for_all_dependent_extensions(self):
         with self.__setup_test_and_get_exts() as (
