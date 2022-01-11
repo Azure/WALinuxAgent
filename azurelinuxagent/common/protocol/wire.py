@@ -846,9 +846,18 @@ class WireClient(object):
 
         Raises ProtocolError if the request fails for any reason (e.g. not supported, time out, server error)
         """
+        def raise_not_supported(reset_state=False):
+            if reset_state:
+                self._host_plugin_supports_vm_settings = False
+                self._host_plugin_supports_vm_settings_next_check = datetime.now() + timedelta(hours=6)  # check again in 6 hours
+                # "Not supported" is not considered an error, so don't use self._vm_settings_error_reporter to report it
+                logger.info("vmSettings is not supported")
+                add_event(op=WALAEventOperation.HostPlugin, message="vmSettings is not supported", is_success=True)
+            raise ProtocolError("VmSettings not supported")
+
         # Raise if VmSettings are not supported but check for periodically since the HostGAPlugin could have been updated since the last check
         if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.now():
-            raise ProtocolError("VmSettings not supported")
+            raise_not_supported()
 
         etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
         correlation_id = str(uuid.uuid4())
@@ -872,9 +881,7 @@ class WireClient(object):
                 response = get_vm_settings()
 
             if response.status == httpclient.NOT_FOUND:  # the HostGAPlugin does not support FastTrack
-                self._host_plugin_supports_vm_settings = False
-                self._host_plugin_supports_vm_settings_next_check = datetime.now() + timedelta(hours=6)  # check again in 6 hours
-                raise _VmSettingsNotSupportedError()
+                raise_not_supported(reset_state=True)
             self._host_plugin_supports_vm_settings = True
 
             if response.status == httpclient.NOT_MODIFIED:  # The goal state hasn't changed, return the current instance
@@ -919,7 +926,7 @@ class WireClient(object):
 
             # Don't support HostGAPlugin versions older than 115
             if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.115"):
-                raise ProtocolError("VmSettings not supported")
+                raise_not_supported(reset_state=True)
 
             logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
             self._cached_vm_settings = vm_settings
