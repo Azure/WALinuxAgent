@@ -298,6 +298,3 @@ def set_goal_state_agent():
 
 GOAL_STATE_AGENT_VERSION = set_goal_state_agent()
 
-
-def is_current_agent_installed():
-    return CURRENT_AGENT == AGENT_LONG_VERSION

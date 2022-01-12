@@ -29,7 +29,6 @@ import sys
 import time
 import uuid
 import zipfile
-
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
@@ -38,34 +37,32 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
-from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
+from azurelinuxagent.common.osutil.default import get_firewall_drop_command, \
+    get_accept_tcp_rule
+from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT,\
-    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, is_current_agent_installed, get_lis_version, \
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT, \
+    CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
-from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
-
-from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, ExtensionStatusValue, ExtHandlerStatusValue
+from azurelinuxagent.ga.env import get_env_handler
+from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, \
+    ExtensionStatusValue, ExtHandlerStatusValue
 from azurelinuxagent.ga.monitor import get_monitor_handler
-
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
-from azurelinuxagent.common.osutil.default import get_firewall_drop_command, \
-    get_accept_tcp_rule
 
 AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -806,17 +803,6 @@ class UpdateHandler(object):
 
         return fileutil.read_file(conf.get_agent_pid_file_path()) != ustr(parent_pid)
 
-    def _is_version_eligible(self, version):
-        # Ensure the installed version is always eligible
-        if version == CURRENT_VERSION and is_current_agent_installed():
-            return True
-
-        for agent in self.agents:
-            if agent.version == version:
-                return agent.is_available
-
-        return False
-
     def _load_agents(self):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent(path=agent_dir)
@@ -949,10 +935,8 @@ class UpdateHandler(object):
             self._purge_agents()
             self._filter_blacklisted_agents()
 
-            # Return True if current agent is no longer available or an
-            # agent with a higher version number is available
-            return not self._is_version_eligible(base_version) \
-                   or (len(self.agents) > 0 and self.agents[0].version > base_version)
+            # Return True if an agent with a higher version number is available
+            return len(self.agents) > 0 and self.agents[0].version > base_version
 
         except Exception as e:  # pylint: disable=W0612
             msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(e))

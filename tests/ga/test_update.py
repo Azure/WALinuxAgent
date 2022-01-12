@@ -1100,34 +1100,6 @@ class TestUpdate(UpdateTestCase):
         with patch('os.getppid', return_value=42):
             self.assertTrue(self.update_handler._is_orphaned)
 
-    def test_is_version_available(self):
-        self.prepare_agents(is_available=True)
-        self.update_handler.agents = self.agents()
-
-        for agent in self.agents():
-            self.assertTrue(self.update_handler._is_version_eligible(agent.version))
-
-    @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
-    def test_is_version_available_rejects(self, mock_current):  # pylint: disable=unused-argument
-        self.prepare_agents(is_available=True)
-        self.update_handler.agents = self.agents()
-
-        self.update_handler.agents[0].mark_failure(is_fatal=True)
-        self.assertFalse(self.update_handler._is_version_eligible(self.agents()[0].version))
-
-    @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=True)
-    def test_is_version_available_accepts_current(self, mock_current):  # pylint: disable=unused-argument
-        self.update_handler.agents = []
-        self.assertTrue(self.update_handler._is_version_eligible(CURRENT_VERSION))
-
-    @patch("azurelinuxagent.ga.update.is_current_agent_installed", return_value=False)
-    def test_is_version_available_rejects_by_default(self, mock_current):  # pylint: disable=unused-argument
-        self.prepare_agents()
-        self.update_handler.agents = []
-
-        v = self.agents()[0].version
-        self.assertFalse(self.update_handler._is_version_eligible(v))
-
     def test_purge_agents(self):
         self.prepare_agents()
         self.update_handler._find_agents()
@@ -1529,19 +1501,14 @@ class TestUpdate(UpdateTestCase):
             agent_versions.append(CURRENT_VERSION)
         self.assertEqual(agent_versions, self.agent_versions())
 
-    def test_update_available_returns_true_if_current_gets_blacklisted(self):
-        self.update_handler._is_version_eligible = Mock(return_value=False)
-        self.assertTrue(self._test_upgrade_available())
-
     def test_upgrade_available_skips_if_too_frequent(self):
         conf.get_autoupdate_frequency = Mock(return_value=10000)
         self.update_handler.last_attempt_time = time.time()
         self.assertFalse(self._test_upgrade_available())
 
-    def test_upgrade_available_skips_if_when_no_new_versions(self):
+    def test_upgrade_available_skips_when_no_new_versions(self):
         self.prepare_agents()
         base_version = self.agent_versions()[0] + 1
-        self.update_handler._is_version_eligible = lambda x: x == base_version
         self.assertFalse(self._test_upgrade_available(base_version=base_version))
 
     def test_upgrade_available_skips_when_no_versions(self):
