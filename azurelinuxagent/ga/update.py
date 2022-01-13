@@ -449,11 +449,13 @@ class UpdateHandler(object):
             return False
         return True
 
-    def __did_incarnation_change(self, incarnation):
+    def __goal_state_updated(self, incarnation):
         """
-        This function returns whether the incarnation changed from the last processed GS
+        This function returns if the Goal State updated.
+        We currently rely on the incarnation number to determine that; i.e. if it changed from the last processed GS
         """
-        # TODO: This check should be based in the etag for the extensions goal state
+        # TODO: This check should be based on the ExtensionsGoalState.id property
+        #  (this property abstracts incarnation/etag logic based on the delivery pipeline of the Goal State)
         return incarnation != self.last_incarnation
 
     def _process_goal_state(self, exthandlers_handler, remote_access_handler):
@@ -486,7 +488,7 @@ class UpdateHandler(object):
         incarnation = protocol.get_incarnation()
 
         try:
-            if self.__did_incarnation_change(incarnation):
+            if self.__goal_state_updated(incarnation):
                 if not self._extensions_summary.converged:
                     message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
                     logger.warn(message)
@@ -498,9 +500,9 @@ class UpdateHandler(object):
 
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, incarnation_changed=self.__did_incarnation_change(incarnation))
+            self._report_status(exthandlers_handler, incarnation_changed=self.__goal_state_updated(incarnation))
 
-            if self.__did_incarnation_change(incarnation):
+            if self.__goal_state_updated(incarnation):
                 remote_access_handler.run()
         finally:
             self.last_incarnation = incarnation
@@ -921,26 +923,27 @@ class UpdateHandler(object):
         if not conf.get_autoupdate_enabled():
             return False
 
-        def report_manifest_error(err_):
-            msg_ = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(err_))
+        def report_error(msg_, version=CURRENT_VERSION):
             logger.warn(msg_)
-            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False,
-                      message=msg_)
+            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=version, is_success=False, message=msg_)
 
         family = conf.get_autoupdate_gafamily()
         incarnation_changed = False
         try:
             # Fetch the agent manifests from the latest Goal State
             manifest_list, incarnation = protocol.get_vmagent_manifests()
-            incarnation_changed = self.__did_incarnation_change(incarnation)
+            incarnation_changed = self.__goal_state_updated(incarnation)
             manifests = [m for m in manifest_list if m.family == family and len(m.uris) > 0]
             if len(manifests) == 0:
-                logger.verbose(u"Incarnation {0} has no {1} agent updates", incarnation, family)
+                logger.verbose(
+                    u"No manifest links found for agent family: {0} for incarnation: {1}, skipping update check".format(
+                        family, incarnation))
                 return False
         except Exception as err:
             # If there's some issues in fetching the agent manifests, report it only on incarnation change
             if incarnation_changed:
-                report_manifest_error(err)
+                msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(err))
+                report_error(msg)
             return False
 
         requested_version = None
@@ -970,7 +973,8 @@ class UpdateHandler(object):
             if next_attempt_time > now:
                 return False
 
-            logger.info("[Old Auto-update logic] Checking for agent updates (family: {0})", family)
+            logger.info("No requested version specified, checking for all versions for agent update (family: {0})",
+                        family)
 
             self.last_attempt_time = now
 
@@ -979,7 +983,8 @@ class UpdateHandler(object):
             # or the 1hr time limit has elapsed for us to check the agent manifest for updates (old auto-update model).
             pkg_list = ExtHandlerPackageList()
 
-            # If the requested version is the current version, don't download anything and delete all other agents from disk
+            # If the requested version is the current version, don't download anything;
+            #       the call to purge() below will delete all other agents from disk
             # In this case, no need to even fetch the GA family manifest as we don't need to download any agent.
             if requested_version is not None and requested_version == CURRENT_VERSION:
                 packages_to_download = []
@@ -999,9 +1004,7 @@ class UpdateHandler(object):
                 if packages_to_download == pkg_list.versions:
                     msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
                         requested_version, incarnation)
-                    logger.warn(msg)
-                    add_event(AGENT_NAME, op=WALAEventOperation.Download, version=requested_version, is_success=False,
-                              message=msg)
+                    report_error(msg, version=requested_version)
                     return False
 
             # Set the agents to those available for download at least as current as the existing agent
@@ -1024,7 +1027,8 @@ class UpdateHandler(object):
                    or (len(self.agents) > 0 and self.agents[0].version > base_version)
 
         except Exception as err:
-            report_manifest_error(err)
+            msg = u"Exception downloading agents for update: {0}".format(textutil.format_exception(err))
+            report_error(msg)
             return False
 
     def _write_pid_file(self):

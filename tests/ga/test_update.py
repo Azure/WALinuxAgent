@@ -2094,7 +2094,9 @@ class TestAgentUpgrade(UpdateTestCase):
             upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
                                   'Agent upgrade discovered, updating to WALinuxAgent-9.9.9.10 -- exiting' in kwarg[
                                       'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
-            self.assertEqual(1, len(upgrade_event_msgs), "Agent not upgraded properly")
+            self.assertEqual(1, len(upgrade_event_msgs),
+                             "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
+                                 mock_telemetry.call_args_list))
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10"])
 
     def test_it_should_cleanup_all_agents_except_requested_version_and_current_version(self):
@@ -2118,7 +2120,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
         data_file = mockwiredata.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_invalid_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_missing_requested_version.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             with patch.object(conf, "get_enable_ga_versioning", return_value=True):
                 update_handler.run(debug=True)
