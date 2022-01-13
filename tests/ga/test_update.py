@@ -2557,7 +2557,6 @@ class ReportStatusTestCase(AgentTestCase):
         except IndexError:
             raise HttpError()
 
-    @skip_if_predicate_true(lambda: True, "See TODO comment")
     def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self):
 
         try:
