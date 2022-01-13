@@ -52,7 +52,7 @@ from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
-from tests.tools import Mock, PropertyMock, patch, AgentTestCase
+from tests.tools import Mock, PropertyMock, patch, AgentTestCase, load_bin_data, mock_sleep
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -1276,7 +1276,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
         # Lastly, test the goal state comparison
         def fail_compare():
-            error = GoalStateMismatchError("TEST COMPARE FAILED")
+            error = GoalStateMismatchError("TEST COMPARE FAILED", "dummy_attribute")
             with patch("azurelinuxagent.common.protocol.extensions_goal_state.ExtensionsGoalState.compare", side_effect=error):
                 with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
                     protocol.client.update_goal_state()
@@ -1370,6 +1370,29 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
                 reported = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == "VmSettings" and "GoalStateMismatchError" in kwargs['message']]
                 self.assertEqual(1, len(reported), "The goal state mismatch should have been reported exactly once; got: {0}".format([kwargs['message'] for _, kwargs in add_event_patcher.call_args_list]))
+
+    def test_it_should_retry_vm_settings_and_extensions_config_do_not_match(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                response = MockHttpResponse(httpclient.OK)
+                response.body = load_bin_data("hostgaplugin/vm_settings-out-of-sync.json")
+                response.headers = [('ETag', "0123456789")]
+                return response
+            return None
+
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            with patch('time.sleep', side_effect=lambda _: mock_sleep()):  # avoid the sleep during retry
+                with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
+                    protocol.client.update_goal_state()
+
+            vm_settings_call_count = len([url for url in protocol.get_tracked_urls() if "vmSettings" in url])
+            self.assertEqual(2, vm_settings_call_count, "Expected 2 calls to vmSettings (original and retry)")
+
+            errors = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+            self.assertTrue(any("[GoalStateMismatchError]" in e for e in errors), "Expected GoalStateMismatchError to have been reported. Got: {0}".format(errors))
 
     def test_it_should_compare_goal_states_when_vm_settings_change(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:

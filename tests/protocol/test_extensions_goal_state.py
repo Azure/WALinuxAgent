@@ -75,7 +75,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 
     def test_extension_goal_state_should_parse_requested_version_properly(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
                 self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
@@ -84,9 +84,9 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             for manifest in vm_settings_ga_manifests:
                 self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
         with mock_wire_protocol(data_file) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
