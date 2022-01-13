@@ -18,7 +18,6 @@
 import datetime
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
