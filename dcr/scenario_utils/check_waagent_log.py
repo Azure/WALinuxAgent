@@ -92,21 +92,6 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         {
             'message': r"WARNING EnvHandler ExtHandler Dhcp client is not running."
         },
-        # This happens in CENTOS and RHEL when waagent attempt to format and mount the error while cloud init is already doing it
-        # 2021-09-20T06:45:57.253801Z WARNING Daemon Daemon Could not mount resource disk: mount: /dev/sdb1 is already mounted or /mnt/resource busy
-        # /dev/sdb1 is already mounted on /mnt/resource
-        {
-            'message': r"Could not mount resource disk: mount: \/dev\/sdb1 is already mounted or \/mnt\/resource busy",
-            'if': lambda log_line: re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", distro,
-                                            flags=re.IGNORECASE) and log_line.level == "WARNING" and log_line.who == "Daemon"
-        },
-        # 2021-09-20T06:45:57.246593Z ERROR Daemon Daemon Command: [mkfs.ext4 -F /dev/sdb1], return code: [1], result: [mke2fs 1.42.9 (28-Dec-2013)
-        # /dev/sdb1 is mounted; will not make a filesystem here!
-        {
-            'message': r"Command: \[mkfs.ext4 -F \/dev\/sdb1\], return code: \[1\]",
-            'if': lambda log_line: re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", distro,
-                                            flags=re.IGNORECASE) and log_line.level == "ERROR" and log_line.who == "Daemon"
-        },
         # 2021-12-20T07:46:23.020197Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a memory cgroup
         {
             'message': r"The agent's process is not within a memory cgroup",
