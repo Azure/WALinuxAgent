@@ -913,8 +913,8 @@ class UpdateHandler(object):
     def _check_and_download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         """
         This function downloads the new agent if an update is available.
-        If a requested version is available in goal state, then only that version is downloaded.
-        Else, we periodically (1hr by default) checks if new Agent upgrade is available and download it on filesystem if available.
+        If a requested version is available in goal state, then only that version is downloaded (new-update model)
+        Else, we periodically (1hr by default) checks if new Agent upgrade is available and download it on filesystem if available (old-update model)
         rtype: Boolean
         return: True if current agent is no longer available or an agent with a higher version number is available
         else False
@@ -995,13 +995,15 @@ class UpdateHandler(object):
 
             # Verify the requested version is in GA family manifest (if specified)
             if requested_version is not None and requested_version != CURRENT_VERSION:
+                package_found = False
                 for pkg in pkg_list.versions:
                     if FlexibleVersion(pkg.version) == requested_version:
                         # Found a matching package, only download that one
                         packages_to_download = [pkg]
+                        package_found = True
                         break
 
-                if packages_to_download == pkg_list.versions:
+                if not package_found:
                     msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
                         requested_version, incarnation)
                     report_error(msg, version=requested_version)
