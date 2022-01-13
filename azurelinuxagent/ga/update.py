@@ -454,7 +454,7 @@ class UpdateHandler(object):
             self._report_status(exthandlers_handler, incarnation_changed=False)
             return
 
-        if self._check_and_download_agent_if_upgrade_available(protocol):
+        if self._download_agent_if_upgrade_available(protocol):
             available_agent = self.get_latest_agent()
             # Legacy behavior: The current agent can become unavailable and needs to be reverted.
             # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
@@ -758,7 +758,7 @@ class UpdateHandler(object):
         Load all non-blacklisted agents currently on disk.
         """
         try:
-            self._set_agents(self._load_agents())
+            self._set_and_sort_agents(self._load_agents())
             self._filter_blacklisted_agents()
         except Exception as e:
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
@@ -844,7 +844,7 @@ class UpdateHandler(object):
                 logger.warn(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
         return
 
-    def _set_agents(self, agents=None):
+    def _set_and_sort_agents(self, agents=None):
         if agents is None:
             agents = []
         self.agents = agents
@@ -887,7 +887,7 @@ class UpdateHandler(object):
                 str(e))
         return
 
-    def _check_and_download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
+    def _download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         """
         This function periodically (1hr by default) checks if new Agent upgrade is available and downloads it on filesystem if it is.
         rtype: Boolean
@@ -930,7 +930,7 @@ class UpdateHandler(object):
             #  so as to preserve the state. Otherwise, those agents could be
             #  again downloaded and inappropriately retried.
             host = self._get_host_plugin(protocol=protocol)
-            self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
+            self._set_and_sort_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
 
             self._purge_agents()
             self._filter_blacklisted_agents()
