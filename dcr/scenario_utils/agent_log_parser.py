@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 import re
 from datetime import datetime
@@ -37,6 +39,8 @@ _46_AGENT_RECORD = re.compile(r'(?P<when>[0-9-]+T[0-9:.]+Z)\s(?P<level>VERBOSE|I
 
 
 class AgentLogRecord:
+    __ERROR_TAGS = ['Exception', 'Traceback', '[CGW]']
+
     def __init__(self, match):
         self.text = match.string
         self.when = match.group("when")
@@ -47,6 +51,10 @@ class AgentLogRecord:
 
     def get_timestamp(self):
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ')
+
+    @property
+    def is_error(self):
+        return self.level in ('ERROR', 'WARNING') or any(err in self.text for err in self.__ERROR_TAGS)
 
 
 def parse_agent_log_file(waagent_log_path=AGENT_LOG_FILE):
