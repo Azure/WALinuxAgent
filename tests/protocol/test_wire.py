@@ -818,7 +818,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.client.update_goal_state(force_update=True)
 
                 urls = protocol.get_tracked_urls()
-                #self.assertTrue(len(urls) >= 4, "Invalid number of requests. Got: {0}".format(urls))
+                self.assertTrue(len(urls) >= 4, "Invalid number of requests. Got: {0}".format(urls))
                 self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
                 self.assertTrue(self.is_host_plugin_extension_artifact_request(urls[1]), "The second request should have been over the host channel")
                 self.assertTrue(self.is_goal_state_request(urls[2]), "The goal state should have been refreshed before retrying the host channel")
