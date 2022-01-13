@@ -35,7 +35,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -780,31 +780,50 @@ class WireClient(object):
         goal_state = GoalState(self)
         self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-    def update_goal_state(self, force_update=False):
+    def update_goal_state(self, force_update=False, is_retry=False):
         """
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
             #
             # The entire goal state needs to be retrieved from the WireServer (via the GoalState class), and the HostGAPlugin
-            # (via the self._fetch_vm_settings_goal_state method.)
+            # (via the self._fetch_vm_settings_goal_state method).
             #
-            # Start by fetching the goal state from the WireServer; if fetch_full_goal_state becomes True this will also
-            # update the ExtensionsConfig instance in GoalState.
+            # We fetch it in 3 parts:
+            #
+            # 1) The "main" goal state from the WireServer, which includes the incarnation, container ID, role config, and URLS
+            #    to the rest of the goal state (certificates, remote users, extensions config, etc). We do this first because
+            #    we need to initialize the HostGAPlugin with the container ID and role config.
             #
             goal_state = GoalState(self)
 
-            # Always update the hostgaplugin, since the agent may issue requests to it even if there are no other changes
-            # in the goal state (e.g. report status)
             self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-            # Fetch the full goal state if needed
+            #
+            # 2) Then we fetch the vmSettings from the HostGAPlugin. We do this before fetching the rest of the goal state from the
+            #    WireServer to minimize the time between the initial call to the WireServer and the call to the HostGAPlugin (and hence
+            #    reduce the window in which a new goal state may arrive in-between the 2 calls)
+            #
+            vm_settings_goal_state, vm_settings_goal_state_updated = (None, False)
+
+            if conf.get_enable_fast_track():
+                try:
+                    vm_settings_goal_state, vm_settings_goal_state_updated = self._fetch_vm_settings_goal_state(force_update=force_update)
+
+                except Exception as error:
+                    # _fetch_vm_settings_goal_state() does its own detailed error reporting and raises ProtocolError; do not report those
+                    if not isinstance(error, ProtocolError):
+                        self._vm_settings_error_reporter.report_error(format_exception(error))
+                self._vm_settings_error_reporter.report_summary()
+
+            #
+            # 3) Lastly we fetch the rest of the goal state from the WireServer (but ony if needed: initialization a "forced" update or
+            #    a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state.
+            #
             if force_update:
                 logger.info("Forcing an update of the goal state..")
 
-            fetch_full_goal_state = force_update or \
-                self._goal_state is None or self._extensions_goal_state is None or \
-                self._goal_state.incarnation != goal_state.incarnation
+            fetch_full_goal_state = force_update or self._goal_state is None or self._goal_state.incarnation != goal_state.incarnation
 
             if not fetch_full_goal_state:
                 goal_state_updated = False
@@ -814,36 +833,34 @@ class WireClient(object):
                 goal_state_updated = True
 
             #
-            # Now fetch the vmSettings (which contain the extensions goal state) from the HostGAPlugin
+            # If we fetched the vmSettings compare them against extensionsConfig and use them for the extensions goal state if
+            # everything matches, otherwise use extensionsConfig.
             #
-            vm_settings_goal_state, vm_settings_goal_state_updated = (None, False)
-            vm_settings_goal_state_is_valid = False
-
-            if conf.get_enable_fast_track():
-                try:
-                    vm_settings_goal_state, vm_settings_goal_state_updated = self._fetch_vm_settings_goal_state(force_update=force_update)
-
-                    if goal_state_updated or vm_settings_goal_state_updated:
-                        # compare() raises a GoalStateMismatchError if the goal states don't match
+            use_vm_settings = False
+            if vm_settings_goal_state is not None:
+                if not goal_state_updated and not vm_settings_goal_state_updated:  # no need to compare them, just use vmSettings
+                    use_vm_settings = True
+                else:
+                    try:
                         ExtensionsGoalState.compare(self._goal_state.extensions_config, vm_settings_goal_state)
+                        use_vm_settings = True
+                    except GoalStateMismatchError as mismatch:
+                        if not is_retry and mismatch.attribute in ("created_on_timestamp", "activity_id"):
+                            # this may be OK; a new goal state may have arrived in-between the calls to the HostGAPlugin and the WireServer;
+                            # retry one time after and then report the error if it happens again
+                            self.update_goal_state(is_retry=True)
+                            return
+                        self._vm_settings_error_reporter.report_error(ustr(mismatch))
+                        self._vm_settings_error_reporter.report_summary()
 
-                    vm_settings_goal_state_is_valid = True
-
-                except Exception as error:
-                    # _fetch_vm_settings_goal_state() does its own detailed error reporting and raises ProtocolError; do not report those
-                    if not isinstance(error, ProtocolError):
-                        self._vm_settings_error_reporter.report_error(format_exception(error))
-                self._vm_settings_error_reporter.report_summary()
-
-            #
-            # If we fetched a valid vmSettings, use that for the extensions goal state. Otherwise use ExtensionsConfig
-            #
-            if vm_settings_goal_state_is_valid:
+            if use_vm_settings:
                 self._extensions_goal_state = vm_settings_goal_state
             else:
                 self._extensions_goal_state = self._goal_state.extensions_config
 
+            #
             # If either goal state changed (goal_state or vm_settings_goal_state) save them
+            #
             if goal_state_updated or vm_settings_goal_state_updated:
                 self._save_goal_state()
 

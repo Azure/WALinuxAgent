@@ -25,8 +25,9 @@ from azurelinuxagent.common.utils import textutil
 
 
 class GoalStateMismatchError(AgentError):
-    def __init__(self, msg):
-        super(GoalStateMismatchError, self).__init__(msg)
+    def __init__(self, message, attribute):
+        super(GoalStateMismatchError, self).__init__(message)
+        self.attribute = attribute
 
 
 class ExtensionsGoalState(object):
@@ -100,9 +101,9 @@ class ExtensionsGoalState(object):
         context = []  # used to keep track of the attribute that is being compared
 
         def compare_goal_states(first, second):
+            compare_attributes(first, second, "created_on_timestamp")
             compare_attributes(first, second, "activity_id")
             compare_attributes(first, second, "correlation_id")
-            compare_attributes(first, second, "created_on_timestamp")
             compare_attributes(first, second, "status_upload_blob")
             compare_attributes(first, second, "status_upload_blob_type")
             compare_attributes(first, second, "required_features")
@@ -154,14 +155,13 @@ class ExtensionsGoalState(object):
                     second_value.sort()
 
                 if first_value != second_value:
-                    raise Exception("[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context)))
+                    mistmatch = "[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context))
+                    message = "Mismatch in Goal States [Incarnation {0}] != [Etag: {1}]: {2}".format(from_extensions_config.id, from_vm_settings.id, mistmatch)
+                    raise GoalStateMismatchError(message, attribute)
             finally:
                 context.pop()
 
-        try:
-            compare_goal_states(from_extensions_config, from_vm_settings)
-        except Exception as exception:
-            raise GoalStateMismatchError("Mismatch in Goal States [Incarnation {0}] != [Etag: {1}]: {2}".format(from_extensions_config.id, from_vm_settings.id, ustr(exception)))
+        compare_goal_states(from_extensions_config, from_vm_settings)
 
     def _do_common_validations(self):
         """
