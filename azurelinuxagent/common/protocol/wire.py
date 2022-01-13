@@ -848,6 +848,7 @@ class WireClient(object):
                         if not is_retry and mismatch.attribute in ("created_on_timestamp", "activity_id"):
                             # this may be OK; a new goal state may have arrived in-between the calls to the HostGAPlugin and the WireServer;
                             # retry one time after and then report the error if it happens again
+                            time.sleep(conf.get_goal_state_period())
                             self.update_goal_state(is_retry=True)
                             return
                         self._vm_settings_error_reporter.report_error(ustr(mismatch))

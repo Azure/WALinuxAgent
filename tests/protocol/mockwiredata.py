@@ -38,8 +38,8 @@ DATA_FILE = {
         "test_ext": "ext/sample_ext-1.3.0.zip",
         "remote_access": None,
         "in_vm_artifacts_profile": None,
-        "vm_settings": "hostgaplugin/vm_settings.json",
-        "ETag": "1"
+        "vm_settings": None,
+        "ETag": None
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -114,6 +114,7 @@ DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
+DATA_FILE_VM_SETTINGS["ETag"] ="1"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
@@ -180,8 +181,11 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
-        self.vm_settings = load_data(self.data_files.get("vm_settings"))
-        self.etag = self.data_files.get("ETag")
+
+        vm_settings = self.data_files.get("vm_settings")
+        if vm_settings is not None:
+            self.vm_settings = load_data(self.data_files.get("vm_settings"))
+            self.etag = self.data_files.get("ETag")
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
@@ -229,8 +233,11 @@ class WireProtocolData(object):
             content = self.in_vm_artifacts_profile
             self.call_counts["in_vm_artifacts_profile"] += 1
         elif "/vmSettings" in url:
-            content = self.vm_settings
-            response_headers = [('ETag', self.etag)]
+            if self.vm_settings is None:
+                resp.status = httpclient.NOT_FOUND
+            else:
+                content = self.vm_settings
+                response_headers = [('ETag', self.etag)]
             self.call_counts["vm_settings"] += 1
 
         else:
