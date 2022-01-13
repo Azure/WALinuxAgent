@@ -16,8 +16,6 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
     distro = "".join(get_distro())
     systemd_enabled = is_systemd_distro()
 
-    error_tags = ['ERROR', 'Exception', 'Traceback', 'WARNING', '[CGW]']
-
     #
     # NOTES:
     #     * 'message' is matched using re.search; be sure to escape any regex metacharacters
@@ -80,7 +78,8 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         # Ignoring this error for Deb 8 as its not a blocker and since Deb 8 is old and not widely used
         {
             'message': r"journalctl: unrecognized option '--utc'",
-            'if': lambda log_line: re.match(r"(debian8\.11)\D*", distro, flags=re.IGNORECASE) is not None and log_line.level == "WARNING"
+            'if': lambda log_line: re.match(r"(debian8\.11)\D*", distro,
+                                            flags=re.IGNORECASE) is not None and log_line.level == "WARNING"
         },
         # 2021-07-09T01:46:53.307959Z INFO MonitorHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Check on cgroups failed:
         # [CGroupsException] The agent's cgroup includes unexpected processes: ['[PID: 2367] UNKNOWN']
@@ -93,6 +92,21 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         {
             'message': r"WARNING EnvHandler ExtHandler Dhcp client is not running."
         },
+        # This happens in CENTOS and RHEL when waagent attempt to format and mount the error while cloud init is already doing it
+        # 2021-09-20T06:45:57.253801Z WARNING Daemon Daemon Could not mount resource disk: mount: /dev/sdb1 is already mounted or /mnt/resource busy
+        # /dev/sdb1 is already mounted on /mnt/resource
+        {
+            'message': r"Could not mount resource disk: mount: \/dev\/sdb1 is already mounted or \/mnt\/resource busy",
+            'if': lambda log_line: re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", distro,
+                                            flags=re.IGNORECASE) and log_line.level == "WARNING" and log_line.who == "Daemon"
+        },
+        # 2021-09-20T06:45:57.246593Z ERROR Daemon Daemon Command: [mkfs.ext4 -F /dev/sdb1], return code: [1], result: [mke2fs 1.42.9 (28-Dec-2013)
+        # /dev/sdb1 is mounted; will not make a filesystem here!
+        {
+            'message': r"Command: \[mkfs.ext4 -F \/dev\/sdb1\], return code: \[1\]",
+            'if': lambda log_line: re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", distro,
+                                            flags=re.IGNORECASE) and log_line.level == "ERROR" and log_line.who == "Daemon"
+        },
         # 2021-12-20T07:46:23.020197Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a memory cgroup
         {
             'message': r"The agent's process is not within a memory cgroup",
@@ -104,16 +118,13 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
     if ignore is not None:
         ignore_list.extend(ignore)
 
-    def is_error(log_line):
-        return any(err in log_line.text for err in error_tags)
-
     def can_be_ignored(log_line):
         return any(re.search(msg['message'], log_line.text) is not None and ('if' not in msg or msg['if'](log_line)) for msg in ignore_list)
 
     errors = []
 
     for agent_log_line in parse_agent_log_file(waagent_log):
-        if is_error(agent_log_line) and not can_be_ignored(agent_log_line):
+        if agent_log_line.is_error and not can_be_ignored(agent_log_line):
             # Handle "/proc/net/route contains no routes" as a special case since it can take time for the
             # primary interface to come up and we don't want to report transient errors as actual errors
             if "/proc/net/route contains no routes" in agent_log_line.text:
