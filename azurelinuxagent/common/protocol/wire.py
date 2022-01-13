@@ -791,7 +791,7 @@ class WireClient(object):
             #
             # We fetch it in 3 parts:
             #
-            # 1) The "main" goal state from the WireServer, which includes the incarnation, container ID, role config, and URLS
+            # 1) The "main" goal state from the WireServer, which includes the incarnation, container ID, role config, and URLs
             #    to the rest of the goal state (certificates, remote users, extensions config, etc). We do this first because
             #    we need to initialize the HostGAPlugin with the container ID and role config.
             #
@@ -817,7 +817,7 @@ class WireClient(object):
                 self._vm_settings_error_reporter.report_summary()
 
             #
-            # 3) Lastly we fetch the rest of the goal state from the WireServer (but ony if needed: initialization a "forced" update or
+            # 3) Lastly we, fetch the rest of the goal state from the WireServer (but ony if needed: initialization, a "forced" update, or
             #    a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state.
             #
             if force_update:
@@ -833,7 +833,7 @@ class WireClient(object):
                 goal_state_updated = True
 
             #
-            # If we fetched the vmSettings compare them against extensionsConfig and use them for the extensions goal state if
+            # If we fetched the vmSettings then compare them against extensionsConfig and use them for the extensions goal state if
             # everything matches, otherwise use extensionsConfig.
             #
             use_vm_settings = False
@@ -847,7 +847,7 @@ class WireClient(object):
                     except GoalStateMismatchError as mismatch:
                         if not is_retry and mismatch.attribute in ("created_on_timestamp", "activity_id"):
                             # this may be OK; a new goal state may have arrived in-between the calls to the HostGAPlugin and the WireServer;
-                            # retry one time after and then report the error if it happens again
+                            # retry one time after a delay and then report the error if it happens again.
                             time.sleep(conf.get_goal_state_period())
                             self.update_goal_state(is_retry=True)
                             return

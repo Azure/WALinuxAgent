@@ -100,6 +100,9 @@ class ExtensionsGoalState(object):
         context = []  # used to keep track of the attribute that is being compared
 
         def compare_goal_states(first, second):
+            # A mismatch on the timestamp or the activity ID (and maybe also on the correlation ID) most likely indicate that we are comparing two
+            # different goal states so we check them first (we raise an exception as soon as a mismatch is detected). A mismatch on the other
+            # attributes likely indicate an actual issue on vmSettings or extensionsConfig).
             compare_attributes(first, second, "created_on_timestamp")
             compare_attributes(first, second, "activity_id")
             compare_attributes(first, second, "correlation_id")
