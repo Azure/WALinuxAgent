@@ -140,6 +140,7 @@ class WireProtocolData(object):
             "extensionsconfiguri": 0,
             "remoteaccessinfouri": 0,
             "extensionArtifact": 0,
+            "agentArtifact": 0,
             "manifest.xml": 0,
             "manifest_of_ga.xml": 0,
             "ExampleHandlerLinux": 0,

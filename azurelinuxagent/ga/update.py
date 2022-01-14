@@ -47,7 +47,7 @@ from azurelinuxagent.common.osutil.default import get_firewall_drop_command, \
     get_accept_tcp_rule
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses
+from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses, ExtHandlerPackageList
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -446,6 +446,15 @@ class UpdateHandler(object):
             return False
         return True
 
+    def __goal_state_updated(self, incarnation):
+        """
+        This function returns if the Goal State updated.
+        We currently rely on the incarnation number to determine that; i.e. if it changed from the last processed GS
+        """
+        # TODO: This check should be based on the ExtensionsGoalState.id property
+        #  (this property abstracts incarnation/etag logic based on the delivery pipeline of the Goal State)
+        return incarnation != self.last_incarnation
+
     def _process_goal_state(self, exthandlers_handler, remote_access_handler):
         protocol = exthandlers_handler.protocol
         if not self._try_update_goal_state(protocol):
@@ -476,7 +485,7 @@ class UpdateHandler(object):
         incarnation = protocol.get_incarnation()
 
         try:
-            if incarnation != self.last_incarnation:  # TODO: This check should be based in the etag for the extensions goal state
+            if self.__goal_state_updated(incarnation):
                 if not self._extensions_summary.converged:
                     message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
                     logger.warn(message)
@@ -488,9 +497,9 @@ class UpdateHandler(object):
 
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, incarnation_changed=incarnation != self.last_incarnation)
+            self._report_status(exthandlers_handler, incarnation_changed=self.__goal_state_updated(incarnation))
 
-            if incarnation != self.last_incarnation:
+            if self.__goal_state_updated(incarnation):
                 remote_access_handler.run()
         finally:
             self.last_incarnation = incarnation
@@ -889,7 +898,9 @@ class UpdateHandler(object):
 
     def _download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         """
-        This function periodically (1hr by default) checks if new Agent upgrade is available and downloads it on filesystem if it is.
+        This function downloads the new agent if an update is available.
+        If a requested version is available in goal state, then only that version is downloaded (new-update model)
+        Else, we periodically (1hr by default) checks if new Agent upgrade is available and download it on filesystem if available (old-update model)
         rtype: Boolean
         return: True if current agent is no longer available or an agent with a higher version number is available
         else False
@@ -898,50 +909,112 @@ class UpdateHandler(object):
         if not conf.get_autoupdate_enabled():
             return False
 
-        now = time.time()
-        if self.last_attempt_time is not None:
-            next_attempt_time = self.last_attempt_time + conf.get_autoupdate_frequency()
-        else:
-            next_attempt_time = now
-        if next_attempt_time > now:
-            return False
+        def report_error(msg_, version=CURRENT_VERSION):
+            logger.warn(msg_)
+            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=version, is_success=False, message=msg_)
 
         family = conf.get_autoupdate_gafamily()
-        logger.info("Checking for agent updates (family: {0})", family)
-
-        self.last_attempt_time = now
-
+        incarnation_changed = False
         try:
-            manifest_list, etag = protocol.get_vmagent_manifests()
-
+            # Fetch the agent manifests from the latest Goal State
+            manifest_list, incarnation = protocol.get_vmagent_manifests()
+            incarnation_changed = self.__goal_state_updated(incarnation)
             manifests = [m for m in manifest_list if m.family == family and len(m.uris) > 0]
             if len(manifests) == 0:
-                logger.verbose(u"Incarnation {0} has no {1} agent updates",
-                               etag, family)
+                logger.verbose(
+                    u"No manifest links found for agent family: {0} for incarnation: {1}, skipping update check".format(
+                        family, incarnation))
+                return False
+        except Exception as err:
+            # If there's some issues in fetching the agent manifests, report it only on incarnation change
+            if incarnation_changed:
+                msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(err))
+                report_error(msg)
+            return False
+
+        requested_version = None
+        if conf.get_enable_ga_versioning() and manifests[0].is_requested_version_specified:
+            # If GA versioning is enabled and requested version present in GS, and it's a new GS, follow new logic
+            if incarnation_changed:
+                # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
+                # If there's no new incarnation, don't proceed with anything
+                requested_version = manifests[0].requested_version
+                msg = "Found requested version in manifest: {0} for incarnation: {1}".format(
+                    requested_version, incarnation)
+                logger.info(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg)
+            else:
+                # If incarnation didn't change, don't process anything.
+                return False
+        else:
+            # If no requested version specified in the Goal State, follow the old auto-update logic
+            # Note: If the first Goal State contains a requested version, this timer won't start (i.e. self.last_attempt_time won't be updated).
+            # If any subsequent goal state does not contain requested version, this timer will start then, and we will
+            # download all versions available in PIR and auto-update to the highest available version on that goal state.
+            now = time.time()
+            if self.last_attempt_time is not None:
+                next_attempt_time = self.last_attempt_time + conf.get_autoupdate_frequency()
+            else:
+                next_attempt_time = now
+            if next_attempt_time > now:
                 return False
 
-            pkg_list = protocol.get_vmagent_pkgs(manifests[0])
+            logger.info("No requested version specified, checking for all versions for agent update (family: {0})",
+                        family)
 
-            # Set the agents to those available for download at least as
-            # current as the existing agent and remove from disk any agent
-            # no longer reported to the VM.
-            # Note:
-            #  The code leaves on disk available, but blacklisted, agents
-            #  so as to preserve the state. Otherwise, those agents could be
-            #  again downloaded and inappropriately retried.
+            self.last_attempt_time = now
+
+        try:
+            # If we make it to this point, then either there is a requested version in a new GS (new auto-update model),
+            # or the 1hr time limit has elapsed for us to check the agent manifest for updates (old auto-update model).
+            pkg_list = ExtHandlerPackageList()
+
+            # If the requested version is the current version, don't download anything;
+            #       the call to purge() below will delete all other agents from disk
+            # In this case, no need to even fetch the GA family manifest as we don't need to download any agent.
+            if requested_version is not None and requested_version == CURRENT_VERSION:
+                packages_to_download = []
+                logger.info("The requested version is running as the current version: {0}".format(requested_version))
+            else:
+                pkg_list = protocol.get_vmagent_pkgs(manifests[0])
+                packages_to_download = pkg_list.versions
+
+            # Verify the requested version is in GA family manifest (if specified)
+            if requested_version is not None and requested_version != CURRENT_VERSION:
+                package_found = False
+                for pkg in pkg_list.versions:
+                    if FlexibleVersion(pkg.version) == requested_version:
+                        # Found a matching package, only download that one
+                        packages_to_download = [pkg]
+                        package_found = True
+                        break
+
+                if not package_found:
+                    msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
+                        requested_version, incarnation)
+                    report_error(msg, version=requested_version)
+                    return False
+
+            # Set the agents to those available for download at least as current as the existing agent
+            # or to the requested version (if specified)
             host = self._get_host_plugin(protocol=protocol)
-            self._set_and_sort_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
+            self._set_and_sort_agents([GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download])
 
+            # Remove from disk any agent no longer needed in the VM.
+            # If requested version is provided, this would delete all other agents present on the VM except the
+            # current one and the requested one if they're different, and only the current one if same.
+            # Note:
+            #  The code leaves on disk available, but blacklisted, agents to preserve the state.
+            #  Otherwise, those agents could be downloaded again and inappropriately retried.
             self._purge_agents()
             self._filter_blacklisted_agents()
 
             # Return True if an agent with a higher version number is available
             return len(self.agents) > 0 and self.agents[0].version > base_version
 
-        except Exception as e:  # pylint: disable=W0612
-            msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(e))
-            add_event(AGENT_NAME, op=WALAEventOperation.Download, version=CURRENT_VERSION, is_success=False,
-                      message=msg)
+        except Exception as err:
+            msg = u"Exception downloading agents for update: {0}".format(textutil.format_exception(err))
+            report_error(msg)
             return False
 
     def _write_pid_file(self):
