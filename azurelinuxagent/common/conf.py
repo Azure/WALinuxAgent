@@ -136,7 +136,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
-    "Debug.EnableFastTrack": False,
+    "Debug.EnableFastTrack": True,
 }
 
 
@@ -159,6 +159,8 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
+    "Debug.CgroupMonitorExpiryTime": "2022-01-31",
+    "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
 }
 
 
@@ -182,6 +184,8 @@ __INTEGER_OPTIONS__ = {
     # versions of the Agent.
     #
     "Debug.CgroupCheckPeriod": 300,
+    "Debug.AgentCpuQuota": 75,
+    "Debug.EtpCollectionPeriod": 300
 }
 
 
@@ -532,10 +536,44 @@ def get_cgroup_disable_on_quota_check_failure(conf=__conf__):
     """
     return conf.get_switch("Debug.CgroupDisableOnQuotaCheckFailure", True)
 
+
+def get_agent_cpu_quota(conf=__conf__):
+    """
+    CPU quota for the agent as a percentage of 1 CPU (100% == 1 CPU)
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentCpuQuota", 75)
+
+def get_cgroup_monitor_expiry_time (conf=__conf__):
+    """
+    cgroups monitoring disabled after expiry time
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-01-31")
+
+def get_cgroup_monitor_extension_name (conf=__conf__):
+    """
+    cgroups monitoring extension name
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get("Debug.CgroupMonitorExtensionName", "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent")
+
+
 def get_enable_fast_track(conf=__conf__):
     """
     If True, the agent use FastTrack when retrieving goal states
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableFastTrack", False)
+    return conf.get_switch("Debug.EnableFastTrack", True)
+
+
+def get_etp_collection_period(conf=__conf__):
+    """
+    Determines the frequency to perform ETP collection on extensions telemetry events.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.EtpCollectionPeriod", 300)

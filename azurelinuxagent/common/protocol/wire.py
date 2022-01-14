@@ -91,12 +91,9 @@ class WireProtocol(DataContract):
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
-        # Set the initial goal state
+        # Initialize the goal state, including all the inner properties
         logger.info('Initializing goal state during protocol detection')
-        self.client.update_goal_state(forced=True)
-
-    def update_extensions_goal_state(self):
-        self.client.update_extensions_goal_state()
+        self.client.update_goal_state(force_update=True)
 
     def update_goal_state(self):
         self.client.update_goal_state()
@@ -126,18 +123,15 @@ class WireProtocol(DataContract):
     def get_incarnation(self):
         return self.client.get_goal_state().incarnation
 
-    def get_etag(self):
-        return self.client.get_etag()
-
     def get_in_vm_gs_metadata(self):
-        return self.client.get_ext_conf().in_vm_gs_metadata
+        return self.client.get_extensions_goal_state().in_vm_gs_metadata
 
     def get_required_features(self):
-        return self.client.get_ext_conf().required_features
+        return self.client.get_extensions_goal_state().get_required_features()
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
-        ext_conf = self.client.get_ext_conf()
+        ext_conf = self.client.get_extensions_goal_state()
         return ext_conf.vmagent_manifests, goal_state.incarnation
 
     def get_vmagent_pkgs(self, vmagent_manifest):
@@ -149,9 +143,9 @@ class WireProtocol(DataContract):
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
         goal_state = self.client.get_goal_state()
-        ext_conf = self.client.get_ext_conf()
+        extensions_goal_state = self.client.get_extensions_goal_state()
         # In wire protocol, incarnation is equivalent to ETag
-        return ext_conf.ext_handlers, goal_state.incarnation
+        return extensions_goal_state.ext_handlers, goal_state.incarnation
 
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
@@ -580,10 +574,12 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
-        self._extensions_goal_state = None
+        self._extensions_goal_state = None  # goal state from ExtensionsConfig
+        self._extensions_goal_state_from_vm_settings = None  # goal state from vmSettings
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
+        self._vm_settings_error_reporter = _ErrorReporter(WALAEventOperation.VmSettings)
 
     def get_endpoint(self):
         return self._endpoint
@@ -774,71 +770,132 @@ class WireClient(object):
         """
         Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
         """
-        goal_state = GoalState.fetch_goal_state(self)
+        goal_state = GoalState(self)
         self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-    def update_goal_state(self, forced=False):
+    def update_goal_state(self, force_update=False):
         """
-        Updates the goal state if the incarnation changed or if 'forced' is True
+        Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
-            if self._goal_state is None or forced:
-                new_goal_state = GoalState.fetch_full_goal_state(self)
-            else:
-                new_goal_state = GoalState.fetch_full_goal_state_if_incarnation_different_than(self, self._goal_state.incarnation)
+            updated = False
 
-            if new_goal_state is not None:
-                self._goal_state = new_goal_state
-                self._update_host_plugin(new_goal_state.container_id, new_goal_state.role_config_name)
-                if conf.get_enable_fast_track():
-                    self.update_extensions_goal_state()
+            goal_state = GoalState(self)
+
+            # Always update the hostgaplugin, since the agent may issue requests to it even if there are no other changes
+            # in the goal state (e.g. report status)
+            self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
+
+            if force_update:
+                logger.info("Forcing an update of the goal state..")
+
+            fetch_full_goal_state = force_update or \
+                self._goal_state is None or self._extensions_goal_state is None or \
+                self._goal_state.incarnation != goal_state.incarnation
+
+            #
+            # TODO: Today we always update self._extensions_goal_state using the ExtensionsConfig. After that, (unless
+            #       FastTrack is disabled in waagent.conf) we query the vmSettings only to compare them against the
+            #       ExtensionsConfig.
+            #       When FastTrack is fully implemented, we will need instead to update self._extensions_goal_state
+            #       from the vmSettings and fallback to the ExtensionsConfig only if FastTrack is disabled or if it is
+            #       not supported by the HostGAPlugin.
+            #       Extensions processing is always based on self._extensions_goal_state, while self._extensions_goal_state_from_vm_settings
+            #       is currently held only for debugging purposes.
+            #
+            if fetch_full_goal_state:
+                goal_state.fetch_full_goal_state(self)
+                self._goal_state = goal_state
+                if self._goal_state.extensions_config_uri is None:
+                    self._extensions_goal_state = ExtensionsGoalState.create_empty()
+                else:
+                    xml_text = self.fetch_config(self._goal_state.extensions_config_uri, self.get_header())
+                    self._extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(goal_state.incarnation, xml_text)
+                updated = True
+
+            if conf.get_enable_fast_track():
+                # Since currently we query vmSettings only to exercise the HostGAPlugin, errors in this section of the code should not
+                # prevent the agent from processing the goal state; we simply report a summary of those errors.
+                try:
+                    request_etag = None if force_update or self._extensions_goal_state_from_vm_settings is None else self._extensions_goal_state_from_vm_settings.get_id()
+                    response_etag, vm_settings = self._fetch_vm_settings(request_etag)
+                    if vm_settings is not None:  # vmSettings is None when there has not been a new goal state, or the HostGAPlugin does not support FastTrack
+                        self._extensions_goal_state_from_vm_settings = ExtensionsGoalState.create_from_vm_settings(response_etag, vm_settings)
+                        updated = True
+                    # If either goal state was updated, compare them
+                    if updated and self._extensions_goal_state_from_vm_settings is not None:
+                        ExtensionsGoalState.compare(self._extensions_goal_state, self._extensions_goal_state_from_vm_settings)
+                except Exception as error:
+                    # TODO: Once FastTrack is stable, these exceptions should be rare. Add a traceback to the error message at that point.
+                    self._vm_settings_error_reporter.report_error(ustr(error))
+                self._vm_settings_error_reporter.report_summary()
+
+            # If either goal state was updated, save them
+            if updated:
                 self._save_goal_state()
 
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
-    def update_extensions_goal_state(self):
+    def _fetch_vm_settings(self, etag):
+        """
+        Queries the vmSettings from the HostGAPlugin using the given etag, returns a tuple of the response's etag and content.
+        If the vmSettings have not been updated for the given etag, or if the HostGAPlugin does not support FastTrack,
+        returns (None, None).
+        """
         correlation_id = str(uuid.uuid4())
-        etag = self.get_etag()
 
         try:
-            # TODO: Remove this log statement when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-            logger.info("Fetching vmSettings [correlation ID: {0} eTag: {1}]", correlation_id, etag)
             def get_vm_settings():
                 url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
                 if etag is not None:
                     headers['if-none-match'] = etag
-                return self.fetch(url, headers, ok_codes=[httpclient.OK, httpclient.NOT_MODIFIED])
+                return restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1)
 
             try:
-                vm_settings, response_headers = get_vm_settings()
-            except ResourceGoneError:
+                response = get_vm_settings()
+            except ResourceGoneError:  # retry after refreshing the HostGAPlugin
                 self.update_host_plugin_from_goal_state()
-                vm_settings, response_headers = get_vm_settings()
+                response = get_vm_settings()
 
-            # on error, fetch() logs the original exception and returns None as content
-            if vm_settings is None:
-                raise Exception("Failed to retrieve the extensions goal state (vmSettings), the error was reported previously in the log.")
+            if response.status == httpclient.NOT_MODIFIED:
+                return None, None
 
-            # The response includes an etag if and only if the VM settings change.
-            response_etag = None
-            for h in response_headers:
+            # TODO: Currently we use the vmSettings just to compare against ExtensionsConfig and we handle
+            #       Not Supported just as if there was no update in the vmSettings. Once FastTrack is
+            #       fully enabled, if the HostGAPlugin does not support FastTrack we actually need to
+            #       fallback to using the ExtensionsConfig
+            if response.status == httpclient.NOT_FOUND:  # the HostGAPlugin does not support FastTrack
+                return None, None
+            # END TODO
+
+            if response.status != httpclient.OK:
+                error_description = restutil.read_response_error(response)
+                # For historical reasons the HostGAPlugin returns 502 (BAD_GATEWAY) for internal errors instead of using
+                # 500 (INTERNAL_SERVER_ERROR). We add a short prefix to the error message in the hope that it will help
+                # clear any confusion produced by the poor choice of status code.
+                if response.status == httpclient.BAD_GATEWAY:
+                    error_description = "[Internal error in HostGAPlugin] {0}".format(error_description)
+                raise ProtocolError("GET vmSettings [correlation ID: {0}]: {1} ({2})".format(correlation_id, response.status, error_description))
+
+            for h in response.getheaders():
                 if h[0].lower() == 'etag':
                     response_etag = h[1]
                     break
+            else:  # since the vmSettings were updated, the response must include an etag
+                raise ProtocolError("The vmSettings do no include an Etag [correlation ID: {0}]".format(correlation_id))
 
-            if response_etag is not None:
-                logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
-                self._extensions_goal_state = ExtensionsGoalState(response_etag, vm_settings)
-            else:
-                # TODO: Remove this log statement (the entire else clause) when invoking this method on each iteration of the goal state loop (currently it is invoked only on a new goal state)
-                logger.error("Expected new vmSettings, but the response did not include an eTag [correlation ID: {0} eTag: {1}]", correlation_id, etag)
+            logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, response_etag)
+            response_content = self.decode_config(response.read())
+            return response_etag, response_content
 
+        except ProtocolError:
+            raise
+        except HttpError as http_error:
+            raise Exception("{0} [correlation ID: {1} eTag: {2}]".format(ustr(http_error), correlation_id, etag))
         except Exception as exception:
-            # TODO: raise ProtocolError instead of logging a warning
-            message = "Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, ustr(exception))
-            logger.warn(message)
-            report_event(op=WALAEventOperation.GoalState, is_success=False, message=message, log_event=False)
+            error = textutil.format_exception(exception)  # since this is a generic error, we format the exception to include the traceback
+            raise Exception("Error fetching vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, error))
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
@@ -862,11 +919,18 @@ class WireClient(object):
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
-            if self._goal_state.ext_conf is not None and self._goal_state.ext_conf.xml_text is not None:
-                self._save_cache(self._goal_state.ext_conf.get_redacted_xml_text(), EXT_CONF_FILE_NAME.format(self._goal_state.incarnation))
-
             if self._extensions_goal_state is not None:
-                self._save_cache(self._extensions_goal_state.get_redacted_vm_settings(), VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state.etag))
+                # disable=assignment-from-none: E1128: Assigning result of a function call, where the function returns None
+                text = self._extensions_goal_state.get_redacted_text()  # pylint: disable=assignment-from-none
+                if text != '':
+                    self._save_cache(text, EXT_CONF_FILE_NAME.format(self._extensions_goal_state.get_id()))
+            # TODO: When Fast Track is fully enabled self._extensions_goal_state_from_vm_settings will go away and this can be deleted
+            if self._extensions_goal_state_from_vm_settings is not None:
+                # disable=assignment-from-none: E1128: Assigning result of a function call, where the function returns None
+                text = self._extensions_goal_state_from_vm_settings.get_redacted_text()  # pylint: disable=assignment-from-none
+                if text != '':
+                    self._save_cache(text, VM_SETTINGS_FILE_NAME.format(self._extensions_goal_state_from_vm_settings.get_id()))
+            # END TODO
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
@@ -875,19 +939,6 @@ class WireClient(object):
         if new_host_plugin is None:
             logger.warn("Setting empty Host Plugin object!")
         self._host_plugin = new_host_plugin
-
-    def get_etag(self):
-        """
-        Returns the Etag of the current ExtensionsGoalState, or None, if the goal state has not been retrieved.
-        """
-        if self._extensions_goal_state is None:
-            return None
-        return self._extensions_goal_state.etag
-
-    def get_extensions_goal_state(self):
-        if self._extensions_goal_state is None:
-            raise ProtocolError("Trying to fetch the extensions goal state before initialization!")
-        return self._extensions_goal_state
 
     def get_goal_state(self):
         if self._goal_state is None:
@@ -909,10 +960,10 @@ class WireClient(object):
             raise ProtocolError("Trying to fetch Certificates before initialization!")
         return self._goal_state.certs
 
-    def get_ext_conf(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Extension Conf before initialization!")
-        return self._goal_state.ext_conf
+    def get_extensions_goal_state(self):
+        if self._extensions_goal_state is None:
+            raise ProtocolError("Trying to fetch ExtensioalState before initialization!")
+        return self._extensions_goal_state
 
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:
@@ -1083,20 +1134,17 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        ext_conf = self.get_ext_conf()
+        extensions_goal_state = self.get_extensions_goal_state()
 
-        if ext_conf.status_upload_blob is None:
+        if extensions_goal_state.get_status_upload_blob() is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
-            self.update_goal_state(forced=True)  # FT: This will come from the ExtensionsGoalState
-            ext_conf = self.get_ext_conf()
+            self.update_goal_state(force_update=True)
+            extensions_goal_state = self.get_extensions_goal_state()
 
-        if ext_conf.status_upload_blob is None:
+        if extensions_goal_state.get_status_upload_blob() is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
 
-        blob_type = ext_conf.status_upload_blob_type
-        if blob_type not in ["BlockBlob", "PageBlob"]:
-            blob_type = "BlockBlob"
-            logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
+        blob_type = extensions_goal_state.get_status_upload_blob_type()
 
         try:
             self.status_blob.prepare(blob_type)
@@ -1114,7 +1162,7 @@ class WireClient(object):
         # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob, ext_conf.status_upload_blob, ext_conf.status_upload_blob_type)
+            host.put_vm_status(self.status_blob, extensions_goal_state.get_status_upload_blob(), extensions_goal_state.get_status_upload_blob_type())
             return
         except ResourceGoneError:
             # refresh the host plugin client and try again on the next iteration of the main loop
@@ -1126,7 +1174,7 @@ class WireClient(object):
             self.report_status_event(msg, is_success=True)
 
         try:
-            if self.status_blob.upload(ext_conf.status_upload_blob):
+            if self.status_blob.upload(extensions_goal_state.get_status_upload_blob()):
                 return
         except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
@@ -1291,16 +1339,16 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = GoalState.fetch_goal_state(self)
+            goal_state = GoalState(self)
             self._set_host_plugin(HostPluginProtocol(self.get_endpoint(),
                                                      goal_state.container_id,
                                                      goal_state.role_config_name))
         return self._host_plugin
 
     def has_artifacts_profile_blob(self):
-        ext_conf = self.get_ext_conf()
-        return ext_conf and not \
-            textutil.is_str_none_or_whitespace(ext_conf.artifacts_profile_blob)
+        extensions_goal_state = self.get_extensions_goal_state()
+        return extensions_goal_state and not \
+            textutil.is_str_none_or_whitespace(extensions_goal_state.artifacts_profile_blob)
 
     def get_artifacts_profile_through_host(self, blob):
         host = self.get_host_plugin()
@@ -1312,7 +1360,7 @@ class WireClient(object):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
-            blob = self.get_ext_conf().artifacts_profile_blob
+            blob = self.get_extensions_goal_state().artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)[0]
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
@@ -1452,3 +1500,29 @@ class InVMArtifactsProfile(object):
         if 'onHold' in self.__dict__:
             return str(self.onHold).lower() == 'true'  # pylint: disable=E1101
         return False
+
+
+class _ErrorReporter(object):
+    _MaxErrors = 5  # Max number of error reported by period
+    _Period = timedelta(hours=1)  # How often to report _errors
+
+    def __init__(self, operation):
+        self._operation = operation
+        self._error_count = 0
+        self._next_period = datetime.now() + _ErrorReporter._Period
+        self._log_message_prefix = "[{0}] [Informational only, the Agent will continue normal operation]".format(self._operation)
+
+    def report_error(self, error):
+        self._error_count += 1
+        if self._error_count <= _ErrorReporter._MaxErrors:
+            logger.info("{0} {1}", self._log_message_prefix, error)
+            add_event(op=self._operation, message=error, is_success=False, log_event=False)
+
+    def report_summary(self):
+        if datetime.now() >= self._next_period:
+            self._next_period = datetime.now() + _ErrorReporter._Period
+            if self._error_count > 0:
+                message = "{0} errors in the last period".format(self._error_count)
+                logger.info("{0} {1}", self._log_message_prefix, message)
+                add_event(op=self._operation, message=message, is_success=False, log_event=False)
+                self._error_count = 0

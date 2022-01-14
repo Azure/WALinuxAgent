@@ -28,7 +28,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.protocol.goal_state import ExtensionsConfig
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackageUri, VMAgentManifest, VMAgentManifestUri, \
@@ -40,10 +40,10 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
-from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ValidHandlerStatus
+from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
-    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, ExtensionsSummary
+    CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, READONLY_FILE_GLOBS, ExtensionsSummary
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, load_data, Mock, MagicMock, \
@@ -1111,7 +1111,11 @@ class TestUpdate(UpdateTestCase):
             with patch('time.time', side_effect=mock_time.time):
                 with patch('time.sleep', side_effect=mock_time.sleep):
                     self.update_handler.run_latest(child_args=child_args)
-                    self.assertEqual(1, mock_popen.call_count, "Expected a single call to the latest agent; got: {0}".format([call.args for call in mock_popen.call_args_list]))
+                    agent_calls = [args[0] for (args, _) in mock_popen.call_args_list if
+                                   "run-exthandlers" in ''.join(args[0])]
+                    self.assertEqual(1, len(agent_calls),
+                                     "Expected a single call to the latest agent; got: {0}. All mocked calls: {1}".format(
+                                         agent_calls, mock_popen.call_args_list))
 
                     return mock_popen.call_args
 
@@ -1409,10 +1413,10 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(self._test_upgrade_available())
 
     def test_upgrade_available_handles_missing_family(self):
-        extensions_config = ExtensionsConfig(load_data("wire/ext_conf_missing_family.xml"))
+        extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(123, load_data("wire/ext_conf_missing_family.xml"))
         protocol = ProtocolMock()
         protocol.family = "Prod"
-        protocol.agent_manifests = extensions_config.vmagent_manifests  # pylint: disable=attribute-defined-outside-init
+        protocol.agent_manifests = extensions_goal_state.vmagent_manifests  # pylint: disable=attribute-defined-outside-init
         self.update_handler.protocol_util = protocol
         with patch('azurelinuxagent.common.logger.warn') as mock_logger:
             with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
@@ -1583,8 +1587,11 @@ class TestUpdate(UpdateTestCase):
             self.assertEqual(os.path.getctime(handler_env_file), last_modification_time,
                              "The creation time and last modified time of the HandlerEnvironment file dont match")
 
-            # Rerun the update handler and ensure that the HandlerEnvironment file is recreated with eventsFolder
-            # flag in HandlerEnvironment.json file
+        # Simulate a service restart by getting a new instance of the update handler and protocol and
+        # re-runnning the update handler. Then,ensure that the HandlerEnvironment file is recreated with eventsFolder
+        # flag in HandlerEnvironment.json file.
+        self._add_write_permission_to_goal_state_files()
+        with self._get_update_handler(iterations) as (update_handler, protocol):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                 update_handler.set_iterations(1)
                 update_handler.run(debug=True)
@@ -1596,6 +1603,15 @@ class TestUpdate(UpdateTestCase):
                 content = json.load(handler_env_content_file)
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
+
+    def _add_write_permission_to_goal_state_files(self):
+        # UpdateHandler.run() marks some of the files from the goal state as read-only. Those files are overwritten when
+        # a new goal state is fetched. This is not a problem for the agent, since it  runs as root, but tests need
+        # to make those files writtable before fetching a new goal state. Note that UpdateHandler.run() fetches a new
+        # goal state, so tests that make multiple calls to that method need to call this function in-between calls.
+        for gb in READONLY_FILE_GLOBS:
+            for path in glob.iglob(os.path.join(conf.get_lib_dir(), gb)):
+                fileutil.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
 
     def test_it_should_not_setup_persistent_firewall_rules_if_EnableFirewall_is_disabled(self):
         executed_firewall_commands = []
@@ -1615,7 +1631,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
         self.assertTrue(any(
             "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
-            patch_info.call_args_list), "Info not logged properly")
+            patch_info.call_args_list), "Info not logged properly, got: {0}".format(patch_info.call_args_list))
 
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
@@ -1665,6 +1681,7 @@ class TestUpdate(UpdateTestCase):
         # Disable extension telemetry pipeline and ensure events directory got deleted
         with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", False):
+                self._add_write_permission_to_goal_state_files()
                 update_handler.run(debug=True)
                 for ext_dir in expected_events_dirs:
                     self.assertFalse(os.path.exists(ext_dir), "Extension directory {0} still exists!".format(ext_dir))
@@ -1672,10 +1689,23 @@ class TestUpdate(UpdateTestCase):
     def test_it_should_retain_extension_events_directories_if_extension_telemetry_pipeline_enabled(self):
         # Rerun update handler again with extension telemetry pipeline enabled to ensure we dont delete events directories
         with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            self._add_write_permission_to_goal_state_files()
             update_handler.run(debug=True)
             for ext_dir in expected_events_dirs:
                 self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
+    def test_it_should_recreate_extension_event_directories_for_existing_extensions_if_extension_telemetry_pipeline_enabled(self):
+        with self._setup_test_for_ext_event_dirs_retention() as (update_handler, expected_events_dirs):
+            # Delete existing events directory
+            for ext_dir in expected_events_dirs:
+                shutil.rmtree(ext_dir, ignore_errors=True)
+                self.assertFalse(os.path.exists(ext_dir), "Extension directory not deleted")
+
+            with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
+                self._add_write_permission_to_goal_state_files()
+                update_handler.run(debug=True)
+                for ext_dir in expected_events_dirs:
+                    self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
 @patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')
 @patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler')
@@ -1907,29 +1937,23 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             update_handler = get_update_handler()
             self.assertFalse(update_handler._try_update_goal_state(protocol), "try_update_goal_state should have failed")
 
-    @skip_if_predicate_true(lambda: True, "TODO: Enable this test once we start retrieving the ExtensionsGoalState (vmSettings)")
     def test_it_should_update_the_goal_state(self):
         update_handler = get_update_handler()
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.set_incarnation(12345)
-            protocol.mock_wire_data.set_etag('54321')
 
             # the first goal state should produce an update
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '12345', "The goal state was not updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state was not updated (received unexpected ETag)")
 
             # no changes in the goal state should not produce an update
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '12345', "The goal state should not be updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '54321', "The extensions goal state should not be updated (received unexpected ETag)")
 
             # a new  goal state should produce an update
             protocol.mock_wire_data.set_incarnation(6789)
-            protocol.mock_wire_data.set_etag('9876')
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(protocol.get_incarnation(), '6789', "The goal state was not updated (received unexpected incarnation)")
-            self.assertEqual(protocol.get_etag(), '9876', "The extensions goal state was not updated (received unexpected ETag)")
 
     def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -2045,7 +2069,7 @@ def _mock_exthandlers_handler(extension_statuses=None):
         exthandlers_handler = ExtHandlersHandler(protocol)
         exthandlers_handler.run = Mock()
         if extension_statuses is None:
-            exthandlers_handler.report_ext_handlers_status = Mock(return_value=create_vm_status(ValidHandlerStatus.success))
+            exthandlers_handler.report_ext_handlers_status = Mock(return_value=create_vm_status(ExtensionStatusValue.success))
         else:
             exthandlers_handler.report_ext_handlers_status = Mock(side_effect=[create_vm_status(s) for s in extension_statuses])
         yield exthandlers_handler
@@ -2086,6 +2110,147 @@ class ReportStatusTestCase(AgentTestCase):
     """
     Tests for UpdateHandler._report_status()
     """
+
+    def setUp(self):
+        self.patches = [
+            patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)),
+            patch("sys.exit")
+        ]
+
+        for p in self.patches:
+            p.start()
+
+        return AgentTestCase.setUp(self)
+
+    def tearDown(self):
+        
+        for p in self.patches:
+            p.stop()
+
+        return AgentTestCase.tearDown(self)
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _mock_update_handler(iterations=1, **kwargs):
+        """
+        Creates an UpdateHandler instance that will run n iterations.
+
+        Can be supplied keyword args for:
+            *   mock_wire_data_file: This arg is treated like mock_wire_protocol
+                would. Defaults to mockwiredata.DATA_FILE_STATUS_BLOB
+            *   http_<action>_handler where action is get, put, or post: This arg
+                is treated like mock_wire_protocol would.
+        
+        Returned UpdateHandler instance has its protocol mocked via mock_wire_protocol.
+        """
+        
+        # Build the side_effect list for the UpdateHandler.is_running PropertyMock.
+        # Return True for the first n iterations followed by a single False to stop
+        # and then another True because the current UpdateHanlder implementation 
+        # does a __set__ during shutdown.
+        is_running_return_values = [True] * iterations + [False, True]
+        is_running_patch = patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=is_running_return_values))
+
+        mock_http_get = kwargs.get("http_get_handler")
+        mock_http_put = kwargs.get("http_put_handler")
+        mock_http_post = kwargs.get("http_post_handler")
+
+        mock_wire_data_file = kwargs.get("mock_wire_data_file", mockwiredata.DATA_FILE_STATUS_BLOB)
+
+        try:
+            with mock_wire_protocol(mock_wire_data_file, mock_http_get, mock_http_post, mock_http_put) as protocol:
+                update_handler = get_update_handler()
+                
+                update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+
+                is_running_patch.start()
+                yield update_handler
+        finally:
+            is_running_patch.stop()
+
+    @staticmethod
+    def _fail_goal_state_fetch(url, **_):
+        """
+        For each goal state requested, returns values in order before failing with an
+        HttpError. Is useful for getting the agent into a specific state before causing
+        a failure.
+
+        Relies on this function to have the property return_vals populated with a list
+        of values to be returned in order. Any `None` in the list will cause the mock wire
+        data to be queried and returned, and thus functions as a sort of default.
+        """
+        if not HttpRequestPredicates.is_goal_state_request(url):
+            # url does not represent a request for a goal state; return None so
+            # that the mock_wire_protocol will return whatever data is in the mock
+            # wire data object (as per the mock_wire_protocol's docstring).
+            return None
+        try:
+            return ReportStatusTestCase._fail_goal_state_fetch.return_vals.pop()
+        except IndexError:
+            raise HttpError()
+
+    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self):
+
+        try:
+            # Returning None forces the mock wire data to return the contents in the static
+            # files, as documented in mock_wire_protocol's docstring. We return thrice:
+            # once for protocol initialization, once for HostGAPlugin initialization,
+            # and once for the initial call in run().
+            # TODO: This test has too much knowledge of the protocol with the wireserver; rewrite it
+            #       at the level of UpdateHanlder._process_goal_state, which is where the tested
+            #       logic resides.
+            #
+            # TODO: For the same reason, the test below (commented out) needs to be rewritten
+            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [None, None, None]
+
+            with ReportStatusTestCase._mock_update_handler(http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
+                update_handler.run(debug=True)
+
+                mock_protocol = update_handler.protocol_util.get_protocol()
+                self.assertEqual(mock_protocol.mock_wire_data.call_counts['/StatusBlob'], 1,
+                    "Expected a single status blob to be uploaded")
+        finally:
+            # clean up the static variable
+            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
+
+    @skip_if_predicate_true(lambda: True, "See TODO comment in test_update_handler_should_report_status_even_on_failed_goal_state_fetch")
+    def test_update_handler_should_report_status_for_cached_goal_state_on_failed_fetch(self):
+
+        try:
+            # Adds one return to the test above (test_upload_vm_status_even_on_failed_goal_state_fetch).
+            # The third (and last) return is to allow for the extensions to be processed once so that
+            # we will have extension status to test for.
+            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None, None, None ]
+
+            with ReportStatusTestCase._mock_update_handler(iterations=2,
+                http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
+                update_handler.run(debug=True)
+
+                wire_data = update_handler.protocol_util.get_protocol().mock_wire_data
+                self.assertEqual(wire_data.call_counts['/StatusBlob'], 2,
+                    "Expected two status blobs to be uploaded, one for each iteration of the run loop.")
+
+                latest_status_blob_str = wire_data.status_blobs[-1]
+                latest_status_blob = json.loads(latest_status_blob_str)
+
+                ext_handler_statuses = latest_status_blob.get('aggregateStatus', {}).get("handlerAggregateStatus")
+                self.assertEqual(1, len(ext_handler_statuses), "Expected status for a single extension")
+
+                expectedHandlerInfo = {
+                    "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                    "handlerVersion": "1.0.0"
+                }
+
+                for key, expected_val in expectedHandlerInfo.items():
+                    actual_val = ext_handler_statuses[0].get(key)
+
+                    msg = "Extension information '{0}' did not match the provided extension.".format(key)
+                    self.assertEqual(actual_val, expected_val, msg)
+
+        finally:
+            # clean up the static variable
+            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
+
     def test_report_status_should_log_errors_only_once_per_goal_state(self):
         update_handler = _create_update_handler()
         with _mock_exthandlers_handler() as exthandlers_handler:
@@ -2139,7 +2304,7 @@ class GoalStateIntervalTestCase(AgentTestCase):
         initial_goal_state_period, goal_state_period = 11111, 22222
         with patch('azurelinuxagent.common.conf.get_initial_goal_state_period', return_value=initial_goal_state_period):
             with patch('azurelinuxagent.common.conf.get_goal_state_period', return_value=goal_state_period):
-                with _mock_exthandlers_handler([ValidHandlerStatus.transitioning, ValidHandlerStatus.success]) as exthandlers_handler:
+                with _mock_exthandlers_handler([ExtensionStatusValue.transitioning, ExtensionStatusValue.success]) as exthandlers_handler:
                     remote_access_handler = Mock()
 
                     update_handler = _create_update_handler()
@@ -2157,7 +2322,7 @@ class GoalStateIntervalTestCase(AgentTestCase):
         initial_goal_state_period, goal_state_period = 11111, 22222
         with patch('azurelinuxagent.common.conf.get_initial_goal_state_period', return_value=initial_goal_state_period):
             with patch('azurelinuxagent.common.conf.get_goal_state_period', return_value=goal_state_period):
-                with _mock_exthandlers_handler([ValidHandlerStatus.transitioning, ValidHandlerStatus.transitioning]) as exthandlers_handler:
+                with _mock_exthandlers_handler([ExtensionStatusValue.transitioning, ExtensionStatusValue.transitioning]) as exthandlers_handler:
                     remote_access_handler = Mock()
 
                     update_handler = _create_update_handler()
@@ -2187,36 +2352,36 @@ class ExtensionsSummaryTestCase(AgentTestCase):
         return ExtensionsSummary(vm_status)
 
     def test_equality_operator_should_return_true_on_items_with_the_same_value(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
 
         self.assertTrue(summary1 == summary2, "{0} == {1} should be True".format(summary1, summary2))
 
     def test_equality_operator_should_return_false_on_items_with_different_values(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertFalse(summary1 == summary2, "{0} == {1} should be False")
 
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertFalse(summary1 == summary2, "{0} == {1} should be False")
 
     def test_inequality_operator_should_return_true_on_items_with_different_values(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertTrue(summary1 != summary2, "{0} != {1} should be True".format(summary1, summary2))
 
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.success)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.success)])
 
         self.assertTrue(summary1 != summary2, "{0} != {1} should be True")
 
     def test_inequality_operator_should_return_false_on_items_with_same_value(self):
-        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
-        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ValidHandlerStatus.success), ("Extension 2", ValidHandlerStatus.transitioning)])
+        summary1 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
+        summary2 = ExtensionsSummaryTestCase._create_extensions_summary([("Extension 1", ExtensionStatusValue.success), ("Extension 2", ExtensionStatusValue.transitioning)])
 
         self.assertFalse(summary1 != summary2, "{0} != {1} should be False".format(summary1, summary2))
 

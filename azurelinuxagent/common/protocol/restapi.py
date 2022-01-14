@@ -82,13 +82,6 @@ class VMAgentManifestList(DataContract):
         self.vmAgentManifests = DataContractList(VMAgentManifest)
 
 
-class RequiredFeature(DataContract):
-    def __init__(self, name, value=None):
-        self.name = name
-        # As per the docs, this is a reserved field and not currently in use.
-        self.value = value
-
-
 class ExtensionState(object):
     Enabled = ustr("enabled")
     Disabled = ustr("disabled")

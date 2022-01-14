@@ -28,6 +28,7 @@ from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output, \
     TELEMETRY_MESSAGE_MAX_LEN
@@ -201,6 +202,24 @@ class SystemdCgroupsApi(CGroupsApi):
 
         return cpu_cgroup_path, memory_cgroup_path
 
+    def get_unit_cgroup_paths(self, unit_name):
+        """
+        Returns a tuple with the path of the cpu and memory cgroups for the given unit.
+        The values returned can be None if the controller is not mounted.
+        Ex: ControlGroup=/azure.slice/walinuxagent.service
+        controlgroup_path[1:] = azure.slice/walinuxagent.service
+        """
+        controlgroup_path = systemd.get_unit_property(unit_name, "ControlGroup")
+        cpu_mount_point, memory_mount_point = self.get_cgroup_mount_points()
+
+        cpu_cgroup_path = os.path.join(cpu_mount_point, controlgroup_path[1:]) \
+            if cpu_mount_point is not None else None
+
+        memory_cgroup_path = os.path.join(memory_mount_point, controlgroup_path[1:]) \
+            if memory_mount_point is not None else None
+
+        return cpu_cgroup_path, memory_cgroup_path
+
     @staticmethod
     def get_cgroup2_controllers():
         """
@@ -230,16 +249,16 @@ class SystemdCgroupsApi(CGroupsApi):
         return unit_not_found in stderr or scope_name not in stderr
 
     @staticmethod
-    def get_extension_cgroup_name(extension_name):
+    def get_extension_slice_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
-        return EXTENSION_SLICE_PREFIX + "-" + extension_name.replace('-', '_')
+        return EXTENSION_SLICE_PREFIX + "-" + extension_name.replace('-', '_') + ".slice"
 
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
-        extension_slice_name = self.get_extension_cgroup_name(extension_name)
+        extension_slice_name = self.get_extension_slice_name(extension_name)
         with self._systemd_run_commands_lock:
             process = subprocess.Popen(  # pylint: disable=W1509
-                "systemd-run --unit={0} --scope --slice={1}.slice {2}".format(scope, extension_slice_name, command),
+                "systemd-run --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -255,7 +274,7 @@ class SystemdCgroupsApi(CGroupsApi):
         logger.info("Started extension in unit '{0}'", scope_name)
 
         try:
-            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name + ".slice")
+            cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
 
             cpu_cgroup_mountpoint, _ = self.get_cgroup_mount_points()
 
@@ -264,6 +283,7 @@ class SystemdCgroupsApi(CGroupsApi):
             else:
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
                 CGroupsTelemetry.track_cgroup(CpuCgroup(extension_name, cpu_cgroup_path))
+
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
                 logger.info("The extension command already completed; will not track resource usage")

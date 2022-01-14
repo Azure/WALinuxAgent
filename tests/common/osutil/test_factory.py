@@ -142,6 +142,12 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_full_name="")
         self.assertTrue(isinstance(ret, CoreOSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")
+        ret = _get_osutil(distro_name="flatcar",
+                          distro_code_name="",
+                          distro_version="",
+                          distro_full_name="")
+        self.assertTrue(isinstance(ret, CoreOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_suse(self):
         ret = _get_osutil(distro_name="suse",
@@ -238,6 +244,13 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertEqual(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="almalinux",
+                          distro_code_name="",
+                          distro_full_name="",
+                          distro_version="8")
+        self.assertTrue(isinstance(ret, RedhatOSUtil))
+        self.assertEqual(ret.get_service_name(), "waagent")
+
+        ret = _get_osutil(distro_name="cloudlinux",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="8")

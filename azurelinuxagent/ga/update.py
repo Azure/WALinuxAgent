@@ -56,7 +56,7 @@ from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_col
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 
-from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, ValidHandlerStatus, HandlerStatus
+from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, ExtensionStatusValue, ExtHandlerStatusValue
 from azurelinuxagent.ga.monitor import get_monitor_handler
 
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
@@ -108,13 +108,13 @@ class ExtensionsSummary(object):
             # take the name and status of the extension if is it not None, else use the handler's
             self.summary = [(o.name, o.status) for o in map(lambda h: h.extension_status if h.extension_status is not None else h, vm_status.vmAgent.extensionHandlers)]
             self.summary.sort(key=lambda s: s[0])  # sort by extension name to make comparisons easier
-            self.converged = all(status in (ValidHandlerStatus.success, ValidHandlerStatus.error, HandlerStatus.ready, HandlerStatus.not_ready) for _, status in self.summary)
+            self.converged = all(status in (ExtensionStatusValue.success, ExtensionStatusValue.error, ExtHandlerStatusValue.ready, ExtHandlerStatusValue.not_ready) for _, status in self.summary)
 
     def __eq__(self, other):
         return self.summary == other.summary
 
     def __ne__(self, other):
-        return not (self.summary == other.summary)
+        return not (self == other)
 
     def __str__(self):
         return ustr(self.summary)
@@ -301,11 +301,11 @@ class UpdateHandler(object):
             logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
 
             #
-            # Fetch the goal state one time; some components depend on information provided by the goal state and this
+            # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g telemetry depends on the container ID.)
             #
             protocol = self.protocol_util.get_protocol()
-            protocol.update_goal_state()
+            protocol.client.update_goal_state(force_update=True)
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
@@ -426,6 +426,8 @@ class UpdateHandler(object):
         protocol = exthandlers_handler.protocol
         if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
+            # We should have a cached goal state here, go ahead and report status for that.
+            self._report_status(exthandlers_handler, incarnation_changed=False)
             return
 
         if self._upgrade_available(protocol):
@@ -571,9 +573,13 @@ class UpdateHandler(object):
                 "Changing this value affects how often extensions are processed and status for the VM is reported. Too small a value may report the VM as unresponsive")
             log_if_op_disabled("OS.EnableFirewall", conf.enable_firewall())
             log_if_op_disabled("Extensions.Enabled", conf.get_extensions_enabled())
+            log_if_op_disabled("AutoUpdate.Enabled", conf.get_autoupdate_enabled())
 
             if conf.enable_firewall():
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
+
+            if conf.get_autoupdate_enabled():
+                log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_autoupdate_frequency())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
                 log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
@@ -920,6 +926,7 @@ class UpdateHandler(object):
 
     @staticmethod
     def _ensure_extension_telemetry_state_configured_properly(protocol):
+        etp_enabled = get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported
         for name, path in list_agent_lib_directory(skip_agent_package=True):
 
             try:
@@ -936,13 +943,17 @@ class UpdateHandler(object):
                     # This is to ensure that existing extensions can start using the telemetry pipeline if they support
                     # it and also ensures that the extensions are not sending out telemetry if the Agent has to disable the feature.
                     handler_instance.create_handler_env()
+                    events_dir = handler_instance.get_extension_events_dir()
+                    # If ETP is enabled and events directory doesn't exist for handler, create it
+                    if etp_enabled and not(os.path.exists(events_dir)):
+                        fileutil.mkdir(events_dir, mode=0o700)
             except Exception as e:
                 logger.warn(
                     "Unable to re-create HandlerEnvironment file on service startup. Error: {0}".format(ustr(e)))
                 continue
 
         try:
-            if not get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).is_supported:
+            if not etp_enabled:
                 # If extension telemetry pipeline is disabled, ensure we delete all existing extension events directory
                 # because the agent will not be listening on those events.
                 extension_event_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
