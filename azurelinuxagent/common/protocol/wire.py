@@ -35,7 +35,6 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -780,7 +779,7 @@ class WireClient(object):
         goal_state = GoalState(self)
         self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
-    def update_goal_state(self, force_update=False, is_retry=False):
+    def update_goal_state(self, force_update=False):
         """
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
@@ -832,29 +831,7 @@ class WireClient(object):
                 self._goal_state = goal_state
                 goal_state_updated = True
 
-            #
-            # If we fetched the vmSettings then compare them against extensionsConfig and use them for the extensions goal state if
-            # everything matches, otherwise use extensionsConfig.
-            #
-            use_vm_settings = False
             if vm_settings_goal_state is not None:
-                if not goal_state_updated and not vm_settings_goal_state_updated:  # no need to compare them, just use vmSettings
-                    use_vm_settings = True
-                else:
-                    try:
-                        ExtensionsGoalState.compare(self._goal_state.extensions_config, vm_settings_goal_state)
-                        use_vm_settings = True
-                    except GoalStateMismatchError as mismatch:
-                        if not is_retry and mismatch.attribute in ("created_on_timestamp", "activity_id"):
-                            # this may be OK; a new goal state may have arrived in-between the calls to the HostGAPlugin and the WireServer;
-                            # retry one time after a delay and then report the error if it happens again.
-                            time.sleep(conf.get_goal_state_period())
-                            self.update_goal_state(is_retry=True)
-                            return
-                        self._vm_settings_error_reporter.report_error(ustr(mismatch))
-                        self._vm_settings_error_reporter.report_summary()
-
-            if use_vm_settings:
                 self._extensions_goal_state = vm_settings_goal_state
             else:
                 self._extensions_goal_state = self._goal_state.extensions_config
