@@ -16,7 +16,7 @@ if sys.version_info[0] < 3 or sys.version_info[0] == 3 and sys.version_info[1] <
 class ExtensionsGoalStateTestCase(AgentTestCase):
     def test_create_from_extensions_config_should_assume_block_when_blob_type_is_not_valid(self):
         data_file = mockwiredata.DATA_FILE.copy()
-        data_file["vm_settings"] = "hostgaplugin/ext_conf-invalid_blob_type.xml"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-invalid_blob_type.xml"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, load_data("hostgaplugin/ext_conf-invalid_blob_type.xml"), protocol)
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')

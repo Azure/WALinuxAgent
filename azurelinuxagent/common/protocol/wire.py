@@ -785,39 +785,34 @@ class WireClient(object):
         """
         try:
             #
-            # The entire goal state needs to be retrieved from the WireServer (via the GoalState class), and the HostGAPlugin
+            # The goal state needs to be retrieved using both the WireServer (via the GoalState class) and the HostGAPlugin
             # (via the self._fetch_vm_settings_goal_state method).
             #
-            # We fetch it in 3 parts:
+            # We always need at least 2 queries: one to the WireServer (to check for incarnation changes) and one to the HostGAPlugin
+            # (to check for extension updates).
             #
-            # 1) The "main" goal state from the WireServer, which includes the incarnation, container ID, role config, and URLs
-            #    to the rest of the goal state (certificates, remote users, extensions config, etc). We do this first because
-            #    we need to initialize the HostGAPlugin with the container ID and role config.
+            # We start by fetching the goal state from the WireServer. The response to this initial query will include the incarnation,
+            # container ID, role config, and URLs to the rest of the goal state (certificates, remote users, extensions config, etc). We
+            # do this first because we need to initialize the HostGAPlugin with the container ID and role config.
             #
             goal_state = GoalState(self)
 
             self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
 
             #
-            # 2) Then we fetch the vmSettings from the HostGAPlugin. We do this before fetching the rest of the goal state from the
-            #    WireServer to minimize the time between the initial call to the WireServer and the call to the HostGAPlugin (and hence
-            #    reduce the window in which a new goal state may arrive in-between the 2 calls)
+            # Then we fetch the vmSettings from the HostGAPlugin; the response will include the goal state for extensions.
             #
             vm_settings_goal_state, vm_settings_goal_state_updated = (None, False)
 
             if conf.get_enable_fast_track():
                 try:
                     vm_settings_goal_state, vm_settings_goal_state_updated = self._fetch_vm_settings_goal_state(force_update=force_update)
-
-                except Exception as error:
-                    # _fetch_vm_settings_goal_state() does its own detailed error reporting and raises ProtocolError; do not report those
-                    if not isinstance(error, ProtocolError):
-                        self._vm_settings_error_reporter.report_error(format_exception(error))
-                self._vm_settings_error_reporter.report_summary()
+                except VmSettingsNotSupported:
+                    pass  # if vmSettings are not supported we use extensionsConfig below
 
             #
-            # 3) Lastly we, fetch the rest of the goal state from the WireServer (but ony if needed: initialization, a "forced" update, or
-            #    a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state.
+            # Now we fetch the rest of the goal state from the WireServer (but ony if needed: initialization, a "forced" update, or
+            # a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state.
             #
             if force_update:
                 logger.info("Forcing an update of the goal state..")
@@ -831,6 +826,9 @@ class WireClient(object):
                 self._goal_state = goal_state
                 goal_state_updated = True
 
+            #
+            # And, lastly, we fall back to extensionsConfig if Fast Track is disabled or not supported
+            #
             if vm_settings_goal_state is not None:
                 self._extensions_goal_state = vm_settings_goal_state
             else:
@@ -852,7 +850,8 @@ class WireClient(object):
         Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalStateFromVmSettings, bool) tuple with the vmSettings and
         a boolean indicating if they are an updated (True) or a cached value (False).
 
-        Raises ProtocolError if the request fails for any reason (e.g. not supported, time out, server error)
+        Raises TypeError if the HostGAPlugin does not support the vmSettings API, or ProtocolError if the request fails for any other reason
+        (e.g. not supported, time out, server error).
         """
         def raise_not_supported(reset_state=False):
             if reset_state:
@@ -861,19 +860,19 @@ class WireClient(object):
                 # "Not supported" is not considered an error, so don't use self._vm_settings_error_reporter to report it
                 logger.info("vmSettings is not supported")
                 add_event(op=WALAEventOperation.HostPlugin, message="vmSettings is not supported", is_success=True)
-            raise ProtocolError("VmSettings not supported")
-
-        # Raise if VmSettings are not supported but check for periodically since the HostGAPlugin could have been updated since the last check
-        if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.now():
-            raise_not_supported()
-
-        etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
-        correlation_id = str(uuid.uuid4())
-
-        def format_message(msg):
-            return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
+            raise VmSettingsNotSupported()
 
         try:
+            # Raise if VmSettings are not supported but check for periodically since the HostGAPlugin could have been updated since the last check
+            if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.now():
+                raise_not_supported()
+
+            etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
+            correlation_id = str(uuid.uuid4())
+
+            def format_message(msg):
+                return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
+
             def get_vm_settings():
                 url, headers = self.get_host_plugin().get_vm_settings_request(correlation_id)
                 if etag is not None:
@@ -940,7 +939,7 @@ class WireClient(object):
             self._cached_vm_settings = vm_settings
             return vm_settings, True
 
-        except ProtocolError:
+        except (ProtocolError, VmSettingsNotSupported):
             raise
         except Exception as exception:
             if isinstance(exception, IOError) and "timed out" in ustr(exception):
@@ -950,6 +949,8 @@ class WireClient(object):
                 message = format_message("Request failed: {0}".format(textutil.format_exception(exception)))
                 self._vm_settings_error_reporter.report_error(message, _VmSettingsError.RequestFailed)
             raise ProtocolError(message)
+        finally:
+            self._vm_settings_error_reporter.report_summary()
 
     def _update_host_plugin(self, container_id, role_config_name):
         if self._host_plugin is not None:
@@ -1565,3 +1566,7 @@ class _VmSettingsErrorReporter(object):
                 logger.info("[VmSettingsSummary] {0}", message)
 
             self._reset()
+
+
+class VmSettingsNotSupported(TypeError):
+    pass
