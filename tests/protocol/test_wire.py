@@ -42,7 +42,7 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _VmSettingsErrorReporter
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
-from azurelinuxagent.common.utils import restutil, textutil
+from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator

@@ -46,7 +46,7 @@ from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json, format_exception
+    findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
