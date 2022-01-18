@@ -457,7 +457,7 @@ class UpdateHandler(object):
 
     def _process_goal_state(self, exthandlers_handler, remote_access_handler):
 
-        def log_update_time():
+        def log_next_update_time():
             next_normal_time, next_hotfix_time = self.__get_next_upgrade_times()
             upgrade_type = self.__get_agent_upgrade_type(available_agent)
             next_time = next_hotfix_time if upgrade_type == AgentUpgradeType.Hotfix else next_normal_time
@@ -468,6 +468,32 @@ class UpdateHandler(object):
                       message=message_, log_event=False)
             logger.info(message_)
 
+        def handle_updates_for_requested_version():
+            if requested_version == CURRENT_VERSION:
+                logger.info("The requested version is running as the current version: {0}".format(requested_version))
+                return
+            if requested_version < CURRENT_VERSION:
+                prefix = "downgrade"
+                # In case of a downgrade, we blacklist the current agent to avoid starting it back up ever again
+                # (the expectation here being that if RSM is asking us to a downgrade, there's a good reason for not wanting the current version).
+                try:
+                    # We should always have an agent directory for the CURRENT_VERSION
+                    # (unless the CURRENT_VERSION == daemon version, but since we don't support downgrading
+                    # below daemon version, we will never reach this code path if that's the scenario)
+                    current_agent = next(agent for agent in self.agents if agent.version == CURRENT_VERSION)
+                    current_agent.mark_failure(is_fatal=True)
+                except StopIteration:
+                    logger.warn(
+                        "Could not find a matching agent with current version {0} to blacklist, skipping it".format(
+                            CURRENT_VERSION))
+            else:
+                # In case of an upgrade, we don't need to blacklist anything as the daemon will automatically
+                # start the next available highest version which would be the requested version
+                prefix = "upgrade"
+            raise AgentUpgradeExitException(
+                "Agent {0} discovered, moving to the requested version: {1} -- exiting".format(
+                    prefix, requested_version))
+
         protocol = exthandlers_handler.protocol
         if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
@@ -476,20 +502,20 @@ class UpdateHandler(object):
             return
 
         if self._download_agent_if_upgrade_available(protocol):
+            # The call to get_latest_agent() also finds all agents in directory and sets the agents and finds the largest agent.
+            # This state is used to find the GuestAgent object with the current version later if requested version is available in last GS.
             available_agent = self.get_latest_agent()
             requested_version, _ = self.__get_requested_version_and_manifest_from_last_gs(protocol)
-            # Legacy behavior: The current agent can become unavailable and needs to be reverted.
-            # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
-            if available_agent is None:
-                raise AgentUpgradeExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
-            elif requested_version is not None:
+            if requested_version is not None:
                 # If requested version specified, upgrade/downgrade to the specified version instantly as this is
                 # driven by the goal state (as compared to the agent periodically checking for new upgrades every hour)
-                raise AgentUpgradeExitException(
-                    "{0} Agent upgrade discovered, updating to the requested version {1} -- exiting".format(
-                        self.__get_agent_upgrade_type(available_agent), available_agent.name))
+                handle_updates_for_requested_version()
+            elif available_agent is None:
+                # Legacy behavior: The current agent can become unavailable and needs to be reverted.
+                # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
+                raise AgentUpgradeExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
             else:
-                log_update_time()
+                log_next_update_time()
 
         self.__upgrade_agent_if_permitted(protocol)
 
@@ -943,9 +969,9 @@ class UpdateHandler(object):
         if not conf.get_autoupdate_enabled():
             return False
 
-        def report_error(msg_, version=CURRENT_VERSION, op=WALAEventOperation.Download):
+        def report_error(msg_, version_=CURRENT_VERSION, op=WALAEventOperation.Download):
             logger.warn(msg_)
-            add_event(AGENT_NAME, op=op, version=version, is_success=False, message=msg_)
+            add_event(AGENT_NAME, op=op, version=version_, is_success=False, message=msg_)
 
         family = conf.get_autoupdate_gafamily()
         incarnation_changed = False
@@ -985,7 +1011,7 @@ class UpdateHandler(object):
                 # as we don't support downgrades below daemon versions.
                 report_error(
                     "Can't process the upgrade as the requested version: {0} is < current daemon version: {1}".format(
-                        requested_version, daemon_version))
+                        requested_version, daemon_version), op=WALAEventOperation.AgentUpgrade)
                 return False
 
         else:
@@ -1033,7 +1059,7 @@ class UpdateHandler(object):
                 else:
                     msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
                         requested_version, incarnation)
-                    report_error(msg, version=requested_version)
+                    report_error(msg, version_=requested_version)
                     return False
 
             # Set the agents to those available for download at least as current as the existing agent
@@ -1042,8 +1068,9 @@ class UpdateHandler(object):
             self._set_and_sort_agents([GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download])
 
             # Remove from disk any agent no longer needed in the VM.
-            # If requested version is provided, this would delete all other agents present on the VM except the
-            # current one and the requested one if they're different, and only the current one if same.
+            # If requested version is provided, this would delete all other agents present on the VM except -
+            #   - the current version and the requested version if requested version != current version
+            #   - only the current version if requested version == current version
             # Note:
             #  The code leaves on disk available, but blacklisted, agents to preserve the state.
             #  Otherwise, those agents could be downloaded again and inappropriately retried.
