@@ -943,7 +943,7 @@ class TestUpdate(UpdateTestCase):
     def _test_evaluate_agent_health(self, child_agent_index=0):
         self.prepare_agents()
 
-        latest_agent = self.update_handler.get_latest_agent()
+        latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
         self.assertTrue(latest_agent.is_available)
         self.assertFalse(latest_agent.is_blacklisted)
         self.assertTrue(len(self.update_handler.agents) > 1)
@@ -1029,7 +1029,7 @@ class TestUpdate(UpdateTestCase):
     def test_get_latest_agent(self):
         latest_version = self.prepare_agents()
 
-        latest_agent = self.update_handler.get_latest_agent()
+        latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
         self.assertEqual(len(self._get_agents(self.tmp_dir)), len(self.update_handler.agents))
         self.assertEqual(latest_version, latest_agent.version)
 
@@ -1038,24 +1038,24 @@ class TestUpdate(UpdateTestCase):
         self.assertFalse(self._test_upgrade_available(
             versions=self.agent_versions(),
             count=1))
-        self.assertEqual(None, self.update_handler.get_latest_agent())
+        self.assertEqual(None, self.update_handler.get_latest_agent_greater_than_daemon())
 
     def test_get_latest_agent_no_updates(self):
-        self.assertEqual(None, self.update_handler.get_latest_agent())
+        self.assertEqual(None, self.update_handler.get_latest_agent_greater_than_daemon())
 
     def test_get_latest_agent_skip_updates(self):
         conf.get_autoupdate_enabled = Mock(return_value=False)
-        self.assertEqual(None, self.update_handler.get_latest_agent())
+        self.assertEqual(None, self.update_handler.get_latest_agent_greater_than_daemon())
 
     def test_get_latest_agent_skips_unavailable(self):
         self.prepare_agents()
-        prior_agent = self.update_handler.get_latest_agent()
+        prior_agent = self.update_handler.get_latest_agent_greater_than_daemon()
 
         latest_version = self.prepare_agents(count=self.agent_count() + 1, is_available=False)
         latest_path = os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, latest_version))
         self.assertFalse(GuestAgent(latest_path).is_available)
 
-        latest_agent = self.update_handler.get_latest_agent()
+        latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
         self.assertTrue(latest_agent.version < latest_version)
         self.assertEqual(latest_agent.version, prior_agent.version)
 
@@ -1163,7 +1163,7 @@ class TestUpdate(UpdateTestCase):
     def test_run_latest(self):
         self.prepare_agents()
 
-        agent = self.update_handler.get_latest_agent()
+        agent = self.update_handler.get_latest_agent_greater_than_daemon()
         args, kwargs = self._test_run_latest()
         args = args[0]
         cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
@@ -1181,8 +1181,8 @@ class TestUpdate(UpdateTestCase):
     def test_run_latest_passes_child_args(self):
         self.prepare_agents()
 
-        agent = self.update_handler.get_latest_agent()  # pylint: disable=unused-variable
-        args, kwargs = self._test_run_latest(child_args="AnArgument")  # pylint: disable=unused-variable
+        self.update_handler.get_latest_agent_greater_than_daemon()
+        args, _ = self._test_run_latest(child_args="AnArgument")
         args = args[0]
 
         self.assertTrue(len(args) > 1)
@@ -1224,7 +1224,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, mock_time.sleep_interval)
 
     def test_run_latest_defaults_to_current(self):
-        self.assertEqual(None, self.update_handler.get_latest_agent())
+        self.assertEqual(None, self.update_handler.get_latest_agent_greater_than_daemon())
 
         args, kwargs = self._test_run_latest()
 
@@ -1259,7 +1259,7 @@ class TestUpdate(UpdateTestCase):
         # logger.add_logger_appender(logger.AppenderType.STDOUT)
         self.prepare_agents()
 
-        latest_agent = self.update_handler.get_latest_agent()
+        latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
         self.assertTrue(latest_agent.is_available)
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
@@ -1275,7 +1275,7 @@ class TestUpdate(UpdateTestCase):
     def test_run_latest_exception_blacklists(self):
         self.prepare_agents()
 
-        latest_agent = self.update_handler.get_latest_agent()
+        latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
         self.assertTrue(latest_agent.is_available)
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
@@ -1291,7 +1291,7 @@ class TestUpdate(UpdateTestCase):
     def test_run_latest_exception_does_not_blacklist_if_terminating(self):
         self.prepare_agents()
 
-        latest_agent = self.update_handler.get_latest_agent()
+        latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
         self.assertTrue(latest_agent.is_available)
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
@@ -1324,7 +1324,7 @@ class TestUpdate(UpdateTestCase):
             with open(error_file_path, 'w') as f:
                 f.write("")
 
-        latest_agent = self.update_handler.get_latest_agent()
+        latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
         self.assertEqual(latest_agent.version, dst_ver, "Latest agent version is invalid")
 
     def _test_run(self, invocations=1, calls=1, enable_updates=False, sleep_interval=(6,)):
@@ -1917,12 +1917,23 @@ class TestAgentUpgrade(UpdateTestCase):
         exit_args, _ = exit_mock.call_args
         self.assertEqual(exit_args[0], 0, "Exit code should be 0")
 
+    def __assert_telemetry_emitted_for_requested_version(self, mock_telemetry, upgrade=True, version="99999.0.0.0"):
+        upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                              'Agent {0} discovered, moving to the requested version: {1} -- exiting'.format(
+                                  "upgrade" if upgrade else "downgrade", version) in kwarg['message'] and kwarg[
+                                  'op'] == WALAEventOperation.AgentUpgrade]
+        self.assertEqual(1, len(upgrade_event_msgs),
+                         "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
+                             mock_telemetry.call_args_list))
+
     def __assert_upgrade_telemetry_emitted(self, mock_telemetry, upgrade_type=AgentUpgradeType.Normal):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
                               '{0} Agent upgrade discovered, updating to WALinuxAgent-99999.0.0.0 -- exiting'.format(
                                   upgrade_type) in kwarg['message'] and kwarg[
                                   'op'] == WALAEventOperation.AgentUpgrade]
-        self.assertEqual(1, len(upgrade_event_msgs), "Agent not upgraded properly")
+        self.assertEqual(1, len(upgrade_event_msgs),
+                         "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
+                             mock_telemetry.call_args_list))
 
     def __assert_agent_directories_available(self, versions):
         for version in versions:
@@ -2059,7 +2070,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
             self.__assert_exit_code_successful(update_handler.exit_mock)
             upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                  'Agent upgrade discovered, updating to WALinuxAgent-9.9.9.10 -- exiting' in kwarg[
+                                  'Agent upgrade discovered, moving to the requested version: 9.9.9.10 -- exiting' in kwarg[
                                       'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
             self.assertEqual(1, len(upgrade_event_msgs),
                              "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
@@ -2080,9 +2091,11 @@ class TestAgentUpgrade(UpdateTestCase):
 
             self.__assert_exit_code_successful(update_handler.exit_mock)
             upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                  'Agent upgrade discovered, updating to WALinuxAgent-9.9.9.10 -- exiting' in kwarg[
+                                  'Agent upgrade discovered, moving to the requested version: 9.9.9.10 -- exiting' in kwarg[
                                       'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
-            self.assertEqual(1, len(upgrade_event_msgs), "Agent not upgraded properly")
+            self.assertEqual(1, len(upgrade_event_msgs),
+                             "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
+                                 mock_telemetry.call_args_list))
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
 
     def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
@@ -2145,7 +2158,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
             self.assertGreaterEqual(reload_conf.call_count, 1, "Reload conf not updated as expected")
             self.__assert_exit_code_successful(update_handler.exit_mock)
-            self.__assert_upgrade_telemetry_emitted(mock_telemetry)
+            self.__assert_telemetry_emitted_for_requested_version(mock_telemetry)
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
             self.assertEqual(update_handler._protocol.mock_wire_data.call_counts['agentArtifact'], 1,
                              "only 1 agent should've been downloaded - 1 per incarnation")
@@ -2211,6 +2224,22 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_exit_code_successful(update_handler.exit_mock)
             self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
+
+    def test_it_should_skip_waiting_if_requested_version(self):
+        raise NotImplementedError
+
+    def test_it_should_update_instantly_if_requested_version_specified(self):
+        # This might already be covered by tests above, verify that
+        raise NotImplementedError
+
+    def test_it_should_blacklist_current_agent_on_downgrade(self):
+        raise NotImplementedError
+
+    def test_it_should_not_downgrade_below_daemon_version(self):
+        raise NotImplementedError
+
+    def test_it_should_start_the_agent_as_the_requested_version(self):
+        raise NotImplementedError
 
 
 @patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')
@@ -2372,6 +2401,9 @@ class ProtocolMock(object):
 
     def get_protocol(self):
         return self
+
+    def get_incarnation(self):
+        return self.etag
 
     def get_vmagent_manifests(self):
         self.call_counts["get_vmagent_manifests"] += 1
