@@ -31,12 +31,21 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             from_extensions_config = protocol.client.get_extensions_goal_state()
             from_vm_settings = protocol.client._cached_vm_settings
 
+            mismatch_messages = {
+                'publicSettings': None,
+                'protectedSettings': None
+            }
+
             def assert_compare_raises(setup_copy, failing_attribute):
                 from_vm_settings_copy = copy.deepcopy(from_vm_settings)
                 setup_copy(from_vm_settings_copy)
 
-                with self.assertRaisesRegexCM(GoalStateMismatchError, re.escape("(Attribute: {0})".format(failing_attribute)), re.DOTALL):
+                with self.assertRaisesRegexCM(GoalStateMismatchError, re.escape("(Attribute: {0})".format(failing_attribute)), re.DOTALL) as context_manager:
                     ExtensionsGoalState.compare(from_extensions_config, from_vm_settings_copy)
+                if context_manager.exception.attribute == 'publicSettings':
+                    mismatch_messages['publicSettings'] = str(context_manager.exception)
+                elif context_manager.exception.attribute == 'protectedSettings':
+                    mismatch_messages['protectedSettings'] = str(context_manager.exception)
 
             assert_compare_raises(lambda c: setattr(c, "_activity_id",              'MOCK_ACTIVITY_ID'),        "activity_id")
             assert_compare_raises(lambda c: setattr(c, "_correlation_id",           'MOCK_CORRELATION_ID'),     "correlation_id")
@@ -62,6 +71,12 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "certificateThumbprint", 'MOCK_CERT'),                 r"extensions[0].settings[0].certificateThumbprint")
             assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "dependencyLevel",       56789),                       r"extensions[0].settings[0].dependencyLevel")
             assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "state",                 'MOCK_STATE'),                r"extensions[0].settings[0].state")
+
+            expected = r'^\[GoalStateMismatchError\] Mismatch in Goal States \[Incarnation 1\] != \[Etag: 1\]: \[REDACTED\] != \[REDACTED\] \(Attribute: .*\.publicSettings\)$'
+            self.assertRegex(mismatch_messages['publicSettings'], expected, 'Expected the protected settings to be redacted. Got: "{0}"'.format(mismatch_messages['publicSettings']))
+
+            expected = r'^\[GoalStateMismatchError\] Mismatch in Goal States \[Incarnation 1\] != \[Etag: 1\]: \[REDACTED\] != \[REDACTED\] \(Attribute: .*\.protectedSettings\)$'
+            self.assertRegex(mismatch_messages['protectedSettings'], expected, 'Expected the protected settings to be redacted. Got: "{0}"'.format(mismatch_messages['protectedSettings']))
 
     def test_create_from_extensions_config_should_assume_block_when_blob_type_is_not_valid(self):
         data_file = mockwiredata.DATA_FILE.copy()

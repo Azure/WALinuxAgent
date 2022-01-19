@@ -157,7 +157,10 @@ class ExtensionsGoalState(object):
                     second_value.sort()
 
                 if first_value != second_value:
-                    mistmatch = "[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context))
+                    if attribute.lower() in ('protectedsettings', 'publicsettings'):
+                        mistmatch = "[REDACTED] != [REDACTED] (Attribute: {0})".format(".".join(context))
+                    else:
+                        mistmatch = "[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context))
                     message = "Mismatch in Goal States [Incarnation {0}] != [Etag: {1}]: {2}".format(from_extensions_config.id, from_vm_settings.id, mistmatch)
                     raise GoalStateMismatchError(message, attribute)
             finally:
