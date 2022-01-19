@@ -1537,7 +1537,6 @@ class _VmSettingsErrorReporter(object):
         self._error_count += 1
 
         if self._error_count <= _VmSettingsErrorReporter._MaxErrors:
-            logger.info("[VmSettings] [Informational only, the Agent will continue normal operation] {0}", error)
             add_event(op=WALAEventOperation.VmSettings, message=error, is_success=False, log_event=False)
 
         if category == _VmSettingsError.ServerError:
