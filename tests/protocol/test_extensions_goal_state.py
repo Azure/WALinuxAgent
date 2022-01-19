@@ -19,7 +19,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
     def test_compare_should_succeed_when_extensions_config_and_vm_settings_are_equal(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             from_extensions_config = protocol.client.get_extensions_goal_state()
-            from_vm_settings = protocol.client._vm_settings_goal_state
+            from_vm_settings = protocol.client._cached_vm_settings
 
             try:
                 ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
@@ -29,7 +29,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
     def test_compare_should_report_mismatches_between_extensions_config_and_vm_settings(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             from_extensions_config = protocol.client.get_extensions_goal_state()
-            from_vm_settings = protocol.client._vm_settings_goal_state
+            from_vm_settings = protocol.client._cached_vm_settings
 
             def assert_compare_raises(setup_copy, failing_attribute):
                 from_vm_settings_copy = copy.deepcopy(from_vm_settings)
@@ -75,23 +75,23 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 
     def test_extension_goal_state_should_parse_requested_version_properly(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
                 self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
-            vm_settings_ga_manifests = protocol.client._vm_settings_goal_state.agent_manifests
+            vm_settings_ga_manifests = protocol.client._cached_vm_settings.agent_manifests
             for manifest in vm_settings_ga_manifests:
                 self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
         with mock_wire_protocol(data_file) as protocol:
             fabric_manifests, _ = protocol.get_vmagent_manifests()
             for manifest in fabric_manifests:
                 self.assertEqual(manifest.requested_version_string, "9.9.9.10", "Version should be 9.9.9.10")
 
-            vm_settings_ga_manifests = protocol.client._vm_settings_goal_state.agent_manifests
+            vm_settings_ga_manifests = protocol.client._cached_vm_settings.agent_manifests
             for manifest in vm_settings_ga_manifests:
                 self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
