@@ -1264,7 +1264,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent_greater_than_daemon', return_value=latest_agent):
             self._test_run_latest(mock_child=ChildMock(return_value=1))
 
         self.assertTrue(latest_agent.is_blacklisted)
@@ -1280,7 +1280,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent_greater_than_daemon', return_value=latest_agent):
             self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Force blacklisting")))
 
         self.assertFalse(latest_agent.is_available)
@@ -1296,7 +1296,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent_greater_than_daemon', return_value=latest_agent):
             self.update_handler.is_running = False
             self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Attempt blacklisting")))
 
