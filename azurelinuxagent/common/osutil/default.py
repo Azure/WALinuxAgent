@@ -277,22 +277,15 @@ class DefaultOSUtil(object):
         try:
             wait = self.get_firewall_will_wait()
 
-            # If the DROP rule exists, make no changes
+            # Add every iptable rule if not present.
             try:
-                drop_rule = get_firewall_drop_command(wait, AddFirewallRules.CHECK_COMMAND, dst_ip)
-                shellutil.run_command(drop_rule)
-                logger.verbose("Firewall appears established")
-                return True
+                AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
             except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid)
                     msg = "please upgrade iptables to a version that supports the -C option"
                     logger.warn(msg)
-                    raise Exception(msg)
-
-            # Otherwise, append all rules
-            try:
-                AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+                    raise
             except Exception as error:
                 logger.warn(ustr(error))
                 raise
