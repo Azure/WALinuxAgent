@@ -156,18 +156,20 @@ class AddFirewallRules(object):
         return ["firewall-cmd", "--permanent", "--direct", command, "ipv4"]
 
     @staticmethod
-    def __get_common_command_params(command, destination):
+    def __get_common_command_params(command, destination, pos):
+        if command == AddFirewallRules.INSERT_COMMAND:
+            return ["-t", "security", command, "OUTPUT", pos, "-d", destination, "-p", "tcp", "-m"]
         return ["-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m"]
 
     @staticmethod
-    def __get_common_accept_command_params(wait, command, destination, uid):
-        cmd = AddFirewallRules.__get_common_command_params(command, destination)
+    def __get_common_accept_command_params(wait, command, destination, uid, pos=""):
+        cmd = AddFirewallRules.__get_common_command_params(command, destination, pos)
         cmd.extend(["owner", "--uid-owner", str(uid), "-j", "ACCEPT"])
         return AddFirewallRules._add_wait(wait, cmd)
 
     @staticmethod
-    def __get_common_drop_command_params(wait, command, destination):
-        cmd = AddFirewallRules.__get_common_command_params(command, destination)
+    def __get_common_drop_command_params(wait, command, destination, pos=""):
+        cmd = AddFirewallRules.__get_common_command_params(command, destination, pos)
         cmd.extend(["conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
         return AddFirewallRules._add_wait(wait, cmd)
 
@@ -178,26 +180,28 @@ class AddFirewallRules(object):
         if firewalld_command != "":
             cmd = AddFirewallRules.__get_firewalld_base_command(firewalld_command)
         else:
-            if command == AddFirewallRules.INSERT_COMMAND:
-                command = "{0} {1}".format(AddFirewallRules.INSERT_COMMAND, "1")
             cmd = AddFirewallRules.__get_iptables_base_command(wait)
         cmd = cmd + ['-t', 'security', command, 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53', '-j', 'ACCEPT']
         return cmd
 
     @staticmethod
     def get_iptables_accept_command(wait, command, destination, owner_uid):
-        if command == AddFirewallRules.INSERT_COMMAND:
-            command = "{0} {1}".format(AddFirewallRules.INSERT_COMMAND, "2")
         cmd = AddFirewallRules.__get_iptables_base_command()
-        cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid))
+        if command == AddFirewallRules.INSERT_COMMAND:
+            cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid, pos="2"))
+        else:
+            cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid))
+
         return cmd
 
     @staticmethod
     def get_iptables_drop_command(wait, command, destination):
-        if command == AddFirewallRules.INSERT_COMMAND:
-            command = "{0} {1}".format(AddFirewallRules.INSERT_COMMAND, "3")
         cmd = AddFirewallRules.__get_iptables_base_command()
-        cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination))
+        if command == AddFirewallRules.INSERT_COMMAND:
+            cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination, pos="3"))
+        else:
+            cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination))
+
         return cmd
 
     @staticmethod
