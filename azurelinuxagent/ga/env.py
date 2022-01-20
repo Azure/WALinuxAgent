@@ -137,6 +137,7 @@ class EnableFirewall(PeriodicOperation):
 
         firewall_list = self._osutil.get_firewall_list(verbose=False)
         if self._log_initial_firewall_list or self._firewall_list != firewall_list:
+            logger.info("Successfully added Azure fabric firewall rules")
             logger.info("Firewall rules:\n{0}".format(self._osutil.get_firewall_list()))
             self._firewall_list = firewall_list
             self._log_initial_firewall_list = False

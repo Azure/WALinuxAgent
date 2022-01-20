@@ -292,7 +292,6 @@ class DefaultOSUtil(object):
                 logger.warn(ustr(error))
                 raise
 
-            logger.info("Successfully added Azure fabric firewall rules")
             return True
 
         except Exception as e:

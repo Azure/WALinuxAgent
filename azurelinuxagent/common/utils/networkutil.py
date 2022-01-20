@@ -187,21 +187,13 @@ class AddFirewallRules(object):
     @staticmethod
     def get_iptables_accept_command(wait, command, destination, owner_uid):
         cmd = AddFirewallRules.__get_iptables_base_command()
-        if command == AddFirewallRules.INSERT_COMMAND:
-            cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid, pos="2"))
-        else:
-            cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid))
-
+        cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid, pos="2"))
         return cmd
 
     @staticmethod
     def get_iptables_drop_command(wait, command, destination):
         cmd = AddFirewallRules.__get_iptables_base_command()
-        if command == AddFirewallRules.INSERT_COMMAND:
-            cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination, pos="3"))
-        else:
-            cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination))
-
+        cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination, pos="3"))
         return cmd
 
     @staticmethod
