@@ -241,7 +241,6 @@ class ExtHandlerState(object):
     Installed = "Installed"
     Enabled = "Enabled"
     FailedUpgrade = "FailedUpgrade"
-    DidNotRun = "DidNotRun"
 
 
 class GoalStateStatus(object):
@@ -514,11 +513,6 @@ class ExtHandlersHandler(object):
                 # For SC extensions, overwrite the HandlerStatus with the relevant message
                 else:
                     handler_i.set_handler_status(message=depends_on_err_msg, code=-1)
-                    # We need to convey state to the extension status reporting logic. It will be looking for a status file
-                    # that should have been created by the extension itself, but it cannot be run in this case. Additionally,
-                    # the agent cannot create the status file itself as some extensions will not run when their status file
-                    # already exists, per a legacy bug in the agent.
-                    handler_i.set_handler_state(ExtHandlerState.DidNotRun)
 
                 continue
 
@@ -698,8 +692,8 @@ class ExtHandlersHandler(object):
         current_handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Enable] current handler state is: {0}", current_handler_state.lower())
         # We go through the entire process of downloading and initializing the extension if it's either a fresh
-        # extension, it's a retry of a previously failed upgrade, or if the extension did not run last goal state.
-        if current_handler_state in (ExtHandlerState.NotInstalled, ExtHandlerState.FailedUpgrade, ExtHandlerState.DidNotRun):
+        # extension or if it's a retry of a previously failed upgrade.
+        if current_handler_state == ExtHandlerState.NotInstalled or current_handler_state == ExtHandlerState.FailedUpgrade:
             self.__setup_new_handler(ext_handler_i, extension)
 
             if old_ext_handler_i is None:
@@ -1023,8 +1017,8 @@ class ExtHandlersHandler(object):
         if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
-            # Only try to read heartbeat if the handler was installed (!= ExtHandlerState.NotInstalled, ExtHandlerState.DidNotRun).
-            if not handler_state in (ExtHandlerState.NotInstalled, ExtHandlerState.DidNotRun):
+            # Only try to read heartbeat if HandlerState != NotInstalled.
+            if handler_state != ExtHandlerState.NotInstalled:
                 # Heartbeat is a handler level thing only, so we dont need to modify this
                 try:
                     heartbeat = ext_handler_i.collect_heartbeat()
@@ -1684,11 +1678,6 @@ class ExtHandlerInstance(object):
         data_str = None
         # Extension.name contains the extension name in case of MC and Handler name in case of Single Config.
         ext_status = ExtensionStatus(name=ext.name, seq_no=seq_no)
-
-        if self.get_handler_state() == ExtHandlerState.DidNotRun:
-            handler_status = self.get_handler_status()
-            ext_status.message = handler_status.message
-            return ext_status
 
         try:
             data_str, data = self._read_status_file(ext_status_file)
