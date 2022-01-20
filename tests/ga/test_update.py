@@ -1918,7 +1918,8 @@ class TestAgentUpgrade(UpdateTestCase):
                                return_value=hotfix_frequency):
                         with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency",
                                    return_value=normal_frequency):
-                            yield
+                            with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
+                                yield
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None, hotfix_frequency=1.0, normal_frequency=2.0,
@@ -1934,12 +1935,14 @@ class TestAgentUpgrade(UpdateTestCase):
 
                 if HttpRequestPredicates.is_agent_package_request(url):
                     agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
+                    protocol.mock_wire_data.call_counts['agentArtifact'] += 1
                     return ResponseMock(response=agent_pkg)
                 return protocol.mock_wire_data.mock_http_get(url, **kwargs)
 
             protocol.set_http_handlers(http_get_handler=get_handler)
             with self.create_conf_mocks(hotfix_frequency, normal_frequency):
                 with patch("azurelinuxagent.ga.update.add_event") as mock_telemetry:
+                    update_handler._protocol = protocol
                     yield update_handler, mock_telemetry
 
     def __assert_exit_code_successful(self, exit_mock):
@@ -1957,6 +1960,13 @@ class TestAgentUpgrade(UpdateTestCase):
     def __assert_agent_directories_available(self, versions):
         for version in versions:
             self.assertTrue(os.path.exists(self.agent_dir(version)), "Agent directory {0} not found".format(version))
+
+    def __assert_agent_directories_exist_and_others_dont_exist(self, versions):
+        self.__assert_agent_directories_available(versions=versions)
+        other_agents = [agent_dir for agent_dir in self.agent_dirs() if
+                        agent_dir not in [self.agent_dir(version) for version in versions]]
+        self.assertFalse(any(other_agents),
+                         "All other agents should be purged from agent dir: {0}".format(other_agents))
 
     def __assert_no_agent_upgrade_telemetry(self, mock_telemetry):
         self.assertEqual(0, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
@@ -2072,6 +2082,168 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertGreater(len([msg for msg in upgrade_event_msgs if
                                     'Discovered new {0} upgrade WALinuxAgent-99999.0.0.0; Will upgrade on or after'.format(
                                         AgentUpgradeType.Normal) in msg]), 0, "Error message not propagated properly")
+
+    def test_it_should_download_only_requested_version_if_available(self):
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler.run(debug=True)
+
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                  'Agent upgrade discovered, updating to WALinuxAgent-9.9.9.10 -- exiting' in kwarg[
+                                      'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
+            self.assertEqual(1, len(upgrade_event_msgs),
+                             "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
+                                 mock_telemetry.call_args_list))
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10"])
+
+    def test_it_should_cleanup_all_agents_except_requested_version_and_current_version(self):
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler.run(debug=True)
+
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                  'Agent upgrade discovered, updating to WALinuxAgent-9.9.9.10 -- exiting' in kwarg[
+                                      'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
+            self.assertEqual(1, len(upgrade_event_msgs), "Agent not upgraded properly")
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
+
+    def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_missing_requested_version.xml"
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler.run(debug=True)
+
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
+            agent_msgs = [kwarg for _, kwarg in mock_telemetry.call_args_list if
+                          kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
+            # This will throw if corresponding message not found so not asserting on that
+            requested_version_found = next(kwarg for kwarg in agent_msgs if
+                                           "Found requested version in manifest: 5.2.1.0 for incarnation: 1" in kwarg['message'])
+            self.assertTrue(requested_version_found['is_success'],
+                            "The requested version found op should be reported as a success")
+
+            skipping_update = next(kwarg for kwarg in agent_msgs if
+                                   "No matching package found in the agent manifest for requested version: 5.2.1.0 in incarnation: 1, skipping agent update" in kwarg['message'])
+            self.assertEqual(skipping_update['version'], FlexibleVersion("5.2.1.0"),
+                             "The not found message should be reported from requested agent version")
+            self.assertFalse(skipping_update['is_success'], "The not found op should be reported as a failure")
+
+    def test_it_should_only_try_downloading_requested_version_on_new_incarnation(self):
+        no_of_iterations = 1000
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        def reload_conf(url, mock_wire_data):
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
+             "goalstate"] >= 10 and mock_wire_data.call_counts["goalstate"] < 15:
+
+                # Ensure we didn't try to download any agents except during the incarnation change
+                self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
+
+                # Update the requested version to "99999.0.0.0"
+                update_handler._protocol.mock_wire_data.set_extension_config_requested_version("99999.0.0.0")
+                reload_conf.call_count += 1
+                self._add_write_permission_to_goal_state_files()
+                reload_conf.incarnation += 1
+                mock_wire_data.set_incarnation(reload_conf.incarnation)
+
+        reload_conf.call_count = 0
+        reload_conf.incarnation = 2
+
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
+                                       normal_frequency=0.01, hotfix_frequency=0.01) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+                update_handler._protocol.mock_wire_data.set_incarnation(2)
+                update_handler.run(debug=True)
+
+            self.assertGreaterEqual(reload_conf.call_count, 1, "Reload conf not updated as expected")
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_upgrade_telemetry_emitted(mock_telemetry)
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
+            self.assertEqual(update_handler._protocol.mock_wire_data.call_counts['agentArtifact'], 1,
+                             "only 1 agent should've been downloaded - 1 per incarnation")
+            self.assertEqual(update_handler._protocol.mock_wire_data.call_counts["manifest_of_ga.xml"], 1,
+                             "only 1 agent manifest call should've been made - 1 per incarnation")
+
+    def test_it_should_fallback_to_old_update_logic_if_requested_version_not_available(self):
+        no_of_iterations = 100
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        def reload_conf(url, mock_wire_data):
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
+             "goalstate"] >= 5:
+                reload_conf.call_count += 1
+
+                # By this point, the GS with requested version should've been executed. Verify that
+                self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
+
+                # Update the ext-conf and incarnation and remove requested versions from GS,
+                # this should download all versions requested in config
+                mock_wire_data.data_files["ext_conf"] = "wire/ext_conf.xml"
+                mock_wire_data.reload()
+                self._add_write_permission_to_goal_state_files()
+                reload_conf.incarnation += 1
+                mock_wire_data.set_incarnation(reload_conf.incarnation)
+
+        reload_conf.call_count = 0
+        reload_conf.incarnation = 2
+
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
+                                       normal_frequency=0.001) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+                update_handler._protocol.mock_wire_data.set_incarnation(2)
+                update_handler.run(debug=True)
+
+            self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_upgrade_telemetry_emitted(mock_telemetry)
+            self.__assert_agent_directories_exist_and_others_dont_exist(
+                versions=["1.0.0", "1.1.0", "1.2.0", "2.0.0", "2.1.0", "9.9.9.10", "99999.0.0.0", str(CURRENT_VERSION)])
+
+    def test_it_should_not_download_anything_if_requested_version_is_current_version_and_delete_all_agents(self):
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+                update_handler._protocol.mock_wire_data.set_incarnation(2)
+                update_handler.run(debug=True)
+
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
 
 
 @patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')
