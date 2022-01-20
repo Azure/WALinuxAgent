@@ -42,7 +42,8 @@ from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
-    AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
+    AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION, set_daemon_version, \
+    __DAEMON_VERSION_ENV_VARIABLE as DAEMON_VERSION_ENV_VARIABLE
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
@@ -1896,9 +1897,11 @@ class TestAgentUpgrade(UpdateTestCase):
 
         with _get_update_handler(iterations, test_data) as (update_handler, protocol):
 
+            protocol.aggregate_status = None
+
             def get_handler(url, **kwargs):
                 if reload_conf is not None:
-                    reload_conf(url, protocol.mock_wire_data)
+                    reload_conf(url, protocol)
 
                 if HttpRequestPredicates.is_agent_package_request(url):
                     agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
@@ -1906,7 +1909,14 @@ class TestAgentUpgrade(UpdateTestCase):
                     return ResponseMock(response=agent_pkg)
                 return protocol.mock_wire_data.mock_http_get(url, **kwargs)
 
-            protocol.set_http_handlers(http_get_handler=get_handler)
+            def put_handler(url, *args, **_):
+                if HttpRequestPredicates.is_host_plugin_status_request(url):
+                    # Skip reading the HostGA request data as its encoded
+                    return MockHttpResponse(status=500)
+                protocol.aggregate_status = json.loads(args[0])
+                return MockHttpResponse(status=201)
+
+            protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
             with self.create_conf_mocks(hotfix_frequency, normal_frequency):
                 with patch("azurelinuxagent.ga.update.add_event") as mock_telemetry:
                     update_handler._protocol = protocol
@@ -1917,7 +1927,7 @@ class TestAgentUpgrade(UpdateTestCase):
         exit_args, _ = exit_mock.call_args
         self.assertEqual(exit_args[0], 0, "Exit code should be 0")
 
-    def __assert_telemetry_emitted_for_requested_version(self, mock_telemetry, upgrade=True, version="99999.0.0.0"):
+    def __assert_upgrade_telemetry_emitted_for_requested_version(self, mock_telemetry, upgrade=True, version="99999.0.0.0"):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
                               'Agent {0} discovered, moving to the requested version: {1} -- exiting'.format(
                                   "upgrade" if upgrade else "downgrade", version) in kwarg['message'] and kwarg[
@@ -1951,6 +1961,13 @@ class TestAgentUpgrade(UpdateTestCase):
                                  "Agent upgrade discovered, updating to" in kwarg['message'] and kwarg[
                                      'op'] == WALAEventOperation.AgentUpgrade]), "Unwanted upgrade")
 
+    def __assert_ga_version_in_status(self, aggregate_status, version=str(CURRENT_VERSION)):
+        self.assertIsNotNone(aggregate_status, "Status should be reported")
+        self.assertEqual(aggregate_status['aggregateStatus']['guestAgentStatus']['version'], version,
+                         "Status should be reported from the Current version")
+        self.assertEqual(aggregate_status['aggregateStatus']['guestAgentStatus']['status'], 'Ready',
+                         "Guest Agent should be reported as Ready")
+
     def test_it_should_upgrade_agent_on_process_start_if_auto_upgrade_enabled(self):
         with self.__get_update_handler(iterations=10) as (update_handler, mock_telemetry):
 
@@ -1966,7 +1983,8 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
 
-        def reload_conf(url, mock_wire_data):
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
             # This function reloads the conf mid-run to mimic an actual customer scenario
             if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations/2:
                 reload_conf.call_count += 1
@@ -1993,7 +2011,8 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
 
-        def reload_conf(url, mock_wire_data):
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
             # This function reloads the conf mid-run to mimic an actual customer scenario
             if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= 2:
                 reload_conf.call_count += 1
@@ -2037,7 +2056,8 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
 
-        def reload_conf(url, mock_wire_data):
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
             # This function reloads the conf mid-run to mimic an actual customer scenario
             if HttpRequestPredicates.is_ga_manifest_request(url) and mock_wire_data.call_counts["manifest_of_ga.xml"] >= no_of_iterations / 2:
                 reload_conf.call_count += 1
@@ -2128,9 +2148,10 @@ class TestAgentUpgrade(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        def reload_conf(url, mock_wire_data):
-            # This function reloads the conf mid-run to mimic an actual customer scenario
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
 
+            # This function reloads the conf mid-run to mimic an actual customer scenario
             if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
              "goalstate"] >= 10 and mock_wire_data.call_counts["goalstate"] < 15:
 
@@ -2158,7 +2179,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
             self.assertGreaterEqual(reload_conf.call_count, 1, "Reload conf not updated as expected")
             self.__assert_exit_code_successful(update_handler.exit_mock)
-            self.__assert_telemetry_emitted_for_requested_version(mock_telemetry)
+            self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry)
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
             self.assertEqual(update_handler._protocol.mock_wire_data.call_counts['agentArtifact'], 1,
                              "only 1 agent should've been downloaded - 1 per incarnation")
@@ -2172,7 +2193,9 @@ class TestAgentUpgrade(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        def reload_conf(url, mock_wire_data):
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
+
             # This function reloads the conf mid-run to mimic an actual customer scenario
             if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
              "goalstate"] >= 5:
@@ -2225,21 +2248,96 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
 
-    def test_it_should_skip_waiting_if_requested_version(self):
-        raise NotImplementedError
+    def test_it_should_skip_wait_to_update_if_requested_version_available(self):
+        no_of_iterations = 100
 
-    def test_it_should_update_instantly_if_requested_version_specified(self):
-        # This might already be covered by tests above, verify that
-        raise NotImplementedError
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
+
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts["goalstate"] >= 5:
+                reload_conf.call_count += 1
+
+                # Assert GA version from status to ensure agent is running fine from the current version
+                self.__assert_ga_version_in_status(protocol.aggregate_status)
+
+                # Update the ext-conf and incarnation and add requested version from GS
+                mock_wire_data.data_files["ext_conf"] = "wire/ext_conf_requested_version.xml"
+                data_file['ga_manifest'] = "wire/ga_manifest.xml"
+                mock_wire_data.reload()
+                self._add_write_permission_to_goal_state_files()
+                mock_wire_data.set_incarnation(2)
+
+        reload_conf.call_count = 0
+
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
+                                       normal_frequency=10, hotfix_frequency=10) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler.run(debug=True)
+
+            self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
+            self.assertLess(update_handler.get_iterations(), no_of_iterations,
+                            "The code should've exited as soon as requested version was found")
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, version="9.9.9.10")
 
     def test_it_should_blacklist_current_agent_on_downgrade(self):
-        raise NotImplementedError
+        # Create Agent directory for current agent
+        self.prepare_agents(count=1)
+        self.assertTrue(os.path.exists(self.agent_dir(CURRENT_VERSION)))
+        self.assertFalse(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
+                         "The current agent should not be blacklisted")
+        downgraded_version = "1.2.0"
+
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler._protocol.mock_wire_data.set_extension_config_requested_version(downgraded_version)
+                update_handler._protocol.mock_wire_data.set_incarnation(2)
+                try:
+                    set_daemon_version("1.0.0.0")
+                    update_handler.run(debug=True)
+                finally:
+                    os.environ.pop(DAEMON_VERSION_ENV_VARIABLE)
+
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, upgrade=False,
+                                                                          version=downgraded_version)
+            self.assertTrue(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
+                            "The current agent should be blacklisted")
 
     def test_it_should_not_downgrade_below_daemon_version(self):
-        raise NotImplementedError
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=True):
+                update_handler._protocol.mock_wire_data.set_extension_config_requested_version("1.0.0.0")
+                update_handler._protocol.mock_wire_data.set_incarnation(2)
 
-    def test_it_should_start_the_agent_as_the_requested_version(self):
-        raise NotImplementedError
+                try:
+                    set_daemon_version("1.2.3.4")
+                    update_handler.run(debug=True)
+                finally:
+                    os.environ.pop(DAEMON_VERSION_ENV_VARIABLE)
+
+            self.__assert_exit_code_successful(update_handler.exit_mock)
+            upgrade_msgs = [kwarg for _, kwarg in mock_telemetry.call_args_list if
+                            kwarg['op'] == WALAEventOperation.AgentUpgrade]
+            # This will throw if corresponding message not found so not asserting on that
+            requested_version_found = next(kwarg for kwarg in upgrade_msgs if
+                                           "Found requested version in manifest: 1.0.0.0 for incarnation: 2" in kwarg[
+                                               'message'])
+            self.assertTrue(requested_version_found['is_success'],
+                            "The requested version found op should be reported as a success")
+
+            skipping_update = next(kwarg for kwarg in upgrade_msgs if
+                                   "Can't process the upgrade as the requested version: 1.0.0.0 is < current daemon version: 1.2.3.4" in
+                                   kwarg['message'])
+            self.assertFalse(skipping_update['is_success'], "Failed Event should be reported as a failure")
+            self.__assert_ga_version_in_status(update_handler._protocol.aggregate_status)
 
 
 @patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')

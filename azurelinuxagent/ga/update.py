@@ -54,7 +54,7 @@ from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_DIR_PATTERN, CURRENT_AGENT, \
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
@@ -973,16 +973,16 @@ class UpdateHandler(object):
             add_event(AGENT_NAME, op=op, version=version_, is_success=False, message=msg_)
 
         def can_proceed_with_requested_version():
-            if gs_updated:
-                # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
-                # If there's no new incarnation, don't proceed with anything
-                msg_ = "Found requested version in manifest: {0} for incarnation: {1}".format(
-                    requested_version, incarnation)
-                logger.info(msg_)
-                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg_)
-            else:
+            if not gs_updated:
                 # If incarnation didn't change, don't process anything.
                 return False
+
+            # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
+            # If there's no new incarnation, don't proceed with anything
+            msg_ = "Found requested version in manifest: {0} for incarnation: {1}".format(
+                requested_version, incarnation)
+            logger.info(msg_)
+            add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg_)
 
             if requested_version < daemon_version:
                 # Don't process the update if the requested version is lesser than daemon version,
@@ -991,6 +991,7 @@ class UpdateHandler(object):
                     "Can't process the upgrade as the requested version: {0} is < current daemon version: {1}".format(
                         requested_version, daemon_version), op=WALAEventOperation.AgentUpgrade)
                 return False
+
             return True
 
         def agent_upgrade_time_elapsed(now_):
@@ -1426,7 +1427,10 @@ class GuestAgent(object):
             self.error.mark_failure(is_fatal=is_fatal)
             self.error.save()
             if self.error.is_blacklisted:
-                logger.warn(u"Agent {0} is permanently blacklisted", self.name)
+                msg = u"Agent {0} is permanently blacklisted".format(self.name)
+                logger.warn(msg)
+                add_event(op=WALAEventOperation.AgentBlacklisted, is_success=False, message=msg, log_event=False,
+                          version=self.version)
         except Exception as e:
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
 
