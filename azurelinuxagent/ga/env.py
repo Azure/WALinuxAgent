@@ -118,6 +118,7 @@ class EnableFirewall(PeriodicOperation):
         self._osutil = osutil
         self._protocol = protocol
         self._try_remove_legacy_firewall_rule = False
+        self._firewall_list = self._osutil.get_firewall_list()
 
     def _operation(self):
         # If the rules ever change we must reset all rules and start over again.
@@ -132,6 +133,11 @@ class EnableFirewall(PeriodicOperation):
             self._try_remove_legacy_firewall_rule = True
 
         success = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+
+        firewall_list = self._osutil.get_firewall_list()
+        if self._firewall_list != firewall_list:
+            logger.info("Firewall rules:\n{0}".format(firewall_list))
+            self._firewall_list = firewall_list
 
         add_periodic(
             logger.EVERY_HOUR,

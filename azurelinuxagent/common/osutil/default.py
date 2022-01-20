@@ -280,6 +280,8 @@ class DefaultOSUtil(object):
             # Add every iptable rule if not present.
             try:
                 AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+                logger.info("Successfully added Azure fabric firewall rules")
+                return True
             except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid)
@@ -290,22 +292,21 @@ class DefaultOSUtil(object):
                 logger.warn(ustr(error))
                 raise
 
-            logger.info("Successfully added Azure fabric firewall rules")
-
-            try:
-                output = shellutil.run_command(get_firewall_list_command(wait))
-                logger.info("Firewall rules:\n{0}".format(output))
-            except Exception as e:
-                logger.warn("Listing firewall rules failed: {0}".format(ustr(e)))
-
-            return True
-
         except Exception as e:
             _enable_firewall = False
             logger.info("Unable to establish firewall -- "
                         "no further attempts will be made: "
                         "{0}".format(ustr(e)))
             return False
+
+    def get_firewall_list(self):
+        try:
+            wait = self.get_firewall_will_wait()
+            output = shellutil.run_command(get_firewall_list_command(wait))
+            return output
+        except Exception as e:
+            logger.warn("Listing firewall rules failed: {0}".format(ustr(e)))
+            return ""
 
     @staticmethod
     def _correct_instance_id(instance_id):
