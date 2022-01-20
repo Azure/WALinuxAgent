@@ -789,7 +789,9 @@ class WireClient(object):
             # (via the self._fetch_vm_settings_goal_state method).
             #
             # We always need at least 2 queries: one to the WireServer (to check for incarnation changes) and one to the HostGAPlugin
-            # (to check for extension updates).
+            # (to check for extension updates). Note that vmSettings are not a full goal state; they include only the extension information
+            # (minus certificates). The check on incarnation (which is also not included in the vmSettings) is needed to check for changes
+            # in, for example, the remote users for JIT access.
             #
             # We start by fetching the goal state from the WireServer. The response to this initial query will include the incarnation,
             # container ID, role config, and URLs to the rest of the goal state (certificates, remote users, extensions config, etc). We
@@ -827,7 +829,7 @@ class WireClient(object):
                 goal_state_updated = True
 
             #
-            # And, lastly, we fall back to extensionsConfig if Fast Track is disabled or not supported
+            # And, lastly, we use extensionsConfig if we don't have the vmSettings (Fast Track may be disabled or not supported).
             #
             if vm_settings_goal_state is not None:
                 self._extensions_goal_state = vm_settings_goal_state
@@ -850,7 +852,7 @@ class WireClient(object):
         Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalStateFromVmSettings, bool) tuple with the vmSettings and
         a boolean indicating if they are an updated (True) or a cached value (False).
 
-        Raises TypeError if the HostGAPlugin does not support the vmSettings API, or ProtocolError if the request fails for any other reason
+        Raises VmSettingsNotSupported if the HostGAPlugin does not support the vmSettings API, or ProtocolError if the request fails for any other reason
         (e.g. not supported, time out, server error).
         """
         def raise_not_supported(reset_state=False):
