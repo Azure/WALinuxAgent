@@ -2089,12 +2089,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 update_handler.run(debug=True)
 
             self.__assert_exit_code_successful(update_handler.exit_mock)
-            upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                  'Agent upgrade discovered, moving to the requested version: 9.9.9.10 -- exiting' in kwarg[
-                                      'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
-            self.assertEqual(1, len(upgrade_event_msgs),
-                             "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
-                                 mock_telemetry.call_args_list))
+            self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, version="9.9.9.10")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10"])
 
     def test_it_should_cleanup_all_agents_except_requested_version_and_current_version(self):
@@ -2110,12 +2105,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 update_handler.run(debug=True)
 
             self.__assert_exit_code_successful(update_handler.exit_mock)
-            upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                  'Agent upgrade discovered, moving to the requested version: 9.9.9.10 -- exiting' in kwarg[
-                                      'message'] and kwarg['op'] == WALAEventOperation.AgentUpgrade]
-            self.assertEqual(1, len(upgrade_event_msgs),
-                             "Did not find the event indicating that the agent was upgraded. Got: {0}".format(
-                                 mock_telemetry.call_args_list))
+            self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, version="9.9.9.10")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
 
     def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
