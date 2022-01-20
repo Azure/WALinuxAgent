@@ -118,7 +118,6 @@ class EnableFirewall(PeriodicOperation):
         self._osutil = osutil
         self._protocol = protocol
         self._try_remove_legacy_firewall_rule = False
-        self._firewall_list = self._osutil.get_firewall_list(verbose=False)
         self._log_initial_firewall_list = True
 
     def _operation(self):
@@ -133,13 +132,13 @@ class EnableFirewall(PeriodicOperation):
             self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
             self._try_remove_legacy_firewall_rule = True
 
+        before_enable_firewall_list = self._osutil.get_firewall_list(verbose=False)
         success = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+        after_enable_firewall_list = self._osutil.get_firewall_list(verbose=False)
 
-        firewall_list = self._osutil.get_firewall_list(verbose=False)
-        if self._log_initial_firewall_list or self._firewall_list != firewall_list:
+        if self._log_initial_firewall_list or before_enable_firewall_list != after_enable_firewall_list:
             logger.info("Successfully added Azure fabric firewall rules")
             logger.info("Firewall rules:\n{0}".format(self._osutil.get_firewall_list()))
-            self._firewall_list = firewall_list
             self._log_initial_firewall_list = False
 
         add_periodic(
