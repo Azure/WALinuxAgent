@@ -86,9 +86,11 @@ def get_firewall_accept_command(wait, command, destination, owner_uid):
 def get_firewall_drop_command(wait, command, destination):
     return AddFirewallRules.get_iptables_drop_command(wait, command, destination)
 
-
-def get_firewall_list_command(wait):
-    return _add_wait(wait, ["iptables", "-t", "security", "-L", "-nxv"])
+# Verbose output extra details like packets and bytes.
+def get_firewall_list_command(wait, verbose=True):
+    if verbose:
+        return _add_wait(wait, ["iptables", "-t", "security", "-L", "-nxv"])
+    return _add_wait(wait, ["iptables", "-t", "security", "-L", "-nx"])
 
 
 def get_firewall_packets_command(wait):
@@ -280,8 +282,6 @@ class DefaultOSUtil(object):
             # Add every iptable rule if not present.
             try:
                 AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
-                logger.info("Successfully added Azure fabric firewall rules")
-                return True
             except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid)
@@ -292,6 +292,9 @@ class DefaultOSUtil(object):
                 logger.warn(ustr(error))
                 raise
 
+            logger.info("Successfully added Azure fabric firewall rules")
+            return True
+
         except Exception as e:
             _enable_firewall = False
             logger.info("Unable to establish firewall -- "
@@ -299,10 +302,10 @@ class DefaultOSUtil(object):
                         "{0}".format(ustr(e)))
             return False
 
-    def get_firewall_list(self):
+    def get_firewall_list(self, verbose=True):
         try:
             wait = self.get_firewall_will_wait()
-            output = shellutil.run_command(get_firewall_list_command(wait))
+            output = shellutil.run_command(get_firewall_list_command(wait, verbose=verbose))
             return output
         except Exception as e:
             logger.warn("Listing firewall rules failed: {0}".format(ustr(e)))
