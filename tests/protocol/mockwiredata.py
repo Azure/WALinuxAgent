@@ -197,7 +197,7 @@ class WireProtocolData(object):
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
     def mock_http_get(self, url, *_, **kwargs):
-        content = None
+        content = ''
         response_headers = []
 
         resp = MagicMock()
