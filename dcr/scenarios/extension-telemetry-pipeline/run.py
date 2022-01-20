@@ -3,13 +3,12 @@ import os
 import random
 import time
 
-from dotenv import load_dotenv
-
+from dcr.scenario_utils.agent_log_parser import parse_agent_log_file
 from dcr.scenario_utils.check_waagent_log import is_data_in_waagent_log, check_waagent_log_for_errors
-from dcr.scenario_utils.models import get_vm_data_from_env
 from dcr.scenario_utils.test_orchestrator import TestFuncObj
 from dcr.scenario_utils.test_orchestrator import TestOrchestrator
-from etp_helpers import add_extension_events_and_get_count, wait_for_extension_events_dir_empty
+from etp_helpers import add_extension_events_and_get_count, wait_for_extension_events_dir_empty, \
+    get_collect_telemetry_thread_name
 
 
 def add_good_extension_events_and_verify():
@@ -22,7 +21,15 @@ def add_good_extension_events_and_verify():
 
     # Sleep for a min to ensure that the TelemetryService has enough time to send events and report errors if any
     time.sleep(60)
-    check_waagent_log_for_errors()
+    telemetry_event_collector_name = get_collect_telemetry_thread_name()
+    errors_reported = False
+    for agent_log_line in parse_agent_log_file():
+        if agent_log_line.thread == telemetry_event_collector_name and agent_log_line.is_error:
+            if not errors_reported:
+                print(
+                    f"waagent.log contains the following errors emitted by the {telemetry_event_collector_name} thread (none expected):")
+                errors_reported = True
+            print(agent_log_line.text.rstrip())
 
     for ext_name in ext_event_count:
         good_count = ext_event_count[ext_name]['good']
@@ -65,12 +72,26 @@ def verify_etp_enabled():
         raise AssertionError("Event directory not found for all extensions!")
 
 
+def check_agent_log():
+    # Since we're injecting bad events in the add_bad_events_and_verify_count() function test,
+    # we expect some warnings to be emitted by the agent.
+    # We're already verifying if these warnings are being emitted properly in the specified test, so ignoring those here.
+    ignore = [
+        {
+            'message': r"Dropped events for Extension: Microsoft\.(OSTCExtensions.VMAccessForLinux|Azure.Extensions.CustomScript); Details:",
+            'if': lambda log_line: log_line.level == "WARNING" and log_line.thread == get_collect_telemetry_thread_name()
+        }
+    ]
+    check_waagent_log_for_errors(ignore=ignore)
+
+
 if __name__ == '__main__':
     tests = [
         TestFuncObj("Verify ETP enabled", verify_etp_enabled, raise_on_error=True, retry=3),
         TestFuncObj("Add Good extension events and verify", add_good_extension_events_and_verify),
         TestFuncObj("Add Bad extension events and verify", add_bad_events_and_verify_count),
         TestFuncObj("Verify all events processed", wait_for_extension_events_dir_empty),
+        TestFuncObj("Check Agent log", check_agent_log),
     ]
 
     test_orchestrator = TestOrchestrator("ETPTests-VM", tests=tests)

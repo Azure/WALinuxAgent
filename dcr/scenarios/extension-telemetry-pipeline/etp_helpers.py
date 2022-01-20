@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 from random import choice
 
 
+def get_collect_telemetry_thread_name():
+    return "TelemetryEventsCollector"
+
+
 def wait_for_extension_events_dir_empty(timeout=timedelta(minutes=2)):
     # By ensuring events dir to be empty, we verify that the telemetry events collector has completed its run
     event_dirs = glob.glob(os.path.join("/var/log/azure/", "*", "events"))

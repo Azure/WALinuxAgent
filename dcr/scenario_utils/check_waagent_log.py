@@ -16,8 +16,6 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
     distro = "".join(get_distro())
     systemd_enabled = is_systemd_distro()
 
-    error_tags = ['ERROR', 'Exception', 'Traceback', 'WARNING', '[CGW]']
-
     #
     # NOTES:
     #     * 'message' is matched using re.search; be sure to escape any regex metacharacters
@@ -80,7 +78,8 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         # Ignoring this error for Deb 8 as its not a blocker and since Deb 8 is old and not widely used
         {
             'message': r"journalctl: unrecognized option '--utc'",
-            'if': lambda log_line: re.match(r"(debian8\.11)\D*", distro, flags=re.IGNORECASE) is not None and log_line.level == "WARNING"
+            'if': lambda log_line: re.match(r"(debian8\.11)\D*", distro,
+                                            flags=re.IGNORECASE) is not None and log_line.level == "WARNING"
         },
         # 2021-07-09T01:46:53.307959Z INFO MonitorHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Check on cgroups failed:
         # [CGroupsException] The agent's cgroup includes unexpected processes: ['[PID: 2367] UNKNOWN']
@@ -96,7 +95,7 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         # 2021-12-20T07:46:23.020197Z INFO ExtHandler ExtHandler [CGW] The agent's process is not within a memory cgroup
         {
             'message': r"The agent's process is not within a memory cgroup",
-            'if': lambda log_line: re.match(r"((centos7\.8)|(redhat7\.8)|(redhat8\.2))\D*", distro,
+            'if': lambda log_line: re.match(r"((centos7\.8)|(centos7\.9)|(redhat7\.8)|(redhat8\.2))\D*", distro,
                                             flags=re.IGNORECASE)
         }
     ]
@@ -104,16 +103,13 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
     if ignore is not None:
         ignore_list.extend(ignore)
 
-    def is_error(log_line):
-        return any(err in log_line.text for err in error_tags)
-
     def can_be_ignored(log_line):
         return any(re.search(msg['message'], log_line.text) is not None and ('if' not in msg or msg['if'](log_line)) for msg in ignore_list)
 
     errors = []
 
     for agent_log_line in parse_agent_log_file(waagent_log):
-        if is_error(agent_log_line) and not can_be_ignored(agent_log_line):
+        if agent_log_line.is_error and not can_be_ignored(agent_log_line):
             # Handle "/proc/net/route contains no routes" as a special case since it can take time for the
             # primary interface to come up and we don't want to report transient errors as actual errors
             if "/proc/net/route contains no routes" in agent_log_line.text:
