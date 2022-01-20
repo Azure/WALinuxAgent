@@ -247,7 +247,7 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
         # Checks (-C) if the iptable rule is available in the chain and
-        #   insert (-I) into particular location if not exist in the chain which
+        #   insert (-I) into particular location if not exist in the chain and
         #   maintains following order: tcp, accept and drop rule in the iptable chain
         check_cmd_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
         if not AddFirewallRules.__execute_check_command(check_cmd_tcp_rule):

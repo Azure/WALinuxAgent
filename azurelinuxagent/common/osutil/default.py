@@ -86,7 +86,7 @@ def get_firewall_accept_command(wait, command, destination, owner_uid):
 def get_firewall_drop_command(wait, command, destination):
     return AddFirewallRules.get_iptables_drop_command(wait, command, destination)
 
-# Verbose output extra details like packets and bytes.
+# Verbose output add extra details like packets and bytes.
 def get_firewall_list_command(wait, verbose=True):
     if verbose:
         return _add_wait(wait, ["iptables", "-t", "security", "-L", "-nxv"])
