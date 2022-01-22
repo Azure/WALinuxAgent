@@ -894,7 +894,7 @@ class WireClient(object):
         correlation_id = str(uuid.uuid4())
 
         def format_message(msg):
-            return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
+            return "GET vmSettings [correlation ID: {0} eTag: {1} HGAP: {2}]: {3}".format(correlation_id, etag, self._host_plugin_version, msg)
 
         try:
             def get_vm_settings():
