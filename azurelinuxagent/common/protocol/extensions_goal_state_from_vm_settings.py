@@ -53,7 +53,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             self._parse_vm_settings(json_text)
             self._do_common_validations()
         except Exception as e:
-            raise VmSettingsError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), self.get_redacted_text()))
+            raise VmSettingsError("Error parsing vmSettings (etag: {0} HGAP: {1}): {2}\n{3}".format(etag, self._host_ga_plugin_version, format_exception(e), self.get_redacted_text()))
 
     @property
     def id(self):
@@ -139,13 +139,15 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         "extensionGoalStatesSource": "Fabric",
         #         ...
         #     }
-        self._activity_id = self._string_to_id(vm_settings.get("activityId"))
-        self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
-        self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
+        # The HGAP version is included in some messages, so parse it first
         host_ga_plugin_version = vm_settings.get("hostGAPluginVersion")
         if host_ga_plugin_version is not None:
             self._host_ga_plugin_version = FlexibleVersion(host_ga_plugin_version)
+
+        self._activity_id = self._string_to_id(vm_settings.get("activityId"))
+        self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
+        self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
         schema_version = vm_settings.get("vmSettingsSchemaVersion")
         if schema_version is not None:
