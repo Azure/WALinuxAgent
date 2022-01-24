@@ -80,11 +80,12 @@ def get_accept_tcp_rule(wait, command, destination):
 
 
 def get_firewall_accept_command(wait, command, destination, owner_uid):
-    return AddFirewallRules.get_iptables_accept_command(wait, command, destination, owner_uid)
+    return AddFirewallRules.get_accept_command(command, destination, owner_uid, wait=wait)
 
 
 def get_firewall_drop_command(wait, command, destination):
-    return AddFirewallRules.get_iptables_drop_command(wait, command, destination)
+    return AddFirewallRules.get_drop_command(command, destination, wait=wait)
+
 
 # Verbose output add extra details like packets and bytes.
 def get_firewall_list_command(wait, verbose=True):
@@ -270,15 +271,13 @@ class DefaultOSUtil(object):
             logger.info(
                 "Unable to remove legacy firewall rule, won't try removing it again. Error: {0}".format(ustr(error)))
 
-    def enable_firewall(self, dst_ip, uid):
+    def enable_firewall(self, dst_ip, uid, wait=""):
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
             return False
 
         try:
-            wait = self.get_firewall_will_wait()
-
             # Add every iptable rule if not present.
             try:
                 AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
@@ -301,9 +300,8 @@ class DefaultOSUtil(object):
                         "{0}".format(ustr(e)))
             return False
 
-    def get_firewall_list(self, verbose=True):
+    def get_firewall_list(self, verbose=True, wait=""):
         try:
-            wait = self.get_firewall_will_wait()
             output = shellutil.run_command(get_firewall_list_command(wait, verbose=verbose))
             return output
         except Exception as e:

@@ -24,7 +24,6 @@ from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 
 
 class NSBSDOSUtil(FreeBSDOSUtil):
-
     resolver = None
 
     def __init__(self):
@@ -45,7 +44,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             for server in output.split("\n"):
                 if server == '':
                     break
-                server = server[:-1] # remove last '='
+                server = server[:-1]  # remove last '='
                 cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
                 ret, ip = shellutil.run_get_output(cmd)
                 servers.append(ip)
@@ -53,7 +52,8 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             dns.resolver.override_system_resolver(self.resolver)
 
     def set_hostname(self, hostname):
-        self._run_command_without_raising(['/usr/Firewall/sbin/setconf', '/usr/Firewall/System/global', 'SystemName', hostname])
+        self._run_command_without_raising(
+            ['/usr/Firewall/sbin/setconf', '/usr/Firewall/System/global', 'SystemName', hostname])
         self._run_command_without_raising(["/usr/Firewall/sbin/enlog"])
         self._run_command_without_raising(["/usr/Firewall/sbin/enproxy", "-u"])
         self._run_command_without_raising(["/usr/Firewall/sbin/ensl", "-u"])
@@ -94,16 +94,15 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         commands = [['setconf', '/usr/Firewall/ConfigFiles/webadmin', 'ACL', 'any'], ['ensl']]
         self._run_multiple_commands_without_raising(commands, log_error=False, continue_on_error=False)
 
-
     def deploy_ssh_pubkey(self, username, pubkey):
         """
         Deploy authorized_key
         """
         path, thumbprint, value = pubkey  # pylint: disable=W0612
 
-        #overide parameters
+        # overide parameters
         super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
-            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value]) 
+                                                   ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
 
     def del_root_password(self):
         logger.warn("Root password deletion disabled")
@@ -130,7 +129,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         shellutil.run("ennetwork", chk_err=False)
 
     def set_dhcp_hostname(self, hostname):
-        #already done by the dhcp client
+        # already done by the dhcp client
         pass
 
     def get_firewall_dropped_packets(self, dst_ip=None):
@@ -152,3 +151,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
     def enable_firewall(self, dst_ip=None, uid=None):
         # disable iptables methods
         return True
+
+    def get_firewall_list(self, verbose=True):
+        # disable iptables methods
+        return ""

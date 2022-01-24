@@ -99,21 +99,25 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     def __assert_firewall_called(self, cmd, validate_command_called=True):
         if validate_command_called:
-            self.assertIn(AddFirewallRules.get_firewalld_accept_command(command=cmd,
+            self.assertIn(AddFirewallRules.get_accept_command(command=AddFirewallRules.INSERT_COMMAND,
                                                                         destination=self.__test_dst_ip,
-                                                                        uid=self.__test_uid),
+                                                                        owner_uid=self.__test_uid,
+                                                              firewalld_command=cmd),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
-            self.assertIn(AddFirewallRules.get_firewalld_drop_command(command=cmd,
-                                                                      destination=self.__test_dst_ip),
+            self.assertIn(AddFirewallRules.get_drop_command(command=AddFirewallRules.INSERT_COMMAND,
+                                                                      destination=self.__test_dst_ip,
+                                                                      firewalld_command=cmd),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
         else:
-            self.assertNotIn(AddFirewallRules.get_firewalld_accept_command(command=cmd,
+            self.assertNotIn(AddFirewallRules.get_accept_command(command=AddFirewallRules.INSERT_COMMAND,
                                                                            destination=self.__test_dst_ip,
-                                                                           uid=self.__test_uid),
+                                                                           owner_uid=self.__test_uid,
+                                                                 firewalld_command=cmd),
                              self.__executed_commands,
                              "Firewall {0} command found".format(cmd))
-            self.assertNotIn(AddFirewallRules.get_firewalld_drop_command(command=cmd,
-                                                                         destination=self.__test_dst_ip),
+            self.assertNotIn(AddFirewallRules.get_drop_command(command=AddFirewallRules.INSERT_COMMAND,
+                                                                         destination=self.__test_dst_ip,
+                                                                         firewalld_command=cmd),
                              self.__executed_commands, "Firewall {0} command found".format(cmd))
 
     def __assert_systemctl_called(self, cmd="enable", validate_command_called=True):
