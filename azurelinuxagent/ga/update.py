@@ -446,16 +446,18 @@ class UpdateHandler(object):
             return False
         return True
 
-    def __goal_state_updated(self, incarnation):
+    def __update_guest_agent(self, protocol):
         """
-        This function returns if the Goal State updated.
-        We currently rely on the incarnation number to determine that; i.e. if it changed from the last processed GS
+        This function checks for new Agent updates and raises AgentUpgradeExitException if available.
+        There are 2 different ways the agent checks for an update -
+            1) Requested Version is specified in the Goal State.
+                - In this case, the Agent will download the requested version and upgrade/downgrade instantly.
+            2) No requested version.
+                - In this case, the agent will periodically check (1 hr) for new agent versions in GA Manifest.
+                - If available, it will download all versions > CURRENT_VERSION.
+                - Depending on the highest version > CURRENT_VERSION,
+                  the agent will update within 4 hrs (for a Hotfix update) or 24 hrs (for a Normal update)
         """
-        # TODO: This check should be based on the ExtensionsGoalState.id property
-        #  (this property abstracts incarnation/etag logic based on the delivery pipeline of the Goal State)
-        return incarnation != self.last_incarnation
-
-    def _process_goal_state(self, exthandlers_handler, remote_access_handler):
 
         def log_next_update_time():
             next_normal_time, next_hotfix_time = self.__get_next_upgrade_times()
@@ -479,6 +481,10 @@ class UpdateHandler(object):
                     # (unless the CURRENT_VERSION == daemon version, but since we don't support downgrading
                     # below daemon version, we will never reach this code path if that's the scenario)
                     current_agent = next(agent for agent in self.agents if agent.version == CURRENT_VERSION)
+                    logger.info(
+                        "Blacklisting the agent {0} since a downgrade was requested in the GoalState, "
+                        "suggesting that we really don't want to execute any extensions using this version".format(
+                            CURRENT_VERSION))
                     current_agent.mark_failure(is_fatal=True)
                 except StopIteration:
                     logger.warn(
@@ -489,15 +495,7 @@ class UpdateHandler(object):
                 # start the next available highest version which would be the requested version
                 prefix = "upgrade"
             raise AgentUpgradeExitException(
-                "Agent {0} discovered, moving to the requested version: {1} -- exiting".format(
-                    prefix, requested_version))
-
-        protocol = exthandlers_handler.protocol
-        if not self._try_update_goal_state(protocol):
-            self._heartbeat_update_goal_state_error_count += 1
-            # We should have a cached goal state here, go ahead and report status for that.
-            self._report_status(exthandlers_handler, incarnation_changed=False)
-            return
+                "Exiting current process to {0} to the request Agent version {1}".format(prefix, requested_version))
 
         if self._download_agent_if_upgrade_available(protocol):
             # The call to get_latest_agent_greater_than_daemon() also finds all agents in directory and sets the self.agents property.
@@ -511,12 +509,33 @@ class UpdateHandler(object):
             elif available_agent is None:
                 # Legacy behavior: The current agent can become unavailable and needs to be reverted.
                 # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
-                raise AgentUpgradeExitException("Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
+                raise AgentUpgradeExitException(
+                    "Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
             else:
                 log_next_update_time()
 
         self.__upgrade_agent_if_permitted()
 
+    def __goal_state_updated(self, incarnation):
+        """
+        This function returns if the Goal State updated.
+        We currently rely on the incarnation number to determine that; i.e. if it changed from the last processed GS
+        """
+        # TODO: This check should be based on the ExtensionsGoalState.id property
+        #  (this property abstracts incarnation/etag logic based on the delivery pipeline of the Goal State)
+        return incarnation != self.last_incarnation
+
+    def _process_goal_state(self, exthandlers_handler, remote_access_handler):
+
+        protocol = exthandlers_handler.protocol
+        if not self._try_update_goal_state(protocol):
+            self._heartbeat_update_goal_state_error_count += 1
+            # We should have a cached goal state here, go ahead and report status for that.
+            self._report_status(exthandlers_handler, incarnation_changed=False)
+            return
+
+        # Update the Guest Agent if a new version is available
+        self.__update_guest_agent(protocol)
         incarnation = protocol.get_incarnation()
 
         try:

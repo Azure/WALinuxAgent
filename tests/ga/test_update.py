@@ -1929,7 +1929,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def __assert_upgrade_telemetry_emitted_for_requested_version(self, mock_telemetry, upgrade=True, version="99999.0.0.0"):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                              'Agent {0} discovered, moving to the requested version: {1} -- exiting'.format(
+                              'Exiting current process to {0} to the request Agent version {1}'.format(
                                   "upgrade" if upgrade else "downgrade", version) in kwarg['message'] and kwarg[
                                   'op'] == WALAEventOperation.AgentUpgrade]
         self.assertEqual(1, len(upgrade_event_msgs),
