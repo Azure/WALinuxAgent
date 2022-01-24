@@ -31,7 +31,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             for manifest in fabric_manifests:
                 self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
-            vm_settings_ga_manifests = protocol.client._cached_vm_settings.agent_manifests
+            vm_settings_ga_manifests = protocol.client._host_plugin._cached_vm_settings.agent_manifests
             for manifest in vm_settings_ga_manifests:
                 self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
@@ -43,6 +43,6 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             for manifest in fabric_manifests:
                 self.assertEqual(manifest.requested_version_string, "9.9.9.10", "Version should be 9.9.9.10")
 
-            vm_settings_ga_manifests = protocol.client._cached_vm_settings.agent_manifests
+            vm_settings_ga_manifests = protocol.client._host_plugin._cached_vm_settings.agent_manifests
             for manifest in vm_settings_ga_manifests:
                 self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
