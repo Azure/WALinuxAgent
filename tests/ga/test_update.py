@@ -1515,10 +1515,6 @@ class TestUpdate(UpdateTestCase):
     def test_upgrade_available_skips_when_no_versions(self):
         self.assertFalse(self._test_upgrade_available(protocol=ProtocolMock()))
 
-    def test_upgrade_available_skips_when_updates_are_disabled(self):
-        conf.get_autoupdate_enabled = Mock(return_value=False)
-        self.assertFalse(self._test_upgrade_available())
-
     def test_upgrade_available_sorts(self):
         self.prepare_agents()
         self._test_upgrade_available()

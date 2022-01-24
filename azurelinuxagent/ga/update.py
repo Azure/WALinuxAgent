@@ -197,7 +197,8 @@ class UpdateHandler(object):
         if self.signal_handler is None:
             self.signal_handler = signal.signal(signal.SIGTERM, self.forward_signal)
 
-        latest_agent = self.get_latest_agent_greater_than_daemon(daemon_version=CURRENT_VERSION)
+        latest_agent = None if not conf.get_autoupdate_enabled() else self.get_latest_agent_greater_than_daemon(
+            daemon_version=CURRENT_VERSION)
         if latest_agent is None:
             logger.info(u"Installed Agent {0} is the most current agent", CURRENT_AGENT)
             agent_cmd = "python -u {0} -run-exthandlers".format(sys.argv[0])
@@ -497,6 +498,10 @@ class UpdateHandler(object):
             raise AgentUpgradeExitException(
                 "Exiting current process to {0} to the request Agent version {1}".format(prefix, requested_version))
 
+        # Ignore new agents if updating is disabled
+        if not conf.get_autoupdate_enabled():
+            return False
+
         if self._download_agent_if_upgrade_available(protocol):
             # The call to get_latest_agent_greater_than_daemon() also finds all agents in directory and sets the self.agents property.
             # This state is used to find the GuestAgent object with the current version later if requested version is available in last GS.
@@ -669,9 +674,6 @@ class UpdateHandler(object):
         Otherwise, return None (implying to use the installed agent).
         If `daemon_version` is None, we fetch it from the environment variable set by the DaemonHandler
         """
-
-        if not conf.get_autoupdate_enabled():
-            return None
 
         self._find_agents()
         daemon_version = self.__get_daemon_version_for_update() if daemon_version is None else daemon_version
@@ -982,9 +984,6 @@ class UpdateHandler(object):
         return: True if current agent is no longer available or an agent with a higher version number is available
         else False
         """
-        # Ignore new agents if updating is disabled
-        if not conf.get_autoupdate_enabled():
-            return False
 
         def report_error(msg_, version_=CURRENT_VERSION, op=WALAEventOperation.Download):
             logger.warn(msg_)
