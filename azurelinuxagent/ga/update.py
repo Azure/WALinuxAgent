@@ -266,7 +266,13 @@ class UpdateHandler(object):
                     log_event=False)
 
                 if ret is None:
-                    ret = self.child_process.wait()
+                    # Wait for the process to exit
+                    if self.child_process.wait() > 0:
+                        msg = u"ExtHandler process {0} launched with command '{1}' exited with return code: {2}".format(
+                            agent_name,
+                            agent_cmd,
+                            ret)
+                        logger.warn(msg)
 
             else:
                 msg = u"Agent {0} launched with command '{1}' failed with return code: {2}".format(
@@ -280,15 +286,6 @@ class UpdateHandler(object):
                     op=WALAEventOperation.Enable,
                     is_success=False,
                     message=msg)
-
-            if ret is not None and ret > 0:
-                msg = u"Agent {0} launched with command '{1}' returned code: {2}".format(
-                    agent_name,
-                    agent_cmd,
-                    ret)
-                logger.warn(msg)
-                if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
 
         except Exception as e:
             # Ignore child errors during termination
@@ -1012,7 +1009,11 @@ class UpdateHandler(object):
             # Set the agents to those available for download at least as current as the existing agent
             # or to the requested version (if specified)
             host = self._get_host_plugin(protocol=protocol)
-            self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download])
+            agents_to_download = [GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download]
+
+            # Filter out the agents that were downloaded/extracted successfully. If the agent was not installed properly,
+            # we delete the directory and the zip package from the filesystem
+            self._set_agents([agent for agent in agents_to_download if agent.is_available])
 
             # Remove from disk any agent no longer needed in the VM.
             # If requested version is provided, this would delete all other agents present on the VM except the
@@ -1253,13 +1254,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m == None:
+            if m is None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version == None:
+        if version is None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
@@ -1283,10 +1284,9 @@ class GuestAgent(object):
             if isinstance(e, IOError):
                 raise
 
-            # Note the failure, blacklist the agent if the package downloaded
-            # - An exception with a downloaded package indicates the package
-            #   is corrupt (e.g., missing the HandlerManifest.json file)
-            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
+            # If we're unable to download/unpack the agent, delete the Agent directory and the zip file (if exists) to
+            # ensure we try downloading again in the next round.
+            fileutil.clean_ioerror(e, paths=[self.get_agent_dir(), self.get_agent_pkg_path()])
 
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
