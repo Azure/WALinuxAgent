@@ -874,7 +874,6 @@ class WireClient(object):
                 text = vm_settings.get_redacted_text()
                 if text != '':
                     self._save_cache(text, VM_SETTINGS_FILE_NAME.format(vm_settings.id))
-            # END TODO
 
         except Exception as e:
             logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
