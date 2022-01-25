@@ -271,7 +271,7 @@ class DefaultOSUtil(object):
             logger.info(
                 "Unable to remove legacy firewall rule, won't try removing it again. Error: {0}".format(ustr(error)))
 
-    def enable_firewall(self, dst_ip, uid, wait=""):
+    def enable_firewall(self, dst_ip, uid, wait):
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
@@ -300,7 +300,7 @@ class DefaultOSUtil(object):
                         "{0}".format(ustr(e)))
             return False
 
-    def get_firewall_list(self, verbose=True, wait=""):
+    def get_firewall_list(self, wait, verbose=True):
         try:
             output = shellutil.run_command(get_firewall_list_command(wait, verbose=verbose))
             return output
