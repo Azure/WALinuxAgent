@@ -139,7 +139,7 @@ class EnableFirewall(PeriodicOperation):
 
         if self._log_initial_firewall_list or before_enable_firewall_list != after_enable_firewall_list:
             logger.info("Successfully added Azure fabric firewall rules")
-            logger.info("Firewall rules:\n{0}".format(self._osutil.get_firewall_list()))
+            logger.info("Firewall rules:\n{0}".format(self._osutil.get_firewall_list(wait=self._wait)))
             self._log_initial_firewall_list = False
 
         add_periodic(

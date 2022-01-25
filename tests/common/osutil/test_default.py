@@ -666,6 +666,7 @@ Match host 192.168.1.2\n\
         set_command(osutil.get_firewall_accept_command(wait, AddFirewallRules.CHECK_COMMAND, destination, uid))
         set_command(osutil.get_firewall_accept_command(wait, AddFirewallRules.APPEND_COMMAND, destination, uid))
         set_command(osutil.get_accept_tcp_rule(wait, AddFirewallRules.APPEND_COMMAND, destination))
+        set_command(osutil.get_accept_tcp_rule(wait, AddFirewallRules.INSERT_COMMAND, destination))
         set_command(osutil.get_accept_tcp_rule(wait, AddFirewallRules.CHECK_COMMAND, destination))
         # the agent assumes the rules have been deleted when these commands return 1
         set_command(osutil.get_firewall_delete_conntrack_accept_command(wait, destination), exit_code=1)
