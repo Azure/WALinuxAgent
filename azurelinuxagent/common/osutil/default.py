@@ -278,9 +278,12 @@ class DefaultOSUtil(object):
             return False
 
         try:
-            # Add every iptable rule if not present.
+            # check every iptable rule and delete others if any rule is missing
+            #   and append every iptable rule to the end of the chain.
             try:
-                AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+                if not AddFirewallRules.verify_iptables_rules_exist(wait, dst_ip, uid):
+                    self.remove_firewall(dst_ip, uid)
+                    AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
             except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid)

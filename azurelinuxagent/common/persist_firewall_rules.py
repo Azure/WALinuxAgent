@@ -149,6 +149,8 @@ if __name__ == '__main__':
             return
 
         logger.info("Firewall rules not added yet, adding them now using firewalld.service")
+        # Remove first if partial list present
+        AddFirewallRules.remove_firewalld_rules(self._dst_ip, self._uid)
         # Add rules if not already set
         AddFirewallRules.add_firewalld_rules(self._dst_ip, self._uid)
         logger.info("Successfully added the firewall commands using firewalld.service")
