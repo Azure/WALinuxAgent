@@ -26,13 +26,13 @@ import azurelinuxagent.common.protocol.hostplugin as hostplugin
 import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError, ProtocolError
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.osutil.default import UUID_PATTERN
-from azurelinuxagent.common.protocol.hostplugin import API_VERSION
+from azurelinuxagent.common.protocol.hostplugin import API_VERSION, _VmSettingsErrorReporter, VmSettingsNotSupported
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, mockwiredata, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
 from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, PropertyMock, patch
@@ -860,6 +860,125 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                                            period)
         self.assertEqual(0, error_state.count)
         self.assertEqual(False, actual)
+
+
+class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
+    def test_it_should_raise_protocol_error_when_the_vm_settings_request_fails(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR, body="TEST ERROR")
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+            with self.assertRaisesRegexCM(ProtocolError, r'GET vmSettings \[correlation ID: .* eTag: .*\]: \[HTTP Failed\] \[500: None].*TEST ERROR.*'):
+                protocol.client.get_host_plugin().fetch_vm_settings(False)
+
+    @staticmethod
+    def _fetch_vm_settings_ignoring_errors(protocol):
+        try:
+            protocol.client.get_host_plugin().fetch_vm_settings(False)
+        except (ProtocolError, VmSettingsNotSupported):
+            pass
+
+    def test_it_should_keep_track_of_errors_in_vm_settings_requests(self):
+        mock_response = None
+
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                if isinstance(mock_response, Exception):
+                    # E0702: Raising NoneType while only classes or instances are allowed (raising-bad-type) - Disabled: we never raise None
+                    raise mock_response  # pylint: disable=raising-bad-type
+                return mock_response
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            mock_response = MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR)
+            self._fetch_vm_settings_ignoring_errors(protocol)
+
+            mock_response = MockHttpResponse(httpclient.BAD_REQUEST)
+            self._fetch_vm_settings_ignoring_errors(protocol)
+            self._fetch_vm_settings_ignoring_errors(protocol)
+
+            mock_response = IOError("timed out")
+            self._fetch_vm_settings_ignoring_errors(protocol)
+
+            mock_response = httpclient.HTTPException()
+            self._fetch_vm_settings_ignoring_errors(protocol)
+            self._fetch_vm_settings_ignoring_errors(protocol)
+
+            # force the summary by resetting its period and calling update_goal_state
+            with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
+                mock_response = None  # stop producing errors
+                protocol.client._host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now()
+                self._fetch_vm_settings_ignoring_errors(protocol)
+            summary_text = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettingsSummary"]
+
+            self.assertEqual(1, len(summary_text), "Exactly 1 summary should have been produced. Got: {0} ".format(summary_text))
+
+            summary = json.loads(summary_text[0])
+
+            expected = {
+                "requests":       6 + 2,  # two extra calls to update_goal_state (when creating the mock protocol and when forcing the summary)
+                "errors":         6,
+                "serverErrors":   1,
+                "clientErrors":   2,
+                "timeouts":       1,
+                "failedRequests": 2
+            }
+
+            self.assertEqual(expected, summary, "The count of errors is incorrect")
+
+    def test_it_should_limit_the_number_of_errors_it_reports(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            def http_get_handler(url, *_, **__):
+                if self.is_host_plugin_vm_settings_request(url):
+                    return MockHttpResponse(httpclient.BAD_GATEWAY)  # HostGAPlugin returns 502 for internal errors
+                return None
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
+                for _ in range(_VmSettingsErrorReporter._MaxErrors + 3):
+                    self._fetch_vm_settings_ignoring_errors(protocol)
+
+                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+
+                self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
+
+            # Reset the error reporter and verify that additional errors are reported
+            protocol.client._host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now()
+            self._fetch_vm_settings_ignoring_errors(protocol)  # this triggers the reset
+
+            with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
+                for _ in range(3):
+                    self._fetch_vm_settings_ignoring_errors(protocol)
+
+                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+
+                self.assertEqual(3, len(messages), "Expected additional errors to be reported in the next period (got: {0})".format(messages))
+
+    def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            def http_get_handler(url, *_, **__):
+                if self.is_host_plugin_vm_settings_request(url):
+                    return MockHttpResponse(httpclient.NOT_FOUND)  # HostGAPlugin returns 404 if the API is not supported
+                return None
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            def get_vm_settings_call_count():
+                return len([url for url in protocol.get_tracked_urls() if "vmSettings" in url])
+
+            self._fetch_vm_settings_ignoring_errors(protocol)
+            self.assertEqual(1, get_vm_settings_call_count(), "There should have been an initial call to vmSettings.")
+
+            protocol.client.update_goal_state()
+            protocol.client.update_goal_state()
+            self.assertEqual(1, get_vm_settings_call_count(), "Additional calls to update_goal_state should not have produced extra calls to vmSettings.")
+
+            # reset the vmSettings check period; this should restart the calls to the API
+            protocol.client._host_plugin._host_plugin_supports_vm_settings_next_check = datetime.datetime.now()
+            protocol.client.update_goal_state()
+            self.assertEqual(2, get_vm_settings_call_count(), "A second call to vmSettings was expecting after the check period has elapsed.")
 
 
 class MockResponse:
