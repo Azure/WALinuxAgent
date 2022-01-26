@@ -280,6 +280,7 @@ class ExtHandlerStatus(DataContract):
         self.message = message
         self.supports_multi_config = False
         self.extension_status = None
+        self.dependency_failed = False
 
 
 class VMAgentStatus(DataContract):

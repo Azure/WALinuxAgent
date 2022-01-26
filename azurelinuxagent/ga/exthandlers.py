@@ -513,6 +513,7 @@ class ExtHandlersHandler(object):
                 # For SC extensions, overwrite the HandlerStatus with the relevant message
                 else:
                     handler_i.set_handler_status(message=depends_on_err_msg, code=-1)
+                    ext_handler.dependency_failed = True
 
                 continue
 
@@ -1014,7 +1015,7 @@ class ExtHandlersHandler(object):
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or ext_handler.dependency_failed:
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
@@ -1678,6 +1679,11 @@ class ExtHandlerInstance(object):
         data_str = None
         # Extension.name contains the extension name in case of MC and Handler name in case of Single Config.
         ext_status = ExtensionStatus(name=ext.name, seq_no=seq_no)
+
+        if self.ext_handler.dependency_failed:
+            handler_status = self.get_handler_status()
+            ext_status.message = handler_status.message
+            return ext_status
 
         try:
             data_str, data = self._read_status_file(ext_status_file)
