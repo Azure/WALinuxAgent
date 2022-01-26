@@ -1300,7 +1300,13 @@ class GuestAgent(object):
 
             # If we're unable to download/unpack the agent, delete the Agent directory and the zip file (if exists) to
             # ensure we try downloading again in the next round.
-            fileutil.clean_ioerror(e, paths=[self.get_agent_dir(), self.get_agent_pkg_path()])
+            try:
+                if os.path.isdir(self.get_agent_dir()):
+                    shutil.rmtree(self.get_agent_dir(), ignore_errors=True)
+                if os.path.isfile(self.get_agent_pkg_path()):
+                    os.remove(self.get_agent_pkg_path())
+            except Exception as err:
+                logger.warn("Unable to delete Agent files: {0}".format(err))
 
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)

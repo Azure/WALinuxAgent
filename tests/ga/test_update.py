@@ -15,6 +15,7 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 import zipfile
 
 from datetime import datetime, timedelta
@@ -58,19 +59,22 @@ from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 NO_ERROR = {
     "last_failure": 0.0,
     "failure_count": 0,
-    "was_fatal": False
+    "was_fatal": False,
+    "reason": None
 }
 
 FATAL_ERROR = {
     "last_failure": 42.42,
     "failure_count": 2,
-    "was_fatal": True
+    "was_fatal": True,
+    "reason": "Test failure"
 }
 
 WITH_ERROR = {
     "last_failure": 42.42,
     "failure_count": 2,
-    "was_fatal": False
+    "was_fatal": False,
+    "reason": "Test failure"
 }
 
 EMPTY_MANIFEST = {
@@ -412,17 +416,19 @@ class TestGuestAgentError(UpdateTestCase):
 
     def test_str(self):
         err = self.create_error(error_data=NO_ERROR)
-        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(
+        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}, Reason: {3}".format(
             NO_ERROR["last_failure"],
             NO_ERROR["failure_count"],
-            NO_ERROR["was_fatal"])
+            NO_ERROR["was_fatal"],
+            NO_ERROR["reason"])
         self.assertEqual(s, str(err))
 
         err = self.create_error(error_data=WITH_ERROR)
-        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(
+        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}, Reason: {3}".format(
             WITH_ERROR["last_failure"],
             WITH_ERROR["failure_count"],
-            WITH_ERROR["was_fatal"])
+            WITH_ERROR["was_fatal"],
+            WITH_ERROR["reason"])
         self.assertEqual(s, str(err))
         return
 
@@ -726,7 +732,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.is_downloaded)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download", side_effect=UpdateError)
-    def test_ensure_downloaded_download_fails(self, mock_download):  # pylint: disable=unused-argument
+    def test_ensure_failure_in_download_cleans_up_filesystem(self, _):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
@@ -734,36 +740,36 @@ class TestGuestAgent(UpdateTestCase):
         pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
-        self.assertEqual(1, agent.error.failure_count)
-        self.assertFalse(agent.error.was_fatal)
-        self.assertFalse(agent.is_blacklisted)
+        self.assertFalse(agent.is_blacklisted, "The agent should not be blacklisted if unable to unpack/download")
+        self.assertFalse(os.path.exists(agent.get_agent_dir()), "Agent directory should be cleaned up")
+        self.assertFalse(os.path.exists(agent.get_agent_pkg_path()), "Agent package should be cleaned up")
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack", side_effect=UpdateError)
-    def test_ensure_downloaded_unpack_fails(self, mock_unpack, mock_download):  # pylint: disable=unused-argument
+    def test_ensure_downloaded_unpack_failure_cleans_file_system(self, *_):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
-        self.assertEqual(1, agent.error.failure_count)
-        self.assertTrue(agent.error.was_fatal)
-        self.assertTrue(agent.is_blacklisted)
+        self.assertFalse(agent.is_blacklisted, "The agent should not be blacklisted if unable to unpack/download")
+        self.assertFalse(os.path.exists(agent.get_agent_dir()), "Agent directory should be cleaned up")
+        self.assertFalse(os.path.exists(agent.get_agent_pkg_path()), "Agent package should be cleaned up")
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
     @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest", side_effect=UpdateError)
-    def test_ensure_downloaded_load_manifest_fails(self, mock_manifest, mock_unpack, mock_download):  # pylint: disable=unused-argument
+    def test_ensure_downloaded_load_manifest_cleans_up_agent_directories(self, *_):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(None)
         agent = GuestAgent(pkg=pkg)
 
-        self.assertEqual(1, agent.error.failure_count)
-        self.assertTrue(agent.error.was_fatal)
-        self.assertTrue(agent.is_blacklisted)
+        self.assertFalse(agent.is_blacklisted, "The agent should not be blacklisted if unable to unpack/download")
+        self.assertFalse(os.path.exists(agent.get_agent_dir()), "Agent directory should be cleaned up")
+        self.assertFalse(os.path.exists(agent.get_agent_pkg_path()), "Agent package should be cleaned up")
 
     @patch("azurelinuxagent.ga.update.GuestAgent._download")
     @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
@@ -1283,23 +1289,6 @@ class TestUpdate(UpdateTestCase):
         finally:
             shutil.rmtree(tempdir, True)
 
-    def test_run_latest_nonzero_code_marks_failures(self):
-        # logger.add_logger_appender(logger.AppenderType.STDOUT)
-        self.prepare_agents()
-
-        latest_agent = self.update_handler.get_latest_agent()
-        self.assertTrue(latest_agent.is_available)
-        self.assertEqual(0.0, latest_agent.error.last_failure)
-        self.assertEqual(0, latest_agent.error.failure_count)
-
-        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
-            self._test_run_latest(mock_child=ChildMock(return_value=1))
-
-        self.assertTrue(latest_agent.is_blacklisted)
-        self.assertFalse(latest_agent.is_available)
-        self.assertNotEqual(0.0, latest_agent.error.last_failure)
-        self.assertEqual(1, latest_agent.error.failure_count)
-
     def test_run_latest_exception_blacklists(self):
         self.prepare_agents()
 
@@ -1307,14 +1296,16 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(latest_agent.is_available)
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
+        verify_string = "Force blacklisting: {0}".format(str(uuid.uuid4()))
 
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
-            self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Force blacklisting")))
+            self._test_run_latest(mock_child=ChildMock(side_effect=Exception(verify_string)))
 
         self.assertFalse(latest_agent.is_available)
         self.assertTrue(latest_agent.error.is_blacklisted)
         self.assertNotEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
+        self.assertIn(verify_string, latest_agent.error.reason, "Error reason not found while blacklisting")
 
     def test_run_latest_exception_does_not_blacklist_if_terminating(self):
         self.prepare_agents()
