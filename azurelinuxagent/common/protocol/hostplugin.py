@@ -396,7 +396,7 @@ class HostPluginProtocol(object):
         Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalStateFromVmSettings, bool) tuple with the vmSettings and
         a boolean indicating if they are an updated (True) or a cached value (False).
 
-        Raises TypeError if the HostGAPlugin does not support the vmSettings API, ResourceGoneError if the container ID and roleconfig name
+        Raises VmSettingsNotSupported if the HostGAPlugin does not support the vmSettings API, ResourceGoneError if the container ID and roleconfig name
         need to be refreshed, or ProtocolError if the request fails for any other reason (e.g. not supported, time out, server error).
         """
         def raise_not_supported(reset_state=False):
