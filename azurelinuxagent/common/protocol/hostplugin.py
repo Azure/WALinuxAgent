@@ -554,9 +554,7 @@ class _VmSettingsErrorReporter(object):
                 "timeouts":       self._timeout_count,
                 "failedRequests": self._request_failure_count
             }
-            # always send telemetry, but log errors only
-            message = json.dumps(summary)
-            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+            add_event(op=WALAEventOperation.VmSettingsSummary, message=json.dumps(summary), is_success=False, log_event=False)
             if self._error_count > 0:
                 logger.info("[VmSettingsSummary] {0}", message)
 
