@@ -167,6 +167,7 @@ class Extension(object):
         self.settings = []
         self.manifest_uris = []
         self.supports_multi_config = False
+        self.dependency_failed = False
         self.__invalid_handler_setting_reason = None
 
     @property
@@ -280,7 +281,6 @@ class ExtHandlerStatus(DataContract):
         self.message = message
         self.supports_multi_config = False
         self.extension_status = None
-        self.dependency_failed = False
 
 
 class VMAgentStatus(DataContract):
