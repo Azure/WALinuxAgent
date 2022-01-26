@@ -1,0 +1,2 @@
+# To disable the Microsoft Azure Agent, set WALINUXAGENT_ENABLED=0
+WALINUXAGENT_ENABLED=1

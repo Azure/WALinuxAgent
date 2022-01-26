@@ -219,6 +219,16 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_udev_files(data_files, dest="/lib/udev/rules.d")
         if debian_has_systemd():
             set_systemd_files(data_files, dest=systemd_dir_path)
+    elif name == 'devuan':
+        set_bin_files(data_files, dest=agent_bin_path,
+                      src=["bin/py3/waagent", "bin/waagent2.0"])
+        set_files(data_files, dest="/etc/init.d",
+                  src=['init/devuan/walinuxagent'])
+        set_files(data_files, dest="/etc/default",
+                  src=['init/devuan/default/walinuxagent'])
+        set_conf_files(data_files, src=['config/devuan/waagent.conf'])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
     elif name == 'iosxe':
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
