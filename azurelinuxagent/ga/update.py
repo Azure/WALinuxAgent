@@ -1254,7 +1254,7 @@ class UpdateHandler(object):
         # (this flag signifies that this agent was blacklisted by the newer agents).
         try:
             legacy_blacklisted_agents = [agent for agent in self._load_agents() if
-                                         agent.is_blacklisted and agent.error.reason is None]
+                                         agent.is_blacklisted and agent.error.reason == '']
             for agent in legacy_blacklisted_agents:
                 agent.clear_error()
         except Exception as err:
@@ -1354,7 +1354,7 @@ class GuestAgent(object):
         return self.is_blacklisted or \
                os.path.isfile(self.get_agent_manifest_path())
 
-    def mark_failure(self, is_fatal=False, reason=None):
+    def mark_failure(self, is_fatal=False, reason=''):
         try:
             if not os.path.isdir(self.get_agent_dir()):
                 os.makedirs(self.get_agent_dir())
@@ -1552,12 +1552,12 @@ class GuestAgentError(object):
             raise UpdateError(u"GuestAgentError requires a path")
         self.path = path
         self.failure_count = 0
-        self.reason = None
+        self.reason = ''
 
         self.clear()
         return
 
-    def mark_failure(self, is_fatal=False, reason=None):
+    def mark_failure(self, is_fatal=False, reason=''):
         self.last_failure = time.time()
         self.failure_count += 1
         self.was_fatal = is_fatal
@@ -1568,7 +1568,7 @@ class GuestAgentError(object):
         self.last_failure = 0.0
         self.failure_count = 0
         self.was_fatal = False
-        self.reason = None
+        self.reason = ''
         return
 
     @property
@@ -1603,8 +1603,8 @@ class GuestAgentError(object):
         self.last_failure = max(self.last_failure, data.get(u"last_failure", 0.0))
         self.failure_count = max(self.failure_count, data.get(u"failure_count", 0))
         self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)
-        reason = data.get(u"reason", None)
-        self.reason = reason if reason is not None else self.reason
+        reason = data.get(u"reason", '')
+        self.reason = reason if reason != '' else self.reason
         return
 
     def to_json(self):
