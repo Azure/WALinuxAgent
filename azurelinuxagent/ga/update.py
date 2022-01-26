@@ -302,7 +302,7 @@ class UpdateHandler(object):
                     is_success=False,
                     message=detailed_message)
                 if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
+                    latest_agent.mark_failure(is_fatal=True, reason=detailed_message)
 
         self.child_process = None
         return
@@ -366,6 +366,7 @@ class UpdateHandler(object):
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
             self._add_accept_tcp_firewall_rule_if_not_enabled(dst_ip=protocol.get_endpoint())
+            self._reset_legacy_blacklisted_agents()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -1246,6 +1247,19 @@ class UpdateHandler(object):
                 upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
             raise AgentUpgradeExitException(upgrade_message)
 
+    def _reset_legacy_blacklisted_agents(self):
+        # Reset the state of all blacklisted agents that were blacklisted by legacy agents (i.e. not during auto-update)
+
+        # Filter legacy agents which are blacklisted but do not contain a `reason` in their error.json files
+        # (this flag signifies that this agent was blacklisted by the newer agents).
+        try:
+            legacy_blacklisted_agents = [agent for agent in self._load_agents() if
+                                         agent.is_blacklisted and agent.error.reason is None]
+            for agent in legacy_blacklisted_agents:
+                agent.clear_error()
+        except Exception as err:
+            logger.warn("Unable to reset legacy blacklisted agents due to: {0}".format(err))
+
 
 class GuestAgent(object):
     def __init__(self, path=None, pkg=None, host=None):
@@ -1334,11 +1348,11 @@ class GuestAgent(object):
         return self.is_blacklisted or \
                os.path.isfile(self.get_agent_manifest_path())
 
-    def mark_failure(self, is_fatal=False):
+    def mark_failure(self, is_fatal=False, reason=None):
         try:
             if not os.path.isdir(self.get_agent_dir()):
                 os.makedirs(self.get_agent_dir())
-            self.error.mark_failure(is_fatal=is_fatal)
+            self.error.mark_failure(is_fatal=is_fatal, reason=reason)
             self.error.save()
             if self.error.is_blacklisted:
                 logger.warn(u"Agent {0} is permanently blacklisted", self.name)
@@ -1526,23 +1540,29 @@ class GuestAgent(object):
 
 class GuestAgentError(object):
     def __init__(self, path):
+        self.last_failure = 0.0
+        self.was_fatal = False
         if path is None:
             raise UpdateError(u"GuestAgentError requires a path")
         self.path = path
+        self.failure_count = 0
+        self.reason = None
 
         self.clear()
         return
 
-    def mark_failure(self, is_fatal=False):
-        self.last_failure = time.time()  # pylint: disable=W0201
+    def mark_failure(self, is_fatal=False, reason=None):
+        self.last_failure = time.time()
         self.failure_count += 1
-        self.was_fatal = is_fatal  # pylint: disable=W0201
+        self.was_fatal = is_fatal
+        self.reason = reason
         return
 
     def clear(self):
         self.last_failure = 0.0
         self.failure_count = 0
         self.was_fatal = False
+        self.reason = None
         return
 
     @property
@@ -1574,25 +1594,25 @@ class GuestAgentError(object):
         return
 
     def from_json(self, data):
-        self.last_failure = max(  # pylint: disable=W0201
-            self.last_failure,
-            data.get(u"last_failure", 0.0))
-        self.failure_count = max(  # pylint: disable=W0201
-            self.failure_count,
-            data.get(u"failure_count", 0))
-        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)  # pylint: disable=W0201
+        self.last_failure = max(self.last_failure, data.get(u"last_failure", 0.0))
+        self.failure_count = max(self.failure_count, data.get(u"failure_count", 0))
+        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)
+        reason = data.get(u"reason", None)
+        self.reason = reason if reason is not None else self.reason
         return
 
     def to_json(self):
         data = {
             u"last_failure": self.last_failure,
             u"failure_count": self.failure_count,
-            u"was_fatal": self.was_fatal
+            u"was_fatal": self.was_fatal,
+            u"reason": ustr(self.reason)
         }
         return data
 
     def __str__(self):
-        return "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(
+        return "Last Failure: {0}, Total Failures: {1}, Fatal: {2}, Reason: {3}".format(
             self.last_failure,
             self.failure_count,
-            self.was_fatal)
+            self.was_fatal,
+            self.reason)
