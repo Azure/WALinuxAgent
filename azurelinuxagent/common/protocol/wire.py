@@ -572,7 +572,6 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
-        self._extensions_goal_state = None  # The goal state to use for extensions; can be an ExtensionsGoalStateFromVmSettings or ExtensionsGoalStateFromExtensionsConfig
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
@@ -776,14 +775,14 @@ class WireClient(object):
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
+            if force_update:
+                logger.info("Forcing an update of the goal state..")
+
             #
-            # The goal state needs to be retrieved using both the WireServer (via the GoalState class) and the HostGAPlugin
-            # (via the self._fetch_vm_settings_goal_state method).
-            #
-            # We always need at least 2 queries: one to the WireServer (to check for incarnation changes) and one to the HostGAPlugin
-            # (to check for extension updates). Note that vmSettings are not a full goal state; they include only the extension information
-            # (minus certificates). The check on incarnation (which is also not included in the vmSettings) is needed to check for changes
-            # in, for example, the remote users for JIT access.
+            # The goal state needs to be retrieved using both the WireServer and the HostGAPlugin, and we always need to query both:
+            # the former to check for incarnation changes and the latter to check for changes in the vmSettings. Note that vmSettings are not
+            # a full goal state; they include only the extension information and other data such as certificates and JIT Access users need
+            # to be retrieved from the WireServer.
             #
             # We start by fetching the goal state from the WireServer. The response to this initial query will include the incarnation,
             # container ID, role config, and URLs to the rest of the goal state (certificates, remote users, extensions config, etc). We
@@ -806,35 +805,32 @@ class WireClient(object):
                 except VmSettingsNotSupported:
                     pass  # if vmSettings are not supported we use extensionsConfig below
                 except ResourceGoneError:
+                    # retry after refreshing the HostGAPlugin
                     self.update_host_plugin_from_goal_state()
                     vm_settings, vm_settings_updated = host_ga_plugin.fetch_vm_settings(force_update=force_update)
 
             #
             # Now we fetch the rest of the goal state from the WireServer (but ony if needed: initialization, a "forced" update, or
-            # a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state.
+            # a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state. Also, if
+            # the vmSettings were retrieved we use them to set the goal state for extensions (if they are not set, the Goal state
+            # falls back to extensionsConfig).
             #
-            if force_update:
-                logger.info("Forcing an update of the goal state..")
-
             fetch_full_goal_state = force_update or self._goal_state is None or self._goal_state.incarnation != goal_state.incarnation
 
-            if not fetch_full_goal_state:
-                goal_state_updated = False
-            else:
-                goal_state.fetch_full_goal_state(self)
-                self._goal_state = goal_state
+            if fetch_full_goal_state:
                 goal_state_updated = True
-
-            #
-            # And, lastly, we use extensionsConfig if we don't have the vmSettings (Fast Track may be disabled or not supported).
-            #
-            if vm_settings is not None:
-                self._extensions_goal_state = vm_settings
+                if vm_settings is not None:
+                    goal_state.fetch_full_goal_state(self, vm_settings)
+                else:
+                    goal_state.fetch_full_goal_state(self)
+                self._goal_state = goal_state
             else:
-                self._extensions_goal_state = self._goal_state.extensions_config
+                goal_state_updated = False
+                if vm_settings is not None:
+                    self._goal_state.set_extensions(vm_settings)
 
             #
-            # If either goal state changed (goal_state or vm_settings_goal_state) save them
+            # Save the goal state and vmSettings if either one of them changed
             #
             if goal_state_updated or vm_settings_updated:
                 self._save_goal_state(vm_settings)
@@ -904,10 +900,10 @@ class WireClient(object):
         return self._goal_state.certs
 
     def get_extensions_goal_state(self):
-        if self._extensions_goal_state is None:
+        if self._goal_state is None:
             raise ProtocolError("Trying to fetch ExtensionsGoalState before initialization!")
 
-        return self._extensions_goal_state
+        return self._goal_state.extensions
 
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:

@@ -39,7 +39,7 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
         data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
         with mock_wire_protocol(data_file) as protocol:
-            fabric_manifests = protocol.client.get_goal_state().extensions_config.agent_manifests
+            fabric_manifests = protocol.client.get_goal_state()._extensions_config.agent_manifests
             for manifest in fabric_manifests:
                 self.assertEqual(manifest.requested_version_string, "9.9.9.10", "Version should be 9.9.9.10")
 

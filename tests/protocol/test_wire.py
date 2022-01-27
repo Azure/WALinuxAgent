@@ -51,7 +51,7 @@ from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
-from tests.tools import Mock, PropertyMock, patch, AgentTestCase
+from tests.tools import patch, AgentTestCase
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -74,14 +74,8 @@ def get_event(message, duration=30000, evt_type="", is_internal=False, is_succes
 
 
 @contextlib.contextmanager
-def create_mock_protocol(status_upload_blob=None, status_upload_blob_type=None):
+def create_mock_protocol():
     with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-        # These tests use mock wire data that dont have any extensions (extension config will be empty).
-        # Mock the upload blob and artifacts profile blob.
-        protocol.client._extensions_goal_state = Mock(wraps=protocol.client._extensions_goal_state)
-        type(protocol.client._extensions_goal_state).status_upload_blob = PropertyMock(return_value=status_upload_blob)
-        type(protocol.client._extensions_goal_state).status_upload_blob_type = PropertyMock(return_value=status_upload_blob_type)
-
         yield protocol
 
 
@@ -245,7 +239,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             self.assertEqual(len(urls), 1, 'Expected one post request to the host: [{0}]'.format(urls))
 
     def test_upload_status_blob_host_ga_plugin(self, *_):
-        with create_mock_protocol(status_upload_blob=testurl, status_upload_blob_type=testtype) as protocol:
+        with create_mock_protocol() as protocol:
             protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
 
             with patch.object(HostPluginProtocol, "ensure_initialized", return_value=True):
@@ -258,7 +252,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                         self.assertFalse(HostPluginProtocol.is_default_channel)
 
     def test_upload_status_blob_reports_prepare_error(self, *_):
-        with create_mock_protocol(status_upload_blob=testurl, status_upload_blob_type=testtype) as protocol:
+        with create_mock_protocol() as protocol:
             protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
 
             with patch.object(StatusBlob, "prepare", side_effect=Exception) as mock_prepare:
@@ -487,10 +481,6 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
             self.assertEqual(0, len(extensions_goal_state.agent_manifests),
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
-            self.assertIsNone(extensions_goal_state.status_upload_blob,
-                              "Status upload blob in the extension config is expected to be None")
-            self.assertIsNone(extensions_goal_state.status_upload_blob_type,
-                              "Type of status upload blob in the extension config is expected to be None")
             self.assertFalse(extensions_goal_state.on_hold,
                               "Extensions On Hold is expected to be False")
 

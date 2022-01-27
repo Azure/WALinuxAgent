@@ -56,65 +56,113 @@ class GoalState(object):
         for _ in range(0, _NUM_GS_FETCH_RETRIES):
             self.xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(self.xml_text)
-            self.incarnation = findtext(xml_doc, "Incarnation")
+            self._incarnation = findtext(xml_doc, "Incarnation")
 
             role_instance = find(xml_doc, "RoleInstance")
             if role_instance:
                 break
             time.sleep(0.5)
         else:
-            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
+            raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self._incarnation))
 
         try:
-            self.role_instance_id = findtext(role_instance, "InstanceId")
+            self._role_instance_id = findtext(role_instance, "InstanceId")
             role_config = find(role_instance, "Configuration")
-            self.role_config_name = findtext(role_config, "ConfigName")
+            self._role_config_name = findtext(role_config, "ConfigName")
             container = find(xml_doc, "Container")
-            self.container_id = findtext(container, "ContainerId")
+            self._container_id = findtext(container, "ContainerId")
 
-            AgentGlobals.update_container_id(self.container_id)
+            AgentGlobals.update_container_id(self._container_id)
 
             # these properties are populated by fetch_full_goal_state()
             self._hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
-            self.hosting_env = None
+            self._hosting_env = None
             self._shared_conf_uri = findtext(xml_doc, "SharedConfig")
-            self.shared_conf = None
+            self._shared_conf = None
             self._certs_uri = findtext(xml_doc, "Certificates")
-            self.certs = None
+            self._certs = None
             self._remote_access_uri = findtext(container, "RemoteAccessInfo")
-            self.remote_access = None
-            # TODO: extensions_config is an instance member only temporarily. Once we stop comparing extensionsConfig with
-            # vmSettings, it will be replaced with the extensions goal state
-            self.extensions_config = None
+            self._remote_access = None
+            self._extensions = None
+            self._extensions_config = None
             self._extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
 
         except Exception as exception:
             # We don't log the error here since fetching the goal state is done every few seconds
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
 
-    def fetch_full_goal_state(self, wire_client):
+    @property
+    def incarnation(self):
+        return self._incarnation
+
+    @property
+    def container_id(self):
+        return self._container_id
+
+    @property
+    def role_instance_id(self):
+        return self._role_instance_id
+
+    @property
+    def role_config_name(self):
+        return self._role_config_name
+
+    @property
+    def extensions(self):
+        return self._extensions
+
+    def set_extensions(self, extensions):
+        self._extensions = extensions
+
+    @property
+    def certs(self):
+        return self._certs
+
+    @property
+    def extensions_config(self):
+        return self._extensions_config
+
+    @property
+    def hosting_env(self):
+        return self._hosting_env
+
+    @property
+    def shared_conf(self):
+        return self._shared_conf
+
+    @property
+    def remote_access(self):
+        return self._remote_access
+
+    def fetch_full_goal_state(self, wire_client, extensions=None):
         try:
-            logger.info('Fetching goal state [incarnation {0}]', self.incarnation)
+            logger.info('Fetching goal state [incarnation {0}]', self._incarnation)
 
             xml_text = wire_client.fetch_config(self._hosting_env_uri, wire_client.get_header())
-            self.hosting_env = HostingEnv(xml_text)
+            self._hosting_env = HostingEnv(xml_text)
 
             xml_text = wire_client.fetch_config(self._shared_conf_uri, wire_client.get_header())
-            self.shared_conf = SharedConfig(xml_text)
+            self._shared_conf = SharedConfig(xml_text)
 
             if self._certs_uri is not None:
                 xml_text = wire_client.fetch_config(self._certs_uri, wire_client.get_header_for_cert())
-                self.certs = Certificates(xml_text)
+                self._certs = Certificates(xml_text)
 
             if self._remote_access_uri is not None:
                 xml_text = wire_client.fetch_config(self._remote_access_uri, wire_client.get_header_for_cert())
-                self.remote_access = RemoteAccess(xml_text)
+                self._remote_access = RemoteAccess(xml_text)
 
             if self._extensions_config_uri is None:
-                self.extensions_config = ExtensionsGoalStateFactory.create_empty()
+                self._extensions_config = ExtensionsGoalStateFactory.create_empty()
             else:
                 xml_text = wire_client.fetch_config(self._extensions_config_uri, wire_client.get_header())
-                self.extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self.incarnation, xml_text, wire_client)
+                self._extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self._incarnation, xml_text, wire_client)
+
+            if extensions is not None:
+                self._extensions = extensions
+            else:
+                self._extensions = self._extensions_config
+
         except Exception as exception:
             logger.warn("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)

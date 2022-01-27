@@ -170,8 +170,11 @@ class TestExtensionCleanup(AgentTestCase):
             self.assertEqual(0, TestExtensionCleanup._count_extension_directories(), "All extension directories should be removed")
 
     def test_cleanup_removes_orphaned_packages(self):
+        data_file = mockwiredata.DATA_FILE_NO_EXT.copy()
+        data_file["ext_conf"] = "wire/ext_conf_no_extensions-no_status_blob.xml"
+
         no_of_orphaned_packages = 5
-        with self._setup_test_env(mockwiredata.DATA_FILE_NO_EXT) as (exthandlers_handler, protocol, no_of_exts):
+        with self._setup_test_env(data_file) as (exthandlers_handler, protocol, no_of_exts):
             self.assertEqual(no_of_exts, 0, "Test setup error - Extensions found in ExtConfig")
 
             # Create random extension directories

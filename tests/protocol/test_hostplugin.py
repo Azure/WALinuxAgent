@@ -35,7 +35,7 @@ from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
 from tests.protocol.mocks import mock_wire_protocol, mockwiredata, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
-from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, PropertyMock, patch
+from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 
 
 hostplugin_status_url = "http://168.63.129.16:32526/status"
@@ -150,13 +150,10 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
     @staticmethod
     @contextlib.contextmanager
     def create_mock_protocol():
-        with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-            # These tests use mock wire data that don't have any extensions (extension config will be empty).
-            # Populate the upload blob and set an initial empty status before returning the protocol.
-            protocol.client._extensions_goal_state = Mock(wraps=protocol.client._extensions_goal_state)
-            type(protocol.client._extensions_goal_state).status_upload_blob = PropertyMock(return_value=sas_url)
-            type(protocol.client._extensions_goal_state).status_upload_blob_type = PropertyMock(return_value=page_blob_type)
+        data_file = DATA_FILE_NO_EXT.copy()
+        data_file["ext_conf"] = "wire/ext_conf_no_extensions-page_blob.xml"
 
+        with mock_wire_protocol(data_file) as protocol:
             status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
             protocol.client.status_blob.set_vm_status(status)
 
