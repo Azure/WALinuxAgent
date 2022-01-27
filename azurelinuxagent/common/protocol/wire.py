@@ -140,9 +140,6 @@ class WireProtocol(DataContract):
     def get_goal_state(self):
         return self.client.get_goal_state()
 
-    def get_extensions_goal_state(self):
-        return self.client.get_goal_state().extensions_goal_state
-
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
@@ -901,12 +898,6 @@ class WireClient(object):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Certificates before initialization!")
         return self._goal_state.certs
-
-    def get_extensions_goal_state(self):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch ExtensionsGoalState before initialization!")
-
-        return self._goal_state.extensions_goal_state
 
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:

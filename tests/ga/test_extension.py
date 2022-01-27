@@ -1707,7 +1707,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                         datafile = mockwiredata.DATA_FILE
 
                 _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)  # pylint: disable=no-value-for-parameter
-                ext_handlers = protocol.client.get_extensions_goal_state().extensions
+                ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
                 self.assertEqual(1, len(ext_handlers))
                 ext_handler = ext_handlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
@@ -2451,7 +2451,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
         _, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
 
-        required_features = protocol.get_extensions_goal_state().required_features
+        required_features = protocol.get_goal_state().extensions_goal_state.required_features
         self.assertEqual(3, len(required_features), "Incorrect features parsed")
         for i, feature in enumerate(required_features):
             self.assertEqual(feature, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
@@ -2511,8 +2511,8 @@ class TestExtensionSequencing(AgentTestCase):
             for ext in handler.settings:
                 ext.dependencyLevel = level
 
-        exthandlers_handler.protocol.client.get_extensions_goal_state()._extensions *= 0
-        exthandlers_handler.protocol.client.get_extensions_goal_state().extensions.extend(all_handlers)
+        exthandlers_handler.protocol.get_goal_state().extensions_goal_state._extensions *= 0
+        exthandlers_handler.protocol.get_goal_state().extensions_goal_state.extensions.extend(all_handlers)
 
     def _validate_extension_sequence(self, expected_sequence, exthandlers_handler):
         installed_extensions = [a[0].ext_handler.name for a, _ in exthandlers_handler.handle_ext_handler.call_args_list]
@@ -3302,7 +3302,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
         manifest_location_handler.num_times_called = 0
 
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
-            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
 
             with self.assertRaises(ExtensionDownloadError):
                 protocol.client.fetch_manifest(ext_handlers[0].manifest_uris,
