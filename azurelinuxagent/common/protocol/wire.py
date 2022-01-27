@@ -123,7 +123,7 @@ class WireProtocol(DataContract):
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
-        ext_conf = self.client.get_goal_state().extensions
+        ext_conf = self.client.get_goal_state().extensions_goal_state
         return ext_conf.agent_manifests, goal_state.incarnation
 
     def get_vmagent_pkgs(self, vmagent_manifest):
@@ -141,7 +141,7 @@ class WireProtocol(DataContract):
         return self.client.get_goal_state()
 
     def get_extensions_goal_state(self):
-        return self.client.get_goal_state().extensions
+        return self.client.get_goal_state().extensions_goal_state
 
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
@@ -830,7 +830,7 @@ class WireClient(object):
             else:
                 goal_state_updated = False
                 if vm_settings is not None:
-                    self._goal_state.set_extensions(vm_settings)
+                    self._goal_state.set_extensions_goal_state(vm_settings)
 
             #
             # Save the goal state and vmSettings if either one of them changed
@@ -865,7 +865,7 @@ class WireClient(object):
             save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
             save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
             save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
-            if self._goal_state.extensions_config is not None:
+            if self._goal_state.extensions_goal_state is not None:
                 text = self._goal_state.extensions_config.get_redacted_text()
                 if text != '':
                     self._save_cache(text, EXT_CONF_FILE_NAME.format(self._goal_state.extensions_config.incarnation))
@@ -906,7 +906,7 @@ class WireClient(object):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch ExtensionsGoalState before initialization!")
 
-        return self._goal_state.extensions
+        return self._goal_state.extensions_goal_state
 
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:
@@ -1077,12 +1077,12 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        extensions_goal_state = self.get_goal_state().extensions
+        extensions_goal_state = self.get_goal_state().extensions_goal_state
 
         if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(force_update=True)
-            extensions_goal_state = self.get_goal_state().extensions
+            extensions_goal_state = self.get_goal_state().extensions_goal_state
 
         if extensions_goal_state.status_upload_blob is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
@@ -1287,7 +1287,7 @@ class WireClient(object):
         return self._host_plugin
 
     def get_on_hold(self):
-        return self.get_goal_state().extensions.on_hold
+        return self.get_goal_state().extensions_goal_state.on_hold
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)

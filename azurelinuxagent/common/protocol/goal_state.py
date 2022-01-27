@@ -83,7 +83,7 @@ class GoalState(object):
             self._certs = None
             self._remote_access_uri = findtext(container, "RemoteAccessInfo")
             self._remote_access = None
-            self._extensions = None
+            self._extensions_goal_state = None
             self._extensions_config = None
             self._extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
 
@@ -108,11 +108,11 @@ class GoalState(object):
         return self._role_config_name
 
     @property
-    def extensions(self):
-        return self._extensions
+    def extensions_goal_state(self):
+        return self._extensions_goal_state
 
-    def set_extensions(self, extensions):
-        self._extensions = extensions
+    def set_extensions_goal_state(self, extensions_goal_state):
+        self._extensions_goal_state = extensions_goal_state
 
     @property
     def certs(self):
@@ -159,9 +159,9 @@ class GoalState(object):
                 self._extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self._incarnation, xml_text, wire_client)
 
             if extensions is not None:
-                self._extensions = extensions
+                self._extensions_goal_state = extensions
             else:
-                self._extensions = self._extensions_config
+                self._extensions_goal_state = self._extensions_config
 
         except Exception as exception:
             logger.warn("Fetching the goal state failed: {0}", ustr(exception))

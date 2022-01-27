@@ -298,7 +298,7 @@ class ExtHandlersHandler(object):
         etag, activity_id, correlation_id, gs_creation_time = None, None, None, None
 
         try:
-            extensions_goal_state = self.protocol.client.get_goal_state().extensions
+            extensions_goal_state = self.protocol.get_goal_state().extensions_goal_state
 
             # self.ext_handlers and etag need to be initialized first, since status reporting depends on them
             self.ext_handlers = extensions_goal_state.extensions
@@ -343,7 +343,7 @@ class ExtHandlersHandler(object):
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
 
     def __get_unsupported_features(self):
-        required_features = self.protocol.get_goal_state().extensions.required_features
+        required_features = self.protocol.get_goal_state().extensions_goal_state.required_features
         supported_features = get_agent_supported_features_list_for_crp()
         return [feature for feature in required_features if feature not in supported_features]
 
@@ -452,7 +452,7 @@ class ExtHandlersHandler(object):
             return False
 
         if conf.get_enable_overprovisioning():
-            if self.protocol.get_goal_state().extensions.on_hold:
+            if self.protocol.get_goal_state().extensions_goal_state.on_hold:
                 logger.info("Extension handling is on hold")
                 return False
 
