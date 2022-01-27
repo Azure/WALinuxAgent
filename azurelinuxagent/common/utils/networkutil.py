@@ -230,49 +230,40 @@ class AddFirewallRules(object):
                and AddFirewallRules.__execute_check_command(check_cmd_drop_rule)
 
     @staticmethod
-    def add_iptables_rules(wait, dst_ip, uid):
+    def __execute_firewall_commands(dst_ip, uid, command=APPEND_COMMAND, firewalld_command="", wait=""):
         # The order in which the below rules are added matters for the ip table rules to work as expected
-        AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
-        AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.APPEND_COMMAND, dst_ip, wait=wait)
-        AddFirewallRules.__execute_cmd(accept_tcp_rule)
-
-        accept_rule = AddFirewallRules.get_accept_command(AddFirewallRules.APPEND_COMMAND, dst_ip, uid, wait=wait)
-        AddFirewallRules.__execute_cmd(accept_rule)
-
-        drop_rule = AddFirewallRules.get_drop_command(AddFirewallRules.APPEND_COMMAND, dst_ip, wait=wait)
-        AddFirewallRules.__execute_cmd(drop_rule)
-
-    @staticmethod
-    def __execute_firewalld_commands(command, dst_ip, uid):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
         # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
 
-        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.APPEND_COMMAND, dst_ip,
-                                                               firewalld_command=command)
+        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(command, dst_ip,
+                                                               firewalld_command=firewalld_command, wait=wait)
         AddFirewallRules.__execute_cmd(accept_tcp_rule)
 
-        accept_cmd = AddFirewallRules.get_accept_command(AddFirewallRules.APPEND_COMMAND, dst_ip, uid,
-                                                         firewalld_command=command)
+        accept_cmd = AddFirewallRules.get_accept_command(command, dst_ip, uid,
+                                                         firewalld_command=firewalld_command, wait=wait)
         AddFirewallRules.__execute_cmd(accept_cmd)
 
-        drop_cmd = AddFirewallRules.get_drop_command(AddFirewallRules.APPEND_COMMAND, dst_ip, firewalld_command=command)
+        drop_cmd = AddFirewallRules.get_drop_command(command, dst_ip, firewalld_command=firewalld_command, wait=wait)
         AddFirewallRules.__execute_cmd(drop_cmd)
+
+    @staticmethod
+    def add_iptables_rules(wait, dst_ip, uid):
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, command=AddFirewallRules.APPEND_COMMAND, wait=wait)
 
     @staticmethod
     def add_firewalld_rules(dst_ip, uid):
         # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
         # Firewalld.service with the "--permanent --passthrough" parameter ensures that a firewall rule is set only once even if command is executed multiple times
 
-        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, dst_ip, uid)
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, firewalld_command=FirewallCmdDirectCommands.PassThrough)
 
     @staticmethod
     def check_firewalld_rule_applied(dst_ip, uid):
-        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.QueryPassThrough, dst_ip, uid)
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, firewalld_command=FirewallCmdDirectCommands.QueryPassThrough)
 
     @staticmethod
     def remove_firewalld_rules(dst_ip, uid):
-        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.RemovePassThrough, dst_ip, uid)
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, firewalld_command=FirewallCmdDirectCommands.RemovePassThrough)
