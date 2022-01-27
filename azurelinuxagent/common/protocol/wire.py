@@ -123,7 +123,7 @@ class WireProtocol(DataContract):
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
-        ext_conf = self.client.get_extensions_goal_state()
+        ext_conf = self.client.get_goal_state().extensions
         return ext_conf.agent_manifests, goal_state.incarnation
 
     def get_vmagent_pkgs(self, vmagent_manifest):
@@ -137,8 +137,11 @@ class WireProtocol(DataContract):
         man = self.client.get_ext_manifest(ext_handler)
         return man.pkg_list
 
+    def get_goal_state(self):
+        return self.client.get_goal_state()
+
     def get_extensions_goal_state(self):
-        return self.client.get_extensions_goal_state()
+        return self.client.get_goal_state().extensions
 
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
@@ -1074,12 +1077,12 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        extensions_goal_state = self.get_extensions_goal_state()
+        extensions_goal_state = self.get_goal_state().extensions
 
         if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(force_update=True)
-            extensions_goal_state = self.get_extensions_goal_state()
+            extensions_goal_state = self.get_goal_state().extensions
 
         if extensions_goal_state.status_upload_blob is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
@@ -1284,7 +1287,7 @@ class WireClient(object):
         return self._host_plugin
 
     def get_on_hold(self):
-        return self.get_extensions_goal_state().on_hold
+        return self.get_goal_state().extensions.on_hold
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)
