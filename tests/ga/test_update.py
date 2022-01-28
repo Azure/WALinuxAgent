@@ -1273,7 +1273,7 @@ class TestUpdate(UpdateTestCase):
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent_greater_than_daemon', return_value=latest_agent):
             self._test_run_latest(mock_child=ChildMock(return_value=1))
 
-        self.assertFalse(latest_agent.is_blacklisted, "Agent should not be black-listeed")
+        self.assertFalse(latest_agent.is_blacklisted, "Agent should not be blacklisted")
 
     def test_run_latest_exception_blacklists(self):
         self.prepare_agents()
