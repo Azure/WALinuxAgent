@@ -1668,14 +1668,19 @@ class TestUpdate(UpdateTestCase):
             with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
                 with patch.object(osutil, '_enable_firewall', True):
                     # drop rule is present
-                    mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+                    mock_iptables.set_command(AddFirewallRules.get_drop_command(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                          wait=mock_iptables.wait), exit_code=0)
                     # non root tcp iptable rule is absent
-                    mock_iptables.set_command(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
+                    mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait), exit_code=1)
                     update_handler.run(debug=True)
 
-                    drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
-                    accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
-                    accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+                    drop_check_command = TestOSUtil._command_to_string(AddFirewallRules.get_drop_command(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                          wait=mock_iptables.wait))
+                    accept_tcp_check_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait))
+                    accept_tcp_insert_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait))
 
                     # Filtering the mock iptable command calls with only the once related to this test.
                     filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
@@ -1694,13 +1699,17 @@ class TestUpdate(UpdateTestCase):
             with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
                 with patch.object(osutil, '_enable_firewall', True):
                     # drop rule is not available
-                    mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
+                    mock_iptables.set_command(AddFirewallRules.get_drop_command(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                          wait=mock_iptables.wait), exit_code=1)
 
                     update_handler.run(debug=True)
 
-                    drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
-                    accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
-                    accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+                    drop_check_command = TestOSUtil._command_to_string(AddFirewallRules.get_drop_command(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                          wait=mock_iptables.wait))
+                    accept_tcp_check_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait))
+                    accept_tcp_insert_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait))
 
                     # Filtering the mock iptable command calls with only the once related to this test.
                     filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
@@ -1715,15 +1724,20 @@ class TestUpdate(UpdateTestCase):
             with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
                 with patch.object(osutil, '_enable_firewall', True):
                     # drop rule is available
-                    mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+                    mock_iptables.set_command(AddFirewallRules.get_drop_command(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                          wait=mock_iptables.wait), exit_code=0)
                     # non root tcp iptable rule is available
-                    mock_iptables.set_command(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+                    mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait), exit_code=0)
 
                     update_handler.run(debug=True)
 
-                    drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
-                    accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
-                    accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+                    drop_check_command = TestOSUtil._command_to_string(AddFirewallRules.get_drop_command(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                          wait=mock_iptables.wait))
+                    accept_tcp_check_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait))
+                    accept_tcp_insert_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, mock_iptables.destination,
+                                                             wait=mock_iptables.wait))
 
                     # Filtering the mock iptable command calls with only the once related to this test.
                     filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]

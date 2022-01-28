@@ -75,18 +75,6 @@ def get_iptables_version_command():
     return ["iptables", "--version"]
 
 
-def get_accept_tcp_rule(wait, command, destination):
-    return AddFirewallRules.get_accept_tcp_rule(command, destination, wait=wait)
-
-
-def get_firewall_accept_command(wait, command, destination, owner_uid):
-    return AddFirewallRules.get_accept_command(command, destination, owner_uid, wait=wait)
-
-
-def get_firewall_drop_command(wait, command, destination):
-    return AddFirewallRules.get_drop_command(command, destination, wait=wait)
-
-
 def get_firewall_list_command(wait):
     return _add_wait(wait, ["iptables", "-t", "security", "-L", "-nxv"])
 
