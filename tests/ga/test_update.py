@@ -2321,8 +2321,11 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_exit_code_successful(update_handler.exit_mock)
             self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, upgrade=False,
                                                                           version=downgraded_version)
-            self.assertTrue(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
-                            "The current agent should be blacklisted")
+            current_agent = next(agent for agent in self.agents() if agent.version == CURRENT_VERSION)
+            self.assertTrue(current_agent.is_blacklisted, "The current agent should be blacklisted")
+            self.assertEqual(current_agent.error.reason, "Blacklisting the agent {0} since a downgrade was requested in the GoalState, "
+                                                         "suggesting that we really don't want to execute any extensions using this version".format(CURRENT_VERSION),
+                             "Invalid reason specified for blacklisting agent")
 
     def test_it_should_not_downgrade_below_daemon_version(self):
         data_file = mockwiredata.DATA_FILE.copy()

@@ -480,11 +480,11 @@ class UpdateHandler(object):
                     # (unless the CURRENT_VERSION == daemon version, but since we don't support downgrading
                     # below daemon version, we will never reach this code path if that's the scenario)
                     current_agent = next(agent for agent in self.agents if agent.version == CURRENT_VERSION)
-                    logger.info(
-                        "Blacklisting the agent {0} since a downgrade was requested in the GoalState, "
-                        "suggesting that we really don't want to execute any extensions using this version".format(
-                            CURRENT_VERSION))
-                    current_agent.mark_failure(is_fatal=True)
+                    msg = "Blacklisting the agent {0} since a downgrade was requested in the GoalState, " \
+                          "suggesting that we really don't want to execute any extensions using this version".format(
+                           CURRENT_VERSION)
+                    logger.info(msg)
+                    current_agent.mark_failure(is_fatal=True, reason=msg)
                 except StopIteration:
                     logger.warn(
                         "Could not find a matching agent with current version {0} to blacklist, skipping it".format(
