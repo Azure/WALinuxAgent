@@ -127,10 +127,11 @@ class ExtensionsGoalState(object):
             compare_array(first.settings, second.settings, compare_settings, "settings")
 
         def compare_settings(first, second):
+            # Note that we do not compare protectedSettings since the same settings can be re-encrypted, resulting
+            # on different encrypted text for the same plain text.
             compare_attributes(first, second, "name")
             compare_attributes(first, second, "sequenceNumber")
             compare_attributes(first, second, "publicSettings")
-            compare_attributes(first, second, "protectedSettings")
             compare_attributes(first, second, "certificateThumbprint")
             compare_attributes(first, second, "dependencyLevel")
             compare_attributes(first, second, "state")
@@ -157,7 +158,10 @@ class ExtensionsGoalState(object):
                     second_value.sort()
 
                 if first_value != second_value:
-                    mistmatch = "[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context))
+                    if attribute.lower() == 'publicsettings':
+                        mistmatch = "[REDACTED] != [REDACTED] (Attribute: {0})".format(".".join(context))
+                    else:
+                        mistmatch = "[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context))
                     message = "Mismatch in Goal States [Incarnation {0}] != [Etag: {1}]: {2}".format(from_extensions_config.id, from_vm_settings.id, mistmatch)
                     raise GoalStateMismatchError(message, attribute)
             finally:
