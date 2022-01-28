@@ -1262,8 +1262,7 @@ class TestUpdate(UpdateTestCase):
         finally:
             shutil.rmtree(tempdir, True)
 
-    def test_run_latest_nonzero_code_marks_failures(self):
-        # logger.add_logger_appender(logger.AppenderType.STDOUT)
+    def test_run_latest_nonzero_code_does_not_mark_failure(self):
         self.prepare_agents()
 
         latest_agent = self.update_handler.get_latest_agent_greater_than_daemon()
@@ -1274,10 +1273,7 @@ class TestUpdate(UpdateTestCase):
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent_greater_than_daemon', return_value=latest_agent):
             self._test_run_latest(mock_child=ChildMock(return_value=1))
 
-        self.assertTrue(latest_agent.is_blacklisted)
-        self.assertFalse(latest_agent.is_available)
-        self.assertNotEqual(0.0, latest_agent.error.last_failure)
-        self.assertEqual(1, latest_agent.error.failure_count)
+        self.assertFalse(latest_agent.is_blacklisted, "Agent should not be black-listeed")
 
     def test_run_latest_exception_blacklists(self):
         self.prepare_agents()
