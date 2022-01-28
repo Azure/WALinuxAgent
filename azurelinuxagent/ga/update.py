@@ -265,7 +265,13 @@ class UpdateHandler(object):
                     log_event=False)
 
                 if ret is None:
-                    ret = self.child_process.wait()
+                    # Wait for the process to exit
+                    if self.child_process.wait() > 0:
+                        msg = u"ExtHandler process {0} launched with command '{1}' exited with return code: {2}".format(
+                            agent_name,
+                            agent_cmd,
+                            ret)
+                        logger.warn(msg)
 
             else:
                 msg = u"Agent {0} launched with command '{1}' failed with return code: {2}".format(
@@ -279,15 +285,6 @@ class UpdateHandler(object):
                     op=WALAEventOperation.Enable,
                     is_success=False,
                     message=msg)
-
-            if ret is not None and ret > 0:
-                msg = u"Agent {0} launched with command '{1}' returned code: {2}".format(
-                    agent_name,
-                    agent_cmd,
-                    ret)
-                logger.warn(msg)
-                if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
 
         except Exception as e:
             # Ignore child errors during termination
@@ -304,7 +301,7 @@ class UpdateHandler(object):
                     is_success=False,
                     message=detailed_message)
                 if latest_agent is not None:
-                    latest_agent.mark_failure(is_fatal=True)
+                    latest_agent.mark_failure(is_fatal=True, reason=detailed_message)
 
         self.child_process = None
         return
@@ -368,6 +365,7 @@ class UpdateHandler(object):
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
             self._add_accept_tcp_firewall_rule_if_not_enabled(dst_ip=protocol.get_endpoint())
+            self._reset_legacy_blacklisted_agents()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -482,11 +480,11 @@ class UpdateHandler(object):
                     # (unless the CURRENT_VERSION == daemon version, but since we don't support downgrading
                     # below daemon version, we will never reach this code path if that's the scenario)
                     current_agent = next(agent for agent in self.agents if agent.version == CURRENT_VERSION)
-                    logger.info(
-                        "Blacklisting the agent {0} since a downgrade was requested in the GoalState, "
-                        "suggesting that we really don't want to execute any extensions using this version".format(
-                            CURRENT_VERSION))
-                    current_agent.mark_failure(is_fatal=True)
+                    msg = "Blacklisting the agent {0} since a downgrade was requested in the GoalState, " \
+                          "suggesting that we really don't want to execute any extensions using this version".format(
+                           CURRENT_VERSION)
+                    logger.info(msg)
+                    current_agent.mark_failure(is_fatal=True, reason=msg)
                 except StopIteration:
                     logger.warn(
                         "Could not find a matching agent with current version {0} to blacklist, skipping it".format(
@@ -1092,7 +1090,11 @@ class UpdateHandler(object):
             # Set the agents to those available for download at least as current as the existing agent
             # or to the requested version (if specified)
             host = self._get_host_plugin(protocol=protocol)
-            self._set_and_sort_agents([GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download])
+            agents_to_download = [GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download]
+
+            # Filter out the agents that were downloaded/extracted successfully. If the agent was not installed properly,
+            # we delete the directory and the zip package from the filesystem
+            self._set_and_sort_agents([agent for agent in agents_to_download if agent.is_available])
 
             # Remove from disk any agent no longer needed in the VM.
             # If requested version is provided, this would delete all other agents present on the VM except -
@@ -1333,6 +1335,19 @@ class UpdateHandler(object):
                 upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
             raise AgentUpgradeExitException(upgrade_message)
 
+    def _reset_legacy_blacklisted_agents(self):
+        # Reset the state of all blacklisted agents that were blacklisted by legacy agents (i.e. not during auto-update)
+
+        # Filter legacy agents which are blacklisted but do not contain a `reason` in their error.json files
+        # (this flag signifies that this agent was blacklisted by the newer agents).
+        try:
+            legacy_blacklisted_agents = [agent for agent in self._load_agents() if
+                                         agent.is_blacklisted and agent.error.reason == '']
+            for agent in legacy_blacklisted_agents:
+                agent.clear_error()
+        except Exception as err:
+            logger.warn("Unable to reset legacy blacklisted agents due to: {0}".format(err))
+
 
 class GuestAgent(object):
     def __init__(self, path=None, pkg=None, host=None):
@@ -1341,13 +1356,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m == None:
+            if m is None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version == None:
+        if version is None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
@@ -1371,10 +1386,15 @@ class GuestAgent(object):
             if isinstance(e, IOError):
                 raise
 
-            # Note the failure, blacklist the agent if the package downloaded
-            # - An exception with a downloaded package indicates the package
-            #   is corrupt (e.g., missing the HandlerManifest.json file)
-            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
+            # If we're unable to download/unpack the agent, delete the Agent directory and the zip file (if exists) to
+            # ensure we try downloading again in the next round.
+            try:
+                if os.path.isdir(self.get_agent_dir()):
+                    shutil.rmtree(self.get_agent_dir(), ignore_errors=True)
+                if os.path.isfile(self.get_agent_pkg_path()):
+                    os.remove(self.get_agent_pkg_path())
+            except Exception as err:
+                logger.warn("Unable to delete Agent files: {0}".format(err))
 
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
@@ -1422,11 +1442,11 @@ class GuestAgent(object):
         return self.is_blacklisted or \
                os.path.isfile(self.get_agent_manifest_path())
 
-    def mark_failure(self, is_fatal=False):
+    def mark_failure(self, is_fatal=False, reason=''):
         try:
             if not os.path.isdir(self.get_agent_dir()):
                 os.makedirs(self.get_agent_dir())
-            self.error.mark_failure(is_fatal=is_fatal)
+            self.error.mark_failure(is_fatal=is_fatal, reason=reason)
             self.error.save()
             if self.error.is_blacklisted:
                 msg = u"Agent {0} is permanently blacklisted".format(self.name)
@@ -1617,23 +1637,29 @@ class GuestAgent(object):
 
 class GuestAgentError(object):
     def __init__(self, path):
+        self.last_failure = 0.0
+        self.was_fatal = False
         if path is None:
             raise UpdateError(u"GuestAgentError requires a path")
         self.path = path
+        self.failure_count = 0
+        self.reason = ''
 
         self.clear()
         return
 
-    def mark_failure(self, is_fatal=False):
-        self.last_failure = time.time()  # pylint: disable=W0201
+    def mark_failure(self, is_fatal=False, reason=''):
+        self.last_failure = time.time()
         self.failure_count += 1
-        self.was_fatal = is_fatal  # pylint: disable=W0201
+        self.was_fatal = is_fatal
+        self.reason = reason
         return
 
     def clear(self):
         self.last_failure = 0.0
         self.failure_count = 0
         self.was_fatal = False
+        self.reason = ''
         return
 
     @property
@@ -1665,25 +1691,25 @@ class GuestAgentError(object):
         return
 
     def from_json(self, data):
-        self.last_failure = max(  # pylint: disable=W0201
-            self.last_failure,
-            data.get(u"last_failure", 0.0))
-        self.failure_count = max(  # pylint: disable=W0201
-            self.failure_count,
-            data.get(u"failure_count", 0))
-        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)  # pylint: disable=W0201
+        self.last_failure = max(self.last_failure, data.get(u"last_failure", 0.0))
+        self.failure_count = max(self.failure_count, data.get(u"failure_count", 0))
+        self.was_fatal = self.was_fatal or data.get(u"was_fatal", False)
+        reason = data.get(u"reason", '')
+        self.reason = reason if reason != '' else self.reason
         return
 
     def to_json(self):
         data = {
             u"last_failure": self.last_failure,
             u"failure_count": self.failure_count,
-            u"was_fatal": self.was_fatal
+            u"was_fatal": self.was_fatal,
+            u"reason": ustr(self.reason)
         }
         return data
 
     def __str__(self):
-        return "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(
+        return "Last Failure: {0}, Total Failures: {1}, Fatal: {2}, Reason: {3}".format(
             self.last_failure,
             self.failure_count,
-            self.was_fatal)
+            self.was_fatal,
+            self.reason)
