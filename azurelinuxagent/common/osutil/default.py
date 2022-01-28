@@ -271,6 +271,7 @@ class DefaultOSUtil(object):
                 if not AddFirewallRules.verify_iptables_rules_exist(wait, dst_ip, uid):
                     self.remove_firewall(dst_ip, uid)
                     AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+                    logger.info("Successfully added Azure fabric firewall rules")
                     logger.info("Firewall rules:\n{0}".format(self.get_firewall_list(wait)))
             except CommandError as e:
                 if e.returncode == 2:
@@ -291,8 +292,10 @@ class DefaultOSUtil(object):
                         "{0}".format(ustr(e)))
             return False
 
-    def get_firewall_list(self, wait):
+    def get_firewall_list(self, wait=None):
         try:
+            if wait is None:
+                wait = self.get_firewall_will_wait()
             output = shellutil.run_command(get_firewall_list_command(wait))
             return output
         except Exception as e:

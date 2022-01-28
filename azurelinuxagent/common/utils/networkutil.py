@@ -113,6 +113,8 @@ class FirewallCmdDirectCommands(object):
     # checks if the firewalld rule is present or not
     QueryPassThrough = "--query-passthrough"
 
+    # firewall-cmd --permanent --direct --remove-passthrough ipv4 -t security -A OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner 0 -j ACCEPT
+    # success
     # remove the firewalld rule
     RemovePassThrough = "--remove-passthrough"
 
