@@ -148,7 +148,7 @@ class EnableFirewall(PeriodicOperation):
 
 class LogFirewallRules(PeriodicOperation):
     def __init__(self, osutil):
-        super(LogFirewallRules, self).__init__(conf.log_firewall_rules_period())
+        super(LogFirewallRules, self).__init__(conf.get_firewall_rules_log_period())
         self._osutil = osutil
 
     def _operation(self):

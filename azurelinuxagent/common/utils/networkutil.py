@@ -239,8 +239,6 @@ class AddFirewallRules(object):
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
-
         accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(command, dst_ip,
                                                                firewalld_command=firewalld_command, wait=wait)
         AddFirewallRules.__execute_cmd(accept_tcp_rule)

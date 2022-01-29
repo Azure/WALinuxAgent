@@ -80,7 +80,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid)
+        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid, wait=osutil.get_firewall_will_wait())
         osutil.enable_firewall.assert_called_once_with(dst_ip=KNOWN_WIRESERVER_IP, uid=fixed_uid)
 
     @patch('azurelinuxagent.common.conf.enable_firewall')
@@ -112,7 +112,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid)
+        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid, wait=osutil.get_firewall_will_wait())
         osutil.enable_firewall.assert_not_called()
 
     # Cleanup certificate files

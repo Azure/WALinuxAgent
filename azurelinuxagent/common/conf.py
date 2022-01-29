@@ -170,7 +170,7 @@ __INTEGER_OPTIONS__ = {
     "Extensions.InitialGoalStatePeriod": 6,
     "Extensions.GoalStateHistoryCleanupPeriod": 1800,
     "OS.EnableFirewallPeriod": 30,
-    "OS.LogFirewallRulesPeriod": 86400,
+    "OS.FirewallRulesLogPeriod": 86400,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
     "OS.MonitorDhcpClientRestartPeriod": 30,
@@ -181,6 +181,7 @@ __INTEGER_OPTIONS__ = {
     "ResourceDisk.SwapSizeMB": 0,
     "Autoupdate.Frequency": 3600,
     "Logs.CollectPeriod": 3600,
+
     #
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
@@ -233,8 +234,8 @@ def get_enable_firewall_period(conf=__conf__):
     return conf.get_int("OS.EnableFirewallPeriod", 30)
 
 
-def log_firewall_rules_period(conf=__conf__):
-    return conf.get_int("OS.LogFirewallRulesPeriod", 86400)
+def get_firewall_rules_log_period(conf=__conf__):
+    return conf.get_int("OS.FirewallRulesLogPeriod", 86400)
 
 
 def get_remove_persistent_net_rules_period(conf=__conf__):

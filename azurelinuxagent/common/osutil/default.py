@@ -255,15 +255,14 @@ class DefaultOSUtil(object):
                 "Unable to remove legacy firewall rule, won't try removing it again. Error: {0}".format(ustr(error)))
 
     def enable_firewall(self, dst_ip, uid):
+        # This is to send telemetry when iptable rules updated
+        is_firewall_rules_updated = False
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
-            return False
+            return False, is_firewall_rules_updated
 
         try:
-            # This is to send telemetry when iptable rules updated
-            is_firewall_rules_updated = False
-
             wait = self.get_firewall_will_wait()
 
             # check every iptable rule and delete others if any rule is missing

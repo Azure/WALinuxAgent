@@ -47,7 +47,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # Override for mocking Popen, should be of the form - (True/False, cmd-to-execute-if-True)
         self.__replace_popen_cmd = lambda *_: (False, "")
         self.__executed_commands = []
-        self.__mocked_commands = {}
         self.__test_dst_ip = "1.2.3.4"
         self.__test_uid = 9999
         self.__test_wait = "-w"
