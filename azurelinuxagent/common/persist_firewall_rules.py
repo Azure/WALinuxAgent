@@ -143,6 +143,20 @@ if __name__ == '__main__':
 
         return True
 
+    def __remove_firewalld_rules(self):
+        try:
+            AddFirewallRules.remove_firewalld_rules(self._dst_ip, self._uid)
+        except Exception as error:
+            logger.verbose(
+                "failed to remove rule using firewalld.service: {0}".format(ustr(error)))
+
+    def __add_firewalld_rules(self):
+        try:
+            AddFirewallRules.add_firewalld_rules(self._dst_ip, self._uid)
+        except Exception as error:
+            logger.verbose(
+                "failed to add rule using firewalld.service: {0}".format(ustr(error)))
+
     def _setup_permanent_firewalld_rules(self):
         if self.__verify_firewall_rules_enabled():
             logger.info("Firewall rules already set. No change needed.")
@@ -150,9 +164,9 @@ if __name__ == '__main__':
 
         logger.info("Firewall rules not added yet, adding them now using firewalld.service")
         # Remove first if partial list present
-        AddFirewallRules.remove_firewalld_rules(self._dst_ip, self._uid)
+        self.__remove_firewalld_rules()
         # Add rules if not already set
-        AddFirewallRules.add_firewalld_rules(self._dst_ip, self._uid)
+        self.__add_firewalld_rules()
         logger.info("Successfully added the firewall commands using firewalld.service")
 
     def __verify_network_setup_service_enabled(self):
@@ -329,4 +343,3 @@ if __name__ == '__main__':
         logger.info(
             "Unit file version matches with expected version: {0}, not overwriting unit file".format(unit_file_version))
         return False
-

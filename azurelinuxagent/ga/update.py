@@ -1254,7 +1254,7 @@ class UpdateHandler(object):
             wait = self.osutil.get_firewall_will_wait()
 
             # "-C" checks if the iptable rule is available in the chain. It throws an exception with return code 1 if the ip table rule doesnt exist
-            drop_rule = AddFirewallRules.get_drop_command(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
+            drop_rule = AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
             if not _execute_run_command(drop_rule):
                 # DROP command doesn't exist indicates then none of the firewall rules are set yet
                 # exiting here as the environment thread will set up all firewall rules

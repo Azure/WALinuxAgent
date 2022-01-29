@@ -60,6 +60,7 @@ OS.CheckRdmaDriver = False
 OS.EnableFIPS = True
 OS.EnableFirewall = False
 OS.EnableFirewallPeriod = 30
+OS.LogFirewallRulesPeriod = 86400
 OS.EnableRDMA = False
 OS.HomeDir = /home
 OS.MonitorDhcpClientRestartPeriod = 30

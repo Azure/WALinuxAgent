@@ -216,15 +216,13 @@ class DefaultOSUtil(object):
                 if e.returncode == 2:
                     raise Exception("invalid firewall deletion rule '{0}'".format(rule))
 
-    def remove_firewall(self, dst_ip, uid):
+    def remove_firewall(self, dst_ip, uid, wait):
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
             return False
 
         try:
-            wait = self.get_firewall_will_wait()
-
             # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
             # has aged out, keep this cleanup in place.
             self._delete_rule(get_firewall_delete_conntrack_accept_command(wait, dst_ip))
@@ -263,19 +261,23 @@ class DefaultOSUtil(object):
             return False
 
         try:
+            # This is to send telemetry when iptable rules updated
+            is_firewall_rules_updated = False
+
             wait = self.get_firewall_will_wait()
 
             # check every iptable rule and delete others if any rule is missing
             #   and append every iptable rule to the end of the chain.
             try:
                 if not AddFirewallRules.verify_iptables_rules_exist(wait, dst_ip, uid):
-                    self.remove_firewall(dst_ip, uid)
+                    self.remove_firewall(dst_ip, uid, wait)
                     AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
+                    is_firewall_rules_updated = True
                     logger.info("Successfully added Azure fabric firewall rules")
                     logger.info("Firewall rules:\n{0}".format(self.get_firewall_list(wait)))
             except CommandError as e:
                 if e.returncode == 2:
-                    self.remove_firewall(dst_ip, uid)
+                    self.remove_firewall(dst_ip, uid, wait)
                     msg = "please upgrade iptables to a version that supports the -C option"
                     logger.warn(msg)
                     raise
@@ -283,14 +285,14 @@ class DefaultOSUtil(object):
                 logger.warn(ustr(error))
                 raise
 
-            return True
+            return True, is_firewall_rules_updated
 
         except Exception as e:
             _enable_firewall = False
             logger.info("Unable to establish firewall -- "
                         "no further attempts will be made: "
                         "{0}".format(ustr(e)))
-            return False
+            return False, is_firewall_rules_updated
 
     def get_firewall_list(self, wait=None):
         try:

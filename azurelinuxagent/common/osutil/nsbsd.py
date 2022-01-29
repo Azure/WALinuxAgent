@@ -144,7 +144,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         # disable iptables methods
         return
 
-    def remove_firewall(self, dst_ip=None, uid=None):
+    def remove_firewall(self, dst_ip=None, uid=None, wait=""):
         # disable iptables methods
         return True
 

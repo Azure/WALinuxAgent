@@ -47,6 +47,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # Override for mocking Popen, should be of the form - (True/False, cmd-to-execute-if-True)
         self.__replace_popen_cmd = lambda *_: (False, "")
         self.__executed_commands = []
+        self.__mocked_commands = {}
         self.__test_dst_ip = "1.2.3.4"
         self.__test_uid = 9999
         self.__test_wait = "-w"
@@ -99,25 +100,25 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     def __assert_firewall_called(self, cmd, validate_command_called=True):
         if validate_command_called:
-            self.assertIn(AddFirewallRules.get_accept_command(command=AddFirewallRules.APPEND_COMMAND,
-                                                                        destination=self.__test_dst_ip,
-                                                                        owner_uid=self.__test_uid,
-                                                              firewalld_command=cmd),
+            self.assertIn(AddFirewallRules.get_wire_root_accept_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                     destination=self.__test_dst_ip,
+                                                                     owner_uid=self.__test_uid,
+                                                                     firewalld_command=cmd),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
-            self.assertIn(AddFirewallRules.get_drop_command(command=AddFirewallRules.APPEND_COMMAND,
-                                                                      destination=self.__test_dst_ip,
-                                                                      firewalld_command=cmd),
+            self.assertIn(AddFirewallRules.get_wire_non_root_drop_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                       destination=self.__test_dst_ip,
+                                                                       firewalld_command=cmd),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
         else:
-            self.assertNotIn(AddFirewallRules.get_accept_command(command=AddFirewallRules.APPEND_COMMAND,
-                                                                           destination=self.__test_dst_ip,
-                                                                           owner_uid=self.__test_uid,
-                                                                 firewalld_command=cmd),
+            self.assertNotIn(AddFirewallRules.get_wire_root_accept_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                        destination=self.__test_dst_ip,
+                                                                        owner_uid=self.__test_uid,
+                                                                        firewalld_command=cmd),
                              self.__executed_commands,
                              "Firewall {0} command found".format(cmd))
-            self.assertNotIn(AddFirewallRules.get_drop_command(command=AddFirewallRules.APPEND_COMMAND,
-                                                                         destination=self.__test_dst_ip,
-                                                                         firewalld_command=cmd),
+            self.assertNotIn(AddFirewallRules.get_wire_non_root_drop_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                          destination=self.__test_dst_ip,
+                                                                          firewalld_command=cmd),
                              self.__executed_commands, "Firewall {0} command found".format(cmd))
 
     def __assert_systemctl_called(self, cmd="enable", validate_command_called=True):
@@ -173,6 +174,22 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.QueryPassThrough, "conntrack"]
         if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
             return True, ["exit", "1"]
+        if "firewall-cmd" in cmd:
+            return True, ["echo", "enabled"]
+        return False, []
+
+    @staticmethod
+    def __mock_firewalld_running_and_remove_not_successful(cmd):
+        if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:
+            return True, ["echo", "running"]
+        # This is to fail the check if firewalld-rules are already applied
+        cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.QueryPassThrough, "conntrack"]
+        if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
+            return True, ["exit", "1"]
+        # This is to fail the remove if firewalld-rules fails to remove rule
+        cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.RemovePassThrough, "conntrack"]
+        if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
+            return True, ["exit", "2"]
         if "firewall-cmd" in cmd:
             return True, ["echo", "enabled"]
         return False, []
@@ -282,6 +299,18 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def test_it_should_use_firewalld_if_available(self):
 
         self.__replace_popen_cmd = self.__mock_firewalld_running_and_not_applied
+        with self._get_persist_firewall_rules_handler() as handler:
+            handler.setup()
+
+        self.__assert_firewall_cmd_running_called(validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=True)
+        self.assertFalse(any("systemctl" in cmd for cmd in self.__executed_commands), "Systemctl shouldn't be called")
+
+    def test_it_should_add_firewalld_rules_if_remove_raises_exception(self):
+
+        self.__replace_popen_cmd = self.__mock_firewalld_running_and_remove_not_successful
         with self._get_persist_firewall_rules_handler() as handler:
             handler.setup()
 
