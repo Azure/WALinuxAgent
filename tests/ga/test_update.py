@@ -20,6 +20,7 @@ import zipfile
 
 from datetime import datetime, timedelta
 from threading import currentThread
+from azurelinuxagent.common.protocol.imds import ComputeInfo
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
 
@@ -1566,6 +1567,47 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, patch_add_event.call_count)
         self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
+
+    @patch("azurelinuxagent.ga.update.add_event")
+    def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, patch_add_event, *_):
+
+        def validate_single_heartbeat_event_matches_vm_size(vm_size):
+            heartbeat_event_call_args = [
+                call_args for call_args in patch_add_event.call_args_list
+                if call_args.kwargs.get('op', None) == WALAEventOperation.HeartBeat
+            ]
+
+            self.assertEqual(1, len(heartbeat_event_call_args),
+                "Expected exactly one HeartBeat event.")
+
+            telemetry_message = heartbeat_event_call_args[0].get("message", "")
+            self.assertTrue(telemetry_message.endswith(vm_size),
+                "Expected HeartBeat message ('{0}') to end with the test vmSize value, {1}."\
+                .format(telemetry_message, vm_size))
+        
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
+            update_handler = get_update_handler()
+            update_handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
+
+            # Zero out the _vm_size parameter for test resiliency
+            update_handler._vm_size = None
+
+            with patch("azurelinuxagent.common.protocol.imds.get_imds_client") as mock_imds_factory:
+
+                # First force a vmSize retrieval failure
+                mock_imds_factory.get_compute = Mock(side_effect=HttpError(msg="HTTP Test Failure"))
+                update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+                update_handler._send_heartbeat_telemetry(mock_protocol)
+
+                validate_single_heartbeat_event_matches_vm_size("unknown")
+                patch_add_event.reset_mock()
+
+                # Now provide a vmSize
+                mock_imds_factory.get_compute = ComputeInfo(vmSize="TestVmSizeValue")
+                update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+                update_handler._send_heartbeat_telemetry(mock_protocol)
+
+                validate_single_heartbeat_event_matches_vm_size("TestVmSizeValue")
 
     @staticmethod
     def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
