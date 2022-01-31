@@ -1577,8 +1577,8 @@ class TestUpdate(UpdateTestCase):
                 if call_args.kwargs.get('op', None) == WALAEventOperation.HeartBeat
             ]
 
-            self.assertEqual(1, len(heartbeat_event_call_args),
-                "Expected exactly one HeartBeat event.")
+            self.assertEqual(1, len(heartbeat_event_call_args), "Expected exactly one HeartBeat event, got {0}"\
+                .format(heartbeat_event_call_args))
 
             telemetry_message = heartbeat_event_call_args[0].get("message", "")
             self.assertTrue(telemetry_message.endswith(vm_size),
