@@ -147,6 +147,11 @@ class EnableFirewall(PeriodicOperation):
 
 
 class LogFirewallRules(PeriodicOperation):
+    """
+    Log firewall rules state once a day.
+    Goal is to capture the firewall state when the agent service startup or after reboot,
+    in addition to add more debug data and would be more useful long term.
+    """
     def __init__(self, osutil):
         super(LogFirewallRules, self).__init__(conf.get_firewall_rules_log_period())
         self._osutil = osutil

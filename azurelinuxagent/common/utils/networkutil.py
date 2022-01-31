@@ -174,8 +174,8 @@ class AddFirewallRules(object):
         # This rule allows DNS TCP request to wireserver ip for non root users
         cmd = AddFirewallRules.__get_firewall_base_command(firewalld_command, wait)
 
-        cmd = cmd + ['-t', 'security', command, 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53',
-                     '-j', 'ACCEPT']
+        cmd.extend(['-t', 'security', command, 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53',
+                     '-j', 'ACCEPT'])
         return cmd
 
     @staticmethod

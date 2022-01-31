@@ -255,6 +255,11 @@ class DefaultOSUtil(object):
                 "Unable to remove legacy firewall rule, won't try removing it again. Error: {0}".format(ustr(error)))
 
     def enable_firewall(self, dst_ip, uid):
+        """
+        it's checks every iptable rule and add rules if not present. It's return tuple(enable firewall status, update rules flag)
+        enable firewall status: Returns true if every rule check completed successfully otherwise false
+        update rules flag: Returns true if rules are updated otherwise false
+        """
         # This is to send telemetry when iptable rules updated
         is_firewall_rules_updated = False
         # If a previous attempt failed, do not retry

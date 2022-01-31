@@ -170,7 +170,6 @@ __INTEGER_OPTIONS__ = {
     "Extensions.InitialGoalStatePeriod": 6,
     "Extensions.GoalStateHistoryCleanupPeriod": 1800,
     "OS.EnableFirewallPeriod": 30,
-    "OS.FirewallRulesLogPeriod": 86400,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
     "OS.MonitorDhcpClientRestartPeriod": 30,
@@ -190,7 +189,8 @@ __INTEGER_OPTIONS__ = {
     "Debug.AgentCpuQuota": 75,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
-    "Debug.AutoUpdateNormalFrequency": 86400
+    "Debug.AutoUpdateNormalFrequency": 86400,
+    "Debug.FirewallRulesLogPeriod": 86400
 }
 
 
@@ -232,10 +232,6 @@ def enable_firewall(conf=__conf__):
 
 def get_enable_firewall_period(conf=__conf__):
     return conf.get_int("OS.EnableFirewallPeriod", 30)
-
-
-def get_firewall_rules_log_period(conf=__conf__):
-    return conf.get_int("OS.FirewallRulesLogPeriod", 86400)
 
 
 def get_remove_persistent_net_rules_period(conf=__conf__):
@@ -611,3 +607,12 @@ def get_enable_ga_versioning(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableGAVersioning", False)
+
+
+def get_firewall_rules_log_period(conf=__conf__):
+    """
+    Determine the frequency to perform the periodic operation of logging firewall rules.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.FirewallRulesLogPeriod", 86400)

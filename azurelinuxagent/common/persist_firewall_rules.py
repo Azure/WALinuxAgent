@@ -147,15 +147,8 @@ if __name__ == '__main__':
         try:
             AddFirewallRules.remove_firewalld_rules(self._dst_ip, self._uid)
         except Exception as error:
-            logger.verbose(
+            logger.warn(
                 "failed to remove rule using firewalld.service: {0}".format(ustr(error)))
-
-    def __add_firewalld_rules(self):
-        try:
-            AddFirewallRules.add_firewalld_rules(self._dst_ip, self._uid)
-        except Exception as error:
-            logger.verbose(
-                "failed to add rule using firewalld.service: {0}".format(ustr(error)))
 
     def _setup_permanent_firewalld_rules(self):
         if self.__verify_firewall_rules_enabled():
@@ -166,7 +159,7 @@ if __name__ == '__main__':
         # Remove first if partial list present
         self.__remove_firewalld_rules()
         # Add rules if not already set
-        self.__add_firewalld_rules()
+        AddFirewallRules.add_firewalld_rules(self._dst_ip, self._uid)
         logger.info("Successfully added the firewall commands using firewalld.service")
 
     def __verify_network_setup_service_enabled(self):
