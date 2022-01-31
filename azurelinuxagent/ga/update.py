@@ -165,7 +165,7 @@ class UpdateHandler(object):
         self._heartbeat_counter = 0
 
         # VM Size is reported via the heartbeat, default it here.
-        self._vm_size = "unknown"
+        self._vm_size = None
 
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
@@ -332,8 +332,6 @@ class UpdateHandler(object):
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
 
-            self._initialize_heartbeat_parameters(protocol)
-
             # Log OS-specific info.
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; AgentService: {service_name}; "\
@@ -415,16 +413,22 @@ class UpdateHandler(object):
         self._shutdown()
         sys.exit(0)
 
-    def _initialize_heartbeat_parameters(self, protocol):
-        imds_client = get_imds_client(protocol.get_endpoint())
+    @property
+    def vm_size(self):
+        if self._vm_size is None:
+
+            protocol = self.protocol_util.get_protocol()
+            imds_client = get_imds_client(protocol.get_endpoint())
+            
+            try:
+                imds_info = imds_client.get_compute()
+                self._vm_size = imds_info.vmSize
+            except Exception as e:
+                err_msg = "Attempts to retrieve VM size information from IMDS are failing: {0}".format(textutil.format_exception(e))
+                logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(err_msg))
+                return "unknown"
         
-        try:
-            imds_info = imds_client.get_compute()
-            self._vm_size = imds_info.vmSize
-        except Exception as e:
-            err_msg = "Failed to reach IMDS while retrieving VM size information. Error was: {0}"\
-                .format(e)
-            logger.warn(err_msg)
+        return self._vm_size
 
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
@@ -1174,7 +1178,7 @@ class UpdateHandler(object):
 
             telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled, self._vm_size)
+                                                         auto_update_enabled, self.vm_size)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
