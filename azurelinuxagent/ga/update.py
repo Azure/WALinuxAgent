@@ -413,11 +413,9 @@ class UpdateHandler(object):
         self._shutdown()
         sys.exit(0)
 
-    @property
-    def vm_size(self):
+    def _get_vm_size(self, protocol):
         if self._vm_size is None:
 
-            protocol = self.protocol_util.get_protocol()
             imds_client = get_imds_client(protocol.get_endpoint())
             
             try:
@@ -1178,7 +1176,7 @@ class UpdateHandler(object):
 
             telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled, self.vm_size)
+                                                         auto_update_enabled, self._get_vm_size(protocol))
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
