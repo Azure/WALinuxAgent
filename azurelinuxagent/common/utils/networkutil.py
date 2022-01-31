@@ -157,7 +157,7 @@ class AddFirewallRules(object):
 
     @staticmethod
     def __get_common_command_params(command, destination):
-        return ["-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m"]
+        return ["-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp"]
 
     @staticmethod
     def __get_firewall_base_command(firewalld_command="", wait=""):
@@ -174,8 +174,8 @@ class AddFirewallRules(object):
         # This rule allows DNS TCP request to wireserver ip for non root users
         cmd = AddFirewallRules.__get_firewall_base_command(firewalld_command, wait)
 
-        cmd.extend(['-t', 'security', command, 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53',
-                     '-j', 'ACCEPT'])
+        cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
+        cmd.extend(['--destination-port', '53', '-j', 'ACCEPT'])
         return cmd
 
     @staticmethod
@@ -183,7 +183,7 @@ class AddFirewallRules(object):
         cmd = AddFirewallRules.__get_firewall_base_command(firewalld_command, wait)
 
         cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
-        cmd.extend(["owner", "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
+        cmd.extend(["-m", "owner", "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
         return cmd
 
     @staticmethod
@@ -191,7 +191,7 @@ class AddFirewallRules(object):
         cmd = AddFirewallRules.__get_firewall_base_command(firewalld_command, wait)
 
         cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
-        cmd.extend(["conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
+        cmd.extend(["-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
         return cmd
 
     @staticmethod

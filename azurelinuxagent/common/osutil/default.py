@@ -256,8 +256,8 @@ class DefaultOSUtil(object):
 
     def enable_firewall(self, dst_ip, uid):
         """
-        it's checks every iptable rule and add rules if not present. It's return tuple(enable firewall status, update rules flag)
-        enable firewall status: Returns true if every rule check completed successfully otherwise false
+        it's checks every iptable rule and add rules if not present. It's return tuple(enable firewall success status, update rules flag)
+        enable firewall success status: Returns true if every rule check completed successfully otherwise false
         update rules flag: Returns true if rules are updated otherwise false
         """
         # This is to send telemetry when iptable rules updated
