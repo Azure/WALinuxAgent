@@ -1572,15 +1572,15 @@ class TestUpdate(UpdateTestCase):
     def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, patch_add_event, *_):
 
         def validate_single_heartbeat_event_matches_vm_size(vm_size):
-            heartbeat_event_call_args = [
-                call_args for call_args in patch_add_event.call_args_list
-                if call_args.kwargs.get('op', None) == WALAEventOperation.HeartBeat
+            heartbeat_event_kwargs = [
+                kwargs for _, kwargs in patch_add_event.call_args_list
+                if kwargs.get('op', None) == WALAEventOperation.HeartBeat
             ]
 
-            self.assertEqual(1, len(heartbeat_event_call_args), "Expected exactly one HeartBeat event, got {0}"\
-                .format(heartbeat_event_call_args))
+            self.assertEqual(1, len(heartbeat_event_kwargs), "Expected exactly one HeartBeat event, got {0}"\
+                .format(heartbeat_event_kwargs))
 
-            telemetry_message = heartbeat_event_call_args[0].get("message", "")
+            telemetry_message = heartbeat_event_kwargs[0].get("message", "")
             self.assertTrue(telemetry_message.endswith(vm_size),
                 "Expected HeartBeat message ('{0}') to end with the test vmSize value, {1}."\
                 .format(telemetry_message, vm_size))
