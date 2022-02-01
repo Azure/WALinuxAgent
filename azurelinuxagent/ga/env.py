@@ -135,7 +135,8 @@ class EnableFirewall(PeriodicOperation):
                                                                           uid=os.getuid())
 
         if is_firewall_rules_updated:
-            msg = "Successfully added Azure fabric firewall rules"
+            msg = "Successfully added Azure fabric firewall rules. Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list())
+            logger.info(msg)
             add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.Firewall, message=msg, log_event=False)
 
         add_periodic(

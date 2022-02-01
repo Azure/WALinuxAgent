@@ -257,8 +257,8 @@ class DefaultOSUtil(object):
     def enable_firewall(self, dst_ip, uid):
         """
         It checks if every iptable rule exists and add them if not present. It returns a tuple(enable firewall success status, update rules flag)
-        enable firewall success status: Returns true if every rule check completed successfully otherwise false
-        update rules flag: Returns true if rules are updated otherwise false
+        enable firewall success status: Returns True if every firewall rule exists otherwise False
+        update rules flag: Returns True if rules are updated otherwise False
         """
         # This is to send telemetry when iptable rules updated
         is_firewall_rules_updated = False
@@ -277,8 +277,6 @@ class DefaultOSUtil(object):
                     self.remove_firewall(dst_ip, uid, wait)
                     AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
                     is_firewall_rules_updated = True
-                    logger.info("Successfully added Azure fabric firewall rules")
-                    logger.info("Firewall rules:\n{0}".format(self.get_firewall_list(wait)))
             except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid, wait)
