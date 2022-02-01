@@ -49,11 +49,10 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
                    "/etc/udev/rules.d/70-persistent-net.rules"]
-
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 """
 Define distro specific behavior. OSUtil class defines default behavior
