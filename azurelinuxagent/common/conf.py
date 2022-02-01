@@ -180,7 +180,6 @@ __INTEGER_OPTIONS__ = {
     "ResourceDisk.SwapSizeMB": 0,
     "Autoupdate.Frequency": 3600,
     "Logs.CollectPeriod": 3600,
-
     #
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
