@@ -41,6 +41,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr, array_to_bytes
@@ -51,6 +52,8 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
                    "/etc/udev/rules.d/70-persistent-net.rules"]
+
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 """
 Define distro specific behavior. OSUtil class defines default behavior
@@ -256,16 +259,13 @@ class DefaultOSUtil(object):
 
     def enable_firewall(self, dst_ip, uid):
         """
-        it's checks every iptable rule and add rules if not present. It's return tuple(enable firewall success status, update rules flag)
+        It checks if every iptable rule exists and add them if not present. It returns enable firewall success status.
         enable firewall success status: Returns true if every rule check completed successfully otherwise false
-        update rules flag: Returns true if rules are updated otherwise false
         """
-        # This is to send telemetry when iptable rules updated
-        is_firewall_rules_updated = False
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
         if not _enable_firewall:
-            return False, is_firewall_rules_updated
+            return False
 
         try:
             wait = self.get_firewall_will_wait()
@@ -276,9 +276,11 @@ class DefaultOSUtil(object):
                 if not AddFirewallRules.verify_iptables_rules_exist(wait, dst_ip, uid):
                     self.remove_firewall(dst_ip, uid, wait)
                     AddFirewallRules.add_iptables_rules(wait, dst_ip, uid)
-                    is_firewall_rules_updated = True
-                    logger.info("Successfully added Azure fabric firewall rules")
+                    msg = "Successfully added Azure fabric firewall rules"
+                    logger.info(msg)
                     logger.info("Firewall rules:\n{0}".format(self.get_firewall_list(wait)))
+                    add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.Firewall, message=msg,
+                              log_event=False)
             except CommandError as e:
                 if e.returncode == 2:
                     self.remove_firewall(dst_ip, uid, wait)
@@ -289,14 +291,14 @@ class DefaultOSUtil(object):
                 logger.warn(ustr(error))
                 raise
 
-            return True, is_firewall_rules_updated
+            return True
 
         except Exception as e:
             _enable_firewall = False
             logger.info("Unable to establish firewall -- "
                         "no further attempts will be made: "
                         "{0}".format(ustr(e)))
-            return False, is_firewall_rules_updated
+            return False
 
     def get_firewall_list(self, wait=None):
         try:

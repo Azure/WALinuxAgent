@@ -62,7 +62,7 @@ def _reset_firewall_rules(osutil):
     """
     osutil.remove_firewall(dst_ip=_KNOWN_METADATASERVER_IP, uid=os.getuid(), wait=osutil.get_firewall_will_wait())
     if conf.enable_firewall():
-        success, _ = osutil.enable_firewall(dst_ip=KNOWN_WIRESERVER_IP, uid=os.getuid())
+        success = osutil.enable_firewall(dst_ip=KNOWN_WIRESERVER_IP, uid=os.getuid())
         add_event(
             AGENT_NAME,
             version=CURRENT_VERSION,

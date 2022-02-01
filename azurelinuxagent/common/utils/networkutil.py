@@ -160,37 +160,31 @@ class AddFirewallRules(object):
         return ["-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp"]
 
     @staticmethod
-    def __get_firewall_base_command(firewalld_command="", wait=""):
+    def __get_firewall_base_command(command, destination, firewalld_command="", wait=""):
         # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
         if firewalld_command != "":
             cmd = AddFirewallRules.__get_firewalld_base_command(firewalld_command)
         else:
             cmd = AddFirewallRules.__get_iptables_base_command(wait)
-
+        cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
         return cmd
 
     @staticmethod
     def get_accept_tcp_rule(command, destination, firewalld_command="", wait=""):
         # This rule allows DNS TCP request to wireserver ip for non root users
-        cmd = AddFirewallRules.__get_firewall_base_command(firewalld_command, wait)
-
-        cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
+        cmd = AddFirewallRules.__get_firewall_base_command(command, destination, firewalld_command, wait)
         cmd.extend(['--destination-port', '53', '-j', 'ACCEPT'])
         return cmd
 
     @staticmethod
     def get_wire_root_accept_rule(command, destination, owner_uid, firewalld_command="", wait=""):
-        cmd = AddFirewallRules.__get_firewall_base_command(firewalld_command, wait)
-
-        cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
+        cmd = AddFirewallRules.__get_firewall_base_command(command, destination, firewalld_command, wait)
         cmd.extend(["-m", "owner", "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
         return cmd
 
     @staticmethod
     def get_wire_non_root_drop_rule(command, destination, firewalld_command="", wait=""):
-        cmd = AddFirewallRules.__get_firewall_base_command(firewalld_command, wait)
-
-        cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
+        cmd = AddFirewallRules.__get_firewall_base_command(command, destination, firewalld_command, wait)
         cmd.extend(["-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
         return cmd
 
