@@ -70,6 +70,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         fixed_uid = 0
         mock_os_getuid.return_value = fixed_uid
         osutil = MagicMock()  # pylint: disable=redefined-outer-name
+        osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
 
         # Run
         migration_util.cleanup_metadata_server_artifacts(osutil)

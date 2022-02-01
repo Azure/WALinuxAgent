@@ -150,7 +150,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
     def enable_firewall(self, dst_ip=None, uid=None):
         # disable iptables methods
-        return True
+        return True, True
 
     def get_firewall_list(self, wait=""):
         # disable iptables methods
