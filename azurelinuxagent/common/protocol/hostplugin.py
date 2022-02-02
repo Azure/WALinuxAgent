@@ -412,6 +412,9 @@ class HostPluginProtocol(object):
                 add_event(op=WALAEventOperation.HostPlugin, message="vmSettings is not supported", is_success=True)
             raise VmSettingsNotSupported()
 
+        def format_message(msg):
+            return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
+
         try:
             # Raise if VmSettings are not supported but check for periodically since the HostGAPlugin could have been updated since the last check
             if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.datetime.now():
@@ -420,12 +423,9 @@ class HostPluginProtocol(object):
             etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
             correlation_id = str(uuid.uuid4())
 
-            def format_message(msg):
-                return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
-
             self._vm_settings_error_reporter.report_request()
 
-            fetched_on_time = datetime.datetime.now()
+            timestamp = datetime.datetime.now().isoformat()
             url, headers = self.get_vm_settings_request(correlation_id)
             if etag is not None:
                 headers['if-none-match'] = etag
@@ -469,7 +469,7 @@ class HostPluginProtocol(object):
 
             response_content = ustr(response.read(), encoding='utf-8')
 
-            vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(fetched_on_time, response_etag, response_content)
+            vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(timestamp, response_etag, response_content)
 
             # log the HostGAPlugin version
             if vm_settings.host_ga_plugin_version != self._host_plugin_version:

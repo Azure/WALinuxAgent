@@ -153,9 +153,8 @@ class GoalState(object):
                 self._extensions_goal_state = vm_settings
 
     def _initialize_basic_properties(self, xml_doc):
-        self._timestamp = datetime.datetime.now()
+        self._timestamp = datetime.datetime.now().isoformat()
         self._incarnation = findtext(xml_doc, "Incarnation")
-        self._history = GoalStateHistory(datetime.datetime.now(), self.incarnation)
         role_instance = find(xml_doc, "RoleInstance")
         self._role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
@@ -215,7 +214,7 @@ class GoalState(object):
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             if vm_settings_updated:
-                history = GoalStateHistory(vm_settings.fetched_on_time, vm_settings.etag)
+                history = GoalStateHistory(vm_settings.timestamp, vm_settings.etag)
                 history.save_vm_settings(vm_settings.get_redacted_text())
 
         return vm_settings

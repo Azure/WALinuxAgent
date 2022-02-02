@@ -31,7 +31,7 @@ from azurelinuxagent.common.utils.textutil import format_exception
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
 
-    def __init__(self, fetched_on_time, etag, json_text):
+    def __init__(self, timestamp, etag, json_text):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = etag
         self._etag = etag
@@ -41,7 +41,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._activity_id = AgentGlobals.GUID_ZERO
         self._correlation_id = AgentGlobals.GUID_ZERO
         self._created_on_timestamp = self._MINIMUM_TIMESTAMP
-        self._fetched_on_time = fetched_on_time
+        self._timestamp = timestamp
         self._source = None
         self._status_upload_blob = None
         self._status_upload_blob_type = None
@@ -81,12 +81,18 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._correlation_id
 
     @property
-    def created_on_timestamp(self):
-        return self._created_on_timestamp
+    def timestamp(self):
+        """
+        Timestamp assigned by the Agent (time at which the vmSettings API was invoked)
+        """
+        return self._timestamp
 
     @property
-    def fetched_on_time(self):
-        return self._fetched_on_time
+    def created_on_timestamp(self):
+        """
+        Timestamp assigned by the CRP (time at which the Fast Track goal state was created)
+        """
+        return self._created_on_timestamp
 
     @property
     def source(self):

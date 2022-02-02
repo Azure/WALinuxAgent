@@ -14,7 +14,7 @@ from tests.tools import AgentTestCase, data_dir
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
     def test_create_from_vm_settings_should_parse_vm_settings(self):
         vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json"))
-        vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(datetime.datetime.now(), "123", vm_settings_text)
+        vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(datetime.datetime.now().isoformat(), "123", vm_settings_text)
 
         def assert_property(name, value):
             self.assertEqual(value, getattr(vm_settings, name), '{0} was not parsed correctly'.format(name))

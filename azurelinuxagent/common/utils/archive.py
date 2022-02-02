@@ -177,7 +177,7 @@ class StateArchiver(object):
 class GoalStateHistory(object):
     def __init__(self, timestamp, tag):
         self._errors = False
-        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, timestamp.isoformat() + ("_{0}".format(tag)))
+        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag))
 
     def _save(self, data, file_name):
         try:

@@ -31,7 +31,7 @@ class GoalStateTestCase(AgentTestCase):
             protocol.mock_wire_data.set_etag(888)
             goal_state = GoalState(protocol.client)
 
-            history_directory = os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, goal_state.timestamp.isoformat() + ("_{0}".format(goal_state.incarnation)))
+            history_directory = os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(goal_state.timestamp, goal_state.incarnation))
             extensions_config_file = os.path.join(history_directory, "ExtensionsConfig.999.xml")
             expected_files = [
                 os.path.join(history_directory, "GoalState.999.xml"),
@@ -41,7 +41,7 @@ class GoalStateTestCase(AgentTestCase):
             ]
 
             extensions_goal_state = goal_state.extensions_goal_state
-            history_directory = os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, extensions_goal_state.fetched_on_time.isoformat() + ("_{0}".format(extensions_goal_state.etag)))
+            history_directory = os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(extensions_goal_state.timestamp, extensions_goal_state.etag))
             vm_settings_file = os.path.join(history_directory, "VmSettings.json")
             expected_files.append(vm_settings_file)
 
