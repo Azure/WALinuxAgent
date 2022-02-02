@@ -204,6 +204,8 @@ class GoalState(object):
 
         if conf.get_enable_fast_track():
             try:
+                timestamp = datetime.datetime.now().isoformat()
+
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             except VmSettingsNotSupported:
@@ -214,7 +216,7 @@ class GoalState(object):
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             if vm_settings_updated:
-                history = GoalStateHistory(vm_settings.timestamp, vm_settings.etag)
+                history = GoalStateHistory(timestamp, vm_settings.etag)
                 history.save_vm_settings(vm_settings.get_redacted_text())
 
         return vm_settings

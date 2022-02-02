@@ -425,7 +425,6 @@ class HostPluginProtocol(object):
 
             self._vm_settings_error_reporter.report_request()
 
-            timestamp = datetime.datetime.now().isoformat()
             url, headers = self.get_vm_settings_request(correlation_id)
             if etag is not None:
                 headers['if-none-match'] = etag
@@ -469,7 +468,7 @@ class HostPluginProtocol(object):
 
             response_content = ustr(response.read(), encoding='utf-8')
 
-            vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(timestamp, response_etag, response_content)
+            vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, response_content)
 
             # log the HostGAPlugin version
             if vm_settings.host_ga_plugin_version != self._host_plugin_version:
