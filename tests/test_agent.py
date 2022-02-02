@@ -41,6 +41,7 @@ Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgen
 Debug.EnableFastTrack = True
 Debug.EnableGAVersioning = False
 Debug.EtpCollectionPeriod = 300
+Debug.FirewallRulesLogPeriod = 86400
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure

@@ -188,7 +188,8 @@ __INTEGER_OPTIONS__ = {
     "Debug.AgentCpuQuota": 75,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
-    "Debug.AutoUpdateNormalFrequency": 86400
+    "Debug.AutoUpdateNormalFrequency": 86400,
+    "Debug.FirewallRulesLogPeriod": 86400
 }
 
 
@@ -605,3 +606,12 @@ def get_enable_ga_versioning(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableGAVersioning", False)
+
+
+def get_firewall_rules_log_period(conf=__conf__):
+    """
+    Determine the frequency to perform the periodic operation of logging firewall rules.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.FirewallRulesLogPeriod", 86400)
