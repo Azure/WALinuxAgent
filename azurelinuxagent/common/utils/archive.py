@@ -38,21 +38,29 @@ The timestamp is an ISO8601 formatted value.
 
 ARCHIVE_DIRECTORY_NAME = 'history'
 
-_MAX_ARCHIVED_STATES = 50
+_MAX_ARCHIVED_STATES = 100
 
 _CACHE_PATTERNS = [
     re.compile(r"^VmSettings.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
-    re.compile(r"waagent_status\.(\d+)\.json$")
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
-# Old names have incarnation, new ones don't. Ensure the regex captures both cases.
-# 2018-04-06T08:21:37.142697_incarnation_N
-# 2018-04-06T08:21:37.142697_incarnation_N.zip
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?$$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?\.zip$")
+#
+# Legacy names
+#   2018-04-06T08:21:37.142697_incarnation_N
+#   2018-04-06T08:21:37.142697_incarnation_N.zip
+#
+# Current names
+#
+#   2018-04-06T08:21:37.142697
+#   2018-04-06T08:21:37.142697.zip
+#   2018-04-06T08:21:37.142697_N
+#   2018-04-06T08:21:37.142697_N.zip
+#
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?$")
+_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?\.zip$")
 
 _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
@@ -62,6 +70,7 @@ _REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
 _EXT_CONF_FILE_NAME = "ExtensionsConfig.xml"
 _MANIFEST_FILE_NAME = "{0}.manifest.xml"
 
+AGENT_STATUS_FILE = "waagent_status.json"
 
 # TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL.
 # @total_ordering first appeared in Python 2.7 and 3.2
@@ -185,9 +194,9 @@ class StateArchiver(object):
 
 
 class GoalStateHistory(object):
-    def __init__(self, timestamp, tag):
+    def __init__(self, timestamp, tag=None):
         self._errors = False
-        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag))
+        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
 
     def save(self, data, file_name):
         try:
@@ -218,3 +227,5 @@ class GoalStateHistory(object):
     def save_shared_conf(self, text):
         self.save(text, _SHARED_CONF_FILE_NAME)
 
+    def save_status(self, text):
+        self.save(text, AGENT_STATUS_FILE)

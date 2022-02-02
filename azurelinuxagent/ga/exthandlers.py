@@ -50,7 +50,7 @@ from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
-from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE, GoalStateHistory
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -67,7 +67,6 @@ HANDLER_NAME_PATTERN = re.compile(_HANDLER_NAME_PATTERN, re.IGNORECASE)
 HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 
-AGENT_STATUS_FILE = "waagent_status.{0}.json"
 NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
@@ -944,7 +943,7 @@ class ExtHandlersHandler(object):
 
                 self.report_status_error_state.reset()
 
-            self.write_ext_handlers_status_to_info_file(vm_status)
+            self.write_ext_handlers_status_to_info_file(vm_status, incarnation_changed)
 
             return vm_status
 
@@ -958,8 +957,7 @@ class ExtHandlersHandler(object):
                       message=msg)
             return None
 
-    def write_ext_handlers_status_to_info_file(self, vm_status):
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.protocol.get_incarnation()))
+    def write_ext_handlers_status_to_info_file(self, vm_status, incarnation_changed):
         status_blob_data = self.protocol.get_status_blob_data()
         data = dict()
         if status_blob_data is not None:
@@ -970,8 +968,7 @@ class ExtHandlersHandler(object):
             "agentName": AGENT_NAME,
             "daemonVersion": str(version.get_daemon_version()),
             "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "extensionSupportedFeatures": [name for name, _ in
-                                         get_agent_supported_features_list_for_extensions().items()]
+            "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
         }
         data["_metadataNotSentToCRP"] = _metadataNotSentToCRP
 
@@ -993,7 +990,12 @@ class ExtHandlersHandler(object):
             status.pop('formattedMessage', None)
             status.pop('substatus', None)
 
-        fileutil.write_file(status_path, json.dumps(data))
+        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
+        json_text = json.dumps(data)
+        fileutil.write_file(status_path, json_text)
+
+        if incarnation_changed:
+            GoalStateHistory(datetime.datetime.utcnow().isoformat()).save_status(json_text)
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

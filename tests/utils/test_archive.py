@@ -62,10 +62,10 @@ class TestArchive(AgentTestCase):
           2. Deleting the timestamped directory
         """
         temp_files = [
-            'GoalState.0.xml',
-            'Prod.0.manifest.xml',
-            'Prod.0.agentsManifest',
-            'Microsoft.Azure.Extensions.CustomScript.0.xml'
+            'GoalState.xml',
+            'Prod.manifest.xml',
+            'Prod.agentsManifest',
+            'Microsoft.Azure.Extensions.CustomScript.xml'
         ]
 
         # this directory matches the pattern that StateArchiver.archive() searches for
@@ -112,9 +112,9 @@ class TestArchive(AgentTestCase):
             timestamps.append(timestamp)
 
             if i % 2 == 0:
-                filename = os.path.join('history', "{0}_incarnation_0".format(timestamp.isoformat()), 'Prod.0.manifest.xml')
+                filename = os.path.join('history', "{0}_0".format(timestamp.isoformat()), 'Prod.manifest.xml')
             else:
-                filename = os.path.join('history', "{0}_incarnation_0.zip".format(timestamp.isoformat()))
+                filename = os.path.join('history', "{0}_0.zip".format(timestamp.isoformat()))
 
             self._write_file(filename)
 
@@ -131,18 +131,19 @@ class TestArchive(AgentTestCase):
         for i in range(0, _MAX_ARCHIVED_STATES):
             timestamp = timestamps[i + count].isoformat()
             if i % 2 == 0:
-                filename = "{0}_incarnation_0".format(timestamp)
+                filename = "{0}_0".format(timestamp)
             else:
-                filename = "{0}_incarnation_0.zip".format(timestamp)
+                filename = "{0}_0.zip".format(timestamp)
             self.assertTrue(filename in archived_entries, "'{0}' is not in the list of unpurged entires".format(filename))
 
     def test_archive03(self):
         """
-        All archives should be purged, both with the new naming (with incarnation number) and with the old naming.
+        All archives should be purged, both with the legacy naming (with incarnation number) and with the new naming.
         """
         start = datetime.now()
         timestamp1 = start + timedelta(seconds=5)
         timestamp2 = start + timedelta(seconds=10)
+        timestamp3 = start + timedelta(seconds=10)
 
         dir_old = timestamp1.isoformat()
         dir_new = "{0}_incarnation_1".format(timestamp2.isoformat())
@@ -150,12 +151,15 @@ class TestArchive(AgentTestCase):
         archive_old = "{0}.zip".format(timestamp1.isoformat())
         archive_new = "{0}_incarnation_1.zip".format(timestamp2.isoformat())
 
-        self._write_file(os.path.join("history", dir_old, "Prod.0.manifest.xml"))
-        self._write_file(os.path.join("history", dir_new, "Prod.1.manifest.xml"))
+        status = "{0}.zip".format(timestamp3.isoformat())
+
+        self._write_file(os.path.join("history", dir_old, "Prod.manifest.xml"))
+        self._write_file(os.path.join("history", dir_new, "Prod.manifest.xml"))
         self._write_file(os.path.join("history", archive_old))
         self._write_file(os.path.join("history", archive_new))
+        self._write_file(os.path.join("history", status))
 
-        self.assertEqual(4, len(os.listdir(self.history_dir)), "Not all entries were archived!")
+        self.assertEqual(5, len(os.listdir(self.history_dir)), "Not all entries were archived!")
 
         test_subject = StateArchiver(self.tmp_dir)
         with patch("azurelinuxagent.common.utils.archive._MAX_ARCHIVED_STATES", 0):

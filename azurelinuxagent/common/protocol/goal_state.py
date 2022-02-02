@@ -157,10 +157,9 @@ class GoalState(object):
         self._history.save(data, file_name)
 
     def _initialize_basic_properties(self, xml_doc):
-        incarnation = findtext(xml_doc, "Incarnation")
-        self._history = GoalStateHistory(datetime.datetime.now().isoformat(), incarnation)  # history for the WireServer goal state; vmSettings are separate
-        self._timestamp = datetime.datetime.now().isoformat()
-        self._incarnation = incarnation
+        self._timestamp = datetime.datetime.utcnow().isoformat()
+        self._incarnation = findtext(xml_doc, "Incarnation")
+        self._history = GoalStateHistory(self._timestamp, self._incarnation)  # history for the WireServer goal state; vmSettings are separate
         role_instance = find(xml_doc, "RoleInstance")
         self._role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
@@ -210,8 +209,6 @@ class GoalState(object):
 
         if conf.get_enable_fast_track():
             try:
-                timestamp = datetime.datetime.now().isoformat()
-
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             except VmSettingsNotSupported:
@@ -223,7 +220,7 @@ class GoalState(object):
 
             if vm_settings_updated:
                 # The vmSettings are updated independently of the WireServer goal state and they are saved to a separate directory
-                history = GoalStateHistory(timestamp, vm_settings.etag)
+                history = GoalStateHistory(datetime.datetime.utcnow().isoformat(), vm_settings.etag)
                 history.save_vm_settings(vm_settings.get_redacted_text())
 
         return vm_settings
