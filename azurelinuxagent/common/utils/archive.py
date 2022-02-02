@@ -138,19 +138,31 @@ class StateArchiver(object):
                 fileutil.mkdir(self._source, mode=0o700)
             except IOError as exception:
                 if exception.errno != errno.EEXIST:
-                    logger.error("{0} : {1}", self._source, exception.strerror)
+                    logger.warn("{0} : {1}", self._source, exception.strerror)
 
     def purge(self):
         """
         Delete "old" archive directories and .zip archives.  Old
         is defined as any directories or files older than the X
-        newest ones.
+        newest ones. Also, clean up any legacy history files.
         """
         states = self._get_archive_states()
         states.sort(reverse=True)
 
         for state in states[_MAX_ARCHIVED_STATES:]:
             state.delete()
+
+        # legacy history files
+        for current_file in os.listdir(self._source):
+            full_path = os.path.join(self._source, current_file)
+            for pattern in _CACHE_PATTERNS:
+                match = pattern.match(current_file)
+                if match is not None:
+                    try:
+                        os.remove(full_path)
+                    except Exception as e:
+                        logger.warn("Cannot delete legacy history file '{0}': {1}".format(full_path, e))
+                    break
 
     def archive(self):
         states = self._get_archive_states()
