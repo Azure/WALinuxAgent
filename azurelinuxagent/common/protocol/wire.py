@@ -40,6 +40,7 @@ from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPack
     ExtHandlerPackageList, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
+from azurelinuxagent.common.utils.archive import _MANIFEST_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
@@ -49,15 +50,6 @@ VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
 ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
 TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
-
-INCARNATION_FILE_NAME = "Incarnation"
-GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
-VM_SETTINGS_FILE_NAME = "VmSettings.{0}.json"
-HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
-SHARED_CONF_FILE_NAME = "SharedConfig.xml"
-REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
-EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
-MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -620,15 +612,6 @@ class WireClient(object):
             raise ProtocolError("Failed to read cache: {0}".format(e))
 
     @staticmethod
-    def _save_cache(data, file_name):
-        try:
-            file_path = os.path.join(conf.get_lib_dir(), file_name)
-            fileutil.write_file(file_path, data)
-        except IOError as e:
-            fileutil.clean_ioerror(e, paths=[file_name])
-            raise ProtocolError("Failed to write cache: {0}".format(e))
-
-    @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
         if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:
@@ -816,7 +799,7 @@ class WireClient(object):
 
         try:
             xml_text = self.fetch_manifest(ext_handler.manifest_uris)
-            self._save_cache(xml_text, MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation))
+            self._goal_state.save_to_history(xml_text, _MANIFEST_FILE_NAME.format(ext_handler.name))
             return ExtensionManifest(xml_text)
         except Exception as e:
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
@@ -827,12 +810,9 @@ class WireClient(object):
         return self._goal_state.remote_access
 
     def fetch_gafamily_manifest(self, vmagent_manifest, goal_state):
-        local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
-        local_file = os.path.join(conf.get_lib_dir(), local_file)
-
         try:
             xml_text = self.fetch_manifest(vmagent_manifest.uris)
-            fileutil.write_file(local_file, xml_text)
+            goal_state.save_to_history(xml_text, _MANIFEST_FILE_NAME.format(vmagent_manifest.family))
             return ExtensionManifest(xml_text)
         except Exception as e:
             raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))

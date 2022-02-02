@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
+import glob
 import os
 import re
 
@@ -31,23 +32,29 @@ class GoalStateTestCase(AgentTestCase):
             protocol.mock_wire_data.set_etag(888)
             goal_state = GoalState(protocol.client)
 
-            history_directory = os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(goal_state.timestamp, goal_state.incarnation))
-            extensions_config_file = os.path.join(history_directory, "ExtensionsConfig.999.xml")
+            matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_999"))
+            self.assertTrue(len(matches) == 1, "Expected one history directory for incarnation 999. Got: {0}".format(matches))
+
+            history_directory = matches[0]
+            extensions_config_file = os.path.join(history_directory, "ExtensionsConfig.xml")
             expected_files = [
-                os.path.join(history_directory, "GoalState.999.xml"),
+                os.path.join(history_directory, "GoalState.xml"),
                 os.path.join(history_directory, "SharedConfig.xml"),
                 os.path.join(history_directory, "HostingEnvironmentConfig.xml"),
                 extensions_config_file,
             ]
 
-            extensions_goal_state = goal_state.extensions_goal_state
-            history_directory = os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(extensions_goal_state.timestamp, extensions_goal_state.etag))
+            matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_888"))
+            self.assertTrue(len(matches) == 1, "Expected one history directory for etag 888. Got: {0}".format(matches))
+
+            history_directory = matches[0]
             vm_settings_file = os.path.join(history_directory, "VmSettings.json")
             expected_files.append(vm_settings_file)
 
             for f in expected_files:
                 self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
 
+            extensions_goal_state = goal_state.extensions_goal_state
             protected_settings = []
             for ext_handler in extensions_goal_state.extensions:
                 for extension in ext_handler.settings:

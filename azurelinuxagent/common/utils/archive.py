@@ -48,21 +48,19 @@ _CACHE_PATTERNS = [
     re.compile(r"waagent_status\.(\d+)\.json$")
 ]
 
-_GOAL_STATE_PATTERN = re.compile(r"^(.*)/GoalState\.(\d+)\.xml$", re.IGNORECASE)
-
-# Old names didn't have incarnation, new ones do. Ensure the regex captures both cases.
+# Old names have incarnation, new ones don't. Ensure the regex captures both cases.
 # 2018-04-06T08:21:37.142697_incarnation_N
 # 2018-04-06T08:21:37.142697_incarnation_N.zip
 _ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?$$")
 _ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?\.zip$")
 
-_GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
+_GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
 _HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 _SHARED_CONF_FILE_NAME = "SharedConfig.xml"
-_REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
-_EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
-_MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
+_REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
+_EXT_CONF_FILE_NAME = "ExtensionsConfig.xml"
+_MANIFEST_FILE_NAME = "{0}.manifest.xml"
 
 
 # TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL.
@@ -179,7 +177,7 @@ class GoalStateHistory(object):
         self._errors = False
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag))
 
-    def _save(self, data, file_name):
+    def save(self, data, file_name):
         try:
             if not os.path.exists(self._root):
                 fileutil.mkdir(self._root, mode=0o700)
@@ -190,21 +188,21 @@ class GoalStateHistory(object):
                 self._errors = True
                 logger.warn("Failed to save goal state file {0}: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
 
-    def save_goal_state(self, text, incarnation):
-        self._save(text, _GOAL_STATE_FILE_NAME.format(incarnation))
+    def save_goal_state(self, text):
+        self.save(text, _GOAL_STATE_FILE_NAME)
 
-    def save_extensions_config(self, text, incarnation):
-        self._save(text, _EXT_CONF_FILE_NAME.format(incarnation))
+    def save_extensions_config(self, text):
+        self.save(text, _EXT_CONF_FILE_NAME)
 
     def save_vm_settings(self, text):
-        self._save(text, _VM_SETTINGS_FILE_NAME)
+        self.save(text, _VM_SETTINGS_FILE_NAME)
 
-    def save_remote_access(self, text, incarnation):
-        self._save(text, _REMOTE_ACCESS_FILE_NAME.format(incarnation))
+    def save_remote_access(self, text):
+        self.save(text, _REMOTE_ACCESS_FILE_NAME)
 
     def save_hosting_env(self, text):
-        self._save(text, _HOSTING_ENV_FILE_NAME)
+        self.save(text, _HOSTING_ENV_FILE_NAME)
 
     def save_shared_conf(self, text):
-        self._save(text, _SHARED_CONF_FILE_NAME)
+        self.save(text, _SHARED_CONF_FILE_NAME)
 

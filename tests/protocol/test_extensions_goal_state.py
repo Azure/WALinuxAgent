@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import copy
-import datetime
 import re
 import sys
 
@@ -23,6 +22,6 @@ class ExtensionsGoalStateTestCase(AgentTestCase):
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 
     def test_create_from_vm_settings_should_assume_block_when_blob_type_is_not_valid(self):
-        extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(datetime.datetime.now().isoformat(), 1234567890, load_data("hostgaplugin/vm_settings-invalid_blob_type.json"))
+        extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(1234567890, load_data("hostgaplugin/vm_settings-invalid_blob_type.json"))
         self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 

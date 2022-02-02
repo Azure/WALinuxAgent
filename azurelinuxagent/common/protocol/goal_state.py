@@ -60,6 +60,7 @@ class GoalState(object):
             self._wire_client = wire_client
 
             # These "basic" properties come from the initial request to WireServer's goalstate API
+            self._timestamp = None
             self._incarnation = None
             self._role_instance_id = None
             self._role_config_name = None
@@ -152,9 +153,14 @@ class GoalState(object):
             if vm_settings is not None:
                 self._extensions_goal_state = vm_settings
 
+    def save_to_history(self, data, file_name):
+        self._history.save(data, file_name)
+
     def _initialize_basic_properties(self, xml_doc):
+        incarnation = findtext(xml_doc, "Incarnation")
+        self._history = GoalStateHistory(datetime.datetime.now().isoformat(), incarnation)  # history for the WireServer goal state; vmSettings are separate
         self._timestamp = datetime.datetime.now().isoformat()
-        self._incarnation = findtext(xml_doc, "Incarnation")
+        self._incarnation = incarnation
         role_instance = find(xml_doc, "RoleInstance")
         self._role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
@@ -216,6 +222,7 @@ class GoalState(object):
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             if vm_settings_updated:
+                # The vmSettings are updated independently of the WireServer goal state and they are saved to a separate directory
                 history = GoalStateHistory(timestamp, vm_settings.etag)
                 history.save_vm_settings(vm_settings.get_redacted_text())
 
@@ -230,9 +237,7 @@ class GoalState(object):
         try:
             logger.info('Fetching goal state [incarnation {0}]', self._incarnation)
 
-            history = GoalStateHistory(self._timestamp, self.incarnation)
-
-            history.save_goal_state(xml_text, self.incarnation)
+            self._history.save_goal_state(xml_text)
 
             # TODO: at this point we always fetch the extensionsConfig, even if it is not needed, and save it for debugging purposes. Once
             #       FastTrack is stable this code can be updated to fetch it only when actually needed.
@@ -243,7 +248,7 @@ class GoalState(object):
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
                 extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self._incarnation, xml_text, self._wire_client)
-                history.save_extensions_config(extensions_config.get_redacted_text(), self.incarnation)
+                self._history.save_extensions_config(extensions_config.get_redacted_text())
 
             if vm_settings is not None:
                 self._extensions_goal_state = vm_settings
@@ -253,12 +258,12 @@ class GoalState(object):
             hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
             xml_text = self._wire_client.fetch_config(hosting_env_uri, self._wire_client.get_header())
             self._hosting_env = HostingEnv(xml_text)
-            history.save_hosting_env(xml_text)
+            self._history.save_hosting_env(xml_text)
 
             shared_conf_uri = findtext(xml_doc, "SharedConfig")
             xml_text = self._wire_client.fetch_config(shared_conf_uri, self._wire_client.get_header())
             self._shared_conf = SharedConfig(xml_text)
-            history.save_shared_conf(xml_text)
+            self._history.save_shared_conf(xml_text)
 
             certs_uri = findtext(xml_doc, "Certificates")
             if certs_uri is not None:
@@ -271,7 +276,7 @@ class GoalState(object):
             if remote_access_uri is not None:
                 xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_cert())
                 self._remote_access = RemoteAccess(xml_text)
-                history.save_remote_access(xml_text, self.incarnation)
+                self._history.save_remote_access(xml_text)
 
         except Exception as exception:
             logger.warn("Fetching the goal state failed: {0}", ustr(exception))
