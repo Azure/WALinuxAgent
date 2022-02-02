@@ -169,7 +169,7 @@ __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
     "Extensions.InitialGoalStatePeriod": 6,
     "Extensions.GoalStateHistoryCleanupPeriod": 1800,
-    "OS.EnableFirewallPeriod": 30,
+    "OS.EnableFirewallPeriod": 300,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
     "OS.MonitorDhcpClientRestartPeriod": 30,
@@ -230,7 +230,7 @@ def enable_firewall(conf=__conf__):
 
 
 def get_enable_firewall_period(conf=__conf__):
-    return conf.get_int("OS.EnableFirewallPeriod", 30)
+    return conf.get_int("OS.EnableFirewallPeriod", 300)
 
 
 def get_remove_persistent_net_rules_period(conf=__conf__):
