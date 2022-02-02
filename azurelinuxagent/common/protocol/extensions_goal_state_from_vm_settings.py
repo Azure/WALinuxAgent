@@ -31,7 +31,7 @@ from azurelinuxagent.common.utils.textutil import format_exception
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
 
-    def __init__(self, etag, json_text):
+    def __init__(self, fetched_on_time, etag, json_text):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = etag
         self._etag = etag
@@ -41,6 +41,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._activity_id = AgentGlobals.GUID_ZERO
         self._correlation_id = AgentGlobals.GUID_ZERO
         self._created_on_timestamp = self._MINIMUM_TIMESTAMP
+        self._fetched_on_time = fetched_on_time
         self._source = None
         self._status_upload_blob = None
         self._status_upload_blob_type = None
@@ -82,6 +83,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     @property
     def created_on_timestamp(self):
         return self._created_on_timestamp
+
+    @property
+    def fetched_on_time(self):
+        return self._fetched_on_time
 
     @property
     def source(self):

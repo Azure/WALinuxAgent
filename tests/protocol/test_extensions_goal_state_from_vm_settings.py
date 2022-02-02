@@ -1,18 +1,20 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
+import datetime
 import json
 import os.path
 
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils import fileutil
+from tests.protocol.mocks import mockwiredata, mock_wire_protocol
 from tests.tools import AgentTestCase, data_dir
 
 
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
     def test_create_from_vm_settings_should_parse_vm_settings(self):
         vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json"))
-        vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings("123", vm_settings_text)
+        vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(datetime.datetime.now(), "123", vm_settings_text)
 
         def assert_property(name, value):
             self.assertEqual(value, getattr(vm_settings, name), '{0} was not parsed correctly'.format(name))
@@ -46,6 +48,20 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
 
         # dependency level (multi-config)
         self.assertEqual(1, vm_settings.extensions[3].settings[1].dependencyLevel, "Incorrect dependency level (multi-config)")
+
+    def test_extension_goal_state_should_parse_requested_version_properly(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            manifests, _ = protocol.get_vmagent_manifests()
+            for manifest in manifests:
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
+
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
+        with mock_wire_protocol(data_file) as protocol:
+            manifests, _ = protocol.get_vmagent_manifests()
+            for manifest in manifests:
+                self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
+
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):
     def test_it_should_retrieve_items_ignoring_case(self):

@@ -41,9 +41,8 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
             'if': lambda _: re.match(r"((sles15\.2)|suse12)\D*", distro, flags=re.IGNORECASE) is not None
         },
         # This warning is expected on when WireServer gives us the incomplete goalstate without roleinstance data
-        # raise IncompleteGoalStateError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=self.incarnation))
         {
-            'message': r"\[IncompleteGoalStateError\] Fetched goal state without a RoleInstance",
+            'message': r"\[ProtocolError\] Fetched goal state without a RoleInstance",
         },
         # The following message is expected to log an error if systemd is not enabled on it
         {

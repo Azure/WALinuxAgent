@@ -35,12 +35,11 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
     ExtHandlerPackageList, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
-from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
@@ -51,7 +50,6 @@ HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
 ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
 TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 
-WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
 INCARNATION_FILE_NAME = "Incarnation"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 VM_SETTINGS_FILE_NAME = "VmSettings.{0}.json"
@@ -574,7 +572,6 @@ class WireClient(object):
         self._goal_state = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
-        self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
     def get_endpoint(self):
         return self._endpoint
@@ -767,8 +764,13 @@ class WireClient(object):
         """
         Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
         """
-        goal_state = GoalState(self)
-        self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
+        if self._host_plugin is not None:
+            GoalState.update_host_plugin_headers(self)
+
+    def update_host_plugin(self, container_id, role_config_name):
+        if self._host_plugin is not None:
+            self._host_plugin.update_container_id(container_id)
+            self._host_plugin.update_role_config_name(role_config_name)
 
     def update_goal_state(self, force_update=False):
         """
@@ -778,106 +780,15 @@ class WireClient(object):
             if force_update:
                 logger.info("Forcing an update of the goal state..")
 
-            #
-            # The goal state needs to be retrieved using both the WireServer and the HostGAPlugin, and we always need to query both:
-            # the former to check for incarnation changes and the latter to check for changes in the vmSettings. Note that vmSettings are not
-            # a full goal state; they include only the extension information and other data such as certificates and JIT Access users need
-            # to be retrieved from the WireServer.
-            #
-            # We start by fetching the goal state from the WireServer. The response to this initial query will include the incarnation,
-            # container ID, role config, and URLs to the rest of the goal state (certificates, remote users, extensions config, etc). We
-            # do this first because we need to initialize the HostGAPlugin with the container ID and role config.
-            #
-            goal_state = GoalState(self)
-
-            host_ga_plugin = self.get_host_plugin()
-            host_ga_plugin.update_container_id(goal_state.container_id)
-            host_ga_plugin.update_role_config_name(goal_state.role_config_name)
-
-            #
-            # Then we fetch the vmSettings from the HostGAPlugin; the response will include the goal state for extensions.
-            #
-            vm_settings, vm_settings_updated = (None, False)
-
-            if conf.get_enable_fast_track():
-                try:
-                    vm_settings, vm_settings_updated = host_ga_plugin.fetch_vm_settings(force_update=force_update)
-                except VmSettingsNotSupported:
-                    pass  # if vmSettings are not supported we use extensionsConfig below
-                except ResourceGoneError:
-                    # retry after refreshing the HostGAPlugin
-                    self.update_host_plugin_from_goal_state()
-                    vm_settings, vm_settings_updated = host_ga_plugin.fetch_vm_settings(force_update=force_update)
-
-            #
-            # Now we fetch the rest of the goal state from the WireServer (but ony if needed: initialization, a "forced" update, or
-            # a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state. Also, if
-            # the vmSettings were retrieved we use them to set the goal state for extensions (if they are not set, the Goal state
-            # falls back to extensionsConfig).
-            #
-            fetch_full_goal_state = force_update or self._goal_state is None or self._goal_state.incarnation != goal_state.incarnation
-
-            if fetch_full_goal_state:
-                goal_state_updated = True
-                if vm_settings is not None:
-                    goal_state.fetch_full_goal_state(self, vm_settings)
-                else:
-                    goal_state.fetch_full_goal_state(self)
-                self._goal_state = goal_state
+            if self._goal_state is None or force_update:
+                self._goal_state = GoalState(self)
             else:
-                goal_state_updated = False
-                if vm_settings is not None:
-                    self._goal_state.set_extensions_goal_state(vm_settings)
-
-            #
-            # Save the goal state and vmSettings if either one of them changed
-            #
-            if goal_state_updated or vm_settings_updated:
-                self._save_goal_state(vm_settings)
+                self._goal_state.update()
 
         except ProtocolError:
             raise
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
-
-    def _update_host_plugin(self, container_id, role_config_name):
-        if self._host_plugin is not None:
-            self._host_plugin.update_container_id(container_id)
-            self._host_plugin.update_role_config_name(role_config_name)
-
-    def _save_goal_state(self, vm_settings):
-        try:
-            self.goal_state_flusher.flush()
-        except Exception as e:
-            logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
-
-        try:
-            def save_if_not_none(goal_state_property, file_name):
-                if goal_state_property is not None and goal_state_property.xml_text is not None:
-                    self._save_cache(goal_state_property.xml_text, file_name)
-
-            # NOTE: Certificates are saved in Certificate.__init__
-            self._save_cache(self._goal_state.incarnation, INCARNATION_FILE_NAME)
-            save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
-            save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
-            save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
-            save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
-            if self._goal_state.extensions_goal_state is not None:
-                text = self._goal_state.extensions_config.get_redacted_text()
-                if text != '':
-                    self._save_cache(text, EXT_CONF_FILE_NAME.format(self._goal_state.extensions_config.incarnation))
-            if vm_settings is not None:
-                text = vm_settings.get_redacted_text()
-                if text != '':
-                    self._save_cache(text, VM_SETTINGS_FILE_NAME.format(vm_settings.id))
-
-        except Exception as e:
-            logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
-
-    def _set_host_plugin(self, new_host_plugin):
-        if new_host_plugin is None:
-            logger.warn("Setting empty Host Plugin object!")
-        self._host_plugin = new_host_plugin
 
     def get_goal_state(self):
         if self._goal_state is None:
@@ -1273,8 +1184,8 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = GoalState(self)
-            self._set_host_plugin(HostPluginProtocol(self.get_endpoint(), goal_state.container_id, goal_state.role_config_name))
+            self._host_plugin = HostPluginProtocol(self.get_endpoint())
+            GoalState.update_host_plugin_headers(self)
         return self._host_plugin
 
     def get_on_hold(self):

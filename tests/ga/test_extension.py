@@ -33,7 +33,6 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
@@ -56,7 +55,6 @@ from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCA
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
-from tests.utils.test_archive import TestArchive
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -3427,49 +3425,6 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
             actual_status_json.pop('guestOSInfo', None)
 
             self.assertEqual(expected_status, actual_status_json)
-
-    def test_it_should_zip_waagent_status_when_incarnation_changes(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-
-            # This test checks when the incarnation changes the waagent_status file for the previous incarnation
-            # is added into the history folder for the previous incarnation and gets zipped
-
-            exthandlers_handler = get_exthandlers_handler(protocol)
-
-            temp_files = [
-                'ExtensionsConfig.1.xml',
-                'GoalState.1.xml',
-                'OSTCExtensions.ExampleHandlerLinux.1.manifest.xml',
-                'waagent_status.1.json'
-            ]
-
-            exthandlers_handler.run()
-            exthandlers_handler.report_ext_handlers_status()
-
-            # Updating incarnation to 2 , hence the history folder should have waaagent_status.1.json added under
-            # incarnation 1
-            protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
-
-            test_subject = StateArchiver(self.tmp_dir)
-            test_subject.archive()
-
-            timestamp_zips = os.listdir(os.path.join(self.tmp_dir, "history"))
-            self.assertEqual(1, len(timestamp_zips), "Expected number of zips in history is 1 for"
-                                                     " incarnation 1(previous incarnation)")
-
-            zip_fn = timestamp_zips[0]
-            zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
-            self.assertEqual(TestArchive.assert_zip_contains(zip_fullname, temp_files), None)
-            exthandlers_handler.run()
-            exthandlers_handler.report_ext_handlers_status()
-
-            # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation
-            # 1 and 2
-            protocol.mock_wire_data.set_incarnation(3)
-            protocol.update_goal_state()
-            test_subject.archive()
-            self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
 
     def test_it_should_process_extensions_only_if_allowed(self):
         def assert_extensions_called(exthandlers_handler, expected_call_count=0):

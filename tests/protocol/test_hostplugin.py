@@ -30,6 +30,7 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError, Proto
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.osutil.default import UUID_PATTERN
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION, _VmSettingsErrorReporter, VmSettingsNotSupported
+from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
 from tests.protocol.mocks import mock_wire_protocol, mockwiredata, MockHttpResponse
@@ -61,10 +62,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def _init_host(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client.get_goal_state()
-            host_plugin = wire.HostPluginProtocol(wireserver_url,
-                                                  test_goal_state.container_id,
-                                                  test_goal_state.role_config_name)
+            host_plugin = wire.HostPluginProtocol(wireserver_url)
+            GoalState.update_host_plugin_headers(protocol.client)
             self.assertTrue(host_plugin.health_service is not None)
             return host_plugin
 
@@ -171,7 +170,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                                   should_initialize,
                                   should_report_healthy):
 
-        host = hostplugin.HostPluginProtocol(endpoint='ws', container_id='cid', role_config_name='rcf')
+        host = hostplugin.HostPluginProtocol(endpoint='ws')
 
         host.is_initialized = False
         patch_http_get.return_value = MockResponse(body=response_body,
@@ -436,11 +435,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def test_validate_block_blob(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
+            host_client = protocol.client.get_host_plugin()
 
-            host_client = wire.HostPluginProtocol(wireserver_url,
-                                                  test_goal_state.container_id,
-                                                  test_goal_state.role_config_name)
             self.assertFalse(host_client.is_initialized)
             self.assertTrue(host_client.api_versions is None)
             self.assertTrue(host_client.health_service is not None)
@@ -469,7 +465,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                     # first call is to host plugin
                     self._validate_hostplugin_args(
                         patch_http.call_args_list[0],
-                        test_goal_state,
+                        protocol.get_goal_state(),
                         exp_method, exp_url, exp_data)
 
                     # second call is to health service
@@ -479,11 +475,9 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
+            test_goal_state = protocol.get_goal_state()
 
-            host_client = wire.HostPluginProtocol(wireserver_url,
-                                                  test_goal_state.container_id,
-                                                  test_goal_state.role_config_name)
+            host_client = protocol.client.get_host_plugin()
 
             self.assertFalse(host_client.is_initialized)
             self.assertTrue(host_client.api_versions is None)
@@ -545,7 +539,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         http_put_handler.args, http_put_handler.kwargs = [], {}
 
         with mock_wire_protocol(DATA_FILE, http_put_handler=http_put_handler) as protocol:
-            test_goal_state = protocol.client.get_goal_state()
+            test_goal_state = protocol.get_goal_state()
 
             expected_url = hostplugin.URI_FORMAT_PUT_LOG.format(wireserver_url, hostplugin.HOST_PLUGIN_PORT)
             expected_headers = {'x-ms-version': '2015-09-01',
@@ -554,9 +548,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                                 "x-ms-client-name": AGENT_NAME,
                                 "x-ms-client-version": AGENT_VERSION}
 
-            host_client = wire.HostPluginProtocol(wireserver_url,
-                                                  test_goal_state.container_id,
-                                                  test_goal_state.role_config_name)
+            host_client = protocol.client.get_host_plugin()
 
             self.assertFalse(host_client.is_initialized, "Host plugin should not be initialized!")
 
@@ -587,11 +579,9 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         http_put_handler.args, http_put_handler.kwargs = [], {}
 
         with mock_wire_protocol(DATA_FILE, http_put_handler=http_put_handler) as protocol:
-            test_goal_state = protocol.client.get_goal_state()
 
-            host_client = wire.HostPluginProtocol(wireserver_url,
-                                                  test_goal_state.container_id,
-                                                  test_goal_state.role_config_name)
+            host_client = wire.HostPluginProtocol(wireserver_url)
+            GoalState.update_host_plugin_headers(protocol.client)
 
             self.assertFalse(host_client.is_initialized, "Host plugin should not be initialized!")
 
@@ -605,7 +595,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
 
     def test_validate_get_extension_artifacts(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
-            test_goal_state = protocol.client._goal_state
+            test_goal_state = protocol.get_goal_state()
 
             expected_url = hostplugin.URI_FORMAT_GET_EXTENSION_ARTIFACT.format(wireserver_url, hostplugin.HOST_PLUGIN_PORT)
             expected_headers = {'x-ms-version': '2015-09-01',
@@ -613,9 +603,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
                                 "x-ms-host-config-name": test_goal_state.role_config_name,
                                 "x-ms-artifact-location": sas_url}
 
-            host_client = wire.HostPluginProtocol(wireserver_url,
-                                                  test_goal_state.container_id,
-                                                  test_goal_state.role_config_name)
+            host_client = protocol.client.get_host_plugin()
+
             self.assertFalse(host_client.is_initialized)
             self.assertTrue(host_client.api_versions is None)
             self.assertTrue(host_client.health_service is not None)

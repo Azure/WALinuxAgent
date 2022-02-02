@@ -665,9 +665,7 @@ class TestGuestAgent(UpdateTestCase):
         host_uri = 'host_uri'
         api_uri = URI_FORMAT_GET_API_VERSIONS.format(host_uri, HOST_PLUGIN_PORT)
         art_uri = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(host_uri, HOST_PLUGIN_PORT)
-        mock_host = HostPluginProtocol(host_uri,
-                                       'container_id',
-                                       'role_config')
+        mock_host = HostPluginProtocol(host_uri)
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ext_uri)

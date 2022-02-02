@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, _MAX_ARCHIVED_STATES
+from azurelinuxagent.common.utils.archive import StateArchiver, _MAX_ARCHIVED_STATES
 from tests.tools import AgentTestCase, patch
 
 debug = False
@@ -53,41 +53,6 @@ class TestArchive(AgentTestCase):
         incarnation_no_ext = os.path.splitext(incarnation_ext)[0]
         return timestamp_str, incarnation_no_ext
 
-    def test_archive00(self):
-        """
-        StateFlusher should move all 'goal state' files to a new directory
-        under the history folder that is timestamped.
-        """
-        temp_files = [
-            'GoalState.0.xml',
-            'Prod.0.manifest.xml',
-            'Prod.0.agentsManifest',
-            'Microsoft.Azure.Extensions.CustomScript.0.xml'
-        ]
-
-        for temp_file in temp_files:
-            self._write_file(temp_file)
-
-        test_subject = StateFlusher(self.tmp_dir)
-        test_subject.flush()
-
-        self.assertTrue(os.path.exists(self.history_dir))
-        self.assertTrue(os.path.isdir(self.history_dir))
-
-        timestamp_dirs = os.listdir(self.history_dir)
-        self.assertEqual(1, len(timestamp_dirs))
-
-        timestamp_str, incarnation = self._parse_archive_name(timestamp_dirs[0])
-        self.assert_is_iso8601(timestamp_str)
-        timestamp = self.parse_isoformat(timestamp_str)
-        self.assert_datetime_close_to(timestamp, datetime.utcnow(), timedelta(seconds=30))
-        self.assertEqual("0", incarnation)
-
-        for temp_file in temp_files:
-            history_path = os.path.join(self.history_dir, timestamp_dirs[0], temp_file)
-            msg = "expected the temp file {0} to exist".format(history_path)
-            self.assertTrue(os.path.exists(history_path), msg)
-
     def test_archive01(self):
         """
         StateArchiver should archive all history directories by
@@ -103,11 +68,11 @@ class TestArchive(AgentTestCase):
             'Microsoft.Azure.Extensions.CustomScript.0.xml'
         ]
 
-        for current_file in temp_files:
-            self._write_file(current_file)
+        # this directory matches the pattern that StateArchiver.archive() searches for
+        temp_directory = os.path.join(self.history_dir, datetime.utcnow().isoformat() + "_incarnation_0")
 
-        flusher = StateFlusher(self.tmp_dir)
-        flusher.flush()
+        for current_file in temp_files:
+            self._write_file(os.path.join(temp_directory, current_file))
 
         test_subject = StateArchiver(self.tmp_dir)
         test_subject.archive()

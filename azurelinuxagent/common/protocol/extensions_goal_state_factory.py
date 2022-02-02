@@ -31,6 +31,6 @@ class ExtensionsGoalStateFactory(object):
         return ExtensionsGoalStateFromExtensionsConfig(incarnation, xml_text, wire_client)
 
     @staticmethod
-    def create_from_vm_settings(etag, json_text):
-        return ExtensionsGoalStateFromVmSettings(etag, json_text)
+    def create_from_vm_settings(fetched_on_time, etag, json_text):
+        return ExtensionsGoalStateFromVmSettings(fetched_on_time, etag, json_text)
 

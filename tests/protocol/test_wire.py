@@ -19,14 +19,11 @@
 import contextlib
 import json
 import os
-import re
 import socket
 import time
 import unittest
 import uuid
-from datetime import datetime, timedelta
 
-from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames, get_supported_feature_by_name, \
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.future import httpclient
@@ -34,12 +31,11 @@ from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    StatusBlob, VMStatus, EXT_CONF_FILE_NAME
+    StatusBlob, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import restutil
@@ -1060,8 +1056,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             # The container id, role config name and shared config can change without the incarnation changing; capture the initial
             # goal state and then change those fields.
-            goal_state = protocol.client.get_goal_state().xml_text
-            shared_conf = protocol.client.get_shared_conf().xml_text
+            container_id = protocol.client.get_goal_state().container_id
+            role_config_name = protocol.client.get_goal_state().role_config_name
 
             new_container_id = str(uuid.uuid4())
             new_role_config_name = str(uuid.uuid4())
@@ -1072,8 +1068,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             protocol.client.update_goal_state()
 
-            self.assertEqual(protocol.client.get_goal_state().xml_text, goal_state)
-            self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf)
+            self.assertEqual(protocol.client.get_goal_state().container_id, container_id)
+            self.assertEqual(protocol.client.get_goal_state().role_config_name, role_config_name)
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
@@ -1100,107 +1096,6 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
-
-    def test_update_goal_state_should_archive_last_goal_state(self):
-        # We use the last modified timestamp of the goal state to be archived to determine the archive's name.
-        mock_mtime = os.path.getmtime(self.tmp_dir)
-        with patch("azurelinuxagent.common.utils.archive.os.path.getmtime") as patch_mtime:
-            first_gs_ms = mock_mtime + timedelta(minutes=5).seconds
-            second_gs_ms = mock_mtime + timedelta(minutes=10).seconds
-            third_gs_ms = mock_mtime + timedelta(minutes=15).seconds
-
-            patch_mtime.side_effect = [first_gs_ms, second_gs_ms, third_gs_ms]
-
-            # The first goal state is created when we instantiate the protocol
-            with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-                history_dir = os.path.join(conf.get_lib_dir(), "history")
-                archives = os.listdir(history_dir)
-                self.assertEqual(len(archives), 0, "The goal state archive should have been empty since this is the first goal state")
-
-                # Create the second new goal state, so the initial one should be archived
-                protocol.mock_wire_data.set_incarnation("2")
-                protocol.client.update_goal_state()
-
-                # The initial goal state should be in the archive
-                first_archive_name = datetime.utcfromtimestamp(first_gs_ms).isoformat() + "_incarnation_1"
-                archives = os.listdir(history_dir)
-                self.assertEqual(len(archives), 1, "Only one goal state should have been archived")
-                self.assertEqual(archives[0], first_archive_name, "The name of goal state archive should match the first goal state timestamp and incarnation")
-
-                # Create the third goal state, so the second one should be archived too
-                protocol.mock_wire_data.set_incarnation("3")
-                protocol.client.update_goal_state()
-
-                # The second goal state should be in the archive
-                second_archive_name = datetime.utcfromtimestamp(second_gs_ms).isoformat() + "_incarnation_2"
-                archives = os.listdir(history_dir)
-                archives.sort()
-                self.assertEqual(len(archives), 2, "Two goal states should have been archived")
-                self.assertEqual(archives[1], second_archive_name, "The name of goal state archive should match the second goal state timestamp and incarnation")
-
-    def test_update_goal_state_should_not_persist_the_protected_settings(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_MULTIPLE_EXT) as protocol:
-            # instantiating the protocol fetches the goal state, so there is no need to do another call to update_goal_state()
-            goal_state = protocol.client.get_goal_state()
-            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
-
-            protected_settings = []
-            for ext_handler in extensions_goal_state.extensions:
-                for extension in ext_handler.settings:
-                    if extension.protectedSettings is not None:
-                        protected_settings.append(extension.protectedSettings)
-            if len(protected_settings) == 0:
-                raise Exception("The test goal state does not include any protected settings")
-
-            extensions_config_file = os.path.join(conf.get_lib_dir(), EXT_CONF_FILE_NAME.format(goal_state.incarnation))
-            if not os.path.exists(extensions_config_file):
-                raise Exception("Cannot find {0}".format(extensions_config_file))
-
-            with open(extensions_config_file, "r") as stream:
-                extensions_config = stream.read()
-
-                for settings in protected_settings:
-                    self.assertNotIn(settings, extensions_config, "The protectedSettings should not have been saved to {0}".format(extensions_config_file))
-
-                matches = re.findall(r'"protectedSettings"\s*:\s*"\*\*\* REDACTED \*\*\*"', extensions_config)
-                self.assertEqual(
-                    len(matches),
-                    len(protected_settings),
-                    "Could not find the expected number of redacted settings. Expected {0}.\n{1}".format(len(protected_settings), extensions_config))
-
-    def test_update_goal_state_should_save_goal_state(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-            protocol.mock_wire_data.set_incarnation(999)
-            protocol.mock_wire_data.set_etag(888)
-            protocol.update_goal_state()
-
-        extensions_config_file = os.path.join(conf.get_lib_dir(), "ExtensionsConfig.999.xml")
-        vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.888.json")
-        expected_files = [
-            os.path.join(conf.get_lib_dir(), "GoalState.999.xml"),
-            os.path.join(conf.get_lib_dir(), "SharedConfig.xml"),
-            os.path.join(conf.get_lib_dir(), "Certificates.xml"),
-            os.path.join(conf.get_lib_dir(), "HostingEnvironmentConfig.xml"),
-            extensions_config_file,
-            vm_settings_file
-        ]
-
-        for f in expected_files:
-            self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
-
-        with open(extensions_config_file, "r") as file_:
-            extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, file_.read(), protocol)
-        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in ExtensionsConfig")
-        for e in extensions_goal_state.extensions:
-            if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
-                self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
-
-        with open(vm_settings_file, "r") as file_:
-            extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(None, file_.read())
-        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in vmSettings")
-        for e in extensions_goal_state.extensions:
-            if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
-                self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
     def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
         # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
@@ -1279,9 +1174,6 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
                 new_container_id = str(uuid.uuid4())
                 new_role_config_name = str(uuid.uuid4())
 
-                goal_state_xml_text = protocol.mock_wire_data.goal_state
-                shared_conf_xml_text = protocol.mock_wire_data.shared_config
-
                 if incarnation_change:
                     protocol.mock_wire_data.set_incarnation(str(uuid.uuid4()))
 
@@ -1294,10 +1186,6 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
 
                 self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
-
-                # it should not update the goal state
-                self.assertEqual(protocol.client.get_goal_state().xml_text, goal_state_xml_text)
-                self.assertEqual(protocol.client.get_shared_conf().xml_text, shared_conf_xml_text)
 
 
 if __name__ == '__main__':
