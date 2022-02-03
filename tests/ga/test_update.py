@@ -49,7 +49,8 @@ from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstanc
 from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
-    READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
+    READONLY_FILE_GLOBS, ExtensionsSummary
+from azurelinuxagent.ga.agent_update import AgentUpgradeType
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \

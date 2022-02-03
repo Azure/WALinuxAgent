@@ -47,8 +47,7 @@ from azurelinuxagent.common.osutil.default import get_firewall_drop_command, \
     get_accept_tcp_rule
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses, ExtHandlerPackageList, \
-    VERSION_0
+from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -57,6 +56,7 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
+from azurelinuxagent.ga.agent_update import get_agent_update_handler, AgentUpdateHandler
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 from azurelinuxagent.ga.env import get_env_handler
@@ -124,14 +124,6 @@ class ExtensionsSummary(object):
         return ustr(self.summary)
 
 
-class AgentUpgradeType(object):
-    """
-    Enum for different modes of Agent Upgrade
-    """
-    Hotfix = "Hotfix"
-    Normal = "Normal"
-
-
 def get_update_handler():
     return UpdateHandler()
 
@@ -197,8 +189,17 @@ class UpdateHandler(object):
         if self.signal_handler is None:
             self.signal_handler = signal.signal(signal.SIGTERM, self.forward_signal)
 
-        latest_agent = None if not conf.get_autoupdate_enabled() else self.get_latest_agent_greater_than_daemon(
-            daemon_version=CURRENT_VERSION)
+        if conf.get_autoupdate_enabled():
+            try:
+                # Fetch the downloaded agents that are greater than the daemon version (i.e. the CURRENT_VERSION here)
+                latest_agent = next(agent for agent in AgentUpdateHandler.get_available_agents_on_disk()
+                                    if agent.is_available and agent.version > CURRENT_VERSION)
+            except StopIteration:
+                # No agent available on disk > current version
+                latest_agent = None
+        else:
+            latest_agent = None
+
         if latest_agent is None:
             logger.info(u"Installed Agent {0} is the most current agent", CURRENT_AGENT)
             agent_cmd = "python -u {0} -run-exthandlers".format(sys.argv[0])
@@ -356,6 +357,8 @@ class UpdateHandler(object):
             from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
             remote_access_handler = get_remote_access_handler(protocol)
 
+            agent_update_handler = get_agent_update_handler(protocol)
+
             self._ensure_no_orphans()
             self._emit_restart_event()
             self._emit_changes_in_default_configuration()
@@ -388,7 +391,7 @@ class UpdateHandler(object):
             while self.is_running:
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
-                self._process_goal_state(exthandlers_handler, remote_access_handler)
+                self._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
                 self._send_heartbeat_telemetry(protocol)
                 time.sleep(self._goal_state_period)
 
@@ -445,80 +448,6 @@ class UpdateHandler(object):
             return False
         return True
 
-    def __update_guest_agent(self, protocol):
-        """
-        This function checks for new Agent updates and raises AgentUpgradeExitException if available.
-        There are 2 different ways the agent checks for an update -
-            1) Requested Version is specified in the Goal State.
-                - In this case, the Agent will download the requested version and upgrade/downgrade instantly.
-            2) No requested version.
-                - In this case, the agent will periodically check (1 hr) for new agent versions in GA Manifest.
-                - If available, it will download all versions > CURRENT_VERSION.
-                - Depending on the highest version > CURRENT_VERSION,
-                  the agent will update within 4 hrs (for a Hotfix update) or 24 hrs (for a Normal update)
-        """
-
-        def log_next_update_time():
-            next_normal_time, next_hotfix_time = self.__get_next_upgrade_times()
-            upgrade_type = self.__get_agent_upgrade_type(available_agent)
-            next_time = next_hotfix_time if upgrade_type == AgentUpgradeType.Hotfix else next_normal_time
-            message_ = "Discovered new {0} upgrade {1}; Will upgrade on or after {2}".format(
-                upgrade_type, available_agent.name,
-                datetime.utcfromtimestamp(next_time).strftime(logger.Logger.LogTimeFormatInUTC))
-            add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, version=CURRENT_VERSION, is_success=True,
-                      message=message_, log_event=False)
-            logger.info(message_)
-
-        def handle_updates_for_requested_version():
-            if requested_version < CURRENT_VERSION:
-                prefix = "downgrade"
-                # In case of a downgrade, we blacklist the current agent to avoid starting it back up ever again
-                # (the expectation here being that if RSM is asking us to a downgrade,
-                # there's a good reason for not wanting the current version).
-                try:
-                    # We should always have an agent directory for the CURRENT_VERSION
-                    # (unless the CURRENT_VERSION == daemon version, but since we don't support downgrading
-                    # below daemon version, we will never reach this code path if that's the scenario)
-                    current_agent = next(agent for agent in self.agents if agent.version == CURRENT_VERSION)
-                    msg = "Blacklisting the agent {0} since a downgrade was requested in the GoalState, " \
-                          "suggesting that we really don't want to execute any extensions using this version".format(
-                           CURRENT_VERSION)
-                    logger.info(msg)
-                    current_agent.mark_failure(is_fatal=True, reason=msg)
-                except StopIteration:
-                    logger.warn(
-                        "Could not find a matching agent with current version {0} to blacklist, skipping it".format(
-                            CURRENT_VERSION))
-            else:
-                # In case of an upgrade, we don't need to blacklist anything as the daemon will automatically
-                # start the next available highest version which would be the requested version
-                prefix = "upgrade"
-            raise AgentUpgradeExitException(
-                "Exiting current process to {0} to the request Agent version {1}".format(prefix, requested_version))
-
-        # Ignore new agents if updating is disabled
-        if not conf.get_autoupdate_enabled():
-            return False
-
-        if self._download_agent_if_upgrade_available(protocol):
-            # The call to get_latest_agent_greater_than_daemon() also finds all agents in directory and sets the self.agents property.
-            # This state is used to find the GuestAgent object with the current version later if requested version is available in last GS.
-            available_agent = self.get_latest_agent_greater_than_daemon()
-            requested_version, _ = self.__get_requested_version_and_manifest_from_last_gs(protocol)
-            if requested_version is not None:
-                # If requested version specified, upgrade/downgrade to the specified version instantly as this is
-                # driven by the goal state (as compared to the agent periodically checking for new upgrades every hour)
-                handle_updates_for_requested_version()
-            elif available_agent is None:
-                # Legacy behavior: The current agent can become unavailable and needs to be reverted.
-                # In that case, self._upgrade_available() returns True and available_agent would be None. Handling it here.
-                raise AgentUpgradeExitException(
-                    "Agent {0} is reverting to the installed agent -- exiting".format(CURRENT_AGENT))
-            else:
-                log_next_update_time()
-
-        self.__upgrade_agent_if_permitted()
-
     def __goal_state_updated(self, incarnation):
         """
         This function returns if the Goal State updated.
@@ -528,18 +457,20 @@ class UpdateHandler(object):
         #  (this property abstracts incarnation/etag logic based on the delivery pipeline of the Goal State)
         return incarnation != self.last_incarnation
 
-    def _process_goal_state(self, exthandlers_handler, remote_access_handler):
+    def _process_goal_state(self, exthandlers_handler, remote_access_handler, agent_update_handler):
 
         protocol = exthandlers_handler.protocol
         if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
             # We should have a cached goal state here, go ahead and report status for that.
-            self._report_status(exthandlers_handler, incarnation_changed=False)
+            self._report_status(exthandlers_handler, agent_update_handler, incarnation_changed=False)
             return
 
-        # Update the Guest Agent if a new version is available
-        self.__update_guest_agent(protocol)
         incarnation = protocol.get_incarnation()
+        # Update the Guest Agent if a new version is available
+        # self.__update_guest_agent(protocol)
+        agent_update_handler.run(gs_updated=self.__goal_state_updated(incarnation),
+                                 host=self._get_host_plugin(protocol))
 
         try:
             if self.__goal_state_updated(incarnation):
@@ -554,51 +485,15 @@ class UpdateHandler(object):
 
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, incarnation_changed=self.__goal_state_updated(incarnation))
+            self._report_status(exthandlers_handler, agent_update_handler, incarnation_changed=self.__goal_state_updated(incarnation))
 
             if self.__goal_state_updated(incarnation):
                 remote_access_handler.run()
         finally:
             self.last_incarnation = incarnation
 
-    def __get_vmagent_update_status(self, protocol, incarnation_changed):
-        """
-        This function gets the VMAgent update status as per the last GoalState.
-        Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
-        """
-        if not conf.get_enable_ga_versioning():
-            return None
-
-        update_status = None
-
-        try:
-            requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
-            if manifest is None and incarnation_changed:
-                logger.info("Unable to report update status as no matching manifest found for family: {0}".format(
-                    conf.get_autoupdate_gafamily()))
-                return None
-
-            if requested_version is not None:
-                if CURRENT_VERSION == requested_version:
-                    status = VMAgentUpdateStatuses.Success
-                    code = 0
-                else:
-                    status = VMAgentUpdateStatuses.Error
-                    code = 1
-                update_status = VMAgentUpdateStatus(expected_version=manifest.requested_version_string, status=status,
-                                                    code=code)
-        except Exception as error:
-            if incarnation_changed:
-                err_msg = "[This error will only be logged once per incarnation] " \
-                          "Ran into error when trying to fetch updateStatus for the agent, skipping reporting update satus. Error: {0}".format(
-                           textutil.format_exception(error))
-                logger.warn(err_msg)
-                add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=err_msg, log_event=False)
-
-        return update_status
-
-    def _report_status(self, exthandlers_handler, incarnation_changed):
-        vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, incarnation_changed)
+    def _report_status(self, exthandlers_handler, agent_update_handler, incarnation_changed):
+        vm_agent_update_status = agent_update_handler.get_vmagent_update_status(gs_updated=incarnation_changed)
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed,
                                                                    vm_agent_update_status=vm_agent_update_status)
@@ -664,24 +559,6 @@ class UpdateHandler(object):
         # We return 0.0.0.0 if daemon version is not specified. In that case,
         # use the min version as 2.2.53 as we started setting the daemon version starting 2.2.53.
         return FlexibleVersion("2.2.53")
-
-    def get_latest_agent_greater_than_daemon(self, daemon_version=None):
-        """
-        If autoupdate is enabled, return the most current, downloaded,
-        non-blacklisted agent which is not the current version (if any) and is greater than the `daemon_version`.
-        Otherwise, return None (implying to use the installed agent).
-        If `daemon_version` is None, we fetch it from the environment variable set by the DaemonHandler
-        """
-
-        self._find_agents()
-        daemon_version = self.__get_daemon_version_for_update() if daemon_version is None else daemon_version
-
-        # Fetch the downloaded agents that are different from the current version and greater than the daemon version
-        available_agents = [agent for agent in self.agents
-                            if agent.is_available
-                            and agent.version != CURRENT_VERSION and agent.version > daemon_version]
-
-        return available_agents[0] if len(available_agents) >= 1 else None
 
     def _emit_restart_event(self):
         try:
@@ -822,17 +699,6 @@ class UpdateHandler(object):
     def _filter_blacklisted_agents(self):
         self.agents = [agent for agent in self.agents if not agent.is_blacklisted]
 
-    def _find_agents(self):
-        """
-        Load all non-blacklisted agents currently on disk.
-        """
-        try:
-            self._set_and_sort_agents(self._load_agents())
-            self._filter_blacklisted_agents()
-        except Exception as e:
-            logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
-        return
-
     def _get_host_plugin(self, protocol):
         return protocol.client.get_host_plugin() if protocol and protocol.client else None
 
@@ -872,53 +738,12 @@ class UpdateHandler(object):
 
         return fileutil.read_file(conf.get_agent_pid_file_path()) != ustr(parent_pid)
 
-    def _load_agents(self):
-        path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
-        return [GuestAgent(path=agent_dir)
-                for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
-
     def _partition(self):
         return int(fileutil.read_file(self._partition_file))
 
     @property
     def _partition_file(self):
         return os.path.join(conf.get_lib_dir(), AGENT_PARTITION_FILE)
-
-    def _purge_agents(self):
-        """
-        Remove from disk all directories and .zip files of unknown agents
-        (without removing the current, running agent).
-        """
-        path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
-
-        known_versions = [agent.version for agent in self.agents]
-        if CURRENT_VERSION not in known_versions:
-            logger.verbose(
-                u"Running Agent {0} was not found in the agent manifest - adding to list",
-                CURRENT_VERSION)
-            known_versions.append(CURRENT_VERSION)
-
-        for agent_path in glob.iglob(path):
-            try:
-                name = fileutil.trim_ext(agent_path, "zip")
-                m = AGENT_DIR_PATTERN.match(name)
-                if m is not None and FlexibleVersion(m.group(1)) not in known_versions:
-                    if os.path.isfile(agent_path):
-                        logger.info(u"Purging outdated Agent file {0}", agent_path)
-                        os.remove(agent_path)
-                    else:
-                        logger.info(u"Purging outdated Agent directory {0}", agent_path)
-                        shutil.rmtree(agent_path)
-            except Exception as e:
-                logger.warn(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
-        return
-
-    def _set_and_sort_agents(self, agents=None):
-        if agents is None:
-            agents = []
-        self.agents = agents
-        self.agents.sort(key=lambda agent: agent.version, reverse=True)
-        return
 
     def _set_sentinel(self, agent=CURRENT_AGENT, msg="Unknown cause"):
         try:
@@ -955,173 +780,6 @@ class UpdateHandler(object):
                 self._sentinel_file_path(),
                 str(e))
         return
-
-    @staticmethod
-    def __get_requested_version_and_manifest_from_last_gs(protocol):
-        """
-        Get the requested version and corresponding manifests from last GS if supported
-        Returns: (Requested Version, Manifest) if supported and available
-                 (None, None) if no manifests found in the last GS
-                 (None, manifest) if not supported or not specified in GS
-        """
-        family = conf.get_autoupdate_gafamily()
-        manifest_list, _ = protocol.get_vmagent_manifests()
-        manifests = [m for m in manifest_list if m.family == family and len(m.uris) > 0]
-        if len(manifests) == 0:
-            return None, None
-        if conf.get_enable_ga_versioning() and manifests[0].is_requested_version_specified:
-            return manifests[0].requested_version, manifests[0]
-        return None, manifests[0]
-
-    def _download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
-        """
-        This function downloads the new agent if an update is available.
-        If a requested version is available in goal state, then only that version is downloaded (new-update model)
-        Else, we periodically (1hr by default) checks if new Agent upgrade is available and download it on filesystem if available (old-update model)
-        rtype: Boolean
-        return: True if current agent is no longer available or an agent with a higher version number is available
-        else False
-        """
-
-        def report_error(msg_, version_=CURRENT_VERSION, op=WALAEventOperation.Download):
-            logger.warn(msg_)
-            add_event(AGENT_NAME, op=op, version=version_, is_success=False, message=msg_, log_event=False)
-
-        def can_proceed_with_requested_version():
-            if not gs_updated:
-                # If incarnation didn't change, don't process anything.
-                return False
-
-            # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
-            # If there's no new incarnation, don't proceed with anything
-            msg_ = "Found requested version in manifest: {0} for incarnation: {1}".format(
-                requested_version, incarnation)
-            logger.info(msg_)
-            add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg_, log_event=False)
-
-            if requested_version < daemon_version:
-                # Don't process the update if the requested version is lesser than daemon version,
-                # as we don't support downgrades below daemon versions.
-                report_error(
-                    "Can't process the upgrade as the requested version: {0} is < current daemon version: {1}".format(
-                        requested_version, daemon_version), op=WALAEventOperation.AgentUpgrade)
-                return False
-
-            return True
-
-        def agent_upgrade_time_elapsed(now_):
-            if self.last_attempt_time is not None:
-                next_attempt_time = self.last_attempt_time + conf.get_autoupdate_frequency()
-            else:
-                next_attempt_time = now_
-            if next_attempt_time > now_:
-                return False
-            return True
-
-        family = conf.get_autoupdate_gafamily()
-        gs_updated = False
-        daemon_version = self.__get_daemon_version_for_update()
-        try:
-            # Fetch the agent manifests from the latest Goal State
-            incarnation = protocol.get_incarnation()
-            gs_updated = self.__goal_state_updated(incarnation)
-            requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
-            if manifest is None:
-                logger.verbose(
-                    u"No manifest links found for agent family: {0} for incarnation: {1}, skipping update check".format(
-                        family, incarnation))
-                return False
-        except Exception as err:
-            # If there's some issues in fetching the agent manifests, report it only on incarnation change
-            msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(err))
-            if gs_updated:
-                report_error(msg)
-            else:
-                logger.verbose(msg)
-            return False
-
-        if requested_version is not None:
-            # If GA versioning is enabled and requested version present in GS, and it's a new GS, follow new logic
-            if not can_proceed_with_requested_version():
-                return False
-        else:
-            # If no requested version specified in the Goal State, follow the old auto-update logic
-            # Note: If the first Goal State contains a requested version, this timer won't start (i.e. self.last_attempt_time won't be updated).
-            # If any subsequent goal state does not contain requested version, this timer will start then, and we will
-            # download all versions available in PIR and auto-update to the highest available version on that goal state.
-            now = time.time()
-            if not agent_upgrade_time_elapsed(now):
-                return False
-
-            logger.info("No requested version specified, checking for all versions for agent update (family: {0})",
-                        family)
-            self.last_attempt_time = now
-
-        try:
-            # If we make it to this point, then either there is a requested version in a new GS (new auto-update model),
-            # or the 1hr time limit has elapsed for us to check the agent manifest for updates (old auto-update model).
-            pkg_list = ExtHandlerPackageList()
-
-            # If the requested version is the current version, don't download anything;
-            #       the call to purge() below will delete all other agents from disk
-            # In this case, no need to even fetch the GA family manifest as we don't need to download any agent.
-            if requested_version is not None and requested_version == CURRENT_VERSION:
-                packages_to_download = []
-                msg = "The requested version is running as the current version: {0}".format(requested_version)
-                logger.info(msg)
-                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg)
-            else:
-                pkg_list = protocol.get_vmagent_pkgs(manifest)
-                packages_to_download = pkg_list.versions
-
-            # Verify the requested version is in GA family manifest (if specified)
-            if requested_version is not None and requested_version != CURRENT_VERSION:
-                for pkg in pkg_list.versions:
-                    if FlexibleVersion(pkg.version) == requested_version:
-                        # Found a matching package, only download that one
-                        packages_to_download = [pkg]
-                        break
-                else:
-                    msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
-                        requested_version, incarnation)
-                    report_error(msg, version_=requested_version)
-                    return False
-
-            # Set the agents to those available for download at least as current as the existing agent
-            # or to the requested version (if specified)
-            host = self._get_host_plugin(protocol=protocol)
-            agents_to_download = [GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download]
-
-            # Filter out the agents that were downloaded/extracted successfully. If the agent was not installed properly,
-            # we delete the directory and the zip package from the filesystem
-            self._set_and_sort_agents([agent for agent in agents_to_download if agent.is_available])
-
-            # Remove from disk any agent no longer needed in the VM.
-            # If requested version is provided, this would delete all other agents present on the VM except -
-            #   - the current version and the requested version if requested version != current version
-            #   - only the current version if requested version == current version
-            # Note:
-            #  The code leaves on disk available, but blacklisted, agents to preserve the state.
-            #  Otherwise, those agents could be downloaded again and inappropriately retried.
-            self._purge_agents()
-            self._filter_blacklisted_agents()
-
-            # If there are no agents available to upgrade/downgrade to, return False
-            if len(self.agents) == 0:
-                return False
-
-            if requested_version is not None:
-                # In case of requested version, return True if an agent with a different version number than the
-                # current version is available that is higher than the current daemon version
-                return self.agents[0].version != base_version and self.agents[0].version > daemon_version
-            else:
-                # Else, return True if the highest agent is > base_version (CURRENT_VERSION)
-                return self.agents[0].version > base_version
-
-        except Exception as err:
-            msg = u"Exception downloading agents for update: {0}".format(textutil.format_exception(err))
-            report_error(msg)
-            return False
 
     def _write_pid_file(self):
         pid_files = self._get_pid_files()
@@ -1283,65 +941,14 @@ class UpdateHandler(object):
             msg = "Error while checking ip table rules:{0}".format(ustr(e))
             logger.error(msg)
 
-    def __get_next_upgrade_times(self):
-        """
-        Get the next upgrade times
-        return: Next Normal Upgrade Time, Next Hotfix Upgrade Time
-        """
-
-        def get_next_process_time(last_val, frequency):
-            return now if last_val is None else last_val + frequency
-
-        now = time.time()
-        next_hotfix_time = get_next_process_time(self._last_hotfix_upgrade_time, conf.get_hotfix_upgrade_frequency())
-        next_normal_time = get_next_process_time(self._last_normal_upgrade_time, conf.get_normal_upgrade_frequency())
-
-        return next_normal_time, next_hotfix_time
-
     @staticmethod
-    def __get_agent_upgrade_type(available_agent):
-        # We follow semantic versioning for the agent, if <Major>.<Minor> is same, then <Patch>.<Build> has changed.
-        # In this case, we consider it as a Hotfix upgrade. Else we consider it a Normal upgrade.
-        if available_agent.version.major == CURRENT_VERSION.major and available_agent.version.minor == CURRENT_VERSION.minor:
-            return AgentUpgradeType.Hotfix
-        return AgentUpgradeType.Normal
-
-    def __upgrade_agent_if_permitted(self):
-        """
-        Check every 4hrs for a Hotfix Upgrade and 24 hours for a Normal upgrade and upgrade the agent if available.
-        raises: ExitException when a new upgrade is available in the relevant time window, else returns
-        """
-
-        next_normal_time, next_hotfix_time = self.__get_next_upgrade_times()
-        now = time.time()
-        # Not permitted to update yet for any of the AgentUpgradeModes
-        if next_hotfix_time > now and next_normal_time > now:
-            return
-
-        # Update the last upgrade check time even if no new agent is available for upgrade
-        self._last_hotfix_upgrade_time = now if next_hotfix_time <= now else self._last_hotfix_upgrade_time
-        self._last_normal_upgrade_time = now if next_normal_time <= now else self._last_normal_upgrade_time
-
-        available_agent = self.get_latest_agent_greater_than_daemon()
-        if available_agent is None or available_agent.version <= CURRENT_VERSION:
-            logger.verbose("No agent upgrade discovered")
-            return
-
-        upgrade_type = self.__get_agent_upgrade_type(available_agent)
-        upgrade_message = "{0} Agent upgrade discovered, updating to {1} -- exiting".format(upgrade_type,
-                                                                                            available_agent.name)
-
-        if (upgrade_type == AgentUpgradeType.Hotfix and next_hotfix_time <= now) or (
-                upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
-            raise AgentUpgradeExitException(upgrade_message)
-
-    def _reset_legacy_blacklisted_agents(self):
+    def _reset_legacy_blacklisted_agents():
         # Reset the state of all blacklisted agents that were blacklisted by legacy agents (i.e. not during auto-update)
 
         # Filter legacy agents which are blacklisted but do not contain a `reason` in their error.json files
         # (this flag signifies that this agent was blacklisted by the newer agents).
         try:
-            legacy_blacklisted_agents = [agent for agent in self._load_agents() if
+            legacy_blacklisted_agents = [agent for agent in AgentUpdateHandler.get_all_agents_on_disk() if
                                          agent.is_blacklisted and agent.error.reason == '']
             for agent in legacy_blacklisted_agents:
                 agent.clear_error()
