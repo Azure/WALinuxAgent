@@ -3352,69 +3352,82 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                 )
 
             expected_status = {
-                "version": "1.1",
-                "timestampUTC": "1970-01-01T00:00:00Z",
-                "aggregateStatus": {
-                    "guestAgentStatus": {
-                        "version": AGENT_VERSION,
-                        "status": "Ready",
-                        "formattedMessage": {
-                            "lang": "en-US",
-                            "message": "Guest Agent is running"
+                "__comment__": "The __status__ property is the actual status reported to CRP",
+                "__status__": {
+                    "version": "1.1",
+                    "timestampUTC": "1970-01-01T00:00:00Z",
+                    "aggregateStatus": {
+                        "guestAgentStatus": {
+                            "version": AGENT_VERSION,
+                            "status": "Ready",
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "Guest Agent is running"
+                            }
+                        },
+                        "handlerAggregateStatus": [
+                            {
+                                "handlerVersion": "1.0.0",
+                                "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                                "status": "Ready",
+                                "code": 0,
+                                "useExactVersion": True,
+                                "formattedMessage": {
+                                    "lang": "en-US",
+                                    "message": "Plugin enabled"
+                                },
+                                "runtimeSettingsStatus": {
+                                    "settingsStatus": {
+                                        "status": {
+                                            "name": "OSTCExtensions.ExampleHandlerLinux",
+                                            "configurationAppliedTime": None,
+                                            "operation": None,
+                                            "status": "success",
+                                            "code": 0,
+                                            "formattedMessage": {
+                                                "lang": "en-US",
+                                                "message": None
+                                            }
+                                        },
+                                        "version": 1.0,
+                                        "timestampUTC": "1970-01-01T00:00:00Z"
+                                    },
+                                    "sequenceNumber": 0
+                                }
+                            }
+                        ],
+                        "vmArtifactsAggregateStatus": {
+                            "goalStateAggregateStatus": {
+                                "formattedMessage": {
+                                    "lang": "en-US",
+                                    "message": "GoalState executed successfully"
+                                },
+                                "timestampUTC": "1970-01-01T00:00:00Z",
+                                "inSvdSeqNo": "1",
+                                "status": "Success",
+                                "code": 0
+                            }
                         }
                     },
-                    "handlerAggregateStatus": [
-                        {
-                            "handlerVersion": "1.0.0",
-                            "handlerName": "OSTCExtensions.ExampleHandlerLinux",
-                            "status": "Ready",
-                            "code": 0,
-                            "useExactVersion": True,
-                            "formattedMessage": {
-                                "lang": "en-US",
-                                "message": "Plugin enabled"
-                            },
-                            "runtimeSettingsStatus": {
-                                "settingsStatus": {
-                                    "status": {
-                                        "name": "OSTCExtensions.ExampleHandlerLinux",
-                                        "configurationAppliedTime": None,
-                                        "operation": None,
-                                        "status": "success",
-                                        "code": 0
-                                    },
-                                    "version": 1,
-                                    "timestampUTC": "1970-01-01T00:00:00Z"
-                                },
-                                "sequenceNumber": 0
-                            },
-                            "supportsMultiConfig": False
-                        }
-                    ],
-                    "vmArtifactsAggregateStatus": {
-                        "goalStateAggregateStatus": {
-                            "formattedMessage": {
-                                "lang": "en-US",
-                                "message": "GoalState executed successfully"
-                            },
-                            "timestampUTC": "1970-01-01T00:00:00Z",
-                            "inSvdSeqNo": "1",
-                            "status": "Success",
-                            "code": 0
-                        }
-                    }
+                    "guestOSInfo": {
+                        "computerName": "nam-u",
+                        "osName": "ubuntu",
+                        "osVersion": "20.04",
+                        "version": "8.8.8.8"
+                    },
+                    "supportedFeatures": supported_features
                 },
-                "supportedFeatures": supported_features,
-                "_metadataNotSentToCRP": {
+                "__debug__": {
                     "agentName": AGENT_NAME,
                     "daemonVersion": "0.0.0.0",
                     "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-                    "extensionSupportedFeatures": [name for name, _ in
-                                                   get_agent_supported_features_list_for_extensions().items()]
-
+                    "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
+                    "supportsMultiConfig": {
+                        "OSTCExtensions.ExampleHandlerLinux": False
+                    }
                 }
-
             }
+
 
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()

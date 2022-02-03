@@ -958,44 +958,51 @@ class ExtHandlersHandler(object):
             return None
 
     def write_ext_handlers_status_to_info_file(self, vm_status, incarnation_changed):
-        status_blob_data = self.protocol.get_status_blob_data()
-        data = dict()
-        if status_blob_data is not None:
-            data = json.loads(status_blob_data)
+        status_file = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
 
-        # Populating the fields that does not come from vm_status or status_blob_data
-        _metadataNotSentToCRP = {
-            "agentName": AGENT_NAME,
-            "daemonVersion": str(version.get_daemon_version()),
-            "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()]
-        }
-        data["_metadataNotSentToCRP"] = _metadataNotSentToCRP
+        if os.path.exists(status_file) and incarnation_changed:
+            # On new goal state, move the last status report for the previous goal state to the history folder
+            last_modified = os.path.getmtime(status_file)
+            timestamp = datetime.datetime.utcfromtimestamp(last_modified).isoformat()
+            GoalStateHistory(timestamp).save_status(status_file)
 
-        # Consuming supports_multi_config info from vm_status. creating a dict out of it for easy lookup in the next step.
+        # Now create/overwrite the status file; this file is kept for debugging purposes only
+        status_blob_text = self.protocol.get_status_blob_data()
+        if status_blob_text is None:
+            status_blob_text = ""
+
+        debug_info = ExtHandlersHandler._get_status_debug_info(vm_status)
+
+        status_file_text = \
+'''{{
+    "__comment__": "The __status__ property is the actual status reported to CRP",
+    "__status__": {0},
+    "__debug__": {1}
+}}
+'''.format(status_blob_text, debug_info)
+
+        fileutil.write_file(status_file, status_file_text)
+
+    @staticmethod
+    def _get_status_debug_info(vm_status):
         support_multi_config = dict()
+
         if vm_status is not None:
-            # Convert VMStatus class to Dict.
             vm_status_data = get_properties(vm_status)
             vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
             for handler_status in vm_handler_statuses:
                 if handler_status.get('name') is not None:
                     support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
 
-        handler_aggregate_status = data.get('aggregateStatus', dict()).get('handlerAggregateStatus', dict())
+        debug_info = {
+            "agentName": AGENT_NAME,
+            "daemonVersion": str(version.get_daemon_version()),
+            "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+            "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
+            "supportsMultiConfig": support_multi_config
+        }
 
-        for handler_status in handler_aggregate_status:
-            handler_status['supportsMultiConfig'] = support_multi_config.get(handler_status.get('handlerName'))
-            status = handler_status.get('runtimeSettingsStatus', dict()).get('settingsStatus', dict()).get('status', dict())
-            status.pop('formattedMessage', None)
-            status.pop('substatus', None)
-
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
-        json_text = json.dumps(data)
-        fileutil.write_file(status_path, json_text)
-
-        if incarnation_changed:
-            GoalStateHistory(datetime.datetime.utcnow().isoformat()).save_status(json_text)
+        return json.dumps(debug_info)
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
