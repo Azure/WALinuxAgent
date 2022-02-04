@@ -3409,12 +3409,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                             }
                         }
                     },
-                    "guestOSInfo": {
-                        "computerName": "nam-u",
-                        "osName": "ubuntu",
-                        "osVersion": "20.04",
-                        "version": "8.8.8.8"
-                    },
+                    "guestOSInfo": None,
                     "supportedFeatures": supported_features
                 },
                 "__debug__": {
@@ -3435,7 +3430,12 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
             status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
             actual_status_json = json.loads(fileutil.read_file(status_path))
 
-            # Popping run time attributes
+            # Don't compare the guestOSInfo
+            status_property = actual_status_json.get("__status__")
+            self.assertIsNotNone(status_property, "The status file is missing the __status__ property")
+            self.assertIsNotNone(status_property.get("guestOSInfo"), "The status file is missing the guestOSInfo property")
+            status_property["guestOSInfo"] = None
+
             actual_status_json.pop('guestOSInfo', None)
 
             self.assertEqual(expected_status, actual_status_json)
