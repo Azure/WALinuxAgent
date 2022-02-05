@@ -71,8 +71,8 @@ class GoalState(object):
             self._initialize_basic_properties(xml_doc)
 
             # The goal state for extensions can come from vmSettings when using FastTrack or from extensionsConfig otherwise, self._fetch_extended_goal_state
-            # populates the '_extensions' property.
-            self._extensions = None
+            # populates the '_extensions_goal_state' property.
+            self._extensions_goal_state = None
             vm_settings = self._fetch_vm_settings()
 
             # These "extended" properties come from additional HTTP requests to the URIs included in the basic goal state
@@ -80,7 +80,6 @@ class GoalState(object):
             self._shared_conf = None
             self._certs = None
             self._remote_access = None
-            self._extensions_goal_state = None
 
             self._fetch_extended_goal_state(xml_text, xml_doc, vm_settings)
 
@@ -228,7 +227,7 @@ class GoalState(object):
     def _fetch_extended_goal_state(self, xml_text, xml_doc, vm_settings):
         """
         Issues HTTP requests (WireServer) for each of the URIs in the goal state (ExtensionsConfig, Certificate, Remote Access users, etc)
-        and populates the corresponding properties. If the give 'vm_settings' are not None they are used for the extensions goal state,
+        and populates the corresponding properties. If the given 'vm_settings' are not None they are used for the extensions goal state,
         otherwise extensionsConfig is used instead.
         """
         try:
