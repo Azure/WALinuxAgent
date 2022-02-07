@@ -2726,7 +2726,8 @@ class ReportStatusTestCase(AgentTestCase):
         except IndexError:
             raise HttpError()
 
-    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self, _):
 
         try:
             # Returning None forces the mock wire data to return the contents in the static
