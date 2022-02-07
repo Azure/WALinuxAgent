@@ -867,7 +867,8 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
         except (ProtocolError, VmSettingsNotSupported):
             pass
 
-    def test_it_should_keep_track_of_errors_in_vm_settings_requests(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_it_should_keep_track_of_errors_in_vm_settings_requests(self, _):
         mock_response = None
 
         def http_get_handler(url, *_, **__):
@@ -943,7 +944,8 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
 
                 self.assertEqual(3, len(messages), "Expected additional errors to be reported in the next period (got: {0})".format(messages))
 
-    def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_host_plugin_vm_settings_request(url):

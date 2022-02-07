@@ -136,7 +136,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
-    "Debug.EnableFastTrack": True,
+    "Debug.EnableFastTrack": False,
     "Debug.EnableGAVersioning": False
 }
 
@@ -571,7 +571,7 @@ def get_enable_fast_track(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableFastTrack", True)
+    return conf.get_switch("Debug.EnableFastTrack", False)
 
 
 def get_etp_collection_period(conf=__conf__):

@@ -1097,7 +1097,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
-    def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_it_should_retry_get_vm_settings_on_resource_gone_error(self, _):
         # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
         # needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
@@ -1125,7 +1126,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertEqual("GET_VM_SETTINGS_TEST_CONTAINER_ID", request_headers[1][hostplugin._HEADER_CONTAINER_ID], "The retry request did not include the expected header for the ContainerId")
             self.assertEqual("GET_VM_SETTINGS_TEST_ROLE_CONFIG_NAME", request_headers[1][hostplugin._HEADER_HOST_CONFIG_NAME], "The retry request did not include the expected header for the RoleConfigName")
 
-    def test_it_should_use_vm_settings_by_default(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_it_should_use_vm_settings_by_default(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertTrue(

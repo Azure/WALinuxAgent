@@ -7,7 +7,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state_factory import Extens
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils import fileutil
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
-from tests.tools import AgentTestCase, data_dir
+from tests.tools import AgentTestCase, data_dir, patch
 
 
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
@@ -48,7 +48,8 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         # dependency level (multi-config)
         self.assertEqual(1, vm_settings.extensions[3].settings[1].dependencyLevel, "Incorrect dependency level (multi-config)")
 
-    def test_extension_goal_state_should_parse_requested_version_properly(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_extension_goal_state_should_parse_requested_version_properly(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             manifests, _ = protocol.get_vmagent_manifests()
             for manifest in manifests:

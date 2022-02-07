@@ -25,7 +25,8 @@ class GoalStateTestCase(AgentTestCase):
                     GoalState(protocol.client)
                 self.assertEqual(_GET_GOAL_STATE_MAX_ATTEMPTS, mock_sleep.call_count, "Unexpected number of retries")
 
-    def test_fetch_full_goal_state_should_save_goal_state_to_history_directory(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_fetch_full_goal_state_should_save_goal_state_to_history_directory(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             # use a new goal state with a specific test incarnation and etag
             protocol.mock_wire_data.set_incarnation(999)
