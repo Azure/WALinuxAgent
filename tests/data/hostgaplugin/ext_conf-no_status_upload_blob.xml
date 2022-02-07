@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Extensions version="1.0.0.0" goalStateIncarnation="10"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <GAFamilies>
+    <GAFamily>
+      <Name>Prod</Name>
+      <Uris>
+        <Uri>https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
+        <Uri>https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
+      </Uris>
+    </GAFamily>
+  </GAFamilies>
+  <Location>CentralUSEUAP</Location>
+  <ServiceName>CRP</ServiceName>
+</GuestAgentExtension>
+<Plugins>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.6" location="https://umsavwggj2v40kvqhc0w.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsafwzhkbm1rfrhl0ws.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true">
+    <additionalLocations>
+      <additionalLocation>https://umsanh4b5rfz0q0p4pwm.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml</additionalLocation>
+    </additionalLocations>
+  </Plugin>
+</Plugins>
+<PluginSettings>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.1.6">
+    <DependsOn dependencyLevel="1">
+      <DependsOnExtension handler="Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent" />
+    </DependsOn>
+    <RuntimeSettings seqNo="0">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "publicSettings": {"commandToExecute":"echo 'cee174d4-4daa-4b07-9958-53b9649445c2'"}
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+</PluginSettings>
+<InVMArtifactsProfileBlob>https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=PaiLic%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
+<InVMGoalStateMetaData inSvdSeqNo="10" createdOnTicks="637726657706205217" activityId="a33f6f53-43d6-4625-b322-1a39651a00c9" correlationId="9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e" /></Extensions>
