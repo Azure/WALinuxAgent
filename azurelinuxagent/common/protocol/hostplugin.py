@@ -65,16 +65,20 @@ class HostPluginProtocol(object):
     FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)
     STATUS_REPORTING_PERIOD = datetime.timedelta(minutes=1)
 
-    def __init__(self, endpoint, container_id, role_config_name):
+    def __init__(self, endpoint):
+        """
+        NOTE: Before using the HostGAPlugin be sure to invoke GoalState.update_host_plugin_headers() to initialize
+              the container id and role config name
+        """
         if endpoint is None:
             raise ProtocolError("HostGAPlugin: Endpoint not provided")
         self.is_initialized = False
         self.is_available = False
         self.api_versions = None
         self.endpoint = endpoint
-        self.container_id = container_id
-        self.deployment_id = self._extract_deployment_id(role_config_name)
-        self.role_config_name = role_config_name
+        self.container_id = None
+        self.deployment_id = None
+        self.role_config_name = None
         self.manifest_uri = None
         self.health_service = HealthService(endpoint)
         self.fetch_error_state = ErrorState(min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
@@ -408,6 +412,9 @@ class HostPluginProtocol(object):
                 add_event(op=WALAEventOperation.HostPlugin, message="vmSettings is not supported", is_success=True)
             raise VmSettingsNotSupported()
 
+        def format_message(msg):
+            return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
+
         try:
             # Raise if VmSettings are not supported but check for periodically since the HostGAPlugin could have been updated since the last check
             if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.datetime.now():
@@ -416,18 +423,12 @@ class HostPluginProtocol(object):
             etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
             correlation_id = str(uuid.uuid4())
 
-            def format_message(msg):
-                return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
-
-            def get_vm_settings():
-                url, headers = self.get_vm_settings_request(correlation_id)
-                if etag is not None:
-                    headers['if-none-match'] = etag
-                return restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1, return_raw_response=True)
-
             self._vm_settings_error_reporter.report_request()
 
-            response = get_vm_settings()
+            url, headers = self.get_vm_settings_request(correlation_id)
+            if etag is not None:
+                headers['if-none-match'] = etag
+            response = restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1, return_raw_response=True)
 
             if response.status == httpclient.GONE:
                 raise ResourceGoneError()

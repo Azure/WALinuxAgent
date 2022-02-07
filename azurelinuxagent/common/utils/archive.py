@@ -5,9 +5,9 @@ import os
 import re
 import shutil
 import zipfile
-from datetime import datetime
 
 import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.utils import fileutil
 
 # pylint: disable=W0105
@@ -38,110 +38,39 @@ The timestamp is an ISO8601 formatted value.
 
 ARCHIVE_DIRECTORY_NAME = 'history'
 
-_MAX_ARCHIVED_STATES = 50
+_MAX_ARCHIVED_STATES = 100
 
 _CACHE_PATTERNS = [
     re.compile(r"^VmSettings.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
-    re.compile(r"waagent_status\.(\d+)\.json$")
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
-_GOAL_STATE_PATTERN = re.compile(r"^(.*)/GoalState\.(\d+)\.xml$", re.IGNORECASE)
+#
+# Legacy names
+#   2018-04-06T08:21:37.142697_incarnation_N
+#   2018-04-06T08:21:37.142697_incarnation_N.zip
+#
+# Current names
+#
+#   2018-04-06T08:21:37.142697
+#   2018-04-06T08:21:37.142697.zip
+#   2018-04-06T08:21:37.142697_N
+#   2018-04-06T08:21:37.142697_N.zip
+#
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?$")
+_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?\.zip$")
 
-# Old names didn't have incarnation, new ones do. Ensure the regex captures both cases.
-# 2018-04-06T08:21:37.142697_incarnation_N
-# 2018-04-06T08:21:37.142697_incarnation_N.zip
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?$$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(_incarnation_(\d+))?\.zip$")
+_GOAL_STATE_FILE_NAME = "GoalState.xml"
+_VM_SETTINGS_FILE_NAME = "VmSettings.json"
+_HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
+_SHARED_CONF_FILE_NAME = "SharedConfig.xml"
+_REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
+_EXT_CONF_FILE_NAME = "ExtensionsConfig.xml"
+_MANIFEST_FILE_NAME = "{0}.manifest.xml"
 
-
-class StateFlusher(object):
-    def __init__(self, lib_dir):
-        self._source = lib_dir
-
-        directory = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME)
-        if not os.path.exists(directory):
-            try:
-                fileutil.mkdir(directory)
-            except OSError as exception:
-                if exception.errno != errno.EEXIST:
-                    logger.error("{0} : {1}", self._source, exception.strerror)
-
-    def flush(self):
-        files = self._get_files_to_archive()
-        if not files:
-            return
-
-        archive_name = self._get_archive_name(files)
-        if archive_name is None:
-            return
-
-        if self._mkdir(archive_name):
-            self._archive(files, archive_name)
-        else:
-            self._purge(files)
-
-    def history_dir(self, name):
-        return os.path.join(self._source, ARCHIVE_DIRECTORY_NAME, name)
-
-    @staticmethod
-    def _get_archive_name(files):
-        """
-        Gets the most recently modified GoalState.*.xml and uses that timestamp and incarnation for the archive name.
-        In a normal workflow, we expect there to be only one GoalState.*.xml at a time, but if the previous one
-        wasn't purged for whatever reason, we take the most recently modified goal state file.
-        If there are no GoalState.*.xml files, we return None.
-        """
-        latest_timestamp_ms = None
-        incarnation = None
-
-        for current_file in files:
-            match = _GOAL_STATE_PATTERN.match(current_file)
-            if not match:
-                continue
-
-            modification_time_ms = os.path.getmtime(current_file)
-            if latest_timestamp_ms is None or latest_timestamp_ms < modification_time_ms:
-                latest_timestamp_ms = modification_time_ms
-                incarnation = match.groups()[1]
-
-        if latest_timestamp_ms is not None and incarnation is not None:
-            return datetime.utcfromtimestamp(latest_timestamp_ms).isoformat() + "_incarnation_{0}".format(incarnation)
-        return None
-
-    def _get_files_to_archive(self):
-        files = []
-        for current_file in os.listdir(self._source):
-            full_path = os.path.join(self._source, current_file)
-            for pattern in _CACHE_PATTERNS:
-                match = pattern.match(current_file)
-                if match is not None:
-                    files.append(full_path)
-                    break
-
-        return files
-
-    def _archive(self, files, timestamp):
-        for current_file in files:
-            dst = os.path.join(self.history_dir(timestamp), os.path.basename(current_file))
-            shutil.move(current_file, dst)
-
-    def _purge(self, files):
-        for current_file in files:
-            os.remove(current_file)
-
-    def _mkdir(self, name):
-        directory = self.history_dir(name)
-
-        try:
-            fileutil.mkdir(directory, mode=0o700)
-            return True
-        except IOError as exception:
-            logger.error("{0} : {1}".format(directory, exception.strerror))
-            return False
-
+AGENT_STATUS_FILE = "waagent_status.json"
 
 # TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL.
 # @total_ordering first appeared in Python 2.7 and 3.2
@@ -218,19 +147,31 @@ class StateArchiver(object):
                 fileutil.mkdir(self._source, mode=0o700)
             except IOError as exception:
                 if exception.errno != errno.EEXIST:
-                    logger.error("{0} : {1}", self._source, exception.strerror)
+                    logger.warn("{0} : {1}", self._source, exception.strerror)
 
     def purge(self):
         """
         Delete "old" archive directories and .zip archives.  Old
         is defined as any directories or files older than the X
-        newest ones.
+        newest ones. Also, clean up any legacy history files.
         """
         states = self._get_archive_states()
         states.sort(reverse=True)
 
         for state in states[_MAX_ARCHIVED_STATES:]:
             state.delete()
+
+        # legacy history files
+        for current_file in os.listdir(self._source):
+            full_path = os.path.join(self._source, current_file)
+            for pattern in _CACHE_PATTERNS:
+                match = pattern.match(current_file)
+                if match is not None:
+                    try:
+                        os.remove(full_path)
+                    except Exception as e:
+                        logger.warn("Cannot delete legacy history file '{0}': {1}".format(full_path, e))
+                    break
 
     def archive(self):
         states = self._get_archive_states()
@@ -250,3 +191,41 @@ class StateArchiver(object):
                 states.append(StateZip(full_path, match.group(0)))
 
         return states
+
+
+class GoalStateHistory(object):
+    def __init__(self, timestamp, tag=None):
+        self._errors = False
+        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
+
+    def save(self, data, file_name):
+        try:
+            if not os.path.exists(self._root):
+                fileutil.mkdir(self._root, mode=0o700)
+            full_file_name = os.path.join(self._root, file_name)
+            fileutil.write_file(full_file_name, data)
+        except IOError as e:
+            if not self._errors:  # report only 1 error per directory
+                self._errors = True
+                logger.warn("Failed to save goal state file {0}: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
+
+    def save_goal_state(self, text):
+        self.save(text, _GOAL_STATE_FILE_NAME)
+
+    def save_extensions_config(self, text):
+        self.save(text, _EXT_CONF_FILE_NAME)
+
+    def save_vm_settings(self, text):
+        self.save(text, _VM_SETTINGS_FILE_NAME)
+
+    def save_remote_access(self, text):
+        self.save(text, _REMOTE_ACCESS_FILE_NAME)
+
+    def save_hosting_env(self, text):
+        self.save(text, _HOSTING_ENV_FILE_NAME)
+
+    def save_shared_conf(self, text):
+        self.save(text, _SHARED_CONF_FILE_NAME)
+
+    def save_status(self, text):
+        self.save(text, AGENT_STATUS_FILE)

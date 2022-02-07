@@ -81,6 +81,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     @property
     def created_on_timestamp(self):
+        """
+        Timestamp assigned by the CRP (time at which the Fast Track goal state was created)
+        """
         return self._created_on_timestamp
 
     @property

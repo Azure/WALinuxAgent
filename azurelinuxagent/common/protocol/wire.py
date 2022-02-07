@@ -35,12 +35,12 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
     ExtHandlerPackageList, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
-from azurelinuxagent.common.utils.archive import StateFlusher
+from azurelinuxagent.common.utils.archive import _MANIFEST_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
@@ -50,16 +50,6 @@ VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
 ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
 TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
-
-WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
-INCARNATION_FILE_NAME = "Incarnation"
-GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
-VM_SETTINGS_FILE_NAME = "VmSettings.{0}.json"
-HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
-SHARED_CONF_FILE_NAME = "SharedConfig.xml"
-REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
-EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
-MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -123,7 +113,7 @@ class WireProtocol(DataContract):
 
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
-        ext_conf = self.client.get_extensions_goal_state()
+        ext_conf = goal_state.extensions_goal_state
         return ext_conf.agent_manifests, goal_state.incarnation
 
     def get_vmagent_pkgs(self, vmagent_manifest):
@@ -137,8 +127,8 @@ class WireProtocol(DataContract):
         man = self.client.get_ext_manifest(ext_handler)
         return man.pkg_list
 
-    def get_extensions_goal_state(self):
-        return self.client.get_extensions_goal_state()
+    def get_goal_state(self):
+        return self.client.get_goal_state()
 
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
@@ -572,10 +562,8 @@ class WireClient(object):
         logger.info("Wire server endpoint:{0}", endpoint)
         self._endpoint = endpoint
         self._goal_state = None
-        self._extensions_goal_state = None  # The goal state to use for extensions; can be an ExtensionsGoalStateFromVmSettings or ExtensionsGoalStateFromExtensionsConfig
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
-        self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
     def get_endpoint(self):
         return self._endpoint
@@ -622,15 +610,6 @@ class WireClient(object):
             return fileutil.read_file(local_file)
         except IOError as e:
             raise ProtocolError("Failed to read cache: {0}".format(e))
-
-    @staticmethod
-    def _save_cache(data, file_name):
-        try:
-            file_path = os.path.join(conf.get_lib_dir(), file_name)
-            fileutil.write_file(file_path, data)
-        except IOError as e:
-            fileutil.clean_ioerror(e, paths=[file_name])
-            raise ProtocolError("Failed to write cache: {0}".format(e))
 
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
@@ -768,120 +747,31 @@ class WireClient(object):
         """
         Fetches a new goal state and updates the Container ID and Role Config Name of the host plugin client
         """
-        goal_state = GoalState(self)
-        self._update_host_plugin(goal_state.container_id, goal_state.role_config_name)
+        if self._host_plugin is not None:
+            GoalState.update_host_plugin_headers(self)
+
+    def update_host_plugin(self, container_id, role_config_name):
+        if self._host_plugin is not None:
+            self._host_plugin.update_container_id(container_id)
+            self._host_plugin.update_role_config_name(role_config_name)
 
     def update_goal_state(self, force_update=False):
         """
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
-            #
-            # The goal state needs to be retrieved using both the WireServer (via the GoalState class) and the HostGAPlugin
-            # (via the self._fetch_vm_settings_goal_state method).
-            #
-            # We always need at least 2 queries: one to the WireServer (to check for incarnation changes) and one to the HostGAPlugin
-            # (to check for extension updates). Note that vmSettings are not a full goal state; they include only the extension information
-            # (minus certificates). The check on incarnation (which is also not included in the vmSettings) is needed to check for changes
-            # in, for example, the remote users for JIT access.
-            #
-            # We start by fetching the goal state from the WireServer. The response to this initial query will include the incarnation,
-            # container ID, role config, and URLs to the rest of the goal state (certificates, remote users, extensions config, etc). We
-            # do this first because we need to initialize the HostGAPlugin with the container ID and role config.
-            #
-            goal_state = GoalState(self)
-
-            host_ga_plugin = self.get_host_plugin()
-            host_ga_plugin.update_container_id(goal_state.container_id)
-            host_ga_plugin.update_role_config_name(goal_state.role_config_name)
-
-            #
-            # Then we fetch the vmSettings from the HostGAPlugin; the response will include the goal state for extensions.
-            #
-            vm_settings, vm_settings_updated = (None, False)
-
-            if conf.get_enable_fast_track():
-                try:
-                    vm_settings, vm_settings_updated = host_ga_plugin.fetch_vm_settings(force_update=force_update)
-                except VmSettingsNotSupported:
-                    pass  # if vmSettings are not supported we use extensionsConfig below
-                except ResourceGoneError:
-                    self.update_host_plugin_from_goal_state()
-                    vm_settings, vm_settings_updated = host_ga_plugin.fetch_vm_settings(force_update=force_update)
-
-            #
-            # Now we fetch the rest of the goal state from the WireServer (but ony if needed: initialization, a "forced" update, or
-            # a change in the incarnation). Note that if we fetch the full goal state we also update self._goal_state.
-            #
             if force_update:
                 logger.info("Forcing an update of the goal state..")
 
-            fetch_full_goal_state = force_update or self._goal_state is None or self._goal_state.incarnation != goal_state.incarnation
-
-            if not fetch_full_goal_state:
-                goal_state_updated = False
+            if self._goal_state is None or force_update:
+                self._goal_state = GoalState(self)
             else:
-                goal_state.fetch_full_goal_state(self)
-                self._goal_state = goal_state
-                goal_state_updated = True
-
-            #
-            # And, lastly, we use extensionsConfig if we don't have the vmSettings (Fast Track may be disabled or not supported).
-            #
-            if vm_settings is not None:
-                self._extensions_goal_state = vm_settings
-            else:
-                self._extensions_goal_state = self._goal_state.extensions_config
-
-            #
-            # If either goal state changed (goal_state or vm_settings_goal_state) save them
-            #
-            if goal_state_updated or vm_settings_updated:
-                self._save_goal_state(vm_settings)
+                self._goal_state.update()
 
         except ProtocolError:
             raise
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
-
-    def _update_host_plugin(self, container_id, role_config_name):
-        if self._host_plugin is not None:
-            self._host_plugin.update_container_id(container_id)
-            self._host_plugin.update_role_config_name(role_config_name)
-
-    def _save_goal_state(self, vm_settings):
-        try:
-            self.goal_state_flusher.flush()
-        except Exception as e:
-            logger.warn("Failed to save the previous goal state to the history folder: {0}", ustr(e))
-
-        try:
-            def save_if_not_none(goal_state_property, file_name):
-                if goal_state_property is not None and goal_state_property.xml_text is not None:
-                    self._save_cache(goal_state_property.xml_text, file_name)
-
-            # NOTE: Certificates are saved in Certificate.__init__
-            self._save_cache(self._goal_state.incarnation, INCARNATION_FILE_NAME)
-            save_if_not_none(self._goal_state, GOAL_STATE_FILE_NAME.format(self._goal_state.incarnation))
-            save_if_not_none(self._goal_state.hosting_env, HOSTING_ENV_FILE_NAME)
-            save_if_not_none(self._goal_state.shared_conf, SHARED_CONF_FILE_NAME)
-            save_if_not_none(self._goal_state.remote_access, REMOTE_ACCESS_FILE_NAME.format(self._goal_state.incarnation))
-            if self._goal_state.extensions_config is not None:
-                text = self._goal_state.extensions_config.get_redacted_text()
-                if text != '':
-                    self._save_cache(text, EXT_CONF_FILE_NAME.format(self._goal_state.extensions_config.incarnation))
-            if vm_settings is not None:
-                text = vm_settings.get_redacted_text()
-                if text != '':
-                    self._save_cache(text, VM_SETTINGS_FILE_NAME.format(vm_settings.id))
-
-        except Exception as e:
-            logger.warn("Failed to save the goal state to disk: {0}", ustr(e))
-
-    def _set_host_plugin(self, new_host_plugin):
-        if new_host_plugin is None:
-            logger.warn("Setting empty Host Plugin object!")
-        self._host_plugin = new_host_plugin
 
     def get_goal_state(self):
         if self._goal_state is None:
@@ -903,19 +793,13 @@ class WireClient(object):
             raise ProtocolError("Trying to fetch Certificates before initialization!")
         return self._goal_state.certs
 
-    def get_extensions_goal_state(self):
-        if self._extensions_goal_state is None:
-            raise ProtocolError("Trying to fetch ExtensionsGoalState before initialization!")
-
-        return self._extensions_goal_state
-
     def get_ext_manifest(self, ext_handler):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Extension Manifest before initialization!")
 
         try:
             xml_text = self.fetch_manifest(ext_handler.manifest_uris)
-            self._save_cache(xml_text, MANIFEST_FILE_NAME.format(ext_handler.name, self.get_goal_state().incarnation))
+            self._goal_state.save_to_history(xml_text, _MANIFEST_FILE_NAME.format(ext_handler.name))
             return ExtensionManifest(xml_text)
         except Exception as e:
             raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
@@ -926,12 +810,9 @@ class WireClient(object):
         return self._goal_state.remote_access
 
     def fetch_gafamily_manifest(self, vmagent_manifest, goal_state):
-        local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
-        local_file = os.path.join(conf.get_lib_dir(), local_file)
-
         try:
             xml_text = self.fetch_manifest(vmagent_manifest.uris)
-            fileutil.write_file(local_file, xml_text)
+            goal_state.save_to_history(xml_text, _MANIFEST_FILE_NAME.format(vmagent_manifest.family))
             return ExtensionManifest(xml_text)
         except Exception as e:
             raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
@@ -1078,12 +959,12 @@ class WireClient(object):
         return ret
 
     def upload_status_blob(self):
-        extensions_goal_state = self.get_extensions_goal_state()
+        extensions_goal_state = self.get_goal_state().extensions_goal_state
 
         if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
             self.update_goal_state(force_update=True)
-            extensions_goal_state = self.get_extensions_goal_state()
+            extensions_goal_state = self.get_goal_state().extensions_goal_state
 
         if extensions_goal_state.status_upload_blob is None:
             raise ProtocolNotFoundError("Status upload uri is missing")
@@ -1283,12 +1164,12 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self._host_plugin is None:
-            goal_state = GoalState(self)
-            self._set_host_plugin(HostPluginProtocol(self.get_endpoint(), goal_state.container_id, goal_state.role_config_name))
+            self._host_plugin = HostPluginProtocol(self.get_endpoint())
+            GoalState.update_host_plugin_headers(self)
         return self._host_plugin
 
     def get_on_hold(self):
-        return self.get_extensions_goal_state().on_hold
+        return self.get_goal_state().extensions_goal_state.on_hold
 
     def upload_logs(self, content):
         host_func = lambda: self._upload_logs_through_host(content)
