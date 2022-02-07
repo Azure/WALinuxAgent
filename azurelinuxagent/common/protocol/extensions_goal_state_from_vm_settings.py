@@ -180,8 +180,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             if self._status_upload_blob is None:
                 raise Exception("Missing statusUploadBlob.value")
             self._status_upload_blob_type = status_upload_blob.get("statusBlobType")
-            if self._status_upload_blob is None:
-                raise Exception("Missing statusUploadBlob.statusBlobType")
+            if self._status_upload_blob_type is None:
+                self._status_upload_blob_type = "BlockBlob"
 
     def _parse_required_features(self, vm_settings):
         # Sample:
