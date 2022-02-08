@@ -1291,25 +1291,35 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 return None
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
+            def get_telemetry_messages():
+                return [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+
+            def get_log_messages():
+                return [arg[0][0] for arg in logger_info.call_args_list   if "[VmSettings]" in arg[0][0]]
+
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                for _ in range(_VmSettingsErrorReporter._MaxErrors + 3):
-                    protocol.client.update_goal_state()
+                with patch('azurelinuxagent.common.logger.info') as logger_info:
+                    for _ in range(_VmSettingsErrorReporter._MaxTelemetryErrors + 3):
+                        protocol.client.update_goal_state()
 
-                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+                    telemetry_messages = get_telemetry_messages()
+                    self.assertEqual(_VmSettingsErrorReporter._MaxTelemetryErrors, len(telemetry_messages), "The number of errors reported to telemetry is not the max allowed (got: {0})".format(telemetry_messages))
 
-                self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
+                    log_messages = get_log_messages()
+                    self.assertEqual(_VmSettingsErrorReporter._MaxLogErrors, len(log_messages), "The number of errors reported to the local log is not the max allowed (got: {0})".format(telemetry_messages))
 
             # Reset the error reporter and verify that additional errors are reported
             protocol.client._vm_settings_error_reporter._next_period = datetime.now()
             protocol.client.update_goal_state()  # this triggers the reset
 
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                for _ in range(3):
-                    protocol.client.update_goal_state()
+                protocol.client.update_goal_state()
 
-                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+                telemetry_messages = get_telemetry_messages()
+                self.assertEqual(1, len(telemetry_messages), "Expected additional errors to be reported to telemetry in the next period (got: {0})".format(telemetry_messages))
 
-                self.assertEqual(3, len(messages), "Expected additional errors to be reported in the next period (got: {0})".format(messages))
+                log_messages = get_log_messages()
+                self.assertEqual(1, len(log_messages), "Expected additional errors to be reported to the local log in the next period (got: {0})".format(telemetry_messages))
 
     def test_it_should_use_vm_settings_by_default(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
