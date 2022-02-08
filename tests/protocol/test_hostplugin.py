@@ -934,7 +934,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             def fetch_vm_settings():
                 try:
                     host_plugin.fetch_vm_settings(True)
-                except:
+                except ProtocolError:
                     pass  # All calls produce an error; ignore it
 
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
