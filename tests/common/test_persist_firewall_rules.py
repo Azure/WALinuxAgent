@@ -99,21 +99,25 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
     def __assert_firewall_called(self, cmd, validate_command_called=True):
         if validate_command_called:
-            self.assertIn(AddFirewallRules.get_firewalld_accept_command(command=cmd,
-                                                                        destination=self.__test_dst_ip,
-                                                                        uid=self.__test_uid),
+            self.assertIn(AddFirewallRules.get_wire_root_accept_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                     destination=self.__test_dst_ip,
+                                                                     owner_uid=self.__test_uid,
+                                                                     firewalld_command=cmd),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
-            self.assertIn(AddFirewallRules.get_firewalld_drop_command(command=cmd,
-                                                                      destination=self.__test_dst_ip),
+            self.assertIn(AddFirewallRules.get_wire_non_root_drop_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                       destination=self.__test_dst_ip,
+                                                                       firewalld_command=cmd),
                           self.__executed_commands, "Firewall {0} command not found".format(cmd))
         else:
-            self.assertNotIn(AddFirewallRules.get_firewalld_accept_command(command=cmd,
-                                                                           destination=self.__test_dst_ip,
-                                                                           uid=self.__test_uid),
+            self.assertNotIn(AddFirewallRules.get_wire_root_accept_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                        destination=self.__test_dst_ip,
+                                                                        owner_uid=self.__test_uid,
+                                                                        firewalld_command=cmd),
                              self.__executed_commands,
                              "Firewall {0} command found".format(cmd))
-            self.assertNotIn(AddFirewallRules.get_firewalld_drop_command(command=cmd,
-                                                                         destination=self.__test_dst_ip),
+            self.assertNotIn(AddFirewallRules.get_wire_non_root_drop_rule(command=AddFirewallRules.APPEND_COMMAND,
+                                                                          destination=self.__test_dst_ip,
+                                                                          firewalld_command=cmd),
                              self.__executed_commands, "Firewall {0} command found".format(cmd))
 
     def __assert_systemctl_called(self, cmd="enable", validate_command_called=True):
@@ -173,6 +177,22 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             return True, ["echo", "enabled"]
         return False, []
 
+    @staticmethod
+    def __mock_firewalld_running_and_remove_not_successful(cmd):
+        if cmd == PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD:
+            return True, ["echo", "running"]
+        # This is to fail the check if firewalld-rules are already applied
+        cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.QueryPassThrough, "conntrack"]
+        if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
+            return True, ["exit", "1"]
+        # This is to fail the remove if firewalld-rules fails to remove rule
+        cmds_to_fail = ["firewall-cmd", FirewallCmdDirectCommands.RemovePassThrough, "conntrack"]
+        if all(cmd_to_fail in cmd for cmd_to_fail in cmds_to_fail):
+            return True, ["exit", "2"]
+        if "firewall-cmd" in cmd:
+            return True, ["echo", "enabled"]
+        return False, []
+
     def __setup_and_assert_network_service_setup_scenario(self, handler, mock_popen=None):
         mock_popen = TestPersistFirewallRulesHandler.__mock_network_setup_service_disabled if mock_popen is None else mock_popen
         self.__replace_popen_cmd = mock_popen
@@ -183,6 +203,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         self.__assert_systemctl_reloaded(validate_command_called=True)
         self.__assert_firewall_cmd_running_called(validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=False)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         self.assertTrue(os.path.exists(handler.get_service_file_path()), "Service unit file not found")
 
@@ -194,6 +215,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         # Assert we verified that rules were set using firewall-cmd
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=True)
         # Assert no commands for adding rules using firewall-cmd were called
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=False)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         # Assert no commands for systemctl were called
         self.assertFalse(any("systemctl" in cmd for cmd in self.__executed_commands), "Systemctl shouldn't be called")
@@ -215,6 +237,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             self.__assert_systemctl_reloaded(validate_command_called=False)
             self.__assert_firewall_cmd_running_called(validate_command_called=True)
             self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
+            self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=False)
             self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
             self.assertTrue(os.path.exists(handler.get_service_file_path()), "Service unit file not found")
 
@@ -280,6 +303,19 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         self.__assert_firewall_cmd_running_called(validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=True)
+        self.assertFalse(any("systemctl" in cmd for cmd in self.__executed_commands), "Systemctl shouldn't be called")
+
+    def test_it_should_add_firewalld_rules_if_remove_raises_exception(self):
+
+        self.__replace_popen_cmd = self.__mock_firewalld_running_and_remove_not_successful
+        with self._get_persist_firewall_rules_handler() as handler:
+            handler.setup()
+
+        self.__assert_firewall_cmd_running_called(validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=True)
+        self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=True)
         self.assertFalse(any("systemctl" in cmd for cmd in self.__executed_commands), "Systemctl shouldn't be called")
 
@@ -356,6 +392,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
             self.__assert_firewall_cmd_running_called(validate_command_called=True)
             self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=True)
+            self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=True)
             self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=True)
             self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=False)
             self.__assert_systemctl_called(cmd="enable", validate_command_called=False)

@@ -26,6 +26,7 @@ class RouteEntry(object):
     Represents a single route. The destination, gateway, and mask members are hex representations of the IPv4 address in
     network byte order.
     """
+
     def __init__(self, interface, destination, gateway, mask, flags, metric):
         self.interface = interface
         self.destination = destination
@@ -40,7 +41,7 @@ class RouteEntry(object):
             raise Exception("String to dotted quad conversion must be 8 characters")
         octets = []
         for idx in range(6, -2, -2):
-            octets.append(str(int(value[idx:idx+2], 16)))
+            octets.append(str(int(value[idx:idx + 2], 16)))
         return ".".join(octets)
 
     def destination_quad(self):
@@ -55,7 +56,7 @@ class RouteEntry(object):
     def to_json(self):
         f = '{{"Iface": "{0}", "Destination": "{1}", "Gateway": "{2}", "Mask": "{3}", "Flags": "{4:#06x}", "Metric": "{5}"}}'
         return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
-                       self.flags, self.metric)
+                        self.flags, self.metric)
 
     def __str__(self):
         f = "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4:#06x}\tMetric: {5}"
@@ -63,7 +64,7 @@ class RouteEntry(object):
                         self.flags, self.metric)
 
     def __repr__(self):
-        return 'RouteEntry("{0}", "{1}", "{2}", "{3}", "{4:#04x}", "{5}")'\
+        return 'RouteEntry("{0}", "{1}", "{2}", "{3}", "{4:#04x}", "{5}")' \
             .format(self.interface, self.destination, self.gateway, self.mask, self.flags, self.metric)
 
 
@@ -112,6 +113,11 @@ class FirewallCmdDirectCommands(object):
     # checks if the firewalld rule is present or not
     QueryPassThrough = "--query-passthrough"
 
+    # firewall-cmd --permanent --direct --remove-passthrough ipv4 -t security -A OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner 0 -j ACCEPT
+    # success
+    # remove the firewalld rule
+    RemovePassThrough = "--remove-passthrough"
+
 
 class AddFirewallRules(object):
     """
@@ -136,16 +142,10 @@ class AddFirewallRules(object):
     CHECK_COMMAND = "-C"
 
     @staticmethod
-    def _add_wait(wait, command):
+    def __get_iptables_base_command(wait=""):
         """
         If 'wait' is True, adds the wait option (-w) to the given iptables command line
         """
-        if wait:
-            command.append("-w")
-        return command
-
-    @staticmethod
-    def __get_iptables_base_command(wait=""):
         if wait != "":
             return ["iptables", "-w"]
         return ["iptables"]
@@ -157,56 +157,35 @@ class AddFirewallRules(object):
 
     @staticmethod
     def __get_common_command_params(command, destination):
-        return ["-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp", "-m"]
+        return ["-t", "security", command, "OUTPUT", "-d", destination, "-p", "tcp"]
 
     @staticmethod
-    def __get_common_accept_command_params(wait, command, destination, uid):
-        cmd = AddFirewallRules.__get_common_command_params(command, destination)
-        cmd.extend(["owner", "--uid-owner", str(uid), "-j", "ACCEPT"])
-        return AddFirewallRules._add_wait(wait, cmd)
-
-    @staticmethod
-    def __get_common_drop_command_params(wait, command, destination):
-        cmd = AddFirewallRules.__get_common_command_params(command, destination)
-        cmd.extend(["conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
-        return AddFirewallRules._add_wait(wait, cmd)
-
-    @staticmethod
-    def get_accept_tcp_rule(command, destination, firewalld_command="", wait=""):
-        # This rule allows DNS TCP request to wireserver ip for non root users
-
+    def __get_firewall_base_command(command, destination, firewalld_command="", wait=""):
+        # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
         if firewalld_command != "":
             cmd = AddFirewallRules.__get_firewalld_base_command(firewalld_command)
         else:
             cmd = AddFirewallRules.__get_iptables_base_command(wait)
-        cmd = cmd + ['-t', 'security', command, 'OUTPUT', '-d', destination, '-p', 'tcp', '--destination-port', '53', '-j', 'ACCEPT']
+        cmd.extend(AddFirewallRules.__get_common_command_params(command, destination))
         return cmd
 
     @staticmethod
-    def get_iptables_accept_command(wait, command, destination, owner_uid):
-        cmd = AddFirewallRules.__get_iptables_base_command()
-        cmd.extend(AddFirewallRules.__get_common_accept_command_params(wait, command, destination, owner_uid))
+    def get_accept_tcp_rule(command, destination, firewalld_command="", wait=""):
+        # This rule allows DNS TCP request to wireserver ip for non root users
+        cmd = AddFirewallRules.__get_firewall_base_command(command, destination, firewalld_command, wait)
+        cmd.extend(['--destination-port', '53', '-j', 'ACCEPT'])
         return cmd
 
     @staticmethod
-    def get_iptables_drop_command(wait, command, destination):
-        cmd = AddFirewallRules.__get_iptables_base_command()
-        cmd.extend(AddFirewallRules.__get_common_drop_command_params(wait, command, destination))
+    def get_wire_root_accept_rule(command, destination, owner_uid, firewalld_command="", wait=""):
+        cmd = AddFirewallRules.__get_firewall_base_command(command, destination, firewalld_command, wait)
+        cmd.extend(["-m", "owner", "--uid-owner", str(owner_uid), "-j", "ACCEPT"])
         return cmd
 
     @staticmethod
-    def get_firewalld_accept_command(command, destination, uid, wait=""):
-        cmd = AddFirewallRules.__get_firewalld_base_command(command)
-        cmd.extend(
-            AddFirewallRules.__get_common_accept_command_params(wait, AddFirewallRules.APPEND_COMMAND, destination,
-                                                                uid))
-        return cmd
-
-    @staticmethod
-    def get_firewalld_drop_command(command, destination, wait=""):
-        cmd = AddFirewallRules.__get_firewalld_base_command(command)
-        cmd.extend(
-            AddFirewallRules.__get_common_drop_command_params(wait, AddFirewallRules.APPEND_COMMAND, destination))
+    def get_wire_non_root_drop_rule(command, destination, firewalld_command="", wait=""):
+        cmd = AddFirewallRules.__get_firewall_base_command(command, destination, firewalld_command, wait)
+        cmd.extend(["-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"])
         return cmd
 
     @staticmethod
@@ -226,43 +205,60 @@ class AddFirewallRules(object):
             raise Exception(msg)
 
     @staticmethod
-    def add_iptables_rules(wait, dst_ip, uid):
-        # The order in which the below rules are added matters for the ip table rules to work as expected
-        AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
-        AddFirewallRules.__raise_if_empty(uid, "User ID")
-
-        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.APPEND_COMMAND, dst_ip, wait=wait)
-        AddFirewallRules.__execute_cmd(accept_tcp_rule)
-
-        accept_rule = AddFirewallRules.get_iptables_accept_command(wait, AddFirewallRules.APPEND_COMMAND, dst_ip, uid)
-        AddFirewallRules.__execute_cmd(accept_rule)
-
-        drop_rule = AddFirewallRules.get_iptables_drop_command(wait, AddFirewallRules.APPEND_COMMAND, dst_ip)
-        AddFirewallRules.__execute_cmd(drop_rule)
+    def __execute_check_command(cmd):
+        # Here we primarily check if an  iptable rule exist. True if it exits , false if not
+        try:
+            shellutil.run_command(cmd)
+            return True
+        except CommandError as err:
+            # return code 1 is expected while using the check command. Raise if encounter any other return code
+            if err.returncode != 1:
+                raise
+        return False
 
     @staticmethod
-    def __execute_firewalld_commands(command, dst_ip, uid):
+    def verify_iptables_rules_exist(wait, dst_ip, uid):
+        check_cmd_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
+        check_cmd_accept_rule = AddFirewallRules.get_wire_root_accept_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, uid,
+                                                                           wait=wait)
+        check_cmd_drop_rule = AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
+
+        return AddFirewallRules.__execute_check_command(check_cmd_tcp_rule) and AddFirewallRules.__execute_check_command(check_cmd_accept_rule) \
+               and AddFirewallRules.__execute_check_command(check_cmd_drop_rule)
+
+    @staticmethod
+    def __execute_firewall_commands(dst_ip, uid, command=APPEND_COMMAND, firewalld_command="", wait=""):
+        # The order in which the below rules are added matters for the ip table rules to work as expected
+
         AddFirewallRules.__raise_if_empty(dst_ip, "Destination IP")
         AddFirewallRules.__raise_if_empty(uid, "User ID")
 
-        # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
-
-        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, dst_ip, firewalld_command=command)
+        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(command, dst_ip,
+                                                               firewalld_command=firewalld_command, wait=wait)
         AddFirewallRules.__execute_cmd(accept_tcp_rule)
 
-        accept_cmd = AddFirewallRules.get_firewalld_accept_command(command, dst_ip, uid)
+        accept_cmd = AddFirewallRules.get_wire_root_accept_rule(command, dst_ip, uid,
+                                                                firewalld_command=firewalld_command, wait=wait)
         AddFirewallRules.__execute_cmd(accept_cmd)
 
-        drop_cmd = AddFirewallRules.get_firewalld_drop_command(command, dst_ip)
+        drop_cmd = AddFirewallRules.get_wire_non_root_drop_rule(command, dst_ip, firewalld_command=firewalld_command, wait=wait)
         AddFirewallRules.__execute_cmd(drop_cmd)
+
+    @staticmethod
+    def add_iptables_rules(wait, dst_ip, uid):
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, command=AddFirewallRules.APPEND_COMMAND, wait=wait)
 
     @staticmethod
     def add_firewalld_rules(dst_ip, uid):
         # Firewalld.service fails if we set `-w` in the iptables command, so not adding it at all for firewalld commands
         # Firewalld.service with the "--permanent --passthrough" parameter ensures that a firewall rule is set only once even if command is executed multiple times
 
-        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.PassThrough, dst_ip, uid)
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, firewalld_command=FirewallCmdDirectCommands.PassThrough)
 
     @staticmethod
     def check_firewalld_rule_applied(dst_ip, uid):
-        AddFirewallRules.__execute_firewalld_commands(FirewallCmdDirectCommands.QueryPassThrough, dst_ip, uid)
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, firewalld_command=FirewallCmdDirectCommands.QueryPassThrough)
+
+    @staticmethod
+    def remove_firewalld_rules(dst_ip, uid):
+        AddFirewallRules.__execute_firewall_commands(dst_ip, uid, firewalld_command=FirewallCmdDirectCommands.RemovePassThrough)

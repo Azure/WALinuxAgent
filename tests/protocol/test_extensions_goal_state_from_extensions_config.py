@@ -26,3 +26,13 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.activity_id, "Incorrect activity Id")
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.correlation_id, "Incorrect correlation Id")
             self.assertEqual('1900-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
+
+    def test_it_should_parse_missing_status_upload_blob_as_none(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-no_status_upload_blob.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = protocol.get_extensions_goal_state()
+
+            self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
+
