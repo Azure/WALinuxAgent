@@ -61,6 +61,12 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             manifests, _ = protocol.get_vmagent_manifests()
             for manifest in manifests:
                 self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
+    def test_create_from_vm_settings_should_parse_missing_status_upload_blob_as_none(self):
+        vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings-no_status_upload_blob.json"))
+        vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings("123", vm_settings_text)
+
+        self.assertIsNone(vm_settings.status_upload_blob, "Expected status upload blob to be None")
+        self.assertEqual("BlockBlob", vm_settings.status_upload_blob_type, "Expected status upload blob to be Block")
 
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):

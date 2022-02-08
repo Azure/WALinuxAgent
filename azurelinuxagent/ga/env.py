@@ -26,7 +26,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
-from azurelinuxagent.common.event import add_periodic, WALAEventOperation
+from azurelinuxagent.common.event import add_periodic, WALAEventOperation, add_event
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
@@ -131,7 +131,13 @@ class EnableFirewall(PeriodicOperation):
             self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
             self._try_remove_legacy_firewall_rule = True
 
-        success = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+        success, is_firewall_rules_updated = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(),
+                                                                          uid=os.getuid())
+
+        if is_firewall_rules_updated:
+            msg = "Successfully added Azure fabric firewall rules. Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list())
+            logger.info(msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.Firewall, message=msg, log_event=False)
 
         add_periodic(
             logger.EVERY_HOUR,
@@ -140,6 +146,21 @@ class EnableFirewall(PeriodicOperation):
             op=WALAEventOperation.Firewall,
             is_success=success,
             log_event=False)
+
+
+class LogFirewallRules(PeriodicOperation):
+    """
+    Log firewall rules state once a day.
+    Goal is to capture the firewall state when the agent service startup,
+    in addition to add more debug data and would be more useful long term.
+    """
+    def __init__(self, osutil):
+        super(LogFirewallRules, self).__init__(conf.get_firewall_rules_log_period())
+        self._osutil = osutil
+
+    def _operation(self):
+        # Log firewall rules state once a day
+        logger.info("Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list()))
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):
@@ -223,6 +244,7 @@ class EnvHandler(ThreadHandlerInterface):
 
             if conf.enable_firewall():
                 periodic_operations.append(EnableFirewall(osutil, protocol))
+                periodic_operations.append(LogFirewallRules(osutil))
             if conf.get_root_device_scsi_timeout() is not None:
                 periodic_operations.append(SetRootDeviceScsiTimeout(osutil))
             if conf.get_monitor_hostname():

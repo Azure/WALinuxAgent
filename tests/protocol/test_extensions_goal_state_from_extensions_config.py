@@ -27,15 +27,11 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.correlation_id, "Incorrect correlation Id")
             self.assertEqual('1900-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
-    def test_extension_goal_state_should_parse_requested_version_properly(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            manifests, _ = protocol.get_vmagent_manifests()
-            for manifest in manifests:
-                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
-
-        data_file = mockwiredata.DATA_FILE.copy()
-        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
+    def test_it_should_parse_missing_status_upload_blob_as_none(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-no_status_upload_blob.xml"
         with mock_wire_protocol(data_file) as protocol:
-            manifests, _ = protocol.get_vmagent_manifests()
-            for manifest in manifests:
-                self.assertEqual(manifest.requested_version_string, "9.9.9.10", "Version should be 9.9.9.10")
+            extensions_goal_state = protocol.get_extensions_goal_state()
+
+            self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")

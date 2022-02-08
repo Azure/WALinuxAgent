@@ -22,10 +22,10 @@ import sys
 
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.textutil import format_exception
 
 
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
@@ -53,7 +53,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             self._parse_vm_settings(json_text)
             self._do_common_validations()
         except Exception as e:
-            raise VmSettingsError("Error parsing vmSettings (etag: {0}): {1}\n{2}".format(etag, format_exception(e), self.get_redacted_text()))
+            raise VmSettingsError("Error parsing vmSettings [HGAP: {0}]: {1}".format(self._host_ga_plugin_version, ustr(e)))
 
     @property
     def id(self):
@@ -142,13 +142,15 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         "extensionGoalStatesSource": "Fabric",
         #         ...
         #     }
-        self._activity_id = self._string_to_id(vm_settings.get("activityId"))
-        self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
-        self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
+        # The HGAP version is included in some messages, so parse it first
         host_ga_plugin_version = vm_settings.get("hostGAPluginVersion")
         if host_ga_plugin_version is not None:
             self._host_ga_plugin_version = FlexibleVersion(host_ga_plugin_version)
+
+        self._activity_id = self._string_to_id(vm_settings.get("activityId"))
+        self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
+        self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
         schema_version = vm_settings.get("vmSettingsSchemaVersion")
         if schema_version is not None:
@@ -174,13 +176,15 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         # }
         status_upload_blob = vm_settings.get("statusUploadBlob")
         if status_upload_blob is None:
-            raise Exception("Missing statusUploadBlob")
-        self._status_upload_blob = status_upload_blob.get("value")
-        if self._status_upload_blob is None:
-            raise Exception("Missing statusUploadBlob.value")
-        self._status_upload_blob_type = status_upload_blob.get("statusBlobType")
-        if self._status_upload_blob is None:
-            raise Exception("Missing statusUploadBlob.statusBlobType")
+            self._status_upload_blob = None
+            self._status_upload_blob_type = "BlockBlob"
+        else:
+            self._status_upload_blob = status_upload_blob.get("value")
+            if self._status_upload_blob is None:
+                raise Exception("Missing statusUploadBlob.value")
+            self._status_upload_blob_type = status_upload_blob.get("statusBlobType")
+            if self._status_upload_blob_type is None:
+                self._status_upload_blob_type = "BlockBlob"
 
     def _parse_required_features(self, vm_settings):
         # Sample:
