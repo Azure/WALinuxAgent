@@ -31,7 +31,7 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["ext_conf"] = "hostgaplugin/ext_conf-no_status_upload_blob.xml"
         with mock_wire_protocol(data_file) as protocol:
-            extensions_goal_state = protocol.get_extensions_goal_state()
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")

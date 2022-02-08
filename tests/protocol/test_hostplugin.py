@@ -916,7 +916,8 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
 
             self.assertEqual(expected, summary, "The count of errors is incorrect")
 
-    def test_it_should_limit_the_number_of_errors_it_reports(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_it_should_limit_the_number_of_errors_it_reports(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_host_plugin_vm_settings_request(url):
@@ -924,25 +925,42 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 return None
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
+            def get_telemetry_messages():
+                return [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+
+            def get_log_messages():
+                return [arg[0][0] for arg in logger_info.call_args_list   if "[VmSettings]" in arg[0][0]]
+
+            def fetch_vm_settings():
+                try:
+                    host_plugin.fetch_vm_settings(True)
+                except:
+                    pass  # All calls produce an error; ignore it
+
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
-                for _ in range(_VmSettingsErrorReporter._MaxErrors + 3):
-                    self._fetch_vm_settings_ignoring_errors(protocol)
+                with patch('azurelinuxagent.common.logger.info') as logger_info:
+                    host_plugin = protocol.client.get_host_plugin()
+                    for _ in range(_VmSettingsErrorReporter._MaxTelemetryErrors + 3):
+                        fetch_vm_settings()
 
-                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+                    telemetry_messages = get_telemetry_messages()
+                    self.assertEqual(_VmSettingsErrorReporter._MaxTelemetryErrors, len(telemetry_messages), "The number of errors reported to telemetry is not the max allowed (got: {0})".format(telemetry_messages))
 
-                self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
+                    log_messages = get_log_messages()
+                    self.assertEqual(_VmSettingsErrorReporter._MaxLogErrors, len(log_messages), "The number of errors reported to the local log is not the max allowed (got: {0})".format(telemetry_messages))
 
             # Reset the error reporter and verify that additional errors are reported
-            protocol.client._host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now()
-            self._fetch_vm_settings_ignoring_errors(protocol)  # this triggers the reset
+            host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now()
+            fetch_vm_settings()  # this triggers the reset
 
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
-                for _ in range(3):
-                    self._fetch_vm_settings_ignoring_errors(protocol)
+                fetch_vm_settings()
 
-                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+                telemetry_messages = get_telemetry_messages()
+                self.assertEqual(1, len(telemetry_messages), "Expected additional errors to be reported to telemetry in the next period (got: {0})".format(telemetry_messages))
 
-                self.assertEqual(3, len(messages), "Expected additional errors to be reported in the next period (got: {0})".format(messages))
+                log_messages = get_log_messages()
+                self.assertEqual(1, len(log_messages), "Expected additional errors to be reported to the local log in the next period (got: {0})".format(telemetry_messages))
 
     @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
     def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self, _):

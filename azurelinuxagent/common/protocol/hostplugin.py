@@ -512,7 +512,8 @@ class _VmSettingsError(object):
 
 
 class _VmSettingsErrorReporter(object):
-    _MaxErrors = 5  # Max number of error reported by period
+    _MaxLogErrors = 1  # Max number of errors by period reported to the local log
+    _MaxTelemetryErrors = 3  # Max number of errors  by period reported to telemetry
     _Period = datetime.timedelta(hours=1)  # How often to report the summary
 
     def __init__(self):
@@ -533,7 +534,10 @@ class _VmSettingsErrorReporter(object):
     def report_error(self, error, category=None):
         self._error_count += 1
 
-        if self._error_count <= _VmSettingsErrorReporter._MaxErrors:
+        if self._error_count <= _VmSettingsErrorReporter._MaxLogErrors:
+            logger.info("[VmSettings] [Informational only, the Agent will continue normal operation] {0}", error)
+
+        if self._error_count <= _VmSettingsErrorReporter._MaxTelemetryErrors:
             add_event(op=WALAEventOperation.VmSettings, message=error, is_success=False, log_event=False)
 
         if category == _VmSettingsError.ServerError:
