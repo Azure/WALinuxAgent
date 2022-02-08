@@ -25,9 +25,11 @@ import uuid
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.exception import HttpError, ProtocolError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.protocol.healthservice import HealthService
+from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.textutil import remove_bom
@@ -63,22 +65,31 @@ class HostPluginProtocol(object):
     FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)
     STATUS_REPORTING_PERIOD = datetime.timedelta(minutes=1)
 
-    def __init__(self, endpoint, container_id, role_config_name):
+    def __init__(self, endpoint):
+        """
+        NOTE: Before using the HostGAPlugin be sure to invoke GoalState.update_host_plugin_headers() to initialize
+              the container id and role config name
+        """
         if endpoint is None:
             raise ProtocolError("HostGAPlugin: Endpoint not provided")
         self.is_initialized = False
         self.is_available = False
         self.api_versions = None
         self.endpoint = endpoint
-        self.container_id = container_id
-        self.deployment_id = self._extract_deployment_id(role_config_name)
-        self.role_config_name = role_config_name
+        self.container_id = None
+        self.deployment_id = None
+        self.role_config_name = None
         self.manifest_uri = None
         self.health_service = HealthService(endpoint)
         self.fetch_error_state = ErrorState(min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
         self.status_error_state = ErrorState(min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
         self.fetch_last_timestamp = None
         self.status_last_timestamp = None
+        self._host_plugin_version = FlexibleVersion("0.0.0.0")  # Version 0 means "unknown"
+        self._host_plugin_supports_vm_settings = False
+        self._host_plugin_supports_vm_settings_next_check = datetime.datetime.now()
+        self._vm_settings_error_reporter = _VmSettingsErrorReporter()
+        self._cached_vm_settings = None  # Cached value of the most recent ExtensionsGoalStateFromVmSettings
 
     @staticmethod
     def _extract_deployment_id(role_config_name):
@@ -383,3 +394,174 @@ class HostPluginProtocol(object):
         if PY_VERSION_MAJOR > 2:
             return s.decode('utf-8')
         return s
+
+    def fetch_vm_settings(self, force_update):
+        """
+        Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalStateFromVmSettings, bool) tuple with the vmSettings and
+        a boolean indicating if they are an updated (True) or a cached value (False).
+
+        Raises VmSettingsNotSupported if the HostGAPlugin does not support the vmSettings API, ResourceGoneError if the container ID and roleconfig name
+        need to be refreshed, or ProtocolError if the request fails for any other reason (e.g. not supported, time out, server error).
+        """
+        def raise_not_supported(reset_state=False):
+            if reset_state:
+                self._host_plugin_supports_vm_settings = False
+                self._host_plugin_supports_vm_settings_next_check = datetime.datetime.now() + datetime.timedelta(hours=6)  # check again in 6 hours
+                # "Not supported" is not considered an error, so don't use self._vm_settings_error_reporter to report it
+                logger.info("vmSettings is not supported")
+                add_event(op=WALAEventOperation.HostPlugin, message="vmSettings is not supported", is_success=True)
+            raise VmSettingsNotSupported()
+
+        def format_message(msg):
+            return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
+
+        try:
+            # Raise if VmSettings are not supported but check for periodically since the HostGAPlugin could have been updated since the last check
+            if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.datetime.now():
+                raise_not_supported()
+
+            etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
+            correlation_id = str(uuid.uuid4())
+
+            self._vm_settings_error_reporter.report_request()
+
+            url, headers = self.get_vm_settings_request(correlation_id)
+            if etag is not None:
+                headers['if-none-match'] = etag
+            response = restutil.http_get(url, headers=headers, use_proxy=False, max_retry=1, return_raw_response=True)
+
+            if response.status == httpclient.GONE:
+                raise ResourceGoneError()
+
+            if response.status == httpclient.NOT_FOUND:  # the HostGAPlugin does not support FastTrack
+                raise_not_supported(reset_state=True)
+
+            if response.status == httpclient.NOT_MODIFIED:  # The goal state hasn't changed, return the current instance
+                return self._cached_vm_settings, False
+
+            if response.status != httpclient.OK:
+                error_description = restutil.read_response_error(response)
+                # For historical reasons the HostGAPlugin returns 502 (BAD_GATEWAY) for internal errors instead of using
+                # 500 (INTERNAL_SERVER_ERROR). We add a short prefix to the error message in the hope that it will help
+                # clear any confusion produced by the poor choice of status code.
+                if response.status == httpclient.BAD_GATEWAY:
+                    error_description = "[Internal error in HostGAPlugin] {0}".format(error_description)
+                error_description = format_message(error_description)
+
+                if 400 <= response.status <= 499:
+                    self._vm_settings_error_reporter.report_error(error_description, _VmSettingsError.ClientError)
+                elif 500 <= response.status <= 599:
+                    self._vm_settings_error_reporter.report_error(error_description, _VmSettingsError.ServerError)
+                else:
+                    self._vm_settings_error_reporter.report_error(error_description)
+
+                raise ProtocolError(error_description)
+
+            for h in response.getheaders():
+                if h[0].lower() == 'etag':
+                    response_etag = h[1]
+                    break
+            else:  # since the vmSettings were updated, the response must include an etag
+                message = format_message("The vmSettings response does not include an Etag header")
+                self._vm_settings_error_reporter.report_error(message)
+                raise ProtocolError(message)
+
+            response_content = ustr(response.read(), encoding='utf-8')
+
+            vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, response_content)
+
+            # log the HostGAPlugin version
+            if vm_settings.host_ga_plugin_version != self._host_plugin_version:
+                self._host_plugin_version = vm_settings.host_ga_plugin_version
+                message = "HostGAPlugin version: {0}".format(vm_settings.host_ga_plugin_version)
+                logger.info(message)
+                add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
+
+            # Don't support HostGAPlugin versions older than 115
+            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.115"):
+                raise_not_supported(reset_state=True)
+
+            logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
+            self._host_plugin_supports_vm_settings = True
+            self._cached_vm_settings = vm_settings
+            return vm_settings, True
+
+        except (ProtocolError, ResourceGoneError, VmSettingsNotSupported):
+            raise
+        except Exception as exception:
+            if isinstance(exception, IOError) and "timed out" in ustr(exception):
+                message = format_message("Timeout")
+                self._vm_settings_error_reporter.report_error(message, _VmSettingsError.Timeout)
+            else:
+                message = format_message("Request failed: {0}".format(textutil.format_exception(exception)))
+                self._vm_settings_error_reporter.report_error(message, _VmSettingsError.RequestFailed)
+            raise ProtocolError(message)
+        finally:
+            self._vm_settings_error_reporter.report_summary()
+
+
+class VmSettingsNotSupported(TypeError):
+    pass
+
+
+class _VmSettingsError(object):
+    ServerError   = 'ServerError'
+    ClientError   = 'ClientError'
+    Timeout       = 'Timeout'
+    RequestFailed = 'RequestFailed'
+
+
+class _VmSettingsErrorReporter(object):
+    _MaxLogErrors = 1  # Max number of errors by period reported to the local log
+    _MaxTelemetryErrors = 3  # Max number of errors  by period reported to telemetry
+    _Period = datetime.timedelta(hours=1)  # How often to report the summary
+
+    def __init__(self):
+        self._reset()
+
+    def _reset(self):
+        self._request_count = 0  # Total number of vmSettings HTTP requests
+        self._error_count = 0   # Total number of errors issuing vmSettings requests (includes all kinds of errors)
+        self._server_error_count = 0  # Count of server side errors (HTTP status in the 500s)
+        self._client_error_count = 0  # Count of client side errors (HTTP status in the 400s)
+        self._timeout_count = 0  # Count of timeouts on vmSettings requests
+        self._request_failure_count = 0  # Total count of requests that could not be issued (does not include timeouts or requests that were actually issued and failed, for example, with 500 or 400 statuses)
+        self._next_period = datetime.datetime.now() + _VmSettingsErrorReporter._Period
+
+    def report_request(self):
+        self._request_count += 1
+
+    def report_error(self, error, category=None):
+        self._error_count += 1
+
+        if self._error_count <= _VmSettingsErrorReporter._MaxLogErrors:
+            logger.info("[VmSettings] [Informational only, the Agent will continue normal operation] {0}", error)
+
+        if self._error_count <= _VmSettingsErrorReporter._MaxTelemetryErrors:
+            add_event(op=WALAEventOperation.VmSettings, message=error, is_success=False, log_event=False)
+
+        if category == _VmSettingsError.ServerError:
+            self._server_error_count += 1
+        elif category == _VmSettingsError.ClientError:
+            self._client_error_count += 1
+        elif category == _VmSettingsError.Timeout:
+            self._timeout_count += 1
+        elif category == _VmSettingsError.RequestFailed:
+            self._request_failure_count += 1
+
+    def report_summary(self):
+        if datetime.datetime.now() >= self._next_period:
+            summary = {
+                "requests":       self._request_count,
+                "errors":         self._error_count,
+                "serverErrors":   self._server_error_count,
+                "clientErrors":   self._client_error_count,
+                "timeouts":       self._timeout_count,
+                "failedRequests": self._request_failure_count
+            }
+            message = json.dumps(summary)
+            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+            if self._error_count > 0:
+                logger.info("[VmSettingsSummary] {0}", message)
+
+            self._reset()

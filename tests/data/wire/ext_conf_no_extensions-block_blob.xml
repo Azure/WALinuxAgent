@@ -1,0 +1,12 @@
+<Extensions version="1.0.0.0" goalStateIncarnation="9">
+  <GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+    <GAFamilies>
+    </GAFamilies>
+  </GuestAgentExtension>
+  <Plugins>
+  </Plugins>
+  <PluginSettings>
+  </PluginSettings>
+  <StatusUploadBlob statusBlobType="BlockBlob">http://foo</StatusUploadBlob>
+</Extensions>
+

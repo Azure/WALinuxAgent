@@ -53,8 +53,7 @@ DATA_FILE_INVALID_VM_META_DATA = DATA_FILE.copy()
 DATA_FILE_INVALID_VM_META_DATA["ext_conf"] = "wire/ext_conf_invalid_vm_metadata.xml"
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
-DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
-DATA_FILE_NO_EXT["ext_conf"] = None
+DATA_FILE_NO_EXT["ext_conf"] = "wire/ext_conf_no_extensions-block_blob.xml"
 
 DATA_FILE_NOOP_GS = DATA_FILE.copy()
 DATA_FILE_NOOP_GS["goal_state"] = "wire/goal_state_noop.xml"
@@ -197,7 +196,7 @@ class WireProtocolData(object):
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
     def mock_http_get(self, url, *_, **kwargs):
-        content = None
+        content = ''
         response_headers = []
 
         resp = MagicMock()

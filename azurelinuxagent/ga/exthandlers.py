@@ -50,7 +50,7 @@ from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
-from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE, GoalStateHistory
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -67,7 +67,6 @@ HANDLER_NAME_PATTERN = re.compile(_HANDLER_NAME_PATTERN, re.IGNORECASE)
 HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 
-AGENT_STATUS_FILE = "waagent_status.{0}.json"
 NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
@@ -298,7 +297,7 @@ class ExtHandlersHandler(object):
         etag, activity_id, correlation_id, gs_creation_time = None, None, None, None
 
         try:
-            extensions_goal_state = self.protocol.get_extensions_goal_state()
+            extensions_goal_state = self.protocol.get_goal_state().extensions_goal_state
 
             # self.ext_handlers and etag need to be initialized first, since status reporting depends on them; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
@@ -344,7 +343,7 @@ class ExtHandlersHandler(object):
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
 
     def __get_unsupported_features(self):
-        required_features = self.protocol.client.get_extensions_goal_state().required_features
+        required_features = self.protocol.get_goal_state().extensions_goal_state.required_features
         supported_features = get_agent_supported_features_list_for_crp()
         return [feature for feature in required_features if feature not in supported_features]
 
@@ -453,7 +452,7 @@ class ExtHandlersHandler(object):
             return False
 
         if conf.get_enable_overprovisioning():
-            if self.protocol.get_extensions_goal_state().on_hold:
+            if self.protocol.get_goal_state().extensions_goal_state.on_hold:
                 logger.info("Extension handling is on hold")
                 return False
 
@@ -945,7 +944,7 @@ class ExtHandlersHandler(object):
 
                 self.report_status_error_state.reset()
 
-            self.write_ext_handlers_status_to_info_file(vm_status)
+            self.write_ext_handlers_status_to_info_file(vm_status, incarnation_changed)
 
             return vm_status
 
@@ -959,42 +958,52 @@ class ExtHandlersHandler(object):
                       message=msg)
             return None
 
-    def write_ext_handlers_status_to_info_file(self, vm_status):
-        status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(self.protocol.get_incarnation()))
-        status_blob_data = self.protocol.get_status_blob_data()
-        data = dict()
-        if status_blob_data is not None:
-            data = json.loads(status_blob_data)
+    def write_ext_handlers_status_to_info_file(self, vm_status, incarnation_changed):
+        status_file = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
 
-        # Populating the fields that does not come from vm_status or status_blob_data
-        _metadataNotSentToCRP = {
-            "agentName": AGENT_NAME,
-            "daemonVersion": str(version.get_daemon_version()),
-            "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "extensionSupportedFeatures": [name for name, _ in
-                                         get_agent_supported_features_list_for_extensions().items()]
-        }
-        data["_metadataNotSentToCRP"] = _metadataNotSentToCRP
+        if os.path.exists(status_file) and incarnation_changed:
+            # On new goal state, move the last status report for the previous goal state to the history folder
+            last_modified = os.path.getmtime(status_file)
+            timestamp = datetime.datetime.utcfromtimestamp(last_modified).isoformat()
+            GoalStateHistory(timestamp).save_status(status_file)
 
-        # Consuming supports_multi_config info from vm_status. creating a dict out of it for easy lookup in the next step.
+        # Now create/overwrite the status file; this file is kept for debugging purposes only
+        status_blob_text = self.protocol.get_status_blob_data()
+        if status_blob_text is None:
+            status_blob_text = ""
+
+        debug_info = ExtHandlersHandler._get_status_debug_info(vm_status)
+
+        status_file_text = \
+'''{{
+    "__comment__": "The __status__ property is the actual status reported to CRP",
+    "__status__": {0},
+    "__debug__": {1}
+}}
+'''.format(status_blob_text, debug_info)
+
+        fileutil.write_file(status_file, status_file_text)
+
+    @staticmethod
+    def _get_status_debug_info(vm_status):
         support_multi_config = dict()
+
         if vm_status is not None:
-            # Convert VMStatus class to Dict.
             vm_status_data = get_properties(vm_status)
             vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
             for handler_status in vm_handler_statuses:
                 if handler_status.get('name') is not None:
                     support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
 
-        handler_aggregate_status = data.get('aggregateStatus', dict()).get('handlerAggregateStatus', dict())
+        debug_info = {
+            "agentName": AGENT_NAME,
+            "daemonVersion": str(version.get_daemon_version()),
+            "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
+            "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
+            "supportsMultiConfig": support_multi_config
+        }
 
-        for handler_status in handler_aggregate_status:
-            handler_status['supportsMultiConfig'] = support_multi_config.get(handler_status.get('handlerName'))
-            status = handler_status.get('runtimeSettingsStatus', dict()).get('settingsStatus', dict()).get('status', dict())
-            status.pop('formattedMessage', None)
-            status.pop('substatus', None)
-
-        fileutil.write_file(status_path, json.dumps(data))
+        return json.dumps(debug_info)
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
