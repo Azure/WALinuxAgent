@@ -1460,6 +1460,7 @@ class TestUpdate(UpdateTestCase):
             protocol = self._create_protocol(count=count, versions=versions)
 
         self.update_handler.protocol_util = protocol
+        self.update_handler._goal_state = protocol.get_goal_state()
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
         return self.update_handler._download_agent_if_upgrade_available(protocol, base_version=base_version)
@@ -2482,6 +2483,17 @@ class ChildMock(Mock):
         self.wait = Mock(return_value=return_value, side_effect=side_effect)
 
 
+class ExtensionsGoalStateMock(object):
+    def __init__(self, identifier):
+        self.id = identifier
+
+
+class GoalStateMock(object):
+    def __init__(self, incarnation):
+        self.incarnation = incarnation
+        self.extensions_goal_state = ExtensionsGoalStateMock(incarnation)
+
+
 class ProtocolMock(object):
     def __init__(self, family="TestAgent", etag=42, versions=None, client=None):
         self.family = family
@@ -2491,6 +2503,7 @@ class ProtocolMock(object):
             "get_vmagent_pkgs": 0,
             "update_goal_state": 0
         }
+        self._goal_state = GoalStateMock(etag)
         self.goal_state_is_stale = False
         self.etag = etag
         self.versions = versions if versions is not None else []
@@ -2526,8 +2539,8 @@ class ProtocolMock(object):
     def get_protocol(self):
         return self
 
-    def get_incarnation(self):
-        return self.etag
+    def get_goal_state(self):
+        return self._goal_state
 
     def get_vmagent_manifests(self):
         self.call_counts["get_vmagent_manifests"] += 1
@@ -2604,16 +2617,16 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             # the first goal state should produce an update
             update_handler._try_update_goal_state(protocol)
-            self.assertEqual(protocol.get_incarnation(), '12345', "The goal state was not updated (received unexpected incarnation)")
+            self.assertEqual(update_handler._goal_state.incarnation, '12345', "The goal state was not updated (received unexpected incarnation)")
 
             # no changes in the goal state should not produce an update
             update_handler._try_update_goal_state(protocol)
-            self.assertEqual(protocol.get_incarnation(), '12345', "The goal state should not be updated (received unexpected incarnation)")
+            self.assertEqual(update_handler._goal_state.incarnation, '12345', "The goal state should not be updated (received unexpected incarnation)")
 
             # a new  goal state should produce an update
             protocol.mock_wire_data.set_incarnation(6789)
             update_handler._try_update_goal_state(protocol)
-            self.assertEqual(protocol.get_incarnation(), '6789', "The goal state was not updated (received unexpected incarnation)")
+            self.assertEqual(update_handler._goal_state.incarnation, '6789', "The goal state was not updated (received unexpected incarnation)")
 
     def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -2918,18 +2931,18 @@ class ReportStatusTestCase(AgentTestCase):
         update_handler = _create_update_handler()
         with _mock_exthandlers_handler() as exthandlers_handler:
             with patch("azurelinuxagent.ga.update.logger.warn") as logger_warn:
-                update_handler._report_status(exthandlers_handler, False)
+                update_handler._report_status(exthandlers_handler)
                 self.assertEqual(0, logger_warn.call_count, "UpdateHandler._report_status() should not report WARNINGS when there are no errors")
 
                 with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", return_value=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
-                    update_handler._report_status(exthandlers_handler, False)
-                    update_handler._report_status(exthandlers_handler, False)
-                    update_handler._report_status(exthandlers_handler, False)
+                    update_handler._report_status(exthandlers_handler)
+                    update_handler._report_status(exthandlers_handler)
+                    update_handler._report_status(exthandlers_handler)
                     self.assertEqual(1, logger_warn.call_count, "UpdateHandler._report_status() should report only 1 WARNING when there are multiple errors within the same goal state")
 
                     exthandlers_handler.protocol.mock_wire_data.set_incarnation(999)
                     update_handler._try_update_goal_state(exthandlers_handler.protocol)
-                    update_handler._report_status(exthandlers_handler, True)
+                    update_handler._report_status(exthandlers_handler)
                     self.assertEqual(2, logger_warn.call_count, "UpdateHandler._report_status() should continue reporting errors after a new goal state")
 
 

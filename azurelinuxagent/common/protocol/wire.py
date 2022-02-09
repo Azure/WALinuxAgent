@@ -108,9 +108,6 @@ class WireProtocol(DataContract):
         certificates = self.client.get_certs()
         return certificates.cert_list
 
-    def get_incarnation(self):
-        return self.client.get_goal_state().incarnation
-
     def get_vmagent_manifests(self):
         goal_state = self.client.get_goal_state()
         ext_conf = goal_state.extensions_goal_state

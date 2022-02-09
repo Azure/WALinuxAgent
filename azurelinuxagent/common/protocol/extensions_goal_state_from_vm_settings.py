@@ -33,7 +33,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     def __init__(self, etag, json_text):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
-        self._id = etag
+        self._id = "incarnation_{0}".format(etag)
         self._etag = etag
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
