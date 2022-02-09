@@ -33,7 +33,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import StateArchiver
+from azurelinuxagent.common.utils.archive import AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
@@ -46,7 +46,7 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProf
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, migrate_handler_state, \
-    get_exthandlers_handler, AGENT_STATUS_FILE, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
+    get_exthandlers_handler, ExtCommandEnvVariable, HandlerManifest, NOT_RUN, \
     ExtensionStatusValue, HANDLER_COMPLETE_NAME_PATTERN, HandlerEnvironment, GoalStateStatus
 
 from tests.protocol import mockwiredata
@@ -56,7 +56,6 @@ from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_EXT_ADDITIONAL_LOCA
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch, mock_sleep
 from tests.ga.extension_emulator import Actions, ExtensionCommandNames, extension_emulator, \
     enable_invocations, generate_put_handler
-from tests.utils.test_archive import TestArchive
 
 # Mocking the original sleep to reduce test execution time
 SLEEP = time.sleep
@@ -170,8 +169,11 @@ class TestExtensionCleanup(AgentTestCase):
             self.assertEqual(0, TestExtensionCleanup._count_extension_directories(), "All extension directories should be removed")
 
     def test_cleanup_removes_orphaned_packages(self):
+        data_file = mockwiredata.DATA_FILE_NO_EXT.copy()
+        data_file["ext_conf"] = "wire/ext_conf_no_extensions-no_status_blob.xml"
+
         no_of_orphaned_packages = 5
-        with self._setup_test_env(mockwiredata.DATA_FILE_NO_EXT) as (exthandlers_handler, protocol, no_of_exts):
+        with self._setup_test_env(data_file) as (exthandlers_handler, protocol, no_of_exts):
             self.assertEqual(no_of_exts, 0, "Test setup error - Extensions found in ExtConfig")
 
             # Create random extension directories
@@ -1704,7 +1706,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                         datafile = mockwiredata.DATA_FILE
 
                 _, protocol = self._create_mock(mockwiredata.WireProtocolData(datafile), *args)  # pylint: disable=no-value-for-parameter
-                ext_handlers = protocol.client.get_extensions_goal_state().extensions
+                ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
                 self.assertEqual(1, len(ext_handlers))
                 ext_handler = ext_handlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
@@ -2448,7 +2450,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_REQUIRED_FEATURES)
         _, protocol = self._create_mock(test_data, mock_get, mock_crypt_util, *args)
 
-        required_features = protocol.get_extensions_goal_state().required_features
+        required_features = protocol.get_goal_state().extensions_goal_state.required_features
         self.assertEqual(3, len(required_features), "Incorrect features parsed")
         for i, feature in enumerate(required_features):
             self.assertEqual(feature, "TestRequiredFeature{0}".format(i+1), "Name mismatch")
@@ -2508,8 +2510,8 @@ class TestExtensionSequencing(AgentTestCase):
             for ext in handler.settings:
                 ext.dependencyLevel = level
 
-        exthandlers_handler.protocol.client.get_extensions_goal_state()._extensions *= 0
-        exthandlers_handler.protocol.client.get_extensions_goal_state().extensions.extend(all_handlers)
+        exthandlers_handler.protocol.get_goal_state().extensions_goal_state._extensions *= 0
+        exthandlers_handler.protocol.get_goal_state().extensions_goal_state.extensions.extend(all_handlers)
 
     def _validate_extension_sequence(self, expected_sequence, exthandlers_handler):
         installed_extensions = [a[0].ext_handler.name for a, _ in exthandlers_handler.handle_ext_handler.call_args_list]
@@ -3299,7 +3301,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
         manifest_location_handler.num_times_called = 0
 
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
-            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
 
             with self.assertRaises(ExtensionDownloadError):
                 protocol.client.fetch_manifest(ext_handlers[0].manifest_uris,
@@ -3350,69 +3352,77 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                 )
 
             expected_status = {
-                "version": "1.1",
-                "timestampUTC": "1970-01-01T00:00:00Z",
-                "aggregateStatus": {
-                    "guestAgentStatus": {
-                        "version": AGENT_VERSION,
-                        "status": "Ready",
-                        "formattedMessage": {
-                            "lang": "en-US",
-                            "message": "Guest Agent is running"
+                "__comment__": "The __status__ property is the actual status reported to CRP",
+                "__status__": {
+                    "version": "1.1",
+                    "timestampUTC": "1970-01-01T00:00:00Z",
+                    "aggregateStatus": {
+                        "guestAgentStatus": {
+                            "version": AGENT_VERSION,
+                            "status": "Ready",
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "Guest Agent is running"
+                            }
+                        },
+                        "handlerAggregateStatus": [
+                            {
+                                "handlerVersion": "1.0.0",
+                                "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                                "status": "Ready",
+                                "code": 0,
+                                "useExactVersion": True,
+                                "formattedMessage": {
+                                    "lang": "en-US",
+                                    "message": "Plugin enabled"
+                                },
+                                "runtimeSettingsStatus": {
+                                    "settingsStatus": {
+                                        "status": {
+                                            "name": "OSTCExtensions.ExampleHandlerLinux",
+                                            "configurationAppliedTime": None,
+                                            "operation": None,
+                                            "status": "success",
+                                            "code": 0,
+                                            "formattedMessage": {
+                                                "lang": "en-US",
+                                                "message": None
+                                            }
+                                        },
+                                        "version": 1.0,
+                                        "timestampUTC": "1970-01-01T00:00:00Z"
+                                    },
+                                    "sequenceNumber": 0
+                                }
+                            }
+                        ],
+                        "vmArtifactsAggregateStatus": {
+                            "goalStateAggregateStatus": {
+                                "formattedMessage": {
+                                    "lang": "en-US",
+                                    "message": "GoalState executed successfully"
+                                },
+                                "timestampUTC": "1970-01-01T00:00:00Z",
+                                "inSvdSeqNo": "1",
+                                "status": "Success",
+                                "code": 0
+                            }
                         }
                     },
-                    "handlerAggregateStatus": [
-                        {
-                            "handlerVersion": "1.0.0",
-                            "handlerName": "OSTCExtensions.ExampleHandlerLinux",
-                            "status": "Ready",
-                            "code": 0,
-                            "useExactVersion": True,
-                            "formattedMessage": {
-                                "lang": "en-US",
-                                "message": "Plugin enabled"
-                            },
-                            "runtimeSettingsStatus": {
-                                "settingsStatus": {
-                                    "status": {
-                                        "name": "OSTCExtensions.ExampleHandlerLinux",
-                                        "configurationAppliedTime": None,
-                                        "operation": None,
-                                        "status": "success",
-                                        "code": 0
-                                    },
-                                    "version": 1,
-                                    "timestampUTC": "1970-01-01T00:00:00Z"
-                                },
-                                "sequenceNumber": 0
-                            },
-                            "supportsMultiConfig": False
-                        }
-                    ],
-                    "vmArtifactsAggregateStatus": {
-                        "goalStateAggregateStatus": {
-                            "formattedMessage": {
-                                "lang": "en-US",
-                                "message": "GoalState executed successfully"
-                            },
-                            "timestampUTC": "1970-01-01T00:00:00Z",
-                            "inSvdSeqNo": "1",
-                            "status": "Success",
-                            "code": 0
-                        }
-                    }
+                    "guestOSInfo": None,
+                    "supportedFeatures": supported_features
                 },
-                "supportedFeatures": supported_features,
-                "_metadataNotSentToCRP": {
+                "__debug__": {
                     "agentName": AGENT_NAME,
                     "daemonVersion": "0.0.0.0",
                     "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-                    "extensionSupportedFeatures": [name for name, _ in
-                                                   get_agent_supported_features_list_for_extensions().items()]
-
+                    "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
+                    "supportsMultiConfig": {
+                        "OSTCExtensions.ExampleHandlerLinux": False
+                    }
                 }
-
             }
+
 
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
@@ -3420,53 +3430,15 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
             status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
             actual_status_json = json.loads(fileutil.read_file(status_path))
 
-            # Popping run time attributes
+            # Don't compare the guestOSInfo
+            status_property = actual_status_json.get("__status__")
+            self.assertIsNotNone(status_property, "The status file is missing the __status__ property")
+            self.assertIsNotNone(status_property.get("guestOSInfo"), "The status file is missing the guestOSInfo property")
+            status_property["guestOSInfo"] = None
+
             actual_status_json.pop('guestOSInfo', None)
 
             self.assertEqual(expected_status, actual_status_json)
-
-    def test_it_should_zip_waagent_status_when_incarnation_changes(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-
-            # This test checks when the incarnation changes the waagent_status file for the previous incarnation
-            # is added into the history folder for the previous incarnation and gets zipped
-
-            exthandlers_handler = get_exthandlers_handler(protocol)
-
-            temp_files = [
-                'ExtensionsConfig.1.xml',
-                'GoalState.1.xml',
-                'OSTCExtensions.ExampleHandlerLinux.1.manifest.xml',
-                'waagent_status.1.json'
-            ]
-
-            exthandlers_handler.run()
-            exthandlers_handler.report_ext_handlers_status()
-
-            # Updating incarnation to 2 , hence the history folder should have waaagent_status.1.json added under
-            # incarnation 1
-            protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
-
-            test_subject = StateArchiver(self.tmp_dir)
-            test_subject.archive()
-
-            timestamp_zips = os.listdir(os.path.join(self.tmp_dir, "history"))
-            self.assertEqual(1, len(timestamp_zips), "Expected number of zips in history is 1 for"
-                                                     " incarnation 1(previous incarnation)")
-
-            zip_fn = timestamp_zips[0]
-            zip_fullname = os.path.join(self.tmp_dir, "history", zip_fn)
-            self.assertEqual(TestArchive.assert_zip_contains(zip_fullname, temp_files), None)
-            exthandlers_handler.run()
-            exthandlers_handler.report_ext_handlers_status()
-
-            # Updating incarnation to 3 , hence the history folder should have 2 zips files corresponding to incarnation
-            # 1 and 2
-            protocol.mock_wire_data.set_incarnation(3)
-            protocol.update_goal_state()
-            test_subject.archive()
-            self.assertEqual(2, len(os.listdir(os.path.join(self.tmp_dir, "history"))))
 
     def test_it_should_process_extensions_only_if_allowed(self):
         def assert_extensions_called(exthandlers_handler, expected_call_count=0):

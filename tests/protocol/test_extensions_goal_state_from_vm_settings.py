@@ -6,7 +6,8 @@ import os.path
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, data_dir
+from tests.protocol.mocks import mockwiredata, mock_wire_protocol
+from tests.tools import AgentTestCase, data_dir, patch
 
 
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
@@ -47,6 +48,19 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         # dependency level (multi-config)
         self.assertEqual(1, vm_settings.extensions[3].settings[1].dependencyLevel, "Incorrect dependency level (multi-config)")
 
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_extension_goal_state_should_parse_requested_version_properly(self, _):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            manifests, _ = protocol.get_vmagent_manifests()
+            for manifest in manifests:
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
+
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
+        with mock_wire_protocol(data_file) as protocol:
+            manifests, _ = protocol.get_vmagent_manifests()
+            for manifest in manifests:
+                self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
     def test_create_from_vm_settings_should_parse_missing_status_upload_blob_as_none(self):
         vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings-no_status_upload_blob.json"))
         vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings("123", vm_settings_text)

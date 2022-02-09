@@ -51,7 +51,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
 
     def _mock_and_assert_ext_handlers(self, expected_handlers):
         with mock_wire_protocol(self.test_data) as protocol:
-            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
             for ext_handler in ext_handlers:
                 if ext_handler.name not in expected_handlers:
                     continue

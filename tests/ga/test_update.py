@@ -673,9 +673,7 @@ class TestGuestAgent(UpdateTestCase):
         host_uri = 'host_uri'
         api_uri = URI_FORMAT_GET_API_VERSIONS.format(host_uri, HOST_PLUGIN_PORT)
         art_uri = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(host_uri, HOST_PLUGIN_PORT)
-        mock_host = HostPluginProtocol(host_uri,
-                                       'container_id',
-                                       'role_config')
+        mock_host = HostPluginProtocol(host_uri)
 
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(ext_uri)
@@ -2896,7 +2894,8 @@ class ReportStatusTestCase(AgentTestCase):
         except IndexError:
             raise HttpError()
 
-    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self):
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self, _):
 
         try:
             # Returning None forces the mock wire data to return the contents in the static
