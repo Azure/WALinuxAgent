@@ -199,9 +199,9 @@ class GoalStateHistory(object):
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
 
     def save(self, data, file_name):
-        def write_to_file(d, file_):
-            with open(file_, "w") as f:
-                f.write(d)
+        def write_to_file(d, f):
+            with open(f, "w") as h:
+                h.write(d)
 
         self._save(write_to_file, data, file_name)
 
