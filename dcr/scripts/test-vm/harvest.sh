@@ -11,6 +11,8 @@
 set -euxo pipefail
 
 ssh -o "StrictHostKeyChecking no" "$1"@"$2" "sudo tar --exclude='journal/*' --exclude='omsbundle' --exclude='omsagent' --exclude='mdsd' --exclude='scx*' --exclude='*.so' --exclude='*__LinuxDiagnostic__*' --exclude='*.zip' --exclude='*.deb' --exclude='*.rpm' -czf logs-$2.tgz /var/log /var/lib/waagent/ /etc/waagent.conf"
+# Some distros do not have "other" permissions (e.g., mariner1.0), add them here.
+ssh -o "StrictHostKeyChecking no" "$1"@"$2" "sudo chmod o+rwx logs-$2.tgz"
 
 # Create directory if doesn't exist
 mkdir -p "$3"

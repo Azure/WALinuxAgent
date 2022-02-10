@@ -234,7 +234,8 @@
             "createOption": "FromImage",
             "managedDisk": {
               "storageAccountType": "[variables('osDiskType')]"
-            }
+            },
+            "diskSizeGB": 2
           },
           "imageReference": {
             "publisher": "[parameters('imagePublisher')]",
