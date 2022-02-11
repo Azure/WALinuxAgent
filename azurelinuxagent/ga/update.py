@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.protocol.imds import get_imds_client
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
@@ -160,6 +161,9 @@ class UpdateHandler(object):
         self._last_telemetry_heartbeat = None
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
+
+        # VM Size is reported via the heartbeat, default it here.
+        self._vm_size = None
 
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
@@ -414,6 +418,25 @@ class UpdateHandler(object):
 
         self._shutdown()
         sys.exit(0)
+
+    def _get_vm_size(self, protocol):
+        """
+        Including VMSize is meant to capture the architecture of the VM (i.e. arm64 VMs will
+        have arm64 included in their vmsize field and amd64 will have no architecture indicated).
+        """
+        if self._vm_size is None:
+
+            imds_client = get_imds_client(protocol.get_endpoint())
+            
+            try:
+                imds_info = imds_client.get_compute()
+                self._vm_size = imds_info.vmSize
+            except Exception as e:
+                err_msg = "Attempts to retrieve VM size information from IMDS are failing: {0}".format(textutil.format_exception(e))
+                logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(err_msg))
+                return "unknown"
+        
+        return self._vm_size
 
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
@@ -1167,10 +1190,13 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+            # Include VMSize in the heartbeat message because the kusto table does not have 
+            # a separate column for it (or architecture).
+            vmsize = self._get_vm_size(protocol)
 
-            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+            telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled)
+                                                         auto_update_enabled, vmsize)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
