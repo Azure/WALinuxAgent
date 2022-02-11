@@ -33,7 +33,7 @@ from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_event, \
     CollectOrReportEventDebugInfo, add_periodic
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-    ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
+    ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, VmSettingsError
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
@@ -966,6 +966,16 @@ class WireClient(object):
         except ProtocolError:
             raise
         except Exception as exception:
+            if isinstance(exception, VmSettingsError):
+                message = format_message(ustr(exception))
+                self._vm_settings_error_reporter.report_error(message)
+                try:
+                    # pylint - Instance of 'Exception' has no 'vm_settings_text/etag' member (no-member)
+                    # Disabled; the above check ensures the exception is a VmSettingsError
+                    self._save_cache(exception.vm_settings_text, VM_SETTINGS_FILE_NAME.format(exception.etag))  # pylint: disable=no-member
+                except Exception as e:
+                    # TODO: Once Fast Track is stable, make this a warning
+                    logger.info("Failed to save vmSettings: {0}", ustr(e))
             if isinstance(exception, IOError) and "timed out" in ustr(exception):
                 message = format_message("Timeout")
                 self._vm_settings_error_reporter.report_error(message, _VmSettingsError.Timeout)

@@ -23,6 +23,7 @@ import sys
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.future import ustr
+import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -53,7 +54,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             self._parse_vm_settings(json_text)
             self._do_common_validations()
         except Exception as e:
-            raise VmSettingsError("Error parsing vmSettings [HGAP: {0}]: {1}".format(self._host_ga_plugin_version, ustr(e)))
+            raise VmSettingsError("Error parsing vmSettings [HGAP: {0}]: {1}".format(self._host_ga_plugin_version, ustr(e)), etag, self.get_redacted_text())
 
     @property
     def id(self):
@@ -197,13 +198,13 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         required_features = vm_settings.get("requiredFeatures")
         if required_features is not None:
             if not isinstance(required_features, list):
-                raise Exception("requiredFeatures should be an array")
+                raise Exception("requiredFeatures should be an array (got {0})".format(required_features))
 
             def get_required_features_names():
                 for feature in required_features:
                     name = feature.get("name")
                     if name is None:
-                        raise Exception("A required feature is missing the 'name' property")
+                        raise Exception("A required feature is missing the 'name' property (got {0})".format(feature))
                     yield name
 
             self._required_features.extend(get_required_features_names())
@@ -235,7 +236,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         if families is None:
             return
         if not isinstance(families, list):
-            raise Exception("gaFamilies should be an array")
+            raise Exception("gaFamilies should be an array (got {0})".format(families))
 
         for family in families:
             name = family["name"]
@@ -318,7 +319,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         extension_goal_states = vm_settings.get("extensionGoalStates")
         if extension_goal_states is not None:
             if not isinstance(extension_goal_states, list):
-                raise Exception("extension_goal_states should be an array")
+                raise Exception("extension_goal_states should be an array (got {0})".format(type(extension_goal_states)))  # report only the type, since the value may contain secrets
             for extension_gs in extension_goal_states:
                 extension = Extension()
 
@@ -337,7 +338,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 additional_locations = extension_gs.get('additionalLocations')
                 if additional_locations is not None:
                     if not isinstance(additional_locations, list):
-                        raise Exception('additionalLocations should be an array')
+                        raise Exception('additionalLocations should be an array (got {0})'.format(additional_locations))
                     extension.manifest_uris.extend(additional_locations)
 
                 #
@@ -455,13 +456,18 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #     ...
         # }
         if not isinstance(depends_on, list):
-            raise Exception('dependsOn should be an array')
+            raise Exception('dependsOn should be an array ({0}) (got {1})'.format(extension.name, depends_on))
 
         if not extension.supports_multi_config:
             # single-config
-            if len(depends_on) != 1:
-                raise Exception('dependsOn should be an array with exactly one item for single-config extensions')
-            extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
+            length = len(depends_on)
+            if length > 1:
+                raise Exception('dependsOn should be an array with exactly one item for single-config extensions ({0}) (got {1})'.format(extension.name, depends_on))
+            elif length == 0:
+                logger.warn('dependsOn is an empty array for extension {0}; setting the dependency level to 0'.format(extension.name))
+                extension.settings[0].dependencyLevel = 0
+            else:
+                extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
         else:
             # multi-config
             settings_by_name = {}
