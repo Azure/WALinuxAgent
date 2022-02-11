@@ -970,7 +970,7 @@ class WireClient(object):
                 message = format_message(ustr(exception))
                 self._vm_settings_error_reporter.report_error(message)
                 try:
-                    # pylint: Instance of 'Exception' has no 'vm_settings_text/etag' member (no-member)
+                    # pylint - Instance of 'Exception' has no 'vm_settings_text/etag' member (no-member)
                     # Disabled; the above check ensures the exception is a VmSettingsError
                     self._save_cache(exception.vm_settings_text, VM_SETTINGS_FILE_NAME.format(exception.etag))  # pylint: disable=no-member
                 except Exception as e:
