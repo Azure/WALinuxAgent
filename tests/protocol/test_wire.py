@@ -43,7 +43,7 @@ from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _VmSettingsErrorReporter
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
-from azurelinuxagent.common.utils import restutil, textutil
+from azurelinuxagent.common.utils import restutil, textutil, fileutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
@@ -52,7 +52,7 @@ from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
-from tests.tools import Mock, PropertyMock, patch, AgentTestCase, load_bin_data, mock_sleep
+from tests.tools import Mock, PropertyMock, patch, AgentTestCase, load_bin_data, mock_sleep, load_data
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -1213,6 +1213,19 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         for e in extensions_goal_state.extensions:
             if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
                 self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
+
+    def test_update_goal_state_should_save_vm_settings_on_parse_errors(self):
+        invalid_vm_settings_file = "hostgaplugin/vm_settings-parse_error.json"
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = invalid_vm_settings_file
+        with mock_wire_protocol(data_file) as protocol:
+            vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.1.json")
+            self.assertTrue(os.path.exists(vm_settings_file), "{0} was not saved".format(vm_settings_file))
+
+            expected = load_data(invalid_vm_settings_file)
+            actual = fileutil.read_file(vm_settings_file)
+
+            self.assertEqual(expected, actual, "The vmSettings were not saved correctly")
 
     def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
         # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent

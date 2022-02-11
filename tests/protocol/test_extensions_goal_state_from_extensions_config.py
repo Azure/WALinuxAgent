@@ -36,3 +36,12 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
 
+    def test_it_should_parse_empty_depends_on_as_dependency_level_0(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-empty_depends_on.json"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-empty_depends_on.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions = protocol.get_extensions_goal_state().extensions
+
+            self.assertEqual(0, extensions[0].settings[0].dependencyLevel, "Incorrect dependencyLevel}")
+
