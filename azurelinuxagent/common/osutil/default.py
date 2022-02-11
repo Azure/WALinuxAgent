@@ -179,9 +179,10 @@ class DefaultOSUtil(object):
                         return int(m.group(1))
 
             except Exception as e:
-                if isinstance(e, CommandError) and e.returncode == 3:  # pylint: disable=E1101
-                    # Transient error  that we ignore.  This code fires every loop
+                if isinstance(e, CommandError) and (e.returncode == 3 or e.returncode == 4):  # pylint: disable=E1101
+                    # Transient error that we ignore returncode 3. This code fires every loop
                     # of the daemon (60m), so we will get the value eventually.
+                    # ignore returncode 4 as temporary fix (RULE_REPLACE failed (Invalid argument))
                     return 0
                 logger.warn("Failed to get firewall packets: {0}", ustr(e))
                 return -1

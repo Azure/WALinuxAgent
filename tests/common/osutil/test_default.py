@@ -715,6 +715,13 @@ Match host 192.168.1.2\n\
                 mock_iptables.set_command(osutil.get_firewall_packets_command(mock_iptables.wait), exit_code=3, output="can't initialize iptables table `security': iptables who? (do you need to insmod?)")
                 self.assertEqual(0, osutil.DefaultOSUtil().get_firewall_dropped_packets())
 
+    def test_get_firewall_dropped_packets_should_ignore_returncode_4(self):
+
+        with TestOSUtil._mock_iptables() as mock_iptables:
+            with patch.object(osutil, '_enable_firewall', True):
+                mock_iptables.set_command(osutil.get_firewall_packets_command(mock_iptables.wait), exit_code=4, output="iptables v1.8.2 (nf_tables): RULE_REPLACE failed (Invalid argument): rule in chain OUTPUT")
+                self.assertEqual(0, osutil.DefaultOSUtil().get_firewall_dropped_packets())
+
     def test_get_firewall_dropped_packets(self):
 
         destination = '168.63.129.16'
