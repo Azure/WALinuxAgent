@@ -1218,7 +1218,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         invalid_vm_settings_file = "hostgaplugin/vm_settings-parse_error.json"
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = invalid_vm_settings_file
-        with mock_wire_protocol(data_file) as protocol:
+        with mock_wire_protocol(data_file):
             vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.1.json")
             self.assertTrue(os.path.exists(vm_settings_file), "{0} was not saved".format(vm_settings_file))
 
