@@ -160,7 +160,7 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
-    "Debug.CgroupMonitorExpiryTime": "2022-01-31",
+    "Debug.CgroupMonitorExpiryTime": "2022-03-31",
     "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
 }
 
@@ -550,11 +550,11 @@ def get_agent_cpu_quota(conf=__conf__):
 
 def get_cgroup_monitor_expiry_time (conf=__conf__):
     """
-    cgroups monitoring disabled after expiry time
+    cgroups monitoring for pilot extensions disabled after expiry time
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-01-31")
+    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-03-31")
 
 def get_cgroup_monitor_extension_name (conf=__conf__):
     """
