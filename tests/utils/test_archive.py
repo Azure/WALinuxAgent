@@ -142,13 +142,13 @@ class TestArchive(AgentTestCase):
                 'RemoteAccess.xml'
             ]
             legacy_files = [os.path.join(self.tmp_dir, file) for file in legacy_files]
-            for file in legacy_files:
-                self._write_file(file)
+            for f in legacy_files:
+                self._write_file(f)
 
             StateArchiver.purge_legacy_goal_state_history()
 
-            for file in legacy_files:
-                self.assertFalse(os.path.exists(file), "Legacy file {0} was not removed".format(file))
+            for f in legacy_files:
+                self.assertFalse(os.path.exists(f), "Legacy file {0} was not removed".format(f))
 
     def test_archive03(self):
         """
