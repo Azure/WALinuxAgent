@@ -141,7 +141,7 @@ class TestArchive(AgentTestCase):
                 'HostingEnvironmentConfig.xml',
                 'RemoteAccess.xml'
             ]
-            legacy_files = [os.path.join(self.tmp_dir, file) for file in legacy_files]
+            legacy_files = [os.path.join(self.tmp_dir, f) for f in legacy_files]
             for f in legacy_files:
                 self._write_file(f)
 
