@@ -1736,7 +1736,7 @@ class TestUpdate(UpdateTestCase):
                                                                  mock_iptables.destination,
                                                                  wait=mock_iptables.wait))
 
-                        # Filtering the mock iptable command calls with only the once related to this test.
+                        # Filtering the mock iptable command calls with only the ones related to this test.
                         filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
                                                        cmd in [drop_check_command, accept_tcp_check_rule,
                                                                accept_tcp_insert_rule]]
@@ -1778,7 +1778,7 @@ class TestUpdate(UpdateTestCase):
                                                                  mock_iptables.destination,
                                                                  wait=mock_iptables.wait))
 
-                        # Filtering the mock iptable command calls with only the once related to this test.
+                        # Filtering the mock iptable command calls with only the ones related to this test.
                         filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
                                                        cmd in [drop_check_command, accept_tcp_check_rule,
                                                                accept_tcp_insert_rule]]
@@ -1821,7 +1821,7 @@ class TestUpdate(UpdateTestCase):
                                                                  mock_iptables.destination,
                                                                  wait=mock_iptables.wait))
 
-                        # Filtering the mock iptable command calls with only the once related to this test.
+                        # Filtering the mock iptable command calls with only the ones related to this test.
                         filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
                                                        cmd in [drop_check_command, accept_tcp_check_rule,
                                                                accept_tcp_insert_rule]]
