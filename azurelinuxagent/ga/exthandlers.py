@@ -965,7 +965,7 @@ class ExtHandlersHandler(object):
             # On new goal state, move the last status report for the previous goal state to the history folder
             last_modified = os.path.getmtime(status_file)
             timestamp = datetime.datetime.utcfromtimestamp(last_modified).isoformat()
-            GoalStateHistory(timestamp).save_status_file(status_file)
+            GoalStateHistory(timestamp, "status").save_status_file(status_file)
 
         # Now create/overwrite the status file; this file is kept for debugging purposes only
         status_blob_text = self.protocol.get_status_blob_data()

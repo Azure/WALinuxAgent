@@ -177,7 +177,6 @@ A sample configuration file is shown below:
 ```yml
 Extensions.Enabled=y
 Extensions.GoalStatePeriod=6
-Extensions.GoalStateHistoryCleanupPeriod=1800
 Provisioning.Agent=auto
 Provisioning.DeleteRootPassword=n
 Provisioning.RegenerateSshHostKeyPair=y
@@ -243,15 +242,6 @@ _Note_: setting up this parameter to more than a few minutes can make the state 
 the VM be reported as unresponsive/unavailable on the Azure portal. Also, this 
 setting affects how fast the agent starts executing extensions. 
 
-#### __Extensions.GoalStateHistoryCleanupPeriod__
-
-_Type: Integer_  
-_Default: 1800 (30 minutes)_
-
-How often to clean up the history folder of the agent. The agent keeps past goal
-states on this folder, each goal state represented with a set of small files. The
-history is useful to debug issues in the agent or extensions.
- 
 #### __AutoUpdate.Enabled__
 
 _Type: Boolean_  
