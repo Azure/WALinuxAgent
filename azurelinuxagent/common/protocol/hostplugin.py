@@ -25,7 +25,7 @@ import uuid
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError
+from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError, VmSettingsError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.protocol.healthservice import HealthService
@@ -400,8 +400,11 @@ class HostPluginProtocol(object):
         Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalStateFromVmSettings, bool) tuple with the vmSettings and
         a boolean indicating if they are an updated (True) or a cached value (False).
 
-        Raises VmSettingsNotSupported if the HostGAPlugin does not support the vmSettings API, ResourceGoneError if the container ID and roleconfig name
-        need to be refreshed, or ProtocolError if the request fails for any other reason (e.g. not supported, time out, server error).
+        Raises
+            * VmSettingsNotSupported if the HostGAPlugin does not support the vmSettings API
+            * VmSettingsError if the HostGAPlugin returned invalid vmSettings (e.g. syntax error)
+            * ResourceGoneError if the container ID and roleconfig name need to be refreshed
+            * ProtocolError if the request fails for any other reason (e.g. not supported, time out, server error)
         """
         def raise_not_supported(reset_state=False):
             if reset_state:
@@ -487,6 +490,10 @@ class HostPluginProtocol(object):
             return vm_settings, True
 
         except (ProtocolError, ResourceGoneError, VmSettingsNotSupported):
+            raise
+        except VmSettingsError as vmSettingsError:
+            message = format_message(ustr(vmSettingsError))
+            self._vm_settings_error_reporter.report_error(message)
             raise
         except Exception as exception:
             if isinstance(exception, IOError) and "timed out" in ustr(exception):
