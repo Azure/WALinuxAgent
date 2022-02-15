@@ -406,12 +406,6 @@ def vm_status_to_v1(vm_status):
                 "Value": feature.version
             }
         )
-    supported_features.append(
-        {
-            "Key": "FastTrack",
-            "Value": "1.0"
-        }
-    )
     if supported_features:
         v1_vm_status["supportedFeatures"] = supported_features
 
