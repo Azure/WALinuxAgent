@@ -22,6 +22,7 @@ class SupportedFeatureNames(object):
     """
     MultiConfig = "MultipleExtensionsPerHandler"
     ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
+    FastTrack = "FastTrack"
 
 
 class AgentSupportedFeature(object):

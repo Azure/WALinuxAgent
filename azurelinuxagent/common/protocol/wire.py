@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, SupportedFeatureNames
 from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_event, \
     CollectOrReportEventDebugInfo, add_periodic
@@ -404,6 +404,13 @@ def vm_status_to_v1(vm_status):
             {
                 "Key": feature.name,
                 "Value": feature.version
+            }
+        )
+    if vm_status.vmAgent.supports_fast_track:
+        supported_features.append(
+            {
+                "Key": SupportedFeatureNames.FastTrack,
+                "Value": "1.0"  # This is a dummy version; CRP ignores it
             }
         )
     if supported_features:
