@@ -207,7 +207,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     # When the OOM killer is invoked on the log collector process, this error code is
                     # returned. Stop the periodic operation because it seems to be persistent.
                     elif e.returncode == logcollector.FORCE_KILLED_ERRCODE: # pylint: disable=no-member
-                        logger.info("Disabling periodic log collection until service restart due OOM error.")
+                        logger.info("Disabling periodic log collection until service restart due to OOM error.")
                         self.stop()
                     else:
                         logger.info(err_msg)
