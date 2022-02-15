@@ -1300,6 +1300,9 @@ class UpdateHandler(object):
 
     def _add_accept_tcp_firewall_rule_if_not_enabled(self, dst_ip):
 
+        if not conf.enable_firewall():
+            return
+
         def _execute_run_command(command):
             # Helper to execute a run command, returns True if no exception
             # Here we primarily check if an  iptable rule exist. True if it exits , false if not
