@@ -50,6 +50,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgent
     VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -395,6 +396,8 @@ class UpdateHandler(object):
 
             logger.info("Goal State Period: {0} sec. This indicates how often the agent checks for new goal states and reports status.", self._goal_state_period)
 
+            self._cleanup_legacy_goal_state_history()
+
             while self.is_running:
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
@@ -590,10 +593,30 @@ class UpdateHandler(object):
 
             if self._processing_new_incarnation():
                 remote_access_handler.run()
+
+            if self._processing_new_extensions_goal_state():
+                try:
+                    UpdateHandler._cleanup_goal_state_history()
+                except Exception as exception:
+                    logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
+
         finally:
             if self._goal_state is not None:
                 self._last_incarnation = self._goal_state.incarnation
                 self._last_extensions_gs_id = self._goal_state.extensions_goal_state.id
+
+    @staticmethod
+    def _cleanup_goal_state_history():
+        archiver = StateArchiver(conf.get_lib_dir())
+        archiver.purge()
+        archiver.archive()
+
+    @staticmethod
+    def _cleanup_legacy_goal_state_history():
+        try:
+            StateArchiver.purge_legacy_goal_state_history()
+        except Exception as exception:
+            logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
     def __get_vmagent_update_status(self, protocol, incarnation_changed):
         """

@@ -44,7 +44,10 @@ _CACHE_PATTERNS = [
     re.compile(r"^VmSettings.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
+    re.compile(r"^SharedConfig\.xml$", re.IGNORECASE),
+    re.compile(r"^HostingEnvironmentConfig\.xml$", re.IGNORECASE),
+    re.compile(r"^RemoteAccess\.xml$", re.IGNORECASE)
 ]
 
 #
@@ -59,8 +62,8 @@ _CACHE_PATTERNS = [
 #   2018-04-06T08:21:37.142697_N
 #   2018-04-06T08:21:37.142697_N.zip
 #
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?\.zip$")
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?$")
+_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?\.zip$")
 
 _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
@@ -161,9 +164,11 @@ class StateArchiver(object):
         for state in states[_MAX_ARCHIVED_STATES:]:
             state.delete()
 
-        # legacy history files
-        for current_file in os.listdir(self._source):
-            full_path = os.path.join(self._source, current_file)
+    @staticmethod
+    def purge_legacy_goal_state_history():
+        lib_dir = conf.get_lib_dir()
+        for current_file in os.listdir(lib_dir):
+            full_path = os.path.join(lib_dir, current_file)
             for pattern in _CACHE_PATTERNS:
                 match = pattern.match(current_file)
                 if match is not None:
@@ -175,8 +180,12 @@ class StateArchiver(object):
 
     def archive(self):
         states = self._get_archive_states()
-        for state in states:
-            state.archive()
+        states.sort(reverse=True)
+
+        if len(states) > 0:
+            # Skip the most recent goal state, since it may still be in use
+            for state in states[1:]:
+                state.archive()
 
     def _get_archive_states(self):
         states = []
