@@ -73,7 +73,7 @@ class TestArchive(AgentTestCase):
         test_subject = StateArchiver(self.tmp_dir)
         test_subject.archive()
 
-        for directory in test_directories[0:1]:
+        for directory in test_directories[0:2]:
             zip_file = directory + ".zip"
             self.assertTrue(os.path.exists(zip_file), "{0} was not archived (could not find {1})".format(directory, zip_file))
 
