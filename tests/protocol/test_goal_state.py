@@ -7,10 +7,11 @@ import re
 
 from azurelinuxagent.common.protocol.goal_state import GoalState, _GET_GOAL_STATE_MAX_ATTEMPTS
 from azurelinuxagent.common.exception import ProtocolError
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from tests.protocol.mocks import mock_wire_protocol
 from tests.protocol import mockwiredata
-from tests.tools import AgentTestCase, patch
+from tests.tools import AgentTestCase, patch, load_data
 
 
 class GoalStateTestCase(AgentTestCase):
@@ -80,5 +81,24 @@ class GoalStateTestCase(AgentTestCase):
                         len(protected_settings),
                         "Could not find the expected number of redacted settings in {0}.\nExpected {1}.\n{2}".format(file_name, len(protected_settings), file_contents))
 
+    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
+    def test_it_should_save_vm_settings_on_parse_errors(self, _):
+        invalid_vm_settings_file = "hostgaplugin/vm_settings-parse_error.json"
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = invalid_vm_settings_file
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
 
+            GoalState(protocol.client)
 
+            matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_888"))
+            self.assertTrue(len(matches) == 1, "Expected one history directory for etag 888. Got: {0}".format(matches))
+
+            history_directory = matches[0]
+            vm_settings_file = os.path.join(history_directory, "VmSettings.json")
+            self.assertTrue(os.path.exists(vm_settings_file), "{0} was not saved".format(vm_settings_file))
+
+            expected = load_data(invalid_vm_settings_file)
+            actual = fileutil.read_file(vm_settings_file)
+
+            self.assertEqual(expected, actual, "The vmSettings were not saved correctly")
