@@ -24,7 +24,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
-from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError
+from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError, VmSettingsError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported
@@ -207,20 +207,25 @@ class GoalState(object):
         vm_settings, vm_settings_updated = (None, False)
 
         if conf.get_enable_fast_track():
+            def save_to_history(etag, text):
+                # The vmSettings are updated independently of the WireServer goal state and they are saved to a separate directory
+                history = GoalStateHistory(datetime.datetime.utcnow().isoformat(), etag)
+                history.save_vm_settings(text)
+
             try:
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             except VmSettingsNotSupported:
                 pass
+            except VmSettingsError as exception:
+                save_to_history(exception.etag, exception.vm_settings_text)
             except ResourceGoneError:
                 # retry after refreshing the HostGAPlugin
                 GoalState.update_host_plugin_headers(self._wire_client)
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             if vm_settings_updated:
-                # The vmSettings are updated independently of the WireServer goal state and they are saved to a separate directory
-                history = GoalStateHistory(datetime.datetime.utcnow().isoformat(), vm_settings.etag)
-                history.save_vm_settings(vm_settings.get_redacted_text())
+                save_to_history(vm_settings.etag, vm_settings.get_redacted_text())
 
         return vm_settings
 
