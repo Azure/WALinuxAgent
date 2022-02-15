@@ -52,6 +52,14 @@ def get_mock_compute_response():
 
 class TestImds(AgentTestCase):
 
+    def setUp(self):
+        super().setUp()
+
+        # Allow the logic to build imds URIs. AgentTestCase does not want to allow 
+        # the agent to call out to IMDS (because, amoung other reasons, it might not
+        # actually be there), but in these tests handle that issue.
+        self._imds_endpoint_patch.stop()
+
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get(self, mock_http_get):
         mock_http_get.return_value = get_mock_compute_response()

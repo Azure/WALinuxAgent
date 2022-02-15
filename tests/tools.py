@@ -182,6 +182,10 @@ class AgentTestCase(unittest.TestCase):
         event.init_event_status(self.tmp_dir)
         event.init_event_logger(self.tmp_dir)
 
+        self._imds_endpoint_patch = patch('azurelinuxagent.common.protocol.imds.IMDS_ENDPOINT', "NotAnIpAddr")
+        self._imds_endpoint_patch.start()
+        self.addCleanup(self._imds_endpoint_patch.stop)
+
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)

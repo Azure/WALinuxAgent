@@ -1562,7 +1562,8 @@ class TestUpdate(UpdateTestCase):
         mock_protocol = WireProtocol("foo.bar")
 
         update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-        update_handler._send_heartbeat_telemetry(mock_protocol)
+        with patch.object(update_handler, "_get_vm_size", return_value="unknown"):
+            update_handler._send_heartbeat_telemetry(mock_protocol)
         self.assertEqual(1, patch_add_event.call_count)
         self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
