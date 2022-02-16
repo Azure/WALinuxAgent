@@ -23,13 +23,10 @@ if debug:
 
 class TestArchive(AgentTestCase):
     def setUp(self):
+        super(TestArchive, self).setUp()
         prefix = "{0}_".format(self.__class__.__name__)
 
         self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
-
-    def tearDown(self):
-        if not debug and self.tmp_dir is not None:
-            shutil.rmtree(self.tmp_dir)
 
     def _write_file(self, filename, contents=None):
         full_name = os.path.join(self.tmp_dir, filename)
