@@ -59,6 +59,7 @@ class TestImds(AgentTestCase):
         # the agent to call out to IMDS (because, amoung other reasons, it might not
         # actually be there), but in these tests handle that issue.
         self._imds_endpoint_patch.stop()
+        self._imds_endpoint_patch = None
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get(self, mock_http_get):
