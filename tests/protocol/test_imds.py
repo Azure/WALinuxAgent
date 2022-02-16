@@ -53,7 +53,7 @@ def get_mock_compute_response():
 class TestImds(AgentTestCase):
 
     def setUp(self):
-        super().setUp()
+        super(TestImds, self).setUp()
 
         # Allow the logic to build imds URIs. AgentTestCase does not want to allow 
         # the agent to call out to IMDS (because, amoung other reasons, it might not

@@ -184,11 +184,16 @@ class AgentTestCase(unittest.TestCase):
 
         self._imds_endpoint_patch = patch('azurelinuxagent.common.protocol.imds.IMDS_ENDPOINT', "NotAnIpAddr")
         self._imds_endpoint_patch.start()
-        self.addCleanup(self._imds_endpoint_patch.stop)
+
+        if sys.version_info >= (2, 7):
+            self.addCleanup(self._imds_endpoint_patch.stop)
 
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
+
+        if (sys.version_info < (2, 7)) and self._imds_endpoint_patch:
+            self._imds_endpoint_patch.stop()
 
     def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
