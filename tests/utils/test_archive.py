@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import os
-import shutil
 import tempfile
 import zipfile
 from datetime import datetime, timedelta
