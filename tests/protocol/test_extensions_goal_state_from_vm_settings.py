@@ -1,55 +1,53 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
-import os.path
 
-from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
-from azurelinuxagent.common.utils import fileutil
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
-from tests.tools import AgentTestCase, data_dir, patch
+from tests.tools import AgentTestCase, patch
 
 
+@patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
-    def test_create_from_vm_settings_should_parse_vm_settings(self):
-        vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json"))
-        vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings("123", vm_settings_text)
+    def test_it_should_parse_vm_settings(self, _):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
-        def assert_property(name, value):
-            self.assertEqual(value, getattr(vm_settings, name), '{0} was not parsed correctly'.format(name))
+            def assert_property(name, value):
+                self.assertEqual(value, getattr(extensions_goal_state, name), '{0} was not parsed correctly'.format(name))
 
-        assert_property("activity_id", "a33f6f53-43d6-4625-b322-1a39651a00c9")
-        assert_property("correlation_id", "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e")
-        assert_property("created_on_timestamp", "2021-11-16T13:22:50.620522Z")
-        assert_property("status_upload_blob", "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w")
-        assert_property("status_upload_blob_type", "BlockBlob")
-        assert_property("required_features", ["MultipleExtensionsPerHandler"])
-        assert_property("on_hold", True)
+            assert_property("activity_id", "a33f6f53-43d6-4625-b322-1a39651a00c9")
+            assert_property("correlation_id", "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e")
+            assert_property("created_on_timestamp", "2021-11-16T13:22:50.620522Z")
+            assert_property("status_upload_blob", "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w")
+            assert_property("status_upload_blob_type", "BlockBlob")
+            assert_property("required_features", ["MultipleExtensionsPerHandler"])
+            assert_property("on_hold", True)
 
-        #
-        # for the rest of the attributes, we check only 1 item in each container (but check the length of the container)
-        #
+            #
+            # for the rest of the attributes, we check only 1 item in each container (but check the length of the container)
+            #
 
-        # agent manifests
-        self.assertEqual(2, len(vm_settings.agent_manifests), "Incorrect number of agent manifests. Got: {0}".format(vm_settings.agent_manifests))
-        self.assertEqual("Prod", vm_settings.agent_manifests[0].family, "Incorrect agent family.")
-        self.assertEqual(2, len(vm_settings.agent_manifests[0].uris), "Incorrect number of uris. Got: {0}".format(vm_settings.agent_manifests[0].uris))
-        self.assertEqual("https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml", vm_settings.agent_manifests[0].uris[0], "Incorrect number of uris.")
+            # agent manifests
+            self.assertEqual(2, len(extensions_goal_state.agent_manifests), "Incorrect number of agent manifests. Got: {0}".format(extensions_goal_state.agent_manifests))
+            self.assertEqual("Prod", extensions_goal_state.agent_manifests[0].family, "Incorrect agent family.")
+            self.assertEqual(2, len(extensions_goal_state.agent_manifests[0].uris), "Incorrect number of uris. Got: {0}".format(extensions_goal_state.agent_manifests[0].uris))
+            self.assertEqual("https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml", extensions_goal_state.agent_manifests[0].uris[0], "Incorrect number of uris.")
 
-        # extensions
-        self.assertEqual(5, len(vm_settings.extensions), "Incorrect number of extensions. Got: {0}".format(vm_settings.extensions))
-        self.assertEqual('Microsoft.Azure.Monitor.AzureMonitorLinuxAgent', vm_settings.extensions[0].name, "Incorrect extension name")
-        self.assertEqual(1, len(vm_settings.extensions[0].settings[0].publicSettings), "Incorrect number of public settings")
-        self.assertEqual(True, vm_settings.extensions[0].settings[0].publicSettings["GCS_AUTO_CONFIG"], "Incorrect public settings")
+            # extensions
+            self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions. Got: {0}".format(extensions_goal_state.extensions))
+            self.assertEqual('Microsoft.Azure.Monitor.AzureMonitorLinuxAgent', extensions_goal_state.extensions[0].name, "Incorrect extension name")
+            self.assertEqual(1, len(extensions_goal_state.extensions[0].settings[0].publicSettings), "Incorrect number of public settings")
+            self.assertEqual(True, extensions_goal_state.extensions[0].settings[0].publicSettings["GCS_AUTO_CONFIG"], "Incorrect public settings")
 
-        # dependency level (single-config)
-        self.assertEqual(1, vm_settings.extensions[2].settings[0].dependencyLevel, "Incorrect dependency level (single-config)")
+            # dependency level (single-config)
+            self.assertEqual(1, extensions_goal_state.extensions[2].settings[0].dependencyLevel, "Incorrect dependency level (single-config)")
 
-        # dependency level (multi-config)
-        self.assertEqual(1, vm_settings.extensions[3].settings[1].dependencyLevel, "Incorrect dependency level (multi-config)")
+            # dependency level (multi-config)
+            self.assertEqual(1, extensions_goal_state.extensions[3].settings[1].dependencyLevel, "Incorrect dependency level (multi-config)")
 
-    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
-    def test_extension_goal_state_should_parse_requested_version_properly(self, _):
+    def test_it_should_parse_requested_version_properly(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             manifests, _ = protocol.get_vmagent_manifests()
             for manifest in manifests:
@@ -62,13 +60,28 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             for manifest in manifests:
                 self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
 
-    def test_create_from_vm_settings_should_parse_missing_status_upload_blob_as_none(self):
-        vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings-no_status_upload_blob.json"))
-        vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings("123", vm_settings_text)
+    def test_it_should_parse_missing_status_upload_blob_as_none(self, _):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-no_status_upload_blob.json"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
-        self.assertIsNone(vm_settings.status_upload_blob, "Expected status upload blob to be None")
-        self.assertEqual("BlockBlob", vm_settings.status_upload_blob_type, "Expected status upload blob to be Block")
+            self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
 
+    def test_it_should_default_to_block_blob_when_the_status_blob_type_is_not_valid(self, _):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-invalid_blob_type.json"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
+
+    def test_its_source_channel_should_be_host_ga_plugin(self, _):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+
+            self.assertEqual(GoalStateChannel.HostGAPlugin, extensions_goal_state.source_channel, "The source_channel is incorrect")
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):
     def test_it_should_retrieve_items_ignoring_case(self):
