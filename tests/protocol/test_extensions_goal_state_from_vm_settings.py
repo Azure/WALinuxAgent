@@ -33,7 +33,8 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             self.assertEqual(2, len(extensions_goal_state.agent_manifests), "Incorrect number of agent manifests. Got: {0}".format(extensions_goal_state.agent_manifests))
             self.assertEqual("Prod", extensions_goal_state.agent_manifests[0].family, "Incorrect agent family.")
             self.assertEqual(2, len(extensions_goal_state.agent_manifests[0].uris), "Incorrect number of uris. Got: {0}".format(extensions_goal_state.agent_manifests[0].uris))
-            self.assertEqual("https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml", extensions_goal_state.agent_manifests[0].uris[0], "Incorrect number of uris.")
+            expected = "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
+            self.assertEqual(expected, extensions_goal_state.agent_manifests[0].uris[0], "Unexpected URI for the agent manifest.")
 
             # extensions
             self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions. Got: {0}".format(extensions_goal_state.extensions))
@@ -75,7 +76,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
-            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBlob for an invalid statusBlobType')
 
     def test_its_source_channel_should_be_host_ga_plugin(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
