@@ -1567,6 +1567,8 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
 
+
+    @skip_if_predicate_true(lambda: True, "Enable this test when VMSize bug hanging Uts is fixed.")
     @patch("azurelinuxagent.ga.update.add_event")
     @patch("azurelinuxagent.common.protocol.imds.ImdsClient")
     def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, mock_imds_factory, patch_add_event, *_):
