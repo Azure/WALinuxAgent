@@ -203,6 +203,12 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     if e.returncode == logcollector.INVALID_CGROUPS_ERRCODE: # pylint: disable=no-member
                         logger.info("Disabling periodic log collection until service restart due to process error.")
                         self.stop()
+                    
+                    # When the OOM killer is invoked on the log collector process, this error code is
+                    # returned. Stop the periodic operation because it seems to be persistent.
+                    elif e.returncode == logcollector.FORCE_KILLED_ERRCODE: # pylint: disable=no-member
+                        logger.info("Disabling periodic log collection until service restart due to OOM error.")
+                        self.stop()
                     else:
                         logger.info(err_msg)
 
