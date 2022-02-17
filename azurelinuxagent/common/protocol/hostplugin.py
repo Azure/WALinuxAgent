@@ -480,8 +480,9 @@ class HostPluginProtocol(object):
                 logger.info(message)
                 add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
 
-            # Don't support HostGAPlugin versions older than 119
-            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.119"):
+            # Don't support HostGAPlugin versions older than 123
+            # TODO: update the minimum version to 1.0.8.117 before release
+            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.117"):
                 raise_not_supported(reset_state=True)
 
             logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
