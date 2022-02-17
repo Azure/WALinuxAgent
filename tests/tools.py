@@ -182,15 +182,9 @@ class AgentTestCase(unittest.TestCase):
         event.init_event_status(self.tmp_dir)
         event.init_event_logger(self.tmp_dir)
 
-        self._imds_endpoint_patch = patch('azurelinuxagent.common.protocol.imds.IMDS_ENDPOINT', "NotAnIpAddr")
-        self._imds_endpoint_patch.start()
-
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
-
-        if self._imds_endpoint_patch:
-            self._imds_endpoint_patch.stop()
 
     def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
@@ -445,6 +439,22 @@ class AgentTestCase(unittest.TestCase):
 
         os.chmod(script_file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
+
+class AgentTestCaseWithGetVmSizeMock(AgentTestCase):
+    
+    def setUp(self):
+        
+        self._get_vm_size_patch = patch('azurelinuxagent.ga.update.UpdateHandler._get_vm_size', return_value="unknown")
+        self._get_vm_size_patch.start()
+        
+        super(AgentTestCaseWithGetVmSizeMock, self).setUp()
+
+    def tearDown(self):
+
+        if self._get_vm_size_patch:
+            self._get_vm_size_patch.stop()
+
+        super(AgentTestCaseWithGetVmSizeMock, self).tearDown()
 
 def load_data(name):
     """Load test data"""
