@@ -244,9 +244,8 @@ class WireProtocolData(object):
                 content = self.vm_settings
                 response_headers = [('ETag', self.etag)]
             self.call_counts["vm_settings"] += 1
-        elif IMDS_ENDPOINT in url:
-            if '/compute' in url:
-                content = json.dumps(self.imds_info.get("compute", "{}"))
+        elif '{0}/metadata/compute'.format(IMDS_ENDPOINT) in url:
+            content = json.dumps(self.imds_info.get("compute", "{}"))
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin
