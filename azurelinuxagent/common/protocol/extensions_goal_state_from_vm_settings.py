@@ -24,7 +24,7 @@ from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
@@ -86,6 +86,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         Timestamp assigned by the CRP (time at which the Fast Track goal state was created)
         """
         return self._created_on_timestamp
+
+    @property
+    def source_channel(self):
+        return GoalStateChannel.HostGAPlugin
 
     @property
     def source(self):

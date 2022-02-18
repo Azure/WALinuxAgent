@@ -45,6 +45,7 @@ from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, Exi
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses, ExtHandlerPackageList, \
     VERSION_0
@@ -430,7 +431,7 @@ class UpdateHandler(object):
         if self._vm_size is None:
 
             imds_client = get_imds_client(protocol.get_endpoint())
-            
+
             try:
                 imds_info = imds_client.get_compute()
                 self._vm_size = imds_info.vmSize
@@ -438,7 +439,7 @@ class UpdateHandler(object):
                 err_msg = "Attempts to retrieve VM size information from IMDS are failing: {0}".format(textutil.format_exception(e))
                 logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(err_msg))
                 return "unknown"
-        
+
         return self._vm_size
 
     def _check_daemon_running(self, debug):
@@ -657,9 +658,18 @@ class UpdateHandler(object):
     def _report_status(self, exthandlers_handler):
         vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, self._processing_new_extensions_goal_state())
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
+        #
         # TODO: Review the use of incarnation when reporting status... what should be the behavior for Fast Track goal states (i.e. no incarnation)?
-        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=self._processing_new_extensions_goal_state(),
-                                                                   vm_agent_update_status=vm_agent_update_status)
+        # TODO: How to handle the case when the HostGAPlugin goes from supporting vmSettings to not supporting it?
+        #
+        if self._goal_state is None:
+            supports_fast_track = False
+        else:
+            supports_fast_track = self._goal_state.extensions_goal_state.source_channel == GoalStateChannel.HostGAPlugin
+        vm_status = exthandlers_handler.report_ext_handlers_status(
+            incarnation_changed=self._processing_new_extensions_goal_state(),
+            vm_agent_update_status=vm_agent_update_status,
+            vm_agent_supports_fast_track=supports_fast_track)
         if vm_status is None:
             return
 

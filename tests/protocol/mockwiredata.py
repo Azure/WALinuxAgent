@@ -14,7 +14,8 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import base64
+import json
 import re
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
@@ -117,9 +118,6 @@ DATA_FILE_VM_SETTINGS["ETag"] ="1"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
-DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
-DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
-
 
 class WireProtocolData(object):
     def __init__(self, data_files=None):
@@ -132,7 +130,6 @@ class WireProtocolData(object):
             "/health": 0,
             "/HealthService": 0,
             "/vmAgentLog": 0,
-            '/StatusBlob': 0,
             "goalstate": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
@@ -305,9 +302,10 @@ class WireProtocolData(object):
 
         if url.endswith('/vmAgentLog'):
             self.call_counts['/vmAgentLog'] += 1
-        elif url.endswith('/StatusBlob'):
-            self.call_counts['/StatusBlob'] += 1
+        elif HttpRequestPredicates.is_storage_status_request(url):
             self.status_blobs.append(data)
+        elif HttpRequestPredicates.is_host_plugin_status_request(url):
+            self.status_blobs.append(WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(content))
         else:
             raise NotImplementedError(url)
 
@@ -315,7 +313,7 @@ class WireProtocolData(object):
         return resp
 
     def mock_crypt_util(self, *args, **kw):
-        #Partially patch instance method of class CryptUtil
+        # Partially patch instance method of class CryptUtil
         cryptutil = CryptUtil(*args, **kw)
         cryptutil.gen_transport_cert = Mock(side_effect=self.mock_gen_trans_cert)
         return cryptutil
@@ -326,6 +324,12 @@ class WireProtocolData(object):
 
         with open(trans_cert_file, 'w+') as cert_file:
             cert_file.write(self.trans_cert)
+
+    @staticmethod
+    def get_status_blob_from_hostgaplugin_put_status_request(data):
+        status_object = json.loads(data)
+        content = status_object["content"]
+        return base64.b64decode(content)
 
     def get_no_of_plugins_in_extension_config(self):
         if self.ext_conf is None:
