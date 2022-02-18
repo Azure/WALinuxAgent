@@ -83,13 +83,15 @@ class GoalStateTestCase(AgentTestCase):
 
     @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
     def test_it_should_save_vm_settings_on_parse_errors(self, _):
-        invalid_vm_settings_file = "hostgaplugin/vm_settings-parse_error.json"
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
-        data_file["vm_settings"] = invalid_vm_settings_file
-        with mock_wire_protocol(data_file) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            invalid_vm_settings_file = "hostgaplugin/vm_settings-parse_error.json"
+            data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+            data_file["vm_settings"] = invalid_vm_settings_file
+            protocol.mock_wire_data = mockwiredata.WireProtocolData(data_file)
             protocol.mock_wire_data.set_etag(888)
 
-            GoalState(protocol.client)
+            with self.assertRaises(ProtocolError):
+                GoalState(protocol.client)
 
             matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_888"))
             self.assertTrue(len(matches) == 1, "Expected one history directory for etag 888. Got: {0}".format(matches))

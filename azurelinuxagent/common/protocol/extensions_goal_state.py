@@ -22,6 +22,12 @@ from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.utils import textutil
 
 
+class GoalStateChannel(object):
+    WireServer = "WireServer"
+    HostGAPlugin = "HostGAPlugin"
+    Empty = "Empty"
+
+
 class ExtensionsGoalState(object):
     """
     ExtensionsGoalState represents the extensions information in the goal state; that information can originate from
@@ -48,6 +54,10 @@ class ExtensionsGoalState(object):
 
     @property
     def created_on_timestamp(self):
+        raise NotImplementedError()
+
+    @property
+    def source_channel(self):
         raise NotImplementedError()
 
     @property
@@ -135,6 +145,10 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
     @property
     def created_on_timestamp(self):
         return datetime.datetime.min
+
+    @property
+    def source_channel(self):
+        return GoalStateChannel.Empty
 
     @property
     def status_upload_blob(self):
