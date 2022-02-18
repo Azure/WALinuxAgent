@@ -17,7 +17,6 @@
 import base64
 import json
 import re
-import json
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
