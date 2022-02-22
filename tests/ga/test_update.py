@@ -53,8 +53,8 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
-from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
-    clear_singleton_instances, mock_sleep, skip_if_predicate_true
+from tests.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
+    clear_singleton_instances, mock_sleep
 from tests.protocol import mockwiredata
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
@@ -156,13 +156,13 @@ def _get_update_handler(iterations=1, test_data=None):
                                 type(update_handler).is_running = True
 
 
-class UpdateTestCase(AgentTestCase):
+class UpdateTestCase(AgentTestCaseWithGetVmSizeMock):
     _test_suite_tmp_dir = None
     _agent_zip_dir = None
 
     @classmethod
     def setUpClass(cls):
-        AgentTestCase.setUpClass()
+        super(UpdateTestCase, cls).setUpClass()
         # copy data_dir/ga/WALinuxAgent-0.0.0.0.zip to _test_suite_tmp_dir/waagent-zip/WALinuxAgent-<AGENT_VERSION>.zip
         sample_agent_zip = "WALinuxAgent-0.0.0.0.zip"
         test_agent_zip = sample_agent_zip.replace("0.0.0.0", AGENT_VERSION)
@@ -175,7 +175,7 @@ class UpdateTestCase(AgentTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        AgentTestCase.tearDownClass()
+        super(UpdateTestCase, cls).tearDownClass()
         shutil.rmtree(UpdateTestCase._test_suite_tmp_dir)
 
     @staticmethod
@@ -1555,62 +1555,6 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._download_agent_if_upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=0, enable_updates=True, sleep_interval=(300,))
 
-    @patch("azurelinuxagent.common.logger.info")
-    @patch("azurelinuxagent.ga.update.add_event")
-    def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
-        update_handler = get_update_handler()
-        mock_protocol = WireProtocol("foo.bar")
-
-        update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-        update_handler._send_heartbeat_telemetry(mock_protocol)
-        self.assertEqual(1, patch_add_event.call_count)
-        self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
-                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
-
-
-    @skip_if_predicate_true(lambda: True, "Enable this test when VMSize bug hanging Uts is fixed.")
-    @patch("azurelinuxagent.ga.update.add_event")
-    @patch("azurelinuxagent.common.protocol.imds.ImdsClient")
-    def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, mock_imds_factory, patch_add_event, *_):
-
-        def validate_single_heartbeat_event_matches_vm_size(vm_size):
-            heartbeat_event_kwargs = [
-                kwargs for _, kwargs in patch_add_event.call_args_list
-                if kwargs.get('op', None) == WALAEventOperation.HeartBeat
-            ]
-
-            self.assertEqual(1, len(heartbeat_event_kwargs), "Expected exactly one HeartBeat event, got {0}"\
-                .format(heartbeat_event_kwargs))
-
-            telemetry_message = heartbeat_event_kwargs[0].get("message", "")
-            self.assertTrue(telemetry_message.endswith(vm_size),
-                "Expected HeartBeat message ('{0}') to end with the test vmSize value, {1}."\
-                .format(telemetry_message, vm_size))
-        
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
-            update_handler = get_update_handler()
-            update_handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
-
-            # Zero out the _vm_size parameter for test resiliency
-            update_handler._vm_size = None
-
-            mock_imds_client = mock_imds_factory.return_value = Mock()
-
-            # First force a vmSize retrieval failure
-            mock_imds_client.get_compute.side_effect = HttpError(msg="HTTP Test Failure")
-            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-            update_handler._send_heartbeat_telemetry(mock_protocol)
-
-            validate_single_heartbeat_event_matches_vm_size("unknown")
-            patch_add_event.reset_mock()
-
-            # Now provide a vmSize
-            mock_imds_client.get_compute = lambda: ComputeInfo(vmSize="TestVmSizeValue")
-            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-            update_handler._send_heartbeat_telemetry(mock_protocol)
-
-            validate_single_heartbeat_event_matches_vm_size("TestVmSizeValue")
-
     @staticmethod
     def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
         eh = Extension(name=name)
@@ -2461,9 +2405,9 @@ class TestAgentUpgrade(UpdateTestCase):
 @patch('azurelinuxagent.ga.update.get_collect_logs_handler')
 @patch('azurelinuxagent.ga.update.get_monitor_handler')
 @patch('azurelinuxagent.ga.update.get_env_handler')
-class MonitorThreadTest(AgentTestCase):
+class MonitorThreadTest(AgentTestCaseWithGetVmSizeMock):
     def setUp(self):
-        AgentTestCase.setUp(self)
+        super(MonitorThreadTest, self).setUp()
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
         currentThread().setName("ExtHandler")
         protocol = Mock()
@@ -2869,6 +2813,62 @@ class ProcessGoalStateTestCase(AgentTestCase):
             self.assertEqual(3, exthandlers_handler.report_ext_handlers_status.call_count, "exthandlers_handler.report_ext_handlers_status() should have been called on a new goal state")
             self.assertEqual(2, remote_access_handler.run.call_count, "remote_access_handler.run() should have been called on a new goal state")
 
+class HeartbeatTestCase(AgentTestCase):
+
+    @patch("azurelinuxagent.common.logger.info")
+    @patch("azurelinuxagent.ga.update.add_event")
+    def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
+        
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
+            update_handler = get_update_handler()
+            
+            update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+            update_handler._send_heartbeat_telemetry(mock_protocol)
+            self.assertEqual(1, patch_add_event.call_count)
+            self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
+                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
+    
+    @patch("azurelinuxagent.ga.update.add_event")
+    @patch("azurelinuxagent.common.protocol.imds.ImdsClient")
+    def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, mock_imds_factory, patch_add_event, *_):
+
+        def validate_single_heartbeat_event_matches_vm_size(vm_size):
+            heartbeat_event_kwargs = [
+                kwargs for _, kwargs in patch_add_event.call_args_list
+                if kwargs.get('op', None) == WALAEventOperation.HeartBeat
+            ]
+
+            self.assertEqual(1, len(heartbeat_event_kwargs), "Expected exactly one HeartBeat event, got {0}"\
+                .format(heartbeat_event_kwargs))
+
+            telemetry_message = heartbeat_event_kwargs[0].get("message", "")
+            self.assertTrue(telemetry_message.endswith(vm_size),
+                "Expected HeartBeat message ('{0}') to end with the test vmSize value, {1}."\
+                .format(telemetry_message, vm_size))
+        
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
+            update_handler = get_update_handler()
+            update_handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
+
+            # Zero out the _vm_size parameter for test resiliency
+            update_handler._vm_size = None
+
+            mock_imds_client = mock_imds_factory.return_value = Mock()
+
+            # First force a vmSize retrieval failure
+            mock_imds_client.get_compute.side_effect = HttpError(msg="HTTP Test Failure")
+            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+            update_handler._send_heartbeat_telemetry(mock_protocol)
+
+            validate_single_heartbeat_event_matches_vm_size("unknown")
+            patch_add_event.reset_mock()
+
+            # Now provide a vmSize
+            mock_imds_client.get_compute = lambda: ComputeInfo(vmSize="TestVmSizeValue")
+            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+            update_handler._send_heartbeat_telemetry(mock_protocol)
+
+            validate_single_heartbeat_event_matches_vm_size("TestVmSizeValue")
 
 class GoalStateIntervalTestCase(AgentTestCase):
     def test_initial_goal_state_period_should_default_to_goal_state_period(self):

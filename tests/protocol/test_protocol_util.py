@@ -62,6 +62,8 @@ class TestProtocolUtil(AgentTestCase):
         if os.path.exists(endpoint_path):
             os.remove(endpoint_path)
 
+        super(TestProtocolUtil, self).tearDown()
+
     def test_get_protocol_util_should_return_same_object_for_same_thread(self, _):
         protocol_util1 = get_protocol_util()
         protocol_util2 = get_protocol_util()

@@ -1225,9 +1225,7 @@ class UpdateHandler(object):
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
             # Include VMSize in the heartbeat message because the kusto table does not have 
             # a separate column for it (or architecture).
-            # Temporarily disable vmsize because it is breaking UTs. TODO: Re-enable when this is fixed.
-            # vmsize = self._get_vm_size(protocol)
-            vmsize = "unknown"
+            vmsize = self._get_vm_size(protocol)
 
             telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
