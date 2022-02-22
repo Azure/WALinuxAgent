@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import os
-import shutil
 import tempfile
 import zipfile
 from datetime import datetime, timedelta
@@ -23,13 +22,10 @@ if debug:
 
 class TestArchive(AgentTestCase):
     def setUp(self):
+        super(TestArchive, self).setUp()
         prefix = "{0}_".format(self.__class__.__name__)
 
         self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
-
-    def tearDown(self):
-        if not debug and self.tmp_dir is not None:
-            shutil.rmtree(self.tmp_dir)
 
     def _write_file(self, filename, contents=None):
         full_name = os.path.join(self.tmp_dir, filename)
@@ -53,43 +49,36 @@ class TestArchive(AgentTestCase):
         incarnation_no_ext = os.path.splitext(incarnation_ext)[0]
         return timestamp_str, incarnation_no_ext
 
-    def test_archive01(self):
-        """
-        StateArchiver should archive all history directories by
-
-          1. Creating a .zip of a timestamped directory's files
-          2. Saving the .zip to /var/lib/waagent/history/
-          2. Deleting the timestamped directory
-        """
-        temp_files = [
+    def test_archive_should_zip_all_but_the_latest_goal_state_in_the_history_folder(self):
+        test_files = [
             'GoalState.xml',
             'Prod.manifest.xml',
             'Prod.agentsManifest',
             'Microsoft.Azure.Extensions.CustomScript.xml'
         ]
 
-        # this directory matches the pattern that StateArchiver.archive() searches for
-        temp_directory = os.path.join(self.history_dir, datetime.utcnow().isoformat() + "_incarnation_0")
-
-        for current_file in temp_files:
-            self._write_file(os.path.join(temp_directory, current_file))
+        # these directories match the pattern that StateArchiver.archive() searches for
+        test_directories = []
+        for i in range(0, 3):
+            timestamp = (datetime.utcnow() + timedelta(minutes=i)).isoformat()
+            directory = os.path.join(self.history_dir, "{0}_incarnation_{1}".format(timestamp, i))
+            for current_file in test_files:
+                self._write_file(os.path.join(directory, current_file))
+            test_directories.append(directory)
 
         test_subject = StateArchiver(self.tmp_dir)
         test_subject.archive()
 
-        timestamp_zips = os.listdir(self.history_dir)
-        self.assertEqual(1, len(timestamp_zips))
+        for directory in test_directories[0:2]:
+            zip_file = directory + ".zip"
+            self.assertTrue(os.path.exists(zip_file), "{0} was not archived (could not find {1})".format(directory, zip_file))
 
-        zip_fn = timestamp_zips[0]  # 2000-01-01T00:00:00.000000_incarnation_N.zip
-        timestamp_str, incarnation = self._parse_archive_name(zip_fn)
+            missing_file = self.assert_zip_contains(zip_file, test_files)
+            self.assertEqual(None, missing_file, missing_file)
 
-        self.assert_is_iso8601(timestamp_str)
-        timestamp = self.parse_isoformat(timestamp_str)
-        self.assert_datetime_close_to(timestamp, datetime.utcnow(), timedelta(seconds=30))
-        self.assertEqual("0", incarnation)
+            self.assertFalse(os.path.exists(directory), "{0} was not removed after being archived ".format(directory))
 
-        zip_full = os.path.join(self.history_dir, zip_fn)
-        self.assertEqual(self.assert_zip_contains(zip_full, temp_files), None)
+        self.assertTrue(os.path.exists(test_directories[2]), "{0}, the latest goal state, should not have being removed".format(test_directories[2]))
 
     def test_archive02(self):
         """
@@ -135,6 +124,27 @@ class TestArchive(AgentTestCase):
             else:
                 filename = "{0}_0.zip".format(timestamp)
             self.assertTrue(filename in archived_entries, "'{0}' is not in the list of unpurged entires".format(filename))
+
+    def test_purge_legacy_goal_state_history(self):
+        with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=self.tmp_dir):
+            legacy_files = [
+                'GoalState.1.xml',
+                'VmSettings.1.json',
+                'Prod.1.manifest.xml',
+                'ExtensionsConfig.1.xml',
+                'Microsoft.Azure.Extensions.CustomScript.1.xml',
+                'SharedConfig.xml',
+                'HostingEnvironmentConfig.xml',
+                'RemoteAccess.xml'
+            ]
+            legacy_files = [os.path.join(self.tmp_dir, f) for f in legacy_files]
+            for f in legacy_files:
+                self._write_file(f)
+
+            StateArchiver.purge_legacy_goal_state_history()
+
+            for f in legacy_files:
+                self.assertFalse(os.path.exists(f), "Legacy file {0} was not removed".format(f))
 
     def test_archive03(self):
         """

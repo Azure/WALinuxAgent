@@ -31,7 +31,6 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -97,19 +96,6 @@ class MonitorDhcpClientRestart(PeriodicOperation):
         self.dhcp_warning_enabled = len(pid) != 0
 
         return pid
-
-
-class CleanupGoalStateHistory(PeriodicOperation):
-    def __init__(self):
-        super(CleanupGoalStateHistory, self).__init__(conf.get_goal_state_history_cleanup_period())
-        self.archiver = StateArchiver(conf.get_lib_dir())
-
-    def _operation(self):
-        """
-        Purge history and create a .zip of the history that has been preserved.
-        """
-        self.archiver.purge()
-        self.archiver.archive()
 
 
 class EnableFirewall(PeriodicOperation):
@@ -239,7 +225,6 @@ class EnvHandler(ThreadHandlerInterface):
             periodic_operations = [
                 RemovePersistentNetworkRules(osutil),
                 MonitorDhcpClientRestart(osutil),
-                CleanupGoalStateHistory()
             ]
 
             if conf.enable_firewall():

@@ -14,12 +14,14 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import base64
+import json
 import re
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
+from azurelinuxagent.common.protocol.imds import IMDS_ENDPOINT
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -36,6 +38,7 @@ DATA_FILE = {
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip",
+        "imds_info": "imds/valid.json",
         "remote_access": None,
         "in_vm_artifacts_profile": None,
         "vm_settings": None,
@@ -117,9 +120,6 @@ DATA_FILE_VM_SETTINGS["ETag"] ="1"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
-DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
-DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
-
 
 class WireProtocolData(object):
     def __init__(self, data_files=None):
@@ -132,7 +132,6 @@ class WireProtocolData(object):
             "/health": 0,
             "/HealthService": 0,
             "/vmAgentLog": 0,
-            '/StatusBlob': 0,
             "goalstate": 0,
             "hostingenvuri": 0,
             "sharedconfiguri": 0,
@@ -164,6 +163,7 @@ class WireProtocolData(object):
         self.in_vm_artifacts_profile = None
         self.vm_settings = None
         self.etag = None
+        self.imds_info = None
 
         self.reload()
 
@@ -180,6 +180,7 @@ class WireProtocolData(object):
         self.ga_manifest = load_data(self.data_files.get("ga_manifest"))
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
+        self.imds_info = json.loads(load_data(self.data_files.get("imds_info")))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
 
         vm_settings = self.data_files.get("vm_settings")
@@ -239,6 +240,8 @@ class WireProtocolData(object):
                 content = self.vm_settings
                 response_headers = [('ETag', self.etag)]
             self.call_counts["vm_settings"] += 1
+        elif '{0}/metadata/compute'.format(IMDS_ENDPOINT) in url:
+            content = json.dumps(self.imds_info.get("compute", "{}"))
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin
@@ -305,9 +308,10 @@ class WireProtocolData(object):
 
         if url.endswith('/vmAgentLog'):
             self.call_counts['/vmAgentLog'] += 1
-        elif url.endswith('/StatusBlob'):
-            self.call_counts['/StatusBlob'] += 1
+        elif HttpRequestPredicates.is_storage_status_request(url):
             self.status_blobs.append(data)
+        elif HttpRequestPredicates.is_host_plugin_status_request(url):
+            self.status_blobs.append(WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(content))
         else:
             raise NotImplementedError(url)
 
@@ -315,7 +319,7 @@ class WireProtocolData(object):
         return resp
 
     def mock_crypt_util(self, *args, **kw):
-        #Partially patch instance method of class CryptUtil
+        # Partially patch instance method of class CryptUtil
         cryptutil = CryptUtil(*args, **kw)
         cryptutil.gen_transport_cert = Mock(side_effect=self.mock_gen_trans_cert)
         return cryptutil
@@ -326,6 +330,12 @@ class WireProtocolData(object):
 
         with open(trans_cert_file, 'w+') as cert_file:
             cert_file.write(self.trans_cert)
+
+    @staticmethod
+    def get_status_blob_from_hostgaplugin_put_status_request(data):
+        status_object = json.loads(data)
+        content = status_object["content"]
+        return base64.b64decode(content)
 
     def get_no_of_plugins_in_extension_config(self):
         if self.ext_conf is None:

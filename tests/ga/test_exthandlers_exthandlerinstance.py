@@ -29,6 +29,7 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
     def tearDown(self):
         self.mock_get_base_dir.stop()
+        super(ExtHandlerInstanceTestCase, self).tearDown()
 
     def test_rm_ext_handler_dir_should_remove_the_extension_packages(self):
         os.mkdir(self.extension_directory)

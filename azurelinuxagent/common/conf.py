@@ -160,7 +160,7 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
-    "Debug.CgroupMonitorExpiryTime": "2022-01-31",
+    "Debug.CgroupMonitorExpiryTime": "2022-03-31",
     "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
 }
 
@@ -168,7 +168,6 @@ __STRING_OPTIONS__ = {
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
     "Extensions.InitialGoalStatePeriod": 6,
-    "Extensions.GoalStateHistoryCleanupPeriod": 1800,
     "OS.EnableFirewallPeriod": 300,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
@@ -377,10 +376,6 @@ def get_initial_goal_state_period(conf=__conf__):
     return conf.get_int("Extensions.InitialGoalStatePeriod", default_value=lambda: get_goal_state_period(conf=conf))
 
 
-def get_goal_state_history_cleanup_period(conf=__conf__):
-    return conf.get_int("Extensions.GoalStateHistoryCleanupPeriod", 1800)
-
-
 def get_allow_reset_sys_user(conf=__conf__):
     return conf.get_switch("Provisioning.AllowResetSysUser", False)
 
@@ -551,11 +546,11 @@ def get_agent_cpu_quota(conf=__conf__):
 
 def get_cgroup_monitor_expiry_time (conf=__conf__):
     """
-    cgroups monitoring disabled after expiry time
+    cgroups monitoring for pilot extensions disabled after expiry time
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-01-31")
+    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-03-31")
 
 def get_cgroup_monitor_extension_name (conf=__conf__):
     """

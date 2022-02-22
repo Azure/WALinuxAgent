@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
-import shutil
 import subprocess
 import tempfile
 
@@ -39,8 +38,8 @@ class TestProcessUtils(AgentTestCase):
     def tearDown(self):
         self.stderr.close()
         self.stdout.close()
-        if self.tmp_dir is not None:
-            shutil.rmtree(self.tmp_dir)
+        
+        super(TestProcessUtils, self).tearDown()
 
     def test_wait_for_process_completion_or_timeout_should_terminate_cleanly(self):
         process = subprocess.Popen(

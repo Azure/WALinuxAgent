@@ -44,7 +44,10 @@ _CACHE_PATTERNS = [
     re.compile(r"^VmSettings.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
+    re.compile(r"^SharedConfig\.xml$", re.IGNORECASE),
+    re.compile(r"^HostingEnvironmentConfig\.xml$", re.IGNORECASE),
+    re.compile(r"^RemoteAccess\.xml$", re.IGNORECASE)
 ]
 
 #
@@ -59,8 +62,8 @@ _CACHE_PATTERNS = [
 #   2018-04-06T08:21:37.142697_N
 #   2018-04-06T08:21:37.142697_N.zip
 #
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+))?\.zip$")
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?$")
+_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?\.zip$")
 
 _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
@@ -161,9 +164,11 @@ class StateArchiver(object):
         for state in states[_MAX_ARCHIVED_STATES:]:
             state.delete()
 
-        # legacy history files
-        for current_file in os.listdir(self._source):
-            full_path = os.path.join(self._source, current_file)
+    @staticmethod
+    def purge_legacy_goal_state_history():
+        lib_dir = conf.get_lib_dir()
+        for current_file in os.listdir(lib_dir):
+            full_path = os.path.join(lib_dir, current_file)
             for pattern in _CACHE_PATTERNS:
                 match = pattern.match(current_file)
                 if match is not None:
@@ -175,8 +180,12 @@ class StateArchiver(object):
 
     def archive(self):
         states = self._get_archive_states()
-        for state in states:
-            state.archive()
+        states.sort(reverse=True)
+
+        if len(states) > 0:
+            # Skip the most recent goal state, since it may still be in use
+            for state in states[1:]:
+                state.archive()
 
     def _get_archive_states(self):
         states = []
@@ -199,15 +208,25 @@ class GoalStateHistory(object):
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
 
     def save(self, data, file_name):
+        def write_to_file(d, f):
+            with open(f, "w") as h:
+                h.write(d)
+
+        self._save(write_to_file, data, file_name)
+
+    def _save_file(self, source_file, target_name):
+        self._save(shutil.move, source_file, target_name)
+
+    def _save(self, function, source, target_name):
         try:
             if not os.path.exists(self._root):
                 fileutil.mkdir(self._root, mode=0o700)
-            full_file_name = os.path.join(self._root, file_name)
-            fileutil.write_file(full_file_name, data)
-        except IOError as e:
+            target = os.path.join(self._root, target_name)
+            function(source, target)
+        except Exception as e:
             if not self._errors:  # report only 1 error per directory
                 self._errors = True
-                logger.warn("Failed to save goal state file {0}: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
+                logger.warn("Failed to save goal state file {0}: {1} [no additional errors saving the goal state will be reported]".format(target_name, e))
 
     def save_goal_state(self, text):
         self.save(text, _GOAL_STATE_FILE_NAME)
@@ -227,5 +246,5 @@ class GoalStateHistory(object):
     def save_shared_conf(self, text):
         self.save(text, _SHARED_CONF_FILE_NAME)
 
-    def save_status(self, text):
-        self.save(text, AGENT_STATUS_FILE)
+    def save_status_file(self, status_file):
+        self._save_file(status_file, AGENT_STATUS_FILE)

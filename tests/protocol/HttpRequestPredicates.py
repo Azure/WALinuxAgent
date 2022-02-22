@@ -45,6 +45,15 @@ class HttpRequestPredicates(object):
         return url.lower() == 'http://{0}:{1}/extensionartifact'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
 
     @staticmethod
+    def is_status_request(url):
+        return HttpRequestPredicates.is_storage_status_request(url) or HttpRequestPredicates.is_host_plugin_status_request(url)
+
+    @staticmethod
+    def is_storage_status_request(url):
+        # e.g. 'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo'
+        return re.match(r'^https://.+/.*\.status\?[^/]+$', url, re.IGNORECASE)
+
+    @staticmethod
     def is_host_plugin_status_request(url):
         return url.lower() == 'http://{0}:{1}/status'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
 

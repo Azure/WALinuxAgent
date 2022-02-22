@@ -45,11 +45,13 @@ from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, Exi
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses, ExtHandlerPackageList, \
     VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -170,7 +172,15 @@ class UpdateHandler(object):
         self._last_try_update_goal_state_failed = False
         self._report_status_last_failed_incarnation = -1
 
-        self.last_incarnation = None
+        # incarnation of the last goal state that has been fully processed
+        # (None if no goal state has been processed)
+        self._last_incarnation = None
+        # ID of the last extensions goal state that has been fully processed (incarnation for WireServer goal states or etag for HostGAPlugin goal states)
+        # (None if no extensions goal state has been processed)
+        self._last_extensions_gs_id = None
+        # Goal state that is currently been processed
+        # (None if no goal state is being processed)
+        self._goal_state = None
 
         self._extensions_summary = ExtensionsSummary()
 
@@ -387,6 +397,8 @@ class UpdateHandler(object):
 
             logger.info("Goal State Period: {0} sec. This indicates how often the agent checks for new goal states and reports status.", self._goal_state_period)
 
+            self._cleanup_legacy_goal_state_history()
+
             while self.is_running:
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
@@ -419,7 +431,7 @@ class UpdateHandler(object):
         if self._vm_size is None:
 
             imds_client = get_imds_client(protocol.get_endpoint())
-            
+
             try:
                 imds_info = imds_client.get_compute()
                 self._vm_size = imds_info.vmSize
@@ -427,7 +439,7 @@ class UpdateHandler(object):
                 err_msg = "Attempts to retrieve VM size information from IMDS are failing: {0}".format(textutil.format_exception(e))
                 logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(err_msg))
                 return "unknown"
-        
+
         return self._vm_size
 
     def _check_daemon_running(self, debug):
@@ -449,6 +461,8 @@ class UpdateHandler(object):
         try:
             protocol.update_goal_state()
 
+            self._goal_state = protocol.get_goal_state()
+
             if self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = False
                 message = u"Retrieving the goal state recovered from previous errors"
@@ -463,6 +477,7 @@ class UpdateHandler(object):
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
             message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
             logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            self._heartbeat_update_goal_state_error_count += 1
             return False
         return True
 
@@ -540,30 +555,30 @@ class UpdateHandler(object):
 
         self.__upgrade_agent_if_permitted()
 
-    def __goal_state_updated(self, incarnation):
+    def _processing_new_incarnation(self):
         """
-        This function returns if the Goal State updated.
-        We currently rely on the incarnation number to determine that; i.e. if it changed from the last processed GS
+        True if we are currently processing a new incarnation (i.e. WireServer goal state)
         """
-        # TODO: This check should be based on the ExtensionsGoalState.id property
-        #  (this property abstracts incarnation/etag logic based on the delivery pipeline of the Goal State)
-        return incarnation != self.last_incarnation
+        return self._goal_state is not None and self._goal_state.incarnation != self._last_incarnation
+
+    def _processing_new_extensions_goal_state(self):
+        """
+        True if we are currently processing a new extensions goal state
+        """
+        return self._goal_state is not None and self._goal_state.extensions_goal_state.id != self._last_extensions_gs_id
 
     def _process_goal_state(self, exthandlers_handler, remote_access_handler):
-
-        protocol = exthandlers_handler.protocol
-        if not self._try_update_goal_state(protocol):
-            self._heartbeat_update_goal_state_error_count += 1
-            # We should have a cached goal state here, go ahead and report status for that.
-            self._report_status(exthandlers_handler, incarnation_changed=False)
-            return
-
-        # Update the Guest Agent if a new version is available
-        self.__update_guest_agent(protocol)
-        incarnation = protocol.get_incarnation()
-
         try:
-            if self.__goal_state_updated(incarnation):
+            protocol = exthandlers_handler.protocol
+
+            # update self._goal_state
+            self._try_update_goal_state(protocol)
+
+            # Update the Guest Agent if a new version is available
+            if self._goal_state is not None:
+                self.__update_guest_agent(protocol)
+
+            if self._processing_new_extensions_goal_state():
                 if not self._extensions_summary.converged:
                     message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
                     logger.warn(message)
@@ -575,12 +590,34 @@ class UpdateHandler(object):
 
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, incarnation_changed=self.__goal_state_updated(incarnation))
+            self._report_status(exthandlers_handler)
 
-            if self.__goal_state_updated(incarnation):
+            if self._processing_new_incarnation():
                 remote_access_handler.run()
+
+            if self._processing_new_extensions_goal_state():
+                try:
+                    UpdateHandler._cleanup_goal_state_history()
+                except Exception as exception:
+                    logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
+
         finally:
-            self.last_incarnation = incarnation
+            if self._goal_state is not None:
+                self._last_incarnation = self._goal_state.incarnation
+                self._last_extensions_gs_id = self._goal_state.extensions_goal_state.id
+
+    @staticmethod
+    def _cleanup_goal_state_history():
+        archiver = StateArchiver(conf.get_lib_dir())
+        archiver.purge()
+        archiver.archive()
+
+    @staticmethod
+    def _cleanup_legacy_goal_state_history():
+        try:
+            StateArchiver.purge_legacy_goal_state_history()
+        except Exception as exception:
+            logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
     def __get_vmagent_update_status(self, protocol, incarnation_changed):
         """
@@ -618,11 +655,21 @@ class UpdateHandler(object):
 
         return update_status
 
-    def _report_status(self, exthandlers_handler, incarnation_changed):
-        vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, incarnation_changed)
+    def _report_status(self, exthandlers_handler):
+        vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, self._processing_new_extensions_goal_state())
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
-        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed,
-                                                                   vm_agent_update_status=vm_agent_update_status)
+        #
+        # TODO: Review the use of incarnation when reporting status... what should be the behavior for Fast Track goal states (i.e. no incarnation)?
+        # TODO: How to handle the case when the HostGAPlugin goes from supporting vmSettings to not supporting it?
+        #
+        if self._goal_state is None:
+            supports_fast_track = False
+        else:
+            supports_fast_track = self._goal_state.extensions_goal_state.source_channel == GoalStateChannel.HostGAPlugin
+        vm_status = exthandlers_handler.report_ext_handlers_status(
+            incarnation_changed=self._processing_new_extensions_goal_state(),
+            vm_agent_update_status=vm_agent_update_status,
+            vm_agent_supports_fast_track=supports_fast_track)
         if vm_status is None:
             return
 
@@ -641,8 +688,9 @@ class UpdateHandler(object):
                         self._on_initial_goal_state_completed(self._extensions_summary)
         except Exception as error:
             # report errors only once per incarnation
-            if self._report_status_last_failed_incarnation != exthandlers_handler.protocol.get_incarnation():
-                self._report_status_last_failed_incarnation = exthandlers_handler.protocol.get_incarnation()
+            goal_state = exthandlers_handler.protocol.get_goal_state()
+            if self._report_status_last_failed_incarnation != goal_state.incarnation:
+                self._report_status_last_failed_incarnation = goal_state.incarnation
                 msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
                 logger.warn(msg)
                 add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
@@ -1044,8 +1092,8 @@ class UpdateHandler(object):
         daemon_version = self.__get_daemon_version_for_update()
         try:
             # Fetch the agent manifests from the latest Goal State
-            incarnation = protocol.get_incarnation()
-            gs_updated = self.__goal_state_updated(incarnation)
+            incarnation = self._goal_state.incarnation
+            gs_updated = self._processing_new_extensions_goal_state()
             requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
             if manifest is None:
                 logger.verbose(
@@ -1261,6 +1309,9 @@ class UpdateHandler(object):
             log_event=False)
 
     def _add_accept_tcp_firewall_rule_if_not_enabled(self, dst_ip):
+
+        if not conf.enable_firewall():
+            return
 
         def _execute_run_command(command):
             # Helper to execute a run command, returns True if no exception

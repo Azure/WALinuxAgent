@@ -110,7 +110,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                 self.assertFalse(os.path.isfile(crt1))
                 self.assertFalse(os.path.isfile(crt2))
                 self.assertFalse(os.path.isfile(prv2))
-            self.assertEqual("1", protocol.get_incarnation())
+            self.assertEqual("1", protocol.get_goal_state().incarnation)
 
     @staticmethod
     def _get_telemetry_events_generator(event_list):

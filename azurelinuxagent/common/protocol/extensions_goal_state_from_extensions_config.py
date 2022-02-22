@@ -23,7 +23,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
@@ -32,7 +32,7 @@ from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall
 class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     def __init__(self, incarnation, xml_text, wire_client):
         super(ExtensionsGoalStateFromExtensionsConfig, self).__init__()
-        self._id = incarnation
+        self._id = "incarnation_{0}".format(incarnation)
         self._incarnation = incarnation
         self._text = xml_text
         self._status_upload_blob = None
@@ -147,6 +147,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     @property
     def created_on_timestamp(self):
         return self._created_on_timestamp
+
+    @property
+    def source_channel(self):
+        return GoalStateChannel.WireServer
 
     @property
     def status_upload_blob(self):

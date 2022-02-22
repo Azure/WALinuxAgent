@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
 from tests.tools import AgentTestCase
 
@@ -28,10 +29,32 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             self.assertEqual('1900-01-01T00:00:00.000000Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
     def test_it_should_parse_missing_status_upload_blob_as_none(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = mockwiredata.DATA_FILE.copy()
         data_file["ext_conf"] = "hostgaplugin/ext_conf-no_status_upload_blob.xml"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
+
+    def test_it_should_default_to_block_blob_when_the_status_blob_type_is_not_valid(self):
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-invalid_blob_type.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBlob for an invalid statusBlobType')
+
+    def test_it_should_parse_empty_depends_on_as_dependency_level_0(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-empty_depends_on.json"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-empty_depends_on.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions = protocol.get_goal_state().extensions_goal_state.extensions
+
+            self.assertEqual(0, extensions[0].settings[0].dependencyLevel, "Incorrect dependencyLevel")
+
+    def test_its_source_channel_should_be_wire_server(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+
+            self.assertEqual(GoalStateChannel.WireServer, extensions_goal_state.source_channel, "The source_channel is incorrect")

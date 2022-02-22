@@ -889,7 +889,7 @@ class ExtHandlersHandler(object):
 
         return handlers_to_report
 
-    def report_ext_handlers_status(self, incarnation_changed=False, vm_agent_update_status=None):
+    def report_ext_handlers_status(self, incarnation_changed=False, vm_agent_update_status=None, vm_agent_supports_fast_track=False):
         """
         Go through handler_state dir, collect and report status.
         Returns the status it reported, or None if an error occurred.
@@ -898,6 +898,7 @@ class ExtHandlersHandler(object):
             vm_status = VMStatus(status="Ready", message="Guest Agent is running",
                                  gs_aggregate_status=self.__gs_aggregate_status,
                                  vm_agent_update_status=vm_agent_update_status)
+            vm_status.vmAgent.set_supports_fast_track(vm_agent_supports_fast_track)
             handlers_to_report = []
 
             # In case of Unsupported error, report the status of the handlers in the VM
@@ -965,7 +966,7 @@ class ExtHandlersHandler(object):
             # On new goal state, move the last status report for the previous goal state to the history folder
             last_modified = os.path.getmtime(status_file)
             timestamp = datetime.datetime.utcfromtimestamp(last_modified).isoformat()
-            GoalStateHistory(timestamp).save_status(status_file)
+            GoalStateHistory(timestamp, "status").save_status_file(status_file)
 
         # Now create/overwrite the status file; this file is kept for debugging purposes only
         status_blob_text = self.protocol.get_status_blob_data()

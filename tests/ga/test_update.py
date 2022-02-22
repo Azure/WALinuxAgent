@@ -53,8 +53,8 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
-from tests.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
-    clear_singleton_instances, mock_sleep, skip_if_predicate_true
+from tests.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
+    clear_singleton_instances, mock_sleep
 from tests.protocol import mockwiredata
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
@@ -156,13 +156,13 @@ def _get_update_handler(iterations=1, test_data=None):
                                 type(update_handler).is_running = True
 
 
-class UpdateTestCase(AgentTestCase):
+class UpdateTestCase(AgentTestCaseWithGetVmSizeMock):
     _test_suite_tmp_dir = None
     _agent_zip_dir = None
 
     @classmethod
     def setUpClass(cls):
-        AgentTestCase.setUpClass()
+        super(UpdateTestCase, cls).setUpClass()
         # copy data_dir/ga/WALinuxAgent-0.0.0.0.zip to _test_suite_tmp_dir/waagent-zip/WALinuxAgent-<AGENT_VERSION>.zip
         sample_agent_zip = "WALinuxAgent-0.0.0.0.zip"
         test_agent_zip = sample_agent_zip.replace("0.0.0.0", AGENT_VERSION)
@@ -175,7 +175,7 @@ class UpdateTestCase(AgentTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        AgentTestCase.tearDownClass()
+        super(UpdateTestCase, cls).tearDownClass()
         shutil.rmtree(UpdateTestCase._test_suite_tmp_dir)
 
     @staticmethod
@@ -1461,6 +1461,7 @@ class TestUpdate(UpdateTestCase):
             protocol = self._create_protocol(count=count, versions=versions)
 
         self.update_handler.protocol_util = protocol
+        self.update_handler._goal_state = protocol.get_goal_state()
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
         return self.update_handler._download_agent_if_upgrade_available(protocol, base_version=base_version)
@@ -1553,60 +1554,6 @@ class TestUpdate(UpdateTestCase):
         """
         self.update_handler._download_agent_if_upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=0, enable_updates=True, sleep_interval=(300,))
-
-    @patch("azurelinuxagent.common.logger.info")
-    @patch("azurelinuxagent.ga.update.add_event")
-    def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
-        update_handler = get_update_handler()
-        mock_protocol = WireProtocol("foo.bar")
-
-        update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-        update_handler._send_heartbeat_telemetry(mock_protocol)
-        self.assertEqual(1, patch_add_event.call_count)
-        self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
-                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
-
-    @patch("azurelinuxagent.ga.update.add_event")
-    @patch("azurelinuxagent.common.protocol.imds.ImdsClient")
-    def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, mock_imds_factory, patch_add_event, *_):
-
-        def validate_single_heartbeat_event_matches_vm_size(vm_size):
-            heartbeat_event_kwargs = [
-                kwargs for _, kwargs in patch_add_event.call_args_list
-                if kwargs.get('op', None) == WALAEventOperation.HeartBeat
-            ]
-
-            self.assertEqual(1, len(heartbeat_event_kwargs), "Expected exactly one HeartBeat event, got {0}"\
-                .format(heartbeat_event_kwargs))
-
-            telemetry_message = heartbeat_event_kwargs[0].get("message", "")
-            self.assertTrue(telemetry_message.endswith(vm_size),
-                "Expected HeartBeat message ('{0}') to end with the test vmSize value, {1}."\
-                .format(telemetry_message, vm_size))
-        
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
-            update_handler = get_update_handler()
-            update_handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
-
-            # Zero out the _vm_size parameter for test resiliency
-            update_handler._vm_size = None
-
-            mock_imds_client = mock_imds_factory.return_value = Mock()
-
-            # First force a vmSize retrieval failure
-            mock_imds_client.get_compute.side_effect = HttpError(msg="HTTP Test Failure")
-            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-            update_handler._send_heartbeat_telemetry(mock_protocol)
-
-            validate_single_heartbeat_event_matches_vm_size("unknown")
-            patch_add_event.reset_mock()
-
-            # Now provide a vmSize
-            mock_imds_client.get_compute = lambda: ComputeInfo(vmSize="TestVmSizeValue")
-            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-            update_handler._send_heartbeat_telemetry(mock_protocol)
-
-            validate_single_heartbeat_event_matches_vm_size("TestVmSizeValue")
 
     @staticmethod
     def _get_test_ext_handler_instance(protocol, name="OSTCExtensions.ExampleHandlerLinux", version="1.0.0"):
@@ -1707,87 +1654,131 @@ class TestUpdate(UpdateTestCase):
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
-                with patch.object(osutil, '_enable_firewall', True):
-                    # drop rule is present
-                    mock_iptables.set_command(AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                                                           wait=mock_iptables.wait), exit_code=0)
-                    # non root tcp iptable rule is absent
-                    mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait), exit_code=1)
-                    update_handler.run(debug=True)
+                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
+                    with patch.object(osutil, '_enable_firewall', True):
+                        # drop rule is present
+                        mock_iptables.set_command(
+                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                         mock_iptables.destination,
+                                                                         wait=mock_iptables.wait), exit_code=0)
+                        # non root tcp iptable rule is absent
+                        mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                                       mock_iptables.destination,
+                                                                                       wait=mock_iptables.wait),
+                                                  exit_code=1)
 
-                    drop_check_command = TestOSUtil._command_to_string(AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                                                                                    wait=mock_iptables.wait))
-                    accept_tcp_check_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait))
-                    accept_tcp_insert_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait))
+                        update_handler._add_accept_tcp_firewall_rule_if_not_enabled(mock_iptables.destination)
 
-                    # Filtering the mock iptable command calls with only the once related to this test.
-                    filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+                        drop_check_command = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                         mock_iptables.destination,
+                                                                         wait=mock_iptables.wait))
+                        accept_tcp_check_rule = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                 mock_iptables.destination,
+                                                                 wait=mock_iptables.wait))
+                        accept_tcp_insert_rule = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND,
+                                                                 mock_iptables.destination,
+                                                                 wait=mock_iptables.wait))
 
-                    self.assertEqual(len(filtered_mock_iptable_calls), 3, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
-                    self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
-                                     "The first command should check the drop rule")
-                    self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
-                                     "The second command should check the accept rule")
-                    self.assertEqual(filtered_mock_iptable_calls[2], accept_tcp_insert_rule,
-                                     "The third command should add the accept rule")
+                        # Filtering the mock iptable command calls with only the ones related to this test.
+                        filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
+                                                       cmd in [drop_check_command, accept_tcp_check_rule,
+                                                               accept_tcp_insert_rule]]
+
+                        self.assertEqual(len(filtered_mock_iptable_calls), 3,
+                                         "Incorrect number of calls to iptables: [{0}]".format(
+                                             mock_iptables.command_calls))
+                        self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
+                                         "The first command should check the drop rule")
+                        self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
+                                         "The second command should check the accept rule")
+                        self.assertEqual(filtered_mock_iptable_calls[2], accept_tcp_insert_rule,
+                                         "The third command should add the accept rule")
 
     def test_it_should_not_set_dns_tcp_iptable_if_drop_unavailable(self):
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
-                with patch.object(osutil, '_enable_firewall', True):
-                    # drop rule is not available
-                    mock_iptables.set_command(AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                                                           wait=mock_iptables.wait), exit_code=1)
+                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
+                    with patch.object(osutil, '_enable_firewall', True):
+                        # drop rule is not available
+                        mock_iptables.set_command(
+                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                         mock_iptables.destination,
+                                                                         wait=mock_iptables.wait), exit_code=1)
 
-                    update_handler.run(debug=True)
+                        update_handler._add_accept_tcp_firewall_rule_if_not_enabled(mock_iptables.destination)
 
-                    drop_check_command = TestOSUtil._command_to_string(AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                                                                                    wait=mock_iptables.wait))
-                    accept_tcp_check_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait))
-                    accept_tcp_insert_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait))
+                        drop_check_command = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                         mock_iptables.destination,
+                                                                         wait=mock_iptables.wait))
+                        accept_tcp_check_rule = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                 mock_iptables.destination,
+                                                                 wait=mock_iptables.wait))
+                        accept_tcp_insert_rule = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND,
+                                                                 mock_iptables.destination,
+                                                                 wait=mock_iptables.wait))
 
-                    # Filtering the mock iptable command calls with only the once related to this test.
-                    filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+                        # Filtering the mock iptable command calls with only the ones related to this test.
+                        filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
+                                                       cmd in [drop_check_command, accept_tcp_check_rule,
+                                                               accept_tcp_insert_rule]]
 
-                    self.assertEqual(len(filtered_mock_iptable_calls), 1, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
-                    self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
-                                     "The first command should check the drop rule")
+                        self.assertEqual(len(filtered_mock_iptable_calls), 1,
+                                         "Incorrect number of calls to iptables: [{0}]".format(
+                                             mock_iptables.command_calls))
+                        self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
+                                         "The first command should check the drop rule")
 
     def test_it_should_not_set_dns_tcp_iptable_if_drop_and_accept_available(self):
 
         with TestOSUtil._mock_iptables() as mock_iptables:
             with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
-                with patch.object(osutil, '_enable_firewall', True):
-                    # drop rule is available
-                    mock_iptables.set_command(AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                                                           wait=mock_iptables.wait), exit_code=0)
-                    # non root tcp iptable rule is available
-                    mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait), exit_code=0)
+                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
+                    with patch.object(osutil, '_enable_firewall', True):
+                        # drop rule is available
+                        mock_iptables.set_command(
+                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                         mock_iptables.destination,
+                                                                         wait=mock_iptables.wait), exit_code=0)
+                        # non root tcp iptable rule is available
+                        mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                                       mock_iptables.destination,
+                                                                                       wait=mock_iptables.wait),
+                                                  exit_code=0)
 
-                    update_handler.run(debug=True)
+                        update_handler._add_accept_tcp_firewall_rule_if_not_enabled(mock_iptables.destination)
 
-                    drop_check_command = TestOSUtil._command_to_string(AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                                                                                    wait=mock_iptables.wait))
-                    accept_tcp_check_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait))
-                    accept_tcp_insert_rule = TestOSUtil._command_to_string(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, mock_iptables.destination,
-                                                             wait=mock_iptables.wait))
+                        drop_check_command = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                         mock_iptables.destination,
+                                                                         wait=mock_iptables.wait))
+                        accept_tcp_check_rule = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
+                                                                 mock_iptables.destination,
+                                                                 wait=mock_iptables.wait))
+                        accept_tcp_insert_rule = TestOSUtil._command_to_string(
+                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND,
+                                                                 mock_iptables.destination,
+                                                                 wait=mock_iptables.wait))
 
-                    # Filtering the mock iptable command calls with only the once related to this test.
-                    filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+                        # Filtering the mock iptable command calls with only the ones related to this test.
+                        filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
+                                                       cmd in [drop_check_command, accept_tcp_check_rule,
+                                                               accept_tcp_insert_rule]]
 
-                    self.assertEqual(len(filtered_mock_iptable_calls), 2, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
-                    self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
-                                     "The first command should check the drop rule")
-                    self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
-                                     "The second command should check the accept rule")
+                        self.assertEqual(len(filtered_mock_iptable_calls), 2,
+                                         "Incorrect number of calls to iptables: [{0}]".format(
+                                             mock_iptables.command_calls))
+                        self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
+                                         "The first command should check the drop rule")
+                        self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
+                                         "The second command should check the accept rule")
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
@@ -2414,9 +2405,9 @@ class TestAgentUpgrade(UpdateTestCase):
 @patch('azurelinuxagent.ga.update.get_collect_logs_handler')
 @patch('azurelinuxagent.ga.update.get_monitor_handler')
 @patch('azurelinuxagent.ga.update.get_env_handler')
-class MonitorThreadTest(AgentTestCase):
+class MonitorThreadTest(AgentTestCaseWithGetVmSizeMock):
     def setUp(self):
-        AgentTestCase.setUp(self)
+        super(MonitorThreadTest, self).setUp()
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
         currentThread().setName("ExtHandler")
         protocol = Mock()
@@ -2525,6 +2516,17 @@ class ChildMock(Mock):
         self.wait = Mock(return_value=return_value, side_effect=side_effect)
 
 
+class ExtensionsGoalStateMock(object):
+    def __init__(self, identifier):
+        self.id = identifier
+
+
+class GoalStateMock(object):
+    def __init__(self, incarnation):
+        self.incarnation = incarnation
+        self.extensions_goal_state = ExtensionsGoalStateMock(incarnation)
+
+
 class ProtocolMock(object):
     def __init__(self, family="TestAgent", etag=42, versions=None, client=None):
         self.family = family
@@ -2534,6 +2536,7 @@ class ProtocolMock(object):
             "get_vmagent_pkgs": 0,
             "update_goal_state": 0
         }
+        self._goal_state = GoalStateMock(etag)
         self.goal_state_is_stale = False
         self.etag = etag
         self.versions = versions if versions is not None else []
@@ -2569,8 +2572,8 @@ class ProtocolMock(object):
     def get_protocol(self):
         return self
 
-    def get_incarnation(self):
-        return self.etag
+    def get_goal_state(self):
+        return self._goal_state
 
     def get_vmagent_manifests(self):
         self.call_counts["get_vmagent_manifests"] += 1
@@ -2647,16 +2650,16 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             # the first goal state should produce an update
             update_handler._try_update_goal_state(protocol)
-            self.assertEqual(protocol.get_incarnation(), '12345', "The goal state was not updated (received unexpected incarnation)")
+            self.assertEqual(update_handler._goal_state.incarnation, '12345', "The goal state was not updated (received unexpected incarnation)")
 
             # no changes in the goal state should not produce an update
             update_handler._try_update_goal_state(protocol)
-            self.assertEqual(protocol.get_incarnation(), '12345', "The goal state should not be updated (received unexpected incarnation)")
+            self.assertEqual(update_handler._goal_state.incarnation, '12345', "The goal state should not be updated (received unexpected incarnation)")
 
             # a new  goal state should produce an update
             protocol.mock_wire_data.set_incarnation(6789)
             update_handler._try_update_goal_state(protocol)
-            self.assertEqual(protocol.get_incarnation(), '6789', "The goal state was not updated (received unexpected incarnation)")
+            self.assertEqual(update_handler._goal_state.incarnation, '6789', "The goal state was not updated (received unexpected incarnation)")
 
     def test_it_should_log_errors_only_when_the_error_state_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -2810,171 +2813,62 @@ class ProcessGoalStateTestCase(AgentTestCase):
             self.assertEqual(3, exthandlers_handler.report_ext_handlers_status.call_count, "exthandlers_handler.report_ext_handlers_status() should have been called on a new goal state")
             self.assertEqual(2, remote_access_handler.run.call_count, "remote_access_handler.run() should have been called on a new goal state")
 
+class HeartbeatTestCase(AgentTestCase):
 
-class ReportStatusTestCase(AgentTestCase):
-    """
-    Tests for UpdateHandler._report_status()
-    """
-
-    def setUp(self):
-        self.patches = [
-            patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)),
-            patch("sys.exit")
-        ]
-
-        for p in self.patches:
-            p.start()
-
-        return AgentTestCase.setUp(self)
-
-    def tearDown(self):
+    @patch("azurelinuxagent.common.logger.info")
+    @patch("azurelinuxagent.ga.update.add_event")
+    def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
         
-        for p in self.patches:
-            p.stop()
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
+            update_handler = get_update_handler()
+            
+            update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+            update_handler._send_heartbeat_telemetry(mock_protocol)
+            self.assertEqual(1, patch_add_event.call_count)
+            self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
+                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
+    
+    @patch("azurelinuxagent.ga.update.add_event")
+    @patch("azurelinuxagent.common.protocol.imds.ImdsClient")
+    def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, mock_imds_factory, patch_add_event, *_):
 
-        return AgentTestCase.tearDown(self)
+        def validate_single_heartbeat_event_matches_vm_size(vm_size):
+            heartbeat_event_kwargs = [
+                kwargs for _, kwargs in patch_add_event.call_args_list
+                if kwargs.get('op', None) == WALAEventOperation.HeartBeat
+            ]
 
-    @staticmethod
-    @contextlib.contextmanager
-    def _mock_update_handler(iterations=1, **kwargs):
-        """
-        Creates an UpdateHandler instance that will run n iterations.
+            self.assertEqual(1, len(heartbeat_event_kwargs), "Expected exactly one HeartBeat event, got {0}"\
+                .format(heartbeat_event_kwargs))
 
-        Can be supplied keyword args for:
-            *   mock_wire_data_file: This arg is treated like mock_wire_protocol
-                would. Defaults to mockwiredata.DATA_FILE_STATUS_BLOB
-            *   http_<action>_handler where action is get, put, or post: This arg
-                is treated like mock_wire_protocol would.
+            telemetry_message = heartbeat_event_kwargs[0].get("message", "")
+            self.assertTrue(telemetry_message.endswith(vm_size),
+                "Expected HeartBeat message ('{0}') to end with the test vmSize value, {1}."\
+                .format(telemetry_message, vm_size))
         
-        Returned UpdateHandler instance has its protocol mocked via mock_wire_protocol.
-        """
-        
-        # Build the side_effect list for the UpdateHandler.is_running PropertyMock.
-        # Return True for the first n iterations followed by a single False to stop
-        # and then another True because the current UpdateHandler implementation
-        # does a __set__ during shutdown.
-        is_running_return_values = [True] * iterations + [False, True]
-        is_running_patch = patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=is_running_return_values))
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
+            update_handler = get_update_handler()
+            update_handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
 
-        mock_http_get = kwargs.get("http_get_handler")
-        mock_http_put = kwargs.get("http_put_handler")
-        mock_http_post = kwargs.get("http_post_handler")
+            # Zero out the _vm_size parameter for test resiliency
+            update_handler._vm_size = None
 
-        mock_wire_data_file = kwargs.get("mock_wire_data_file", mockwiredata.DATA_FILE_STATUS_BLOB)
+            mock_imds_client = mock_imds_factory.return_value = Mock()
 
-        try:
-            with mock_wire_protocol(mock_wire_data_file, mock_http_get, mock_http_post, mock_http_put) as protocol:
-                update_handler = get_update_handler()
-                
-                update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+            # First force a vmSize retrieval failure
+            mock_imds_client.get_compute.side_effect = HttpError(msg="HTTP Test Failure")
+            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+            update_handler._send_heartbeat_telemetry(mock_protocol)
 
-                is_running_patch.start()
-                yield update_handler
-        finally:
-            is_running_patch.stop()
+            validate_single_heartbeat_event_matches_vm_size("unknown")
+            patch_add_event.reset_mock()
 
-    @staticmethod
-    def _fail_goal_state_fetch(url, **_):
-        """
-        For each goal state requested, returns values in order before failing with an
-        HttpError. Is useful for getting the agent into a specific state before causing
-        a failure.
+            # Now provide a vmSize
+            mock_imds_client.get_compute = lambda: ComputeInfo(vmSize="TestVmSizeValue")
+            update_handler._last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+            update_handler._send_heartbeat_telemetry(mock_protocol)
 
-        Relies on this function to have the property return_vals populated with a list
-        of values to be returned in order. Any `None` in the list will cause the mock wire
-        data to be queried and returned, and thus functions as a sort of default.
-        """
-        if not HttpRequestPredicates.is_goal_state_request(url):
-            # url does not represent a request for a goal state; return None so
-            # that the mock_wire_protocol will return whatever data is in the mock
-            # wire data object (as per the mock_wire_protocol's docstring).
-            return None
-        try:
-            return ReportStatusTestCase._fail_goal_state_fetch.return_vals.pop()
-        except IndexError:
-            raise HttpError()
-
-    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
-    def test_update_handler_should_report_status_even_on_failed_goal_state_fetch(self, _):
-
-        try:
-            # Returning None forces the mock wire data to return the contents in the static
-            # files, as documented in mock_wire_protocol's docstring. We return thrice:
-            # once for protocol initialization, once for HostGAPlugin initialization,
-            # and once for the initial call in run().
-            # TODO: This test has too much knowledge of the protocol with the wireserver; rewrite it
-            #       at the level of UpdateHanlder._process_goal_state, which is where the tested
-            #       logic resides.
-            #
-            # TODO: For the same reason, the test below (commented out) needs to be rewritten
-            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [None, None, None]
-
-            with ReportStatusTestCase._mock_update_handler(http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
-                update_handler.run(debug=True)
-
-                mock_protocol = update_handler.protocol_util.get_protocol()
-                self.assertEqual(mock_protocol.mock_wire_data.call_counts['/StatusBlob'], 1,
-                    "Expected a single status blob to be uploaded")
-        finally:
-            # clean up the static variable
-            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
-
-    @skip_if_predicate_true(lambda: True, "See TODO comment in test_update_handler_should_report_status_even_on_failed_goal_state_fetch")
-    def test_update_handler_should_report_status_for_cached_goal_state_on_failed_fetch(self):
-
-        try:
-            # Adds one return to the test above (test_upload_vm_status_even_on_failed_goal_state_fetch).
-            # The third (and last) return is to allow for the extensions to be processed once so that
-            # we will have extension status to test for.
-            ReportStatusTestCase._fail_goal_state_fetch.return_vals = [ None, None, None, None ]
-
-            with ReportStatusTestCase._mock_update_handler(iterations=2,
-                http_get_handler=ReportStatusTestCase._fail_goal_state_fetch) as update_handler:
-                update_handler.run(debug=True)
-
-                wire_data = update_handler.protocol_util.get_protocol().mock_wire_data
-                self.assertEqual(wire_data.call_counts['/StatusBlob'], 2,
-                    "Expected two status blobs to be uploaded, one for each iteration of the run loop.")
-
-                latest_status_blob_str = wire_data.status_blobs[-1]
-                latest_status_blob = json.loads(latest_status_blob_str)
-
-                ext_handler_statuses = latest_status_blob.get('aggregateStatus', {}).get("handlerAggregateStatus")
-                self.assertEqual(1, len(ext_handler_statuses), "Expected status for a single extension")
-
-                expectedHandlerInfo = {
-                    "handlerName": "OSTCExtensions.ExampleHandlerLinux",
-                    "handlerVersion": "1.0.0"
-                }
-
-                for key, expected_val in expectedHandlerInfo.items():
-                    actual_val = ext_handler_statuses[0].get(key)
-
-                    msg = "Extension information '{0}' did not match the provided extension.".format(key)
-                    self.assertEqual(actual_val, expected_val, msg)
-
-        finally:
-            # clean up the static variable
-            del ReportStatusTestCase._fail_goal_state_fetch.return_vals
-
-    def test_report_status_should_log_errors_only_once_per_goal_state(self):
-        update_handler = _create_update_handler()
-        with _mock_exthandlers_handler() as exthandlers_handler:
-            with patch("azurelinuxagent.ga.update.logger.warn") as logger_warn:
-                update_handler._report_status(exthandlers_handler, False)
-                self.assertEqual(0, logger_warn.call_count, "UpdateHandler._report_status() should not report WARNINGS when there are no errors")
-
-                with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", return_value=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
-                    update_handler._report_status(exthandlers_handler, False)
-                    update_handler._report_status(exthandlers_handler, False)
-                    update_handler._report_status(exthandlers_handler, False)
-                    self.assertEqual(1, logger_warn.call_count, "UpdateHandler._report_status() should report only 1 WARNING when there are multiple errors within the same goal state")
-
-                    exthandlers_handler.protocol.mock_wire_data.set_incarnation(999)
-                    update_handler._try_update_goal_state(exthandlers_handler.protocol)
-                    update_handler._report_status(exthandlers_handler, True)
-                    self.assertEqual(2, logger_warn.call_count, "UpdateHandler._report_status() should continue reporting errors after a new goal state")
-
+            validate_single_heartbeat_event_matches_vm_size("TestVmSizeValue")
 
 class GoalStateIntervalTestCase(AgentTestCase):
     def test_initial_goal_state_period_should_default_to_goal_state_period(self):
