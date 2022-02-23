@@ -219,6 +219,7 @@ class GoalState(object):
                 pass
             except VmSettingsError as exception:
                 save_to_history(exception.etag, exception.vm_settings_text)
+                raise
             except ResourceGoneError:
                 # retry after refreshing the HostGAPlugin
                 GoalState.update_host_plugin_headers(self._wire_client)

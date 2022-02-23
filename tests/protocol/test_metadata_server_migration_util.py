@@ -128,5 +128,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
                 os.remove(path)
         # pylint: enable=redefined-builtin
 
+        super(TestMetadataServerMigrationUtil, self).tearDown()
+
 if __name__ == '__main__':
     unittest.main()
