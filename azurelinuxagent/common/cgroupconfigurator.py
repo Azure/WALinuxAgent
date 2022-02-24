@@ -605,7 +605,8 @@ class CGroupConfigurator(object):
                     current = process
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
-                    if current == 0:
+                    # Process started by agent will have a marker and check if that marker found in process environment.
+                    if current == 0 and not self.__is_process_env_flag_found(process):
                         unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
@@ -639,6 +640,24 @@ class CGroupConfigurator(object):
             except Exception:
                 pass
             return "[PID: {0}] UNKNOWN".format(pid)
+
+        @staticmethod
+        def __is_process_env_flag_found(pid):
+            """
+            Returns True if the process env flag(PARENT_NAME) found otherwise False
+            """
+            try:
+                env = '/proc/{0}/environ'.format(pid)
+                if os.path.exists(env):
+                    with open(env, "r") as env_file:
+                        environ = env_file.read()
+                        if environ and environ[-1] == '\x00':
+                            environ = environ[:-1]
+                        match = re.search(shellutil.PARENT_PROCESS_NAME + "=" + shellutil.AZURE_GUEST_AGENT, environ)
+                        return match is not None
+            except Exception:
+                pass
+            return False
 
         @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
