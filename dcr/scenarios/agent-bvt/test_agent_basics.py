@@ -48,7 +48,7 @@ def check_root_login():
     print(root_passwd_line)
     root_passwd = root_passwd_line.split(":")[1]
 
-    if "!" in root_passwd or "*" in root_passwd:
+    if any(val in root_passwd for val in ("!", "*", "x")):
         return 'root login disabled'
     else:
         raise Exception('root login appears to be enabled: {0}'.format(root_passwd))
