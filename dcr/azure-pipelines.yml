@@ -40,6 +40,12 @@ parameters:
         sku: "7-RAW"
         version: "latest"
         name: "rhel7Raw"
+##
+      - publisher: "microsoftcblmariner"
+        offer: "cbl-mariner"
+        sku: "cbl-mariner-1"
+        version: "latest"
+        name: "mariner1"
 
 trigger:
   - develop

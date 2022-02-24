@@ -8,14 +8,15 @@ from dcr.scenario_utils.models import ExtensionMetaData
 
 
 class VMAccessExtension(BaseExtensionTestClass):
+    META_DATA = ExtensionMetaData(
+        publisher='Microsoft.OSTCExtensions',
+        ext_type='VMAccessForLinux',
+        version="1.5"
+    )
 
     def __init__(self, extension_name: str):
-        extension_data = ExtensionMetaData(
-            publisher='Microsoft.OSTCExtensions',
-            ext_type='VMAccessForLinux',
-            version="1.5",
-            ext_name=extension_name
-        )
+        extension_data = self.META_DATA
+        extension_data.name = extension_name
         super().__init__(extension_data)
         self.public_key, self.private_key_file = generate_ssh_key_pair('dcr_py')
         self.user_name = f'dcr{random_alphanum(length=8)}'

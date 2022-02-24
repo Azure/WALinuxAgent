@@ -37,7 +37,7 @@ def wait_for_extension_events_dir_empty(timeout=timedelta(minutes=2)):
     raise AssertionError("Extension events dir not empty!")
 
 
-def add_extension_events_and_get_count(bad_event_count=0, no_of_events_per_extension=50):
+def add_extension_events_and_get_count(bad_event_count=0, no_of_events_per_extension=50, extension_names=None):
     print("Creating random extension events now. No of Good Events: {0}, No of Bad Events: {1}".format(
         no_of_events_per_extension - bad_event_count, bad_event_count))
 
@@ -128,7 +128,8 @@ def add_extension_events_and_get_count(bad_event_count=0, no_of_events_per_exten
 
     for ext_dir in os.listdir(ext_log_dir):
         events_dir = os.path.join(ext_log_dir, ext_dir, "events")
-        if not os.path.isdir(events_dir):
+        # If specific extensions are provided, only add the events for them
+        if not os.path.isdir(events_dir) or (extension_names is not None and ext_dir not in extension_names):
             continue
 
         new_opr_id = str(uuid.uuid4())
