@@ -33,7 +33,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib
-from azurelinuxagent.common.utils.time import create_timestamp
+from azurelinuxagent.common.utils.timeutil import create_timestamp
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
 CERTS_FILE_NAME = "Certificates.xml"

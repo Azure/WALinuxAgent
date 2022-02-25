@@ -2,10 +2,10 @@
 # Licensed under the Apache License.
 
 import glob
-import http.client as httpclient
 import os
 import re
 
+from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.goal_state import GoalState, _GET_GOAL_STATE_MAX_ATTEMPTS
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils import fileutil
