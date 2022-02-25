@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-import datetime
 import os
 import re
 import time
@@ -84,10 +83,6 @@ class GoalState(object):
         except Exception as exception:
             # We don't log the error here since fetching the goal state is done every few seconds
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
-
-    @property
-    def timestamp(self):
-        return self._timestamp
 
     @property
     def incarnation(self):

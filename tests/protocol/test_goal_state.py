@@ -126,7 +126,7 @@ class GoalStateTestCase(AgentTestCase):
             protocol.mock_wire_data.set_incarnation(888)
 
             with self.assertRaises(ProtocolError):  # the parsing error will cause an exception
-                goal_state = GoalState(protocol.client)
+                _ = GoalState(protocol.client)
 
             matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_888"))
             self.assertTrue(len(matches) == 1, "Expected one history directory for incarnation 888. Got: {0}".format(matches))
