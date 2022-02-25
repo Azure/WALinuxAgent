@@ -152,9 +152,6 @@ class GoalState(object):
     def save_to_history(self, data, file_name):
         self._history.save(data, file_name)
 
-    def add_file_to_history(self, file_name):
-        self._history.add_file(file_name)
-
     def _initialize_basic_properties(self, xml_doc):
         self._incarnation = findtext(xml_doc, "Incarnation")
         role_instance = find(xml_doc, "RoleInstance")

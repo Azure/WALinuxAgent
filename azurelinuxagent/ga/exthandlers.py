@@ -50,7 +50,7 @@ from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
-from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -945,8 +945,6 @@ class ExtHandlersHandler(object):
 
                 self.report_status_error_state.reset()
 
-            self.write_ext_handlers_status_to_info_file(vm_status)
-
             return vm_status
 
         except Exception as error:
@@ -959,45 +957,32 @@ class ExtHandlersHandler(object):
                       message=msg)
             return None
 
-    def write_ext_handlers_status_to_info_file(self, vm_status):
-        status_file = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
-
+    def get_ext_handlers_status_debug_info(self, vm_status):
         status_blob_text = self.protocol.get_status_blob_data()
         if status_blob_text is None:
             status_blob_text = ""
 
-        debug_info = ExtHandlersHandler._get_status_debug_info(vm_status)
-
-        status_file_text = \
-'''{{
-    "__comment__": "The __status__ property is the actual status reported to CRP",
-    "__status__": {0},
-    "__debug__": {1}
-}}
-'''.format(status_blob_text, debug_info)
-
-        fileutil.write_file(status_file, status_file_text)
-
-    @staticmethod
-    def _get_status_debug_info(vm_status):
         support_multi_config = dict()
+        vm_status_data = get_properties(vm_status)
+        vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
+        for handler_status in vm_handler_statuses:
+            if handler_status.get('name') is not None:
+                support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
 
-        if vm_status is not None:
-            vm_status_data = get_properties(vm_status)
-            vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
-            for handler_status in vm_handler_statuses:
-                if handler_status.get('name') is not None:
-                    support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
-
-        debug_info = {
+        debug_text = json.dumps({
             "agentName": AGENT_NAME,
             "daemonVersion": str(version.get_daemon_version()),
             "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
             "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
             "supportsMultiConfig": support_multi_config
-        }
+        })
 
-        return json.dumps(debug_info)
+        return '''{{
+    "__comment__": "The __status__ property is the actual status reported to CRP",
+    "__status__": {0},
+    "__debug__": {1}
+}}
+'''.format(status_blob_text, debug_text)
 
     def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

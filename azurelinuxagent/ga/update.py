@@ -170,7 +170,7 @@ class UpdateHandler(object):
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
         self._last_try_update_goal_state_failed = False
-        self._report_status_last_failed_incarnation = -1
+        self._report_status_last_failed_goal_state = None
 
         # incarnation of the last goal state that has been fully processed
         # (None if no goal state has been processed)
@@ -588,21 +588,14 @@ class UpdateHandler(object):
                 self._extensions_summary = ExtensionsSummary()
                 exthandlers_handler.run()
 
-            # report status always, even if the goal state did not change
+            # always report status, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
-            if self._processing_new_extensions_goal_state():
-                # Before reporting status for the new goal state, move the status report for the previous goal state to the history folder.
-                status_file = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
-                if os.path.exists(status_file):
-                    self._goal_state.add_file_to_history(status_file)
-
             self._report_status(exthandlers_handler)
 
-            # now process remote access
             if self._processing_new_incarnation():
                 remote_access_handler.run()
 
-            # and lastly, cleanup the goal state history (but do it only on new goal states - no need to do it on every iteration)
+            # lastly, cleanup the goal state history (but do it only on new goal states - no need to do it on every iteration)
             if self._processing_new_extensions_goal_state():
                 UpdateHandler._cleanup_goal_state_history()
 
@@ -679,9 +672,14 @@ class UpdateHandler(object):
             incarnation_changed=self._processing_new_extensions_goal_state(),
             vm_agent_update_status=vm_agent_update_status,
             vm_agent_supports_fast_track=supports_fast_track)
-        if vm_status is None:
-            return
 
+        if vm_status is not None:
+            self._report_extensions_summary(vm_status)
+            if self._goal_state is not None:
+                agent_status = exthandlers_handler.get_ext_handlers_status_debug_info(vm_status)
+                self._goal_state.save_to_history(agent_status, AGENT_STATUS_FILE)
+
+    def _report_extensions_summary(self, vm_status):
         try:
             extensions_summary = ExtensionsSummary(vm_status)
             if self._extensions_summary != extensions_summary:
@@ -696,10 +694,9 @@ class UpdateHandler(object):
                     if self._is_initial_goal_state:
                         self._on_initial_goal_state_completed(self._extensions_summary)
         except Exception as error:
-            # report errors only once per incarnation
-            goal_state = exthandlers_handler.protocol.get_goal_state()
-            if self._report_status_last_failed_incarnation != goal_state.incarnation:
-                self._report_status_last_failed_incarnation = goal_state.incarnation
+            # report errors only once per goal state
+            if self._report_status_last_failed_goal_state != self._goal_state.extensions_goal_state.id:
+                self._report_status_last_failed_goal_state = self._goal_state.extensions_goal_state.id
                 msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
                 logger.warn(msg)
                 add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
