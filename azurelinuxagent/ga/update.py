@@ -51,7 +51,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgent
     VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.utils.archive import StateArchiver
+from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -590,16 +590,21 @@ class UpdateHandler(object):
 
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
+            if self._processing_new_extensions_goal_state():
+                # Before reporting status for the new goal state, move the status report for the previous goal state to the history folder.
+                status_file = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
+                if os.path.exists(status_file):
+                    self._goal_state.add_file_to_history(status_file)
+
             self._report_status(exthandlers_handler)
 
+            # now process remote access
             if self._processing_new_incarnation():
                 remote_access_handler.run()
 
+            # and lastly, cleanup the goal state history (but do it only on new goal states - no need to do it on every iteration)
             if self._processing_new_extensions_goal_state():
-                try:
-                    UpdateHandler._cleanup_goal_state_history()
-                except Exception as exception:
-                    logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
+                UpdateHandler._cleanup_goal_state_history()
 
         finally:
             if self._goal_state is not None:
@@ -608,9 +613,12 @@ class UpdateHandler(object):
 
     @staticmethod
     def _cleanup_goal_state_history():
-        archiver = StateArchiver(conf.get_lib_dir())
-        archiver.purge()
-        archiver.archive()
+        try:
+            archiver = StateArchiver(conf.get_lib_dir())
+            archiver.purge()
+            archiver.archive()
+        except Exception as exception:
+            logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
 
     @staticmethod
     def _cleanup_legacy_goal_state_history():
@@ -666,6 +674,7 @@ class UpdateHandler(object):
             supports_fast_track = False
         else:
             supports_fast_track = self._goal_state.extensions_goal_state.source_channel == GoalStateChannel.HostGAPlugin
+
         vm_status = exthandlers_handler.report_ext_handlers_status(
             incarnation_changed=self._processing_new_extensions_goal_state(),
             vm_agent_update_status=vm_agent_update_status,

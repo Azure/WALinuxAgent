@@ -126,7 +126,11 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._extensions
 
     def get_redacted_text(self):
-        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
+        return ExtensionsGoalStateFromVmSettings.redact(self._text)
+
+    @staticmethod
+    def redact(text):
+        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', text)
 
     def _parse_vm_settings(self, json_text):
         vm_settings = _CaseFoldedDict.from_dict(json.loads(json_text))

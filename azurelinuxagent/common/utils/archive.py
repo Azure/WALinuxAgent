@@ -38,7 +38,7 @@ The timestamp is an ISO8601 formatted value.
 
 ARCHIVE_DIRECTORY_NAME = 'history'
 
-_MAX_ARCHIVED_STATES = 100
+_MAX_ARCHIVED_STATES = 50
 
 _CACHE_PATTERNS = [
     re.compile(r"^VmSettings.\d+\.json$"),
@@ -214,9 +214,6 @@ class GoalStateHistory(object):
 
         self._save(write_to_file, data, file_name)
 
-    def _save_file(self, source_file, target_name):
-        self._save(shutil.move, source_file, target_name)
-
     def _save(self, function, source, target_name):
         try:
             if not os.path.exists(self._root):
@@ -227,6 +224,9 @@ class GoalStateHistory(object):
             if not self._errors:  # report only 1 error per directory
                 self._errors = True
                 logger.warn("Failed to save goal state file {0}: {1} [no additional errors saving the goal state will be reported]".format(target_name, e))
+
+    def add_file(self, source_file):
+        self._save(shutil.move, source_file, self._root)
 
     def save_goal_state(self, text):
         self.save(text, _GOAL_STATE_FILE_NAME)
@@ -245,6 +245,3 @@ class GoalStateHistory(object):
 
     def save_shared_conf(self, text):
         self.save(text, _SHARED_CONF_FILE_NAME)
-
-    def save_status_file(self, status_file):
-        self._save_file(status_file, AGENT_STATUS_FILE)

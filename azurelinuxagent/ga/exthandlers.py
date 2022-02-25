@@ -945,7 +945,7 @@ class ExtHandlersHandler(object):
 
                 self.report_status_error_state.reset()
 
-            self.write_ext_handlers_status_to_info_file(vm_status, incarnation_changed)
+            self.write_ext_handlers_status_to_info_file(vm_status)
 
             return vm_status
 
@@ -959,16 +959,9 @@ class ExtHandlersHandler(object):
                       message=msg)
             return None
 
-    def write_ext_handlers_status_to_info_file(self, vm_status, incarnation_changed):
+    def write_ext_handlers_status_to_info_file(self, vm_status):
         status_file = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
 
-        if os.path.exists(status_file) and incarnation_changed:
-            # On new goal state, move the last status report for the previous goal state to the history folder
-            last_modified = os.path.getmtime(status_file)
-            timestamp = datetime.datetime.utcfromtimestamp(last_modified).isoformat()
-            GoalStateHistory(timestamp, "status").save_status_file(status_file)
-
-        # Now create/overwrite the status file; this file is kept for debugging purposes only
         status_blob_text = self.protocol.get_status_blob_data()
         if status_blob_text is None:
             status_blob_text = ""

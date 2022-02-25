@@ -27,12 +27,14 @@ from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError, VmSettingsError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
+from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib
+from azurelinuxagent.common.utils.time import create_timestamp
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
 CERTS_FILE_NAME = "Certificates.xml"
@@ -60,28 +62,24 @@ class GoalState(object):
             self._wire_client = wire_client
 
             # These "basic" properties come from the initial request to WireServer's goalstate API
-            self._timestamp = None
             self._incarnation = None
             self._role_instance_id = None
             self._role_config_name = None
             self._container_id = None
 
-            xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
-
-            self._initialize_basic_properties(xml_doc)
-
-            # The goal state for extensions can come from vmSettings when using FastTrack or from extensionsConfig otherwise, self._fetch_extended_goal_state
-            # populates the '_extensions_goal_state' property.
+            # These "extended" properties come from additional HTTP requests to the URIs included in the basic goal state, or to the HostGAPlugin
             self._extensions_goal_state = None
-            vm_settings = self._fetch_vm_settings()
-
-            # These "extended" properties come from additional HTTP requests to the URIs included in the basic goal state
             self._hosting_env = None
             self._shared_conf = None
             self._certs = None
             self._remote_access = None
 
-            self._fetch_extended_goal_state(xml_text, xml_doc, vm_settings)
+            timestamp = create_timestamp()
+            xml_text, xml_doc, incarnation = GoalState._fetch_goal_state(self._wire_client)
+            self._history = GoalStateHistory(timestamp, incarnation)
+
+            self._initialize_basic_properties(xml_doc)
+            self._fetch_extended_goal_state(xml_text, xml_doc)
 
         except Exception as exception:
             # We don't log the error here since fetching the goal state is done every few seconds
@@ -139,26 +137,31 @@ class GoalState(object):
         """
         Updates the current GoalState instance fetching values from the WireServer/HostGAPlugin as needed
         """
-        xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
+        timestamp = create_timestamp()
+        xml_text, xml_doc, incarnation = GoalState._fetch_goal_state(self._wire_client)
 
-        vm_settings = self._fetch_vm_settings(force_update=force_update)
-
-        if force_update or self._incarnation != findtext(xml_doc, "Incarnation"):
-            # update the extended goal state, using vm_settings for the extensions (unless they are None, then use extensionsConfig)
+        if force_update or self._incarnation != incarnation:
+            # If we are fetching a new goal state
+            self._history = GoalStateHistory(timestamp, incarnation)
             self._initialize_basic_properties(xml_doc)
-            self._fetch_extended_goal_state(xml_text, xml_doc,  vm_settings)
+            self._fetch_extended_goal_state(xml_text, xml_doc, force_vm_settings_update=force_update)
         else:
-            # else just ensure the extensions are using the latest vm_settings
-            if vm_settings is not None:
+            # else ensure the extensions are using the latest vm_settings
+            timestamp = create_timestamp()
+            vm_settings, vm_settings_updated = self._fetch_vm_settings(force_update=force_update)
+            if vm_settings_updated:
+                self._history = GoalStateHistory(timestamp, vm_settings.etag)
                 self._extensions_goal_state = vm_settings
+                self._history.save_vm_settings(vm_settings.get_redacted_text())
 
     def save_to_history(self, data, file_name):
         self._history.save(data, file_name)
 
+    def add_file_to_history(self, file_name):
+        self._history.add_file(file_name)
+
     def _initialize_basic_properties(self, xml_doc):
-        self._timestamp = datetime.datetime.utcnow().isoformat()
         self._incarnation = findtext(xml_doc, "Incarnation")
-        self._history = GoalStateHistory(self._timestamp, self._incarnation)  # history for the WireServer goal state; vmSettings are separate
         role_instance = find(xml_doc, "RoleInstance")
         self._role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
@@ -175,16 +178,17 @@ class GoalState(object):
 
         # In some environments a few goal state requests return a missing RoleInstance; these retries are used to work around that issue
         # TODO: Consider retrying on 410 (ResourceGone) as well
+        incarnation = "unknown"
         for _ in range(0, _GET_GOAL_STATE_MAX_ATTEMPTS):
             xml_text = wire_client.fetch_config(uri, wire_client.get_header())
             xml_doc = parse_doc(xml_text)
+            incarnation = findtext(xml_doc, "Incarnation")
 
             role_instance = find(xml_doc, "RoleInstance")
             if role_instance:
                 break
             time.sleep(0.5)
         else:
-            incarnation = findtext(xml_doc, "Incarnation")
             raise ProtocolError("Fetched goal state without a RoleInstance [incarnation {inc}]".format(inc=incarnation))
 
         # Telemetry and the HostGAPlugin depend on the container id/role config; keep them up-to-date each time we fetch the goal state
@@ -198,7 +202,7 @@ class GoalState(object):
 
         wire_client.update_host_plugin(container_id, role_config_name)
 
-        return xml_text, xml_doc
+        return xml_text, xml_doc, incarnation
 
     def _fetch_vm_settings(self, force_update=False):
         """
@@ -207,30 +211,23 @@ class GoalState(object):
         vm_settings, vm_settings_updated = (None, False)
 
         if conf.get_enable_fast_track():
-            def save_to_history(etag, text):
-                # The vmSettings are updated independently of the WireServer goal state and they are saved to a separate directory
-                history = GoalStateHistory(datetime.datetime.utcnow().isoformat(), etag)
-                history.save_vm_settings(text)
-
             try:
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             except VmSettingsNotSupported:
                 pass
             except VmSettingsError as exception:
-                save_to_history(exception.etag, exception.vm_settings_text)
+                # ensure we save the vmSettings if there were parsing errors
+                self._history.save_vm_settings(ExtensionsGoalStateFromVmSettings.redact(exception.vm_settings_text))
                 raise
             except ResourceGoneError:
                 # retry after refreshing the HostGAPlugin
                 GoalState.update_host_plugin_headers(self._wire_client)
                 vm_settings, vm_settings_updated = self._wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
-            if vm_settings_updated:
-                save_to_history(vm_settings.etag, vm_settings.get_redacted_text())
+        return vm_settings, vm_settings_updated
 
-        return vm_settings
-
-    def _fetch_extended_goal_state(self, xml_text, xml_doc, vm_settings):
+    def _fetch_extended_goal_state(self, xml_text, xml_doc, force_vm_settings_update=False):
         """
         Issues HTTP requests (WireServer) for each of the URIs in the goal state (ExtensionsConfig, Certificate, Remote Access users, etc)
         and populates the corresponding properties. If the given 'vm_settings' are not None they are used for the extensions goal state,
@@ -241,8 +238,8 @@ class GoalState(object):
 
             self._history.save_goal_state(xml_text)
 
-            # TODO: at this point we always fetch the extensionsConfig, even if it is not needed, and save it for debugging purposes. Once
-            #       FastTrack is stable this code can be updated to fetch it only when actually needed.
+            # Always fetch the ExtensionsConfig, even if it is not needed, and save it for debugging purposes. Once FastTrack is stable this code could be updated to
+            # fetch it only when actually needed.
             extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
 
             if extensions_config_uri is None:
@@ -252,8 +249,12 @@ class GoalState(object):
                 extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self._incarnation, xml_text, self._wire_client)
                 self._history.save_extensions_config(extensions_config.get_redacted_text())
 
+            vm_settings, vm_settings_updated = self._fetch_vm_settings(force_update=force_vm_settings_update)
+
             if vm_settings is not None:
                 self._extensions_goal_state = vm_settings
+                if vm_settings_updated:
+                    self._history.save_vm_settings(vm_settings.get_redacted_text())
             else:
                 self._extensions_goal_state = extensions_config
 
