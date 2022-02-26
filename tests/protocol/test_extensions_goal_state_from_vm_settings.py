@@ -82,7 +82,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
-            self.assertEqual(GoalStateChannel.HostGAPlugin, extensions_goal_state.source_channel, "The source_channel is incorrect")
+            self.assertEqual(GoalStateChannel.HostGAPlugin, extensions_goal_state.channel, "The source_channel is incorrect")
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):
     def test_it_should_retrieve_items_ignoring_case(self):

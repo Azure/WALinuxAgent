@@ -666,7 +666,7 @@ class UpdateHandler(object):
         if self._goal_state is None:
             supports_fast_track = False
         else:
-            supports_fast_track = self._goal_state.extensions_goal_state.source_channel == GoalStateChannel.HostGAPlugin
+            supports_fast_track = self._goal_state.extensions_goal_state.channel == GoalStateChannel.HostGAPlugin
 
         vm_status = exthandlers_handler.report_ext_handlers_status(
             incarnation_changed=self._processing_new_extensions_goal_state(),
