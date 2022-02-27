@@ -294,7 +294,8 @@ class ExtHandlersHandler(object):
 
     def run(self):
         try:
-            egs = self.protocol.get_goal_state().extensions_goal_state
+            gs = self.protocol.get_goal_state()
+            egs = gs.extensions_goal_state
 
             # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
@@ -311,7 +312,7 @@ class ExtHandlersHandler(object):
             add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
 
             try:
-                self.__process_and_handle_extensions(egs.incarnation)  # TODO: review the use of incarnation
+                self.__process_and_handle_extensions(gs.incarnation)  # TODO: review the use of incarnation
                 self._cleanup_outdated_handlers()
             except Exception as e:
                 error = u"Error processing extensions:{0}".format(textutil.format_exception(e))
