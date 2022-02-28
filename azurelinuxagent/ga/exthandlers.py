@@ -322,7 +322,7 @@ class ExtHandlersHandler(object):
                     message = 'ProcessExtensionsGoalState completed [{0} {1} ms]'.format(egs.id, duration)
                     logger.info(message)
                 else:
-                    message = 'ProcessExtensionsInGoalState failed [{0} {1} ms]\n{2}'.format(egs.id, duration, error)
+                    message = 'ProcessExtensionsGoalState failed [{0} {1} ms]\n{2}'.format(egs.id, duration, error)
                     logger.error(message)
                 add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
 
