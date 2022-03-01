@@ -660,7 +660,6 @@ class UpdateHandler(object):
         vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, self._processing_new_extensions_goal_state())
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         #
-        # TODO: Review the use of incarnation when reporting status... what should be the behavior for Fast Track goal states (i.e. no incarnation)?
         # TODO: How to handle the case when the HostGAPlugin goes from supporting vmSettings to not supporting it?
         #
         if self._goal_state is None:

@@ -51,6 +51,10 @@ class ExtensionsGoalState(object):
         raise NotImplementedError()
 
     @property
+    def svd_sequence_number(self):
+        raise NotImplementedError()
+
+    @property
     def activity_id(self):
         raise NotImplementedError()
 
@@ -146,9 +150,22 @@ class ExtensionsGoalState(object):
 
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
+    def __init__(self, incarnation):
+        super(EmptyExtensionsGoalState, self).__init__()
+        self._id = "incarnation_{0}".format(incarnation)
+        self._incarnation = incarnation
+
     @property
     def id(self):
-        return self._string_to_id(None)
+        return self._incarnation
+
+    @property
+    def incarnation(self):
+        return self._id
+
+    @property
+    def svd_sequence_number(self):
+        return self._incarnation
 
     @property
     def activity_id(self):

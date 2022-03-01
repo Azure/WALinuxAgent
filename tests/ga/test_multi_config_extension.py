@@ -965,7 +965,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                              GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures, "Incorrect code")
             self.assertEqual(gs_aggregate_status['inSvdSeqNo'], '2', "Incorrect incarnation reported")
             self.assertEqual(gs_aggregate_status['formattedMessage']['message'],
-                             'Failing GS incarnation: 2 as Unsupported features found: TestRequiredFeature1, TestRequiredFeature2, TestRequiredFeature3',
+                             'Failing GS incarnation_2 as Unsupported features found: TestRequiredFeature1, TestRequiredFeature2, TestRequiredFeature3',
                              "Incorrect error message reported")
 
     def test_it_should_fail_handler_if_handler_does_not_support_mc(self):

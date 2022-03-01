@@ -312,7 +312,7 @@ class ExtHandlersHandler(object):
             add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
 
             try:
-                self.__process_and_handle_extensions(gs.incarnation)  # TODO: review the use of incarnation
+                self.__process_and_handle_extensions(egs.svd_sequence_number, egs.id)
                 self._cleanup_outdated_handlers()
             except Exception as e:
                 error = u"Error processing extensions:{0}".format(textutil.format_exception(e))
@@ -336,15 +336,14 @@ class ExtHandlersHandler(object):
         supported_features = get_agent_supported_features_list_for_crp()
         return [feature for feature in required_features if feature not in supported_features]
 
-    def __process_and_handle_extensions(self, etag):
+    def __process_and_handle_extensions(self, svd_sequence_number, goal_state_id):
         try:
             # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
             unsupported_features = self.__get_unsupported_features()
             if any(unsupported_features):
-                msg = "Failing GS incarnation: {0} as Unsupported features found: {1}".format(etag, ', '.join(
-                    unsupported_features))
+                msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
                 logger.warn(msg)
-                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                       code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
                                                                       message=msg)
                 add_event(op=WALAEventOperation.GoalStateUnsupportedFeatures,
@@ -352,13 +351,13 @@ class ExtHandlersHandler(object):
                           message=msg,
                           log_event=False)
             else:
-                self.handle_ext_handlers(etag)
-                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Success, seq_no=etag,
+                self.handle_ext_handlers(goal_state_id)
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Success, seq_no=svd_sequence_number,
                                                                       code=GoalStateAggregateStatusCodes.Success,
                                                                       message="GoalState executed successfully")
         except Exception as error:
             msg = "Unexpected error when processing goal state:{0}".format(textutil.format_exception(error))
-            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
+            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                   code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
             logger.warn(msg)
@@ -468,7 +467,7 @@ class ExtHandlersHandler(object):
 
         return all_extensions
 
-    def handle_ext_handlers(self, etag=None):
+    def handle_ext_handlers(self, goal_state_id):
         if not self.ext_handlers:
             logger.info("No extension handlers found, not processing anything.")
             return
@@ -506,7 +505,7 @@ class ExtHandlersHandler(object):
                 continue
 
             # Process extensions and get if it was successfully executed or not
-            extension_success = self.handle_ext_handler(handler_i, extension, etag)
+            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
@@ -573,12 +572,12 @@ class ExtHandlersHandler(object):
             msg = "Dependent Extension {0} did not succeed. Status was {1}".format(extension_name, status)
             raise Exception(msg)
 
-    def handle_ext_handler(self, ext_handler_i, extension, etag):
+    def handle_ext_handler(self, ext_handler_i, extension, goal_state_id):
         """
         Execute the requested command for the handler and return if success
         :param ext_handler_i: The ExtHandlerInstance object to execute the command on
         :param extension: The extension settings on which to run the command on
-        :param etag: Current incarnation of the GoalState
+        :param goal_state_id: ID of the current GoalState
         :return: True if the operation was successful, False if not
         """
 
@@ -602,7 +601,7 @@ class ExtHandlersHandler(object):
                 raise ExtensionError(msg=err_msg)
 
             # Handle everything on an extension level rather than Handler level
-            ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", handler_state, etag)
+            ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", handler_state, goal_state_id)
             if handler_state == ExtensionRequestedState.Enabled:
                 self.handle_enable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Disabled:
