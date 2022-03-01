@@ -45,7 +45,7 @@ class ExtensionsGoalState(object):
     @property
     def id(self):
         """
-        Returns the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
+        Returns an string that includes the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
         was created from vmSettings.
         """
         raise NotImplementedError()

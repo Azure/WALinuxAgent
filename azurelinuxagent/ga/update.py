@@ -620,7 +620,7 @@ class UpdateHandler(object):
         except Exception as exception:
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
-    def __get_vmagent_update_status(self, protocol, incarnation_changed):
+    def __get_vmagent_update_status(self, protocol, goal_state_changed):
         """
         This function gets the VMAgent update status as per the last GoalState.
         Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
@@ -632,7 +632,7 @@ class UpdateHandler(object):
 
         try:
             requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
-            if manifest is None and incarnation_changed:
+            if manifest is None and goal_state_changed:
                 logger.info("Unable to report update status as no matching manifest found for family: {0}".format(
                     conf.get_autoupdate_gafamily()))
                 return None
@@ -647,8 +647,8 @@ class UpdateHandler(object):
                 update_status = VMAgentUpdateStatus(expected_version=manifest.requested_version_string, status=status,
                                                     code=code)
         except Exception as error:
-            if incarnation_changed:
-                err_msg = "[This error will only be logged once per incarnation] " \
+            if goal_state_changed:
+                err_msg = "[This error will only be logged once per goal state] " \
                           "Ran into error when trying to fetch updateStatus for the agent, skipping reporting update satus. Error: {0}".format(
                            textutil.format_exception(error))
                 logger.warn(err_msg)
@@ -668,9 +668,8 @@ class UpdateHandler(object):
             supports_fast_track = self._goal_state.extensions_goal_state.channel == GoalStateChannel.HostGAPlugin
 
         vm_status = exthandlers_handler.report_ext_handlers_status(
-            incarnation_changed=self._processing_new_extensions_goal_state(),
-            vm_agent_update_status=vm_agent_update_status,
-            vm_agent_supports_fast_track=supports_fast_track)
+            goal_state_changed=self._processing_new_extensions_goal_state(),
+            vm_agent_update_status=vm_agent_update_status, vm_agent_supports_fast_track=supports_fast_track)
 
         if vm_status is not None:
             self._report_extensions_summary(vm_status)
@@ -1063,13 +1062,13 @@ class UpdateHandler(object):
 
         def can_proceed_with_requested_version():
             if not gs_updated:
-                # If incarnation didn't change, don't process anything.
+                # If the goal state didn't change, don't process anything.
                 return False
 
             # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
-            # If there's no new incarnation, don't proceed with anything
-            msg_ = "Found requested version in manifest: {0} for incarnation: {1}".format(
-                requested_version, incarnation)
+            # If there's no new goal state, don't proceed with anything
+            msg_ = "Found requested version in manifest: {0} for goal state {1}".format(
+                requested_version, goal_state_id)
             logger.info(msg_)
             add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg_, log_event=False)
 
@@ -1097,16 +1096,16 @@ class UpdateHandler(object):
         daemon_version = self.__get_daemon_version_for_update()
         try:
             # Fetch the agent manifests from the latest Goal State
-            incarnation = self._goal_state.incarnation
+            goal_state_id = self._goal_state.extensions_goal_state.id
             gs_updated = self._processing_new_extensions_goal_state()
             requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
             if manifest is None:
                 logger.verbose(
-                    u"No manifest links found for agent family: {0} for incarnation: {1}, skipping update check".format(
-                        family, incarnation))
+                    u"No manifest links found for agent family: {0} for goal state {1}, skipping update check".format(
+                        family, goal_state_id))
                 return False
         except Exception as err:
-            # If there's some issues in fetching the agent manifests, report it only on incarnation change
+            # If there's some issues in fetching the agent manifests, report it only on goal state change
             msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(err))
             if gs_updated:
                 report_error(msg)
@@ -1156,8 +1155,8 @@ class UpdateHandler(object):
                         packages_to_download = [pkg]
                         break
                 else:
-                    msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
-                        requested_version, incarnation)
+                    msg = "No matching package found in the agent manifest for requested version: {0} in goal state {1}, skipping agent update".format(
+                        requested_version, goal_state_id)
                     report_error(msg, version_=requested_version)
                     return False
 

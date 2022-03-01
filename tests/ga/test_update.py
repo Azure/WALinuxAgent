@@ -2189,12 +2189,12 @@ class TestAgentUpgrade(UpdateTestCase):
                           kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
             # This will throw if corresponding message not found so not asserting on that
             requested_version_found = next(kwarg for kwarg in agent_msgs if
-                                           "Found requested version in manifest: 5.2.1.0 for incarnation: 1" in kwarg['message'])
+                                           "Found requested version in manifest: 5.2.1.0 for goal state incarnation_1" in kwarg['message'])
             self.assertTrue(requested_version_found['is_success'],
                             "The requested version found op should be reported as a success")
 
             skipping_update = next(kwarg for kwarg in agent_msgs if
-                                   "No matching package found in the agent manifest for requested version: 5.2.1.0 in incarnation: 1, skipping agent update" in kwarg['message'])
+                                   "No matching package found in the agent manifest for requested version: 5.2.1.0 in goal state incarnation_1, skipping agent update" in kwarg['message'])
             self.assertEqual(skipping_update['version'], FlexibleVersion("5.2.1.0"),
                              "The not found message should be reported from requested agent version")
             self.assertFalse(skipping_update['is_success'], "The not found op should be reported as a failure")
@@ -2389,7 +2389,7 @@ class TestAgentUpgrade(UpdateTestCase):
                             kwarg['op'] == WALAEventOperation.AgentUpgrade]
             # This will throw if corresponding message not found so not asserting on that
             requested_version_found = next(kwarg for kwarg in upgrade_msgs if
-                                           "Found requested version in manifest: 1.0.0.0 for incarnation: 2" in kwarg[
+                                           "Found requested version in manifest: 1.0.0.0 for goal state incarnation_2" in kwarg[
                                                'message'])
             self.assertTrue(requested_version_found['is_success'],
                             "The requested version found op should be reported as a success")
