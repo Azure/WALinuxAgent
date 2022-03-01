@@ -43,7 +43,7 @@ ConditionPathExists={binary_path}
 [Service]
 Type=oneshot
 ExecStart={py_path} {binary_path}
-RemainAfterExit=false
+RemainAfterExit=yes
 
 [Install]
 WantedBy=network.target
@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     # The current version of the unit file; Update it whenever the unit file is modified to ensure Agent can dynamically
     # modify the unit file on VM too
-    _UNIT_VERSION = "1.2"
+    _UNIT_VERSION = "1.3"
 
     @staticmethod
     def get_service_file_path():
