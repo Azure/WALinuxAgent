@@ -216,7 +216,7 @@ class GoalStateHistory(object):
         except Exception as e:
             if not self._errors:  # report only 1 error per directory
                 self._errors = True
-                logger.warn("Failed to save goal state file {0}: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
+                logger.warn("Failed to save {0} to the goal state history: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
 
     def save_goal_state(self, text):
         self.save(text, _GOAL_STATE_FILE_NAME)
