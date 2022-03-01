@@ -57,4 +57,4 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
-            self.assertEqual(GoalStateChannel.WireServer, extensions_goal_state.channel, "The source_channel is incorrect")
+            self.assertEqual(GoalStateChannel.WireServer, extensions_goal_state.channel, "The channel is incorrect")
