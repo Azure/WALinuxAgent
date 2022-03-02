@@ -166,8 +166,9 @@ exit({0})
             self.assertEqual(popen_patch.call_count, 1)
 
             args, kwargs = popen_patch.call_args
-            self.assertTrue("A TEST STRING" in args)
-            self.assertEqual(kwargs[shellutil.PARENT_PROCESS_NAME], shellutil.AZURE_GUEST_AGENT)
+            self.assertTrue(any(arg for arg in args[0] if "A TEST STRING" in arg), "command not being used")
+            self.assertEqual(kwargs['env'].get(shellutil.PARENT_PROCESS_NAME), shellutil.AZURE_GUEST_AGENT,
+                             "Env flag not being used")
 
     def test_run_pipe_should_execute_a_pipe_with_two_commands(self):
         # Output the same string 3 times and then remove duplicates
