@@ -654,8 +654,7 @@ class CGroupConfigurator(object):
                         environ = env_file.read()
                         if environ and environ[-1] == '\x00':
                             environ = environ[:-1]
-                        match = re.search(shellutil.PARENT_PROCESS_NAME + "=" + shellutil.AZURE_GUEST_AGENT, environ)
-                        return match is not None
+                        return "{0}={1}".format(shellutil.PARENT_PROCESS_NAME, shellutil.AZURE_GUEST_AGENT) in environ
             except Exception:
                 pass
             return False
