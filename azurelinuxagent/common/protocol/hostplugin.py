@@ -471,7 +471,7 @@ class HostPluginProtocol(object):
 
             response_content = ustr(response.read(), encoding='utf-8')
 
-            vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, response_content)
+            vm_settings = ExtensionsGoalStateFactory.create_from_vm_settings(response_etag, response_content, correlation_id)
 
             # log the HostGAPlugin version
             if vm_settings.host_ga_plugin_version != self._host_plugin_version:
@@ -485,7 +485,6 @@ class HostPluginProtocol(object):
             if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.117"):
                 raise_not_supported(reset_state=True)
 
-            logger.info("Fetched new vmSettings [correlation ID: {0} New eTag: {1}]", correlation_id, vm_settings.etag)
             self._host_plugin_supports_vm_settings = True
             self._cached_vm_settings = vm_settings
             return vm_settings, True

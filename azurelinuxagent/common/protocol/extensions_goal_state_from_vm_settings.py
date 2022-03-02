@@ -32,10 +32,11 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
 
-    def __init__(self, etag, json_text):
+    def __init__(self, etag, json_text, correlation_id):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = "etag_{0}".format(etag)
         self._etag = etag
+        self._fetch_correlation_id = correlation_id
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
         self._schema_version = FlexibleVersion('0.0.0.0')
@@ -74,28 +75,38 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     @property
     def activity_id(self):
+        """
+        The CRP activity id
+        """
         return self._activity_id
 
     @property
     def correlation_id(self):
+        """
+        The correlation id for the CRP operation
+        """
         return self._correlation_id
+
+    @property
+    def fetch_correlation_id(self):
+        """
+        The correlation id for the fetch operation (i.e. the call to the HostGAPlugin vmSettings API)
+        """
+        return self._fetch_correlation_id
 
     @property
     def created_on_timestamp(self):
         """
-        Timestamp assigned by the CRP (time at which the Fast Track goal state was created)
+        Timestamp assigned by the CRP (time at which the goal state was created)
         """
         return self._created_on_timestamp
 
     @property
-    def source_channel(self):
+    def channel(self):
         return GoalStateChannel.HostGAPlugin
 
     @property
     def source(self):
-        """
-        Whether the goal state originated from Fabric or Fast Track
-        """
         return self._source
 
     @property

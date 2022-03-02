@@ -145,6 +145,7 @@ class GoalState(object):
             timestamp = create_timestamp()
             vm_settings, vm_settings_updated = self._fetch_vm_settings(force_update=force_update)
             if vm_settings_updated:
+                logger.info("Fetched new vmSettings [correlation ID: {0} eTag: {1} source: {2}]", vm_settings.fetch_correlation_id, vm_settings.etag, vm_settings.source)
                 self._history = GoalStateHistory(timestamp, vm_settings.etag)
                 self._extensions_goal_state = vm_settings
                 self._history.save_vm_settings(vm_settings.get_redacted_text())
@@ -244,6 +245,8 @@ class GoalState(object):
             vm_settings, vm_settings_updated = self._fetch_vm_settings(force_update=force_vm_settings_update)
 
             if vm_settings is not None:
+                new = " new " if vm_settings_updated else " "
+                logger.info("Fetched{0}vmSettings [correlation ID: {1} eTag: {2} source: {3}]", new, vm_settings.fetch_correlation_id, vm_settings.etag, vm_settings.source)
                 self._extensions_goal_state = vm_settings
                 if vm_settings_updated:
                     self._history.save_vm_settings(vm_settings.get_redacted_text())
