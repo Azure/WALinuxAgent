@@ -92,6 +92,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         """
         The correlation id for the fetch operation (i.e. the call to the HostGAPlugin vmSettings API)
         """
+        return self._fetch_correlation_id
 
     @property
     def created_on_timestamp(self):
