@@ -345,7 +345,7 @@ def quote(word_list):
 #
 _running_commands = []
 _running_commands_lock = threading.RLock()
-PARENT_PROCESS_NAME = "PARENT_PROCESS_NAME"
+PARENT_PROCESS_NAME = "AZURE_GUEST_AGENT_PARENT_PROCESS_NAME"
 AZURE_GUEST_AGENT = "AZURE_GUEST_AGENT"
 
 

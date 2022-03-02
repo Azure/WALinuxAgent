@@ -738,6 +738,10 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                     self.assertFalse(any(env_var in commands['data'] for env_var in not_expected), "Unwanted env variable found")
 
         def mock_popen(cmd, *_, **kwargs):
+            # This cgroupsapi Popen mocking all other popen calls. The extension emulator being called
+            # with assumption that extension commands run with custom environment but now I introduced env
+            # flag for other non extension commands which breaking the extension emulator logic.
+            # So, I added ExtensionVersion check to call extension emulator on extension operations.
             if 'env' in kwargs and ExtCommandEnvVariable.ExtensionVersion in kwargs['env']:
                 handler_name, __, command = extract_extension_info_from_command(cmd)
                 name = handler_name

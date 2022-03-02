@@ -17,6 +17,7 @@
 #
 import os
 import signal
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -155,6 +156,18 @@ exit({0})
         command = ["echo", "-n", "A TEST STRING"]
         ret = shellutil.run_command(command)
         self.assertEqual(ret, "A TEST STRING")
+
+    def test_run_command_should_use_popen_arg_list(self):
+        with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            command = ["echo", "-n", "A TEST STRING"]
+            ret = shellutil.run_command(command)
+
+            self.assertEqual(ret, "A TEST STRING")
+            self.assertEqual(popen_patch.call_count, 1)
+
+            args, kwargs = popen_patch.call_args
+            self.assertTrue("A TEST STRING" in args)
+            self.assertEqual(kwargs[shellutil.PARENT_PROCESS_NAME], shellutil.AZURE_GUEST_AGENT)
 
     def test_run_pipe_should_execute_a_pipe_with_two_commands(self):
         # Output the same string 3 times and then remove duplicates

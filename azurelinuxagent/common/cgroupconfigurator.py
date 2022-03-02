@@ -606,7 +606,7 @@ class CGroupConfigurator(object):
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
                     # Process started by agent will have a marker and check if that marker found in process environment.
-                    if current == 0 and not self.__is_process_env_flag_found(process):
+                    if current == 0 and not self.__is_process_descendant_of_the_agent(process):
                         unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
@@ -642,9 +642,10 @@ class CGroupConfigurator(object):
             return "[PID: {0}] UNKNOWN".format(pid)
 
         @staticmethod
-        def __is_process_env_flag_found(pid):
+        def __is_process_descendant_of_the_agent(pid):
             """
-            Returns True if the process env flag(PARENT_NAME) found otherwise False
+            Returns True if the process is descendant of the agent by looking at the env flag(AZURE_GUEST_AGENT_PARENT_PROCESS_NAME)
+            that we set when the process starts otherwise False.
             """
             try:
                 env = '/proc/{0}/environ'.format(pid)
