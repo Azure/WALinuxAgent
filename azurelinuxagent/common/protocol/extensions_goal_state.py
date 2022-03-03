@@ -157,11 +157,11 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
 
     @property
     def id(self):
-        return self._incarnation
+        return self._id
 
     @property
     def incarnation(self):
-        return self._id
+        return self._incarnation
 
     @property
     def svd_sequence_number(self):
