@@ -32,10 +32,12 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
 
-    def __init__(self, etag, json_text):
+    def __init__(self, etag, json_text, correlation_id):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = "etag_{0}".format(etag)
         self._etag = etag
+        self._svd_sequence_number = 0
+        self._fetch_correlation_id = correlation_id
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
         self._schema_version = FlexibleVersion('0.0.0.0')
@@ -65,6 +67,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._etag
 
     @property
+    def svd_sequence_number(self):
+        return self._svd_sequence_number
+
+    @property
     def host_ga_plugin_version(self):
         return self._host_ga_plugin_version
 
@@ -74,28 +80,38 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     @property
     def activity_id(self):
+        """
+        The CRP activity id
+        """
         return self._activity_id
 
     @property
     def correlation_id(self):
+        """
+        The correlation id for the CRP operation
+        """
         return self._correlation_id
+
+    @property
+    def fetch_correlation_id(self):
+        """
+        The correlation id for the fetch operation (i.e. the call to the HostGAPlugin vmSettings API)
+        """
+        return self._fetch_correlation_id
 
     @property
     def created_on_timestamp(self):
         """
-        Timestamp assigned by the CRP (time at which the Fast Track goal state was created)
+        Timestamp assigned by the CRP (time at which the goal state was created)
         """
         return self._created_on_timestamp
 
     @property
-    def source_channel(self):
+    def channel(self):
         return GoalStateChannel.HostGAPlugin
 
     @property
     def source(self):
-        """
-        Whether the goal state originated from Fabric or Fast Track
-        """
         return self._source
 
     @property
@@ -126,7 +142,11 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._extensions
 
     def get_redacted_text(self):
-        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
+        return ExtensionsGoalStateFromVmSettings.redact(self._text)
+
+    @staticmethod
+    def redact(text):
+        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', text)
 
     def _parse_vm_settings(self, json_text):
         vm_settings = _CaseFoldedDict.from_dict(json.loads(json_text))
@@ -143,6 +163,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         "vmSettingsSchemaVersion": "0.0",
         #         "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
         #         "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+        #         "inSvdSeqNo": 1,
         #         "extensionsLastModifiedTickCount": 637726657706205217,
         #         "extensionGoalStatesSource": "Fabric",
         #         ...
@@ -155,6 +176,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         self._activity_id = self._string_to_id(vm_settings.get("activityId"))
         self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
+        self._svd_sequence_number = self._string_to_id(vm_settings.get("inSvdSeqNo"))
         self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
         schema_version = vm_settings.get("vmSettingsSchemaVersion")

@@ -23,7 +23,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
@@ -137,6 +137,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._incarnation
 
     @property
+    def svd_sequence_number(self):
+        return self._incarnation
+
+    @property
     def activity_id(self):
         return self._activity_id
 
@@ -149,8 +153,12 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._created_on_timestamp
 
     @property
-    def source_channel(self):
+    def channel(self):
         return GoalStateChannel.WireServer
+
+    @property
+    def source(self):
+        return GoalStateSource.Fabric
 
     @property
     def status_upload_blob(self):

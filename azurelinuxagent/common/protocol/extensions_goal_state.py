@@ -28,6 +28,12 @@ class GoalStateChannel(object):
     Empty = "Empty"
 
 
+class GoalStateSource(object):
+    Fabric = "Fabric"
+    FastTrack = "FastTrack"
+    Empty = "Empty"
+
+
 class ExtensionsGoalState(object):
     """
     ExtensionsGoalState represents the extensions information in the goal state; that information can originate from
@@ -39,9 +45,13 @@ class ExtensionsGoalState(object):
     @property
     def id(self):
         """
-        Returns the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
+        Returns a string that includes the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
         was created from vmSettings.
         """
+        raise NotImplementedError()
+
+    @property
+    def svd_sequence_number(self):
         raise NotImplementedError()
 
     @property
@@ -57,7 +67,17 @@ class ExtensionsGoalState(object):
         raise NotImplementedError()
 
     @property
-    def source_channel(self):
+    def channel(self):
+        """
+        Whether the goal state was retrieved from the WireServer or the HostGAPlugin
+        """
+        raise NotImplementedError()
+
+    @property
+    def source(self):
+        """
+        Whether the goal state originated from Fabric or Fast Track
+        """
         raise NotImplementedError()
 
     @property
@@ -130,9 +150,22 @@ class ExtensionsGoalState(object):
 
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
+    def __init__(self, incarnation):
+        super(EmptyExtensionsGoalState, self).__init__()
+        self._id = "incarnation_{0}".format(incarnation)
+        self._incarnation = incarnation
+
     @property
     def id(self):
-        return self._string_to_id(None)
+        return self._id
+
+    @property
+    def incarnation(self):
+        return self._incarnation
+
+    @property
+    def svd_sequence_number(self):
+        return self._incarnation
 
     @property
     def activity_id(self):
@@ -147,8 +180,12 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
         return datetime.datetime.min
 
     @property
-    def source_channel(self):
+    def channel(self):
         return GoalStateChannel.Empty
+
+    @property
+    def source(self):
+        return GoalStateSource.Empty
 
     @property
     def status_upload_blob(self):

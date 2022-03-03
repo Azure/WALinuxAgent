@@ -41,6 +41,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentManifest, \
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil, restutil, textutil
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
@@ -2188,12 +2189,12 @@ class TestAgentUpgrade(UpdateTestCase):
                           kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
             # This will throw if corresponding message not found so not asserting on that
             requested_version_found = next(kwarg for kwarg in agent_msgs if
-                                           "Found requested version in manifest: 5.2.1.0 for incarnation: 1" in kwarg['message'])
+                                           "Found requested version in manifest: 5.2.1.0 for goal state incarnation_1" in kwarg['message'])
             self.assertTrue(requested_version_found['is_success'],
                             "The requested version found op should be reported as a success")
 
             skipping_update = next(kwarg for kwarg in agent_msgs if
-                                   "No matching package found in the agent manifest for requested version: 5.2.1.0 in incarnation: 1, skipping agent update" in kwarg['message'])
+                                   "No matching package found in the agent manifest for requested version: 5.2.1.0 in goal state incarnation_1, skipping agent update" in kwarg['message'])
             self.assertEqual(skipping_update['version'], FlexibleVersion("5.2.1.0"),
                              "The not found message should be reported from requested agent version")
             self.assertFalse(skipping_update['is_success'], "The not found op should be reported as a failure")
@@ -2388,7 +2389,7 @@ class TestAgentUpgrade(UpdateTestCase):
                             kwarg['op'] == WALAEventOperation.AgentUpgrade]
             # This will throw if corresponding message not found so not asserting on that
             requested_version_found = next(kwarg for kwarg in upgrade_msgs if
-                                           "Found requested version in manifest: 1.0.0.0 for incarnation: 2" in kwarg[
+                                           "Found requested version in manifest: 1.0.0.0 for goal state incarnation_2" in kwarg[
                                                'message'])
             self.assertTrue(requested_version_found['is_success'],
                             "The requested version found op should be reported as a success")
@@ -2780,6 +2781,7 @@ def _mock_exthandlers_handler(extension_statuses=None):
             exthandlers_handler.report_ext_handlers_status = Mock(return_value=create_vm_status(ExtensionStatusValue.success))
         else:
             exthandlers_handler.report_ext_handlers_status = Mock(side_effect=[create_vm_status(s) for s in extension_statuses])
+        exthandlers_handler.get_ext_handlers_status_debug_info = Mock(return_value='')
         yield exthandlers_handler
 
 
@@ -2812,6 +2814,22 @@ class ProcessGoalStateTestCase(AgentTestCase):
             self.assertEqual(2, exthandlers_handler.run.call_count, "exthandlers_handler.run() should have been called on a new goal state")
             self.assertEqual(3, exthandlers_handler.report_ext_handlers_status.call_count, "exthandlers_handler.report_ext_handlers_status() should have been called on a new goal state")
             self.assertEqual(2, remote_access_handler.run.call_count, "remote_access_handler.run() should have been called on a new goal state")
+
+    def test_it_should_write_the_agent_status_to_the_history_folder(self):
+        with _mock_exthandlers_handler() as exthandlers_handler:
+            update_handler = _create_update_handler()
+            remote_access_handler = Mock()
+            remote_access_handler.run = Mock()
+
+            update_handler._process_goal_state(exthandlers_handler, remote_access_handler)
+
+            incarnation = exthandlers_handler.protocol.get_goal_state().incarnation
+            matches = glob.glob(os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "*_{0}".format(incarnation)))
+            self.assertTrue(len(matches) == 1, "Could not find the history directory for the goal state. Got: {0}".format(matches))
+
+            status_file = os.path.join(matches[0], AGENT_STATUS_FILE)
+            self.assertTrue(os.path.exists(status_file), "Could not find {0}".format(status_file))
+
 
 class HeartbeatTestCase(AgentTestCase):
 

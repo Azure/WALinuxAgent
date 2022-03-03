@@ -51,7 +51,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgent
     VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.utils.archive import StateArchiver
+from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -170,7 +170,7 @@ class UpdateHandler(object):
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
         self._last_try_update_goal_state_failed = False
-        self._report_status_last_failed_incarnation = -1
+        self._report_status_last_failed_goal_state = None
 
         # incarnation of the last goal state that has been fully processed
         # (None if no goal state has been processed)
@@ -588,18 +588,16 @@ class UpdateHandler(object):
                 self._extensions_summary = ExtensionsSummary()
                 exthandlers_handler.run()
 
-            # report status always, even if the goal state did not change
+            # always report status, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
             self._report_status(exthandlers_handler)
 
             if self._processing_new_incarnation():
                 remote_access_handler.run()
 
+            # lastly, cleanup the goal state history (but do it only on new goal states - no need to do it on every iteration)
             if self._processing_new_extensions_goal_state():
-                try:
-                    UpdateHandler._cleanup_goal_state_history()
-                except Exception as exception:
-                    logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
+                UpdateHandler._cleanup_goal_state_history()
 
         finally:
             if self._goal_state is not None:
@@ -608,9 +606,12 @@ class UpdateHandler(object):
 
     @staticmethod
     def _cleanup_goal_state_history():
-        archiver = StateArchiver(conf.get_lib_dir())
-        archiver.purge()
-        archiver.archive()
+        try:
+            archiver = StateArchiver(conf.get_lib_dir())
+            archiver.purge()
+            archiver.archive()
+        except Exception as exception:
+            logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
 
     @staticmethod
     def _cleanup_legacy_goal_state_history():
@@ -619,7 +620,7 @@ class UpdateHandler(object):
         except Exception as exception:
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
-    def __get_vmagent_update_status(self, protocol, incarnation_changed):
+    def __get_vmagent_update_status(self, protocol, goal_state_changed):
         """
         This function gets the VMAgent update status as per the last GoalState.
         Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
@@ -631,7 +632,7 @@ class UpdateHandler(object):
 
         try:
             requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
-            if manifest is None and incarnation_changed:
+            if manifest is None and goal_state_changed:
                 logger.info("Unable to report update status as no matching manifest found for family: {0}".format(
                     conf.get_autoupdate_gafamily()))
                 return None
@@ -646,8 +647,8 @@ class UpdateHandler(object):
                 update_status = VMAgentUpdateStatus(expected_version=manifest.requested_version_string, status=status,
                                                     code=code)
         except Exception as error:
-            if incarnation_changed:
-                err_msg = "[This error will only be logged once per incarnation] " \
+            if goal_state_changed:
+                err_msg = "[This error will only be logged once per goal state] " \
                           "Ran into error when trying to fetch updateStatus for the agent, skipping reporting update satus. Error: {0}".format(
                            textutil.format_exception(error))
                 logger.warn(err_msg)
@@ -659,20 +660,24 @@ class UpdateHandler(object):
         vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, self._processing_new_extensions_goal_state())
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         #
-        # TODO: Review the use of incarnation when reporting status... what should be the behavior for Fast Track goal states (i.e. no incarnation)?
         # TODO: How to handle the case when the HostGAPlugin goes from supporting vmSettings to not supporting it?
         #
         if self._goal_state is None:
             supports_fast_track = False
         else:
-            supports_fast_track = self._goal_state.extensions_goal_state.source_channel == GoalStateChannel.HostGAPlugin
-        vm_status = exthandlers_handler.report_ext_handlers_status(
-            incarnation_changed=self._processing_new_extensions_goal_state(),
-            vm_agent_update_status=vm_agent_update_status,
-            vm_agent_supports_fast_track=supports_fast_track)
-        if vm_status is None:
-            return
+            supports_fast_track = self._goal_state.extensions_goal_state.channel == GoalStateChannel.HostGAPlugin
 
+        vm_status = exthandlers_handler.report_ext_handlers_status(
+            goal_state_changed=self._processing_new_extensions_goal_state(),
+            vm_agent_update_status=vm_agent_update_status, vm_agent_supports_fast_track=supports_fast_track)
+
+        if vm_status is not None:
+            self._report_extensions_summary(vm_status)
+            if self._goal_state is not None:
+                agent_status = exthandlers_handler.get_ext_handlers_status_debug_info(vm_status)
+                self._goal_state.save_to_history(agent_status, AGENT_STATUS_FILE)
+
+    def _report_extensions_summary(self, vm_status):
         try:
             extensions_summary = ExtensionsSummary(vm_status)
             if self._extensions_summary != extensions_summary:
@@ -687,10 +692,9 @@ class UpdateHandler(object):
                     if self._is_initial_goal_state:
                         self._on_initial_goal_state_completed(self._extensions_summary)
         except Exception as error:
-            # report errors only once per incarnation
-            goal_state = exthandlers_handler.protocol.get_goal_state()
-            if self._report_status_last_failed_incarnation != goal_state.incarnation:
-                self._report_status_last_failed_incarnation = goal_state.incarnation
+            # report errors only once per goal state
+            if self._report_status_last_failed_goal_state != self._goal_state.extensions_goal_state.id:
+                self._report_status_last_failed_goal_state = self._goal_state.extensions_goal_state.id
                 msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
                 logger.warn(msg)
                 add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
@@ -1058,13 +1062,13 @@ class UpdateHandler(object):
 
         def can_proceed_with_requested_version():
             if not gs_updated:
-                # If incarnation didn't change, don't process anything.
+                # If the goal state didn't change, don't process anything.
                 return False
 
             # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
-            # If there's no new incarnation, don't proceed with anything
-            msg_ = "Found requested version in manifest: {0} for incarnation: {1}".format(
-                requested_version, incarnation)
+            # If there's no new goal state, don't proceed with anything
+            msg_ = "Found requested version in manifest: {0} for goal state {1}".format(
+                requested_version, goal_state_id)
             logger.info(msg_)
             add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg_, log_event=False)
 
@@ -1092,16 +1096,16 @@ class UpdateHandler(object):
         daemon_version = self.__get_daemon_version_for_update()
         try:
             # Fetch the agent manifests from the latest Goal State
-            incarnation = self._goal_state.incarnation
+            goal_state_id = self._goal_state.extensions_goal_state.id
             gs_updated = self._processing_new_extensions_goal_state()
             requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
             if manifest is None:
                 logger.verbose(
-                    u"No manifest links found for agent family: {0} for incarnation: {1}, skipping update check".format(
-                        family, incarnation))
+                    u"No manifest links found for agent family: {0} for goal state {1}, skipping update check".format(
+                        family, goal_state_id))
                 return False
         except Exception as err:
-            # If there's some issues in fetching the agent manifests, report it only on incarnation change
+            # If there's some issues in fetching the agent manifests, report it only on goal state change
             msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(err))
             if gs_updated:
                 report_error(msg)
@@ -1151,8 +1155,8 @@ class UpdateHandler(object):
                         packages_to_download = [pkg]
                         break
                 else:
-                    msg = "No matching package found in the agent manifest for requested version: {0} in incarnation: {1}, skipping agent update".format(
-                        requested_version, incarnation)
+                    msg = "No matching package found in the agent manifest for requested version: {0} in goal state {1}, skipping agent update".format(
+                        requested_version, goal_state_id)
                     report_error(msg, version_=requested_version)
                     return False
 

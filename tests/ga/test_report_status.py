@@ -109,11 +109,12 @@ class ReportStatusTestCase(AgentTestCase):
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):  # skip agent update
                 with patch("azurelinuxagent.ga.update.logger.warn") as logger_warn:
                     update_handler = get_update_handler()
+                    update_handler._goal_state = protocol.get_goal_state()  # these tests skip the initialization of the goal state. so do that here
                     exthandlers_handler = ExtHandlersHandler(protocol)
                     update_handler._report_status(exthandlers_handler)
                     self.assertEqual(0, logger_warn.call_count, "UpdateHandler._report_status() should not report WARNINGS when there are no errors")
 
-                    with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", return_value=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
+                    with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", side_effect=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
                         update_handler._report_status(exthandlers_handler)
                         update_handler._report_status(exthandlers_handler)
                         update_handler._report_status(exthandlers_handler)

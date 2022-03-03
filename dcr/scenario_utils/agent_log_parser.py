@@ -6,14 +6,9 @@ from datetime import datetime
 
 AGENT_LOG_FILE = '/var/log/waagent.log'
 
-# Examples:
-#     ProcessGoalState completed [Incarnation: 12; 23 ms]
-#     ProcessGoalState completed [Incarnation: 12; 23 ms; Activity Id: 555e551c-600e-4fb4-90ba-8ab8ec28eccc]
-#     ProcessGoalState completed [Incarnation: 12; 23 ms; Correlation Id: 555e551c-600e-4fb4-90ba-8ab8ec28eccc]
-#     ProcessGoalState completed [Incarnation: 12; 23 ms; GS Creation Time: 2020-11-09T17:48:50.000000Z]
-GOAL_STATE_COMPLETED = r"ProcessExtensionsInGoalState completed\s\[Incarnation:\s(?P<incarnation>\d+);\s(?P<duration>\d+)\sms" \
-                       r"(;\sActivity Id:\s(?P<activity_id>\S+))?(;\sCorrelation Id:\s(?P<correlation_id>\S+))?" \
-                       r"(;\sGS Creation Time:\s(?P<gs_creation_time>\S+))?\]"
+# Example:
+#     ProcessExtensionsGoalState completed [etag_2824367392948713696 4073 ms]
+GOAL_STATE_COMPLETED = r"ProcessExtensionsGoalState completed\s\[(?P<id>[a-z_\d]+)\s(?P<duration>\d+)\sms\]"
 
 # The format of the log has changed over time and the current log may include records from different sources. Most records are single-line, but some of them
 # can span across multiple lines. We will assume records always start with a line similar to the examples below; any other lines will be assumed to be part

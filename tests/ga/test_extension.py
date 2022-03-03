@@ -33,7 +33,6 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
@@ -3425,10 +3424,8 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
 
 
             exthandlers_handler.run()
-            exthandlers_handler.report_ext_handlers_status()
-
-            status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE.format(1))
-            actual_status_json = json.loads(fileutil.read_file(status_path))
+            vm_status = exthandlers_handler.report_ext_handlers_status()
+            actual_status_json = json.loads(exthandlers_handler.get_ext_handlers_status_debug_info(vm_status))
 
             # Don't compare the guestOSInfo
             status_property = actual_status_json.get("__status__")

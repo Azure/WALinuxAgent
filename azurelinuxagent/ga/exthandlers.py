@@ -50,7 +50,7 @@ from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
-from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE, GoalStateHistory
+from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
@@ -279,9 +279,8 @@ class ExtHandlersHandler(object):
         self.protocol = protocol
         self.ext_handlers = None
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
-        # extensions on incarnation change, we need to maintain its state.
+        # extensions on goal state change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
-        # (once self._extension_processing_allowed() is True).
         self.__gs_aggregate_status = None
 
         self.report_status_error_state = ErrorState()
@@ -294,68 +293,57 @@ class ExtHandlersHandler(object):
                self.__gs_aggregate_status.code == GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures
 
     def run(self):
-        etag, activity_id, correlation_id, gs_creation_time = None, None, None, None
-
         try:
-            extensions_goal_state = self.protocol.get_goal_state().extensions_goal_state
+            gs = self.protocol.get_goal_state()
+            egs = gs.extensions_goal_state
 
-            # self.ext_handlers and etag need to be initialized first, since status reporting depends on them; also
+            # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
-            self.ext_handlers = copy.deepcopy(extensions_goal_state.extensions)
-            etag = self.protocol.client.get_goal_state().incarnation
+            self.ext_handlers = copy.deepcopy(egs.extensions)
 
             if not self._extension_processing_allowed():
                 return
 
-            gs_creation_time = extensions_goal_state.created_on_timestamp
-            activity_id = extensions_goal_state.activity_id
-            correlation_id = extensions_goal_state.correlation_id
+            utc_start = datetime.datetime.utcnow()
+            error = None
+            message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
+                egs.id, egs.channel, egs.source, egs.activity_id, egs.correlation_id, egs.created_on_timestamp)
+            logger.info(message)
+            add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
+
+            try:
+                self.__process_and_handle_extensions(egs.svd_sequence_number, egs.id)
+                self._cleanup_outdated_handlers()
+            except Exception as e:
+                error = u"Error processing extensions:{0}".format(textutil.format_exception(e))
+            finally:
+                duration = elapsed_milliseconds(utc_start)
+                if error is None:
+                    message = 'ProcessExtensionsGoalState completed [{0} {1} ms]'.format(egs.id, duration)
+                    logger.info(message)
+                else:
+                    message = 'ProcessExtensionsGoalState failed [{0} {1} ms]\n{2}'.format(egs.id, duration, error)
+                    logger.error(message)
+                add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
+
         except Exception as error:
             msg = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(error))
-            logger.warn(msg)
+            logger.error(msg)
             add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=msg, log_event=False)
-            return
-
-        def goal_state_debug_info(duration=None):
-            if duration is None:
-                return "[Incarnation: {0}; Activity Id: {1}; Correlation Id: {2}; GS Creation Time: {3}]".format(etag, activity_id, correlation_id, gs_creation_time)
-            else:
-                return "[Incarnation: {0}; {1} ms; Activity Id: {2}; Correlation Id: {3}; GS Creation Time: {4}]".format(etag, duration, activity_id, correlation_id, gs_creation_time)
-
-        utc_start = datetime.datetime.utcnow()
-        error = None
-        message = "ProcessExtensionsInGoalState started {0}".format(goal_state_debug_info())
-        logger.info(message)
-        add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
-        try:
-            self.__process_and_handle_extensions(etag)
-            self._cleanup_outdated_handlers()
-        except Exception as e:
-            error = u"ProcessExtensionsInGoalState - Exception processing extension handlers:{0}".format(textutil.format_exception(e))
-        finally:
-            duration = elapsed_milliseconds(utc_start)
-            if error is None:
-                message = 'ProcessExtensionsInGoalState completed {0}'.format(goal_state_debug_info(duration=duration))
-                logger.info(message)
-            else:
-                message = 'ProcessExtensionsInGoalState failed {0}\nError:{1}'.format(goal_state_debug_info(duration=duration), error)
-                logger.warn(message)
-            add_event(op=WALAEventOperation.ExtensionProcessing, is_success=(error is None), message=message, log_event=False, duration=duration)
 
     def __get_unsupported_features(self):
         required_features = self.protocol.get_goal_state().extensions_goal_state.required_features
         supported_features = get_agent_supported_features_list_for_crp()
         return [feature for feature in required_features if feature not in supported_features]
 
-    def __process_and_handle_extensions(self, etag):
+    def __process_and_handle_extensions(self, svd_sequence_number, goal_state_id):
         try:
             # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
             unsupported_features = self.__get_unsupported_features()
             if any(unsupported_features):
-                msg = "Failing GS incarnation: {0} as Unsupported features found: {1}".format(etag, ', '.join(
-                    unsupported_features))
+                msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
                 logger.warn(msg)
-                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                       code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
                                                                       message=msg)
                 add_event(op=WALAEventOperation.GoalStateUnsupportedFeatures,
@@ -363,13 +351,13 @@ class ExtHandlersHandler(object):
                           message=msg,
                           log_event=False)
             else:
-                self.handle_ext_handlers(etag)
-                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Success, seq_no=etag,
+                self.handle_ext_handlers(goal_state_id)
+                self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Success, seq_no=svd_sequence_number,
                                                                       code=GoalStateAggregateStatusCodes.Success,
                                                                       message="GoalState executed successfully")
         except Exception as error:
             msg = "Unexpected error when processing goal state:{0}".format(textutil.format_exception(error))
-            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=etag,
+            self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                   code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
                                                                   message=msg)
             logger.warn(msg)
@@ -479,7 +467,7 @@ class ExtHandlersHandler(object):
 
         return all_extensions
 
-    def handle_ext_handlers(self, etag=None):
+    def handle_ext_handlers(self, goal_state_id):
         if not self.ext_handlers:
             logger.info("No extension handlers found, not processing anything.")
             return
@@ -517,7 +505,7 @@ class ExtHandlersHandler(object):
                 continue
 
             # Process extensions and get if it was successfully executed or not
-            extension_success = self.handle_ext_handler(handler_i, extension, etag)
+            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
@@ -584,12 +572,12 @@ class ExtHandlersHandler(object):
             msg = "Dependent Extension {0} did not succeed. Status was {1}".format(extension_name, status)
             raise Exception(msg)
 
-    def handle_ext_handler(self, ext_handler_i, extension, etag):
+    def handle_ext_handler(self, ext_handler_i, extension, goal_state_id):
         """
         Execute the requested command for the handler and return if success
         :param ext_handler_i: The ExtHandlerInstance object to execute the command on
         :param extension: The extension settings on which to run the command on
-        :param etag: Current incarnation of the GoalState
+        :param goal_state_id: ID of the current GoalState
         :return: True if the operation was successful, False if not
         """
 
@@ -613,7 +601,7 @@ class ExtHandlersHandler(object):
                 raise ExtensionError(msg=err_msg)
 
             # Handle everything on an extension level rather than Handler level
-            ext_handler_i.logger.info("Target handler state: {0} [incarnation {1}]", handler_state, etag)
+            ext_handler_i.logger.info("Target handler state: {0} [{1}]", handler_state, goal_state_id)
             if handler_state == ExtensionRequestedState.Enabled:
                 self.handle_enable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Disabled:
@@ -845,7 +833,7 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.remove_ext_handler()
 
-    def __get_handlers_on_file_system(self, incarnation_changed):
+    def __get_handlers_on_file_system(self, goal_state_changed):
         handlers_to_report = []
         # Ignoring the `history` and `events` directories as they're not handlers and are agent-generated
         for item, path in list_agent_lib_directory(skip_agent_package=True,
@@ -883,13 +871,14 @@ class ExtHandlersHandler(object):
 
                     handlers_to_report.append(ext_handler)
             except Exception as error:
-                # Log error once per incarnation
-                if incarnation_changed:
+                # Log error once per goal state
+                if goal_state_changed:
                     logger.warn("Can't fetch ExtHandler from path: {0}; Error: {1}".format(path, ustr(error)))
 
         return handlers_to_report
 
-    def report_ext_handlers_status(self, incarnation_changed=False, vm_agent_update_status=None, vm_agent_supports_fast_track=False):
+    def report_ext_handlers_status(self, goal_state_changed=False, vm_agent_update_status=None,
+                                   vm_agent_supports_fast_track=False):
         """
         Go through handler_state dir, collect and report status.
         Returns the status it reported, or None if an error occurred.
@@ -903,7 +892,7 @@ class ExtHandlersHandler(object):
 
             # In case of Unsupported error, report the status of the handlers in the VM
             if self.__last_gs_unsupported():
-                handlers_to_report = self.__get_handlers_on_file_system(incarnation_changed)
+                handlers_to_report = self.__get_handlers_on_file_system(goal_state_changed)
 
             # If GoalState supported, report the status of extension handlers that were requested by the GoalState
             elif not self.__last_gs_unsupported() and self.ext_handlers is not None:
@@ -911,7 +900,7 @@ class ExtHandlersHandler(object):
 
             for ext_handler in handlers_to_report:
                 try:
-                    self.report_ext_handler_status(vm_status, ext_handler, incarnation_changed)
+                    self.report_ext_handler_status(vm_status, ext_handler, goal_state_changed)
                 except ExtensionError as error:
                     add_event(op=WALAEventOperation.ExtensionProcessing, is_success=False, message=ustr(error))
 
@@ -945,8 +934,6 @@ class ExtHandlersHandler(object):
 
                 self.report_status_error_state.reset()
 
-            self.write_ext_handlers_status_to_info_file(vm_status, incarnation_changed)
-
             return vm_status
 
         except Exception as error:
@@ -959,54 +946,34 @@ class ExtHandlersHandler(object):
                       message=msg)
             return None
 
-    def write_ext_handlers_status_to_info_file(self, vm_status, incarnation_changed):
-        status_file = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
-
-        if os.path.exists(status_file) and incarnation_changed:
-            # On new goal state, move the last status report for the previous goal state to the history folder
-            last_modified = os.path.getmtime(status_file)
-            timestamp = datetime.datetime.utcfromtimestamp(last_modified).isoformat()
-            GoalStateHistory(timestamp, "status").save_status_file(status_file)
-
-        # Now create/overwrite the status file; this file is kept for debugging purposes only
+    def get_ext_handlers_status_debug_info(self, vm_status):
         status_blob_text = self.protocol.get_status_blob_data()
         if status_blob_text is None:
             status_blob_text = ""
 
-        debug_info = ExtHandlersHandler._get_status_debug_info(vm_status)
-
-        status_file_text = \
-'''{{
-    "__comment__": "The __status__ property is the actual status reported to CRP",
-    "__status__": {0},
-    "__debug__": {1}
-}}
-'''.format(status_blob_text, debug_info)
-
-        fileutil.write_file(status_file, status_file_text)
-
-    @staticmethod
-    def _get_status_debug_info(vm_status):
         support_multi_config = dict()
+        vm_status_data = get_properties(vm_status)
+        vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
+        for handler_status in vm_handler_statuses:
+            if handler_status.get('name') is not None:
+                support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
 
-        if vm_status is not None:
-            vm_status_data = get_properties(vm_status)
-            vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
-            for handler_status in vm_handler_statuses:
-                if handler_status.get('name') is not None:
-                    support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
-
-        debug_info = {
+        debug_text = json.dumps({
             "agentName": AGENT_NAME,
             "daemonVersion": str(version.get_daemon_version()),
             "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
             "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
             "supportsMultiConfig": support_multi_config
-        }
+        })
 
-        return json.dumps(debug_info)
+        return '''{{
+    "__comment__": "The __status__ property is the actual status reported to CRP",
+    "__status__": {0},
+    "__debug__": {1}
+}}
+'''.format(status_blob_text, debug_text)
 
-    def report_ext_handler_status(self, vm_status, ext_handler, incarnation_changed):
+    def report_ext_handler_status(self, vm_status, ext_handler, goal_state_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         handler_status = ext_handler_i.get_handler_status()
@@ -1017,7 +984,7 @@ class ExtHandlersHandler(object):
             # multi-config. If state is != Uninstall, report error
             if ext_handler.state != ExtensionRequestedState.Uninstall:
                 msg = "No handler status found for {0}. Not reporting anything for it.".format(ext_handler.name)
-                ext_handler_i.report_error_on_incarnation_change(incarnation_changed, log_msg=msg, event_msg=msg)
+                ext_handler_i.report_error_on_incarnation_change(goal_state_changed, log_msg=msg, event_msg=msg)
             return
 
         handler_state = ext_handler_i.get_handler_state()
@@ -1038,7 +1005,7 @@ class ExtHandlersHandler(object):
                 except ExtensionError as e:
                     ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
-            ext_handler_statuses = ext_handler_i.get_extension_handler_statuses(handler_status, incarnation_changed)
+            ext_handler_statuses = ext_handler_i.get_extension_handler_statuses(handler_status, goal_state_changed)
 
         # If not any extension status reported, report the Handler status
         if not any(ext_handler_statuses):
@@ -1790,18 +1757,18 @@ class ExtHandlerInstance(object):
         # Extension completed, return its status
         return True, status
 
-    def report_error_on_incarnation_change(self, incarnation_changed, log_msg, event_msg, extension=None,
+    def report_error_on_incarnation_change(self, goal_state_changed, log_msg, event_msg, extension=None,
                                            op=WALAEventOperation.ReportStatus):
-        # Since this code is called on a loop, logging as a warning only on incarnation change, else logging it
+        # Since this code is called on a loop, logging as a warning only on goal state change, else logging it
         # as verbose
-        if incarnation_changed:
+        if goal_state_changed:
             logger.warn(log_msg)
             add_event(name=self.get_extension_full_name(extension), version=self.ext_handler.version,
                       op=op, message=event_msg, is_success=False, log_event=False)
         else:
             logger.verbose(log_msg)
 
-    def get_extension_handler_statuses(self, handler_status, incarnation_changed):
+    def get_extension_handler_statuses(self, handler_status, goal_state_changed):
         """
         Get the list of ExtHandlerStatus objects corresponding to each extension in the Handler. Each object might have
         its own status for the Extension status but the Handler status would be the same for each extension in a Handle
@@ -1824,7 +1791,7 @@ class ExtHandlerInstance(object):
             except Exception as error:
                 msg = "Something went wrong when trying to get a copy of the Handler status for {0}".format(
                     self.get_extension_full_name())
-                self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
+                self.report_error_on_incarnation_change(goal_state_changed, event_msg=msg,
                                                         log_msg="{0}.\nStack Trace: {1}".format(
                                                                                      msg, textutil.format_exception(error)))
                 # Since this is a Handler level error and we need to do it per extension, breaking here and logging
@@ -1842,7 +1809,7 @@ class ExtHandlerInstance(object):
 
                 msg = "Unknown error when trying to fetch status from extension {0}".format(
                     self.get_extension_full_name(ext))
-                self.report_error_on_incarnation_change(incarnation_changed, event_msg=msg,
+                self.report_error_on_incarnation_change(goal_state_changed, event_msg=msg,
                                                         log_msg="{0}.\nStack Trace: {1}".format(
                                                                                      msg, textutil.format_exception(error)),
                                                         extension=ext)
