@@ -45,9 +45,13 @@ class ExtensionsGoalState(object):
     @property
     def id(self):
         """
-        Returns the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
+        Returns a string that includes the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
         was created from vmSettings.
         """
+        raise NotImplementedError()
+
+    @property
+    def svd_sequence_number(self):
         raise NotImplementedError()
 
     @property
@@ -146,9 +150,22 @@ class ExtensionsGoalState(object):
 
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
+    def __init__(self, incarnation):
+        super(EmptyExtensionsGoalState, self).__init__()
+        self._id = "incarnation_{0}".format(incarnation)
+        self._incarnation = incarnation
+
     @property
     def id(self):
-        return self._string_to_id(None)
+        return self._id
+
+    @property
+    def incarnation(self):
+        return self._incarnation
+
+    @property
+    def svd_sequence_number(self):
+        return self._incarnation
 
     @property
     def activity_id(self):

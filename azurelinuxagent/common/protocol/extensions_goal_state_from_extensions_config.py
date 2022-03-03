@@ -137,6 +137,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._incarnation
 
     @property
+    def svd_sequence_number(self):
+        return self._incarnation
+
+    @property
     def activity_id(self):
         return self._activity_id
 

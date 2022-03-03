@@ -36,6 +36,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
         self._id = "etag_{0}".format(etag)
         self._etag = etag
+        self._svd_sequence_number = 0
         self._fetch_correlation_id = correlation_id
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
@@ -64,6 +65,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     @property
     def etag(self):
         return self._etag
+
+    @property
+    def svd_sequence_number(self):
+        return self._svd_sequence_number
 
     @property
     def host_ga_plugin_version(self):
@@ -158,6 +163,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         "vmSettingsSchemaVersion": "0.0",
         #         "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
         #         "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+        #         "inSvdSeqNo": 1,
         #         "extensionsLastModifiedTickCount": 637726657706205217,
         #         "extensionGoalStatesSource": "Fabric",
         #         ...
@@ -170,6 +176,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         self._activity_id = self._string_to_id(vm_settings.get("activityId"))
         self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
+        self._svd_sequence_number = self._string_to_id(vm_settings.get("inSvdSeqNo"))
         self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
         schema_version = vm_settings.get("vmSettingsSchemaVersion")

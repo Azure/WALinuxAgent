@@ -236,7 +236,7 @@ class GoalState(object):
             extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
 
             if extensions_config_uri is None:
-                extensions_config = ExtensionsGoalStateFactory.create_empty()
+                extensions_config = ExtensionsGoalStateFactory.create_empty(self._incarnation)
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
                 extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self._incarnation, xml_text, self._wire_client)
