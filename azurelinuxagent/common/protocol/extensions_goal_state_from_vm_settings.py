@@ -93,9 +93,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._correlation_id
 
     @property
-    def fetch_correlation_id(self):
+    def hostga_plugin_correlation_id(self):
         """
-        The correlation id for the fetch operation (i.e. the call to the HostGAPlugin vmSettings API)
+        The correlation id for the call to the HostGAPlugin vmSettings API
         """
         return self._fetch_correlation_id
 
