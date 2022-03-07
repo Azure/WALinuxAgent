@@ -37,7 +37,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._id = "etag_{0}".format(etag)
         self._etag = etag
         self._svd_sequence_number = 0
-        self._fetch_correlation_id = correlation_id
+        self._hostga_plugin_correlation_id = correlation_id
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
         self._schema_version = FlexibleVersion('0.0.0.0')
@@ -93,11 +93,11 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._correlation_id
 
     @property
-    def fetch_correlation_id(self):
+    def hostga_plugin_correlation_id(self):
         """
-        The correlation id for the fetch operation (i.e. the call to the HostGAPlugin vmSettings API)
+        The correlation id for the call to the HostGAPlugin vmSettings API
         """
-        return self._fetch_correlation_id
+        return self._hostga_plugin_correlation_id
 
     @property
     def created_on_timestamp(self):
