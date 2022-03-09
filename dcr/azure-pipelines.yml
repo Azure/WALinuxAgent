@@ -46,6 +46,12 @@ parameters:
         sku: "cbl-mariner-1"
         version: "latest"
         name: "mariner1"
+##
+      - publisher: "microsoftcblmariner"
+        offer: "cbl-mariner"
+        sku: "cbl-mariner-2"
+        version: "latest"
+        name: "mariner2"
 
 trigger:
   - develop
