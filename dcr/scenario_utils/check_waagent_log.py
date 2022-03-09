@@ -22,12 +22,6 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
     #     * 'if' receives as parameter an AgentLogRecord
     #
     ignore_list = [
-        # This is a known issue (https://github.com/Azure/WALinuxAgent/pull/2016)
-        # Please remove this message from ignored once this task is completed
-        # - https://msazure.visualstudio.com/One/_workitems/edit/8733946
-        {
-            'message': r"need a bytes-like object, NoneType found"
-        },
         # This warning is expected on CentOS/RedHat 7.8 and Redhat 7.6
         {
             'message': r"Move rules file 70-persistent-net.rules to /var/lib/waagent/70-persistent-net.rules",
