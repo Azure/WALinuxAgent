@@ -96,6 +96,15 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
             'message': r"The agent's process is not within a memory cgroup",
             'if': lambda log_line: re.match(r"((centos7\.8)|(centos7\.9)|(redhat7\.8)|(redhat8\.2))\D*", distro,
                                             flags=re.IGNORECASE)
+        },
+        # 2022-03-09T20:04:33.745721Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=Install, message=[ExtensionOperationError] \
+        #   Non-zero exit code: 51, /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.15.3/./shim.sh -install
+        #
+        # This is a known issue where AMA does not support Mariner 2.0. Please remove when support is
+        # added in the next AMA release (1.16.x).
+        {
+            'message': r"Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=Install, message=\[ExtensionOperationError\] Non-zero exit code: 51",
+            'if': lambda log_line: "Mariner2.0" in distro and log_line.level == "ERROR" and log_line.who == "ExtHandler"
         }
     ]
 
