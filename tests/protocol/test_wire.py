@@ -30,25 +30,29 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames, get_supported_feature_by_name, \
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateMismatchError
+from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
+from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
+from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import VMAgentManifestUri
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
-    InVMArtifactsProfile, StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _ErrorReporter
+    StatusBlob, VMStatus, EXT_CONF_FILE_NAME, _VmSettingsErrorReporter
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema, \
     TelemetryEventParam, TelemetryEvent
-from azurelinuxagent.common.utils import restutil, textutil
+from azurelinuxagent.common.utils import restutil, textutil, fileutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
 from tests.protocol.mockwiredata import WireProtocolData
-from tests.tools import Mock, patch, AgentTestCase
+from tests.tools import Mock, PropertyMock, patch, AgentTestCase, load_bin_data, mock_sleep, load_data
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -71,15 +75,13 @@ def get_event(message, duration=30000, evt_type="", is_internal=False, is_succes
 
 
 @contextlib.contextmanager
-def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, status_upload_blob_type=None):
+def create_mock_protocol(status_upload_blob=None, status_upload_blob_type=None):
     with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
         # These tests use mock wire data that dont have any extensions (extension config will be empty).
-        # Populate the upload blob and artifacts profile blob.
-        extensions_goal_state = ExtensionsGoalState()
-        extensions_goal_state.artifacts_profile_blob = artifacts_profile_blob
-        extensions_goal_state._status_upload_blob = status_upload_blob
-        extensions_goal_state._status_upload_blob_type = status_upload_blob_type
-        protocol.client._extensions_goal_state = extensions_goal_state
+        # Mock the upload blob and artifacts profile blob.
+        protocol.client._extensions_goal_state = Mock(wraps=protocol.client._extensions_goal_state)
+        type(protocol.client._extensions_goal_state).status_upload_blob = PropertyMock(return_value=status_upload_blob)
+        type(protocol.client._extensions_goal_state).status_upload_blob_type = PropertyMock(return_value=status_upload_blob_type)
 
         yield protocol
 
@@ -87,7 +89,7 @@ def create_mock_protocol(artifacts_profile_blob=None, status_upload_blob=None, s
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
-class TestWireProtocol(AgentTestCase):
+class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
     def setUp(self):
         super(TestWireProtocol, self).setUp()
@@ -101,8 +103,8 @@ class TestWireProtocol(AgentTestCase):
             protocol.detect()
             protocol.get_vminfo()
             protocol.get_certs()
-            ext_handlers, etag = protocol.get_ext_handlers()  # pylint: disable=unused-variable
-            for ext_handler in ext_handlers.extHandlers:
+            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            for ext_handler in ext_handlers:
                 protocol.get_ext_handler_pkgs(ext_handler)
 
             crt1 = os.path.join(self.tmp_dir,
@@ -214,11 +216,13 @@ class TestWireProtocol(AgentTestCase):
 
     def test_status_blob_parsing(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            self.assertEqual(protocol.client.get_extensions_goal_state().get_status_upload_blob(),
+            extensions_goal_state = protocol.client.get_extensions_goal_state()
+            self.assertIsInstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig)
+            self.assertEqual(extensions_goal_state.status_upload_blob,
                              'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?'
                              'sr=b&sp=rw&se=9999-01-01&sk=key1&sv=2014-02-14&'
                              'sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo')
-            self.assertEqual(protocol.client.get_extensions_goal_state().get_status_upload_blob_type(), u'BlockBlob')
+            self.assertEqual(protocol.client.get_extensions_goal_state().status_upload_blob_type, u'BlockBlob')
 
     def test_get_host_ga_plugin(self, *args):  # pylint: disable=unused-argument
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
@@ -263,60 +267,49 @@ class TestWireProtocol(AgentTestCase):
                 self.assertEqual(1, mock_prepare.call_count)
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *_):
-        # Test when artifacts_profile_blob is null/None
-        with mock_wire_protocol(DATA_FILE_NO_EXT) as protocol:
-            protocol.client._extensions_goal_state = ExtensionsGoalState()
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_in_vm_empty_artifacts_profile.xml"
 
-            self.assertEqual(None, protocol.client.get_artifacts_profile())
+        with mock_wire_protocol(data_file) as protocol:
+            self.assertFalse(protocol.get_extensions_goal_state().on_hold)
 
-        # Test when artifacts_profile_blob is whitespace
-        with create_mock_protocol(artifacts_profile_blob="  ") as protocol:
-            self.assertEqual(None, protocol.client.get_artifacts_profile())
+    def test_it_should_set_on_hold_to_false_when_the_in_vm_artifacts_profile_is_not_valid(self, *_):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+            extensions_on_hold = protocol.get_extensions_goal_state().on_hold
+            self.assertTrue(extensions_on_hold, "Extensions should be on hold in the test data")
 
-    def test_get_in_vm_artifacts_profile_response_body_not_valid(self, *_):
-        with create_mock_protocol(artifacts_profile_blob=testurl) as protocol:
-            with patch.object(HostPluginProtocol, "get_artifact_request", return_value=['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
-                # Test when response body is None
-                protocol.client.call_storage_service = Mock(return_value=MockHttpResponse(200, body=None))
-                in_vm_artifacts_profile = protocol.client.get_artifacts_profile()
-                self.assertTrue(in_vm_artifacts_profile is None)
+            def http_get_handler(url, *_, **kwargs):
+                if self.is_in_vm_artifacts_profile_request(url) or self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
+                    return mock_response
+                return None
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-                # Test when response body is None
-                protocol.client.call_storage_service = Mock(return_value=MockHttpResponse(200, '   '.encode('utf-8')))
-                in_vm_artifacts_profile = protocol.client.get_artifacts_profile()
-                self.assertTrue(in_vm_artifacts_profile is None)
+            mock_response = MockHttpResponse(200, body=None)
+            protocol.client.update_goal_state(force_update=True)
+            extensions_on_hold = protocol.get_extensions_goal_state().on_hold
+            self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response body is None")
 
-                # Test when response body is None
-                protocol.client.call_storage_service = Mock(return_value=MockHttpResponse(200, '{ }'.encode('utf-8')))
-                in_vm_artifacts_profile = protocol.client.get_artifacts_profile()
-                self.assertEqual(dict(), in_vm_artifacts_profile.__dict__,
-                                 'If artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
-                                 'should contain nothing')
+            mock_response = MockHttpResponse(200, '   '.encode('utf-8'))
+            protocol.client.update_goal_state(force_update=True)
+            extensions_on_hold = protocol.get_extensions_goal_state().on_hold
+            self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is an empty string")
 
-                host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
+            mock_response = MockHttpResponse(200, '{ }'.encode('utf-8'))
+            protocol.client.update_goal_state(force_update=True)
+            extensions_on_hold = protocol.get_extensions_goal_state().on_hold
+            self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is an empty json object")
 
-    @patch("azurelinuxagent.common.event.add_event")
-    def test_artifacts_profile_json_parsing(self, patch_event, *args):  # pylint: disable=unused-argument
-        with create_mock_protocol(artifacts_profile_blob=testurl) as protocol:
-            # response is invalid json
-            protocol.client.call_storage_service = Mock(return_value=MockHttpResponse(200, "invalid json".encode('utf-8')))
-            in_vm_artifacts_profile = protocol.client.get_artifacts_profile()
+            with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.add_event") as add_event:
+                mock_response = MockHttpResponse(200, 'invalid json'.encode('utf-8'))
+                protocol.client.update_goal_state(force_update=True)
 
-            # ensure response is empty
-            self.assertEqual(None, in_vm_artifacts_profile)
+                extensions_on_hold = protocol.get_extensions_goal_state().on_hold
+                self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is not valid json")
 
-            # ensure event is logged
-            self.assertEqual(1, patch_event.call_count)
-            self.assertFalse(patch_event.call_args[1]['is_success'])
-            self.assertTrue('invalid json' in patch_event.call_args[1]['message'])
-            self.assertEqual('ArtifactsProfileBlob', patch_event.call_args[1]['op'])
-
-    def test_get_in_vm_artifacts_profile_default(self, *args):  # pylint: disable=unused-argument
-        with create_mock_protocol(artifacts_profile_blob=testurl) as protocol:
-            protocol.client.call_storage_service = Mock(return_value=MockHttpResponse(200, '{"onHold": "true"}'.encode('utf-8')))
-            in_vm_artifacts_profile = protocol.client.get_artifacts_profile()
-            self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
-            self.assertTrue(in_vm_artifacts_profile.is_on_hold())
+                events = [kwargs for _, kwargs in add_event.call_args_list if kwargs['op'] == WALAEventOperation.ArtifactsProfileBlob]
+                self.assertEqual(1, len(events), "Expected 1 event for operation ArtifactsProfileBlob. Got: {0}".format(events))
+                self.assertFalse(events[0]['is_success'], "Expected ArtifactsProfileBlob's success to be False")
+                self.assertTrue('invalid json' in events[0]['message'], "Expected 'invalid json' as the reason for the operation failure. Got: {0}".format(events[0]['message']))
 
     @patch("socket.gethostname", return_value="hostname")
     @patch("time.gmtime", return_value=time.localtime(1485543256))
@@ -489,18 +482,18 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_NO_EXT) as protocol:
             extensions_goal_state = protocol.client.get_extensions_goal_state()
 
-            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
-            self.assertEqual(0, len(extensions_goal_state.ext_handlers.extHandlers),
+            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
+            self.assertEqual(0, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
-            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.vmagent_manifests.vmAgentManifests]
-            self.assertEqual(0, len(extensions_goal_state.vmagent_manifests.vmAgentManifests),
+            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
+            self.assertEqual(0, len(extensions_goal_state.agent_manifests),
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
-            self.assertIsNone(extensions_goal_state.get_status_upload_blob(),
+            self.assertIsNone(extensions_goal_state.status_upload_blob,
                               "Status upload blob in the extension config is expected to be None")
-            self.assertIsNone(extensions_goal_state.get_status_upload_blob_type(),
+            self.assertIsNone(extensions_goal_state.status_upload_blob_type,
                               "Type of status upload blob in the extension config is expected to be None")
-            self.assertIsNone(extensions_goal_state.artifacts_profile_blob,
-                              "Artifacts profile blob in the extensions config is expected to be None")
+            self.assertFalse(extensions_goal_state.on_hold,
+                              "Extensions On Hold is expected to be False")
 
     def test_get_ext_conf_with_extensions_should_retrieve_ext_handlers_and_vmagent_manifests_info(self):
         # Basic test for get_extensions_goal_state() when extensions are present in the config. The test verifies that get_extensions_goal_state()
@@ -509,19 +502,19 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             wire_protocol_client = protocol.client
             extensions_goal_state = wire_protocol_client.get_extensions_goal_state()
 
-            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.ext_handlers.extHandlers]
-            self.assertEqual(1, len(extensions_goal_state.ext_handlers.extHandlers),
+            ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
+            self.assertEqual(1, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
-            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.vmagent_manifests.vmAgentManifests]
-            self.assertEqual(2, len(extensions_goal_state.vmagent_manifests.vmAgentManifests),
+            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
+            self.assertEqual(2, len(extensions_goal_state.agent_manifests),
                              "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
             self.assertEqual("https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&sp=rw"
                              "&se=9999-01-01&sk=key1&sv=2014-02-14&sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo",
-                             extensions_goal_state.get_status_upload_blob(), "Unexpected value for status upload blob URI")
-            self.assertEqual("BlockBlob", extensions_goal_state.get_status_upload_blob_type(),
+                             extensions_goal_state.status_upload_blob, "Unexpected value for status upload blob URI")
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type,
                              "Unexpected status upload blob type in the extension config")
-            self.assertEqual(None, extensions_goal_state.artifacts_profile_blob,
-                             "Artifacts profile blob in the extension config should have been None")
+            self.assertFalse(extensions_goal_state.on_hold,
+                              "Extensions On Hold is expected to be False")
 
     def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         extension_url = 'https://fake_host/fake_extension.zip'
@@ -654,7 +647,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+            manifest = protocol.client.fetch_manifest([manifest_url])
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -677,7 +670,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
 
             try:
-                manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+                manifest = protocol.client.fetch_manifest([manifest_url])
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -714,7 +707,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.client.get_host_plugin()
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
-                manifest = protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+                manifest = protocol.client.fetch_manifest([manifest_url])
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml)
@@ -748,7 +741,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.fetch_manifest([VMAgentManifestUri(uri=manifest_url)])
+                protocol.client.fetch_manifest([manifest_url])
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -766,12 +759,12 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.track_url(url)
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
             HostPluginProtocol.is_default_channel = False
 
-            return_value = protocol.client.get_artifacts_profile()
+            protocol.client.update_goal_state(force_update=True)
 
-            self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 1, "Unexpected HTTP requests: [{0}]".format(urls))
             self.assertFalse(HostPluginProtocol.is_default_channel, "The host should not have been set as the default channel")
@@ -785,16 +778,12 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
             HostPluginProtocol.is_default_channel = False
-
             try:
-                protocol.set_http_handlers(http_get_handler=http_get_handler)
+                protocol.client.update_goal_state(force_update=True)
 
-                return_value = protocol.client.get_artifacts_profile()
-
-                self.assertIsNotNone(return_value, "The artifacts profile request should have succeeded")
-                self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
-                self.assertTrue(return_value.onHold, 'The OnHold property should be True')  # pylint: disable=no-member
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
                 self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
@@ -812,7 +801,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                     http_get_handler.host_plugin_calls += 1
                     return ResourceGoneError("Exception to fake a stale goal state")
                 protocol.track_url(url)
-            if self.is_goal_state_request(url):
+            if self.is_goal_state_request(url) and http_get_handler.host_plugin_calls == 1:
                 protocol.track_url(url)
             return None
         http_get_handler.host_plugin_calls = 0
@@ -826,11 +815,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-                return_value = protocol.client.get_artifacts_profile()
+                protocol.client.update_goal_state(force_update=True)
 
-                self.assertIsNotNone(return_value, "The artifacts profile request should have succeeded")
-                self.assertIsInstance(return_value, InVMArtifactsProfile, 'The request did not return a valid artifacts profile: {0}'.format(return_value))
-                self.assertTrue(return_value.onHold, 'The OnHold property should be True')  # pylint: disable=no-member
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
                 self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
@@ -846,10 +832,12 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             if self.is_in_vm_artifacts_profile_request(url):
                 return HttpError("Exception to fake an error on the direct channel")
             if self.is_host_plugin_in_vm_artifacts_profile_request(url, kwargs):
+                http_get_handler.host_plugin_calls += 1
                 return ResourceGoneError("Exception to fake a stale goal state")
-            if self.is_goal_state_request(url):
+            if self.is_goal_state_request(url) and http_get_handler.host_plugin_calls == 1:
                 protocol.track_url(url)
             return None
+        http_get_handler.host_plugin_calls = 0
 
         with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             HostPluginProtocol.is_default_channel = False
@@ -859,9 +847,8 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-            return_value = protocol.client.get_artifacts_profile()
+            protocol.client.update_goal_state(force_update=True)
 
-            self.assertIsNone(return_value, "The artifacts profile request should have failed")
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
             self.assertTrue(self.is_in_vm_artifacts_profile_request(urls[0]), "The first request should have been over the direct channel")
@@ -1044,7 +1031,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 new_role_config_name = str(uuid.uuid4())
                 new_hosting_env_deployment_name = str(uuid.uuid4())
                 new_shared_conf = WireProtocolData.replace_xml_attribute_value(protocol.mock_wire_data.shared_config, "Deployment", "name", str(uuid.uuid4()))
-                new_sequence_number = str(uuid.uuid4())
+                new_sequence_number = 12345
 
                 if '<Format>Pkcs7BlobWithPfxContents</Format>' not in protocol.mock_wire_data.certs:
                     raise Exception('This test requires a non-empty certificate list')
@@ -1068,7 +1055,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 else:
                     protocol.client.update_goal_state()
 
-                sequence_number = protocol.client.get_extensions_goal_state().ext_handlers.extHandlers[0].properties.extensions[0].sequenceNumber
+                sequence_number = protocol.client.get_extensions_goal_state().extensions[0].settings[0].sequenceNumber
 
                 self.assertEqual(protocol.client.get_goal_state().incarnation, new_incarnation)
                 self.assertEqual(protocol.client.get_hosting_env().deployment_name, new_hosting_env_deployment_name)
@@ -1170,8 +1157,8 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             extensions_goal_state = protocol.client.get_extensions_goal_state()
 
             protected_settings = []
-            for ext_handler in extensions_goal_state.ext_handlers.extHandlers:
-                for extension in ext_handler.properties.extensions:
+            for ext_handler in extensions_goal_state.extensions:
+                for extension in ext_handler.settings:
                     if extension.protectedSettings is not None:
                         protected_settings.append(extension.protectedSettings)
             if len(protected_settings) == 0:
@@ -1194,46 +1181,55 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                     "Could not find the expected number of redacted settings. Expected {0}.\n{1}".format(len(protected_settings), extensions_config))
 
     def test_update_goal_state_should_save_goal_state(self):
-        # Enable FastTrack to also save the vmSettings
-        with patch("azurelinuxagent.common.protocol.wire.conf.get_enable_fast_track", return_value=True):
-            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS) as protocol:
-                protocol.mock_wire_data.set_incarnation(999)
-                protocol.mock_wire_data.set_etag(888)
-                protocol.update_goal_state()
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_incarnation(999)
+            protocol.mock_wire_data.set_etag(888)
+            protocol.update_goal_state()
 
-            extensions_config_file = os.path.join(conf.get_lib_dir(), "ExtensionsConfig.999.xml")
-            vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.888.json")
-            expected_files = [
-                os.path.join(conf.get_lib_dir(), "GoalState.999.xml"),
-                os.path.join(conf.get_lib_dir(), "SharedConfig.xml"),
-                os.path.join(conf.get_lib_dir(), "Certificates.xml"),
-                os.path.join(conf.get_lib_dir(), "HostingEnvironmentConfig.xml"),
-                extensions_config_file,
-                vm_settings_file
-            ]
+        extensions_config_file = os.path.join(conf.get_lib_dir(), "ExtensionsConfig.999.xml")
+        vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.888.json")
+        expected_files = [
+            os.path.join(conf.get_lib_dir(), "GoalState.999.xml"),
+            os.path.join(conf.get_lib_dir(), "SharedConfig.xml"),
+            os.path.join(conf.get_lib_dir(), "Certificates.xml"),
+            os.path.join(conf.get_lib_dir(), "HostingEnvironmentConfig.xml"),
+            extensions_config_file,
+            vm_settings_file
+        ]
 
-            for f in expected_files:
-                self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
+        for f in expected_files:
+            self.assertTrue(os.path.exists(f), "{0} was not saved".format(f))
 
-            with open(extensions_config_file, "r") as file_:
-                extensions_goal_state = ExtensionsGoalState.create_from_extensions_config(123, file_.read())
-            self.assertEqual(4, len(extensions_goal_state.ext_handlers.extHandlers), "Expected 4 extensions in the test ExtensionsConfig")
-            for e in extensions_goal_state.ext_handlers.extHandlers:
-                self.assertEqual(e.properties.extensions[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
+        with open(extensions_config_file, "r") as file_:
+            extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, file_.read(), protocol)
+        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in ExtensionsConfig")
+        for e in extensions_goal_state.extensions:
+            if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
+                self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
 
-            # TODO: Use azurelinuxagent.common.protocol.ExtensionsGoalState once it implements parsing
-            with open(vm_settings_file, "r") as file_:
-                vm_settings = json.load(file_)
-            extensions = vm_settings["extensionGoalStates"]
-            self.assertEqual(4, len(extensions), "Expected 4 extensions in the test vmSettings")
-            for e in extensions:
-                self.assertEqual(e["settings"][0]["protectedSettings"], "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e["name"]))
+        with open(vm_settings_file, "r") as file_:
+            extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(None, file_.read())
+        self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions in vmSettings")
+        for e in extensions_goal_state.extensions:
+            if e.name in ("Microsoft.Azure.Monitor.AzureMonitorLinuxAgent", "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"):
+                self.assertEqual(e.settings[0].protectedSettings, "*** REDACTED ***", "The protected settings for {0} were not redacted".format(e.name))
+
+    def test_update_goal_state_should_save_vm_settings_on_parse_errors(self):
+        invalid_vm_settings_file = "hostgaplugin/vm_settings-parse_error.json"
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = invalid_vm_settings_file
+        with mock_wire_protocol(data_file):
+            vm_settings_file = os.path.join(conf.get_lib_dir(), "VmSettings.1.json")
+            self.assertTrue(os.path.exists(vm_settings_file), "{0} was not saved".format(vm_settings_file))
+
+            expected = load_data(invalid_vm_settings_file)
+            actual = fileutil.read_file(vm_settings_file)
+
+            self.assertEqual(expected, actual, "The vmSettings were not saved correctly")
 
     def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
-        """
-        Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
-        needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
-        """
+        # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
+        # needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             # Do not mock the vmSettings request at the level of azurelinuxagent.common.utils.restutil.http_request. The GONE status is handled
             # in the internal _http_request, which we mock below.
@@ -1271,31 +1267,29 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
         def test_error_in_http_request(test_case, mock_response, expected_error):
             def do_mock_request():
-                with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-                    protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
-
-                    def http_get_vm_settings(_method, _host, _relative_url, **_):
+                def http_get_handler(url, *_, **__):
+                    if self.is_host_plugin_vm_settings_request(url):
                         if isinstance(mock_response, Exception):
                             raise mock_response
                         return mock_response
+                    return None
 
-                    with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                        protocol.client.update_goal_state()
+                with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+                    protocol.client.update_goal_state()
 
             assert_no_exception(test_case, do_mock_request, expected_error)
         #
         # We test errors different kind of errors; none of them should make update_protocol raise an exception, but all of them should be reported
         #
-        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "Status Code 502")  # HostGAPlugin uses 502 for internal errors
+        test_error_in_http_request("Internal error in the HostGAPlugin", MockHttpResponse(httpclient.BAD_GATEWAY), "[Internal error in HostGAPlugin] [HTTP Failed] [502: None]")
         test_error_in_http_request("Arbitrary error in the request (BAD_REQUEST)", MockHttpResponse(httpclient.BAD_REQUEST), "[HTTP Failed] [400: None]")
-        test_error_in_http_request("ProtocolError during the request", ProtocolError("GENERIC PROTOCOL ERROR"), "GENERIC PROTOCOL ERROR")
         test_error_in_http_request("Generic error in the request", Exception("GENERIC REQUEST ERROR"), "GENERIC REQUEST ERROR")
-        test_error_in_http_request("Response headers with no Etag", MockHttpResponse(200, b""), "The vmSettings do no include an Etag")
+        test_error_in_http_request("Response headers with no Etag", MockHttpResponse(200, b""), "The vmSettings response does not include an Etag header")
         test_error_in_http_request("Invalid response (bad json)", MockHttpResponse(200, b"{ INVALID JSON ]", headers=[("Etag", 123)]), "Error parsing vmSettings")
 
         # Lastly, test the goal state comparison
         def fail_compare():
-            error = GoalStateMismatchError("TEST COMPARE FAILED")
+            error = GoalStateMismatchError("TEST COMPARE FAILED", "dummy_attribute")
             with patch("azurelinuxagent.common.protocol.extensions_goal_state.ExtensionsGoalState.compare", side_effect=error):
                 with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
                     protocol.client.update_goal_state()
@@ -1310,31 +1304,213 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 return None
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
+            def get_telemetry_messages():
+                return [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+
+            def get_log_messages():
+                return [arg[0][0] for arg in logger_info.call_args_list   if "[VmSettings]" in arg[0][0]]
+
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                for _ in range(_ErrorReporter._MaxErrors + 3):
+                with patch('azurelinuxagent.common.logger.info') as logger_info:
+                    for _ in range(_VmSettingsErrorReporter._MaxTelemetryErrors + 3):
+                        protocol.client.update_goal_state()
+
+                    telemetry_messages = get_telemetry_messages()
+                    self.assertEqual(_VmSettingsErrorReporter._MaxTelemetryErrors, len(telemetry_messages), "The number of errors reported to telemetry is not the max allowed (got: {0})".format(telemetry_messages))
+
+                    log_messages = get_log_messages()
+                    self.assertEqual(_VmSettingsErrorReporter._MaxLogErrors, len(log_messages), "The number of errors reported to the local log is not the max allowed (got: {0})".format(telemetry_messages))
+
+            # Reset the error reporter and verify that additional errors are reported
+            protocol.client._vm_settings_error_reporter._next_period = datetime.now()
+            protocol.client.update_goal_state()  # this triggers the reset
+
+            with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
+                protocol.client.update_goal_state()
+
+                telemetry_messages = get_telemetry_messages()
+                self.assertEqual(1, len(telemetry_messages), "Expected additional errors to be reported to telemetry in the next period (got: {0})".format(telemetry_messages))
+
+                log_messages = get_log_messages()
+                self.assertEqual(1, len(log_messages), "Expected additional errors to be reported to the local log in the next period (got: {0})".format(telemetry_messages))
+
+    def test_it_should_use_vm_settings_by_default(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            extensions_goal_state = protocol.get_extensions_goal_state()
+            self.assertTrue(
+                isinstance(extensions_goal_state, ExtensionsGoalStateFromVmSettings),
+                'The extensions goal state should have been created from the vmSettings (got: {0})'.format(type(extensions_goal_state)))
+
+    def _assert_is_extensions_goal_state_from_extensions_config(self, extensions_goal_state):
+        self.assertTrue(
+            isinstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig),
+            'The extensions goal state should have been created from the extensionsConfig (got: {0})'.format(type(extensions_goal_state)))
+
+    def test_it_should_use_extensions_config_when_fast_track_is_disabled(self):
+        with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
+            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+                self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_fast_track_is_not_supported(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.NOT_FOUND)
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_the_vm_settings_request_fails(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR)
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_the_host_ga_plugin_version_is_not_supported(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-unsupported_version.json"
+
+        with mock_wire_protocol(data_file) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_vm_settings_can_not_be_parsed(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-parse_error.json"
+
+        with mock_wire_protocol(data_file) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+    def test_it_should_use_extensions_config_when_vm_settings_do_not_match_extensions_config(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-difference_in_required_features.json"
+
+        with patch('azurelinuxagent.common.event.EventLogger.add_event') as add_event_patcher:
+            with mock_wire_protocol(data_file) as protocol:
+                self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_extensions_goal_state())
+
+                reported = [kwargs for _, kwargs in add_event_patcher.call_args_list if kwargs['op'] == "VmSettings" and "GoalStateMismatchError" in kwargs['message']]
+                self.assertEqual(1, len(reported), "The goal state mismatch should have been reported exactly once; got: {0}".format([kwargs['message'] for _, kwargs in add_event_patcher.call_args_list]))
+
+    def test_it_should_retry_vm_settings_and_extensions_config_do_not_match(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                response = MockHttpResponse(httpclient.OK)
+                response.body = load_bin_data("hostgaplugin/vm_settings-out-of-sync.json")
+                response.headers = [('ETag', "0123456789")]
+                return response
+            return None
+
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            with patch('time.sleep', side_effect=lambda _: mock_sleep()):  # avoid the sleep during retry
+                with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
                     protocol.client.update_goal_state()
 
-                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+            vm_settings_call_count = len([url for url in protocol.get_tracked_urls() if "vmSettings" in url])
+            self.assertEqual(2, vm_settings_call_count, "Expected 2 calls to vmSettings (original and retry)")
 
-                self.assertEqual(_ErrorReporter._MaxErrors, len(messages), "The number of errors reported is not the max allowed (got: {0})".format(messages))
+            errors = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+            self.assertTrue(any("[GoalStateMismatchError]" in e for e in errors), "Expected GoalStateMismatchError to have been reported. Got: {0}".format(errors))
 
+    def test_it_should_compare_goal_states_when_vm_settings_change(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_etag("aNewEtag")
+
+            with patch('azurelinuxagent.common.protocol.extensions_goal_state.ExtensionsGoalState.compare') as compare_patcher:
+                protocol.update_goal_state()
+
+            self.assertEqual(1, compare_patcher.call_count, "ExtensionsGoalState.compare() should have been called exactly once")
+
+    def test_it_should_compare_goal_states_when_extensions_config_change(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_incarnation(468753)
+
+            with patch('azurelinuxagent.common.protocol.extensions_goal_state.ExtensionsGoalState.compare') as compare_patcher:
+                protocol.update_goal_state()
+
+            self.assertEqual(1, compare_patcher.call_count, "ExtensionsGoalState.compare() should have been called exactly once")
+
+    def test_it_should_keep_track_of_errors_in_vm_settings_requests(self):
+        mock_response = None
+
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                if isinstance(mock_response, Exception):
+                    # E0702: Raising NoneType while only classes or instances are allowed (raising-bad-type) - Disabled: we never raise None
+                    raise mock_response  # pylint: disable=raising-bad-type
+                return mock_response
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            mock_response = MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR)
+            protocol.client.update_goal_state()
+
+            mock_response = MockHttpResponse(httpclient.BAD_REQUEST)
+            protocol.client.update_goal_state()
+            protocol.client.update_goal_state()
+
+            mock_response = IOError("timed out")
+            protocol.client.update_goal_state()
+
+            mock_response = httpclient.HTTPException()
+            protocol.client.update_goal_state()
+            protocol.client.update_goal_state()
+
+            # force the summary by resetting its period and calling update_goal_state
             with patch("azurelinuxagent.common.protocol.wire.add_event") as add_event:
-                # Reset the error reporter and verify that additional errors are reported
+                mock_response = None  # stop producing errors
                 protocol.client._vm_settings_error_reporter._next_period = datetime.now()
+                protocol.client.update_goal_state()
+            summary_text = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettingsSummary"]
 
-                for _ in range(3):
-                    protocol.client.update_goal_state()
+            self.assertEqual(1, len(summary_text), "Exactly 1 summary should have been produced. Got: {0} ".format(summary_text))
 
-                messages = [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
+            summary = json.loads(summary_text[0])
 
-                self.assertEqual(3, len(messages), "Expected additional errors to be reported in the next period (got: {0})".format(messages))
+            expected = {
+                "requests":       6 + 2,  # two extra calls to update_goal_state (when creating the mock protocol and when forcing the summary)
+                "errors":         6,
+                "serverErrors":   1,
+                "clientErrors":   2,
+                "timeouts":       1,
+                "failedRequests": 2
+            }
+
+            self.assertEqual(expected, summary, "The count of errors is incorrect")
+
+    def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            def http_get_handler(url, *_, **__):
+                if self.is_host_plugin_vm_settings_request(url):
+                    return MockHttpResponse(httpclient.NOT_FOUND)  # HostGAPlugin returns 404 if the API is not supported
+                return None
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            def get_vm_settings_call_count():
+                return len([url for url in protocol.get_tracked_urls() if "vmSettings" in url])
+
+            protocol.client.update_goal_state()
+            self.assertEqual(1, get_vm_settings_call_count(), "There should have been an initial call to vmSettings.")
+
+            protocol.client.update_goal_state()
+            protocol.client.update_goal_state()
+            self.assertEqual(1, get_vm_settings_call_count(), "Additional calls to update_goal_state should not have produced extra calls to vmSettings.")
+
+            # reset the vmSettings check period; this should restart the calls to the API
+            protocol.client._host_plugin_supports_vm_settings_next_check = datetime.now()
+            protocol.client.update_goal_state()
+            self.assertEqual(2, get_vm_settings_call_count(), "A second call to vmSettings was expecting after the check period has elapsed.")
 
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
     Tests for WireClient.update_host_plugin_from_goal_state()
     """
-
     def test_it_should_update_the_host_plugin_with_or_without_incarnation_changes(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()

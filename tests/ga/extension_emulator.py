@@ -28,7 +28,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtCommandEnvVariable
 
 from tests.tools import Mock, patch
-from tests.protocol.mocks import HttpRequestPredicates
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
 
 class ExtensionCommandNames(object):
@@ -312,7 +312,7 @@ def generate_mock_load_manifest(*emulators):
 
         for name in names:
             try:
-                matching_emulator = _first_matching_emulator(emulators, name, self.ext_handler.properties.version)
+                matching_emulator = _first_matching_emulator(emulators, name, self.ext_handler.version)
             except StopIteration:
                 continue
             else:
@@ -321,7 +321,7 @@ def generate_mock_load_manifest(*emulators):
         if matching_emulator is None:
             raise Exception(
                 "Extension('{name}', '{version}') not listed as a parameter. Is it being emulated?".format(
-                    name=self.ext_handler.name, version=self.ext_handler.properties.version))
+                    name=self.ext_handler.name, version=self.ext_handler.version))
                     
         base_manifest = original_load_manifest(self)
 

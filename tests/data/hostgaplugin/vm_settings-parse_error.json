@@ -1,0 +1,71 @@
+{
+    "hostGAPluginVersion": "1.0.8.115",
+    "vmSettingsSchemaVersion": THIS_IS_A_SYNTAX_ERROR,
+    "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
+    "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+    "extensionsLastModifiedTickCount": 637726657706205217,
+    "extensionGoalStatesSource": "Fabric",
+    "onHold": true,
+    "statusUploadBlob": {
+        "statusBlobType": "BlockBlob",
+        "value": "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+    },
+    "inVMMetadata": {
+        "subscriptionId": "8e037ad4-618f-4466-8bc8-5099d41ac15b",
+        "resourceGroupName": "rg-dc-86fjzhp",
+        "vmName": "edp0plkw2b",
+        "location": "CentralUSEUAP",
+        "vmId": "86f4ae0a-61f8-48ae-9199-40f402d56864",
+        "vmSize": "Standard_B2s",
+        "osType": "Linux"
+    },
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
+            ]
+        },
+        {
+            "name": "Test",
+            "uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
+            ]
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.Azure.Extensions.CustomScript",
+            "version": "2.1.6",
+            "location": "https://umsavwggj2v40kvqhc0w.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "failoverlocation": "https://umsafwzhkbm1rfrhl0ws.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "additionalLocations": [
+                "https://umsanh4b5rfz0q0p4pwm.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "publicSettings": "{\"commandToExecute\":\"echo 'cee174d4-4daa-4b07-9958-53b9649445c2'\"}"
+                }
+            ],
+            "dependsOn": [
+                {
+                    "DependsOnExtension": [
+                        {
+                            "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
+                        }
+                    ],
+                    "dependencyLevel": 1
+                }
+            ]
+        }
+    ]
+}

@@ -36,6 +36,7 @@ from .openbsd import OpenBSDOSUtil
 from .openwrt import OpenWRTOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
+from .photonos import PhotonOSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
 
@@ -52,6 +53,9 @@ def get_osutil(distro_name=DISTRO_NAME,
 
 
 def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name):
+
+    if distro_name == "photonos":
+        return PhotonOSUtil()
 
     if distro_name == "arch":
         return ArchUtil()
@@ -105,6 +109,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         return RedhatOSUtil()
 
     if distro_name == "euleros":
+        return RedhatOSUtil()
+
+    if distro_name == "uos":
         return RedhatOSUtil()
 
     if distro_name == "freebsd":

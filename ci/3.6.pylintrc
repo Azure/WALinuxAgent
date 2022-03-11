@@ -21,6 +21,7 @@ disable=C, # (C) convention, for programming standard violation
     too-few-public-methods, # (R0903): *Too few public methods (%s/%s)*
     too-many-ancestors, # (R0901): *Too many ancestors (%s/%s)*
     too-many-arguments, # (R0913): *Too many arguments (%s/%s)*
+    too-many-boolean-expressions, # (R0916): *Too many boolean expressions in if statement (%s/%s)*
     too-many-branches, # (R0912): *Too many branches (%s/%s)*
     too-many-instance-attributes, # (R0902): *Too many instance attributes (%s/%s)*
     too-many-locals, # (R0914): *Too many local variables (%s/%s)*

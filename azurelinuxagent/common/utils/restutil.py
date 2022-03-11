@@ -354,7 +354,14 @@ def http_request(method,
                  max_retry=None,
                  retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
-                 redact_data=False):
+                 redact_data=False,
+                 return_raw_response=False):
+    """
+    NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
+          and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
+          method will return the actual HTTP response and bubble up any exceptions while issuing the request. Also note that if
+        return_raw_response is True no retries will be done.
+    """
 
     if max_retry is None:
         max_retry = DEFAULT_RETRIES
@@ -437,7 +444,11 @@ def http_request(method,
                                  proxy_host=proxy_host,
                                  proxy_port=proxy_port,
                                  redact_data=redact_data)
+
             logger.verbose("[HTTP Response] Status Code {0}", resp.status)
+
+            if return_raw_response:  # skip all error handling
+                return resp
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
@@ -465,6 +476,8 @@ def http_request(method,
             return resp
 
         except httpclient.HTTPException as e:
+            if return_raw_response:  # skip all error handling
+                raise
             clean_url = _trim_url_parameters(url)
             msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
@@ -472,6 +485,8 @@ def http_request(method,
             break
 
         except IOError as e:
+            if return_raw_response:  # skip all error handling
+                raise
             IOErrorCounter.increment(host=host, port=port)
             clean_url = _trim_url_parameters(url)
             msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
@@ -485,7 +500,14 @@ def http_get(url,
              use_proxy=False,
              max_retry=None,
              retry_codes=None,
-             retry_delay=DELAY_IN_SECONDS):
+             retry_delay=DELAY_IN_SECONDS,
+             return_raw_response=False):
+    """
+    NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
+          and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
+          method will return the actual HTTP response and bubble up any exceptions while issuing the request. Also note that if
+          return_raw_response is True no retries will be done.
+    """
 
     if max_retry is None:
         max_retry = DEFAULT_RETRIES
@@ -496,7 +518,8 @@ def http_get(url,
                         use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
-                        retry_delay=retry_delay)
+                        retry_delay=retry_delay,
+                        return_raw_response=return_raw_response)
 
 
 def http_head(url,

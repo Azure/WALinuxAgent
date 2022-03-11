@@ -5,8 +5,7 @@ import os
 import shutil
 import sys
 
-from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, \
-    ExtHandlerVersionUri
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from tests.tools import AgentTestCase, patch
 
@@ -15,15 +14,12 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
-        ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = "1.2.3"
-        ext_handler = ExtHandler(name='foo')
-        ext_handler.properties = ext_handler_properties
+        ext_handler = Extension(name='foo')
+        ext_handler.version = "1.2.3"
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
 
-        pkg_uri = ExtHandlerVersionUri()
-        pkg_uri.uri = "http://bar/foo__1.2.3"
-        self.ext_handler_instance.pkg = ExtHandlerPackage(ext_handler_properties.version)
+        pkg_uri = "http://bar/foo__1.2.3"
+        self.ext_handler_instance.pkg = ExtHandlerPackage(ext_handler.version)
         self.ext_handler_instance.pkg.uris.append(pkg_uri)
 
         self.base_dir = self.tmp_dir

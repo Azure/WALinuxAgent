@@ -1,93 +1,104 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
-import json
-import os.path
+import copy
 import re
+import sys
 
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError, _CaseFoldedDict
-from azurelinuxagent.common.utils import fileutil
-from tests.protocol.mocks import HttpRequestPredicates
-from tests.tools import AgentTestCase, data_dir
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateMismatchError
+from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
+from azurelinuxagent.common.utils import textutil
+from tests.protocol.mocks import mockwiredata, mock_wire_protocol
+from tests.tools import AgentTestCase, load_data
+
+# Python < 3.7 can't copy regular expressions, this is the recommended patch
+if sys.version_info[0] < 3 or sys.version_info[0] == 3 and sys.version_info[1] < 7:
+    copy._deepcopy_dispatch[type(re.compile(''))] = lambda r, _: r
 
 
-class ExtensionsGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
+class ExtensionsGoalStateTestCase(AgentTestCase):
+    def test_compare_should_succeed_when_extensions_config_and_vm_settings_are_equal(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            from_extensions_config = protocol.client.get_extensions_goal_state()
+            from_vm_settings = protocol.client._cached_vm_settings
+
+            try:
+                ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
+            except Exception as exception:
+                self.fail("Compare goal state failed: {0}".format(textutil.format_exception(exception)))
+
     def test_compare_should_report_mismatches_between_extensions_config_and_vm_settings(self):
-        from_vm_settings = ExtensionsGoalState.create_from_vm_settings("123", fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json")))
-        from_extensions_config = ExtensionsGoalState.create_from_extensions_config("123", fileutil.read_file(os.path.join(data_dir, "hostgaplugin/ext_conf.xml")))
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            from_extensions_config = protocol.client.get_extensions_goal_state()
+            from_vm_settings = protocol.client._cached_vm_settings
 
-        from_vm_settings._required_features = ['FORCE_A_MISMATCH_FEATURE']
-        with self.assertRaisesRegexCM(GoalStateMismatchError, "MultipleExtensionsPerHandler.*!=.*FORCE_A_MISMATCH_FEATURE"):
-            ExtensionsGoalState.compare(from_extensions_config, from_vm_settings)
+            public_settings_mismatch = [""]
+
+            def assert_compare_raises(setup_copy, failing_attribute):
+                from_vm_settings_copy = copy.deepcopy(from_vm_settings)
+                setup_copy(from_vm_settings_copy)
+
+                with self.assertRaisesRegexCM(GoalStateMismatchError, re.escape("(Attribute: {0})".format(failing_attribute)), re.DOTALL) as context_manager:
+                    ExtensionsGoalState.compare(from_extensions_config, from_vm_settings_copy)
+                if context_manager.exception.attribute == 'publicSettings':
+                    public_settings_mismatch[0] = str(context_manager.exception)
+
+            assert_compare_raises(lambda c: setattr(c, "_activity_id",              'MOCK_ACTIVITY_ID'),        "activity_id")
+            assert_compare_raises(lambda c: setattr(c, "_correlation_id",           'MOCK_CORRELATION_ID'),     "correlation_id")
+            assert_compare_raises(lambda c: setattr(c, "_created_on_timestamp",     'MOCK_TIMESTAMP'),          "created_on_timestamp")
+            assert_compare_raises(lambda c: setattr(c, "_status_upload_blob",       'MOCK_UPLOAD_BLOB'),        "status_upload_blob")
+            assert_compare_raises(lambda c: setattr(c, "_status_upload_blob_type",  'MOCK_UPLOAD_BLOB_TYPE'),   "status_upload_blob_type")
+            assert_compare_raises(lambda c: setattr(c, "_required_features",        ['MOCK_REQUIRED_FEATURE']), "required_features")
+            assert_compare_raises(lambda c: setattr(c, "_on_hold",                  False),                     "on_hold")
+
+            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "family",  'MOCK_FAMILY'),  r"agent_manifests[0].family")
+            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "requested_version_string", 'MOCK_VERSION'), r"agent_manifests[0].requested_version_string")
+            assert_compare_raises(lambda c: setattr(c.agent_manifests[0], "uris",    ['MOCK_URI']),   r"agent_manifests[0].uris")
+
+            assert_compare_raises(lambda c: setattr(c.extensions[0], "version",  'MOCK_NAME'),         r"extensions[0].version")
+            assert_compare_raises(lambda c: setattr(c.extensions[0], "state",  'MOCK_STATE'),          r"extensions[0].state")
+            assert_compare_raises(lambda c: setattr(c.extensions[0], "manifest_uris",  ['MOCK_URI']),  r"extensions[0].manifest_uris")
+            assert_compare_raises(lambda c: setattr(c.extensions[0], "supports_multi_config",  True),  r"extensions[0].supports_multi_config")
+
+            # NOTE: protectedSettings are not compared, so we skip them below
+            assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "name",                  'MOCK_NAME'),                 r"extensions[0].settings[0].name")
+            assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "sequenceNumber",        98765),                       r"extensions[0].settings[0].sequenceNumber")
+            assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "publicSettings",        {'MOCK_NAME': 'MOCK_VALUE'}), r"extensions[0].settings[0].publicSettings")
+            assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "certificateThumbprint", 'MOCK_CERT'),                 r"extensions[0].settings[0].certificateThumbprint")
+            assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "dependencyLevel",       56789),                       r"extensions[0].settings[0].dependencyLevel")
+            assert_compare_raises(lambda c: setattr(c.extensions[0].settings[0], "state",                 'MOCK_STATE'),                r"extensions[0].settings[0].state")
+
+            expected = r'^\[GoalStateMismatchError\] Mismatch in Goal States \[Incarnation 1\] != \[Etag: 1\]: \[REDACTED\] != \[REDACTED\] \(Attribute: .*\.publicSettings\)$'
+            self.assertRegex(public_settings_mismatch[0], expected, 'Expected the protected settings to be redacted. Got: "{0}"'.format(public_settings_mismatch[0]))
 
     def test_create_from_extensions_config_should_assume_block_when_blob_type_is_not_valid(self):
-        extensions_config_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/ext_conf.xml"))
-        extensions_config_text = re.sub(r'statusBlobType.*=.*"BlockBlob"', 'statusBlobType="INVALID_BLOB_TYPE"', extensions_config_text)
-        if "INVALID_BLOB_TYPE" not in extensions_config_text:
-            raise Exception("Failed to inject an invalid blob type in the test data")
-        extensions_config = ExtensionsGoalState.create_from_extensions_config("123", extensions_config_text)
-
-        actual = extensions_config.get_status_upload_blob_type()
-        self.assertEqual("BlockBlob", actual, 'Expected BlockBob for an invalid statusBlobType')
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["vm_settings"] = "hostgaplugin/ext_conf-invalid_blob_type.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = ExtensionsGoalStateFactory.create_from_extensions_config(123, load_data("hostgaplugin/ext_conf-invalid_blob_type.xml"), protocol)
+            self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 
     def test_create_from_vm_settings_should_assume_block_when_blob_type_is_not_valid(self):
-        vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json"))
-        vm_settings_text =  re.sub(r'"statusBlobType".*:.*"BlockBlob"', '"statusBlobType": "INVALID_BLOB_TYPE"', vm_settings_text)
-        if "INVALID_BLOB_TYPE" not in vm_settings_text:
-            raise Exception("Failed to inject an invalid blob type in the test data")
-        vm_settings = ExtensionsGoalState.create_from_vm_settings("123", vm_settings_text)
+        extensions_goal_state = ExtensionsGoalStateFactory.create_from_vm_settings(1234567890, load_data("hostgaplugin/vm_settings-invalid_blob_type.json"))
+        self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBob for an invalid statusBlobType')
 
-        actual = vm_settings.get_status_upload_blob_type()
-        self.assertEqual("BlockBlob", actual, 'Expected BlockBob for an invalid statusBlobType')
+    def test_extension_goal_state_should_parse_requested_version_properly(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            fabric_manifests, _ = protocol.get_vmagent_manifests()
+            for manifest in fabric_manifests:
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
-    def test_create_from_vm_settings_should_parse_vm_settiings(self):
-        vm_settings_text = fileutil.read_file(os.path.join(data_dir, "hostgaplugin/vm_settings.json"))
-        vm_settings = ExtensionsGoalState.create_from_vm_settings("123", vm_settings_text)
+            vm_settings_ga_manifests = protocol.client._cached_vm_settings.agent_manifests
+            for manifest in vm_settings_ga_manifests:
+                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
 
-        # TODO: HostGAPlugin 112 does not include the status blob; see TODO in ExtensionsGoalState
-        # self.assertEqual("https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status?sv=2018-03-28&sr=b&sk=system-1&sig=U4KaLxlyYfgQ%2fie8RCwgMBSXa3E4vlW0ozPYOEHikoc%3d&se=9999-01-01T00%3a00%3a00Z&sp=w", vm_settings.get_status_upload_blob(), 'statusUploadBlob.value was not parsed correctly')
-        # self.assertEqual("BlockBlob", vm_settings.get_status_upload_blob_type(), 'statusBlobType was not parsed correctly')
-        self.assertEqual(["MultipleExtensionsPerHandler"], vm_settings.get_required_features(), 'requiredFeatures was not parsed correctly')
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            fabric_manifests, _ = protocol.get_vmagent_manifests()
+            for manifest in fabric_manifests:
+                self.assertEqual(manifest.requested_version_string, "9.9.9.10", "Version should be 9.9.9.10")
 
-
-class CaseFoldedDictionaryTestCase(AgentTestCase):
-    def test_it_should_retrieve_items_ignoring_case(self):
-        dictionary = json.loads('''{
-            "activityId": "2e7f8b5d-f637-4721-b757-cb190d49b4e9",
-            "StatusUploadBlob": {
-                "statusBlobType": "BlockBlob",
-                "value": "https://dcrcqabsr1.blob.core.windows.net/$system/edpxmal5j1.058b176d-445b-4e75-bd97-4911511b7d96.status"
-            },
-            "gaFamilies": [
-                {
-                    "Name": "Prod",
-                    "Version": "2.5.0.2",
-                    "Uris": [
-                        "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
-                        "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
-                    ]
-                }
-            ]
-         }''')
-
-        case_folded = _CaseFoldedDict.from_dict(dictionary)
-
-        def test_retrieve_item(key, expected_value):
-            """
-            Test for operators [] and in, and methods get() and has_key()
-            """
-            try:
-                self.assertEqual(expected_value, case_folded[key], "Operator [] retrieved incorrect value for '{0}'".format(key))
-            except KeyError:
-                self.fail("Operator [] failed to retrieve '{0}'".format(key))
-
-            self.assertTrue(case_folded.has_key(key), "Method has_key() did not find '{0}'".format(key))
-
-            self.assertEqual(expected_value, case_folded.get(key), "Method get() retrieved incorrect value for '{0}'".format(key))
-            self.assertTrue(key in case_folded, "Operator in did not find key '{0}'".format(key))
-
-        test_retrieve_item("activityId", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
-        test_retrieve_item("activityid", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
-        test_retrieve_item("ACTIVITYID", "2e7f8b5d-f637-4721-b757-cb190d49b4e9")
-
-        self.assertEqual("BlockBlob", case_folded["statusuploadblob"]["statusblobtype"], "Failed to retrieve item in nested dictionary")
-        self.assertEqual("Prod", case_folded["gafamilies"][0]["name"], "Failed to retrieve item in nested array")
+            vm_settings_ga_manifests = protocol.client._cached_vm_settings.agent_manifests
+            for manifest in vm_settings_ga_manifests:
+                self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")

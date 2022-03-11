@@ -72,7 +72,6 @@ class TestOrchestrator(LoggingHandler):
         The report is dropped in `/home/$(adminUsername)/` directory
         """
         assert file_name.startswith("test-result"), "File name is invalid, it should start with test-result*"
-        load_dotenv()
         admin_username = get_vm_data_from_env().admin_username
         self.__generate_report(os.path.join("/home", admin_username, file_name))
 
@@ -81,8 +80,6 @@ class TestOrchestrator(LoggingHandler):
         return (self.__test_suite.failures + self.__test_suite.errors) > 0
 
     def run_test_and_get_tc(self, test_name, test_func) -> TestCase:
-        stdout = ""
-
         tc = TestCase(test_name, classname=os.environ['SCENARIONAME'])
         start_time = time.time()
         self.log.info("Execute Test: {0}".format(test_name))

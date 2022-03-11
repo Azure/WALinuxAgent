@@ -18,6 +18,7 @@
 import re
 
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
@@ -37,8 +38,8 @@ DATA_FILE = {
         "test_ext": "ext/sample_ext-1.3.0.zip",
         "remote_access": None,
         "in_vm_artifacts_profile": None,
-        "vm_settings": "hostgaplugin/vm_settings.json",
-        "ETag": "1"
+        "vm_settings": None,
+        "ETag": None
 }
 
 DATA_FILE_IN_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
@@ -113,14 +114,13 @@ DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
+DATA_FILE_VM_SETTINGS["ETag"] ="1"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
-
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS = DATA_FILE.copy()
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings-protected_settings.json"
-DATA_FILE_VM_SETTINGS_PROTECTED_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf-protected_settings.xml"
+DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
 DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
 DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
+
 
 class WireProtocolData(object):
     def __init__(self, data_files=None):
@@ -181,8 +181,11 @@ class WireProtocolData(object):
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
-        self.vm_settings = load_data(self.data_files.get("vm_settings"))
-        self.etag = self.data_files.get("ETag")
+
+        vm_settings = self.data_files.get("vm_settings")
+        if vm_settings is not None:
+            self.vm_settings = load_data(self.data_files.get("vm_settings"))
+            self.etag = self.data_files.get("ETag")
 
         remote_access_data_file = self.data_files.get("remote_access")
         if remote_access_data_file is not None:
@@ -230,8 +233,11 @@ class WireProtocolData(object):
             content = self.in_vm_artifacts_profile
             self.call_counts["in_vm_artifacts_profile"] += 1
         elif "/vmSettings" in url:
-            content = self.vm_settings
-            response_headers = [('ETag', self.etag)]
+            if self.vm_settings is None:
+                resp.status = httpclient.NOT_FOUND
+            else:
+                content = self.vm_settings
+                response_headers = [('ETag', self.etag)]
             self.call_counts["vm_settings"] += 1
 
         else:
@@ -258,7 +264,7 @@ class WireProtocolData(object):
             if "manifest.xml" in url:
                 content = self.manifest
                 self.call_counts["manifest.xml"] += 1
-            elif "manifest_of_ga.xml" in url:
+            elif HttpRequestPredicates.is_ga_manifest_request(url):
                 content = self.ga_manifest
                 self.call_counts["manifest_of_ga.xml"] += 1
             elif "ExampleHandlerLinux" in url:
@@ -270,7 +276,7 @@ class WireProtocolData(object):
                 content = self.in_vm_artifacts_profile
                 self.call_counts["in_vm_artifacts_profile"] += 1
             else:
-                raise Exception("Bad url {0}".format(url))
+                raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         resp.getheaders = Mock(return_value=response_headers)
@@ -286,7 +292,7 @@ class WireProtocolData(object):
             self.call_counts['/HealthService'] += 1
             content = ''
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
@@ -303,7 +309,7 @@ class WireProtocolData(object):
             self.call_counts['/StatusBlob'] += 1
             self.status_blobs.append(data)
         else:
-            raise Exception("Bad url {0}".format(url))
+            raise NotImplementedError(url)
 
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
@@ -408,3 +414,9 @@ class WireProtocolData(object):
         Sets the version of the extension manifest
         '''
         self.manifest = WireProtocolData.replace_xml_element_value(self.manifest, "Version", version)
+
+    def set_extension_config(self, ext_conf_file):
+        self.ext_conf = load_data(ext_conf_file)
+
+    def set_extension_config_requested_version(self, version):
+        self.ext_conf = WireProtocolData.replace_xml_element_value(self.ext_conf, "Version", version)

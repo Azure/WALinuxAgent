@@ -115,7 +115,7 @@ __SWITCH_OPTIONS__ = {
     "OS.CheckRdmaDriver": False,
     "Logs.Verbose": False,
     "Logs.Console": True,
-    "Logs.Collect": False,
+    "Logs.Collect": True,
     "Extensions.Enabled": True,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
@@ -137,6 +137,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableFastTrack": True,
+    "Debug.EnableGAVersioning": False
 }
 
 
@@ -159,7 +160,7 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
     "AutoUpdate.GAFamily": "Prod",
-    "Debug.CgroupMonitorExpiryTime": "2022-01-31",
+    "Debug.CgroupMonitorExpiryTime": "2022-03-31",
     "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
 }
 
@@ -185,7 +186,9 @@ __INTEGER_OPTIONS__ = {
     #
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 75,
-    "Debug.EtpCollectionPeriod": 300
+    "Debug.EtpCollectionPeriod": 300,
+    "Debug.AutoUpdateHotfixFrequency": 14400,
+    "Debug.AutoUpdateNormalFrequency": 86400
 }
 
 
@@ -260,7 +263,7 @@ def get_logs_console(conf=__conf__):
 
 
 def get_collect_logs(conf=__conf__):
-    return conf.get_switch("Logs.Collect", False)
+    return conf.get_switch("Logs.Collect", True)
 
 
 def get_collect_logs_period(conf=__conf__):
@@ -547,11 +550,11 @@ def get_agent_cpu_quota(conf=__conf__):
 
 def get_cgroup_monitor_expiry_time (conf=__conf__):
     """
-    cgroups monitoring disabled after expiry time
+    cgroups monitoring for pilot extensions disabled after expiry time
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-01-31")
+    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-03-31")
 
 def get_cgroup_monitor_extension_name (conf=__conf__):
     """
@@ -577,3 +580,28 @@ def get_etp_collection_period(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.EtpCollectionPeriod", 300)
+
+
+def get_hotfix_upgrade_frequency(conf=__conf__):
+    """
+    Determines the frequency to check for Hotfix upgrades (<Patch>.<Build> version changed in new upgrades).
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AutoUpdateHotfixFrequency", 4 * 60 * 60)
+
+
+def get_normal_upgrade_frequency(conf=__conf__):
+    """
+    Determines the frequency to check for Normal upgrades (<Major>.<Minor> version changed in new upgrades).
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AutoUpdateNormalFrequency", 24 * 60 * 60)
+
+
+def get_enable_ga_versioning(conf=__conf__):
+    """
+    If True, the agent uses GA Versioning for auto-updating the agent vs automatically auto-updating to the highest version.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableGAVersioning", False)

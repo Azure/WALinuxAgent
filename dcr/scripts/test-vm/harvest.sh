@@ -10,7 +10,7 @@
 #                 or zero if no command exited with a non-zero status
 set -euxo pipefail
 
-ssh -o "StrictHostKeyChecking no" "$1"@"$2" "sudo tar --exclude='journal/*' --exclude='*.zip' -czf logs-$2.tgz /var/log /var/lib/waagent/ /root /etc/waagent.conf"
+ssh -o "StrictHostKeyChecking no" "$1"@"$2" "sudo tar --exclude='journal/*' --exclude='omsbundle' --exclude='omsagent' --exclude='mdsd' --exclude='scx*' --exclude='*.so' --exclude='*__LinuxDiagnostic__*' --exclude='*.zip' --exclude='*.deb' --exclude='*.rpm' -czf logs-$2.tgz /var/log /var/lib/waagent/ /etc/waagent.conf"
 
 # Create directory if doesn't exist
 mkdir -p "$3"

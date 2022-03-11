@@ -41,13 +41,15 @@ from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, Gu
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
 from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, HttpRequestPredicates, MockHttpResponse
+from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
+from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true
 from tests.utils.event_logger_tools import EventLoggerTools
 
 
 class TestEvent(HttpRequestPredicates, AgentTestCase):
     # These are the Operation/Category for events produced by the tests below (as opposed by events produced by the agent itself)
+    _Message = "ThisIsATestEventMessage"
     _Operation = "ThisIsATestEventOperation"
     _Category = "ThisIsATestMetricCategory"
 
@@ -102,7 +104,10 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
     def _collect_events():
         def append_event(e):
             for p in e.parameters:
-                if p.name == 'Operation' and p.value == TestEvent._Operation or p.name == 'Category' and p.value == TestEvent._Category:
+                if p.name == 'Operation' and p.value == TestEvent._Operation \
+                    or p.name == 'Category' and p.value == TestEvent._Category \
+                    or p.name == 'Message' and p.value == TestEvent._Message \
+                    or p.name == 'Context1' and p.value == TestEvent._Message:
                     event_list.append(e)
         event_list = []
         send_telemetry_events = MagicMock()
@@ -598,15 +603,14 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
                 GuestAgentGenericLogsSchema.Context3: ''
             })
 
-    @skip_if_predicate_true(lambda: True, "TODO: This test fails since the agent also generates other events; needs to be fixed")
     def test_add_log_event_should_always_create_events_when_forced(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
-            create_event_function=lambda: add_log_event(logger.LogLevel.WARNING, 'A test WARNING log event',
+            create_event_function=lambda: add_log_event(logger.LogLevel.WARNING, TestEvent._Message,
                                                         forced=True),
             expected_parameters={
                 GuestAgentGenericLogsSchema.EventName: 'Log',
                 GuestAgentGenericLogsSchema.CapabilityUsed: 'WARNING',
-                GuestAgentGenericLogsSchema.Context1: 'log event',
+                GuestAgentGenericLogsSchema.Context1: TestEvent._Message,
                 GuestAgentGenericLogsSchema.Context3: ''
             })
 
