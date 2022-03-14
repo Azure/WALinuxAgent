@@ -107,6 +107,9 @@ class CollectLogsHandler(ThreadHandlerInterface):
     def run(self):
         self.start()
 
+    def keep_alive(self):
+        return self.should_run
+
     def is_alive(self):
         return self.event_thread.is_alive()
 
