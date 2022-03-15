@@ -1902,12 +1902,15 @@ class ExtHandlerInstance(object):
                 if supported_features:
                     env[ExtCommandEnvVariable.ExtensionSupportedFeatures] = json.dumps(supported_features)
 
+                ext_name = self.get_extension_full_name(extension)
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
                     # as root-relative. (Issue #1170)
                     command_full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
-                    self.logger.info("Executing command: {0} with environment variables: {1}".format(command_full_path,
-                                                                                                     json.dumps(env)))
+                    log_msg = "Executing command: {0} with environment variables: {1}".format(command_full_path,
+                                                                                              json.dumps(env))
+                    self.logger.info(log_msg)
+                    self.report_event(name=ext_name, message=log_msg, log_event=False)
 
                     # Add the os environment variables before executing command
                     env.update(os.environ)
@@ -1928,7 +1931,6 @@ class ExtHandlerInstance(object):
                                          code=extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
-                ext_name = self.get_extension_full_name(extension)
                 log_msg = "Command: {0}\n{1}".format(cmd, "\n".join(
                     [line for line in process_output.split('\n') if line != ""]))
                 self.logger.info(log_msg)

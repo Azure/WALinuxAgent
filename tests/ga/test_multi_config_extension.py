@@ -1,6 +1,7 @@
 import contextlib
 import json
 import os.path
+import re
 import subprocess
 import uuid
 
@@ -887,15 +888,19 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                         (sc_ext, ExtensionCommandNames.ENABLE)
                     )
 
+                    reported_events = [kwargs for _, kwargs in patch_report_event.call_args_list if
+                                       re.search("Executing command: (.+) with environment variables: ",
+                                                 kwargs['message']) is None]
+
                     self.assertTrue(all(
-                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        fail_code in kwargs['message'] for kwargs in reported_events if
                         kwargs['name'] == first_ext.name), "Error not reported")
                     self.assertTrue(all(
-                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        fail_code in kwargs['message'] for kwargs in reported_events if
                         kwargs['name'] == second_ext.name), "Error not reported")
                     # Make sure fail code is not reported for any other extension
                     self.assertFalse(all(
-                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        fail_code in kwargs['message'] for kwargs in reported_events if
                         kwargs['name'] == third_ext.name), "Error not reported")
 
     def test_it_should_report_transitioning_if_status_file_not_found(self):
