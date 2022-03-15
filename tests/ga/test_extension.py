@@ -2336,8 +2336,8 @@ class TestExtension_Deprecated(TestExtensionBase):
                 exthandlers_handler.report_ext_handlers_status()
 
                 for _, kwargs in mock_report_event.call_args_list:
-                    # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
-                    if test_file_name not in kwargs['message']:
+                    # The output is of the format - 'Command: testfile.sh -{Operation} \n[stdout]ConfigSequenceNumber=N\n[stderr]'
+                    if ("Command: " + test_file_name) not in kwargs['message']:
                         continue
                     self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
                                   kwargs['message'])
@@ -2405,13 +2405,13 @@ class TestExtension_Deprecated(TestExtensionBase):
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
-                exthandlers_handler.report_ext_handlers_status()
 
-                _, disable_kwargs = mock_report_event.call_args_list[1]  # pylint: disable=unused-variable
-                _, update_kwargs = mock_report_event.call_args_list[2]
-                _, uninstall_kwargs = mock_report_event.call_args_list[3]  # pylint: disable=unused-variable
-                _, install_kwargs = mock_report_event.call_args_list[4]
-                _, enable_kwargs = mock_report_event.call_args_list[5]
+                update_kwargs = next(kwargs for _, kwargs in mock_report_event.call_args_list if
+                                     "Command: testfile.sh -update" in kwargs['message'])
+                install_kwargs = next(kwargs for _, kwargs in mock_report_event.call_args_list if
+                                      "Command: testfile.sh -install" in kwargs['message'])
+                enable_kwargs = next(kwargs for _, kwargs in mock_report_event.call_args_list if
+                                     "Command: testfile.sh -enable" in kwargs['message'])
 
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.DisableReturnCode, exit_code), update_kwargs['message'])
                 self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), install_kwargs['message'])
