@@ -450,7 +450,7 @@ class UpdateHandler(object):
     def _check_threads_running(self, all_thread_handlers):
         # Check that all the threads are still running
         for thread_handler in all_thread_handlers:
-            if not thread_handler.is_alive():
+            if thread_handler.keep_alive() and not thread_handler.is_alive():
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 

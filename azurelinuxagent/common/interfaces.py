@@ -30,6 +30,15 @@ class ThreadHandlerInterface(object):
     def run(self):
         raise NotImplementedError("run() not implemented")
 
+    def keep_alive(self):
+        """
+        Returns true if the thread handler should be restarted when the thread dies
+        and false when it should remain dead.
+        
+        Defaults to True and can be overridden by sub-classes.
+        """
+        return True
+
     def is_alive(self):
         raise NotImplementedError("is_alive() not implemented")
 
