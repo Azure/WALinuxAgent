@@ -360,7 +360,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 is_multi_config = extension_gs.get('isMultiConfig')
                 if is_multi_config is not None:
                     extension.supports_multi_config = is_multi_config
-                extension.manifest_uris.append(extension_gs['location'])
+                location = extension_gs.get('location')
+                if location is not None:
+                    extension.manifest_uris.append(location)
                 fail_over_location = extension_gs.get('failoverLocation')
                 if fail_over_location is not None:
                     extension.manifest_uris.append(fail_over_location)
