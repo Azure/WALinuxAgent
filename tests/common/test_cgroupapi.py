@@ -48,7 +48,7 @@ class _MockedFileSystemTestCase(AgentTestCase):
 
 
 class CGroupsApiTestCase(_MockedFileSystemTestCase):
-    def test_cgroups_should_be_supported_only_on_ubuntu_16_and_later(self):
+    def test_cgroups_should_be_supported_only_on_ubuntu16_centos7dot4_redhat7dot4_and_later_versions(self):
         test_cases = [
             (['ubuntu', '16.04', 'xenial'], True),
             (['ubuntu', '16.10', 'yakkety'], True),
