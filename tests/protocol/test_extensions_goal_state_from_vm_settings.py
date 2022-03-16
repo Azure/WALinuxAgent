@@ -70,6 +70,22 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
 
+    def test_it_should_parse_missing_extension_manifests_as_empty(self, _):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-no_extension_manifests.json"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+
+            self.assertEqual(3, len(extensions_goal_state.extensions), "Incorrect number of extensions. Got: {0}".format(extensions_goal_state.extensions))
+            self.assertEqual([], extensions_goal_state.extensions[0].manifest_uris, "Expected an empty list of manifests for {0}".format(extensions_goal_state.extensions[0]))
+            self.assertEqual([], extensions_goal_state.extensions[1].manifest_uris, "Expected an empty list of manifests for {0}".format(extensions_goal_state.extensions[1]))
+            self.assertEqual(
+                [
+                    "https://umsakzkwhng2ft0jjptl.blob.core.windows.net/deeb2df6-c025-e6fb-b015-449ed6a676bc/deeb2df6-c025-e6fb-b015-449ed6a676bc_manifest.xml",
+                    "https://umsafmqfbv4hgrd1hqff.blob.core.windows.net/deeb2df6-c025-e6fb-b015-449ed6a676bc/deeb2df6-c025-e6fb-b015-449ed6a676bc_manifest.xml",
+                ],
+                extensions_goal_state.extensions[2].manifest_uris, "Incorrect list of manifests for {0}".format(extensions_goal_state.extensions[2]))
+
     def test_it_should_default_to_block_blob_when_the_status_blob_type_is_not_valid(self, _):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-invalid_blob_type.json"
@@ -83,6 +99,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             self.assertEqual(GoalStateChannel.HostGAPlugin, extensions_goal_state.channel, "The channel is incorrect")
+
 
 class CaseFoldedDictionaryTestCase(AgentTestCase):
     def test_it_should_retrieve_items_ignoring_case(self):
