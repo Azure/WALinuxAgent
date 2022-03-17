@@ -30,6 +30,7 @@ AutoUpdate.GAFamily = Prod
 Autoupdate.Frequency = 3600
 DVD.MountPoint = /mnt/cdrom/secure
 Debug.AgentCpuQuota = 75
+Debug.AgentCpuThrottledTimeThreshold = 120
 Debug.AutoUpdateHotfixFrequency = 14400
 Debug.AutoUpdateNormalFrequency = 86400
 Debug.CgroupCheckPeriod = 300
