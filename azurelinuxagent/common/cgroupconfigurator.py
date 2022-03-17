@@ -94,7 +94,6 @@ _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 [Service]
 CPUQuota={0}
 """
-_AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 
 class DisableCgroups(object):
@@ -663,7 +662,7 @@ class CGroupConfigurator(object):
         def _check_agent_throttled_time(cgroup_metrics):
             for metric in cgroup_metrics:
                 if metric.instance == AGENT_NAME_TELEMETRY and metric.counter == MetricsCounter.THROTTLED_TIME:
-                    if metric.value > _AGENT_THROTTLED_TIME_THRESHOLD:
+                    if metric.value > conf.get_agent_cpu_throttled_time_threshold():
                         raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
 
         @staticmethod

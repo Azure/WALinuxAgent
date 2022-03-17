@@ -185,6 +185,7 @@ __INTEGER_OPTIONS__ = {
     #
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 75,
+    "Debug.AgentCpuThrottledTimeThreshold": 120,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,
@@ -544,7 +545,17 @@ def get_agent_cpu_quota(conf=__conf__):
     """
     return conf.get_int("Debug.AgentCpuQuota", 75)
 
-def get_cgroup_monitor_expiry_time (conf=__conf__):
+
+def get_agent_cpu_throttled_time_threshold(conf=__conf__):
+    """
+    Throttled time threshold for agent cpu in seconds.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentCpuThrottledTimeThreshold", 120)
+
+
+def get_cgroup_monitor_expiry_time(conf=__conf__):
     """
     cgroups monitoring for pilot extensions disabled after expiry time
 
