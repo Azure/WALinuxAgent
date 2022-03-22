@@ -99,6 +99,12 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
         {
             'message': r"Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=Install, message=\[ExtensionOperationError\] Non-zero exit code: 51",
             'if': lambda log_line: "Mariner2.0" in distro and log_line.level == "ERROR" and log_line.who == "ExtHandler"
+        },
+        # 2022-03-18T00:13:37.063540Z INFO ExtHandler ExtHandler [CGW] The daemon's PID was added to a legacy cgroup; will not monitor resource usage.
+        #
+        # Agent disables cgroups in older versions of the daemon (2.2.31-2.2.40).This is known issue and ignoring.
+        {
+            'message': r"The daemon's PID was added to a legacy cgroup; will not monitor resource usage"
         }
     ]
 
