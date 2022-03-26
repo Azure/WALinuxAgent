@@ -121,16 +121,6 @@ class ExtensionsConfigError(ExtensionsGoalStateError):
     """
 
 
-class VmSettingsError(ExtensionsGoalStateError):
-    """
-    Error raised when the VmSettings are malformed
-    """
-    def __init__(self, message, etag, vm_settings_text, inner=None):
-        super(VmSettingsError, self).__init__(message, inner)
-        self.etag = etag
-        self.vm_settings_text = vm_settings_text
-
-
 class MultiConfigExtensionEnableError(ExtensionError):
     """
     Error raised when enable for a Multi-Config extension is failing.

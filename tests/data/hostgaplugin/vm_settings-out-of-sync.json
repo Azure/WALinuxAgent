@@ -5,7 +5,7 @@
     "correlationId": "EEEEEEEE-DDDD-CCCC-BBBB-AAAAAAAAAAAA",
     "inSvdSeqNo": 1,
     "extensionsLastModifiedTickCount": 637726657000000000,
-    "extensionGoalStatesSource": "Fabric",
+    "extensionGoalStatesSource": "FastTrack",
     "onHold": true,
     "statusUploadBlob": {
         "statusBlobType": "BlockBlob",

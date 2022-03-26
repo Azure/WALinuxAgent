@@ -21,10 +21,9 @@ import re
 import sys
 
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
-from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, VmSettingsParseError
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
@@ -56,7 +55,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             self._parse_vm_settings(json_text)
             self._do_common_validations()
         except Exception as e:
-            raise VmSettingsError("Error parsing vmSettings [HGAP: {0}]: {1}".format(self._host_ga_plugin_version, ustr(e)), etag, self.get_redacted_text())
+            message = "Error parsing vmSettings [HGAP: {0} Etag:{1}]: {2}".format(self._host_ga_plugin_version, etag, ustr(e))
+            raise VmSettingsParseError(message, etag, self.get_redacted_text())
 
     @property
     def id(self):
@@ -142,11 +142,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._extensions
 
     def get_redacted_text(self):
-        return ExtensionsGoalStateFromVmSettings.redact(self._text)
-
-    @staticmethod
-    def redact(text):
-        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', text)
+        return re.sub(r'("protectedSettings"\s*:\s*)"[^"]+"', r'\1"*** REDACTED ***"', self._text)
 
     def _parse_vm_settings(self, json_text):
         vm_settings = _CaseFoldedDict.from_dict(json.loads(json_text))
@@ -165,7 +161,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
         #         "inSvdSeqNo": 1,
         #         "extensionsLastModifiedTickCount": 637726657706205217,
-        #         "extensionGoalStatesSource": "Fabric",
+        #         "extensionGoalStatesSource": "FastTrack",
         #         ...
         #     }
 

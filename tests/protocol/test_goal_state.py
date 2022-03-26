@@ -32,11 +32,12 @@ class GoalStateTestCase(AgentTestCase):
     def test_instantiating_goal_state_should_save_the_goal_state_to_the_history_directory(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(999)
+            protocol.mock_wire_data.set_etag(888)
 
             _ = GoalState(protocol.client)
 
             self._assert_directory_contents(
-                self._find_history_subdirectory("999"),
+                self._find_history_subdirectory("999-888"),
                 ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
 
     def _find_history_subdirectory(self, tag):
@@ -60,7 +61,7 @@ class GoalStateTestCase(AgentTestCase):
 
             goal_state = GoalState(protocol.client)
             self._assert_directory_contents(
-                self._find_history_subdirectory("123"),
+                self._find_history_subdirectory("123-654"),
                 ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
 
             def http_get_handler(url, *_, **__):
@@ -72,14 +73,14 @@ class GoalStateTestCase(AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             goal_state.update()
             self._assert_directory_contents(
-                self._find_history_subdirectory("234"),
+                self._find_history_subdirectory("234-654"),
                 ["GoalState.xml", "ExtensionsConfig.xml", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
 
             protocol.mock_wire_data.set_etag(987)
             protocol.set_http_handlers(http_get_handler=None)
             goal_state.update()
             self._assert_directory_contents(
-                self._find_history_subdirectory("987"), ["VmSettings.json"])
+                self._find_history_subdirectory("234-987"), ["VmSettings.json"])
 
     @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
     def test_it_should_redact_the_protected_settings_when_saving_to_the_history_directory(self, _):
@@ -97,7 +98,7 @@ class GoalStateTestCase(AgentTestCase):
             if len(protected_settings) == 0:
                 raise Exception("The test goal state does not include any protected settings")
 
-            history_directory = self._find_history_subdirectory("888")
+            history_directory = self._find_history_subdirectory("888-1")
             extensions_config_file = os.path.join(history_directory, "ExtensionsConfig.xml")
             vm_settings_file = os.path.join(history_directory, "VmSettings.json")
             for file_name in extensions_config_file, vm_settings_file:
@@ -123,16 +124,14 @@ class GoalStateTestCase(AgentTestCase):
             data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
             data_file["vm_settings"] = invalid_vm_settings_file
             protocol.mock_wire_data = mockwiredata.WireProtocolData(data_file)
-            protocol.mock_wire_data.set_incarnation(888)
+            protocol.mock_wire_data.set_etag(888)
 
             with self.assertRaises(ProtocolError):  # the parsing error will cause an exception
                 _ = GoalState(protocol.client)
 
-            matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_888"))
-            self.assertTrue(len(matches) == 1, "Expected one history directory for incarnation 888. Got: {0}".format(matches))
+            history_directory = self._find_history_subdirectory("0")
 
-            history_directory = matches[0]
-            vm_settings_file = os.path.join(history_directory, "VmSettings.json")
+            vm_settings_file = os.path.join(history_directory, "VmSettings.888.json")
             self.assertTrue(os.path.exists(vm_settings_file), "{0} was not saved".format(vm_settings_file))
 
             expected = load_data(invalid_vm_settings_file)

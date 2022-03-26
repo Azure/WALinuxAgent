@@ -858,12 +858,12 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             with self.assertRaisesRegexCM(ProtocolError, r'GET vmSettings \[correlation ID: .* eTag: .*\]: \[HTTP Failed\] \[500: None].*TEST ERROR.*'):
-                protocol.client.get_host_plugin().fetch_vm_settings(False)
+                protocol.client.get_host_plugin().fetch_vm_settings()
 
     @staticmethod
     def _fetch_vm_settings_ignoring_errors(protocol):
         try:
-            protocol.client.get_host_plugin().fetch_vm_settings(False)
+            protocol.client.get_host_plugin().fetch_vm_settings()
         except (ProtocolError, VmSettingsNotSupported):
             pass
 
@@ -933,7 +933,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
 
             def fetch_vm_settings():
                 try:
-                    host_plugin.fetch_vm_settings(True)
+                    host_plugin.fetch_vm_settings()
                 except ProtocolError:
                     pass  # All calls produce an error; ignore it
 

@@ -203,7 +203,7 @@ class StateArchiver(object):
 
 
 class GoalStateHistory(object):
-    def __init__(self, timestamp, tag=None):
+    def __init__(self, timestamp, tag):
         self._errors = False
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
 

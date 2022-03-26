@@ -25,10 +25,11 @@ import uuid
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError, VmSettingsError
+from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.protocol.healthservice import HealthService
+from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
@@ -395,7 +396,7 @@ class HostPluginProtocol(object):
             return s.decode('utf-8')
         return s
 
-    def fetch_vm_settings(self, force_update):
+    def fetch_vm_settings(self):
         """
         Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalStateFromVmSettings, bool) tuple with the vmSettings and
         a boolean indicating if they are an updated (True) or a cached value (False).
@@ -423,7 +424,7 @@ class HostPluginProtocol(object):
             if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.datetime.now():
                 raise_not_supported()
 
-            etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
+            etag = None if self._cached_vm_settings is None else self._cached_vm_settings.etag
             correlation_id = str(uuid.uuid4())
 
             self._vm_settings_error_reporter.report_request()
@@ -491,8 +492,8 @@ class HostPluginProtocol(object):
 
         except (ProtocolError, ResourceGoneError, VmSettingsNotSupported):
             raise
-        except VmSettingsError as vmSettingsError:
-            message = format_message(ustr(vmSettingsError))
+        except VmSettingsParseError as exception:
+            message = format_message(ustr(exception))
             self._vm_settings_error_reporter.report_error(message)
             raise
         except Exception as exception:

@@ -19,6 +19,7 @@ import datetime
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
+from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
 
 
@@ -32,6 +33,16 @@ class GoalStateSource(object):
     Fabric = "Fabric"
     FastTrack = "FastTrack"
     Empty = "Empty"
+
+
+class VmSettingsParseError(AgentError):
+    """
+    Error raised when the VmSettings are malformed
+    """
+    def __init__(self, message, etag, vm_settings_text, inner=None):
+        super(VmSettingsParseError, self).__init__(message, inner)
+        self.etag = etag
+        self.vm_settings_text = vm_settings_text
 
 
 class ExtensionsGoalState(object):
