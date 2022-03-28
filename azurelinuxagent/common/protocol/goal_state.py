@@ -67,7 +67,6 @@ class GoalState(object):
             self._role_instance_id = None
             self._role_config_name = None
             self._container_id = None
-            self._extensions_config = None
             self._hosting_env = None
             self._shared_conf = None
             self._certs = None
@@ -158,16 +157,22 @@ class GoalState(object):
         #
         # Continue fetching the rest of the goal state
         #
+        extensions_config = None
         if goal_state_updated:
-            self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
+            extensions_config = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
 
         #
         # Lastly, decide whether to use the vmSettings or extensionsConfig for the extensions goal state
         #
-        if goal_state_updated:
-            self._extensions_goal_state = self._extensions_config
-        if vm_settings_updated:
-            self._extensions_goal_state = vm_settings
+        if goal_state_updated and vm_settings_updated:
+            most_recent = extensions_config if extensions_config.created_on_timestamp > vm_settings.created_on_timestamp else vm_settings
+        elif goal_state_updated:
+            most_recent = extensions_config
+        else:
+            most_recent = vm_settings
+
+        if self._extensions_goal_state is None or most_recent.created_on_timestamp >= self._extensions_goal_state.created_on_timestamp:
+            self._extensions_goal_state = most_recent
 
     def save_to_history(self, data, file_name):
         self._history.save(data, file_name)
@@ -234,9 +239,10 @@ class GoalState(object):
 
     def _fetch_full_wire_server_goal_state(self, incarnation, xml_doc):
         """
-        Issues HTTP requests (WireServer) for each of the URIs in the goal state (ExtensionsConfig, Certificate, Remote Access users, etc)
-        and populates the corresponding properties. If the given 'vm_settings' are not None they are used for the extensions goal state,
-        otherwise extensionsConfig is used instead.
+        Issues HTTP requests (to the WireServer) for each of the URIs in the goal state (ExtensionsConfig, Certificate, Remote Access users, etc)
+        and populates the corresponding properties.
+
+        Returns the value of ExtensionsConfig.
         """
         try:
             logger.info('Fetching full goal state from the WireServer')
@@ -253,7 +259,7 @@ class GoalState(object):
                 extensions_config = ExtensionsGoalStateFactory.create_empty(incarnation)
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
-                extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(self._incarnation, xml_text, self._wire_client)
+                extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(incarnation, xml_text, self._wire_client)
                 self._history.save_extensions_config(extensions_config.get_redacted_text())
 
             hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
@@ -284,11 +290,12 @@ class GoalState(object):
             self._role_instance_id = role_instance_id
             self._role_config_name = role_config_name
             self._container_id = container_id
-            self._extensions_config = extensions_config
             self._hosting_env = hosting_env
             self._shared_conf = shared_conf
             self._certs = certs
             self._remote_access = remote_access
+
+            return extensions_config
 
         except Exception as exception:
             logger.warn("Fetching the goal state failed: {0}", ustr(exception))
