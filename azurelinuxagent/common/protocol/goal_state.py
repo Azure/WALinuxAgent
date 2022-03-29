@@ -233,8 +233,9 @@ class GoalState(object):
             except VmSettingsNotSupported:
                 pass
             except VmSettingsParseError as exception:
-                # ensure we save the vmSettings if there were parsing errors; use a special
-                GoalStateHistory(timeutil.create_null_timestamp(), "0").save(exception.vm_settings_text, "VmSettings.{0}.json".format(exception.etag))
+                # ensure we save the vmSettings if there were parsing errors, but save them only once per ETag
+                if not GoalStateHistory.tag_exists(exception.etag):
+                    GoalStateHistory(timeutil.create_timestamp(), exception.etag).save_vm_settings(exception.vm_settings_text)
                 raise
 
         return vm_settings, vm_settings_updated

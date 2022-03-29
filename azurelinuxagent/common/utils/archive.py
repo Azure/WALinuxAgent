@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import errno
+import glob
 import os
 import re
 import shutil
@@ -206,6 +207,13 @@ class GoalStateHistory(object):
     def __init__(self, timestamp, tag):
         self._errors = False
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
+
+    @staticmethod
+    def tag_exists(tag):
+        """
+        Returns True when an item with the given 'tag' already exists in the history directory
+        """
+        return len(glob.glob(os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "*_{0}".format(tag)))) > 0
 
     def save(self, data, file_name):
         try:

@@ -4,6 +4,7 @@
 import glob
 import os
 import re
+import time
 
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.goal_state import GoalState, _GET_GOAL_STATE_MAX_ATTEMPTS
@@ -129,9 +130,15 @@ class GoalStateTestCase(AgentTestCase):
             with self.assertRaises(ProtocolError):  # the parsing error will cause an exception
                 _ = GoalState(protocol.client)
 
-            history_directory = self._find_history_subdirectory("0")
+            # Do an extra call to update the goal state; this should save the vmsettings to the history directory
+            # only once (self._find_history_subdirectory asserts 1 single match)
+            time.sleep(0.5)  # add a short delay to ensure that a new timestamp would be saved in the history folder
+            with self.assertRaises(ProtocolError):
+                _ = GoalState(protocol.client)
 
-            vm_settings_file = os.path.join(history_directory, "VmSettings.888.json")
+            history_directory = self._find_history_subdirectory("888")
+
+            vm_settings_file = os.path.join(history_directory, "VmSettings.json")
             self.assertTrue(os.path.exists(vm_settings_file), "{0} was not saved".format(vm_settings_file))
 
             expected = load_data(invalid_vm_settings_file)
