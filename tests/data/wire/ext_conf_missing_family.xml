@@ -30,4 +30,5 @@
         <Location>eastus</Location>
     </GuestAgentExtension>
     <StatusUploadBlob statusBlobType="BlockBlob">https://walaautoasmeastus.blob.core.windows.net/vhds/walaautos73small.walaautos73small.walaautos73small.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=u%2BCA2Cxb7ticiEBRIW8HWgNW7gl2NPuOGQl0u95ApQE%3D</StatusUploadBlob>
+<InVMGoalStateMetaData inSvdSeqNo="10" createdOnTicks="637726657706205217" activityId="a33f6f53-43d6-4625-b322-1a39651a00c9" correlationId="9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e" />
 </Extensions>

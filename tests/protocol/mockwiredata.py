@@ -15,9 +15,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import base64
+import datetime
 import json
 import re
 
+from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
@@ -116,7 +118,7 @@ DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
-DATA_FILE_VM_SETTINGS["ETag"] ="1"
+DATA_FILE_VM_SETTINGS["ETag"] = "1"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
@@ -377,17 +379,31 @@ class WireProtocolData(object):
             raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
         return new_xml_document
 
-    def set_etag(self, etag):
-        '''
-        Sets the ETag for the mock response
-        '''
+    def set_etag(self, etag, timestamp=None):
+        """
+        Sets the ETag for the mock response.
+        This function is used to mock a new goal state, and it also updates the timestamp (extensionsLastModifiedTickCount) in vmSettings.
+        """
+        if timestamp is None:
+            timestamp = datetime.datetime.utcnow()
         self.etag = etag
+        try:
+            vm_settings = json.loads(self.vm_settings)
+            vm_settings["extensionsLastModifiedTickCount"] = timeutil.datetime_to_ticks(timestamp)
+            self.vm_settings = json.dumps(vm_settings)
+        except ValueError:  # some test data include syntax errors; ignore those
+            pass
 
-    def set_incarnation(self, incarnation):
-        '''
-        Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
-        '''
+    def set_incarnation(self, incarnation, timestamp=None):
+        """
+        Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config).
+        This function is used to mock a new goal state, and it also updates the timestamp (createdOnTicks) in ExtensionsConfig.
+        """
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
+        if self.ext_conf is not None:
+            if timestamp is None:
+                timestamp = datetime.datetime.utcnow()
+            self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "InVMGoalStateMetaData", "createdOnTicks", timeutil.datetime_to_ticks(timestamp))
 
     def set_container_id(self, container_id):
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)

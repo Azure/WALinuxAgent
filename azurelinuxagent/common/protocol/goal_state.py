@@ -144,11 +144,13 @@ class GoalState(object):
             logger.info("The vmSettings originated via Fabric; will ignore them.")
             vm_settings, vm_settings_updated = None, False
 
-        # If either goal state changed, start a new history folder
-        if goal_state_updated or vm_settings_updated:
-            tag = "{0}".format(incarnation) if vm_settings is None else "{0}-{1}".format(incarnation, vm_settings.etag)
-            self._history = GoalStateHistory(timestamp, tag)
+        # If neither goal state has changed we are done with the update
+        if not goal_state_updated and not vm_settings_updated:
+            return
 
+        # Start a new history subdirectory and capture the updated goal state
+        tag = "{0}".format(incarnation) if vm_settings is None else "{0}-{1}".format(incarnation, vm_settings.etag)
+        self._history = GoalStateHistory(timestamp, tag)
         if goal_state_updated:
             self._history.save_goal_state(xml_text)
         if vm_settings_updated:
@@ -165,13 +167,13 @@ class GoalState(object):
         # Lastly, decide whether to use the vmSettings or extensionsConfig for the extensions goal state
         #
         if goal_state_updated and vm_settings_updated:
-            most_recent = extensions_config if extensions_config.created_on_timestamp > vm_settings.created_on_timestamp else vm_settings
+            most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
         elif goal_state_updated:
             most_recent = extensions_config
-        else:
+        else:  # vm_settings_updated
             most_recent = vm_settings
 
-        if self._extensions_goal_state is None or most_recent.created_on_timestamp >= self._extensions_goal_state.created_on_timestamp:
+        if self._extensions_goal_state is None or most_recent.created_on_timestamp > self._extensions_goal_state.created_on_timestamp:
             self._extensions_goal_state = most_recent
 
     def save_to_history(self, data, file_name):

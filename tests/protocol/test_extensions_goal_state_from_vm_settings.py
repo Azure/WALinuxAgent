@@ -19,7 +19,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
 
             assert_property("activity_id", "a33f6f53-43d6-4625-b322-1a39651a00c9")
             assert_property("correlation_id", "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e")
-            assert_property("created_on_timestamp", "2021-11-16T13:22:50.620522Z")
+            assert_property("created_on_timestamp", "2021-11-16T13:22:50.620529Z")
             assert_property("status_upload_blob", "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w")
             assert_property("status_upload_blob_type", "BlockBlob")
             assert_property("required_features", ["MultipleExtensionsPerHandler"])
