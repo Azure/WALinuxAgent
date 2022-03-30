@@ -1158,10 +1158,6 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(data_file) as protocol:
             self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_goal_state().extensions_goal_state)
 
-    def test_it_should(self):
-        pass  ### CONTINUE HERE
-
-
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
