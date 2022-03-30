@@ -141,7 +141,8 @@ class GoalState(object):
             logger.info("Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]", vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
         # Ignore the vmSettings if their source is Fabric (processing a Fabric goal state may require the tenant certificate and the vmSettings don't include it.)
         if vm_settings is not None and vm_settings.source == GoalStateSource.Fabric:
-            logger.info("The vmSettings originated via Fabric; will ignore them.")
+            if vm_settings_updated:
+                logger.info("The vmSettings originated via Fabric; will ignore them.")
             vm_settings, vm_settings_updated = None, False
 
         # If neither goal state has changed we are done with the update
