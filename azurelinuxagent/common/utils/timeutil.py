@@ -3,11 +3,14 @@
 import datetime
 
 
-def create_timestamp():
+def create_timestamp(dt=None):
     """
-    Returns a string with current UTC time in iso format
+    Returns a string with the given datetime iso format. If no datetime is given as parameter, it
+    uses datetime.utcnow().
     """
-    return datetime.datetime.utcnow().isoformat()
+    if dt is None:
+        dt = datetime.datetime.utcnow()
+    return dt.isoformat()
 
 
 def datetime_to_ticks(dt):

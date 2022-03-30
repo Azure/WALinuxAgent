@@ -394,6 +394,14 @@ class WireProtocolData(object):
         except ValueError:  # some test data include syntax errors; ignore those
             pass
 
+    def set_vm_settings_source(self, source):
+        """
+        Sets the "extensionGoalStatesSource" for the mock vm_settings data
+        """
+        vm_settings = json.loads(self.vm_settings)
+        vm_settings["extensionGoalStatesSource"] = source
+        self.vm_settings = json.dumps(vm_settings)
+
     def set_incarnation(self, incarnation, timestamp=None):
         """
         Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config).
