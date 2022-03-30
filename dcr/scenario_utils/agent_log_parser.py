@@ -49,7 +49,15 @@ class AgentLogRecord:
 
     @property
     def is_error(self):
-        return self.level in ('ERROR', 'WARNING') or any(err in self.text for err in self.__ERROR_TAGS)
+        is_error = self.level in ('ERROR', 'WARNING') or any(err in self.text for err in self.__ERROR_TAGS)
+        #
+        # Don't report errors in the telemetry data. Sample log line:
+        #
+        #     2022-03-27T06:40:46.011455Z VERBOSE SendTelemetryHandler ExtHandler HTTP connection [POST] [/machine?comp=telemetrydata] [<?xml version="1.0"?><TelemetryData...
+        #
+        if is_error and self.level == 'VERBOSE' and self.thread == 'SendTelemetryHandler' and self.message.startswith('HTTP connection [POST] [/machine?comp=telemetrydata]'):
+            is_error = False
+        return is_error
 
 
 def parse_agent_log_file(waagent_log_path=AGENT_LOG_FILE):
