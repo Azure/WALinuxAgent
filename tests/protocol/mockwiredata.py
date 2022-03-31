@@ -367,17 +367,17 @@ class WireProtocolData(object):
     #
     @staticmethod
     def replace_xml_element_value(xml_document, element_name, element_value):
-        new_xml_document = re.sub(r'(?<=<{0}>).+(?=</{0}>)'.format(element_name), element_value, xml_document)
-        if new_xml_document == xml_document:
-            raise Exception("Could not match element '{0}'", element_name)  # pylint: disable=raising-format-tuple
-        return new_xml_document
+        element_regex = r'(?<=<{0}>).+(?=</{0}>)'.format(element_name)
+        if not re.search(element_regex, xml_document):
+            raise Exception("Can't find XML element '{0}' in {1}".format(element_name, xml_document))
+        return re.sub(element_regex, element_value, xml_document)
 
     @staticmethod
     def replace_xml_attribute_value(xml_document, element_name, attribute_name, attribute_value):
-        new_xml_document = re.sub(r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name), r'\g<1>{0}'.format(attribute_value), xml_document)
-        if new_xml_document == xml_document:
-            raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
-        return new_xml_document
+        attribute_regex = r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name)
+        if not re.search(attribute_regex, xml_document):
+            raise Exception("Can't find attribute {0} in XML element '{1}'. Document: {2}".format(attribute_name, element_name, xml_document))
+        return re.sub(attribute_regex, r'\g<1>{0}'.format(attribute_value), xml_document)
 
     def set_etag(self, etag, timestamp=None):
         """
