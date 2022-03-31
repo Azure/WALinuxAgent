@@ -19,4 +19,12 @@ def datetime_to_ticks(dt):
 
     Note that the resolution of a datetime goes only to microseconds.
     """
-    return 10 ** 7 * (dt - datetime.datetime.min).total_seconds()
+    return 10 ** 7 * total_seconds(dt - datetime.datetime.min)
+
+
+def total_seconds(dt):
+    """
+    Compute the total_seconds for timedelta 'td'. Used instead timedelta.total_seconds() because 2.6 does not implement total_seconds.
+    """
+    return ((24 * dt.days * 60 * 60 + dt.seconds) * 10.0 ** 6 + dt.microseconds) / 10.0 ** 6
+

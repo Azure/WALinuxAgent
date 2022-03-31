@@ -6,7 +6,7 @@ import zipfile
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, timeutil
 from azurelinuxagent.common.utils.archive import StateArchiver, _MAX_ARCHIVED_STATES
 from tests.tools import AgentTestCase, patch
 
@@ -198,20 +198,13 @@ class TestArchive(AgentTestCase):
         except:
             raise AssertionError("the value '{0}' is not an ISO8601 formatted timestamp".format(timestamp_str))
 
-    @staticmethod
-    def _total_seconds(delta):
-        """
-        Compute the total_seconds for a timedelta because 2.6 does not have total_seconds.
-        """
-        return (0.0 + delta.microseconds + (delta.seconds + delta.days * 24 * 60 * 60) * 10 ** 6) / 10 ** 6
-
     def assert_datetime_close_to(self, time1, time2, within):
         if time1 <= time2:
             diff = time2 - time1
         else:
             diff = time1 - time2
 
-        secs = self._total_seconds(within - diff)
+        secs = timeutil.total_seconds(within - diff)
         if secs < 0:
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 

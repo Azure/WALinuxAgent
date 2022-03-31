@@ -5,7 +5,7 @@ import json
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
-from tests.tools import AgentTestCase, patch
+from tests.tools import AgentTestCase
 
 
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
