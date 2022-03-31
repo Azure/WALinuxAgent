@@ -131,7 +131,7 @@ class GoalStateTestCase(AgentTestCase):
 
             # Do an extra call to update the goal state; this should save the vmsettings to the history directory
             # only once (self._find_history_subdirectory asserts 1 single match)
-            time.sleep(0.5)  # add a short delay to ensure that a new timestamp would be saved in the history folder
+            time.sleep(0.1)  # add a short delay to ensure that a new timestamp would be saved in the history folder
             with self.assertRaises(ProtocolError):
                 _ = GoalState(protocol.client)
 

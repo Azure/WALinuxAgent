@@ -178,9 +178,10 @@ class UpdateHandler(object):
         # ID of the last extensions goal state that has been fully processed (incarnation for WireServer goal states or etag for HostGAPlugin goal states)
         # (None if no extensions goal state has been processed)
         self._last_extensions_gs_id = None
-        # Goal state that is currently been processed
-        # (None if no goal state is being processed)
+        # Goal state that is currently been processed (None if no goal state is being processed)
         self._goal_state = None
+        # Whether the agent supports FastTrack (it does, as long as the HostGAPlugin supports the vmSettings API)
+        self._supports_fast_track = False
 
         self._extensions_summary = ExtensionsSummary()
 
@@ -469,6 +470,8 @@ class UpdateHandler(object):
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
 
+            self._supports_fast_track = conf.get_enable_fast_track() and protocol.client.get_host_plugin().check_vm_settings_support()
+
         except Exception as e:
             if not self._last_try_update_goal_state_failed:
                 self._last_try_update_goal_state_failed = True
@@ -659,17 +662,9 @@ class UpdateHandler(object):
     def _report_status(self, exthandlers_handler):
         vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, self._processing_new_extensions_goal_state())
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
-        #
-        # TODO: How to handle the case when the HostGAPlugin goes from supporting vmSettings to not supporting it?
-        #
-        if self._goal_state is None:
-            supports_fast_track = False
-        else:
-            supports_fast_track = self._goal_state.extensions_goal_state.channel == GoalStateChannel.HostGAPlugin
-
         vm_status = exthandlers_handler.report_ext_handlers_status(
             goal_state_changed=self._processing_new_extensions_goal_state(),
-            vm_agent_update_status=vm_agent_update_status, vm_agent_supports_fast_track=supports_fast_track)
+            vm_agent_update_status=vm_agent_update_status, vm_agent_supports_fast_track=self._supports_fast_track)
 
         if vm_status is not None:
             self._report_extensions_summary(vm_status)
