@@ -53,18 +53,19 @@ _CACHE_PATTERNS = [
 
 #
 # Legacy names
+#   2018-04-06T08:21:37.142697
+#   2018-04-06T08:21:37.142697.zip
 #   2018-04-06T08:21:37.142697_incarnation_N
 #   2018-04-06T08:21:37.142697_incarnation_N.zip
 #
 # Current names
 #
-#   2018-04-06T08:21:37.142697
-#   2018-04-06T08:21:37.142697.zip
-#   2018-04-06T08:21:37.142697_N
-#   2018-04-06T08:21:37.142697_N.zip
+#   2018-04-06T08:21:37.142697_N-M
+#   2018-04-06T08:21:37.142697_N-M.zip
 #
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?\.zip$")
+_ARCHIVE_BASE_PATTERN = r"\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status)(-\d+)?)?"
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r'^{0}$'.format(_ARCHIVE_BASE_PATTERN))
+_ARCHIVE_PATTERNS_ZIP = re.compile(r'^{0}\.zip$'.format(_ARCHIVE_BASE_PATTERN))
 
 _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
