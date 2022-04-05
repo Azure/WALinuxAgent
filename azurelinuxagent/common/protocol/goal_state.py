@@ -23,11 +23,12 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, ResourceGoneError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
-from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported
+from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList
 from azurelinuxagent.common.utils import fileutil, timeutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory
@@ -134,9 +135,15 @@ class GoalState(object):
         incarnation, xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
         goal_state_updated = incarnation != self._incarnation
         if goal_state_updated:
-            logger.info('Fetched new goal state from the WireServer [incarnation {0}]', incarnation)
+            logger.info('Fetched a new incarnation for the WireServer goal state [incarnation {0}]', incarnation)
 
-        vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client)
+        vm_settings, vm_settings_updated = None, False
+        try:
+            vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client)
+        except VmSettingsSupportStopped as exception:  # If the HGAP stopped supporting vmSettings, we need to use the goal state from the WireServer
+            self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
+            return
+
         if vm_settings_updated:
             logger.info("Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]", vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
         # Ignore the vmSettings if their source is Fabric (processing a Fabric goal state may require the tenant certificate and the vmSettings don't include it.)
@@ -176,6 +183,18 @@ class GoalState(object):
 
         if self._extensions_goal_state is None or most_recent.created_on_timestamp > self._extensions_goal_state.created_on_timestamp:
             self._extensions_goal_state = most_recent
+
+    def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
+        logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
+        self._history = GoalStateHistory(timeutil.create_timestamp(), incarnation)
+        self._history.save_goal_state(xml_text)
+        self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
+        if self._extensions_goal_state.created_on_timestamp < vm_settings_support_stopped_error.timestamp:
+            self._extensions_goal_state.is_outdated = True
+            msg = "Fetched a Fabric goal state older than the most recent FastTrack goal state; will skip it. (Fabric: {0} FastTrack: {1})".format(
+                  self._extensions_goal_state.created_on_timestamp, vm_settings_support_stopped_error.timestamp)
+            logger.info(msg)
+            add_event(op=WALAEventOperation.VmSettings, message=msg, is_success=True)
 
     def save_to_history(self, data, file_name):
         self._history.save(data, file_name)
@@ -231,6 +250,8 @@ class GoalState(object):
                     GoalState.update_host_plugin_headers(wire_client)
                     vm_settings, vm_settings_updated = wire_client.get_host_plugin().fetch_vm_settings()
 
+            except VmSettingsSupportStopped:
+                raise
             except VmSettingsNotSupported:
                 pass
             except VmSettingsParseError as exception:
@@ -249,7 +270,7 @@ class GoalState(object):
         Returns the value of ExtensionsConfig.
         """
         try:
-            logger.info('Fetching full goal state from the WireServer')
+            logger.info('Fetching full goal state from the WireServer [incarnation {0}]', incarnation)
 
             role_instance = find(xml_doc, "RoleInstance")
             role_instance_id = findtext(role_instance, "InstanceId")

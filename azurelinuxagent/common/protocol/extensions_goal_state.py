@@ -53,6 +53,9 @@ class ExtensionsGoalState(object):
 
     NOTE: This is an abstract class. The corresponding concrete classes can be instantiated using the ExtensionsGoalStateFactory.
     """
+    def __init__(self):
+        self._is_outdated = False
+
     @property
     def id(self):
         """
@@ -60,6 +63,18 @@ class ExtensionsGoalState(object):
         was created from vmSettings.
         """
         raise NotImplementedError()
+
+    @property
+    def is_outdated(self):
+        """
+        A goal state can be outdated if, for example, the VM Agent is using Fast Track and support for it stops (e.g. the VM is migrated
+        to a node with an older version of the HostGAPlugin) and now the Agent is fetching goal states via the WireServer.
+        """
+        return self._is_outdated
+
+    @is_outdated.setter
+    def is_outdated(self, value):
+        self._is_outdated = value
 
     @property
     def svd_sequence_number(self):

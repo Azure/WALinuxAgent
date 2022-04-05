@@ -1356,26 +1356,27 @@ class TestUpdate(UpdateTestCase):
                                     with patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler') as mock_event_collector:
                                         with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                                             with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
-                                                with patch('time.sleep') as sleep_mock:
-                                                    with patch('sys.exit') as mock_exit:
-                                                        if isinstance(os.getppid, MagicMock):
-                                                            self.update_handler.run()
-                                                        else:
-                                                            with patch('os.getppid', return_value=42):
+                                                with patch.object(self.update_handler, "_processing_new_extensions_goal_state", return_value=True):
+                                                    with patch('time.sleep') as sleep_mock:
+                                                        with patch('sys.exit') as mock_exit:
+                                                            if isinstance(os.getppid, MagicMock):
                                                                 self.update_handler.run()
+                                                            else:
+                                                                with patch('os.getppid', return_value=42):
+                                                                    self.update_handler.run()
 
-                                                    self.assertEqual(1, mock_handler.call_count)
-                                                    self.assertEqual(calls, len([c for c in [call[0] for call in mock_handler.return_value.method_calls] if c == 'run']))
-                                                    self.assertEqual(1, mock_ra_handler.call_count)
-                                                    self.assertEqual(calls, len(mock_ra_handler.return_value.method_calls))
-                                                    if calls > 0:
-                                                        self.assertEqual(sleep_interval, sleep_mock.call_args[0])
-                                                    self.assertEqual(1, mock_monitor.call_count)
-                                                    self.assertEqual(1, mock_env.call_count)
-                                                    self.assertEqual(1, mock_collect_logs.call_count)
-                                                    self.assertEqual(1, mock_telemetry_send_events.call_count)
-                                                    self.assertEqual(1, mock_event_collector.call_count)
-                                                    self.assertEqual(1, mock_exit.call_count)
+                                                        self.assertEqual(1, mock_handler.call_count)
+                                                        self.assertEqual(calls, len([c for c in [call[0] for call in mock_handler.return_value.method_calls] if c == 'run']))
+                                                        self.assertEqual(1, mock_ra_handler.call_count)
+                                                        self.assertEqual(calls, len(mock_ra_handler.return_value.method_calls))
+                                                        if calls > 0:
+                                                            self.assertEqual(sleep_interval, sleep_mock.call_args[0])
+                                                        self.assertEqual(1, mock_monitor.call_count)
+                                                        self.assertEqual(1, mock_env.call_count)
+                                                        self.assertEqual(1, mock_collect_logs.call_count)
+                                                        self.assertEqual(1, mock_telemetry_send_events.call_count)
+                                                        self.assertEqual(1, mock_event_collector.call_count)
+                                                        self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
@@ -1463,6 +1464,7 @@ class TestUpdate(UpdateTestCase):
 
         self.update_handler.protocol_util = protocol
         self.update_handler._goal_state = protocol.get_goal_state()
+        self.update_handler._goal_state.extensions_goal_state.is_outdated = False
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
         return self.update_handler._download_agent_if_upgrade_available(protocol, base_version=base_version)

@@ -19,17 +19,20 @@ import base64
 import contextlib
 import datetime
 import json
+import os.path
 import sys
 import unittest
 
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
 import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError, ProtocolError
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.osutil.default import UUID_PATTERN
-from azurelinuxagent.common.protocol.hostplugin import API_VERSION, _VmSettingsErrorReporter, VmSettingsNotSupported
+from azurelinuxagent.common.protocol.hostplugin import API_VERSION, _VmSettingsErrorReporter, VmSettingsNotSupported, VmSettingsSupportStopped
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
@@ -926,39 +929,22 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             def get_telemetry_messages():
                 return [kwargs["message"] for _, kwargs in add_event.call_args_list if kwargs["op"] == "VmSettings"]
 
-            def get_log_messages():
-                return [arg[0][0] for arg in logger_info.call_args_list   if "[VmSettings]" in arg[0][0]]
-
-            def fetch_vm_settings():
-                try:
-                    host_plugin.fetch_vm_settings()
-                except ProtocolError:
-                    pass  # All calls produce an error; ignore it
-
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
-                with patch('azurelinuxagent.common.logger.info') as logger_info:
-                    host_plugin = protocol.client.get_host_plugin()
-                    for _ in range(_VmSettingsErrorReporter._MaxTelemetryErrors + 3):
-                        fetch_vm_settings()
+                for _ in range(_VmSettingsErrorReporter._MaxErrors + 3):
+                    self._fetch_vm_settings_ignoring_errors(protocol)
 
-                    telemetry_messages = get_telemetry_messages()
-                    self.assertEqual(_VmSettingsErrorReporter._MaxTelemetryErrors, len(telemetry_messages), "The number of errors reported to telemetry is not the max allowed (got: {0})".format(telemetry_messages))
-
-                    log_messages = get_log_messages()
-                    self.assertEqual(_VmSettingsErrorReporter._MaxLogErrors, len(log_messages), "The number of errors reported to the local log is not the max allowed (got: {0})".format(telemetry_messages))
+                telemetry_messages = get_telemetry_messages()
+                self.assertEqual(_VmSettingsErrorReporter._MaxErrors, len(telemetry_messages), "The number of errors reported to telemetry is not the max allowed (got: {0})".format(telemetry_messages))
 
             # Reset the error reporter and verify that additional errors are reported
-            host_plugin._vm_settings_error_reporter._next_period = datetime.datetime.now()
-            fetch_vm_settings()  # this triggers the reset
+            protocol.client.get_host_plugin()._vm_settings_error_reporter._next_period = datetime.datetime.now()
+            self._fetch_vm_settings_ignoring_errors(protocol)  # this triggers the reset
 
             with patch("azurelinuxagent.common.protocol.hostplugin.add_event") as add_event:
-                fetch_vm_settings()
+                self._fetch_vm_settings_ignoring_errors(protocol)
 
                 telemetry_messages = get_telemetry_messages()
                 self.assertEqual(1, len(telemetry_messages), "Expected additional errors to be reported to telemetry in the next period (got: {0})".format(telemetry_messages))
-
-                log_messages = get_log_messages()
-                self.assertEqual(1, len(log_messages), "Expected additional errors to be reported to the local log in the next period (got: {0})".format(telemetry_messages))
 
     def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
@@ -974,15 +960,54 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             self._fetch_vm_settings_ignoring_errors(protocol)
             self.assertEqual(1, get_vm_settings_call_count(), "There should have been an initial call to vmSettings.")
 
-            protocol.client.update_goal_state()
-            protocol.client.update_goal_state()
+            self._fetch_vm_settings_ignoring_errors(protocol)
+            self._fetch_vm_settings_ignoring_errors(protocol)
             self.assertEqual(1, get_vm_settings_call_count(), "Additional calls to update_goal_state should not have produced extra calls to vmSettings.")
 
             # reset the vmSettings check period; this should restart the calls to the API
-            protocol.client._host_plugin._host_plugin_supports_vm_settings_next_check = datetime.datetime.now()
+            protocol.client._host_plugin._supports_vm_settings_next_check = datetime.datetime.now()
             protocol.client.update_goal_state()
             self.assertEqual(2, get_vm_settings_call_count(), "A second call to vmSettings was expecting after the check period has elapsed.")
 
+    def test_it_should_raise_when_the_vm_settings_api_stops_being_supported(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.NOT_FOUND)  # HostGAPlugin returns 404 if the API is not supported
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            host_ga_plugin = protocol.client.get_host_plugin()
+
+            # Do an initial call to ensure the API is supported
+            vm_settings, _ = host_ga_plugin.fetch_vm_settings()
+
+            # Now return NOT_FOUND to indicate the API is not supported
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            with self.assertRaises(VmSettingsSupportStopped) as cm:
+                host_ga_plugin.fetch_vm_settings()
+
+            self.assertEqual(vm_settings.created_on_timestamp, cm.exception.timestamp)
+
+    def test_it_should_save_the_timestamp_of_the_most_recent_fast_track_goal_state(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            host_ga_plugin = protocol.client.get_host_plugin()
+
+            vm_settings, _ = host_ga_plugin.fetch_vm_settings()
+
+            state_file = os.path.join(conf.get_lib_dir(), "fast_track.json")
+            self.assertTrue(os.path.exists(state_file), "The timestamp was not saved (can't find {0})".format(state_file))
+
+            with open(state_file, "r") as state_file_:
+                state = json.load(state_file_)
+            self.assertEqual(vm_settings.created_on_timestamp, state["timestamp"], "{0} does not contain the expected timestamp".format(state_file))
+
+            # A fabric goal state should remove the state file
+            protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.Fabric)
+
+            _ = host_ga_plugin.fetch_vm_settings()
+
+            self.assertFalse(os.path.exists(state_file), "{0} was not removed by a Fabric goal state".format(state_file))
 
 class MockResponse:
     def __init__(self, body, status_code, reason=''):
