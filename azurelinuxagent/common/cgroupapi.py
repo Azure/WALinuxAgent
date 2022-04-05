@@ -259,7 +259,7 @@ class SystemdCgroupsApi(CGroupsApi):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return EXTENSION_SLICE_PREFIX + "-" + extension_name.replace('-', '_') + ".slice"
 
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
+    def start_extension_command(self, extension_name, command, cmd_name, timeout, osutil, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
         scope = "{0}_{1}".format(cmd_name, uuid.uuid4())
         extension_slice_name = self.get_extension_slice_name(extension_name)
@@ -275,6 +275,12 @@ class SystemdCgroupsApi(CGroupsApi):
 
             # We start systemd-run with shell == True so process.pid is the shell's pid, not the pid for systemd-run
             self._systemd_run_commands.append(process.pid)
+            # Extension run is child of the systemd-run and grandchild of the shell process.
+            ext_run_pid = osutil.get_extension_process_id(process.pid)
+            if ext_run_pid is not None:
+                cpu_path, memory_path = self.get_process_cgroup_relative_paths(ext_run_pid)
+                logger.info("Extension Pid:{0}; CPU controller mounted at:{1}; Memory controller mounted at:{2}".format(
+                    ext_run_pid, cpu_path, memory_path))
 
         scope_name = scope + '.scope'
 

@@ -1521,3 +1521,23 @@ class DefaultOSUtil(object):
                 "{0}, Retcode: {1}, Output: {2}, Error: {3}".format(err_msg, e.returncode, e.stdout, e.stderr))
         except Exception as e:
             raise OSUtilError("{0}, Retcode: {1}, Error: {2}".format(err_msg, -1, ustr(e)))
+
+    @staticmethod
+    def _get_child_processes(pid):
+        # This method returns child processes of the parent.
+        try:
+            command = ['ps', '-opid', '--no-headers', '--ppid', str(pid)]
+            output = shellutil.run_command(command)
+            return output
+        except Exception as error:
+            logger.warn("Error retrieving child processes: {0}".format(ustr(error)))
+            return ""
+
+    def get_extension_process_id(self, pid):
+        # Extension run is child of the systemd-run and grandchild of the shell process.
+        ps_output = self._get_child_processes(pid)
+        child_process_ids = [int(line) for line in ps_output.splitlines()]
+        if child_process_ids:
+            ps_output = self._get_child_processes(child_process_ids[0])
+            child_process_ids = [int(line) for line in ps_output.splitlines()]
+        return child_process_ids[0] if child_process_ids else None

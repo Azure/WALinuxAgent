@@ -1411,9 +1411,8 @@ class ExtHandlerInstance(object):
         env = {
             ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code
         }
-        # This check to call the setup if AzureMonitorLinuxAgent extension already installed and not called setup before
-        if self.is_azuremonitorlinuxagent(self.get_full_name()) and \
-                not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(self.get_full_name()):
+        # This check to call the setup if extension already installed and not called setup before
+        if not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(self.get_full_name()):
             self.set_extension_resource_limits()
 
         self.set_operation(WALAEventOperation.Enable)

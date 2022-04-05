@@ -51,14 +51,19 @@ class PollResourceUsage(PeriodicOperation):
     def __init__(self):
         super(PollResourceUsage, self).__init__(conf.get_cgroup_check_period())
         self.__log_metrics = conf.get_cgroup_log_metrics()
+        self._current_run_time = datetime.datetime.utcnow()
 
     def _operation(self):
         tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
-        for metric in tracked_metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+        previous_run_time = self._current_run_time
+        self._current_run_time = datetime.datetime.utcnow()
+        # Don't report metric values if polling not happens within polling period + grace period. It may produce wrong values.
+        if self._current_run_time - previous_run_time <= datetime.timedelta(seconds=conf.get_cgroup_check_period() + 30):
+            for metric in tracked_metrics:
+                report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
-        CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
+            CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 
 
 class ResetPeriodicLogMessages(PeriodicOperation):

@@ -131,6 +131,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
+            self._osutil = get_osutil()
 
         def initialize(self):
             try:
@@ -742,7 +743,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 try:
-                    return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout,
+                    return self._cgroups_api.start_extension_command(extension_name, command, cmd_name, timeout, self._osutil,
                                                                      shell=shell, cwd=cwd, env=env, stdout=stdout,
                                                                      stderr=stderr, error_code=error_code)
                 except SystemdRunError as exception:
@@ -771,6 +772,9 @@ class CGroupConfigurator(object):
                 try:
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
+
+                    logger.info("Executing systemctl daemon-reload...")
+                    shellutil.run_command(["systemctl", "daemon-reload"])
                 except Exception as exception:
                     _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
