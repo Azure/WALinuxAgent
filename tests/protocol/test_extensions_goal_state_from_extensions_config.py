@@ -15,7 +15,9 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             self.assertEqual('2020-11-09T17:48:50.412125Z', extensions_goal_state.created_on_timestamp, "Incorrect GS Creation time")
 
     def test_it_should_use_default_values_when_in_vm_metadata_is_missing(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf-no_gs_metadata.xml"
+        with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.activity_id, "Incorrect activity Id")
             self.assertEqual(AgentGlobals.GUID_ZERO, extensions_goal_state.correlation_id, "Incorrect correlation Id")

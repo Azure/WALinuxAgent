@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import errno
+import glob
 import os
 import re
 import shutil
@@ -52,18 +53,19 @@ _CACHE_PATTERNS = [
 
 #
 # Legacy names
+#   2018-04-06T08:21:37.142697
+#   2018-04-06T08:21:37.142697.zip
 #   2018-04-06T08:21:37.142697_incarnation_N
 #   2018-04-06T08:21:37.142697_incarnation_N.zip
 #
 # Current names
 #
-#   2018-04-06T08:21:37.142697
-#   2018-04-06T08:21:37.142697.zip
-#   2018-04-06T08:21:37.142697_N
-#   2018-04-06T08:21:37.142697_N.zip
+#   2018-04-06T08:21:37.142697_N-M
+#   2018-04-06T08:21:37.142697_N-M.zip
 #
-_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?$")
-_ARCHIVE_PATTERNS_ZIP = re.compile(r"^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status))?\.zip$")
+_ARCHIVE_BASE_PATTERN = r"\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status)(-\d+)?)?"
+_ARCHIVE_PATTERNS_DIRECTORY = re.compile(r'^{0}$'.format(_ARCHIVE_BASE_PATTERN))
+_ARCHIVE_PATTERNS_ZIP = re.compile(r'^{0}\.zip$'.format(_ARCHIVE_BASE_PATTERN))
 
 _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
@@ -203,9 +205,16 @@ class StateArchiver(object):
 
 
 class GoalStateHistory(object):
-    def __init__(self, timestamp, tag=None):
+    def __init__(self, timestamp, tag):
         self._errors = False
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
+
+    @staticmethod
+    def tag_exists(tag):
+        """
+        Returns True when an item with the given 'tag' already exists in the history directory
+        """
+        return len(glob.glob(os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "*_{0}".format(tag)))) > 0
 
     def save(self, data, file_name):
         try:

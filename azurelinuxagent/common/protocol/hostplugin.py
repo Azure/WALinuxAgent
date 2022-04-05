@@ -25,10 +25,11 @@ import uuid
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError, VmSettingsError
+from azurelinuxagent.common.exception import HttpError, ProtocolError, ResourceGoneError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.protocol.healthservice import HealthService
+from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
@@ -86,7 +87,7 @@ class HostPluginProtocol(object):
         self.fetch_last_timestamp = None
         self.status_last_timestamp = None
         self._host_plugin_version = FlexibleVersion("0.0.0.0")  # Version 0 means "unknown"
-        self._host_plugin_supports_vm_settings = False
+        self._host_plugin_supports_vm_settings = None   # Tri-state variable: None == Not Initialized, True == Supports, False == Does Not Support
         self._host_plugin_supports_vm_settings_next_check = datetime.datetime.now()
         self._vm_settings_error_reporter = _VmSettingsErrorReporter()
         self._cached_vm_settings = None  # Cached value of the most recent ExtensionsGoalStateFromVmSettings
@@ -95,6 +96,15 @@ class HostPluginProtocol(object):
     def _extract_deployment_id(role_config_name):
         # Role config name consists of: <deployment id>.<incarnation>(...)
         return role_config_name.split(".")[0] if role_config_name is not None else None
+
+    def check_vm_settings_support(self):
+        """
+        Returns True if the HostGAPlugin supports the vmSettings API.
+        """
+        # _host_plugin_supports_vm_settings is set by fetch_vm_settings()
+        if self._host_plugin_supports_vm_settings is None:
+            _, _ = self.fetch_vm_settings()
+        return self._host_plugin_supports_vm_settings
 
     def update_container_id(self, new_container_id):
         self.container_id = new_container_id
@@ -395,7 +405,7 @@ class HostPluginProtocol(object):
             return s.decode('utf-8')
         return s
 
-    def fetch_vm_settings(self, force_update):
+    def fetch_vm_settings(self):
         """
         Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalStateFromVmSettings, bool) tuple with the vmSettings and
         a boolean indicating if they are an updated (True) or a cached value (False).
@@ -420,10 +430,11 @@ class HostPluginProtocol(object):
 
         try:
             # Raise if VmSettings are not supported but check for periodically since the HostGAPlugin could have been updated since the last check
-            if not self._host_plugin_supports_vm_settings and self._host_plugin_supports_vm_settings_next_check > datetime.datetime.now():
+            # Note that self._host_plugin_supports_vm_settings can be None, so we need to compare against False
+            if self._host_plugin_supports_vm_settings == False and self._host_plugin_supports_vm_settings_next_check > datetime.datetime.now():
                 raise_not_supported()
 
-            etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
+            etag = None if self._cached_vm_settings is None else self._cached_vm_settings.etag
             correlation_id = str(uuid.uuid4())
 
             self._vm_settings_error_reporter.report_request()
@@ -491,8 +502,8 @@ class HostPluginProtocol(object):
 
         except (ProtocolError, ResourceGoneError, VmSettingsNotSupported):
             raise
-        except VmSettingsError as vmSettingsError:
-            message = format_message(ustr(vmSettingsError))
+        except VmSettingsParseError as exception:
+            message = format_message(ustr(exception))
             self._vm_settings_error_reporter.report_error(message)
             raise
         except Exception as exception:

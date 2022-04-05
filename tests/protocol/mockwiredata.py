@@ -15,9 +15,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import base64
+import datetime
 import json
 import re
 
+from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
@@ -116,7 +118,7 @@ DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
-DATA_FILE_VM_SETTINGS["ETag"] ="1"
+DATA_FILE_VM_SETTINGS["ETag"] = "1"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
 
@@ -365,29 +367,51 @@ class WireProtocolData(object):
     #
     @staticmethod
     def replace_xml_element_value(xml_document, element_name, element_value):
-        new_xml_document = re.sub(r'(?<=<{0}>).+(?=</{0}>)'.format(element_name), element_value, xml_document)
-        if new_xml_document == xml_document:
-            raise Exception("Could not match element '{0}'", element_name)  # pylint: disable=raising-format-tuple
-        return new_xml_document
+        element_regex = r'(?<=<{0}>).+(?=</{0}>)'.format(element_name)
+        if not re.search(element_regex, xml_document):
+            raise Exception("Can't find XML element '{0}' in {1}".format(element_name, xml_document))
+        return re.sub(element_regex, element_value, xml_document)
 
     @staticmethod
     def replace_xml_attribute_value(xml_document, element_name, attribute_name, attribute_value):
-        new_xml_document = re.sub(r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name), r'\g<1>{0}'.format(attribute_value), xml_document)
-        if new_xml_document == xml_document:
-            raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
-        return new_xml_document
+        attribute_regex = r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name)
+        if not re.search(attribute_regex, xml_document):
+            raise Exception("Can't find attribute {0} in XML element '{1}'. Document: {2}".format(attribute_name, element_name, xml_document))
+        return re.sub(attribute_regex, r'\g<1>{0}'.format(attribute_value), xml_document)
 
-    def set_etag(self, etag):
-        '''
-        Sets the ETag for the mock response
-        '''
+    def set_etag(self, etag, timestamp=None):
+        """
+        Sets the ETag for the mock response.
+        This function is used to mock a new goal state, and it also updates the timestamp (extensionsLastModifiedTickCount) in vmSettings.
+        """
+        if timestamp is None:
+            timestamp = datetime.datetime.utcnow()
         self.etag = etag
+        try:
+            vm_settings = json.loads(self.vm_settings)
+            vm_settings["extensionsLastModifiedTickCount"] = timeutil.datetime_to_ticks(timestamp)
+            self.vm_settings = json.dumps(vm_settings)
+        except ValueError:  # some test data include syntax errors; ignore those
+            pass
 
-    def set_incarnation(self, incarnation):
-        '''
-        Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
-        '''
+    def set_vm_settings_source(self, source):
+        """
+        Sets the "extensionGoalStatesSource" for the mock vm_settings data
+        """
+        vm_settings = json.loads(self.vm_settings)
+        vm_settings["extensionGoalStatesSource"] = source
+        self.vm_settings = json.dumps(vm_settings)
+
+    def set_incarnation(self, incarnation, timestamp=None):
+        """
+        Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config).
+        This function is used to mock a new goal state, and it also updates the timestamp (createdOnTicks) in ExtensionsConfig.
+        """
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
+        if self.ext_conf is not None:
+            if timestamp is None:
+                timestamp = datetime.datetime.utcnow()
+            self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "InVMGoalStateMetaData", "createdOnTicks", timeutil.datetime_to_ticks(timestamp))
 
     def set_container_id(self, container_id):
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)

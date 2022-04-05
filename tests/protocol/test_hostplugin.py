@@ -858,17 +858,16 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             with self.assertRaisesRegexCM(ProtocolError, r'GET vmSettings \[correlation ID: .* eTag: .*\]: \[HTTP Failed\] \[500: None].*TEST ERROR.*'):
-                protocol.client.get_host_plugin().fetch_vm_settings(False)
+                protocol.client.get_host_plugin().fetch_vm_settings()
 
     @staticmethod
     def _fetch_vm_settings_ignoring_errors(protocol):
         try:
-            protocol.client.get_host_plugin().fetch_vm_settings(False)
+            protocol.client.get_host_plugin().fetch_vm_settings()
         except (ProtocolError, VmSettingsNotSupported):
             pass
 
-    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
-    def test_it_should_keep_track_of_errors_in_vm_settings_requests(self, _):
+    def test_it_should_keep_track_of_errors_in_vm_settings_requests(self):
         mock_response = None
 
         def http_get_handler(url, *_, **__):
@@ -916,8 +915,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
 
             self.assertEqual(expected, summary, "The count of errors is incorrect")
 
-    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
-    def test_it_should_limit_the_number_of_errors_it_reports(self, _):
+    def test_it_should_limit_the_number_of_errors_it_reports(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_host_plugin_vm_settings_request(url):
@@ -933,7 +931,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
 
             def fetch_vm_settings():
                 try:
-                    host_plugin.fetch_vm_settings(True)
+                    host_plugin.fetch_vm_settings()
                 except ProtocolError:
                     pass  # All calls produce an error; ignore it
 
@@ -962,8 +960,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 log_messages = get_log_messages()
                 self.assertEqual(1, len(log_messages), "Expected additional errors to be reported to the local log in the next period (got: {0})".format(telemetry_messages))
 
-    @patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True)
-    def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self, _):
+    def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_host_plugin_vm_settings_request(url):

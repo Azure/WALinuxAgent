@@ -3533,7 +3533,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                     exthandlers_handler.report_ext_handlers_status()
 
                     self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-                    self.assertEqual("1", protocol.report_vm_status.call_args[0][0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "Incarnation mismatch")
+                    self.assertEqual("1", protocol.report_vm_status.call_args[0][0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "SVD sequence number mismatch")
 
 
 if __name__ == '__main__':

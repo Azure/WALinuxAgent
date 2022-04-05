@@ -139,12 +139,11 @@ class ReportStatusTestCase(AgentTestCase):
             self._test_supported_features_includes_fast_track(protocol, False)
 
     def _test_supported_features_includes_fast_track(self, protocol, expected):
-        with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=True):
-            with ReportStatusTestCase._mock_update_handler(protocol) as update_handler:
-                update_handler.run(debug=True)
+        with ReportStatusTestCase._mock_update_handler(protocol) as update_handler:
+            update_handler.run(debug=True)
 
-                status = json.loads(protocol.mock_wire_data.status_blobs[0])
-                supported_features = status['supportedFeatures']
-                includes_fast_track = any(f['Key'] == 'FastTrack' for f in supported_features)
-                self.assertEqual(expected, includes_fast_track, "supportedFeatures should {0}include FastTrack. Got: {1}".format("" if expected else "not ", supported_features))
+            status = json.loads(protocol.mock_wire_data.status_blobs[0])
+            supported_features = status['supportedFeatures']
+            includes_fast_track = any(f['Key'] == 'FastTrack' for f in supported_features)
+            self.assertEqual(expected, includes_fast_track, "supportedFeatures should {0}include FastTrack. Got: {1}".format("" if expected else "not ", supported_features))
 
