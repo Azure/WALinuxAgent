@@ -24,7 +24,7 @@ import tempfile
 
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.osutil import systemd
+from azurelinuxagent.common.osutil import systemd, get_osutil
 from azurelinuxagent.common.utils import fileutil
 from tests.common.mock_cgroup_environment import mock_cgroup_environment
 from tests.tools import AgentTestCase, patch, mock_sleep
@@ -151,58 +151,66 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         with mock_cgroup_environment(self.tmp_dir):
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
                 with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:  # pylint: disable=unused-variable
-                    command_output = SystemdCgroupsApi().start_extension_command(
-                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                        command="A_TEST_COMMAND",
-                        cmd_name="test",
-                        shell=True,
-                        timeout=300,
-                        cwd=self.tmp_dir,
-                        env={},
-                        stdout=output_file,
-                        stderr=output_file)
+                    with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_extension_process_id", return_value=123):
+                        command_output = SystemdCgroupsApi().start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="A_TEST_COMMAND",
+                            cmd_name="test",
+                            shell=True,
+                            timeout=300,
+                            osutil=get_osutil(),
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=output_file,
+                            stderr=output_file)
 
-                    self.assertIn("[stdout]\nTEST_OUTPUT\n", command_output, "The test output was not captured")
+                        self.assertIn("[stdout]\nTEST_OUTPUT\n", command_output, "The test output was not captured")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_execute_the_command_in_a_cgroup(self, _):
         with mock_cgroup_environment(self.tmp_dir):
-            SystemdCgroupsApi().start_extension_command(
-                extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                command="test command",
-                cmd_name="test",
-                shell=False,
-                timeout=300,
-                cwd=self.tmp_dir,
-                env={},
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
-
-            tracked = CGroupsTelemetry._tracked
-
-            self.assertTrue(
-                any(cg for cg in tracked.values() if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
-                "The extension's CPU is not being tracked")
-
-    @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_use_systemd_to_execute_the_command(self, _):
-        with mock_cgroup_environment(self.tmp_dir):
-            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_extension_process_id",
+                       return_value=123):
                 SystemdCgroupsApi().start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                    command="the-test-extension-command",
+                    command="test command",
                     cmd_name="test",
+                    shell=False,
                     timeout=300,
-                    shell=True,
+                    osutil=get_osutil(),
                     cwd=self.tmp_dir,
                     env={},
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
 
-                extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
+                tracked = CGroupsTelemetry._tracked
 
-                self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                self.assertIn("systemd-run", extension_calls[0], "The extension should have been invoked using systemd")
+                self.assertTrue(
+                    any(cg for cg in tracked.values() if cg.name == 'Microsoft.Compute.TestExtension-1.2.3' and 'cpu' in cg.path),
+                    "The extension's CPU is not being tracked")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_use_systemd_to_execute_the_command(self, _):
+        with mock_cgroup_environment(self.tmp_dir):
+            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_extension_process_id",
+                           return_value=123):
+                    SystemdCgroupsApi().start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="the-test-extension-command",
+                        cmd_name="test",
+                        timeout=300,
+                        osutil=get_osutil(),
+                        shell=True,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+
+                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
+
+                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
+                    self.assertIn("systemd-run", extension_calls[0], "The extension should have been invoked using systemd")
 
 
 class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
