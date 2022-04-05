@@ -453,6 +453,7 @@ class HostPluginProtocol(object):
 
         Raises
             * VmSettingsNotSupported if the HostGAPlugin does not support the vmSettings API
+            * VmSettingsSupportStopped if the HostGAPlugin stopped supporting the vmSettings API
             * VmSettingsParseError if the HostGAPlugin returned invalid vmSettings (e.g. syntax error)
             * ResourceGoneError if the container ID and roleconfig name need to be refreshed
             * ProtocolError if the request fails for any other reason (e.g. not supported, time out, server error)
@@ -477,7 +478,7 @@ class HostPluginProtocol(object):
             return "GET vmSettings [correlation ID: {0} eTag: {1}]: {2}".format(correlation_id, etag, msg)
 
         try:
-            # Raise if VmSettings are not supported, but check for periodically since the HostGAPlugin could have been updated since the last check
+            # Raise if VmSettings are not supported, but check again periodically since the HostGAPlugin could have been updated since the last check
             # Note that self._host_plugin_supports_vm_settings can be None, so we need to compare against False
             if self._supports_vm_settings == False and self._supports_vm_settings_next_check > datetime.datetime.now():
                 # Raise VmSettingsNotSupported directly instead of using raise_not_supported() to avoid resetting the timestamp for the next check
