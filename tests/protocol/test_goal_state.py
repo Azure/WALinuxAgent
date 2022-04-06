@@ -10,6 +10,9 @@ import time
 
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource, GoalStateChannel
+from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
+from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
+from azurelinuxagent.common.protocol import hostplugin
 from azurelinuxagent.common.protocol.goal_state import GoalState, _GET_GOAL_STATE_MAX_ATTEMPTS
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils import fileutil
@@ -20,7 +23,68 @@ from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import AgentTestCase, patch, load_data
 
 
-class GoalStateTestCase(AgentTestCase):
+class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
+    def test_it_should_use_vm_settings_by_default(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            extensions_goal_state = GoalState(protocol.client).extensions_goal_state
+            self.assertTrue(
+                isinstance(extensions_goal_state, ExtensionsGoalStateFromVmSettings),
+                'The extensions goal state should have been created from the vmSettings (got: {0})'.format(type(extensions_goal_state)))
+
+    def _assert_is_extensions_goal_state_from_extensions_config(self, extensions_goal_state):
+        self.assertTrue(
+            isinstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig),
+            'The extensions goal state should have been created from the extensionsConfig (got: {0})'.format(type(extensions_goal_state)))
+
+    def test_it_should_use_extensions_config_when_fast_track_is_disabled(self):
+        with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
+            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+                self._assert_is_extensions_goal_state_from_extensions_config(GoalState(protocol.client).extensions_goal_state)
+
+    def test_it_should_use_extensions_config_when_fast_track_is_not_supported(self):
+        def http_get_handler(url, *_, **__):
+            if self.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.NOT_FOUND)
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(GoalState(protocol.client).extensions_goal_state)
+
+    def test_it_should_use_extensions_config_when_the_host_ga_plugin_version_is_not_supported(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-unsupported_version.json"
+
+        with mock_wire_protocol(data_file) as protocol:
+            self._assert_is_extensions_goal_state_from_extensions_config(GoalState(protocol.client).extensions_goal_state)
+
+    def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
+        # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
+        # needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            # Do not mock the vmSettings request at the level of azurelinuxagent.common.utils.restutil.http_request. The GONE status is handled
+            # in the internal _http_request, which we mock below.
+            protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
+
+            request_headers = []  # we expect a retry with new headers and use this array to persist the headers of each request
+
+            def http_get_vm_settings(_method, _host, _relative_url, **kwargs):
+                request_headers.append(kwargs["headers"])
+                if len(request_headers) == 1:
+                    # Fail the first request with status GONE and update the mock data to return the new Container ID and RoleConfigName that should be
+                    # used in the headers of the retry request.
+                    protocol.mock_wire_data.set_container_id("GET_VM_SETTINGS_TEST_CONTAINER_ID")
+                    protocol.mock_wire_data.set_role_config_name("GET_VM_SETTINGS_TEST_ROLE_CONFIG_NAME")
+                    return MockHttpResponse(status=httpclient.GONE)
+                # For this test we are interested only on the retry logic, so the second request (the retry) is not important; we use NOT_MODIFIED (304) for simplicity.
+                return MockHttpResponse(status=httpclient.NOT_MODIFIED)
+
+            with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
+                protocol.client.update_goal_state()
+
+            self.assertEqual(2, len(request_headers), "We expected 2 requests for vmSettings: the original request and the retry request")
+            self.assertEqual("GET_VM_SETTINGS_TEST_CONTAINER_ID", request_headers[1][hostplugin._HEADER_CONTAINER_ID], "The retry request did not include the expected header for the ContainerId")
+            self.assertEqual("GET_VM_SETTINGS_TEST_ROLE_CONFIG_NAME", request_headers[1][hostplugin._HEADER_HOST_CONFIG_NAME], "The retry request did not include the expected header for the RoleConfigName")
+
     def test_fetch_goal_state_should_raise_on_incomplete_goal_state(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
@@ -166,13 +230,13 @@ class GoalStateTestCase(AgentTestCase):
             # that may invalidate this setup.
             vm_settings, _ = protocol.client.get_host_plugin().fetch_vm_settings()
             if vm_settings.etag != etag:
-                raise Exception("The HostGAPlugin is no in sync. Expected ETag {0}. Got {1}".format(etag, vm_settings.etag))
+                raise Exception("The HostGAPlugin is not in sync. Expected ETag {0}. Got {1}".format(etag, vm_settings.etag))
             if vm_settings.source != GoalStateSource.Fabric:
                 raise Exception("The HostGAPlugin should be returning a Fabric goal state. Got {0}".format(vm_settings.source))
 
             goal_state = GoalState(protocol.client)
             if goal_state.incarnation != incarnation:
-                raise Exception("The WireServer is no in sync. Expected incarnation {0}. Got {1}".format(incarnation, goal_state.incarnation))
+                raise Exception("The WireServer is not in sync. Expected incarnation {0}. Got {1}".format(incarnation, goal_state.incarnation))
 
             if goal_state.extensions_goal_state.correlation_id != vm_settings.correlation_id:
                 raise Exception(
@@ -267,3 +331,30 @@ class GoalStateTestCase(AgentTestCase):
             goal_state.update()
 
             self._assert_goal_state(goal_state, '222', channel=GoalStateChannel.WireServer, source=GoalStateSource.Fabric)
+
+    def test_it_should_mark_outdated_goal_states(self):
+        with GoalStateTestCase._create_protocol_ws_and_hgap_in_sync() as protocol:
+            goal_state = GoalState(protocol.client)
+            initial_incarnation = goal_state.incarnation
+            initial_timestamp = goal_state.extensions_goal_state.created_on_timestamp
+
+            # Make the most recent goal state FastTrack
+            timestamp = datetime.datetime.utcnow() + datetime.timedelta(seconds=15)
+            protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.FastTrack)
+            protocol.mock_wire_data.set_etag('444444', timestamp)
+
+            goal_state.update()
+
+            # Update the goal state after the HGAP plugin stops supporting vmSettings
+            def http_get_handler(url, *_, **__):
+                if self.is_host_plugin_vm_settings_request(url):
+                    return MockHttpResponse(httpclient.NOT_FOUND)
+                return None
+
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            goal_state.update()
+
+            self._assert_goal_state(goal_state, initial_incarnation, channel=GoalStateChannel.WireServer, source=GoalStateSource.Fabric)
+            self.assertEqual(initial_timestamp, goal_state.extensions_goal_state.created_on_timestamp, "The timestamp of the updated goal state is incorrect")
+            self.assertTrue(goal_state.extensions_goal_state.is_outdated, "The updated goal state should be marked as outdated")

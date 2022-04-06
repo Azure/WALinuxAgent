@@ -33,6 +33,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
     def __init__(self, incarnation, xml_text, wire_client):
         super(ExtensionsGoalStateFromExtensionsConfig, self).__init__()
         self._id = "incarnation_{0}".format(incarnation)
+        self._is_outdated = False
         self._incarnation = incarnation
         self._text = xml_text
         self._status_upload_blob = None

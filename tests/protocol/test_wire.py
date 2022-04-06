@@ -26,13 +26,10 @@ import uuid
 
 from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames, get_supported_feature_by_name, \
     get_agent_supported_features_list_for_crp
-from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
-from azurelinuxagent.common.protocol import hostplugin
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
-from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     StatusBlob, VMStatus
@@ -1096,67 +1093,6 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
-
-    def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
-        # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
-        # needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-            # Do not mock the vmSettings request at the level of azurelinuxagent.common.utils.restutil.http_request. The GONE status is handled
-            # in the internal _http_request, which we mock below.
-            protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
-
-            request_headers = []  # we expect a retry with new headers and use this array to persist the headers of each request
-
-            def http_get_vm_settings(_method, _host, _relative_url, **kwargs):
-                request_headers.append(kwargs["headers"])
-                if len(request_headers) == 1:
-                    # Fail the first request with status GONE and update the mock data to return the new Container ID and RoleConfigName that should be
-                    # used in the headers of the retry request.
-                    protocol.mock_wire_data.set_container_id("GET_VM_SETTINGS_TEST_CONTAINER_ID")
-                    protocol.mock_wire_data.set_role_config_name("GET_VM_SETTINGS_TEST_ROLE_CONFIG_NAME")
-                    return MockHttpResponse(status=httpclient.GONE)
-                # For this test we are interested only on the retry logic, so the second request (the retry) is not important; we use NOT_MODIFIED (304) for simplicity.
-                return MockHttpResponse(status=httpclient.NOT_MODIFIED)
-
-            with patch("azurelinuxagent.common.utils.restutil._http_request", side_effect=http_get_vm_settings):
-                protocol.client.update_goal_state()
-
-            self.assertEqual(2, len(request_headers), "We expected 2 requests for vmSettings: the original request and the retry request")
-            self.assertEqual("GET_VM_SETTINGS_TEST_CONTAINER_ID", request_headers[1][hostplugin._HEADER_CONTAINER_ID], "The retry request did not include the expected header for the ContainerId")
-            self.assertEqual("GET_VM_SETTINGS_TEST_ROLE_CONFIG_NAME", request_headers[1][hostplugin._HEADER_HOST_CONFIG_NAME], "The retry request did not include the expected header for the RoleConfigName")
-
-    def test_it_should_use_vm_settings_by_default(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
-            self.assertTrue(
-                isinstance(extensions_goal_state, ExtensionsGoalStateFromVmSettings),
-                'The extensions goal state should have been created from the vmSettings (got: {0})'.format(type(extensions_goal_state)))
-
-    def _assert_is_extensions_goal_state_from_extensions_config(self, extensions_goal_state):
-        self.assertTrue(
-            isinstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig),
-            'The extensions goal state should have been created from the extensionsConfig (got: {0})'.format(type(extensions_goal_state)))
-
-    def test_it_should_use_extensions_config_when_fast_track_is_disabled(self):
-        with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
-            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-                self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_goal_state().extensions_goal_state)
-
-    def test_it_should_use_extensions_config_when_fast_track_is_not_supported(self):
-        def http_get_handler(url, *_, **__):
-            if self.is_host_plugin_vm_settings_request(url):
-                return MockHttpResponse(httpclient.NOT_FOUND)
-            return None
-
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
-            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_goal_state().extensions_goal_state)
-
-    def test_it_should_use_extensions_config_when_the_host_ga_plugin_version_is_not_supported(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
-        data_file["vm_settings"] = "hostgaplugin/vm_settings-unsupported_version.json"
-
-        with mock_wire_protocol(data_file) as protocol:
-            self._assert_is_extensions_goal_state_from_extensions_config(protocol.get_goal_state().extensions_goal_state)
 
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):

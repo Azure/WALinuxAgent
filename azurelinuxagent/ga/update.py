@@ -567,7 +567,8 @@ class UpdateHandler(object):
         """
         True if we are currently processing a new extensions goal state
         """
-        return self._goal_state is not None and self._goal_state.extensions_goal_state.id != self._last_extensions_gs_id
+        egs = self._goal_state.extensions_goal_state
+        return self._goal_state is not None and egs.id != self._last_extensions_gs_id and not egs.is_outdated
 
     def _process_goal_state(self, exthandlers_handler, remote_access_handler):
         try:
@@ -670,6 +671,8 @@ class UpdateHandler(object):
             if self._goal_state is not None:
                 agent_status = exthandlers_handler.get_ext_handlers_status_debug_info(vm_status)
                 self._goal_state.save_to_history(agent_status, AGENT_STATUS_FILE)
+                if self._goal_state.extensions_goal_state.is_outdated:
+                    exthandlers_handler.protocol.client.get_host_plugin().clear_fast_track_state()
 
     def _report_extensions_summary(self, vm_status):
         try:
