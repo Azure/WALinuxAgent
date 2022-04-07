@@ -45,7 +45,7 @@ from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, Exi
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses, ExtHandlerPackageList, \
     VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -332,10 +332,7 @@ class UpdateHandler(object):
             #
             protocol = self.protocol_util.get_protocol()
 
-            while not self._try_update_goal_state(protocol):
-                # Don't proceed with processing anything until we're able to fetch the first goal state.
-                # self._try_update_goal_state() has its own logging and error handling so not adding anything here.
-                time.sleep(conf.get_goal_state_period())
+            self._initialize_goal_state(protocol)
 
             # Initialize the common parameters for telemetry events
             initialize_event_logger_vminfo_common_parameters(protocol)
@@ -392,8 +389,7 @@ class UpdateHandler(object):
                 all_thread_handlers.append(get_collect_logs_handler())
 
             # Launch all monitoring threads
-            for thread_handler in all_thread_handlers:
-                thread_handler.run()
+            self._start_threads(all_thread_handlers)
 
             logger.info("Goal State Period: {0} sec. This indicates how often the agent checks for new goal states and reports status.", self._goal_state_period)
 
@@ -423,6 +419,26 @@ class UpdateHandler(object):
         self._shutdown()
         sys.exit(0)
 
+    def _initialize_goal_state(self, protocol):
+        #
+        # Block until we can fetch the first goal state (self._try_update_goal_state() does its own logging and error handling).
+        #
+        while not self._try_update_goal_state(protocol):
+            time.sleep(conf.get_goal_state_period())
+
+        #
+        # If FastTrack is disabled we need to check if the current goal state (which will be retrieved using the WireServer and
+        # hence will be a Fabric goal state) is outdated.
+        #
+        if not conf.get_enable_fast_track():
+            last_fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
+            if last_fast_track_timestamp is not None:
+                egs = protocol.client.get_goal_state().extensions_goal_state
+                if egs.created_on_timestamp < last_fast_track_timestamp:
+                    egs.is_outdated = True
+                    logger.info("The current Fabric goal state is older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}",
+                        egs.created_on_timestamp, last_fast_track_timestamp)
+
     def _get_vm_size(self, protocol):
         """
         Including VMSize is meant to capture the architecture of the VM (i.e. arm64 VMs will
@@ -447,6 +463,10 @@ class UpdateHandler(object):
         if not debug and self._is_orphaned:
             raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT))
 
+    def _start_threads(self, all_thread_handlers):
+        for thread_handler in all_thread_handlers:
+            thread_handler.run()
+
     def _check_threads_running(self, all_thread_handlers):
         # Check that all the threads are still running
         for thread_handler in all_thread_handlers:
@@ -469,7 +489,10 @@ class UpdateHandler(object):
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
 
-            self._supports_fast_track = conf.get_enable_fast_track() and protocol.client.get_host_plugin().check_vm_settings_support()
+            try:
+                self._supports_fast_track = conf.get_enable_fast_track() and protocol.client.get_host_plugin().check_vm_settings_support()
+            except VmSettingsNotSupported:
+                self._supports_fast_track = False
 
         except Exception as e:
             if not self._last_try_update_goal_state_failed:

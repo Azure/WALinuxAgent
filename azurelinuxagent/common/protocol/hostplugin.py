@@ -99,7 +99,7 @@ class HostPluginProtocol(object):
         else:
             self._supports_vm_settings = True
             self._supports_vm_settings_next_check = datetime.datetime.now()
-            self._fast_track_timestamp = HostPluginProtocol._get_fast_track_timestamp()
+            self._fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
 
     @staticmethod
     def _extract_deployment_id(role_config_name):
@@ -437,13 +437,20 @@ class HostPluginProtocol(object):
                         ustr(e))
 
     @staticmethod
-    def _get_fast_track_timestamp():
+    def get_fast_track_timestamp():
+        """
+        Returns the timestamp of the most recent FastTrack goal state retrieved by fetch_vm_settings(), or None if the most recent
+        goal state was Fabric or fetch_vm_settings() has not been invoked.
+        """
+        if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
+            return None
+
         try:
             with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
                 return json.load(file_)["timestamp"]
         except Exception as e:
             logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}",
-                HostPluginProtocol._get_fast_track_state_file(), ustr(e))
+                    HostPluginProtocol._get_fast_track_state_file(), ustr(e))
         return timeutil.create_timestamp(datetime.datetime.utcnow())
 
     def fetch_vm_settings(self):
