@@ -191,7 +191,7 @@ class GoalState(object):
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
         if self._extensions_goal_state.created_on_timestamp < vm_settings_support_stopped_error.timestamp:
             self._extensions_goal_state.is_outdated = True
-            msg = "Fetched a Fabric goal state older than the most recent FastTrack goal state; will skip it. (Fabric: {0} FastTrack: {1})".format(
+            msg = "Fetched a Fabric goal state older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}".format(
                   self._extensions_goal_state.created_on_timestamp, vm_settings_support_stopped_error.timestamp)
             logger.info(msg)
             add_event(op=WALAEventOperation.VmSettings, message=msg, is_success=True)

@@ -1,14 +1,13 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
-import contextlib
 import json
 
-from mock import PropertyMock
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
-from azurelinuxagent.ga.update import UpdateHandler, get_update_handler
+from azurelinuxagent.ga.update import get_update_handler
+from tests.ga.mocks import mock_update_handler
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.tools import AgentTestCase, patch, Mock, mock_sleep
+from tests.tools import AgentTestCase, patch
 from tests.protocol import mockwiredata
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
@@ -17,38 +16,6 @@ class ReportStatusTestCase(AgentTestCase):
     """
     Tests for UpdateHandler._report_status()
     """
-
-    @staticmethod
-    @contextlib.contextmanager
-    def _mock_update_handler(protocol, exthandlers_handler=None, iterations=1, on_new_iteration=lambda _: None):
-        """
-        The run() method of the mock handler will execute its main loop for the given 'iterations', and will invoke 'on_new_iteration' when
-        starting each iteration, passing the iteration number as argument.
-        """
-        iteration_count = [0]
-
-        def is_running(*args):  # mock for property UpdateHandler.is_running, which controls the main loop
-            if len(args) == 0:
-                # getter
-                iteration_count[0] += 1
-                on_new_iteration(iteration_count[0])
-                return iteration_count[0] <= iterations
-            else:
-                # setter
-                return None
-
-        if exthandlers_handler is None:
-            exthandlers_handler = ExtHandlersHandler(protocol)
-
-        with patch("azurelinuxagent.ga.exthandlers.get_exthandlers_handler", return_value=exthandlers_handler):
-            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):  # skip agent update
-                with patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=is_running)):
-                    with patch('time.sleep', side_effect=lambda _: mock_sleep(0.001)):
-                        with patch('sys.exit', side_effect=lambda _: 0):
-                            update_handler = get_update_handler()
-                            update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
-
-                            yield update_handler
 
     def test_update_handler_should_report_status_when_fetch_goal_state_fails(self):
         # The test executes the main loop of UpdateHandler.run() twice, failing requests for the goal state
@@ -66,7 +33,7 @@ class ReportStatusTestCase(AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             exthandlers_handler = ExtHandlersHandler(protocol)
             with patch.object(exthandlers_handler, "run", wraps=exthandlers_handler.run) as exthandlers_handler_run:
-                with ReportStatusTestCase._mock_update_handler(protocol, exthandlers_handler=exthandlers_handler, iterations=2, on_new_iteration=on_new_iteration) as update_handler:
+                with mock_update_handler(protocol, iterations=2, on_new_iteration=on_new_iteration, exthandlers_handler=exthandlers_handler) as update_handler:
                     update_handler.run(debug=True)
 
                     self.assertEqual(1, exthandlers_handler_run.call_count,  "Extensions should have been executed only once.")
@@ -139,7 +106,7 @@ class ReportStatusTestCase(AgentTestCase):
             self._test_supported_features_includes_fast_track(protocol, False)
 
     def _test_supported_features_includes_fast_track(self, protocol, expected):
-        with ReportStatusTestCase._mock_update_handler(protocol) as update_handler:
+        with mock_update_handler(protocol) as update_handler:
             update_handler.run(debug=True)
 
             status = json.loads(protocol.mock_wire_data.status_blobs[0])

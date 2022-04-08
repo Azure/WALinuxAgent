@@ -31,7 +31,7 @@ from mock import PropertyMock
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
     URI_FORMAT_GET_EXTENSION_ARTIFACT, HostPluginProtocol
@@ -52,6 +52,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
+from tests.ga.mocks import mock_update_handler
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
@@ -2832,6 +2833,57 @@ class ProcessGoalStateTestCase(AgentTestCase):
             status_file = os.path.join(matches[0], AGENT_STATUS_FILE)
             self.assertTrue(os.path.exists(status_file), "Could not find {0}".format(status_file))
 
+    @staticmethod
+    def _prepare_fast_track_goal_state():
+        """
+        Creates a set of mock wire data where the most recent goal state is a FastTrack goal state; also
+        invokes HostPluginProtocol.fetch_vm_settings() to save the Fast Track status to disk
+        """
+        # Do a query for the vmSettings; this would retrieve a FastTrack goal state and keep track of its timestamp
+        mock_wire_data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        with mock_wire_protocol(mock_wire_data_file) as protocol:
+            protocol.mock_wire_data.set_etag("0123456789")
+            _ = protocol.client.get_host_plugin().fetch_vm_settings()
+        return mock_wire_data_file
+
+    def test_it_should_mark_outdated_goal_states_on_service_restart_when_fast_track_is_disabled(self):
+        data_file = self._prepare_fast_track_goal_state()
+
+        with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
+            with mock_wire_protocol(data_file) as protocol:
+                with mock_update_handler(protocol) as update_handler:
+                    update_handler.run()
+
+                    self.assertTrue(protocol.client.get_goal_state().extensions_goal_state.is_outdated)
+
+    @staticmethod
+    def _http_get_vm_settings_handler_not_found(url, *_, **__):
+        if HttpRequestPredicates.is_host_plugin_vm_settings_request(url):
+            return MockHttpResponse(httpclient.NOT_FOUND)  # HostGAPlugin returns 404 if the API is not supported
+        return None
+
+    def test_it_should_mark_outdated_goal_states_on_service_restart_when_host_ga_plugin_stops_supporting_vm_settings(self):
+        data_file = self._prepare_fast_track_goal_state()
+
+        with mock_wire_protocol(data_file, http_get_handler=self._http_get_vm_settings_handler_not_found) as protocol:
+            with mock_update_handler(protocol) as update_handler:
+                update_handler.run()
+
+                self.assertTrue(protocol.client.get_goal_state().extensions_goal_state.is_outdated)
+
+    def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
+        data_file = self._prepare_fast_track_goal_state()
+
+        if HostPluginProtocol.get_fast_track_timestamp() is None:
+            raise Exception("The test setup did not save the Fast Track state")
+
+        with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
+            with mock_wire_protocol(data_file) as protocol:
+                with mock_update_handler(protocol) as update_handler:
+                    update_handler.run()
+
+        self.assertIsNone(HostPluginProtocol.get_fast_track_timestamp(), "The Fast Track state was not cleared")
+
 
 class HeartbeatTestCase(AgentTestCase):
 
@@ -2889,6 +2941,7 @@ class HeartbeatTestCase(AgentTestCase):
             update_handler._send_heartbeat_telemetry(mock_protocol)
 
             validate_single_heartbeat_event_matches_vm_size("TestVmSizeValue")
+
 
 class GoalStateIntervalTestCase(AgentTestCase):
     def test_initial_goal_state_period_should_default_to_goal_state_period(self):
