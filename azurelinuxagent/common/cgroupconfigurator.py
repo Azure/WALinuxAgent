@@ -540,7 +540,7 @@ class CGroupConfigurator(object):
                 return False
             return True
 
-        def check_cgroups(self, cgroup_metrics):
+        def check_cgroups(self, cgroup_metrics=None):
             if not self.enabled():
                 return
 
@@ -555,7 +555,8 @@ class CGroupConfigurator(object):
 
             quota_check_success = False
             try:
-                self._check_agent_throttled_time(cgroup_metrics)
+                if cgroup_metrics is not None:
+                    self._check_agent_throttled_time(cgroup_metrics)
                 quota_check_success = True
             except CGroupsException as exception:
                 errors.append(exception)
