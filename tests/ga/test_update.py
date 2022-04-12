@@ -26,8 +26,6 @@ import azurelinuxagent.common.osutil.default as osutil
 
 _ORIGINAL_POPEN = subprocess.Popen
 
-from mock import PropertyMock
-
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
@@ -56,7 +54,7 @@ from tests.ga.mocks import mock_update_handler
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
 from tests.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
-    clear_singleton_instances, mock_sleep
+    clear_singleton_instances
 from tests.protocol import mockwiredata
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
@@ -103,59 +101,22 @@ def faux_logger():
 
 
 @contextlib.contextmanager
-def _get_update_handler(iterations=1, test_data=None):
+def _get_update_handler(iterations=1, test_data=None, protocol=None):
     """
     This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
     main loop [iterations] no of times.
-    To reuse the same object, be sure to reset the iterations by using the update_handler.set_iterations() function.
-    :param iterations: No of times the UpdateHandler.run() method should run.
-    :return: Mocked object of UpdateHandler() class and object of the MockWireProtocol().
     """
-
-    def _set_iterations(iterations_):
-        # This will reset the current iteration and the max iterations to run for this test object.
-        update_handler._cur_iteration = 0
-        update_handler._iterations = iterations_
-
-    def check_running(*val, **__):
-        # This method will determine if the current UpdateHandler object is supposed to run or not.
-
-        # There can be scenarios where the UpdateHandler.is_running.setter is called, in that case, return the first
-        # value of the tuple and not increment the cur_iteration
-        if len(val) > 0:
-            return val[0]
-
-        if update_handler._cur_iteration < update_handler._iterations:
-            update_handler._cur_iteration += 1
-            return True
-        return False
 
     test_data = DATA_FILE if test_data is None else test_data
 
-    with mock_wire_protocol(test_data) as protocol:
-        protocol_util = MagicMock()
-        protocol_util.get_protocol = Mock(return_value=protocol)
-        with patch("azurelinuxagent.ga.update.get_protocol_util", return_value=protocol_util):
-            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
-                with patch.object(HostPluginProtocol, "is_default_channel", False):
-                    update_handler = get_update_handler()
-                    # Setup internal state for the object required for testing
-                    update_handler._cur_iteration = 0
-                    update_handler._iterations = 0
-                    update_handler.set_iterations = _set_iterations
-                    update_handler.get_iterations = lambda: update_handler._cur_iteration
-                    type(update_handler).is_running = PropertyMock(side_effect=check_running)
-                    with patch("time.sleep", side_effect=lambda _: mock_sleep(0.001)):
-                        with patch('sys.exit') as exit_mock:
-                            # Setup the initial number of iterations
-                            update_handler.set_iterations(iterations)
-                            update_handler.exit_mock = exit_mock
-                            try:
-                                yield update_handler, protocol
-                            finally:
-                                # Since PropertyMock requires us to mock the type(ClassName).property of the object,
-                                # reverting it back to keep the state of the test clean
-                                type(update_handler).is_running = True
+    with patch.object(HostPluginProtocol, "is_default_channel", False):
+        if protocol is None:
+            with mock_wire_protocol(test_data) as mock_protocol:
+                with mock_update_handler(mock_protocol, iterations=iterations, enable_agent_updates=True) as update_handler:
+                    yield update_handler, mock_protocol
+        else:
+            with mock_update_handler(protocol, iterations=iterations, enable_agent_updates=True) as update_handler:
+                yield update_handler, protocol
 
 
 class UpdateTestCase(AgentTestCaseWithGetVmSizeMock):
@@ -1585,9 +1546,8 @@ class TestUpdate(UpdateTestCase):
         # re-runnning the update handler. Then,ensure that the HandlerEnvironment file is recreated with eventsFolder
         # flag in HandlerEnvironment.json file.
         self._add_write_permission_to_goal_state_files()
-        with _get_update_handler(iterations) as (update_handler, protocol):
+        with _get_update_handler(iterations=1) as (update_handler, protocol):
             with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
-                update_handler.set_iterations(1)
                 update_handler.run(debug=True)
 
             self.assertGreater(os.path.getmtime(handler_env_file), last_modification_time,
@@ -1614,9 +1574,7 @@ class TestUpdate(UpdateTestCase):
                         with patch("azurelinuxagent.common.logger.warn") as patch_warn:
                             update_handler.run(debug=True)
 
-        self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
-        exit_args, _ = update_handler.exit_mock.call_args
-        self.assertEqual(exit_args[0], 0, "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
             patch_warn.call_args_list))
         self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
         self.assertTrue(any(
@@ -1640,9 +1598,7 @@ class TestUpdate(UpdateTestCase):
                         with patch("azurelinuxagent.common.logger.warn") as patch_warn:
                             update_handler.run(debug=True)
 
-        self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
-        exit_args, _ = update_handler.exit_mock.call_args
-        self.assertEqual(exit_args[0], 0, "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
             patch_warn.call_args_list))
 
         # Firewall-cmd should only be called 4 times - 1st to check if running, 2nd, 3rd and 4th for the QueryPassThrough cmd
@@ -1836,7 +1792,7 @@ class TestUpdate(UpdateTestCase):
                     self.assertTrue(os.path.exists(ext_dir), "Extension directory {0} should exist!".format(ext_dir))
 
     def test_it_should_report_update_status_in_status_blob(self):
-        with _get_update_handler(iterations=1) as (update_handler, protocol):
+        with mock_wire_protocol(DATA_FILE) as protocol:
             with patch.object(conf, "get_enable_ga_versioning", return_value=True):
                 with patch.object(conf, "get_autoupdate_gafamily", return_value="Prod"):
                     with patch("azurelinuxagent.common.logger.warn") as patch_warn:
@@ -1855,11 +1811,9 @@ class TestUpdate(UpdateTestCase):
                             protocol.incarnation += 1
                             protocol.mock_wire_data.set_incarnation(protocol.incarnation)
                             self._add_write_permission_to_goal_state_files()
-                            update_handler.set_iterations(1)
-                            update_handler.run(debug=True)
-                            self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
-                            exit_args, _ = update_handler.exit_mock.call_args
-                            self.assertEqual(exit_args[0], 0,
+                            with _get_update_handler(iterations=1, protocol=protocol) as (update_handler, _):
+                                update_handler.run(debug=True)
+                            self.assertEqual(0, update_handler.get_exit_code(),
                                              "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
                                                  patch_warn.call_args_list))
 
@@ -1912,9 +1866,7 @@ class TestUpdate(UpdateTestCase):
                     protocol.set_http_handlers(http_get_handler=get_handler)
                     update_handler.run(debug=True)
 
-        self.assertTrue(update_handler.exit_mock.called, "The process should have exited")
-        exit_args, _ = update_handler.exit_mock.call_args
-        self.assertEqual(exit_args[0], 0, "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
             patch_warn.call_args_list))
         warn_msgs = [args[0] for (args, _) in patch_warn.call_args_list if
                      "An error occurred while retrieving the goal state" in args[0]]
@@ -1951,14 +1903,13 @@ class TestAgentUpgrade(UpdateTestCase):
     def create_conf_mocks(self, hotfix_frequency, normal_frequency):
         # Disabling extension processing to speed up tests as this class deals with testing agent upgrades
         with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
-            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
-                with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=0.001):
-                    with patch("azurelinuxagent.common.conf.get_hotfix_upgrade_frequency",
-                               return_value=hotfix_frequency):
-                        with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency",
-                                   return_value=normal_frequency):
-                            with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                                yield
+            with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=0.001):
+                with patch("azurelinuxagent.common.conf.get_hotfix_upgrade_frequency",
+                           return_value=hotfix_frequency):
+                    with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency",
+                               return_value=normal_frequency):
+                        with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
+                            yield
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None, hotfix_frequency=1.0, normal_frequency=2.0,
@@ -1993,10 +1944,8 @@ class TestAgentUpgrade(UpdateTestCase):
                     update_handler._protocol = protocol
                     yield update_handler, mock_telemetry
 
-    def __assert_exit_code_successful(self, exit_mock):
-        self.assertTrue(exit_mock.called, "The process should have exited")
-        exit_args, _ = exit_mock.call_args
-        self.assertEqual(exit_args[0], 0, "Exit code should be 0")
+    def __assert_exit_code_successful(self, update_handler):
+        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0")
 
     def __assert_upgrade_telemetry_emitted_for_requested_version(self, mock_telemetry, upgrade=True, version="99999.0.0.0"):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
@@ -2044,7 +1993,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
             update_handler.run(debug=True)
 
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.assertEqual(1, update_handler.get_iterations(), "Update handler should've exited after the first run")
             self.__assert_agent_directories_available(versions=["99999.0.0.0"])
             self.__assert_upgrade_telemetry_emitted(mock_telemetry)
@@ -2072,7 +2021,7 @@ class TestAgentUpgrade(UpdateTestCase):
             update_handler.run(debug=True)
 
             self.assertGreater(reload_conf.call_count, 0, "Ensure the conf reload was called")
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.assertEqual(no_of_iterations, update_handler.get_iterations(), "Update handler should've run its course")
             # Ensure the new agent versions were also downloaded once the manifest was updated
             self.__assert_agent_directories_available(versions=["2.0.0", "2.1.0", "99999.0.0.0"])
@@ -2102,7 +2051,7 @@ class TestAgentUpgrade(UpdateTestCase):
             diff = time.time() - start_time
 
             self.assertGreater(reload_conf.call_count, 0, "Ensure the conf reload was called")
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.assertGreaterEqual(update_handler.get_iterations(), 3,
                                     "Update handler should've run at least until the new GA was available")
             # A bare-bone check to ensure that the agent waited for the new agent at least for the preset frequency time
@@ -2115,7 +2064,7 @@ class TestAgentUpgrade(UpdateTestCase):
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
                 update_handler.run(debug=True)
 
-                self.__assert_exit_code_successful(update_handler.exit_mock)
+                self.__assert_exit_code_successful(update_handler)
                 self.assertGreaterEqual(update_handler.get_iterations(), 10, "Update handler should've run 10 times")
                 self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
                 self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
@@ -2143,7 +2092,7 @@ class TestAgentUpgrade(UpdateTestCase):
             update_handler.run(debug=True)
 
             self.assertGreater(reload_conf.call_count, 0, "Ensure the conf reload was called")
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.assertEqual(no_of_iterations, update_handler.get_iterations(), "Update handler didn't run completely")
             self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
             upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
@@ -2159,7 +2108,7 @@ class TestAgentUpgrade(UpdateTestCase):
             with patch.object(conf, "get_enable_ga_versioning", return_value=True):
                 update_handler.run(debug=True)
 
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, version="9.9.9.10")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10"])
 
@@ -2175,7 +2124,7 @@ class TestAgentUpgrade(UpdateTestCase):
             with patch.object(conf, "get_enable_ga_versioning", return_value=True):
                 update_handler.run(debug=True)
 
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, version="9.9.9.10")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
 
@@ -2186,7 +2135,7 @@ class TestAgentUpgrade(UpdateTestCase):
             with patch.object(conf, "get_enable_ga_versioning", return_value=True):
                 update_handler.run(debug=True)
 
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
             agent_msgs = [kwarg for _, kwarg in mock_telemetry.call_args_list if
                           kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
@@ -2239,7 +2188,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 update_handler.run(debug=True)
 
             self.assertGreaterEqual(reload_conf.call_count, 1, "Reload conf not updated as expected")
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry)
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
             self.assertEqual(update_handler._protocol.mock_wire_data.call_counts['agentArtifact'], 1,
@@ -2286,7 +2235,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 update_handler.run(debug=True)
 
             self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry)
             self.__assert_agent_directories_exist_and_others_dont_exist(
                 versions=["1.0.0", "1.1.0", "1.2.0", "2.0.0", "2.1.0", "9.9.9.10", "99999.0.0.0", str(CURRENT_VERSION)])
@@ -2305,7 +2254,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 update_handler._protocol.mock_wire_data.set_incarnation(2)
                 update_handler.run(debug=True)
 
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
 
@@ -2341,7 +2290,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
             self.assertLess(update_handler.get_iterations(), no_of_iterations,
                             "The code should've exited as soon as requested version was found")
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, version="9.9.9.10")
 
     def test_it_should_blacklist_current_agent_on_downgrade(self):
@@ -2364,7 +2313,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 finally:
                     os.environ.pop(DAEMON_VERSION_ENV_VARIABLE)
 
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted_for_requested_version(mock_telemetry, upgrade=False,
                                                                           version=downgraded_version)
             current_agent = next(agent for agent in self.agents() if agent.version == CURRENT_VERSION)
@@ -2387,7 +2336,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 finally:
                     os.environ.pop(DAEMON_VERSION_ENV_VARIABLE)
 
-            self.__assert_exit_code_successful(update_handler.exit_mock)
+            self.__assert_exit_code_successful(update_handler)
             upgrade_msgs = [kwarg for _, kwarg in mock_telemetry.call_args_list if
                             kwarg['op'] == WALAEventOperation.AgentUpgrade]
             # This will throw if corresponding message not found so not asserting on that

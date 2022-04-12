@@ -28,20 +28,25 @@ from tests.tools import patch, Mock, mock_sleep
 def mock_update_handler(protocol, iterations=1, on_new_iteration=lambda _: None, exthandlers_handler=None, remote_access_handler=None, enable_agent_updates=False):
     """
     Creates a mock UpdateHandler that executes its main loop for the given 'iterations'.
-    If 'on_new_iteration' is given, it is invoked at the beginning of each iteration passing the iteration number as argument.
-    Network requests (e.g. requests for the goal state) are done using the given 'protocol'.
-    The mock UpdateHandler uses mock no-op ExtHandlersHandler and RemoteAccessHandler, unless they are given by 'exthandlers_handler' and 'remote_access_handler'.
-    Agent updates are disabled, unless specified otherwise with 'enable_agent_updates'.
-    Background threads (monitor, env, telemetry, etc) are not started.
+        * If 'on_new_iteration' is given, it is invoked at the beginning of each iteration passing the iteration number as argument.
+        * Network requests (e.g. requests for the goal state) are done using the given 'protocol'.
+        * The mock UpdateHandler uses mock no-op ExtHandlersHandler and RemoteAccessHandler, unless they are given by 'exthandlers_handler' and 'remote_access_handler'.
+        * Agent updates are disabled, unless specified otherwise with 'enable_agent_updates'.
+        * Background threads (monitor, env, telemetry, etc) are not started.
+        * The UpdateHandler is augmented with these extra functions:
+              * get_exit_code()   - returns the code passed to sys.exit() when the handler exits
+              * get_iterations()  - returns the number of iterations executed by the main loop
     """
     iteration_count = [0]
 
     def is_running(*args):  # mock for property UpdateHandler.is_running, which controls the main loop
         if len(args) == 0:
             # getter
-            iteration_count[0] += 1
-            on_new_iteration(iteration_count[0])
-            return iteration_count[0] <= iterations
+            enter_loop = iteration_count[0] < iterations
+            if enter_loop:
+                iteration_count[0] += 1
+                on_new_iteration(iteration_count[0])
+            return enter_loop
         else:
             # setter
             return None
@@ -60,9 +65,22 @@ def mock_update_handler(protocol, iterations=1, on_new_iteration=lambda _: None,
                         with patch.object(UpdateHandler, "_start_threads"):
                             with patch.object(UpdateHandler, "_check_threads_running"):
                                 with patch('time.sleep', side_effect=lambda _: mock_sleep(0.001)):
-                                    with patch('sys.exit', side_effect=lambda _: 0):
+                                    with patch('sys.exit', side_effect=lambda _: 0) as mock_exit:
+                                        def get_exit_code():
+                                            if mock_exit.call_count == 0:
+                                                raise Exception("The UpdateHandler did not exit")
+                                            if mock_exit.call_count != 1:
+                                                raise Exception("The UpdateHandler exited multiple times ({0})".format(mock_exit.call_count))
+                                            args, _ = mock_exit.call_args
+                                            return args[0]
+
+                                        def get_iterations():
+                                            return iteration_count[0]
+
                                         update_handler = get_update_handler()
                                         update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+                                        update_handler.get_exit_code = get_exit_code
+                                        update_handler.get_iterations = get_iterations
 
                                         yield update_handler
 
