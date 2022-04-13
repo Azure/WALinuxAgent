@@ -547,9 +547,8 @@ class HostPluginProtocol(object):
                 logger.info(message)
                 add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
 
-            # Don't support HostGAPlugin versions older than 123
-            # TODO: update the minimum version to 1.0.8.123 before release
-            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.117"):
+            # Don't support HostGAPlugin versions older than 124
+            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.124"):
                 raise_not_supported()
 
             self._supports_vm_settings = True
