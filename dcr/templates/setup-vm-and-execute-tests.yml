@@ -32,7 +32,7 @@ jobs:
         displayName: 'Install SSH Key to agent'
         name: "InstallKey"
         inputs:
-          knownHostsEntry: '$(SSH_PUBLIC)'
+          knownHostsEntry: ''
           sshPublicKey: '$(SSH_PUBLIC)'
           sshKeySecureFile: 'id_rsa'
 
@@ -52,7 +52,7 @@ jobs:
           architecture: 'x64'
 
       - script: |
-          rm -rf ~/.ssh/known_hosts
+          # rm -rf ~/.ssh/known_hosts
           mkdir -p "$(Build.ArtifactStagingDirectory)/harvest"
         displayName: "Clear known host keys and create directories"
 
