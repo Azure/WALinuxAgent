@@ -186,13 +186,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             # get the paths to the mocked files
             extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
 
-            configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension")
+            configurator.setup_extension_slice(extension_name="Microsoft.CPlat.Extension", cpu_quota=5)
 
             expected_cpu_accounting = "CPUAccounting=yes"
+            expected_cpu_quota_percentage = "5%"
 
             self.assertTrue(os.path.exists(extension_slice_unit_file), "{0} was not created".format(extension_slice_unit_file))
             self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_cpu_accounting),
                 "CPUAccounting was not set correctly. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(
+                    extension_slice_unit_file)))
+            self.assertTrue(fileutil.findre_in_file(extension_slice_unit_file, expected_cpu_quota_percentage),
+                "CPUQuota was not set correctly. Expected: {0}. Got:\n{1}".format(expected_cpu_quota_percentage, fileutil.read_file(
                     extension_slice_unit_file)))
 
     def test_remove_extension_slice_should_remove_unit_files(self):
@@ -577,21 +581,29 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_set_extension_services_cpu_memory_quota(self):
         service_list = [
             {
-                "name": "extension.service"
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
             }
         ]
         with self._get_cgroup_configurator() as configurator:
             # get the paths to the mocked files
             extension_service_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_accounting)
+            extension_service_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_quota)
 
             configurator.set_extension_services_cpu_memory_quota(service_list)
             expected_cpu_accounting = "CPUAccounting=yes"
+            expected_cpu_quota_percentage = "CPUQuota=5%"
 
             # create drop in files to set those properties
             self.assertTrue(os.path.exists(extension_service_cpu_accounting), "{0} was not created".format(extension_service_cpu_accounting))
             self.assertTrue(
                 fileutil.findre_in_file(extension_service_cpu_accounting, expected_cpu_accounting),
                 "CPUAccounting was not enabled. Expected: {0}. Got:\n{1}".format(expected_cpu_accounting, fileutil.read_file(extension_service_cpu_accounting)))
+
+            self.assertTrue(os.path.exists(extension_service_cpu_quota), "{0} was not created".format(extension_service_cpu_quota))
+            self.assertTrue(
+                fileutil.findre_in_file(extension_service_cpu_quota, expected_cpu_quota_percentage),
+                "CPUQuota was not set. Expected: {0}. Got:\n{1}".format(expected_cpu_quota_percentage, fileutil.read_file(extension_service_cpu_quota)))
 
     def test_it_should_set_extension_services_when_quotas_not_defined(self):
         service_list = [
@@ -648,15 +660,19 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_remove_extension_services_drop_in_files(self):
         service_list = [
             {
-                "name": "extension.service"
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
             }
         ]
         with self._get_cgroup_configurator() as configurator:
             extension_service_cpu_accounting = configurator.mocks.get_mapped_path(
             UnitFilePaths.extension_service_cpu_accounting)
+            extension_service_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_quota)
             configurator.remove_extension_services_drop_in_files(service_list)
             self.assertFalse(os.path.exists(extension_service_cpu_accounting),
                             "{0} should not have been created".format(extension_service_cpu_accounting))
+            self.assertFalse(os.path.exists(extension_service_cpu_quota),
+                            "{0} should not have been created".format(extension_service_cpu_quota))
 
     def test_it_should_start_tracking_unit_cgroups(self):
 

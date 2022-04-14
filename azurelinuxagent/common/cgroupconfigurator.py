@@ -770,7 +770,7 @@ class CGroupConfigurator(object):
                 extension_slice_path = os.path.join(unit_file_install_path,
                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
-                    cpu_quota = cpu_quota if cpu_quota is not None else ""
+                    cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
@@ -810,6 +810,7 @@ class CGroupConfigurator(object):
 
                         cpu_quota = service.get('cpuQuotaPercentage', None)
                         if cpu_quota is not None:
+                            cpu_quota = str(cpu_quota) + "%"
                             drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
                             cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
                             files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
