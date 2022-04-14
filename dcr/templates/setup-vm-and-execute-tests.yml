@@ -32,7 +32,7 @@ jobs:
         displayName: 'Install SSH Key to agent'
         name: "InstallKey"
         inputs:
-          knownHostsEntry: ''
+          knownHostsEntry: 'githib.com $(SSH_PUBLIC)'
           sshPublicKey: '$(SSH_PUBLIC)'
           sshKeySecureFile: 'id_rsa'
 
