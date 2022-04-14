@@ -616,7 +616,7 @@ class UpdateHandler(object):
 
                 # check cgroup and disable if any extension started in agent cgroup after goal state processed.
                 # Note: Monitor thread periodically checks this in addition to here.
-                CGroupConfigurator.get_instance().check_cgroups()
+                CGroupConfigurator.get_instance().check_cgroups(cgroup_metrics=[])
 
             # always report status, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time

@@ -542,7 +542,7 @@ class CGroupConfigurator(object):
                 return False
             return True
 
-        def check_cgroups(self, cgroup_metrics=[]):
+        def check_cgroups(self, cgroup_metrics):
             self._lock.acquire()
             try:
                 if not self.enabled():
