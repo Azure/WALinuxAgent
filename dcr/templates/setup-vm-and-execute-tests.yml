@@ -32,7 +32,7 @@ jobs:
         displayName: 'Install SSH Key to agent'
         name: "InstallKey"
         inputs:
-          knownHostsEntry: 'githib.com $(SSH_PUBLIC)'
+          knownHostsEntry: 'github.com $(SSH_PUBLIC)' # Adding a dummy known host for github.com as leaving it empty is not allowed by this task
           sshPublicKey: '$(SSH_PUBLIC)'
           sshKeySecureFile: 'id_rsa'
 
