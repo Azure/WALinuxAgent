@@ -132,7 +132,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
-            self._lock = threading.RLock()
+            self._check_cgroups_lock = threading.RLock() # Protect the check_cgroups which is called from Monitor thread and main loop.
 
         def initialize(self):
             try:
@@ -543,7 +543,7 @@ class CGroupConfigurator(object):
             return True
 
         def check_cgroups(self, cgroup_metrics):
-            self._lock.acquire()
+            self._check_cgroups_lock.acquire()
             try:
                 if not self.enabled():
                     return
@@ -573,7 +573,7 @@ class CGroupConfigurator(object):
                 if not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure():
                     self.disable(reason, DisableCgroups.AGENT)
             finally:
-                self._lock.release()
+                self._check_cgroups_lock.release()
 
         def _check_processes_in_agent_cgroup(self):
             """
