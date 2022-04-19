@@ -19,7 +19,9 @@
 
 import datetime
 import os
+import re
 import sys
+import platform
 import threading
 import time
 from azurelinuxagent.common import cgroupconfigurator, logcollector
@@ -33,6 +35,7 @@ from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 
@@ -50,13 +53,13 @@ def is_log_collection_allowed():
     conf_enabled = conf.get_collect_logs()
     cgroups_enabled = CGroupConfigurator.get_instance().enabled()
     supported_python = PY_VERSION_MINOR >= 6 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
-    is_allowed = conf_enabled and cgroups_enabled and supported_python
+    supported_kernel = __get_kernel_supported()
+    is_allowed = conf_enabled and cgroups_enabled and supported_python and supported_kernel
 
-    msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
-          "configuration enabled [{1}], cgroups enabled [{2}], python supported: [{3}]".format(is_allowed,
-                                                                                               conf_enabled,
-                                                                                               cgroups_enabled,
-                                                                                               supported_python)
+    msg = "Checking if log collection is allowed at this time [{0}]. All four conditions must be met: " \
+          "configuration enabled [{1}], cgroups enabled [{2}], python supported: [{3}]" \
+          "kernel supported: [{4}]".format(is_allowed, conf_enabled, cgroups_enabled,
+                                        supported_python, supported_kernel)
     logger.info(msg)
     add_event(
         name=AGENT_NAME,
@@ -67,6 +70,21 @@ def is_log_collection_allowed():
         log_event=False)
 
     return is_allowed
+
+def __get_kernel_supported():
+    # This pattern has been tested on reported telemetry; the OSVersion column uses
+    # platform.release() as well.
+    kernel_version_pattern = r'^\d+(\.\d+)+'
+
+    kernel_version_str = re.search(kernel_version_pattern, platform.release())
+    if kernel_version_str is None:
+        return False
+    
+    kernel_version = FlexibleVersion(kernel_version_str)
+
+    # Compare against minimum supported kernel version; on earlier kernels, OOM
+    # behavior differs and can lead to OOM kills of the log collector process.
+    return kernel_version >= FlexibleVersion('5.8.0')
 
 
 class CollectLogsHandler(ThreadHandlerInterface):
