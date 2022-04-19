@@ -316,7 +316,7 @@ class GoalState(object):
             if certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
                 certs = Certificates(xml_text)
-                # Save the certificate summary, which includes only the thumbprint, but not the certificate itself to the goal state history
+                # Save the certificate summary, which includes only the thumbprint but not the certificate itself, to the goal state history
                 self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
