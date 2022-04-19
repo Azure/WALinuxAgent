@@ -1453,7 +1453,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             return original_popen(["echo", "Yes"], *args, **kwargs)
 
         with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
-            with patch('azurelinuxagent.ga.exthandlers._DEFAULT_EXT_TIMEOUT_MINUTES', 0.001):
+            with patch('azurelinuxagent.ga.exthandlers._DEFAULT_EXT_TIMEOUT_MINUTES', 0.01):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
