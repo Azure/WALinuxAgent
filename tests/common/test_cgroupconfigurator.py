@@ -552,7 +552,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         def mock_popen(command, *args, **kwargs):
             # Inject a syntax error to the call
-            systemd_command = command.replace('systemd-run', 'systemd-run syntax_error')
+            
+            # Popen can accept both strings and lists, handle both here.
+            if isinstance(command, str):
+                systemd_command = command.replace('systemd-run', 'systemd-run syntax_error')
+            elif isinstance(command, list) and command[0] == 'systemd-run':
+                systemd_command = ['systemd-run', 'syntax_error'] + command[1:]
+
             return original_popen(systemd_command, *args, **kwargs)
 
         expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
