@@ -859,7 +859,10 @@ exit 0
                     with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as add_event:
                         configurator.enable()
 
-                        configurator.check_cgroups([])
+                        tracked_metrics = [
+                            MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, "test",
+                                        10)]
+                        configurator.check_cgroups(tracked_metrics)
                         if method_to_fail == "_check_processes_in_agent_cgroup":
                             self.assertFalse(configurator.enabled(), "An error in {0} should have disabled cgroups".format(method_to_fail))
                         else:

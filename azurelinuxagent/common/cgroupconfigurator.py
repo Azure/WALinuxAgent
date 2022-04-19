@@ -17,6 +17,7 @@
 import os
 import re
 import subprocess
+import threading
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -131,6 +132,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
+            self._check_cgroups_lock = threading.RLock() # Protect the check_cgroups which is called from Monitor thread and main loop.
 
         def initialize(self):
             try:
@@ -541,32 +543,37 @@ class CGroupConfigurator(object):
             return True
 
         def check_cgroups(self, cgroup_metrics):
-            if not self.enabled():
-                return
-
-            errors = []
-
-            process_check_success = False
+            self._check_cgroups_lock.acquire()
             try:
-                self._check_processes_in_agent_cgroup()
-                process_check_success = True
-            except CGroupsException as exception:
-                errors.append(exception)
+                if not self.enabled():
+                    return
 
-            quota_check_success = False
-            try:
-                self._check_agent_throttled_time(cgroup_metrics)
-                quota_check_success = True
-            except CGroupsException as exception:
-                errors.append(exception)
+                errors = []
 
-            reason = "Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors]))
+                process_check_success = False
+                try:
+                    self._check_processes_in_agent_cgroup()
+                    process_check_success = True
+                except CGroupsException as exception:
+                    errors.append(exception)
 
-            if not process_check_success and conf.get_cgroup_disable_on_process_check_failure():
-                self.disable(reason, DisableCgroups.ALL)
+                quota_check_success = False
+                try:
+                    if cgroup_metrics:
+                        self._check_agent_throttled_time(cgroup_metrics)
+                    quota_check_success = True
+                except CGroupsException as exception:
+                    errors.append(exception)
 
-            if not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure():
-                self.disable(reason, DisableCgroups.AGENT)
+                reason = "Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors]))
+
+                if not process_check_success and conf.get_cgroup_disable_on_process_check_failure():
+                    self.disable(reason, DisableCgroups.ALL)
+
+                if not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure():
+                    self.disable(reason, DisableCgroups.AGENT)
+            finally:
+                self._check_cgroups_lock.release()
 
         def _check_processes_in_agent_cgroup(self):
             """
