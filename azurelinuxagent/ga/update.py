@@ -827,7 +827,7 @@ class UpdateHandler(object):
                 log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_autoupdate_frequency())
 
             if conf.get_enable_fast_track():
-                log_if_int_changed_from_default("Debug.EnableFastTrack", conf.get_enable_fast_track())
+                log_if_op_disabled("Debug.EnableFastTrack", conf.get_enable_fast_track())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
                 log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
