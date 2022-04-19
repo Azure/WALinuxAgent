@@ -30,7 +30,7 @@ from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_i
 
 
 @contextlib.contextmanager
-def _create_collect_logs_handler(iterations=1, cgroups_enabled=True, collect_logs_conf=True):
+def _create_collect_logs_handler(iterations=1, cgroups_enabled=True, collect_logs_conf=True, kernel_supported=True):
     """
     Creates an instance of CollectLogsHandler that
         * Uses a mock_wire_protocol for network requests,
@@ -42,6 +42,8 @@ def _create_collect_logs_handler(iterations=1, cgroups_enabled=True, collect_log
         * run_and_wait() - invokes run() and wait() on the CollectLogsHandler
 
     """
+    mock_kernel_version = '5.8.0' if kernel_supported else '5.4.0'
+
     with mock_wire_protocol(DATA_FILE) as protocol:
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
@@ -53,14 +55,15 @@ def _create_collect_logs_handler(iterations=1, cgroups_enabled=True, collect_log
                     cgroups_configurator_singleton = CGroupConfigurator.get_instance()
                     with patch.object(cgroups_configurator_singleton, "enabled", return_value=cgroups_enabled):
                         with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=collect_logs_conf):
-                            def run_and_wait():
-                                collect_logs_handler.run()
-                                collect_logs_handler.join()
+                            with patch("azurelinuxagent.ga.collect_logs.platform.release", return_value=mock_kernel_version):
+                                def run_and_wait():
+                                    collect_logs_handler.run()
+                                    collect_logs_handler.join()
 
-                            collect_logs_handler = get_collect_logs_handler()
-                            collect_logs_handler.get_mock_wire_protocol = lambda: protocol
-                            collect_logs_handler.run_and_wait = run_and_wait
-                            yield collect_logs_handler
+                                collect_logs_handler = get_collect_logs_handler()
+                                collect_logs_handler.get_mock_wire_protocol = lambda: protocol
+                                collect_logs_handler.run_and_wait = run_and_wait
+                                yield collect_logs_handler
 
 
 @skip_if_predicate_true(is_python_version_26, "Disabled on Python 2.6")
@@ -116,6 +119,10 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
         # cgroups enabled, config flag true
         with _create_collect_logs_handler(cgroups_enabled=True, collect_logs_conf=True):
             self.assertEqual(True, is_log_collection_allowed(), "Log collection should have been enabled")
+
+        # kernel unsupported, cgroups and config flag enabled
+        with _create_collect_logs_handler(cgroups_enabled=True, collect_logs_conf=True, kernel_supported=False):
+            self.assertEqual(False, is_log_collection_allowed(), "Log collection should not have been enabled")
 
     def test_it_uploads_logs_when_collection_is_successful(self):
         archive_size = 42
