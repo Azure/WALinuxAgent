@@ -76,11 +76,11 @@ def __get_kernel_supported():
     # platform.release() as well.
     kernel_version_pattern = r'^\d+(\.\d+)+'
 
-    kernel_version_str = re.search(kernel_version_pattern, platform.release())
-    if kernel_version_str is None:
+    kernel_version_match = re.search(kernel_version_pattern, platform.release())
+    if kernel_version_match is None:
         return False
     
-    kernel_version = FlexibleVersion(kernel_version_str)
+    kernel_version = FlexibleVersion(kernel_version_match.group())
 
     # Compare against minimum supported kernel version; on earlier kernels, OOM
     # behavior differs and can lead to OOM kills of the log collector process.
