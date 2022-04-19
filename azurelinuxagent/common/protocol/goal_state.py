@@ -18,6 +18,7 @@
 import os
 import re
 import time
+import json
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -145,6 +146,7 @@ class GoalState(object):
             return
 
         if vm_settings_updated:
+            logger.info('')
             logger.info("Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]", vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
         # Ignore the vmSettings if their source is Fabric (processing a Fabric goal state may require the tenant certificate and the vmSettings don't include it.)
         if vm_settings is not None and vm_settings.source == GoalStateSource.Fabric:
@@ -183,6 +185,17 @@ class GoalState(object):
 
         if self._extensions_goal_state is None or most_recent.created_on_timestamp > self._extensions_goal_state.created_on_timestamp:
             self._extensions_goal_state = most_recent
+
+        # For Fast Track goal states, verify that the required certificates are in the goal state
+        if self.extensions_goal_state.source == GoalStateSource.FastTrack:
+            for extension in self.extensions_goal_state.extensions:
+                for settings in extension.settings:
+                    if settings.protectedSettings is None:
+                        continue
+                    certificates = self.certs.summary
+                    if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
+                        message = "Certificate {0} needed by {1} is missing from the goal state".format(settings.certificateThumbprint, extension.name)
+                        add_event(op=WALAEventOperation.VmSettings, message=message, is_success=False)
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
         logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
@@ -270,6 +283,7 @@ class GoalState(object):
         Returns the value of ExtensionsConfig.
         """
         try:
+            logger.info('')
             logger.info('Fetching full goal state from the WireServer [incarnation {0}]', incarnation)
 
             role_instance = find(xml_doc, "RoleInstance")
@@ -303,6 +317,7 @@ class GoalState(object):
                 # Note that we do not save the certificates to the goal state history
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
                 certs = Certificates(xml_text)
+                self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
             remote_access_uri = findtext(container, "RemoteAccessInfo")
@@ -349,6 +364,7 @@ class SharedConfig(object):
 class Certificates(object):
     def __init__(self, xml_text):
         self.cert_list = CertList()
+        self.summary = []  # debugging info
 
         # Save the certificates
         local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
@@ -428,18 +444,15 @@ class Certificates(object):
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
-                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
             else:
                 # Since private key has *no* matching certificate,
                 # it will not be named correctly
                 logger.warn("Found NO matching cert/thumbprint for private key!")
 
-        # Log if any certificates were found without matching private keys
-        # This can happen (rarely), and is useful to know for debugging
-        for pubkey in thumbprints:
-            if not pubkey in prvs:
-                msg = "Certificate with thumbprint {0} has no matching private key."
-                logger.info(msg.format(thumbprints[pubkey]))
+        for pubkey, thumbprint in thumbprints.items():
+            has_private_key = pubkey in prvs
+            logger.info("Downloaded certificate with thumbprint {0} (has private key: {1})".format(thumbprint, has_private_key))
+            self.summary.append({"thumbprint": thumbprint, "hasPrivateKey": has_private_key})
 
         for v1_cert in v1_cert_list:
             cert = Cert()

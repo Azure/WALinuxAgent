@@ -54,7 +54,7 @@ from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FIL
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, \
+from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
@@ -324,20 +324,11 @@ class UpdateHandler(object):
         """
 
         try:
+            logger.info("{0} Version: {1}", AGENT_LONG_NAME, CURRENT_AGENT)
+            logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
+            logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
             logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
 
-            #
-            # Initialize the goal state; some components depend on information provided by the goal state and this
-            # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
-            #
-            protocol = self.protocol_util.get_protocol()
-
-            self._initialize_goal_state(protocol)
-
-            # Initialize the common parameters for telemetry events
-            initialize_event_logger_vminfo_common_parameters(protocol)
-
-            # Log OS-specific info.
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; AgentService: {service_name}; "\
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
@@ -351,8 +342,20 @@ class UpdateHandler(object):
                     py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
                 )
-
             logger.info(os_info_msg)
+
+            #
+            # Initialize the goal state; some components depend on information provided by the goal state and this
+            # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
+            #
+            protocol = self.protocol_util.get_protocol()
+
+            self._initialize_goal_state(protocol)
+
+            # Initialize the common parameters for telemetry events
+            initialize_event_logger_vminfo_common_parameters(protocol)
+
+            # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             #
@@ -734,7 +737,7 @@ class UpdateHandler(object):
             return
 
         logger.info(
-            u"Agent {0} forwarding signal {1} to {2}",
+            u"Agent {0} forwarding signal {1} to {2}\n",
             CURRENT_AGENT,
             signum,
             self.child_agent.name if self.child_agent is not None else CURRENT_AGENT)
@@ -822,6 +825,9 @@ class UpdateHandler(object):
 
             if conf.get_autoupdate_enabled():
                 log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_autoupdate_frequency())
+
+            if conf.get_enable_fast_track():
+                log_if_int_changed_from_default("Debug.EnableFastTrack", conf.get_enable_fast_track())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
                 log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
