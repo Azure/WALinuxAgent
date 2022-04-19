@@ -135,7 +135,8 @@ class TestArchive(AgentTestCase):
                 'Microsoft.Azure.Extensions.CustomScript.1.xml',
                 'SharedConfig.xml',
                 'HostingEnvironmentConfig.xml',
-                'RemoteAccess.xml'
+                'RemoteAccess.xml',
+                'waagent_status.1.json'
             ]
             legacy_files = [os.path.join(self.tmp_dir, f) for f in legacy_files]
             for f in legacy_files:

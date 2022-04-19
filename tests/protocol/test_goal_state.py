@@ -8,6 +8,7 @@ import os
 import re
 import time
 
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource, GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
@@ -105,7 +106,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
             self._assert_directory_contents(
                 self._find_history_subdirectory("999-888"),
-                ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
+                ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json", "Certificates.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
 
     def _find_history_subdirectory(self, tag):
         matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_{0}".format(tag)))
@@ -128,7 +129,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state = GoalState(protocol.client)
             self._assert_directory_contents(
                 self._find_history_subdirectory("123-654"),
-                ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
+                ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json",  "Certificates.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
 
             def http_get_handler(url, *_, **__):
                 if HttpRequestPredicates.is_host_plugin_vm_settings_request(url):
@@ -140,7 +141,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state.update()
             self._assert_directory_contents(
                 self._find_history_subdirectory("234-654"),
-                ["GoalState.xml", "ExtensionsConfig.xml", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
+                ["GoalState.xml", "ExtensionsConfig.xml",  "Certificates.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
 
             protocol.mock_wire_data.set_etag(987)
             protocol.set_http_handlers(http_get_handler=None)
@@ -358,3 +359,18 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self._assert_goal_state(goal_state, initial_incarnation, channel=GoalStateChannel.WireServer, source=GoalStateSource.Fabric)
             self.assertEqual(initial_timestamp, goal_state.extensions_goal_state.created_on_timestamp, "The timestamp of the updated goal state is incorrect")
             self.assertTrue(goal_state.extensions_goal_state.is_outdated, "The updated goal state should be marked as outdated")
+
+    def test_it_should_report_missing_certificates(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-missing_cert.json"
+
+        with mock_wire_protocol(data_file) as protocol:
+            with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
+                _ = GoalState(protocol.client)
+
+                expected_message = "Certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C needed by Microsoft.OSTCExtensions.VMAccessForLinux is missing from the goal state"
+                events = [kwargs for _, kwargs in add_event.call_args_list if kwargs['op'] == WALAEventOperation.VmSettings and kwargs['message'] == expected_message]
+
+                self.assertTrue(
+                    len(events) == 1,
+                    "Missing certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C was note reported. Telemetry: {0}".format([kwargs['message'] for _, kwargs in add_event.call_args_list]))
