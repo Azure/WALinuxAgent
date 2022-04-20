@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+import threading
 from collections import namedtuple
 
 import errno
@@ -138,6 +139,7 @@ class CpuCgroup(CGroup):
         self._current_system_cpu = None
         self._previous_throttled_time = None
         self._current_throttled_time = None
+        self._throttled_time_lock = threading.RLock()  # Protect the get_throttled_time which is called from Monitor thread and cgroupconfigurator.
 
     def _get_cpu_ticks(self, allow_no_such_file_or_directory_error=False):
         """
@@ -171,7 +173,8 @@ class CpuCgroup(CGroup):
 
         return cpu_ticks
 
-    def _get_throttled_time(self):
+    def get_throttled_time(self):
+        self._throttled_time_lock.acquire()
         try:
             with open(os.path.join(self.path, 'cpu.stat')) as cpu_stat:
                 #
@@ -193,6 +196,8 @@ class CpuCgroup(CGroup):
             raise CGroupsException("Failed to read cpu.stat: {0}".format(ustr(e)))
         except Exception as e:
             raise CGroupsException("Failed to read cpu.stat: {0}".format(ustr(e)))
+        finally:
+            self._throttled_time_lock.release()
 
     def _cpu_usage_initialized(self):
         return self._current_cgroup_cpu is not None and self._current_system_cpu is not None
@@ -205,7 +210,7 @@ class CpuCgroup(CGroup):
             raise CGroupsException("initialize_cpu_usage() should be invoked only once")
         self._current_cgroup_cpu = self._get_cpu_ticks(allow_no_such_file_or_directory_error=True)
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
-        self._current_throttled_time = self._get_throttled_time()
+        self._current_throttled_time = self.get_throttled_time()
 
     def get_cpu_usage(self):
         """
@@ -229,7 +234,7 @@ class CpuCgroup(CGroup):
 
         return round(100.0 * self._osutil.get_processor_cores() * float(cgroup_delta) / float(system_delta), 3)
 
-    def get_throttled_time(self):
+    def get_cpu_throttled_time(self):
         """
         Computes the throttled time (in seconds) since the last call to this function.
         NOTE: initialize_cpu_usage() must be invoked before calling this function
@@ -238,7 +243,7 @@ class CpuCgroup(CGroup):
             raise CGroupsException("initialize_cpu_usage() must be invoked before the first call to get_throttled_time()")
 
         self._previous_throttled_time = self._current_throttled_time
-        self._current_throttled_time = self._get_throttled_time()
+        self._current_throttled_time = self.get_throttled_time()
 
         return float(self._current_throttled_time - self._previous_throttled_time) / 1E9
 
@@ -249,7 +254,7 @@ class CpuCgroup(CGroup):
             tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
 
         if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
-            throttled_time = self.get_throttled_time()
+            throttled_time = self.get_cpu_throttled_time()
             if cpu_usage >= float(0) and throttled_time >= float(0):
                 tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
 

@@ -15,14 +15,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
+import shutil
 import subprocess
 import tempfile
 
+from azurelinuxagent.common.cgroup import CpuCgroup
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
-from tests.tools import AgentTestCase, patch
+from tests.tools import AgentTestCase, patch, data_dir
 
 
 class TestProcessUtils(AgentTestCase):
@@ -50,7 +52,7 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
+        timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=5, cpu_cgroup=None)
         self.assertEqual(timed_out, False) 
         self.assertEqual(ret, 0) 
 
@@ -68,7 +70,7 @@ class TestProcessUtils(AgentTestCase):
         # We don't actually mock the kill, just wrap it so we can assert its call count
         with patch('azurelinuxagent.common.utils.extensionprocessutil.os.killpg', wraps=os.killpg) as patch_kill:
             with patch('time.sleep') as mock_sleep:
-                timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=timeout)
+                timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=timeout, cpu_cgroup=None)
 
                 # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                 # we're "waiting" the correct amount of time before killing the process
@@ -87,7 +89,7 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
+        timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=5, cpu_cgroup=None)
         self.assertEqual(timed_out, False) 
         self.assertEqual(ret, 2) 
 
@@ -143,6 +145,46 @@ class TestProcessUtils(AgentTestCase):
 
                     self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
                     self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
+                    self.assertNotIn("CPUThrottledTime({0}secs)".format(timeout), ustr(context_manager.exception)) #Extension not started in cpuCgroup
+
+
+    def test_handle_process_completion_should_log_throttled_time_on_timeout(self):
+        command = "sleep 1m"
+        timeout = 20
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch('time.sleep') as mock_sleep:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        test_file = os.path.join(self.tmp_dir, "cpu.stat")
+                        shutil.copyfile(os.path.join(data_dir, "cgroups", "cpu.stat_t0"),
+                                        test_file)  # throttled_time = 50
+                        cgroup = CpuCgroup("test", self.tmp_dir)
+                        process = subprocess.Popen(command,  # pylint: disable=subprocess-popen-preexec-fn
+                                                   shell=True,
+                                                   cwd=self.tmp_dir,
+                                                   env={},
+                                                   stdout=stdout,
+                                                   stderr=stderr,
+                                                   preexec_fn=os.setsid)
+
+                        handle_process_completion(process=process,
+                                                  command=command,
+                                                  timeout=timeout,
+                                                  stdout=stdout,
+                                                  stderr=stderr,
+                                                  error_code=42,
+                                                  cpu_cgroup=cgroup)
+
+                    # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
+                    # we're "waiting" the correct amount of time before killing the process and raising an exception
+                    # Due to an extra call to sleep at some point in the call stack which only happens sometimes,
+                    # we are relaxing this assertion to allow +/- 2 sleep calls.
+                    self.assertTrue(abs(mock_sleep.call_count - timeout) <= 2)
+
+                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                    self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
+                    throttled_time = float(50 / 1E9)
+                    self.assertIn("CPUThrottledTime({0}secs)".format(throttled_time), ustr(context_manager.exception))
 
     def test_handle_process_completion_should_raise_on_nonzero_exit_code(self):
         command = "ls folder_does_not_exist"
