@@ -9,7 +9,7 @@ import zipfile
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, timeutil
 
 # pylint: disable=W0105
 
@@ -58,13 +58,15 @@ _CACHE_PATTERNS = [
 #   2018-04-06T08:21:37.142697.zip
 #   2018-04-06T08:21:37.142697_incarnation_N
 #   2018-04-06T08:21:37.142697_incarnation_N.zip
-#
-# Current names
-#
 #   2018-04-06T08:21:37.142697_N-M
 #   2018-04-06T08:21:37.142697_N-M.zip
 #
-_ARCHIVE_BASE_PATTERN = r"\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status)(-\d+)?)?"
+# Current names
+#
+#   2018-04-06T08-21-37__N-M
+#   2018-04-06T08-21-37__N-M.zip
+#
+_ARCHIVE_BASE_PATTERN = r"\d{4}\-\d{2}\-\d{2}T\d{2}[:-]\d{2}[:-]\d{2}(\.\d+)?((_incarnation)?_+(\d+|status)(-\d+)?)?"
 _ARCHIVE_PATTERNS_DIRECTORY = re.compile(r'^{0}$'.format(_ARCHIVE_BASE_PATTERN))
 _ARCHIVE_PATTERNS_ZIP = re.compile(r'^{0}\.zip$'.format(_ARCHIVE_BASE_PATTERN))
 
@@ -163,7 +165,6 @@ class StateArchiver(object):
         newest ones. Also, clean up any legacy history files.
         """
         states = self._get_archive_states()
-        states.sort(reverse=True)
 
         for state in states[_MAX_ARCHIVED_STATES:]:
             state.delete()
@@ -184,7 +185,6 @@ class StateArchiver(object):
 
     def archive(self):
         states = self._get_archive_states()
-        states.sort(reverse=True)
 
         if len(states) > 0:
             # Skip the most recent goal state, since it may still be in use
@@ -203,13 +203,16 @@ class StateArchiver(object):
             if match is not None:
                 states.append(StateZip(full_path, match.group(0)))
 
+        states.sort(key=lambda state: os.path.getctime(state._path), reverse=True)
+
         return states
 
 
 class GoalStateHistory(object):
-    def __init__(self, timestamp, tag):
+    def __init__(self, time, tag):
         self._errors = False
-        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
+        timestamp = timeutil.create_history_timestamp(time)
+        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}__{1}".format(timestamp, tag) if tag is not None else timestamp)
 
     @staticmethod
     def tag_exists(tag):
