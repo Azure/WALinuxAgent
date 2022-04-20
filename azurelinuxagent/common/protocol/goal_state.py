@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+import datetime
 import os
 import re
 import time
@@ -31,7 +32,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state_factory import Extens
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList
-from azurelinuxagent.common.utils import fileutil, timeutil
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib
@@ -131,7 +132,7 @@ class GoalState(object):
         #
         # Fetch the goal state from both the HGAP and the WireServer
         #
-        timestamp = timeutil.create_timestamp()
+        timestamp = datetime.datetime.utcnow()
 
         incarnation, xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
         goal_state_updated = incarnation != self._incarnation
@@ -199,7 +200,7 @@ class GoalState(object):
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
         logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
-        self._history = GoalStateHistory(timeutil.create_timestamp(), incarnation)
+        self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
         self._history.save_goal_state(xml_text)
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
         if self._extensions_goal_state.created_on_timestamp < vm_settings_support_stopped_error.timestamp:
@@ -270,7 +271,7 @@ class GoalState(object):
             except VmSettingsParseError as exception:
                 # ensure we save the vmSettings if there were parsing errors, but save them only once per ETag
                 if not GoalStateHistory.tag_exists(exception.etag):
-                    GoalStateHistory(timeutil.create_timestamp(), exception.etag).save_vm_settings(exception.vm_settings_text)
+                    GoalStateHistory(datetime.datetime.utcnow(), exception.etag).save_vm_settings(exception.vm_settings_text)
                 raise
 
         return vm_settings, vm_settings_updated
