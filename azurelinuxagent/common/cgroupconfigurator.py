@@ -56,6 +56,7 @@ DefaultDependencies=no
 Before=slices.target
 [Slice]
 CPUAccounting=yes
+CPUQuota={cpu_quota}
 """
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
@@ -762,21 +763,22 @@ class CGroupConfigurator(object):
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
-        def setup_extension_slice(self, extension_name):
+        def setup_extension_slice(self, extension_name, cpu_quota):
             """
             Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
             extensions are grouped under "azure-vmextensions.slice.
 
             This method ensures that the extension slice is created. Setup should create
             under /lib/systemd/system if it is not exist.
-            TODO: set cpu and memory quotas
+            TODO: set memory quotas
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
-                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name)
+                    cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""
+                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
                     _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
@@ -800,7 +802,7 @@ class CGroupConfigurator(object):
             Each extension service will have name, systemd path and it's quotas.
             This method ensures that drop-in files are created under service.d folder if quotas given.
             ex: /lib/systemd/system/extension.service.d/11-CPUAccounting.conf
-            TODO: set cpu and memory quotas
+            TODO: set memory quotas
             """
             if self.enabled() and services_list is not None:
                 for service in services_list:
@@ -812,6 +814,13 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+
+                        cpu_quota = service.get('cpuQuotaPercentage', None)
+                        if cpu_quota is not None:
+                            cpu_quota = str(cpu_quota) + "%"
+                            drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                            cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
+                            files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
 
                         self.__create_all_files(files_to_create)
 
@@ -836,6 +845,11 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_cleanup.append(drop_in_file_cpu_accounting)
+                        cpu_quota = service.get('cpuQuotaPercentage', None)
+                        if cpu_quota is not None:
+                            drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                            files_to_cleanup.append(drop_in_file_cpu_quota)
+
                         CGroupConfigurator._Impl.__cleanup_all_files(files_to_cleanup)
                         _log_cgroup_info("Drop in files removed for {0}".format(service_name))
 
