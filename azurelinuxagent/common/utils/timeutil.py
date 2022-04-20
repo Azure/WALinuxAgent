@@ -3,14 +3,14 @@
 import datetime
 
 
-def create_timestamp(dt=None, timespec='auto'):
+def create_timestamp(dt=None):
     """
     Returns a string with the given datetime in iso format. If no datetime is given as parameter, it
-    uses datetime.utcnow(). The 'timespec' parameter is passed as argument to datetime.isoformat()
+    uses datetime.utcnow().
     """
     if dt is None:
         dt = datetime.datetime.utcnow()
-    return dt.isoformat(timespec=timespec)
+    return dt.isoformat()
 
 
 def create_history_timestamp(dt=None):
@@ -19,7 +19,7 @@ def create_history_timestamp(dt=None):
     """
     if dt is None:
         dt = datetime.datetime.utcnow()
-    return dt.isoformat(timespec='seconds').replace(":", "-")
+    return dt.strftime('%Y-%m-%dT%H-%M-%S')
 
 
 def datetime_to_ticks(dt):
