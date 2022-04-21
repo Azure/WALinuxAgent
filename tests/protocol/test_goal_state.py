@@ -373,4 +373,4 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
                 self.assertTrue(
                     len(events) == 1,
-                    "Missing certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C was note reported. Telemetry: {0}".format([kwargs['message'] for _, kwargs in add_event.call_args_list]))
+                    "Missing certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C was not reported. Telemetry: {0}".format([kwargs['message'] for _, kwargs in add_event.call_args_list]))
