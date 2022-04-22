@@ -48,6 +48,14 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 _GET_GOAL_STATE_MAX_ATTEMPTS = 6
 
 
+class GoalStateInconsistentError(ProtocolError):
+    """
+    Indicates an inconsistency in the goal state (e.g. missing tenant certificate)
+    """
+    def __init__(self, msg, inner=None):
+        super(GoalStateInconsistentError, self).__init__(msg, inner)
+
+
 class GoalState(object):
     def __init__(self, wire_client):
         """
@@ -77,6 +85,8 @@ class GoalState(object):
 
             self.update()
 
+        except ProtocolError:
+            raise
         except Exception as exception:
             # We don't log the error here since fetching the goal state is done every few seconds
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
@@ -129,19 +139,25 @@ class GoalState(object):
         """
         Updates the current GoalState instance fetching values from the WireServer/HostGAPlugin as needed
         """
+        self._update(is_retry=False)
+
+    def _update(self, is_retry):
         #
         # Fetch the goal state from both the HGAP and the WireServer
         #
         timestamp = datetime.datetime.utcnow()
 
+        if is_retry:  # we force a refresh of the entire goal state on retries
+            logger.info("Refreshing goal state and vmSettings")
+
         incarnation, xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
-        goal_state_updated = incarnation != self._incarnation
+        goal_state_updated = incarnation != self._incarnation or is_retry
         if goal_state_updated:
             logger.info('Fetched a new incarnation for the WireServer goal state [incarnation {0}]', incarnation)
 
         vm_settings, vm_settings_updated = None, False
         try:
-            vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client)
+            vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client, force_update=is_retry)
         except VmSettingsSupportStopped as exception:  # If the HGAP stopped supporting vmSettings, we need to use the goal state from the WireServer
             self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
             return
@@ -187,16 +203,34 @@ class GoalState(object):
         if self._extensions_goal_state is None or most_recent.created_on_timestamp > self._extensions_goal_state.created_on_timestamp:
             self._extensions_goal_state = most_recent
 
-        # For Fast Track goal states, verify that the required certificates are in the goal state
+        #
+        # For Fast Track goal states, verify that the required certificates are in the goal state.
+        #
+        # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
+        # tenant certificate is re-generated when the VM is restarted) *without* the incarnation necessarily changing (e.g. if the incarnation
+        # is 1 before the hibernation; on resume the incarnation is set to 1 even though the goal state has a new certificate). If a Fast
+        # Track goal state comes after that, the extensions will need the new certificate. The Agent needs to refresh the goal state in that
+        # case, to ensure it fetches the new certificate.
+        #
         if self.extensions_goal_state.source == GoalStateSource.FastTrack:
-            for extension in self.extensions_goal_state.extensions:
-                for settings in extension.settings:
-                    if settings.protectedSettings is None:
-                        continue
-                    certificates = self.certs.summary
-                    if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
-                        message = "Certificate {0} needed by {1} is missing from the goal state".format(settings.certificateThumbprint, extension.name)
-                        add_event(op=WALAEventOperation.VmSettings, message=message, is_success=False)
+            try:
+                self._check_certificates()
+            except GoalStateInconsistentError as e:
+                if is_retry:
+                    raise
+                logger.warn("Detected an inconsistency in the goal state: {0}", ustr(e))
+                self._update(is_retry=True)
+                logger.info("The goal state is consistent")
+
+    def _check_certificates(self):
+        for extension in self.extensions_goal_state.extensions:
+            for settings in extension.settings:
+                if settings.protectedSettings is None:
+                    continue
+                certificates = self.certs.summary
+                if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
+                    message = "Certificate {0} needed by {1} is missing from the goal state".format(settings.certificateThumbprint, extension.name)
+                    raise GoalStateInconsistentError(message)
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
         logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
@@ -249,7 +283,7 @@ class GoalState(object):
         return incarnation, xml_text, xml_doc
 
     @staticmethod
-    def _fetch_vm_settings(wire_client):
+    def _fetch_vm_settings(wire_client, force_update=False):
         """
         Issues an HTTP request (HostGAPlugin) for the vm settings and returns the response as an ExtensionsGoalState.
         """
@@ -258,11 +292,11 @@ class GoalState(object):
         if conf.get_enable_fast_track():
             try:
                 try:
-                    vm_settings, vm_settings_updated = wire_client.get_host_plugin().fetch_vm_settings()
+                    vm_settings, vm_settings_updated = wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
                 except ResourceGoneError:
                     # retry after refreshing the HostGAPlugin
                     GoalState.update_host_plugin_headers(wire_client)
-                    vm_settings, vm_settings_updated = wire_client.get_host_plugin().fetch_vm_settings()
+                    vm_settings, vm_settings_updated = wire_client.get_host_plugin().fetch_vm_settings(force_update=force_update)
 
             except VmSettingsSupportStopped:
                 raise

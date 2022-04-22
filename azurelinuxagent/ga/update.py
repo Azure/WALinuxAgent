@@ -559,8 +559,8 @@ class UpdateHandler(object):
             raise AgentUpgradeExitException(
                 "Exiting current process to {0} to the request Agent version {1}".format(prefix, requested_version))
 
-        # Ignore new agents if updating is disabled
-        if not conf.get_autoupdate_enabled():
+        # Skip the update if there is no goal state yet or auto-update is disabled
+        if self._goal_state is None or not conf.get_autoupdate_enabled():
             return False
 
         if self._download_agent_if_upgrade_available(protocol):
@@ -600,11 +600,14 @@ class UpdateHandler(object):
             protocol = exthandlers_handler.protocol
 
             # update self._goal_state
-            self._try_update_goal_state(protocol)
-
-            # Update the Guest Agent if a new version is available
-            if self._goal_state is not None:
+            if not self._try_update_goal_state(protocol):
+                # agent updates and status reporting should be done even when the goal state is not updated
                 self.__update_guest_agent(protocol)
+                self._report_status(exthandlers_handler)
+                return
+
+            # check for agent updates
+            self.__update_guest_agent(protocol)
 
             if self._processing_new_extensions_goal_state():
                 if not self._extensions_summary.converged:
@@ -616,8 +619,7 @@ class UpdateHandler(object):
                 self._extensions_summary = ExtensionsSummary()
                 exthandlers_handler.run()
 
-            # always report status, even if the goal state did not change
-            # do it before processing the remote access, since that operation can take a long time
+            # report status before processing the remote access, since that operation can take a long time
             self._report_status(exthandlers_handler)
 
             if self._processing_new_incarnation():
