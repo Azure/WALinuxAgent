@@ -2712,7 +2712,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 update_handler._try_update_goal_state(protocol)
 
                 e = errors()
-                self.assertEqual(1, len(e), "A failure should have produced a warning: [{0}]".format(e))
+                self.assertEqual(1, len(e), "A failure should have produced an error: [{0}]".format(e))
 
                 gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
@@ -2728,7 +2728,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 e = errors()
                 pe = periodic_errors()
                 self.assertEqual(2, len(e), "Two additional errors should have been reported: [{0}]".format(e))
-                self.assertEqual(len(pe), 3, "Subsequent failures should produce periodic warnings: [{0}]".format(pe))
+                self.assertEqual(len(pe), 3, "Subsequent failures should produce periodic errors: [{0}]".format(pe))
 
                 tc = telemetry_calls()
                 self.assertTrue(len(tc) == 5, "The failures should have produced telemetry events. Got: [{0}]".format(tc))
