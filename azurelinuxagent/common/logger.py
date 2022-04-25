@@ -45,6 +45,7 @@ class Logger(object):
         self.logger = self if logger is None else logger
         self.periodic_messages = {}
         self.prefix = prefix
+        self.silent = False
 
     def reset_periodic(self):
         self.logger.periodic_messages = {}
@@ -123,6 +124,9 @@ class Logger(object):
                     log_appender.write(level, log_item)
                 finally:
                     log_appender.appender_lock = False
+
+        if self.silent:
+            return
 
         # if msg_format is not unicode convert it to unicode
         if type(msg_format) is not ustr:
