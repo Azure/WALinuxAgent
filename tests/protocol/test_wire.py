@@ -160,7 +160,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # -- Tracking calls to retrieve GoalState is problematic since it is
         #    fetched often; however, the dependent documents, such as the
         #    HostingEnvironmentConfig, will be retrieved the expected number
-        self.assertEqual(1, test_data.call_counts["hostingenvuri"])
+        self.assertEqual(1, test_data.call_counts["hostingEnvironmentConfig"])
         self.assertEqual(1, patch_report.call_count)
 
     def test_call_storage_kwargs(self, *args):  # pylint: disable=unused-argument
