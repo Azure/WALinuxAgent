@@ -168,7 +168,8 @@ class UpdateHandler(object):
 
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
-        self._last_try_update_goal_state_failed = False
+        self._update_goal_state_error_count = 0
+        self._update_goal_state_last_error_report = datetime.min
         self._report_status_last_failed_goal_state = None
 
         # incarnation of the last goal state that has been fully processed
@@ -481,13 +482,16 @@ class UpdateHandler(object):
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
         """
         try:
-            protocol.update_goal_state()
+            max_errors_to_log = 3
+
+            protocol.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log)
 
             self._goal_state = protocol.get_goal_state()
 
-            if self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = False
-                message = u"Retrieving the goal state recovered from previous errors"
+            if self._update_goal_state_error_count > 0:
+                self._update_goal_state_error_count = 0
+                message = u"Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})".format(
+                    self._goal_state.extensions_goal_state.id, self._goal_state.certs.summary)
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
 
@@ -497,15 +501,21 @@ class UpdateHandler(object):
                 self._supports_fast_track = False
 
         except Exception as e:
-            if not self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = True
-                message = u"An error occurred while retrieving the goal state: {0}".format(textutil.format_exception(e))
-                logger.warn(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
-            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
-            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            self._update_goal_state_error_count += 1
             self._heartbeat_update_goal_state_error_count += 1
+            if self._update_goal_state_error_count <= max_errors_to_log:
+                message = u"Error fetching the goal state: {0}".format(textutil.format_exception(e))
+                logger.error(message)
+                add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
+                self._update_goal_state_last_error_report = datetime.now()
+            else:
+                if self._update_goal_state_last_error_report + timedelta(hours=6) > datetime.now():
+                    self._update_goal_state_last_error_report = datetime.now()
+                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))
+                    logger.error(message)
+                    add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
             return False
+
         return True
 
     def __update_guest_agent(self, protocol):

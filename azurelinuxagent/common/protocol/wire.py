@@ -83,8 +83,8 @@ class WireProtocol(DataContract):
         logger.info('Initializing goal state during protocol detection')
         self.client.update_goal_state(force_update=True)
 
-    def update_goal_state(self):
-        self.client.update_goal_state()
+    def update_goal_state(self, silent=False):
+        self.client.update_goal_state(silent=silent)
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -759,18 +759,18 @@ class WireClient(object):
             self._host_plugin.update_container_id(container_id)
             self._host_plugin.update_role_config_name(role_config_name)
 
-    def update_goal_state(self, force_update=False):
+    def update_goal_state(self, force_update=False, silent=False):
         """
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
             if force_update:
-                logger.info("Forcing an update of the goal state..")
+                logger.info("Forcing an update of the goal state.")
 
             if self._goal_state is None or force_update:
-                self._goal_state = GoalState(self)
+                self._goal_state = GoalState(self, silent=silent)
             else:
-                self._goal_state.update()
+                self._goal_state.update(silent=silent)
 
         except ProtocolError:
             raise

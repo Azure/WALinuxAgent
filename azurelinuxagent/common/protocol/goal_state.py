@@ -57,7 +57,7 @@ class GoalStateInconsistentError(ProtocolError):
 
 
 class GoalState(object):
-    def __init__(self, wire_client):
+    def __init__(self, wire_client, silent=False):
         """
         Fetches the goal state using the given wire client.
 
@@ -72,6 +72,8 @@ class GoalState(object):
             self._wire_client = wire_client
             self._history = None
             self._extensions_goal_state = None  # populated from vmSettings or extensionsConfig
+            self.logger = logger.Logger(logger.DEFAULT_LOGGER)
+            self.logger.silent = silent
 
             # These properties hold the goal state from the WireServer and are initialized by self._fetch_full_wire_server_goal_state()
             self._incarnation = None
@@ -83,7 +85,7 @@ class GoalState(object):
             self._certs = None
             self._remote_access = None
 
-            self.update()
+            self.update(silent=silent)
 
         except ProtocolError:
             raise
@@ -135,40 +137,47 @@ class GoalState(object):
         # Fetching the goal state updates the HostGAPlugin so simply trigger the request
         GoalState._fetch_goal_state(wire_client)
 
-    def update(self):
+    def update(self, silent=False):
         """
         Updates the current GoalState instance fetching values from the WireServer/HostGAPlugin as needed
         """
-        self._update(is_retry=False)
+        self.logger.silent = silent
 
-    def _update(self, is_retry):
+        try:
+            self._update(force_update=False)
+        except GoalStateInconsistentError as e:
+            self.logger.warn("Detected an inconsistency in the goal state: {0}", ustr(e))
+            self._update(force_update=True)
+            self.logger.info("The goal state is consistent")
+
+    def _update(self, force_update):
         #
         # Fetch the goal state from both the HGAP and the WireServer
         #
         timestamp = datetime.datetime.utcnow()
 
-        if is_retry:  # we force a refresh of the entire goal state on retries
-            logger.info("Refreshing goal state and vmSettings")
+        if force_update:
+            self.logger.info("Refreshing goal state and vmSettings")
 
         incarnation, xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
-        goal_state_updated = incarnation != self._incarnation or is_retry
+        goal_state_updated = force_update or incarnation != self._incarnation
         if goal_state_updated:
-            logger.info('Fetched a new incarnation for the WireServer goal state [incarnation {0}]', incarnation)
+            self.logger.info('Fetched a new incarnation for the WireServer goal state [incarnation {0}]', incarnation)
 
         vm_settings, vm_settings_updated = None, False
         try:
-            vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client, force_update=is_retry)
+            vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client, force_update=force_update)
         except VmSettingsSupportStopped as exception:  # If the HGAP stopped supporting vmSettings, we need to use the goal state from the WireServer
             self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
             return
 
         if vm_settings_updated:
-            logger.info('')
-            logger.info("Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]", vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
+            self.logger.info('')
+            self.logger.info("Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]", vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
         # Ignore the vmSettings if their source is Fabric (processing a Fabric goal state may require the tenant certificate and the vmSettings don't include it.)
         if vm_settings is not None and vm_settings.source == GoalStateSource.Fabric:
             if vm_settings_updated:
-                logger.info("The vmSettings originated via Fabric; will ignore them.")
+                self.logger.info("The vmSettings originated via Fabric; will ignore them.")
             vm_settings, vm_settings_updated = None, False
 
         # If neither goal state has changed we are done with the update
@@ -213,14 +222,7 @@ class GoalState(object):
         # case, to ensure it fetches the new certificate.
         #
         if self.extensions_goal_state.source == GoalStateSource.FastTrack:
-            try:
-                self._check_certificates()
-            except GoalStateInconsistentError as e:
-                if is_retry:
-                    raise
-                logger.warn("Detected an inconsistency in the goal state: {0}", ustr(e))
-                self._update(is_retry=True)
-                logger.info("The goal state is consistent")
+            self._check_certificates()
 
     def _check_certificates(self):
         for extension in self.extensions_goal_state.extensions:
@@ -233,7 +235,7 @@ class GoalState(object):
                     raise GoalStateInconsistentError(message)
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
-        logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
+        self.logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
         self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
         self._history.save_goal_state(xml_text)
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
@@ -241,7 +243,7 @@ class GoalState(object):
             self._extensions_goal_state.is_outdated = True
             msg = "Fetched a Fabric goal state older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}".format(
                   self._extensions_goal_state.created_on_timestamp, vm_settings_support_stopped_error.timestamp)
-            logger.info(msg)
+            self.logger.info(msg)
             add_event(op=WALAEventOperation.VmSettings, message=msg, is_success=True)
 
     def save_to_history(self, data, file_name):
@@ -318,8 +320,8 @@ class GoalState(object):
         Returns the value of ExtensionsConfig.
         """
         try:
-            logger.info('')
-            logger.info('Fetching full goal state from the WireServer [incarnation {0}]', incarnation)
+            self.logger.info('')
+            self.logger.info('Fetching full goal state from the WireServer [incarnation {0}]', incarnation)
 
             role_instance = find(xml_doc, "RoleInstance")
             role_instance_id = findtext(role_instance, "InstanceId")
@@ -351,7 +353,11 @@ class GoalState(object):
             if certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
                 certs = Certificates(xml_text)
-                # Save the certificate summary, which includes only the thumbprint but not the certificate itself, to the goal state history
+                # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
+                for c in certs.summary:
+                    logger.info("Downloaded certificate {0}".format(c))
+                if len(certs.warnings) > 0:
+                    logger.warn(certs.warnings)
                 self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
@@ -373,10 +379,10 @@ class GoalState(object):
             return extensions_config
 
         except Exception as exception:
-            logger.warn("Fetching the goal state failed: {0}", ustr(exception))
+            self.logger.warn("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
-            logger.info('Fetch goal state completed')
+            self.logger.info('Fetch goal state completed')
 
 
 class HostingEnv(object):
@@ -400,6 +406,7 @@ class Certificates(object):
     def __init__(self, xml_text):
         self.cert_list = CertList()
         self.summary = []  # debugging info
+        self.warnings = []
 
         # Save the certificates
         local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
@@ -482,11 +489,10 @@ class Certificates(object):
             else:
                 # Since private key has *no* matching certificate,
                 # it will not be named correctly
-                logger.warn("Found NO matching cert/thumbprint for private key!")
+                self.warnings.append("Found NO matching cert/thumbprint for private key!")
 
         for pubkey, thumbprint in thumbprints.items():
             has_private_key = pubkey in prvs
-            logger.info("Downloaded certificate with thumbprint {0} (has private key: {1})".format(thumbprint, has_private_key))
             self.summary.append({"thumbprint": thumbprint, "hasPrivateKey": has_private_key})
 
         for v1_cert in v1_cert_list:

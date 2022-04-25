@@ -257,9 +257,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             # assert host plugin route is called
             self.assertEqual(1, patch_put.call_count, "Host plugin was not used")
 
-            # assert update goal state is only called once, non-forced
+            # assert update goal state is only called once
             self.assertEqual(1, wire_protocol.client.update_goal_state.call_count, "Unexpected call count")
-            self.assertEqual(0, len(wire_protocol.client.update_goal_state.call_args[1]), "Unexpected parameters")
 
             # ensure the correct url is used
             self.assertEqual(sas_url, patch_put.call_args[0][0])
@@ -291,9 +290,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             # assert host plugin route is called
             self.assertEqual(1, patch_put.call_count, "Host plugin was not used")
 
-            # assert update goal state is only called once, non-forced
+            # assert update goal state is only called once
             self.assertEqual(1, wire_protocol.client.update_goal_state.call_count, "Update goal state unexpected call count")
-            self.assertEqual(0, len(wire_protocol.client.update_goal_state.call_args[1]), "Update goal state unexpected call count")
 
             # ensure the correct url is used
             self.assertEqual(sas_url, patch_put.call_args[0][0])
@@ -326,9 +324,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             # assert host plugin route is called
             self.assertEqual(1, patch_put.call_count, "Host plugin was not used")
 
-            # assert update goal state is called with no arguments (forced=False), then update_host_plugin_from_goal_state is called
+            # assert update goal state is called, then update_host_plugin_from_goal_state is called
             self.assertEqual(1, wire_protocol.client.update_goal_state.call_count, "Update goal state unexpected call count")
-            self.assertEqual(0, len(wire_protocol.client.update_goal_state.call_args[1]), "Update goal state unexpected argument count")
             self.assertEqual(1, patch_refresh_host_plugin.call_count, "Refresh host plugin unexpected call count")
 
             # ensure the correct url is used
@@ -361,9 +358,8 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             # assert host plugin route is called
             self.assertEqual(1, patch_put.call_count, "Host plugin was not used")
 
-            # assert update goal state is called twice, forced=True on the second
+            # assert update goal state is called twice
             self.assertEqual(1, wire_protocol.client.update_goal_state.call_count, "Update goal state unexpected call count")
-            self.assertEqual(0, len(wire_protocol.client.update_goal_state.call_args[1]), "Update goal state unexpected call count")
 
             # ensure the correct url is used
             self.assertEqual(sas_url, patch_put.call_args[0][0])
