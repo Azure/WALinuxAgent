@@ -96,23 +96,23 @@ def check_waagent_log_for_errors(waagent_log=AGENT_LOG_FILE, ignore=None):
             'if': lambda log_line: log_line.level == "WARNING" and log_line.who == "Daemon"
         },
         #
-        # 2022-02-09T04:50:37.384810Z WARNING ExtHandler ExtHandler An error occurred while retrieving the goal state: [ProtocolError] GET vmSettings [correlation ID: 2bed9b62-188e-4668-b1a8-87c35cfa4927 eTag: 7031887032544600793]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] b'{  "errorCode": "VMArtifactsProfileBlobContentNotFound",  "message": "VM artifacts profile blob has no content in it.",  "details": ""}'
+        # 2022-02-09T04:50:37.384810Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 2bed9b62-188e-4668-b1a8-87c35cfa4927 eTag: 7031887032544600793]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] b'{  "errorCode": "VMArtifactsProfileBlobContentNotFound",  "message": "VM artifacts profile blob has no content in it.",  "details": ""}'
         #
         # Fetching the goal state may catch the HostGAPlugin in the process of computing the vmSettings. This can be ignored, if the issue persist the log would include additional instances.
         #
         {
             'message': r"\[ProtocolError\] GET vmSettings.*VMArtifactsProfileBlobContentNotFound",
-            'if': lambda log_line: log_line.level == "WARNING"
+            'if': lambda log_line: log_line.level == "ERROR"
         },
         #
-        # 2021-12-29T06:50:49.904601Z WARNING ExtHandler ExtHandler An error occurred while retrieving the goal state: [ProtocolError] Error fetching goal state: [ProtocolError] Error fetching goal state Inner error: [ResourceGoneError] [HTTP Failed] [410: Gone] The page you requested was removed.
-        # 2022-03-21T02:44:03.770017Z WARNING ExtHandler ExtHandler An error occurred while retrieving the goal state: [ProtocolError] Error fetching goal state Inner error: [ResourceGoneError] Resource is gone
+        # 2021-12-29T06:50:49.904601Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] Error fetching goal state Inner error: [ResourceGoneError] [HTTP Failed] [410: Gone] The page you requested was removed.
+        # 2022-03-21T02:44:03.770017Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] Error fetching goal state Inner error: [ResourceGoneError] Resource is gone
         # 2022-02-16T04:46:50.477315Z WARNING Daemon Daemon Fetching the goal state failed: [ResourceGoneError] [HTTP Failed] [410: Gone] b'<?xml version="1.0" encoding="utf-8"?>\n<Error xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\n    <Code>ResourceNotAvailable</Code>\n    <Message>The resource requested is no longer available. Please refresh your cache.</Message>\n    <Details></Details>\n</Error>'
         #
         # ResourceGone can happen if we are fetching one of the URIs in the goal state and a new goal state arrives
         {
-            'message': r"(?s)(An error occurred while retrieving the goal state|Fetching the goal state failed|Error fetching goal state).*(\[ResourceGoneError\]|\[410: Gone\]|Resource is gone)",
-            'if': lambda log_line: log_line.level == "WARNING"
+            'message': r"(?s)(Fetching the goal state failed|Error fetching goal state|Error fetching the goal state).*(\[ResourceGoneError\]|\[410: Gone\]|Resource is gone)",
+            'if': lambda log_line: log_line.level in ("WARNING", "ERROR")
         },
         #
         # 2022-03-08T03:03:23.036161Z WARNING ExtHandler ExtHandler Fetch failed from [http://168.63.129.16:32526/extensionArtifact]: [HTTP Failed] [400: Bad Request] b''
