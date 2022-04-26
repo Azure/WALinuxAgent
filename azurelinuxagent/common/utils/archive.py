@@ -42,13 +42,14 @@ ARCHIVE_DIRECTORY_NAME = 'history'
 _MAX_ARCHIVED_STATES = 50
 
 _CACHE_PATTERNS = [
-    re.compile(r"^VmSettings.\d+\.json$"),
+    re.compile(r"^VmSettings\.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
     re.compile(r"^SharedConfig\.xml$", re.IGNORECASE),
     re.compile(r"^HostingEnvironmentConfig\.xml$", re.IGNORECASE),
-    re.compile(r"^RemoteAccess\.xml$", re.IGNORECASE)
+    re.compile(r"^RemoteAccess\.xml$", re.IGNORECASE),
+    re.compile(r"^waagent_status\.\d+\.json$"),
 ]
 
 #
@@ -69,6 +70,7 @@ _ARCHIVE_PATTERNS_ZIP = re.compile(r'^{0}\.zip$'.format(_ARCHIVE_BASE_PATTERN))
 
 _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
+_CERTIFICATES_FILE_NAME = "Certificates.json"
 _HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 _SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 _REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
@@ -238,6 +240,9 @@ class GoalStateHistory(object):
 
     def save_remote_access(self, text):
         self.save(text, _REMOTE_ACCESS_FILE_NAME)
+
+    def save_certificates(self, text):
+        self.save(text, _CERTIFICATES_FILE_NAME)
 
     def save_hosting_env(self, text):
         self.save(text, _HOSTING_ENV_FILE_NAME)
