@@ -606,19 +606,19 @@ class UpdateHandler(object):
         return self._goal_state is not None and egs.id != self._last_extensions_gs_id and not egs.is_outdated
 
     def _process_goal_state(self, exthandlers_handler, remote_access_handler):
-        try:
-            protocol = exthandlers_handler.protocol
+        protocol = exthandlers_handler.protocol
 
-            # update self._goal_state
-            if not self._try_update_goal_state(protocol):
-                # agent updates and status reporting should be done even when the goal state is not updated
-                self.__update_guest_agent(protocol)
-                self._report_status(exthandlers_handler)
-                return
-
-            # check for agent updates
+        # update self._goal_state
+        if not self._try_update_goal_state(protocol):
+            # agent updates and status reporting should be done even when the goal state is not updated
             self.__update_guest_agent(protocol)
+            self._report_status(exthandlers_handler)
+            return
 
+        # check for agent updates
+        self.__update_guest_agent(protocol)
+
+        try:
             if self._processing_new_extensions_goal_state():
                 if not self._extensions_summary.converged:
                     message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
