@@ -62,6 +62,7 @@ from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_ev
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.exthandlers import HandlerManifest, ExtHandlersHandler, list_agent_lib_directory, \
     ExtensionStatusValue, ExtHandlerStatusValue
+from azurelinuxagent.ga.long_polling import get_longpolling_handler
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 
@@ -381,6 +382,7 @@ class UpdateHandler(object):
             all_thread_handlers = [
                 get_monitor_handler(),
                 get_env_handler(),
+                get_longpolling_handler(),
                 telemetry_handler,
                 get_collect_telemetry_events_handler(telemetry_handler)
             ]
