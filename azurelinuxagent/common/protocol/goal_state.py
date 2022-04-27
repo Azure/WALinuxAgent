@@ -209,7 +209,7 @@ class GoalState(object):
         else:  # vm_settings_updated
             most_recent = vm_settings
 
-        if self._extensions_goal_state is None or most_recent.created_on_timestamp > self._extensions_goal_state.created_on_timestamp:
+        if self._extensions_goal_state is None or most_recent.created_on_timestamp >= self._extensions_goal_state.created_on_timestamp:
             self._extensions_goal_state = most_recent
 
         #
@@ -221,7 +221,7 @@ class GoalState(object):
         # Track goal state comes after that, the extensions will need the new certificate. The Agent needs to refresh the goal state in that
         # case, to ensure it fetches the new certificate.
         #
-        if self.extensions_goal_state.source == GoalStateSource.FastTrack:
+        if self._extensions_goal_state.source == GoalStateSource.FastTrack:
             self._check_certificates()
 
     def _check_certificates(self):
