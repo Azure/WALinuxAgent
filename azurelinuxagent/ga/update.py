@@ -168,7 +168,8 @@ class UpdateHandler(object):
 
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
-        self._last_try_update_goal_state_failed = False
+        self._update_goal_state_error_count = 0
+        self._update_goal_state_last_error_report = datetime.min
         self._report_status_last_failed_goal_state = None
 
         # incarnation of the last goal state that has been fully processed
@@ -481,13 +482,16 @@ class UpdateHandler(object):
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
         """
         try:
-            protocol.update_goal_state()
+            max_errors_to_log = 3
+
+            protocol.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log)
 
             self._goal_state = protocol.get_goal_state()
 
-            if self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = False
-                message = u"Retrieving the goal state recovered from previous errors"
+            if self._update_goal_state_error_count > 0:
+                self._update_goal_state_error_count = 0
+                message = u"Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})".format(
+                    self._goal_state.extensions_goal_state.id, self._goal_state.certs.summary)
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
 
@@ -497,15 +501,21 @@ class UpdateHandler(object):
                 self._supports_fast_track = False
 
         except Exception as e:
-            if not self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = True
-                message = u"An error occurred while retrieving the goal state: {0}".format(textutil.format_exception(e))
-                logger.warn(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
-            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
-            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            self._update_goal_state_error_count += 1
             self._heartbeat_update_goal_state_error_count += 1
+            if self._update_goal_state_error_count <= max_errors_to_log:
+                message = u"Error fetching the goal state: {0}".format(textutil.format_exception(e))
+                logger.error(message)
+                add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
+                self._update_goal_state_last_error_report = datetime.now()
+            else:
+                if self._update_goal_state_last_error_report + timedelta(hours=6) > datetime.now():
+                    self._update_goal_state_last_error_report = datetime.now()
+                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))
+                    logger.error(message)
+                    add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
             return False
+
         return True
 
     def __update_guest_agent(self, protocol):
@@ -559,8 +569,8 @@ class UpdateHandler(object):
             raise AgentUpgradeExitException(
                 "Exiting current process to {0} to the request Agent version {1}".format(prefix, requested_version))
 
-        # Ignore new agents if updating is disabled
-        if not conf.get_autoupdate_enabled():
+        # Skip the update if there is no goal state yet or auto-update is disabled
+        if self._goal_state is None or not conf.get_autoupdate_enabled():
             return False
 
         if self._download_agent_if_upgrade_available(protocol):
@@ -600,11 +610,14 @@ class UpdateHandler(object):
             protocol = exthandlers_handler.protocol
 
             # update self._goal_state
-            self._try_update_goal_state(protocol)
-
-            # Update the Guest Agent if a new version is available
-            if self._goal_state is not None:
+            if not self._try_update_goal_state(protocol):
+                # agent updates and status reporting should be done even when the goal state is not updated
                 self.__update_guest_agent(protocol)
+                self._report_status(exthandlers_handler)
+                return
+
+            # check for agent updates
+            self.__update_guest_agent(protocol)
 
             if self._processing_new_extensions_goal_state():
                 if not self._extensions_summary.converged:
@@ -620,8 +633,7 @@ class UpdateHandler(object):
                 # Note: Monitor thread periodically checks this in addition to here.
                 CGroupConfigurator.get_instance().check_cgroups(cgroup_metrics=[])
 
-            # always report status, even if the goal state did not change
-            # do it before processing the remote access, since that operation can take a long time
+            # report status before processing the remote access, since that operation can take a long time
             self._report_status(exthandlers_handler)
 
             if self._processing_new_incarnation():

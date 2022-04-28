@@ -8,13 +8,12 @@ import os
 import re
 import time
 
-from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource, GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.goal_state import GoalState, _GET_GOAL_STATE_MAX_ATTEMPTS
+from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateInconsistentError, _GET_GOAL_STATE_MAX_ATTEMPTS
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
@@ -360,17 +359,54 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertEqual(initial_timestamp, goal_state.extensions_goal_state.created_on_timestamp, "The timestamp of the updated goal state is incorrect")
             self.assertTrue(goal_state.extensions_goal_state.is_outdated, "The updated goal state should be marked as outdated")
 
-    def test_it_should_report_missing_certificates(self):
+    def test_it_should_raise_when_the_tenant_certificate_is_missing(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
-        data_file["vm_settings"] = "hostgaplugin/vm_settings-missing_cert.json"
 
         with mock_wire_protocol(data_file) as protocol:
-            with patch("azurelinuxagent.common.protocol.goal_state.add_event") as add_event:
+            data_file["vm_settings"] = "hostgaplugin/vm_settings-missing_cert.json"
+            protocol.mock_wire_data.reload()
+
+            with self.assertRaises(GoalStateInconsistentError) as context:
                 _ = GoalState(protocol.client)
 
-                expected_message = "Certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C needed by Microsoft.OSTCExtensions.VMAccessForLinux is missing from the goal state"
-                events = [kwargs for _, kwargs in add_event.call_args_list if kwargs['op'] == WALAEventOperation.VmSettings and kwargs['message'] == expected_message]
+            expected_message = "Certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C needed by Microsoft.OSTCExtensions.VMAccessForLinux is missing from the goal state"
+            self.assertIn(expected_message, str(context.exception))
 
-                self.assertTrue(
-                    len(events) == 1,
-                    "Missing certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C was not reported. Telemetry: {0}".format([kwargs['message'] for _, kwargs in add_event.call_args_list]))
+    def test_it_should_refresh_the_goal_state_when_it_is_inconsistent(self):
+        #
+        # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
+        # tenant certificate is re-generated when the VM is restarted) *without* the incarnation changing. If a Fast Track goal state
+        # comes after that, the extensions will need the new certificate. This test simulates that scenario by mocking the certificates
+        # request and returning first a set of certificates (certs-2.xml) that do not match those needed by the extensions, and then a
+        # set (certs.xml) that does match. The test then ensures that the goal state was refreshed and the correct certificates were
+        # fetched.
+        #
+        data_files = [
+            "wire/certs-2.xml",
+            "wire/certs.xml"
+        ]
+
+        def http_get_handler(url, *_, **__):
+            if HttpRequestPredicates.is_certificates_request(url):
+                http_get_handler.certificate_requests += 1
+                if http_get_handler.certificate_requests < len(data_files):
+                    data = load_data(data_files[http_get_handler.certificate_requests - 1])
+                    return MockHttpResponse(status=200, body=data.encode('utf-8'))
+            return None
+        http_get_handler.certificate_requests = 0
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+            protocol.mock_wire_data.reset_call_counts()
+
+            goal_state = GoalState(protocol.client)
+
+            self.assertEqual(2, protocol.mock_wire_data.call_counts['goalstate'], "There should have been exactly 2 requests for the goal state (original + refresh)")
+            self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
+
+            thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
+
+            for extension in goal_state.extensions_goal_state.extensions:
+                for settings in extension.settings:
+                    if settings.protectedSettings is not None:
+                        self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")

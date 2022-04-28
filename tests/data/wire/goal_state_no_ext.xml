@@ -15,11 +15,11 @@
          <InstanceId>b61f93d0-e1ed-40b2-b067-22c243233448.MachineRole_IN_0</InstanceId>
          <State>Started</State>
          <Configuration>
-         <HostingEnvironmentConfig>http://168.63.129.16:80/hostingenvuri/</HostingEnvironmentConfig>
-         <SharedConfig>http://168.63.129.16:80/sharedconfiguri/</SharedConfig>
-         <Certificates>http://168.63.129.16:80/certificatesuri/</Certificates>
-         <FullConfig>http://168.63.129.16:80/fullconfiguri/</FullConfig>
-         <ConfigName>b61f93d0-e1ed-40b2-b067-22c243233448.1.b61f93d0-e1ed-40b2-b067-22c243233448.2.MachineRole_IN_0.xml</ConfigName>
+          <HostingEnvironmentConfig>http://168.63.129.16:80/machine/865a6683-91d8-450f-99ae/bc8b9d47%2Db5ed%2D4704%2D85d9%2Dfd74cc967ec2.%5Fcanary?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=1</HostingEnvironmentConfig>
+          <SharedConfig>http://168.63.129.16:80/machine/865a6683-91d8-450f-99ae/bc8b9d47%2Db5ed%2D4704%2D85d9%2Dfd74cc967ec2.%5Fcanary?comp=config&amp;type=sharedConfig&amp;incarnation=1</SharedConfig>
+          <FullConfig>http://168.63.129.16:80/machine/865a6683-91d8-450f-99ae/bc8b9d47%2Db5ed%2D4704%2D85d9%2Dfd74cc967ec2.%5Fcanary?comp=config&amp;type=fullConfig&amp;incarnation=1</FullConfig>
+          <Certificates>http://168.63.129.16:80/machine/865a6683-91d8-450f-99ae/bc8b9d47%2Db5ed%2D4704%2D85d9%2Dfd74cc967ec2.%5Fcanary?comp=certificates&amp;incarnation=1</Certificates>
+          <ConfigName>bc8b9d47-b5ed-4704-85d9-fd74cc967ec2.5.bc8b9d47-b5ed-4704-85d9-fd74cc967ec2.5._canary.1.xml</ConfigName>
          </Configuration>
        </RoleInstance>
      </RoleInstanceList>

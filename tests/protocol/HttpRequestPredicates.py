@@ -12,6 +12,22 @@ class HttpRequestPredicates(object):
         return url.lower() == 'http://{0}/machine/?comp=goalstate'.format(restutil.KNOWN_WIRESERVER_IP)
 
     @staticmethod
+    def is_certificates_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=certificates'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
+    def is_extensions_config_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=config&type=extensionsConfig'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
+    def is_hosting_environment_config_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=config&type=hostingEnvironmentConfig'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
+    def is_shared_config_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=config&type=sharedConfig'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
     def is_telemetry_request(url):
         return url.lower() == 'http://{0}/machine?comp=telemetrydata'.format(restutil.KNOWN_WIRESERVER_IP)
 
