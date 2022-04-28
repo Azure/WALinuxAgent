@@ -65,7 +65,7 @@ class LongPollingHandler(ThreadHandlerInterface):
                     timeout -= 1
 
                 if timeout == 0:
-                    logger.warn("Request timed out at : {0}".format(datetime.datetime.utcnow()))
+                    logger.warn("[HTTP Request(longPolling)] timed out at : {0}".format(datetime.datetime.utcnow()))
                 else:
                     if resp.status != 200 and not 500 <= resp.status <= 599:
                         new_request = False
