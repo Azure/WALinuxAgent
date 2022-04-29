@@ -2927,7 +2927,8 @@ class ProcessGoalStateTestCase(AgentTestCase):
                 with mock_update_handler(protocol) as update_handler:
                     update_handler.run()
 
-        self.assertIsNone(HostPluginProtocol.get_fast_track_timestamp(), "The Fast Track state was not cleared")
+        self.assertEquals(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_timestamp(datetime.min),
+            "The Fast Track state was not cleared")
 
     def test_it_should_default_fast_track_timestamp_to_datetime_min(self):
         data = DATA_FILE_VM_SETTINGS.copy()
