@@ -1592,9 +1592,10 @@ class TestUpdate(UpdateTestCase):
                             for (args, _) in filter(lambda a: len(a) > 0, patched_error.call_args_list):
                                 if unexpected_msg_fragment in args[0]:
                                     matching_errors.append(args[0])
-
-                            self.assertLessEqual(len(matching_errors), 1, "Guest Agent did not recover, with new error(s): {}"\
-                                .format(matching_errors[1:]))
+                            
+                            if len(matching_errors) > 1:
+                                self.fail("Guest Agent did not recover, with new error(s): {}"\
+                                    .format(matching_errors[1:]))
 
                         def match_expected_info():
                             expected_msg_fragment = "Fetching the goal state recovered from previous errors"
