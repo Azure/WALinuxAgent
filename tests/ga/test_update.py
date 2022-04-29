@@ -2932,6 +2932,12 @@ class ProcessGoalStateTestCase(AgentTestCase):
 
     def test_it_should_default_fast_track_timestamp_to_datetime_min(self):
         data = DATA_FILE_VM_SETTINGS.copy()
+        # TODO: Currently, there's a limitation in the mocks where bumping the incarnation but the goal
+        # state will cause the agent to error out while trying to write the certificates to disk. These
+        # files have no dependencies on certs, so using them does not present that issue.
+        #
+        # Note that the scenario this test is representing does not depend on certificates at all, and
+        # can be changed to use the default files when the above limitation is addressed.
         data["vm_settings"] = "hostgaplugin/vm_settings-fabric-no_extension_manifests.json"
         data['goal_state'] = 'wire/goal_state_no_certs.xml'
 
