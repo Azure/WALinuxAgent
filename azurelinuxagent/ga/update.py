@@ -489,11 +489,11 @@ class UpdateHandler(object):
             self._goal_state = protocol.get_goal_state()
 
             if self._update_goal_state_error_count > 0:
-                self._update_goal_state_error_count = 0
                 message = u"Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})".format(
                     self._goal_state.extensions_goal_state.id, self._goal_state.certs.summary)
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
+                self._update_goal_state_error_count = 0
 
             try:
                 self._supports_fast_track = conf.get_enable_fast_track() and protocol.client.get_host_plugin().check_vm_settings_support()
