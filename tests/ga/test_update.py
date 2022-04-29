@@ -2957,15 +2957,19 @@ class ProcessGoalStateTestCase(AgentTestCase):
             
             with mock_update_handler(protocol, 3, on_new_iteration=mock_live_migration) as update_handler:
                 with patch("azurelinuxagent.ga.update.logger.error") as patched_error:
-                    def match_unexpected_errors():
-                        unexpected_msg_fragment = "Error fetching the goal state:"
+                    def check_for_errors():
+                        msg_fragment = "Error fetching the goal state:"
 
                         for (args, _) in filter(lambda a: len(a) > 0, patched_error.call_args_list):
-                            if unexpected_msg_fragment in args[0]:
+                            if msg_fragment in args[0]:
                                 self.fail("Found error: {}".format(args[0]))
 
                     update_handler.run(debug=True)
-                    match_unexpected_errors()
+                    check_for_errors()
+                
+            timestamp = protocol.client.get_host_plugin()._fast_track_timestamp
+            self.assertEqual(timestamp, timeutil.create_timestamp(datetime.min),
+                "Expected fast track time stamp to be set to {0}, got {1}".format(datetime.min, timestamp))
 
 class HeartbeatTestCase(AgentTestCase):
 
