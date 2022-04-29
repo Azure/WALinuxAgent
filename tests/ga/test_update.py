@@ -28,7 +28,7 @@ _ORIGINAL_POPEN = subprocess.Popen
 
 from mock import PropertyMock
 
-from azurelinuxagent.common import conf, protocol
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError
 from azurelinuxagent.common.future import ustr, httpclient

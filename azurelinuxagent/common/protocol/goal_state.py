@@ -506,7 +506,7 @@ class Certificates(object):
         fileutil.write_file(file_name, "".join(buf))
         return file_name
 
-class EmptyCertificates(Certificates):
+class EmptyCertificates:
     def __init__(self):
         self.cert_list = CertList()
         self.summary = []  # debugging info
