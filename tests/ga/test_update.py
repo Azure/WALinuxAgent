@@ -2919,7 +2919,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
     def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
         data_file = self._prepare_fast_track_goal_state()
 
-        if HostPluginProtocol.get_fast_track_timestamp() is timeutil.create_timestamp(datetime.datetime.min):
+        if HostPluginProtocol.get_fast_track_timestamp() is timeutil.create_timestamp(datetime.min):
             raise Exception("The test setup did not save the Fast Track state")
 
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
