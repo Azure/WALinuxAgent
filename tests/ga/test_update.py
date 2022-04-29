@@ -1564,6 +1564,53 @@ class TestUpdate(UpdateTestCase):
         eh = Extension(name=name)
         eh.version = version
         return ExtHandlerInstance(eh, protocol)
+    
+    def test_update_handler_recovers_from_error_with_no_certs(self):
+        data = DATA_FILE.copy()
+        data['goal_state'] = 'wire/goal_state_no_certs.xml'
+
+        def fail_gs_fetch(url, *_, **__):
+            if HttpRequestPredicates.is_goal_state_request(url):
+                return MockHttpResponse(status=500)
+            return None
+
+        with mock_wire_protocol(data) as protocol:
+
+            def fail_fetch_on_second_iter(iteration):
+                if iteration == 2:
+                    protocol.set_http_handlers(http_get_handler=fail_gs_fetch)
+                if iteration > 2: # Zero out the fail handler for subsequent iterations.
+                    protocol.set_http_handlers(http_get_handler=None)
+
+            with mock_update_handler(protocol, 3, on_new_iteration=fail_fetch_on_second_iter) as update_handler:
+                with patch("azurelinuxagent.ga.update.logger.error") as patched_error:
+                    with patch("azurelinuxagent.ga.update.logger.info") as patched_info:
+                        def match_unexpected_errors():
+                            unexpected_msg_fragment = "Error fetching the goal state:"
+
+                            matching_errors = []
+                            for (args, _) in filter(lambda a: len(a) > 0, patched_error.call_args_list):
+                                if unexpected_msg_fragment in args[0]:
+                                    matching_errors.append(args[0])
+                            
+                            if len(matching_errors) > 1:
+                                self.fail("Guest Agent did not recover, with new error(s): {}"\
+                                    .format(matching_errors[1:]))
+
+                        def match_expected_info():
+                            expected_msg_fragment = "Fetching the goal state recovered from previous errors"
+
+                            for (call_args, _) in filter(lambda a: len(a) > 0, patched_info.call_args_list):
+                                if expected_msg_fragment in call_args[0]:
+                                    break
+                            else:
+                                self.fail("Expected the guest agent to recover with '{}', but it didn't"\
+                                    .format(expected_msg_fragment))
+
+                        update_handler.run(debug=True)
+                        match_unexpected_errors() # Match on errors first, they can provide more info.
+                        match_expected_info()
+
 
     def test_it_should_recreate_handler_env_on_service_startup(self):
         iterations = 5
