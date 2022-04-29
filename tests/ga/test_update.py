@@ -2938,7 +2938,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
         #
         # Note that the scenario this test is representing does not depend on certificates at all, and
         # can be changed to use the default files when the above limitation is addressed.
-        data["vm_settings"] = "hostgaplugin/vm_settings-fabric-no_extension_manifests.json"
+        data["vm_settings"] = "hostgaplugin/vm_settings-fabric-no_thumbprints.json"
         data['goal_state'] = 'wire/goal_state_no_certs.xml'
 
         def vm_settings_no_change(url, *_, **__):
