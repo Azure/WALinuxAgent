@@ -1,0 +1,192 @@
+{
+    "hostGAPluginVersion": "1.0.8.124",
+    "vmSettingsSchemaVersion": "0.0",
+    "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
+    "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+    "inSvdSeqNo": 1,
+    "extensionsLastModifiedTickCount": 637726657706205299,
+    "extensionGoalStatesSource": "Fabric",
+    "onHold": true,
+    "statusUploadBlob": {
+        "statusBlobType": "BlockBlob",
+        "value": "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+    },
+    "inVMMetadata": {
+        "subscriptionId": "8e037ad4-618f-4466-8bc8-5099d41ac15b",
+        "resourceGroupName": "rg-dc-86fjzhp",
+        "vmName": "edp0plkw2b",
+        "location": "CentralUSEUAP",
+        "vmId": "86f4ae0a-61f8-48ae-9199-40f402d56864",
+        "vmSize": "Standard_B2s",
+        "osType": "Linux"
+    },
+    "requiredFeatures": [
+        {
+            "name": "MultipleExtensionsPerHandler"
+        }
+    ],
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
+            ]
+        },
+        {
+            "name": "Test",
+            "uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
+            ]
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
+            "version": "1.9.1",
+            "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml",
+            "failoverlocation": "https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml",
+            "additionalLocations": ["https://zrdfepirv2cbn09pr02a.blob.core.windows.net/a47f0806d764480a8d989d009c75007d/Microsoft.Azure.Monitor_AzureMonitorLinuxAgent_useast2euap_manifest.xml"],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "settings": [
+                {
+                    "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent",
+            "version": "2.15.112",
+            "location": "https://zrdfepirv2cbn04prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml",
+            "failoverlocation": "https://zrdfepirv2cbz06prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml",
+            "additionalLocations": ["https://zrdfepirv2cbn06prdstr01a.blob.core.windows.net/4ef06ad957494df49c807a5334f2b5d2/Microsoft.Azure.Security.Monitoring_AzureSecurityLinuxAgent_useast2euap_manifest.xml"],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "settings": [
+                {
+                    "publicSettings": "{\"enableGenevaUpload\":true}"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.Azure.Extensions.CustomScript",
+            "version": "2.1.6",
+            "location": "https://umsavwggj2v40kvqhc0w.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "failoverlocation": "https://umsafwzhkbm1rfrhl0ws.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "additionalLocations": [
+                "https://umsanh4b5rfz0q0p4pwm.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "publicSettings": "{\"commandToExecute\":\"echo 'cee174d4-4daa-4b07-9958-53b9649445c2'\"}"
+                }
+            ],
+            "dependsOn": [
+                {
+                    "DependsOnExtension": [
+                        {
+                            "handler": "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent"
+                        }
+                    ],
+                    "dependencyLevel": 1
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.CPlat.Core.RunCommandHandlerLinux",
+            "version": "1.2.0",
+            "location": "https://umsavbvncrpzbnxmxzmr.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml",
+            "failoverlocation": "https://umsajbjtqrb3zqjvgb2z.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml",
+            "additionalLocations": [
+                "https://umsawqtlsshtn5v2nfgh.blob.core.windows.net/f4086d41-69f9-3103-78e0-8a2c7e789d0f/f4086d41-69f9-3103-78e0-8a2c7e789d0f_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": true,
+            "settings": [
+                {
+                    "publicSettings": "{\"source\":{\"script\":\"echo '4abb1e88-f349-41f8-8442-247d9fdfcac5'\"}}",
+                    "seqNo": 0,
+                    "extensionName": "MCExt1",
+                    "extensionState": "enabled"
+                },
+                {
+                    "publicSettings": "{\"source\":{\"script\":\"echo 'e865c9bc-a7b3-42c6-9a79-cfa98a1ee8b3'\"}}",
+                    "seqNo": 0,
+                    "extensionName": "MCExt2",
+                    "extensionState": "enabled"
+                },
+                {
+                    "publicSettings": "{\"source\":{\"script\":\"echo 'f923e416-0340-485c-9243-8b84fb9930c6'\"}}",
+                    "seqNo": 0,
+                    "extensionName": "MCExt3",
+                    "extensionState": "enabled"
+                }
+            ],
+            "dependsOn": [
+                {
+                    "dependsOnExtension": [
+                        {
+                            "extension": "...",
+                            "handler": "..."
+                        },
+                        {
+                            "extension": "...",
+                            "handler": "..."
+                        }
+                    ],
+                    "dependencyLevel": 2,
+                    "name": "MCExt1"
+                },
+                {
+                    "dependsOnExtension": [
+                        {
+                            "extension": "...",
+                            "handler": "..."
+                        }
+                    ],
+                    "dependencyLevel": 1,
+                    "name": "MCExt2"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.OSTCExtensions.VMAccessForLinux",
+            "version": "1.5.11",
+            "location": "https://umsasc25p0kjg0c1dg4b.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "failoverlocation": "https://umsamfwlmfshvxx2lsjm.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "additionalLocations": [
+                "https://umsah3cwjlctnmhsvzqv.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": false,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [ ]
+        }
+    ]
+}

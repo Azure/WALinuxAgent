@@ -95,7 +95,7 @@ class HostPluginProtocol(object):
         if not os.path.exists(self._get_fast_track_state_file()):
             self._supports_vm_settings = False
             self._supports_vm_settings_next_check = datetime.datetime.now()
-            self._fast_track_timestamp = None
+            self._fast_track_timestamp = timeutil.create_timestamp(datetime.datetime.min)
         else:
             self._supports_vm_settings = True
             self._supports_vm_settings_next_check = datetime.datetime.now()
@@ -443,7 +443,7 @@ class HostPluginProtocol(object):
         goal state was Fabric or fetch_vm_settings() has not been invoked.
         """
         if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
-            return None
+            return timeutil.create_timestamp(datetime.datetime.min)
 
         try:
             with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
