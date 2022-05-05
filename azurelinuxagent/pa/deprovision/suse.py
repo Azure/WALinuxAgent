@@ -17,12 +17,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
                                                    DeprovisionAction
 
 class SUSEDeprovisionHandler(DeprovisionHandler):
-    def __init__(self):
+    def __init__(self):  # pylint: disable=W0235
         super(SUSEDeprovisionHandler, self).__init__()
 
     def reset_hostname(self, warnings, actions):
