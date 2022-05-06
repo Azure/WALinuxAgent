@@ -154,8 +154,8 @@ class AgentUpdateHandler(object):
             # Note: If the first Goal State contains a requested version, this timer won't start (i.e. self.last_attempt_time won't be updated).
             # If any subsequent goal state does not contain requested version, this timer will start then, and we will
             # download all versions available in PIR and auto-update to the highest available version on that goal state.
-            return _LargestGAVersionAvailableUpdater(manifest, gs_id, self.ga_family, self.daemon_version,
-                                                     self.persistent_update_data)
+            return _LargestGAVersionUpdater(manifest, gs_id, self.ga_family, self.daemon_version,
+                                            self.persistent_update_data)
 
     @staticmethod
     def __purge_extra_agents_from_disk(known_agents):
@@ -277,11 +277,10 @@ class _RequestedGAVersionUpdater(_GuestAgentUpdaterInterface):
 
     def can_update(self, gs_updated):
         if not gs_updated:
-            # If incarnation didn't change, don't process anything.
+            # We will get a new GS when CRP wants us to auto-update using required version.
+            # If there's no new incarnation, don't proceed with anything
             return False
 
-        # We will get a new GS when CRP wants us to auto-update using required version.
-        # If there's no new incarnation, don't proceed with anything
         msg_ = "Found requested version in manifest: {0} for incarnation: {1}".format(self.requested_version, self.gs_id)
         logger.info(msg_)
         add_event(op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg_, log_event=False)
@@ -329,7 +328,7 @@ class _RequestedGAVersionUpdater(_GuestAgentUpdaterInterface):
 
     def process_update(self, _):
         """
-        If requested version specified, upgrade/downgrade to the specified version instantly as this is
+        If requested version is specified, upgrade/downgrade to the specified version instantly as this is
         driven by the goal state.
         Raises: AgentUpgradeExitException
         """
@@ -374,10 +373,10 @@ class _RequestedGAVersionUpdater(_GuestAgentUpdaterInterface):
         pass
 
 
-class _LargestGAVersionAvailableUpdater(_GuestAgentUpdaterInterface):
+class _LargestGAVersionUpdater(_GuestAgentUpdaterInterface):
 
     def __init__(self, manifest, gs_id, ga_family, daemon_version, persistent_data):
-        super(_LargestGAVersionAvailableUpdater, self).__init__(manifest, gs_id, ga_family, daemon_version)
+        super(_LargestGAVersionUpdater, self).__init__(manifest, gs_id, ga_family, daemon_version)
         self.persistent_data = persistent_data
 
     def get_agent_package_list_to_download(self, protocol):
@@ -389,14 +388,14 @@ class _LargestGAVersionAvailableUpdater(_GuestAgentUpdaterInterface):
 
     def is_update_available(self, largest_agent, base_version):
         """
-        return True if the highest agent is > base_version (defaults to the CURRENT_VERSION)
+        return True if the largest agent is > base_version (defaults to the CURRENT_VERSION)
         """
         return largest_agent.version > base_version
 
     def can_update(self, _):
         """
         Check to see if the Updater is permitted to update. We only check for agent updates once per hour
-         (or as specified in the  conf.get_autoupdate_frequency())
+         (or as specified in the conf.get_autoupdate_frequency())
         """
         now = time.time()
         if self.persistent_data.last_update_available_check_time is not None:
@@ -436,8 +435,9 @@ class _LargestGAVersionAvailableUpdater(_GuestAgentUpdaterInterface):
 
         next_normal_time, next_hotfix_time = self.__get_next_upgrade_times()
         now = time.time()
-        # Not permitted to update yet for any of the AgentUpgradeModes
+
         if next_hotfix_time > now and next_normal_time > now:
+            # Not permitted to update yet for any of the AgentUpgradeModes
             return
 
         # Update the last upgrade check time even if no new agent is available for upgrade

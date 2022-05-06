@@ -539,17 +539,14 @@ class UpdateHandler(object):
 
         # update self._goal_state
         if not self._try_update_goal_state(protocol):
-            self._heartbeat_update_goal_state_error_count += 1
             # agent updates and status reporting should be done even when the goal state is not updated
             agent_update_handler.run(gs_updated=False, host=self._get_host_plugin(protocol))
-            self._report_status(exthandlers_handler, agent_update_handler, incarnation_changed=False)
+            self._report_status(exthandlers_handler, agent_update_handler, gs_updated=False)
             return
 
-        incarnation = protocol.get_incarnation()
         # Update the Guest Agent if a new version is available
-        # self.__update_guest_agent(protocol)
-        agent_update_handler.run(gs_updated=self._processing_new_incarnation(),
-                                 host=self._get_host_plugin(protocol))
+        gs_updated = self._processing_new_extensions_goal_state() or self._processing_new_incarnation()
+        agent_update_handler.run(gs_updated=gs_updated, host=self._get_host_plugin(protocol))
 
         try:
             if self._processing_new_extensions_goal_state():
@@ -566,9 +563,9 @@ class UpdateHandler(object):
                 # Note: Monitor thread periodically checks this in addition to here.
                 CGroupConfigurator.get_instance().check_cgroups(cgroup_metrics=[])
 
-            # report status always, even if the goal state did not change
-            # do it before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, agent_update_handler, incarnation_changed=self._processing_new_incarnation())
+            # Report status always, even if the goal state did not change
+            #  do it before processing the remote access, since that operation can take a long time
+            self._report_status(exthandlers_handler, agent_update_handler, gs_updated=gs_updated)
 
             if self._processing_new_incarnation():
                 remote_access_handler.run()
@@ -598,8 +595,8 @@ class UpdateHandler(object):
         except Exception as exception:
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
-    def _report_status(self, exthandlers_handler, agent_update_handler, incarnation_changed):
-        vm_agent_update_status = agent_update_handler.get_vmagent_update_status(gs_updated=incarnation_changed)
+    def _report_status(self, exthandlers_handler, agent_update_handler, gs_updated):
+        vm_agent_update_status = agent_update_handler.get_vmagent_update_status(gs_updated=gs_updated)
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         vm_status = exthandlers_handler.report_ext_handlers_status(
             goal_state_changed=self._processing_new_extensions_goal_state(),
