@@ -32,7 +32,7 @@ jobs:
         displayName: 'Install SSH Key to agent'
         name: "InstallKey"
         inputs:
-          knownHostsEntry: '$(SSH_PUBLIC)'
+          knownHostsEntry: 'github.com $(SSH_PUBLIC)' # Adding a dummy known host for github.com as leaving it empty is not allowed by this task
           sshPublicKey: '$(SSH_PUBLIC)'
           sshKeySecureFile: 'id_rsa'
 
@@ -52,9 +52,8 @@ jobs:
           architecture: 'x64'
 
       - script: |
-          rm -rf ~/.ssh/known_hosts
           mkdir -p "$(Build.ArtifactStagingDirectory)/harvest"
-        displayName: "Clear known host keys and create directories"
+        displayName: "Create harvest directories"
 
       - bash: $(Build.SourcesDirectory)/dcr/scripts/build_agent_zip.sh
         displayName: "Build Agent Zip"

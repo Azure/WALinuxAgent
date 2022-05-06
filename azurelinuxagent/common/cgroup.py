@@ -120,7 +120,9 @@ class CGroup(object):
 
     def get_tracked_metrics(self, **_):
         """
-        Retrieves the current value of the metrics tracked for this cgroup and returns them as an array
+        Retrieves the current value of the metrics tracked for this cgroup and returns them as an array.
+
+        Note: Agent won't track the metrics if the current cpu ticks less than previous value and returns empty array.
         """
         raise NotImplementedError()
 
@@ -241,11 +243,16 @@ class CpuCgroup(CGroup):
         return float(self._current_throttled_time - self._previous_throttled_time) / 1E9
 
     def get_tracked_metrics(self, **kwargs):
-        tracked = [
-            MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, self.get_cpu_usage()),
-        ]
+        tracked = []
+        cpu_usage = self.get_cpu_usage()
+        if cpu_usage >= float(0):
+            tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
+
         if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
-            tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, self.get_throttled_time()))
+            throttled_time = self.get_throttled_time()
+            if cpu_usage >= float(0) and throttled_time >= float(0):
+                tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
+
         return tracked
 
 

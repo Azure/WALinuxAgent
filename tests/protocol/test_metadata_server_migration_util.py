@@ -70,6 +70,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         fixed_uid = 0
         mock_os_getuid.return_value = fixed_uid
         osutil = MagicMock()  # pylint: disable=redefined-outer-name
+        osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
 
         # Run
         migration_util.cleanup_metadata_server_artifacts(osutil)
@@ -80,7 +81,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid)
+        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid, wait=osutil.get_firewall_will_wait())
         osutil.enable_firewall.assert_called_once_with(dst_ip=KNOWN_WIRESERVER_IP, uid=fixed_uid)
 
     @patch('azurelinuxagent.common.conf.enable_firewall')
@@ -112,7 +113,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid)
+        osutil.remove_firewall.assert_called_once_with(dst_ip=_KNOWN_METADATASERVER_IP, uid=fixed_uid, wait=osutil.get_firewall_will_wait())
         osutil.enable_firewall.assert_not_called()
 
     # Cleanup certificate files
@@ -126,6 +127,8 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
             if os.path.exists(path):
                 os.remove(path)
         # pylint: enable=redefined-builtin
+
+        super(TestMetadataServerMigrationUtil, self).tearDown()
 
 if __name__ == '__main__':
     unittest.main()

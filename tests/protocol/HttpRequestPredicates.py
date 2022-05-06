@@ -12,6 +12,22 @@ class HttpRequestPredicates(object):
         return url.lower() == 'http://{0}/machine/?comp=goalstate'.format(restutil.KNOWN_WIRESERVER_IP)
 
     @staticmethod
+    def is_certificates_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=certificates'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
+    def is_extensions_config_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=config&type=extensionsConfig'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
+    def is_hosting_environment_config_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=config&type=hostingEnvironmentConfig'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
+    def is_shared_config_request(url):
+        return re.match(r'http://{0}(:80)?/machine/.*?comp=config&type=sharedConfig'.format(restutil.KNOWN_WIRESERVER_IP), url, re.IGNORECASE)
+
+    @staticmethod
     def is_telemetry_request(url):
         return url.lower() == 'http://{0}/machine?comp=telemetrydata'.format(restutil.KNOWN_WIRESERVER_IP)
 
@@ -43,6 +59,15 @@ class HttpRequestPredicates(object):
     @staticmethod
     def is_host_plugin_extension_artifact_request(url):
         return url.lower() == 'http://{0}:{1}/extensionartifact'.format(restutil.KNOWN_WIRESERVER_IP, restutil.HOST_PLUGIN_PORT)
+
+    @staticmethod
+    def is_status_request(url):
+        return HttpRequestPredicates.is_storage_status_request(url) or HttpRequestPredicates.is_host_plugin_status_request(url)
+
+    @staticmethod
+    def is_storage_status_request(url):
+        # e.g. 'https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo'
+        return re.match(r'^https://.+/.*\.status\?[^/]+$', url, re.IGNORECASE)
 
     @staticmethod
     def is_host_plugin_status_request(url):

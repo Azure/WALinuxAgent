@@ -293,6 +293,14 @@ class VMAgentStatus(DataContract):
         self.extensionHandlers = DataContractList(ExtHandlerStatus)
         self.vm_artifacts_aggregate_status = VMArtifactsAggregateStatus(gs_aggregate_status)
         self.update_status = update_status
+        self._supports_fast_track = False
+
+    @property
+    def supports_fast_track(self):
+        return self._supports_fast_track
+
+    def set_supports_fast_track(self, value):
+        self._supports_fast_track = value
 
 
 class VMStatus(DataContract):

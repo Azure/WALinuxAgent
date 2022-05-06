@@ -21,20 +21,22 @@ import re
 import sys
 
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
-from azurelinuxagent.common.exception import VmSettingsError
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.future import ustr
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, VmSettingsParseError
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.textutil import format_exception
 
 
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
 
-    def __init__(self, etag, json_text):
+    def __init__(self, etag, json_text, correlation_id):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
-        self._id = etag
+        self._id = "etag_{0}".format(etag)
         self._etag = etag
+        self._svd_sequence_number = 0
+        self._hostga_plugin_correlation_id = correlation_id
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
         self._schema_version = FlexibleVersion('0.0.0.0')
@@ -53,7 +55,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             self._parse_vm_settings(json_text)
             self._do_common_validations()
         except Exception as e:
-            raise VmSettingsError("Error parsing vmSettings (etag: {0} HGAP: {1}): {2}\n{3}".format(etag, self._host_ga_plugin_version, format_exception(e), self.get_redacted_text()))
+            message = "Error parsing vmSettings [HGAP: {0} Etag:{1}]: {2}".format(self._host_ga_plugin_version, etag, ustr(e))
+            raise VmSettingsParseError(message, etag, self.get_redacted_text())
 
     @property
     def id(self):
@@ -62,6 +65,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     @property
     def etag(self):
         return self._etag
+
+    @property
+    def svd_sequence_number(self):
+        return self._svd_sequence_number
 
     @property
     def host_ga_plugin_version(self):
@@ -73,21 +80,38 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     @property
     def activity_id(self):
+        """
+        The CRP activity id
+        """
         return self._activity_id
 
     @property
     def correlation_id(self):
+        """
+        The correlation id for the CRP operation
+        """
         return self._correlation_id
 
     @property
+    def hostga_plugin_correlation_id(self):
+        """
+        The correlation id for the call to the HostGAPlugin vmSettings API
+        """
+        return self._hostga_plugin_correlation_id
+
+    @property
     def created_on_timestamp(self):
+        """
+        Timestamp assigned by the CRP (time at which the goal state was created)
+        """
         return self._created_on_timestamp
 
     @property
+    def channel(self):
+        return GoalStateChannel.HostGAPlugin
+
+    @property
     def source(self):
-        """
-        Whether the goal state originated from Fabric or Fast Track
-        """
         return self._source
 
     @property
@@ -135,8 +159,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         "vmSettingsSchemaVersion": "0.0",
         #         "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
         #         "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+        #         "inSvdSeqNo": 1,
         #         "extensionsLastModifiedTickCount": 637726657706205217,
-        #         "extensionGoalStatesSource": "Fabric",
+        #         "extensionGoalStatesSource": "FastTrack",
         #         ...
         #     }
 
@@ -147,6 +172,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         self._activity_id = self._string_to_id(vm_settings.get("activityId"))
         self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
+        self._svd_sequence_number = self._string_to_id(vm_settings.get("inSvdSeqNo"))
         self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
         schema_version = vm_settings.get("vmSettingsSchemaVersion")
@@ -173,13 +199,15 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         # }
         status_upload_blob = vm_settings.get("statusUploadBlob")
         if status_upload_blob is None:
-            raise Exception("Missing statusUploadBlob")
-        self._status_upload_blob = status_upload_blob.get("value")
-        if self._status_upload_blob is None:
-            raise Exception("Missing statusUploadBlob.value")
-        self._status_upload_blob_type = status_upload_blob.get("statusBlobType")
-        if self._status_upload_blob is None:
-            raise Exception("Missing statusUploadBlob.statusBlobType")
+            self._status_upload_blob = None
+            self._status_upload_blob_type = "BlockBlob"
+        else:
+            self._status_upload_blob = status_upload_blob.get("value")
+            if self._status_upload_blob is None:
+                raise Exception("Missing statusUploadBlob.value")
+            self._status_upload_blob_type = status_upload_blob.get("statusBlobType")
+            if self._status_upload_blob_type is None:
+                self._status_upload_blob_type = "BlockBlob"
 
     def _parse_required_features(self, vm_settings):
         # Sample:
@@ -195,13 +223,13 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         required_features = vm_settings.get("requiredFeatures")
         if required_features is not None:
             if not isinstance(required_features, list):
-                raise Exception("requiredFeatures should be an array")
+                raise Exception("requiredFeatures should be an array (got {0})".format(required_features))
 
             def get_required_features_names():
                 for feature in required_features:
                     name = feature.get("name")
                     if name is None:
-                        raise Exception("A required feature is missing the 'name' property")
+                        raise Exception("A required feature is missing the 'name' property (got {0})".format(feature))
                     yield name
 
             self._required_features.extend(get_required_features_names())
@@ -233,7 +261,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         if families is None:
             return
         if not isinstance(families, list):
-            raise Exception("gaFamilies should be an array")
+            raise Exception("gaFamilies should be an array (got {0})".format(families))
 
         for family in families:
             name = family["name"]
@@ -261,7 +289,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #             "settingsSeqNo": 0,
         #             "settings": [
         #                 {
-        #                     "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+        #                     "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
         #                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
         #                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
         #                 }
@@ -316,7 +344,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         extension_goal_states = vm_settings.get("extensionGoalStates")
         if extension_goal_states is not None:
             if not isinstance(extension_goal_states, list):
-                raise Exception("extension_goal_states should be an array")
+                raise Exception("extension_goal_states should be an array (got {0})".format(type(extension_goal_states)))  # report only the type, since the value may contain secrets
             for extension_gs in extension_goal_states:
                 extension = Extension()
 
@@ -328,14 +356,16 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 is_multi_config = extension_gs.get('isMultiConfig')
                 if is_multi_config is not None:
                     extension.supports_multi_config = is_multi_config
-                extension.manifest_uris.append(extension_gs['location'])
+                location = extension_gs.get('location')
+                if location is not None:
+                    extension.manifest_uris.append(location)
                 fail_over_location = extension_gs.get('failoverLocation')
                 if fail_over_location is not None:
                     extension.manifest_uris.append(fail_over_location)
                 additional_locations = extension_gs.get('additionalLocations')
                 if additional_locations is not None:
                     if not isinstance(additional_locations, list):
-                        raise Exception('additionalLocations should be an array')
+                        raise Exception('additionalLocations should be an array (got {0})'.format(additional_locations))
                     extension.manifest_uris.extend(additional_locations)
 
                 #
@@ -453,13 +483,18 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #     ...
         # }
         if not isinstance(depends_on, list):
-            raise Exception('dependsOn should be an array')
+            raise Exception('dependsOn should be an array ({0}) (got {1})'.format(extension.name, depends_on))
 
         if not extension.supports_multi_config:
             # single-config
-            if len(depends_on) != 1:
-                raise Exception('dependsOn should be an array with exactly one item for single-config extensions')
-            extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
+            length = len(depends_on)
+            if length > 1:
+                raise Exception('dependsOn should be an array with exactly one item for single-config extensions ({0}) (got {1})'.format(extension.name, depends_on))
+            elif length == 0:
+                logger.warn('dependsOn is an empty array for extension {0}; setting the dependency level to 0'.format(extension.name))
+                extension.settings[0].dependencyLevel = 0
+            else:
+                extension.settings[0].dependencyLevel = depends_on[0]['dependencyLevel']
         else:
             # multi-config
             settings_by_name = {}

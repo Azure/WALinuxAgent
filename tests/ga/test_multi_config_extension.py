@@ -1,6 +1,7 @@
 import contextlib
 import json
 import os.path
+import re
 import subprocess
 import uuid
 
@@ -51,7 +52,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
 
     def _mock_and_assert_ext_handlers(self, expected_handlers):
         with mock_wire_protocol(self.test_data) as protocol:
-            ext_handlers = protocol.client.get_extensions_goal_state().extensions
+            ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
             for ext_handler in ext_handlers:
                 if ext_handler.name not in expected_handlers:
                     continue
@@ -738,7 +739,10 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                     self.assertFalse(any(env_var in commands['data'] for env_var in not_expected), "Unwanted env variable found")
 
         def mock_popen(cmd, *_, **kwargs):
-            if 'env' in kwargs:
+            # This cgroupsapi Popen mocking all other popen calls which breaking the extension emulator logic.
+            # The emulator should be used only on extension commands and not on other commands even env flag set.
+            # So, added ExtensionVersion check to avoid using extension emulator on non extension operations.
+            if 'env' in kwargs and ExtCommandEnvVariable.ExtensionVersion in kwargs['env']:
                 handler_name, __, command = extract_extension_info_from_command(cmd)
                 name = handler_name
                 if ExtCommandEnvVariable.ExtensionName in kwargs['env']:
@@ -884,15 +888,19 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                         (sc_ext, ExtensionCommandNames.ENABLE)
                     )
 
+                    reported_events = [kwargs for _, kwargs in patch_report_event.call_args_list if
+                                       re.search("Executing command: (.+) with environment variables: ",
+                                                 kwargs['message']) is None]
+
                     self.assertTrue(all(
-                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        fail_code in kwargs['message'] for kwargs in reported_events if
                         kwargs['name'] == first_ext.name), "Error not reported")
                     self.assertTrue(all(
-                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        fail_code in kwargs['message'] for kwargs in reported_events if
                         kwargs['name'] == second_ext.name), "Error not reported")
                     # Make sure fail code is not reported for any other extension
                     self.assertFalse(all(
-                        fail_code in kwargs['message'] for args, kwargs in patch_report_event.call_args_list if
+                        fail_code in kwargs['message'] for kwargs in reported_events if
                         kwargs['name'] == third_ext.name), "Error not reported")
 
     def test_it_should_report_transitioning_if_status_file_not_found(self):
@@ -965,7 +973,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                              GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures, "Incorrect code")
             self.assertEqual(gs_aggregate_status['inSvdSeqNo'], '2', "Incorrect incarnation reported")
             self.assertEqual(gs_aggregate_status['formattedMessage']['message'],
-                             'Failing GS incarnation: 2 as Unsupported features found: TestRequiredFeature1, TestRequiredFeature2, TestRequiredFeature3',
+                             'Failing GS incarnation_2 as Unsupported features found: TestRequiredFeature1, TestRequiredFeature2, TestRequiredFeature3',
                              "Incorrect error message reported")
 
     def test_it_should_fail_handler_if_handler_does_not_support_mc(self):

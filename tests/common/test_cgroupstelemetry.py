@@ -374,3 +374,38 @@ class TestCGroupsTelemetry(AgentTestCase):
                 metrics = CGroupsTelemetry.poll_all_tracked()
                 self.assertEqual(0, len(metrics))
 
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_throttled_time")
+    @patch("azurelinuxagent.common.cgroup.CGroup.is_active")
+    def test_cgroup_telemetry_should_not_report_cpu_negative_value(self, patch_is_active, path_get_throttled_time, patch_get_cpu_usage):
+
+        num_polls = 5
+        num_extensions = 1
+
+        # only verifying calculations and not validity of the values.
+        cpu_percent_values = [random.randint(0, 100) for _ in range(num_polls-1)]
+        cpu_percent_values.append(-1)
+        cpu_throttled_values = [random.randint(0, 60 * 60) for _ in range(num_polls)]
+
+        dummy_cpu_cgroup = CpuCgroup("dummy_extension_name", "dummy_cpu_path")
+        CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+        self.assertEqual(1, len(CGroupsTelemetry._tracked))
+
+        for i in range(num_polls):
+            patch_is_active.return_value = True
+            patch_get_cpu_usage.return_value = cpu_percent_values[i]
+            path_get_throttled_time.return_value = cpu_throttled_values[i]
+
+            CGroupsTelemetry._track_throttled_time = True
+            metrics = CGroupsTelemetry.poll_all_tracked()
+
+            # 1 CPU metric + 1 CPU throttled
+            # ignore CPU metrics from telemetry if cpu cgroup reports negative value
+            if i < num_polls-1:
+                self.assertEqual(len(metrics), 2 * num_extensions)
+            else:
+                self.assertEqual(len(metrics), 0)
+
+            for metric in metrics:
+                self.assertGreaterEqual(metric.value, 0, "telemetry should not report negative value")
+

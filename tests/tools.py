@@ -440,6 +440,22 @@ class AgentTestCase(unittest.TestCase):
         os.chmod(script_file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
 
+class AgentTestCaseWithGetVmSizeMock(AgentTestCase):
+    
+    def setUp(self):
+        
+        self._get_vm_size_patch = patch('azurelinuxagent.ga.update.UpdateHandler._get_vm_size', return_value="unknown")
+        self._get_vm_size_patch.start()
+        
+        super(AgentTestCaseWithGetVmSizeMock, self).setUp()
+
+    def tearDown(self):
+
+        if self._get_vm_size_patch:
+            self._get_vm_size_patch.stop()
+
+        super(AgentTestCaseWithGetVmSizeMock, self).tearDown()
+
 def load_data(name):
     """Load test data"""
     path = os.path.join(data_dir, name)

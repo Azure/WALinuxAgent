@@ -121,12 +121,6 @@ class ExtensionsConfigError(ExtensionsGoalStateError):
     """
 
 
-class VmSettingsError(ExtensionsGoalStateError):
-    """
-    Error raised when the VmSettings are malformed
-    """
-
-
 class MultiConfigExtensionEnableError(ExtensionError):
     """
     Error raised when enable for a Multi-Config extension is failing.
@@ -181,12 +175,6 @@ class ProtocolError(AgentError):
 class ProtocolNotFoundError(ProtocolError):
     """
     Error raised when Azure protocol endpoint not found
-    """
-
-
-class IncompleteGoalStateError(ProtocolError):
-    """
-    Goal state is returned incomplete.
     """
 
 

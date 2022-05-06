@@ -17,6 +17,7 @@
 import os
 import re
 import subprocess
+import threading
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -55,6 +56,7 @@ DefaultDependencies=no
 Before=slices.target
 [Slice]
 CPUAccounting=yes
+CPUQuota={cpu_quota}
 """
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
@@ -94,7 +96,6 @@ _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 [Service]
 CPUQuota={0}
 """
-_AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 
 class DisableCgroups(object):
@@ -132,6 +133,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
+            self._check_cgroups_lock = threading.RLock() # Protect the check_cgroups which is called from Monitor thread and main loop.
 
         def initialize(self):
             try:
@@ -542,32 +544,37 @@ class CGroupConfigurator(object):
             return True
 
         def check_cgroups(self, cgroup_metrics):
-            if not self.enabled():
-                return
-
-            errors = []
-
-            process_check_success = False
+            self._check_cgroups_lock.acquire()
             try:
-                self._check_processes_in_agent_cgroup()
-                process_check_success = True
-            except CGroupsException as exception:
-                errors.append(exception)
+                if not self.enabled():
+                    return
 
-            quota_check_success = False
-            try:
-                self._check_agent_throttled_time(cgroup_metrics)
-                quota_check_success = True
-            except CGroupsException as exception:
-                errors.append(exception)
+                errors = []
 
-            reason = "Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors]))
+                process_check_success = False
+                try:
+                    self._check_processes_in_agent_cgroup()
+                    process_check_success = True
+                except CGroupsException as exception:
+                    errors.append(exception)
 
-            if not process_check_success and conf.get_cgroup_disable_on_process_check_failure():
-                self.disable(reason, DisableCgroups.ALL)
+                quota_check_success = False
+                try:
+                    if cgroup_metrics:
+                        self._check_agent_throttled_time(cgroup_metrics)
+                    quota_check_success = True
+                except CGroupsException as exception:
+                    errors.append(exception)
 
-            if not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure():
-                self.disable(reason, DisableCgroups.AGENT)
+                reason = "Check on cgroups failed:\n{0}".format("\n".join([ustr(e) for e in errors]))
+
+                if not process_check_success and conf.get_cgroup_disable_on_process_check_failure():
+                    self.disable(reason, DisableCgroups.ALL)
+
+                if not quota_check_success and conf.get_cgroup_disable_on_quota_check_failure():
+                    self.disable(reason, DisableCgroups.AGENT)
+            finally:
+                self._check_cgroups_lock.release()
 
         def _check_processes_in_agent_cgroup(self):
             """
@@ -605,7 +612,8 @@ class CGroupConfigurator(object):
                     current = process
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
-                    if current == 0:
+                    # Process started by agent will have a marker and check if that marker found in process environment.
+                    if current == 0 and not self.__is_process_descendant_of_the_agent(process):
                         unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
@@ -641,10 +649,28 @@ class CGroupConfigurator(object):
             return "[PID: {0}] UNKNOWN".format(pid)
 
         @staticmethod
+        def __is_process_descendant_of_the_agent(pid):
+            """
+            Returns True if the process is descendant of the agent by looking at the env flag(AZURE_GUEST_AGENT_PARENT_PROCESS_NAME)
+            that we set when the process starts otherwise False.
+            """
+            try:
+                env = '/proc/{0}/environ'.format(pid)
+                if os.path.exists(env):
+                    with open(env, "r") as env_file:
+                        environ = env_file.read()
+                        if environ and environ[-1] == '\x00':
+                            environ = environ[:-1]
+                        return "{0}={1}".format(shellutil.PARENT_PROCESS_NAME, shellutil.AZURE_GUEST_AGENT) in environ
+            except Exception:
+                pass
+            return False
+
+        @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
             for metric in cgroup_metrics:
                 if metric.instance == AGENT_NAME_TELEMETRY and metric.counter == MetricsCounter.THROTTLED_TIME:
-                    if metric.value > _AGENT_THROTTLED_TIME_THRESHOLD:
+                    if metric.value > conf.get_agent_cpu_throttled_time_threshold():
                         raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
 
         @staticmethod
@@ -737,21 +763,22 @@ class CGroupConfigurator(object):
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
-        def setup_extension_slice(self, extension_name):
+        def setup_extension_slice(self, extension_name, cpu_quota):
             """
             Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
             extensions are grouped under "azure-vmextensions.slice.
 
             This method ensures that the extension slice is created. Setup should create
             under /lib/systemd/system if it is not exist.
-            TODO: set cpu and memory quotas
+            TODO: set memory quotas
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
-                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name)
+                    cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""
+                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
                     _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
@@ -775,7 +802,7 @@ class CGroupConfigurator(object):
             Each extension service will have name, systemd path and it's quotas.
             This method ensures that drop-in files are created under service.d folder if quotas given.
             ex: /lib/systemd/system/extension.service.d/11-CPUAccounting.conf
-            TODO: set cpu and memory quotas
+            TODO: set memory quotas
             """
             if self.enabled() and services_list is not None:
                 for service in services_list:
@@ -787,6 +814,13 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+
+                        cpu_quota = service.get('cpuQuotaPercentage', None)
+                        if cpu_quota is not None:
+                            cpu_quota = str(cpu_quota) + "%"
+                            drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                            cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
+                            files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
 
                         self.__create_all_files(files_to_create)
 
@@ -811,6 +845,11 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_cleanup.append(drop_in_file_cpu_accounting)
+                        cpu_quota = service.get('cpuQuotaPercentage', None)
+                        if cpu_quota is not None:
+                            drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                            files_to_cleanup.append(drop_in_file_cpu_quota)
+
                         CGroupConfigurator._Impl.__cleanup_all_files(files_to_cleanup)
                         _log_cgroup_info("Drop in files removed for {0}".format(service_name))
 

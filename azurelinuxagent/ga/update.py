@@ -33,6 +33,7 @@ from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.protocol.imds import get_imds_client
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
@@ -43,17 +44,16 @@ from azurelinuxagent.common.event import add_event, initialize_event_logger_vmin
 from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
-from azurelinuxagent.common.osutil.default import get_firewall_drop_command, \
-    get_accept_tcp_rule
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.archive import StateArchiver, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, \
+from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, AGENT_VERSION, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
 from azurelinuxagent.ga.agent_update import get_agent_update_handler, AgentUpdateHandler
@@ -155,12 +155,25 @@ class UpdateHandler(object):
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
 
+        # VM Size is reported via the heartbeat, default it here.
+        self._vm_size = None
+
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
-        self._last_try_update_goal_state_failed = False
-        self._report_status_last_failed_incarnation = -1
+        self._update_goal_state_error_count = 0
+        self._update_goal_state_last_error_report = datetime.min
+        self._report_status_last_failed_goal_state = None
 
-        self.last_incarnation = None
+        # incarnation of the last goal state that has been fully processed
+        # (None if no goal state has been processed)
+        self._last_incarnation = None
+        # ID of the last extensions goal state that has been fully processed (incarnation for WireServer goal states or etag for HostGAPlugin goal states)
+        # (None if no extensions goal state has been processed)
+        self._last_extensions_gs_id = None
+        # Goal state that is currently been processed (None if no goal state is being processed)
+        self._goal_state = None
+        # Whether the agent supports FastTrack (it does, as long as the HostGAPlugin supports the vmSettings API)
+        self._supports_fast_track = False
 
         self._extensions_summary = ExtensionsSummary()
 
@@ -313,23 +326,10 @@ class UpdateHandler(object):
         """
 
         try:
-            logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
+            logger.info("{0} (Goal State Agent version {1})", AGENT_LONG_NAME, AGENT_VERSION)
+            logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
+            logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
-            #
-            # Initialize the goal state; some components depend on information provided by the goal state and this
-            # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
-            #
-            protocol = self.protocol_util.get_protocol()
-
-            while not self._try_update_goal_state(protocol):
-                # Don't proceed with processing anything until we're able to fetch the first goal state.
-                # self._try_update_goal_state() has its own logging and error handling so not adding anything here.
-                time.sleep(conf.get_goal_state_period())
-
-            # Initialize the common parameters for telemetry events
-            initialize_event_logger_vminfo_common_parameters(protocol)
-
-            # Log OS-specific info.
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; AgentService: {service_name}; "\
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
@@ -343,8 +343,20 @@ class UpdateHandler(object):
                     py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
                 )
-
             logger.info(os_info_msg)
+
+            #
+            # Initialize the goal state; some components depend on information provided by the goal state and this
+            # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
+            #
+            protocol = self.protocol_util.get_protocol()
+
+            self._initialize_goal_state(protocol)
+
+            # Initialize the common parameters for telemetry events
+            initialize_event_logger_vminfo_common_parameters(protocol)
+
+            # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
 
             #
@@ -383,10 +395,11 @@ class UpdateHandler(object):
                 all_thread_handlers.append(get_collect_logs_handler())
 
             # Launch all monitoring threads
-            for thread_handler in all_thread_handlers:
-                thread_handler.run()
+            self._start_threads(all_thread_handlers)
 
             logger.info("Goal State Period: {0} sec. This indicates how often the agent checks for new goal states and reports status.", self._goal_state_period)
+
+            self._cleanup_legacy_goal_state_history()
 
             while self.is_running:
                 self._check_daemon_running(debug)
@@ -412,15 +425,58 @@ class UpdateHandler(object):
         self._shutdown()
         sys.exit(0)
 
+    def _initialize_goal_state(self, protocol):
+        #
+        # Block until we can fetch the first goal state (self._try_update_goal_state() does its own logging and error handling).
+        #
+        while not self._try_update_goal_state(protocol):
+            time.sleep(conf.get_goal_state_period())
+
+        #
+        # If FastTrack is disabled we need to check if the current goal state (which will be retrieved using the WireServer and
+        # hence will be a Fabric goal state) is outdated.
+        #
+        if not conf.get_enable_fast_track():
+            last_fast_track_timestamp = HostPluginProtocol.get_fast_track_timestamp()
+            if last_fast_track_timestamp is not None:
+                egs = protocol.client.get_goal_state().extensions_goal_state
+                if egs.created_on_timestamp < last_fast_track_timestamp:
+                    egs.is_outdated = True
+                    logger.info("The current Fabric goal state is older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}",
+                        egs.created_on_timestamp, last_fast_track_timestamp)
+
+    def _get_vm_size(self, protocol):
+        """
+        Including VMSize is meant to capture the architecture of the VM (i.e. arm64 VMs will
+        have arm64 included in their vmsize field and amd64 will have no architecture indicated).
+        """
+        if self._vm_size is None:
+
+            imds_client = get_imds_client(protocol.get_endpoint())
+
+            try:
+                imds_info = imds_client.get_compute()
+                self._vm_size = imds_info.vmSize
+            except Exception as e:
+                err_msg = "Attempts to retrieve VM size information from IMDS are failing: {0}".format(textutil.format_exception(e))
+                logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(err_msg))
+                return "unknown"
+
+        return self._vm_size
+
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
         if not debug and self._is_orphaned:
             raise ExitException("Agent {0} is an orphan -- exiting".format(CURRENT_AGENT))
 
+    def _start_threads(self, all_thread_handlers):
+        for thread_handler in all_thread_handlers:
+            thread_handler.run()
+
     def _check_threads_running(self, all_thread_handlers):
         # Check that all the threads are still running
         for thread_handler in all_thread_handlers:
-            if not thread_handler.is_alive():
+            if thread_handler.keep_alive() and not thread_handler.is_alive():
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 
@@ -429,51 +485,74 @@ class UpdateHandler(object):
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
         """
         try:
-            protocol.update_goal_state()
+            max_errors_to_log = 3
 
-            if self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = False
-                message = u"Retrieving the goal state recovered from previous errors"
+            protocol.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log)
+
+            self._goal_state = protocol.get_goal_state()
+
+            if self._update_goal_state_error_count > 0:
+                self._update_goal_state_error_count = 0
+                message = u"Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})".format(
+                    self._goal_state.extensions_goal_state.id, self._goal_state.certs.summary)
                 add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
                 logger.info(message)
 
+            try:
+                self._supports_fast_track = conf.get_enable_fast_track() and protocol.client.get_host_plugin().check_vm_settings_support()
+            except VmSettingsNotSupported:
+                self._supports_fast_track = False
+
         except Exception as e:
-            if not self._last_try_update_goal_state_failed:
-                self._last_try_update_goal_state_failed = True
-                message = u"An error occurred while retrieving the goal state: {0}".format(textutil.format_exception(e))
-                logger.warn(message)
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=False, message=message, log_event=False)
-            message = u"Attempts to retrieve the goal state are failing: {0}".format(ustr(e))
-            logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(message))
+            self._update_goal_state_error_count += 1
+            self._heartbeat_update_goal_state_error_count += 1
+            if self._update_goal_state_error_count <= max_errors_to_log:
+                message = u"Error fetching the goal state: {0}".format(textutil.format_exception(e))
+                logger.error(message)
+                add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
+                self._update_goal_state_last_error_report = datetime.now()
+            else:
+                if self._update_goal_state_last_error_report + timedelta(hours=6) > datetime.now():
+                    self._update_goal_state_last_error_report = datetime.now()
+                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))
+                    logger.error(message)
+                    add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
             return False
+
         return True
 
-    def __goal_state_updated(self, incarnation):
+    def _processing_new_incarnation(self):
         """
-        This function returns if the Goal State updated.
-        We currently rely on the incarnation number to determine that; i.e. if it changed from the last processed GS
+        True if we are currently processing a new incarnation (i.e. WireServer goal state)
         """
-        # TODO: This check should be based on the ExtensionsGoalState.id property
-        #  (this property abstracts incarnation/etag logic based on the delivery pipeline of the Goal State)
-        return incarnation != self.last_incarnation
+        return self._goal_state is not None and self._goal_state.incarnation != self._last_incarnation
+
+    def _processing_new_extensions_goal_state(self):
+        """
+        True if we are currently processing a new extensions goal state
+        """
+        egs = self._goal_state.extensions_goal_state
+        return self._goal_state is not None and egs.id != self._last_extensions_gs_id and not egs.is_outdated
 
     def _process_goal_state(self, exthandlers_handler, remote_access_handler, agent_update_handler):
-
         protocol = exthandlers_handler.protocol
+
+        # update self._goal_state
         if not self._try_update_goal_state(protocol):
             self._heartbeat_update_goal_state_error_count += 1
-            # We should have a cached goal state here, go ahead and report status for that.
+            # agent updates and status reporting should be done even when the goal state is not updated
+            agent_update_handler.run(gs_updated=False, host=self._get_host_plugin(protocol))
             self._report_status(exthandlers_handler, agent_update_handler, incarnation_changed=False)
             return
 
         incarnation = protocol.get_incarnation()
         # Update the Guest Agent if a new version is available
         # self.__update_guest_agent(protocol)
-        agent_update_handler.run(gs_updated=self.__goal_state_updated(incarnation),
+        agent_update_handler.run(gs_updated=self._processing_new_incarnation(),
                                  host=self._get_host_plugin(protocol))
 
         try:
-            if self.__goal_state_updated(incarnation):
+            if self._processing_new_extensions_goal_state():
                 if not self._extensions_summary.converged:
                     message = "A new goal state was received, but not all the extensions in the previous goal state have completed: {0}".format(self._extensions_summary)
                     logger.warn(message)
@@ -483,23 +562,58 @@ class UpdateHandler(object):
                 self._extensions_summary = ExtensionsSummary()
                 exthandlers_handler.run()
 
+                # check cgroup and disable if any extension started in agent cgroup after goal state processed.
+                # Note: Monitor thread periodically checks this in addition to here.
+                CGroupConfigurator.get_instance().check_cgroups(cgroup_metrics=[])
+
             # report status always, even if the goal state did not change
             # do it before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, agent_update_handler, incarnation_changed=self.__goal_state_updated(incarnation))
+            self._report_status(exthandlers_handler, agent_update_handler, incarnation_changed=self._processing_new_incarnation())
 
-            if self.__goal_state_updated(incarnation):
+            if self._processing_new_incarnation():
                 remote_access_handler.run()
+
+            # lastly, cleanup the goal state history (but do it only on new goal states - no need to do it on every iteration)
+            if self._processing_new_extensions_goal_state():
+                UpdateHandler._cleanup_goal_state_history()
+
         finally:
-            self.last_incarnation = incarnation
+            if self._goal_state is not None:
+                self._last_incarnation = self._goal_state.incarnation
+                self._last_extensions_gs_id = self._goal_state.extensions_goal_state.id
+
+    @staticmethod
+    def _cleanup_goal_state_history():
+        try:
+            archiver = StateArchiver(conf.get_lib_dir())
+            archiver.purge()
+            archiver.archive()
+        except Exception as exception:
+            logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
+
+    @staticmethod
+    def _cleanup_legacy_goal_state_history():
+        try:
+            StateArchiver.purge_legacy_goal_state_history()
+        except Exception as exception:
+            logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
     def _report_status(self, exthandlers_handler, agent_update_handler, incarnation_changed):
         vm_agent_update_status = agent_update_handler.get_vmagent_update_status(gs_updated=incarnation_changed)
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
-        vm_status = exthandlers_handler.report_ext_handlers_status(incarnation_changed=incarnation_changed,
-                                                                   vm_agent_update_status=vm_agent_update_status)
-        if vm_status is None:
-            return
+        vm_status = exthandlers_handler.report_ext_handlers_status(
+            goal_state_changed=self._processing_new_extensions_goal_state(),
+            vm_agent_update_status=vm_agent_update_status, vm_agent_supports_fast_track=self._supports_fast_track)
 
+        if vm_status is not None:
+            self._report_extensions_summary(vm_status)
+            if self._goal_state is not None:
+                agent_status = exthandlers_handler.get_ext_handlers_status_debug_info(vm_status)
+                self._goal_state.save_to_history(agent_status, AGENT_STATUS_FILE)
+                if self._goal_state.extensions_goal_state.is_outdated:
+                    exthandlers_handler.protocol.client.get_host_plugin().clear_fast_track_state()
+
+    def _report_extensions_summary(self, vm_status):
         try:
             extensions_summary = ExtensionsSummary(vm_status)
             if self._extensions_summary != extensions_summary:
@@ -514,9 +628,9 @@ class UpdateHandler(object):
                     if self._is_initial_goal_state:
                         self._on_initial_goal_state_completed(self._extensions_summary)
         except Exception as error:
-            # report errors only once per incarnation
-            if self._report_status_last_failed_incarnation != exthandlers_handler.protocol.get_incarnation():
-                self._report_status_last_failed_incarnation = exthandlers_handler.protocol.get_incarnation()
+            # report errors only once per goal state
+            if self._report_status_last_failed_goal_state != self._goal_state.extensions_goal_state.id:
+                self._report_status_last_failed_goal_state = self._goal_state.extensions_goal_state.id
                 msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
                 logger.warn(msg)
                 add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
@@ -536,7 +650,7 @@ class UpdateHandler(object):
             return
 
         logger.info(
-            u"Agent {0} forwarding signal {1} to {2}",
+            u"Agent {0} forwarding signal {1} to {2}\n",
             CURRENT_AGENT,
             signum,
             self.child_agent.name if self.child_agent is not None else CURRENT_AGENT)
@@ -606,6 +720,9 @@ class UpdateHandler(object):
 
             if conf.get_autoupdate_enabled():
                 log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_autoupdate_frequency())
+
+            if conf.get_enable_fast_track():
+                log_if_op_disabled("Debug.EnableFastTrack", conf.get_enable_fast_track())
 
             if conf.get_lib_dir() != "/var/lib/waagent":
                 log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
@@ -781,6 +898,173 @@ class UpdateHandler(object):
                 str(e))
         return
 
+    @staticmethod
+    def __get_requested_version_and_manifest_from_last_gs(protocol):
+        """
+        Get the requested version and corresponding manifests from last GS if supported
+        Returns: (Requested Version, Manifest) if supported and available
+                 (None, None) if no manifests found in the last GS
+                 (None, manifest) if not supported or not specified in GS
+        """
+        family = conf.get_autoupdate_gafamily()
+        manifest_list, _ = protocol.get_vmagent_manifests()
+        manifests = [m for m in manifest_list if m.family == family and len(m.uris) > 0]
+        if len(manifests) == 0:
+            return None, None
+        if conf.get_enable_ga_versioning() and manifests[0].is_requested_version_specified:
+            return manifests[0].requested_version, manifests[0]
+        return None, manifests[0]
+
+    def _download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
+        """
+        This function downloads the new agent if an update is available.
+        If a requested version is available in goal state, then only that version is downloaded (new-update model)
+        Else, we periodically (1hr by default) checks if new Agent upgrade is available and download it on filesystem if available (old-update model)
+        rtype: Boolean
+        return: True if current agent is no longer available or an agent with a higher version number is available
+        else False
+        """
+
+        def report_error(msg_, version_=CURRENT_VERSION, op=WALAEventOperation.Download):
+            logger.warn(msg_)
+            add_event(AGENT_NAME, op=op, version=version_, is_success=False, message=msg_, log_event=False)
+
+        def can_proceed_with_requested_version():
+            if not gs_updated:
+                # If the goal state didn't change, don't process anything.
+                return False
+
+            # With the new model, we will get a new GS when CRP wants us to auto-update using required version.
+            # If there's no new goal state, don't proceed with anything
+            msg_ = "Found requested version in manifest: {0} for goal state {1}".format(
+                requested_version, goal_state_id)
+            logger.info(msg_)
+            add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg_, log_event=False)
+
+            if requested_version < daemon_version:
+                # Don't process the update if the requested version is lesser than daemon version,
+                # as we don't support downgrades below daemon versions.
+                report_error(
+                    "Can't process the upgrade as the requested version: {0} is < current daemon version: {1}".format(
+                        requested_version, daemon_version), op=WALAEventOperation.AgentUpgrade)
+                return False
+
+            return True
+
+        def agent_upgrade_time_elapsed(now_):
+            if self.last_attempt_time is not None:
+                next_attempt_time = self.last_attempt_time + conf.get_autoupdate_frequency()
+            else:
+                next_attempt_time = now_
+            if next_attempt_time > now_:
+                return False
+            return True
+
+        family = conf.get_autoupdate_gafamily()
+        gs_updated = False
+        daemon_version = self.__get_daemon_version_for_update()
+        try:
+            # Fetch the agent manifests from the latest Goal State
+            goal_state_id = self._goal_state.extensions_goal_state.id
+            gs_updated = self._processing_new_extensions_goal_state()
+            requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
+            if manifest is None:
+                logger.verbose(
+                    u"No manifest links found for agent family: {0} for goal state {1}, skipping update check".format(
+                        family, goal_state_id))
+                return False
+        except Exception as err:
+            # If there's some issues in fetching the agent manifests, report it only on goal state change
+            msg = u"Exception retrieving agent manifests: {0}".format(textutil.format_exception(err))
+            if gs_updated:
+                report_error(msg)
+            else:
+                logger.verbose(msg)
+            return False
+
+        if requested_version is not None:
+            # If GA versioning is enabled and requested version present in GS, and it's a new GS, follow new logic
+            if not can_proceed_with_requested_version():
+                return False
+        else:
+            # If no requested version specified in the Goal State, follow the old auto-update logic
+            # Note: If the first Goal State contains a requested version, this timer won't start (i.e. self.last_attempt_time won't be updated).
+            # If any subsequent goal state does not contain requested version, this timer will start then, and we will
+            # download all versions available in PIR and auto-update to the highest available version on that goal state.
+            now = time.time()
+            if not agent_upgrade_time_elapsed(now):
+                return False
+
+            logger.info("No requested version specified, checking for all versions for agent update (family: {0})",
+                        family)
+            self.last_attempt_time = now
+
+        try:
+            # If we make it to this point, then either there is a requested version in a new GS (new auto-update model),
+            # or the 1hr time limit has elapsed for us to check the agent manifest for updates (old auto-update model).
+            pkg_list = ExtHandlerPackageList()
+
+            # If the requested version is the current version, don't download anything;
+            #       the call to purge() below will delete all other agents from disk
+            # In this case, no need to even fetch the GA family manifest as we don't need to download any agent.
+            if requested_version is not None and requested_version == CURRENT_VERSION:
+                packages_to_download = []
+                msg = "The requested version is running as the current version: {0}".format(requested_version)
+                logger.info(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg)
+            else:
+                pkg_list = protocol.get_vmagent_pkgs(manifest)
+                packages_to_download = pkg_list.versions
+
+            # Verify the requested version is in GA family manifest (if specified)
+            if requested_version is not None and requested_version != CURRENT_VERSION:
+                for pkg in pkg_list.versions:
+                    if FlexibleVersion(pkg.version) == requested_version:
+                        # Found a matching package, only download that one
+                        packages_to_download = [pkg]
+                        break
+                else:
+                    msg = "No matching package found in the agent manifest for requested version: {0} in goal state {1}, skipping agent update".format(
+                        requested_version, goal_state_id)
+                    report_error(msg, version_=requested_version)
+                    return False
+
+            # Set the agents to those available for download at least as current as the existing agent
+            # or to the requested version (if specified)
+            host = self._get_host_plugin(protocol=protocol)
+            agents_to_download = [GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download]
+
+            # Filter out the agents that were downloaded/extracted successfully. If the agent was not installed properly,
+            # we delete the directory and the zip package from the filesystem
+            self._set_and_sort_agents([agent for agent in agents_to_download if agent.is_available])
+
+            # Remove from disk any agent no longer needed in the VM.
+            # If requested version is provided, this would delete all other agents present on the VM except -
+            #   - the current version and the requested version if requested version != current version
+            #   - only the current version if requested version == current version
+            # Note:
+            #  The code leaves on disk available, but blacklisted, agents to preserve the state.
+            #  Otherwise, those agents could be downloaded again and inappropriately retried.
+            self._purge_agents()
+            self._filter_blacklisted_agents()
+
+            # If there are no agents available to upgrade/downgrade to, return False
+            if len(self.agents) == 0:
+                return False
+
+            if requested_version is not None:
+                # In case of requested version, return True if an agent with a different version number than the
+                # current version is available that is higher than the current daemon version
+                return self.agents[0].version != base_version and self.agents[0].version > daemon_version
+            else:
+                # Else, return True if the highest agent is > base_version (CURRENT_VERSION)
+                return self.agents[0].version > base_version
+
+        except Exception as err:
+            msg = u"Exception downloading agents for update: {0}".format(textutil.format_exception(err))
+            report_error(msg)
+            return False
+
     def _write_pid_file(self):
         pid_files = self._get_pid_files()
 
@@ -812,10 +1096,13 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+            # Include VMSize in the heartbeat message because the kusto table does not have
+            # a separate column for it (or architecture).
+            vmsize = self._get_vm_size(protocol)
 
-            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+            telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled)
+                                                         auto_update_enabled, vmsize)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
@@ -896,6 +1183,9 @@ class UpdateHandler(object):
 
     def _add_accept_tcp_firewall_rule_if_not_enabled(self, dst_ip):
 
+        if not conf.enable_firewall():
+            return
+
         def _execute_run_command(command):
             # Helper to execute a run command, returns True if no exception
             # Here we primarily check if an  iptable rule exist. True if it exits , false if not
@@ -912,7 +1202,7 @@ class UpdateHandler(object):
             wait = self.osutil.get_firewall_will_wait()
 
             # "-C" checks if the iptable rule is available in the chain. It throws an exception with return code 1 if the ip table rule doesnt exist
-            drop_rule = get_firewall_drop_command(wait, AddFirewallRules.CHECK_COMMAND, dst_ip)
+            drop_rule = AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
             if not _execute_run_command(drop_rule):
                 # DROP command doesn't exist indicates then none of the firewall rules are set yet
                 # exiting here as the environment thread will set up all firewall rules
@@ -920,12 +1210,12 @@ class UpdateHandler(object):
                 return
             else:
                 # DROP rule exists in the ip table chain. Hence checking if the DNS TCP to wireserver rule exists. If not we add it.
-                accept_tcp_rule = get_accept_tcp_rule(wait, AddFirewallRules.CHECK_COMMAND, dst_ip)
+                accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
                 if not _execute_run_command(accept_tcp_rule):
                     try:
                         logger.info(
                             "Firewall rule to allow DNS TCP request to wireserver for a non root user unavailable. Setting it now.")
-                        accept_tcp_rule = get_accept_tcp_rule(wait, AddFirewallRules.INSERT_COMMAND, dst_ip)
+                        accept_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND, dst_ip, wait=wait)
                         shellutil.run_command(accept_tcp_rule)
                         logger.info(
                             "Succesfully added firewall rule to allow non root users to do a DNS TCP request to wireserver")

@@ -14,12 +14,16 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import base64
+import datetime
+import json
 import re
 
+from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.tools import load_bin_data, load_data, MagicMock, Mock
+from azurelinuxagent.common.protocol.imds import IMDS_ENDPOINT
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -36,6 +40,7 @@ DATA_FILE = {
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip",
+        "imds_info": "imds/valid.json",
         "remote_access": None,
         "in_vm_artifacts_profile": None,
         "vm_settings": None,
@@ -53,8 +58,7 @@ DATA_FILE_INVALID_VM_META_DATA = DATA_FILE.copy()
 DATA_FILE_INVALID_VM_META_DATA["ext_conf"] = "wire/ext_conf_invalid_vm_metadata.xml"
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
-DATA_FILE_NO_EXT["goal_state"] = "wire/goal_state_no_ext.xml"
-DATA_FILE_NO_EXT["ext_conf"] = None
+DATA_FILE_NO_EXT["ext_conf"] = "wire/ext_conf_no_extensions-block_blob.xml"
 
 DATA_FILE_NOOP_GS = DATA_FILE.copy()
 DATA_FILE_NOOP_GS["goal_state"] = "wire/goal_state_noop.xml"
@@ -114,12 +118,9 @@ DATA_FILE_REQUIRED_FEATURES["ext_conf"] = "wire/ext_conf_required_features.xml"
 
 DATA_FILE_VM_SETTINGS = DATA_FILE.copy()
 DATA_FILE_VM_SETTINGS["vm_settings"] = "hostgaplugin/vm_settings.json"
-DATA_FILE_VM_SETTINGS["ETag"] ="1"
+DATA_FILE_VM_SETTINGS["ETag"] = "1"
 DATA_FILE_VM_SETTINGS["ext_conf"] = "hostgaplugin/ext_conf.xml"
 DATA_FILE_VM_SETTINGS["in_vm_artifacts_profile"] = "hostgaplugin/in_vm_artifacts_profile.json"
-
-DATA_FILE_STATUS_BLOB = DATA_FILE.copy()
-DATA_FILE_STATUS_BLOB["ext_conf"] = "wire/ext_conf_mock_status_blob.xml"
 
 
 class WireProtocolData(object):
@@ -133,12 +134,11 @@ class WireProtocolData(object):
             "/health": 0,
             "/HealthService": 0,
             "/vmAgentLog": 0,
-            '/StatusBlob': 0,
             "goalstate": 0,
-            "hostingenvuri": 0,
-            "sharedconfiguri": 0,
-            "certificatesuri": 0,
-            "extensionsconfiguri": 0,
+            "hostingEnvironmentConfig": 0,
+            "sharedConfig": 0,
+            "certificates": 0,
+            "extensionsConfig": 0,
             "remoteaccessinfouri": 0,
             "extensionArtifact": 0,
             "agentArtifact": 0,
@@ -165,6 +165,7 @@ class WireProtocolData(object):
         self.in_vm_artifacts_profile = None
         self.vm_settings = None
         self.etag = None
+        self.imds_info = None
 
         self.reload()
 
@@ -181,6 +182,7 @@ class WireProtocolData(object):
         self.ga_manifest = load_data(self.data_files.get("ga_manifest"))
         self.trans_prv = load_data(self.data_files.get("trans_prv"))
         self.trans_cert = load_data(self.data_files.get("trans_cert"))
+        self.imds_info = json.loads(load_data(self.data_files.get("imds_info")))
         self.ext = load_bin_data(self.data_files.get("test_ext"))
 
         vm_settings = self.data_files.get("vm_settings")
@@ -196,8 +198,12 @@ class WireProtocolData(object):
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
+    def reset_call_counts(self):
+        for counter in self.call_counts:
+            self.call_counts[counter] = 0
+
     def mock_http_get(self, url, *_, **kwargs):
-        content = None
+        content = ''
         response_headers = []
 
         resp = MagicMock()
@@ -215,18 +221,18 @@ class WireProtocolData(object):
         elif "goalstate" in url:
             content = self.goal_state
             self.call_counts["goalstate"] += 1
-        elif "hostingenvuri" in url:
+        elif HttpRequestPredicates.is_hosting_environment_config_request(url):
             content = self.hosting_env
-            self.call_counts["hostingenvuri"] += 1
-        elif "sharedconfiguri" in url:
+            self.call_counts["hostingEnvironmentConfig"] += 1
+        elif HttpRequestPredicates.is_shared_config_request(url):
             content = self.shared_config
-            self.call_counts["sharedconfiguri"] += 1
-        elif "certificatesuri" in url:
+            self.call_counts["sharedConfig"] += 1
+        elif HttpRequestPredicates.is_certificates_request(url):
             content = self.certs
-            self.call_counts["certificatesuri"] += 1
-        elif "extensionsconfiguri" in url:
+            self.call_counts["certificates"] += 1
+        elif HttpRequestPredicates.is_extensions_config_request(url):
             content = self.ext_conf
-            self.call_counts["extensionsconfiguri"] += 1
+            self.call_counts["extensionsConfig"] += 1
         elif "remoteaccessinfouri" in url:
             content = self.remote_access
             self.call_counts["remoteaccessinfouri"] += 1
@@ -240,6 +246,8 @@ class WireProtocolData(object):
                 content = self.vm_settings
                 response_headers = [('ETag', self.etag)]
             self.call_counts["vm_settings"] += 1
+        elif '{0}/metadata/compute'.format(IMDS_ENDPOINT) in url:
+            content = json.dumps(self.imds_info.get("compute", "{}"))
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin
@@ -306,9 +314,10 @@ class WireProtocolData(object):
 
         if url.endswith('/vmAgentLog'):
             self.call_counts['/vmAgentLog'] += 1
-        elif url.endswith('/StatusBlob'):
-            self.call_counts['/StatusBlob'] += 1
+        elif HttpRequestPredicates.is_storage_status_request(url):
             self.status_blobs.append(data)
+        elif HttpRequestPredicates.is_host_plugin_status_request(url):
+            self.status_blobs.append(WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(content))
         else:
             raise NotImplementedError(url)
 
@@ -316,7 +325,7 @@ class WireProtocolData(object):
         return resp
 
     def mock_crypt_util(self, *args, **kw):
-        #Partially patch instance method of class CryptUtil
+        # Partially patch instance method of class CryptUtil
         cryptutil = CryptUtil(*args, **kw)
         cryptutil.gen_transport_cert = Mock(side_effect=self.mock_gen_trans_cert)
         return cryptutil
@@ -327,6 +336,12 @@ class WireProtocolData(object):
 
         with open(trans_cert_file, 'w+') as cert_file:
             cert_file.write(self.trans_cert)
+
+    @staticmethod
+    def get_status_blob_from_hostgaplugin_put_status_request(data):
+        status_object = json.loads(data)
+        content = status_object["content"]
+        return base64.b64decode(content)
 
     def get_no_of_plugins_in_extension_config(self):
         if self.ext_conf is None:
@@ -356,29 +371,51 @@ class WireProtocolData(object):
     #
     @staticmethod
     def replace_xml_element_value(xml_document, element_name, element_value):
-        new_xml_document = re.sub(r'(?<=<{0}>).+(?=</{0}>)'.format(element_name), element_value, xml_document)
-        if new_xml_document == xml_document:
-            raise Exception("Could not match element '{0}'", element_name)  # pylint: disable=raising-format-tuple
-        return new_xml_document
+        element_regex = r'(?<=<{0}>).+(?=</{0}>)'.format(element_name)
+        if not re.search(element_regex, xml_document):
+            raise Exception("Can't find XML element '{0}' in {1}".format(element_name, xml_document))
+        return re.sub(element_regex, element_value, xml_document)
 
     @staticmethod
     def replace_xml_attribute_value(xml_document, element_name, attribute_name, attribute_value):
-        new_xml_document = re.sub(r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name), r'\g<1>{0}'.format(attribute_value), xml_document)
-        if new_xml_document == xml_document:
-            raise Exception("Could not match attribute '{0}' of element '{1}'".format(attribute_name, element_name))
-        return new_xml_document
+        attribute_regex = r'(?<=<{0} )(.*{1}=")[^"]+(?="[^>]*>)'.format(element_name, attribute_name)
+        if not re.search(attribute_regex, xml_document):
+            raise Exception("Can't find attribute {0} in XML element '{1}'. Document: {2}".format(attribute_name, element_name, xml_document))
+        return re.sub(attribute_regex, r'\g<1>{0}'.format(attribute_value), xml_document)
 
-    def set_etag(self, etag):
-        '''
-        Sets the ETag for the mock response
-        '''
+    def set_etag(self, etag, timestamp=None):
+        """
+        Sets the ETag for the mock response.
+        This function is used to mock a new goal state, and it also updates the timestamp (extensionsLastModifiedTickCount) in vmSettings.
+        """
+        if timestamp is None:
+            timestamp = datetime.datetime.utcnow()
         self.etag = etag
+        try:
+            vm_settings = json.loads(self.vm_settings)
+            vm_settings["extensionsLastModifiedTickCount"] = timeutil.datetime_to_ticks(timestamp)
+            self.vm_settings = json.dumps(vm_settings)
+        except ValueError:  # some test data include syntax errors; ignore those
+            pass
 
-    def set_incarnation(self, incarnation):
-        '''
-        Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config)
-        '''
+    def set_vm_settings_source(self, source):
+        """
+        Sets the "extensionGoalStatesSource" for the mock vm_settings data
+        """
+        vm_settings = json.loads(self.vm_settings)
+        vm_settings["extensionGoalStatesSource"] = source
+        self.vm_settings = json.dumps(vm_settings)
+
+    def set_incarnation(self, incarnation, timestamp=None):
+        """
+        Sets the incarnation in the goal state, but not on its subcomponents (e.g. hosting env, shared config).
+        This function is used to mock a new goal state, and it also updates the timestamp (createdOnTicks) in ExtensionsConfig.
+        """
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "Incarnation", str(incarnation))
+        if self.ext_conf is not None:
+            if timestamp is None:
+                timestamp = datetime.datetime.utcnow()
+            self.ext_conf = WireProtocolData.replace_xml_attribute_value(self.ext_conf, "InVMGoalStateMetaData", "createdOnTicks", timeutil.datetime_to_ticks(timestamp))
 
     def set_container_id(self, container_id):
         self.goal_state = WireProtocolData.replace_xml_element_value(self.goal_state, "ContainerId", container_id)
