@@ -52,7 +52,7 @@ def get_mock_compute_response():
 
 class TestImds(AgentTestCase):
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     def test_get(self, mock_http_get):
         mock_http_get.return_value = get_mock_compute_response()
 
@@ -67,21 +67,21 @@ class TestImds(AgentTestCase):
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     def test_get_bad_request(self, mock_http_get):
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
 
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(HttpError, test_subject.get_compute)
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     def test_get_internal_service_error(self, mock_http_get):
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.INTERNAL_SERVER_ERROR)
 
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(HttpError, test_subject.get_compute)
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     def test_get_empty_response(self, mock_http_get):
         mock_http_get.return_value = ResponseMock(response=''.encode('utf-8'))
 

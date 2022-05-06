@@ -165,7 +165,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             yield protocol
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     @patch("azurelinuxagent.common.protocol.hostplugin.add_event")
     def assert_ensure_initialized(self, patch_event, patch_http_get, patch_report_health,
                                   response_body,

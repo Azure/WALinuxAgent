@@ -433,7 +433,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(agent.is_blacklisted)
         self.assertTrue(agent.is_available)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
     def test_clear_error(self, mock_downloaded):  # pylint: disable=unused-argument
         self.expand_agents()
 
@@ -451,8 +451,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(agent.is_blacklisted)
         self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_is_available(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
 
@@ -463,8 +463,8 @@ class TestGuestAgent(UpdateTestCase):
         agent.mark_failure(is_fatal=True)
         self.assertFalse(agent.is_available)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_is_blacklisted(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_blacklisted)
@@ -477,8 +477,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.is_blacklisted)
         self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_resource_gone_error_not_blacklisted(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         try:
             mock_downloaded.side_effect = ResourceGoneError()
@@ -489,8 +489,8 @@ class TestGuestAgent(UpdateTestCase):
         except:  # pylint: disable=bare-except
             self.fail("Exception was not expected!")
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_ioerror_not_blacklisted(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         try:
             mock_downloaded.side_effect = IOError()
@@ -501,16 +501,16 @@ class TestGuestAgent(UpdateTestCase):
         except:  # pylint: disable=bare-except
             self.fail("Exception was not expected!")
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_is_downloaded(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_downloaded)
         agent._unpack()
         self.assertTrue(agent.is_downloaded)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_mark_failure(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
 
@@ -521,8 +521,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertEqual(2, agent.error.failure_count)
         self.assertTrue(agent.is_blacklisted)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_unpack(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
@@ -530,16 +530,16 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(os.path.isdir(agent.get_agent_dir()))
         self.assertTrue(os.path.isfile(agent.get_agent_manifest_path()))
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_unpack_fail(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
         os.remove(agent.get_agent_pkg_path())
         self.assertRaises(UpdateError, agent._unpack)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_load_manifest(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         agent._unpack()
@@ -547,8 +547,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertEqual(agent.manifest.get_enable_command(),
                          agent.get_agent_cmd())
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_load_manifest_missing(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
@@ -556,8 +556,8 @@ class TestGuestAgent(UpdateTestCase):
         os.remove(agent.get_agent_manifest_path())
         self.assertRaises(UpdateError, agent._load_manifest)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_load_manifest_is_empty(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
@@ -568,8 +568,8 @@ class TestGuestAgent(UpdateTestCase):
             json.dump(EMPTY_MANIFEST, file)
         self.assertRaises(UpdateError, agent._load_manifest)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
     def test_load_manifest_is_malformed(self, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(os.path.isdir(agent.get_agent_dir()))
@@ -587,9 +587,9 @@ class TestGuestAgent(UpdateTestCase):
         agent._load_error()
         self.assertTrue(agent.error is not None)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     def test_download(self, mock_http_get, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
@@ -604,9 +604,9 @@ class TestGuestAgent(UpdateTestCase):
 
         self.assertTrue(os.path.isfile(agent.get_agent_pkg_path()))
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     def test_download_fail(self, mock_http_get, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
@@ -621,10 +621,10 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isfile(agent.get_agent_pkg_path()))
         self.assertFalse(agent.is_downloaded)
 
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
-    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
-    @patch("azurelinuxagent.ga.update.restutil.http_post")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.agent_update.GuestAgent.__ensure_loaded")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_post")
     def test_download_fallback(self, mock_http_post, mock_http_get, mock_loaded, mock_downloaded):  # pylint: disable=unused-argument
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
@@ -680,7 +680,7 @@ class TestGuestAgent(UpdateTestCase):
                 a, k = mock_http_get.call_args_list[5]
                 self.assertEqual(False, k['use_proxy'])
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.ga.agent_update.restutil.http_get")
     def test_ensure_downloaded(self, mock_http_get):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
