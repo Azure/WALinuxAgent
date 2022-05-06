@@ -46,11 +46,11 @@ from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION, set_daemon_version, \
     __DAEMON_VERSION_ENV_VARIABLE as DAEMON_VERSION_ENV_VARIABLE
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
-from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, AGENT_MANIFEST_FILE, \
-    get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, AGENT_ERROR_FILE, ORPHAN_WAIT_INTERVAL, \
+from azurelinuxagent.ga.update import get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
-from azurelinuxagent.ga.agent_update import AgentUpgradeType
+from azurelinuxagent.ga.agent_update import AgentUpgradeType, GuestAgent, GuestAgentError, AGENT_ERROR_FILE, \
+    AGENT_MANIFEST_FILE, MAX_FAILURE
 from tests.ga.mocks import mock_update_handler
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
