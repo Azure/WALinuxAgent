@@ -82,7 +82,7 @@ class GoalState(object):
             self._container_id = None
             self._hosting_env = None
             self._shared_conf = None
-            self._certs = None
+            self._certs = EmptyCertificates()
             self._remote_access = None
 
             self.update(silent=silent)
@@ -348,7 +348,7 @@ class GoalState(object):
             shared_conf = SharedConfig(xml_text)
             self._history.save_shared_conf(xml_text)
 
-            certs = None
+            certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
             if certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
@@ -506,6 +506,11 @@ class Certificates(object):
         fileutil.write_file(file_name, "".join(buf))
         return file_name
 
+class EmptyCertificates:
+    def __init__(self):
+        self.cert_list = CertList()
+        self.summary = []  # debugging info
+        self.warnings = []
 
 class RemoteAccess(object):
     """
