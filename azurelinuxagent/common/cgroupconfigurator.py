@@ -490,6 +490,7 @@ class CGroupConfigurator(object):
                 self.__reset_agent_cpu_quota()
                 extension_services = self.get_extension_services_list()
                 for extension in extension_services:
+                    logger.info("Resetting extension : {0} and it's services: {1} CPUQuota".format(extension, extension_services[extension]))
                     self.__reset_extension_cpu_quota(extension_name=extension)
                     self.__reset_extension_services_cpu_quota(extension_services[extension])
                 self.__reload_systemd_config()
@@ -800,7 +801,7 @@ class CGroupConfigurator(object):
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
-                    _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
+                    _log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}", extension_name, ustr(exception))
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
 
         def remove_extension_slice(self, extension_name):
@@ -851,8 +852,9 @@ class CGroupConfigurator(object):
             NOTE: This resets the quota on the extension service's default dropin file; any local overrides on the VM will take precedence
             over this setting.
             """
-            try:
-                if self.enabled() and services_list is not None:
+            if self.enabled() and services_list is not None:
+                try:
+                    service_name = None
                     for service in services_list:
                         service_name = service.get('name', None)
                         unit_file_path = systemd.get_unit_file_install_path()
@@ -868,8 +870,8 @@ class CGroupConfigurator(object):
                                         return
                                 files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
                             self.__create_all_files(files_to_create)
-            except Exception as exception:
-                _log_cgroup_warning('Failed to set CPUQuota: {0}', ustr(exception))
+                except Exception as exception:
+                    _log_cgroup_warning('Failed to reset CPUQuota for {0} : {1}', service_name, ustr(exception))
 
         def remove_extension_services_drop_in_files(self, services_list):
             """

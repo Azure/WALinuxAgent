@@ -158,7 +158,7 @@ def get_cpu_throttled_time(cpu_cgroup):
     throttled_time = 0
     if cpu_cgroup is not None:
         try:
-            throttled_time = float(cpu_cgroup.get_throttled_time() / 1E9)
+            throttled_time = cpu_cgroup.get_cpu_throttled_time(read_previous_throttled_time=False)
         except Exception as e:
             logger.warn("Failed to get cpu throttled time for the extension: {0}", ustr(e))
 
