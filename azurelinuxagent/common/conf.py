@@ -184,7 +184,7 @@ __INTEGER_OPTIONS__ = {
     # versions of the Agent.
     #
     "Debug.CgroupCheckPeriod": 300,
-    "Debug.AgentCpuQuota": 75,
+    "Debug.AgentCpuQuota": 50,
     "Debug.AgentCpuThrottledTimeThreshold": 120,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
@@ -543,7 +543,7 @@ def get_agent_cpu_quota(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AgentCpuQuota", 75)
+    return conf.get_int("Debug.AgentCpuQuota", 50)
 
 
 def get_agent_cpu_throttled_time_threshold(conf=__conf__):
