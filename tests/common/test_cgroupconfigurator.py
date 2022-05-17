@@ -254,7 +254,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked")
 
-    def test_disable_should_reset_cpu_quota_and_tracked_cgroups(self):
+    def test_disable_should_reset_cpu_quota(self):
         with self._get_cgroup_configurator() as configurator:
             if len(CGroupsTelemetry._tracked) == 0:
                 raise Exception("Test setup should have started tracking at least 1 cgroup (the agent's)")
@@ -269,7 +269,55 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 fileutil.findre_in_file(agent_drop_in_file_cpu_quota, "^CPUQuota=$"),
                 "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(fileutil.read_file(agent_drop_in_file_cpu_quota)))
             self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should be tracked after disable. Tracking: {0}".format(CGroupsTelemetry._tracked))
-            self.assertFalse(CGroupsTelemetry._track_throttled_time, "Throttle Time should not be tracked after disable")
+
+    def test_disable_should_reset_cpu_quota_for_all_cgroups(self):
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            }
+        ]
+        extension_name = "Microsoft.CPlat.Extension"
+        extension_services = {extension_name: service_list}
+        with self._get_cgroup_configurator() as configurator:
+            with patch.object(configurator, "get_extension_services_list", return_value=extension_services):
+                # get the paths to the mocked files
+                agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
+                extension_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.extensionslice)
+                extension_service_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.extension_service_cpu_quota)
+
+                configurator.setup_extension_slice(extension_name=extension_name, cpu_quota=5)
+                configurator.set_extension_services_cpu_memory_quota(service_list)
+                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
+                                          'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
+                    CpuCgroup('Microsoft.CPlat.Extension',
+                              '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
+
+                configurator.disable("UNIT TEST", DisableCgroups.ALL)
+
+                self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota),
+                                "{0} was not created".format(agent_drop_in_file_cpu_quota))
+                self.assertTrue(
+                    fileutil.findre_in_file(agent_drop_in_file_cpu_quota, "^CPUQuota=$"),
+                    "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(
+                        fileutil.read_file(agent_drop_in_file_cpu_quota)))
+                self.assertTrue(os.path.exists(extension_slice_unit_file),
+                                "{0} was not created".format(extension_slice_unit_file))
+                self.assertTrue(
+                    fileutil.findre_in_file(extension_slice_unit_file, "^CPUQuota=$"),
+                    "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(
+                        fileutil.read_file(extension_slice_unit_file)))
+                self.assertTrue(os.path.exists(extension_service_cpu_quota),
+                                "{0} was not created".format(extension_service_cpu_quota))
+                self.assertTrue(
+                    fileutil.findre_in_file(extension_service_cpu_quota, "^CPUQuota=$"),
+                    "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(
+                        fileutil.read_file(extension_service_cpu_quota)))
+                self.assertEqual(len(CGroupsTelemetry._tracked), 0,
+                                 "No cgroups should be tracked after disable. Tracking: {0}".format(
+                                     CGroupsTelemetry._tracked))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_systemd_when_cgroups_are_not_enabled(self, _):
@@ -529,7 +577,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch("azurelinuxagent.common.utils.extensionprocessutil.wait_for_process_completion_or_timeout",
-                           return_value=[True, None]):
+                           return_value=[True, None, 0]):
                     with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
                                return_value=False):
                         with self.assertRaises(ExtensionError) as context_manager:
