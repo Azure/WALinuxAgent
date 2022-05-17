@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+import glob
+import json
 import os
 import re
 import subprocess
@@ -358,12 +360,16 @@ class CGroupConfigurator(object):
                         CGroupConfigurator._Impl.__cleanup_unit_file(unit_file)
                     return
 
-                # reload the systemd configuration; the new slices will be used once the agent's service restarts
-                try:
-                    logger.info("Executing systemctl daemon-reload...")
-                    shellutil.run_command(["systemctl", "daemon-reload"])
-                except Exception as exception:
-                    _log_cgroup_warning("daemon-reload failed (create azure slice): {0}", ustr(exception))
+                CGroupConfigurator._Impl.__reload_systemd_config()
+
+        @staticmethod
+        def __reload_systemd_config():
+            # reload the systemd configuration; the new slices will be used once the agent's service restarts
+            try:
+                logger.info("Executing systemctl daemon-reload...")
+                shellutil.run_command(["systemctl", "daemon-reload"])
+            except Exception as exception:
+                _log_cgroup_warning("daemon-reload failed (create azure slice): {0}", ustr(exception))
 
         @staticmethod
         def __create_unit_file(path, contents):
@@ -479,18 +485,23 @@ class CGroupConfigurator(object):
             self.__set_cpu_quota(conf.get_agent_cpu_quota())
 
         def disable(self, reason, disable_cgroups):
-            # Todo: disable/reset extension when ext quotas introduced
             if disable_cgroups == DisableCgroups.ALL:  # disable all
+                # Reset quotas
+                self.__reset_agent_cpu_quota()
+                extension_services = self.get_extension_services_list()
+                for extension in extension_services:
+                    logger.info("Resetting extension : {0} and it's services: {1} CPUQuota".format(extension, extension_services[extension]))
+                    self.__reset_extension_cpu_quota(extension_name=extension)
+                    self.__reset_extension_services_cpu_quota(extension_services[extension])
+                self.__reload_systemd_config()
+
+                CGroupsTelemetry.reset()
                 self._agent_cgroups_enabled = False
                 self._extensions_cgroups_enabled = False
-                self.__reset_agent_cpu_quota()
-                CGroupsTelemetry.reset()
             elif disable_cgroups == DisableCgroups.AGENT:  # disable agent
                 self._agent_cgroups_enabled = False
                 self.__reset_agent_cpu_quota()
                 CGroupsTelemetry.stop_tracking(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
-            elif disable_cgroups == DisableCgroups.EXTENSIONS:  # disable extensions
-                self._extensions_cgroups_enabled = False
 
             message = "[CGW] Disabling resource usage monitoring. Reason: {0}".format(reason)
             logger.info(message)  # log as INFO for now, in the future it should be logged as WARNING
@@ -519,7 +530,6 @@ class CGroupConfigurator(object):
             """
             logger.info("Resetting agent's CPUQuota")
             if CGroupConfigurator._Impl.__try_set_cpu_quota(''):  # setting an empty value resets to the default (infinity)
-                CGroupsTelemetry.set_track_throttled_time(False)
                 _log_cgroup_info('CPUQuota: {0}', systemd.get_unit_property(systemd.get_agent_unit_name(), "CPUQuotaPerSecUSec"))
 
         @staticmethod
@@ -763,6 +773,16 @@ class CGroupConfigurator(object):
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout, stderr=stderr, error_code=error_code)
 
+        def __reset_extension_cpu_quota(self, extension_name):
+            """
+            Removes any CPUQuota on the extension
+
+            NOTE: This resets the quota on the extension's slice; any local overrides on the VM will take precedence
+            over this setting.
+            """
+            if self.enabled():
+                self.setup_extension_slice(extension_name, cpu_quota=None)
+
         def setup_extension_slice(self, extension_name, cpu_quota):
             """
             Each extension runs under its own slice (Ex "Microsoft.CPlat.Extension.slice"). All the slices for
@@ -777,11 +797,11 @@ class CGroupConfigurator(object):
                 extension_slice_path = os.path.join(unit_file_install_path,
                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
-                    cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""
+                    cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
-                    _log_cgroup_warning("Failed to create unit files for the extension slice: {0}", ustr(exception))
+                    _log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}", extension_name, ustr(exception))
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
 
         def remove_extension_slice(self, extension_name):
@@ -823,13 +843,35 @@ class CGroupConfigurator(object):
                             files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
 
                         self.__create_all_files(files_to_create)
+                        self.__reload_systemd_config()
 
-                # reload the systemd configuration; the new unit will be used once the service restarts
+        def __reset_extension_services_cpu_quota(self, services_list):
+            """
+            Removes any CPUQuota on the extension service
+
+            NOTE: This resets the quota on the extension service's default dropin file; any local overrides on the VM will take precedence
+            over this setting.
+            """
+            if self.enabled() and services_list is not None:
                 try:
-                    logger.info("Executing systemctl daemon-reload...")
-                    shellutil.run_command(["systemctl", "daemon-reload"])
+                    service_name = None
+                    for service in services_list:
+                        service_name = service.get('name', None)
+                        unit_file_path = systemd.get_unit_file_install_path()
+                        if service_name is not None and unit_file_path is not None:
+                            files_to_create = []
+                            drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
+                            cpu_quota = ""  # setting an empty value resets to the default (infinity)
+                            drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                            cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
+                            if os.path.exists(drop_in_file_cpu_quota):
+                                with open(drop_in_file_cpu_quota, "r") as file_:
+                                    if file_.read() == cpu_quota_contents:
+                                        return
+                                files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
+                            self.__create_all_files(files_to_create)
                 except Exception as exception:
-                    _log_cgroup_warning("daemon-reload failed (create service unit files): {0}", ustr(exception))
+                    _log_cgroup_warning('Failed to reset CPUQuota for {0} : {1}', service_name, ustr(exception))
 
         def remove_extension_services_drop_in_files(self, services_list):
             """
@@ -872,6 +914,31 @@ class CGroupConfigurator(object):
                     service_name = service.get('name', None)
                     if service_name is not None:
                         self.start_tracking_unit_cgroups(service_name)
+
+        @staticmethod
+        def get_extension_services_list():
+            """
+            ResourceLimits for extensions are coming from <extName>/HandlerManifest.json file.
+            Use this pattern to determine all the installed extension HandlerManifest files and
+            read the extension services if ResourceLimits are present.
+            """
+            extensions_services = {}
+            for manifest_path in glob.iglob(os.path.join(conf.get_lib_dir(), "*/HandlerManifest.json")):
+                match = re.search("(?P<extname>[\\w+\\.-]+).HandlerManifest\\.json", manifest_path)
+                if match is not None:
+                    extensions_name = match.group('extname')
+                    if not extensions_name.startswith('WALinuxAgent'):
+                        try:
+                            data = json.loads(fileutil.read_file(manifest_path))
+                            resource_limits = data[0].get('resourceLimits', None)
+                            services = resource_limits.get('services') if resource_limits else None
+                            extensions_services[extensions_name] = services
+                        except (IOError, OSError) as e:
+                            _log_cgroup_warning(
+                                'Failed to load manifest file ({0}): {1}'.format(manifest_path, e.strerror))
+                        except ValueError:
+                            _log_cgroup_warning('Malformed manifest file ({0}).'.format(manifest_path))
+            return extensions_services
 
     # unique instance for the singleton
     _instance = None
