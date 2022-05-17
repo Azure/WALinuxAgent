@@ -142,3 +142,25 @@ class RedhatOSUtil(Redhat6xOSUtil):
             endpoint = self.get_endpoint_from_leases_path('/var/lib/NetworkManager/dhclient-*.lease')
 
         return endpoint
+
+
+class RedhatOSModernUtil(RedhatOSUtil):
+    def __init__(self):  # pylint: disable=W0235
+        super(RedhatOSModernUtil, self).__init__()
+
+    def restart_if(self, ifname, retries=3, wait=5):
+        """
+        Restart an interface by bouncing the link. systemd-networkd observes
+        this event, and forces a renew of DHCP.
+        """
+        retry_limit = retries + 1
+        for attempt in range(1, retry_limit):
+            return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
+            if return_code == 0:
+                return
+            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            if attempt < retry_limit:
+                logger.info("retrying in {0} seconds".format(wait))
+                time.sleep(wait)
+            else:
+                logger.warn("exceeded restart retries")
