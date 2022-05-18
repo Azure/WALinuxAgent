@@ -1,0 +1,344 @@
+#!/bin/bash
+# walinuxagent
+# script to start and stop the waagent daemon.
+# 
+# This script takes into account the possibility that both daemon and
+# non-daemon instances of waagent may be running concurrently,
+# and attempts to ensure that any non-daemon instances are preserved 
+# when the daemon instance is stopped.
+# 
+### BEGIN INIT INFO
+# Provides:          walinuxagent
+# Required-Start:    $remote_fs $syslog $network
+# Required-Stop:     $remote_fs
+# X-Start-Before:    cloud-init
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Microsoft Azure Linux Agent
+### END INIT INFO
+
+DESC="Microsoft Azure Linux Agent"
+INTERPRETER="/usr/bin/python3"
+DAEMON='/usr/sbin/waagent'
+DAEMON_ARGS='-daemon'
+START_ARGS='--background'
+NAME='waagent'
+# set to 1 to enable a lot of debugging output
+DEBUG=0
+
+. /lib/lsb/init-functions
+
+debugmsg() {
+	# output a console message if DEBUG is set
+	# (can be enabled dynamically by giving "debug" as an extra argument)
+	if [ "x${DEBUG}" == "x1" ] ; then
+		echo "[debug]: $1" >&2
+	fi
+	return 0
+}
+
+check_non_daemon_instances() {
+	# check if there are any non-daemon instances of waagent running
+	local NDPIDLIST i NDPIDCT
+	declare -a NDPIDLIST
+	debugmsg "check_non_daemon_instance: after init, #NDPIDLIST=${#NDPIDLIST[*]}"
+	readarray -t NDPIDLIST < <( ps ax | 
+		grep "${INTERPRETER}" |
+		grep "${DAEMON}" |
+		grep -v -- "${DAEMON_ARGS}" |
+		grep -v  "grep" |
+		awk '{ print $1 }')
+	NDPIDCT=${#NDPIDLIST[@]}
+	debugmsg "check_non_daemon_instances: NDPIDCT=${NDPIDCT}"
+	debugmsg "check_non_daemon_instances: NDPIDLIST[0] = ${NDPIDLIST[0]}"
+	if [ ${NDPIDCT} -gt 0 ] ; then
+		debugmsg "check_non_daemon_instances: WARNING: non-daemon instances of waagent exist"
+	else
+		debugmsg "check_non_daemon_instances: no non-daemon instances of waagent are currently running"
+	fi
+	for (( i = 0 ; i < ${NDPIDCT} ; i++ )) ; do
+		debugmsg "check_non_daemon_instances: WARNING: process ${NDPIDLIST[${i}]} is a non-daemon waagent instance"
+	done
+	return 0 
+}
+
+get_daemon_pid() {
+	# (re)create PIDLIST, return the first entry
+	local PID
+	create_pidlist
+	PID=${PIDLIST[0]}	
+	if [ -z "${PID}" ] ; then
+		debugmsg "get_daemon_pid: : WARNING: no waagent daemon process found"
+	fi
+	echo "${PID}"
+}
+
+recheck_status() {
+	# after an attempt to stop the daemon, re-check the status
+	# and take any further actions required.
+	# (NB: at the moment, we only re-check once. Possible improvement
+	# would be to iterate the re-check up to a given maximum tries). 
+	local STATUS NEWSTATUS
+	get_status
+	STATUS=$?
+	debugmsg "stop_waagent: status is now ${STATUS}"
+	# ideal if stop has been successful: STATUS=1 - no daemon process
+	case ${STATUS} in 
+		0)
+			# stop didn't work
+			# what to do? maybe try kill -9 ? 
+			debugmsg "recheck_status: ERROR: unable to stop waagent"
+			debugmsg "recheck_status: trying again with kill -9"
+			kill_daemon_from_pid 1
+			# probably need to check status again? 
+			get_status
+			NEW_STATUS=$?
+			if [ "x${NEW_STATUS}" == "x1" ] ; then
+				debugmsg "recheck_status: successfully stopped."
+				log_end_msg 0 || true
+			else
+				# could probably do something more productive here
+				debugmsg "recheck_status: unable to stop daemon - giving up"
+				log_end_msg 1 || true
+				exit 1
+			fi
+		;;
+		1) 
+			# THIS IS THE EXPECTED CASE: daemon is no longer running and
+			debugmsg "recheck_status: waagent daemon stopped successfully."
+			log_end_msg 0 || true
+		;;
+		2) 
+			# so weird that we can't figure out what's going on							
+			debugmsg "recheck_status: ERROR: unable to determine waagent status"
+			debugmsg "recheck_status: manual intervention required"
+			log_end_msg 1 || true
+			exit 1
+		;;
+	esac
+}
+
+start_waagent() {
+	# we use start-stop-daemon for starting waagent
+	local STATUS
+	get_status
+	STATUS=$?
+	# check the status value - take appropriate action
+	debugmsg "start_waagent: STATUS=${STATUS}"
+	case "${STATUS}" in 
+		0) 
+			debugmsg "start_waagent: waagent is already running"
+			log_daemon_msg "waagent is already running"
+			log_end_msg 0 || true
+		;;
+		1)
+			# not running (we ignore presence/absence of pidfile)
+			# just start waagent
+			debugmsg "start_waagent: waagent is not currently running"
+			log_daemon_msg "Starting ${NAME} daemon"
+			start-stop-daemon --start --quiet --background  --name "${NAME}" --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
+			log_end_msg $? || true
+		;;
+		2)
+			# get_status can't figure out what's going on.
+			# try doing a stop to clean up, then attempt to start waagent
+			# will probably require manual intervention
+			debugmsg "start_waagent: unable to determine current status"
+			debugmsg "start_waagent: trying to stop waagent first, and then start it"
+			stop_waagent
+			log_daemon_msg "Starting ${NAME} daemon"
+			start-stop-daemon --start --quiet --background --name ${NAME} --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
+			log_end_msg $? || true
+		;;
+	esac
+}
+
+kill_daemon_from_pidlist() {
+	# check the pidlist for at least one waagent daemon process
+	# if found, kill it directly from the entry in the pidlist
+	# Ignore any pidfile. Avoid killing any non-daemon
+	# waagent processes.
+	# If called with "1" as first argument, use kill -9 rather than
+	# normal kill
+	local i PIDCT FORCE
+	FORCE=0
+	if [ "x${1}" == "x1" ] ; then
+		debugmsg "kill_daemon_from_pidlist: WARNING: using kill -9"
+		FORCE=1
+	fi
+	debugmsg "kill_daemon_from_pidlist: killing daemon using pid(s) in PIDLIST"
+	PIDCT=${#PIDLIST[*]} 
+	if [ "${PIDCT}" -eq 0 ] ; then
+		debugmsg "kill_daemon_from_pidlist: ERROR: no pids in PIDLIST"
+		return 1
+	fi
+	for (( i=0 ; i < ${PIDCT} ; i++ )) ; do
+		debugmsg "kill_daemon_from_pidlist: killing waagent daemon process ${PIDLIST[${i}]}"
+		if [ "x${FORCE}" == "x1" ] ; then
+			kill -9 ${PIDLIST[${i}]}
+		else 
+			kill ${PIDLIST[${i}]}
+		fi
+	done
+	return 0	
+}
+
+stop_waagent() {
+	# check the current status and if the waagent daemon is running, attempt
+	# to stop it.
+	# start-stop-daemon is avoided here
+	local STATUS PID RC
+	get_status	
+	STATUS=$?
+	debugmsg "stop_waagent: current status = ${STATUS}"
+	case "${STATUS}" in
+		0)
+			# - ignore any pidfile - kill directly from process list
+			log_daemon_msg "Stopping ${NAME} daemon (using process list)"
+			kill_daemon_from_pidlist
+			recheck_status
+		;;
+		1)
+			# not running - we ignore any pidfile
+			# REVISIT: should we check for a pidfile and remove if found?
+			debugmsg "waagent is not running"
+			log_daemon_msg "waagent is already stopped"
+			log_end_msg 0 || true
+		;;
+		2)
+			# weirdness - call for help
+			debugmsg "ERROR: unable to determine waagent status - manual intervention required"
+			log_daemon_msg "WARNING: unable to determine status of waagent daemon - manual intervention required"
+			log_end_msg 1 || true
+		;;
+	esac
+}
+
+check_daemons() {
+	# check for running waagent daemon processes
+	local ENTRY
+	ps ax |
+	grep "${INTERPRETER}" |
+	grep "${DAEMON}" |
+	grep -- "${DAEMON_ARGS}" |
+	grep -v 'grep' |
+	while read ENTRY ; do
+		debugmsg "check_daemons(): ENTRY='${ENTRY}'"
+	done
+	return 0
+}
+
+create_pidlist() {
+	# initialise the list of waagent daemon processes
+	# NB: there should only be one - both this script and waagent itself
+	# attempt to avoid starting more than one daemon process.
+	# However, we use an array just in case.
+  readarray -t PIDLIST < <( ps ax | 
+   grep "${INTERPRETER}" |
+	 grep "${DAEMON}" |
+	 grep --  "${DAEMON_ARGS}" |
+   grep -v 'grep' |
+   awk '{ print $1 }')
+	if [ "${#PIDLIST[*]}" -eq 0 ] ; then
+		debugmsg "create_pidlist: WARNING: no waagent daemons found"
+	elif [ "${#PIDLIST[*]}" -gt 1 ] ; then
+		debugmsg "create_pidlist: WARNING: multiple waagent daemons running"
+	fi
+	return 0
+}
+
+get_status() {
+	# simplified status - ignoring any pidfile
+	# Possibilities:
+	# 0 - waagent daemon running
+	# 1 - waagent daemon not running
+	# 2 - status unclear
+	# (NB: if we find that multiple daemons exist, we just ignore the fact.
+	# It should be virtually impossible for this to happen)
+	local FOUND RPID ENTRY STATUS DAEMON_RUNNING PIDCT
+	PIDCT=0
+	DAEMON_RUNNING=
+	RPID=
+	ENTRY=
+	# assume the worst
+	STATUS=2
+	check_daemons
+	create_pidlist
+	# should only be one daemon running - but we check, just in case
+	PIDCT=${#PIDLIST[@]}
+	debugmsg "get_status: PIDCT=${PIDCT}"
+	if [ ${PIDCT} -eq 0 ] ; then
+		# not running
+		STATUS=1
+	else
+		# at least one daemon process is running
+		if [ ${PIDCT} -gt 1 ] ; then
+			debugmsg "get_status: WARNING: more than one waagent daemon running"
+			debugmsg "get_status: (should not happen)"
+		else
+			debugmsg "get_status: only one daemon instance running - as expected"
+		fi
+		STATUS=0
+	fi
+	return ${STATUS}	
+}
+
+waagent_status() {
+	# get the current status of the waagent daemon, and return it
+	local STATUS
+	get_status
+	STATUS=$?
+	debugmsg "waagent status = ${STATUS}"
+	case ${STATUS} in 
+		0) 
+			log_daemon_msg "waagent is running"
+		;;
+		1) 
+			log_daemon_msg "WARNING: waagent is not running"
+		;;
+		2)
+			log_daemon_msg "WARNING: waagent status cannot be determined"
+		;;
+	esac
+	log_end_msg 0 || true
+	return 0
+}
+
+
+#########################################################################
+# MAINLINE
+# Usage: "service [scriptname] [ start | stop | status | restart ] [ debug ]
+# (specifying debug as extra argument enables debugging output)
+#########################################################################
+
+export PATH="${PATH}:+$PATH:}/usr/sbin:/sbin"
+
+declare -a PIDLIST
+
+if [ ! -z "$2" -a "$2" == "debug" ] ; then
+	DEBUG=1
+fi
+
+# pre-check for non-daemon (e.g. console) instances of waagent
+check_non_daemon_instances
+
+case "$1" in
+	start)
+		start_waagent
+	;;
+
+	stop) 
+		stop_waagent
+	;;
+
+	status)
+		waagent_status
+	;;
+
+	restart)
+		stop_waagent
+		start_waagent
+	;;
+
+esac
+exit 0

@@ -280,6 +280,7 @@ class SystemdCgroupsApi(CGroupsApi):
 
         logger.info("Started extension in unit '{0}'", scope_name)
 
+        cpu_cgroup = None
         try:
             cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
 
@@ -289,7 +290,8 @@ class SystemdCgroupsApi(CGroupsApi):
                 logger.info("The CPU controller is not mounted; will not track resource usage")
             else:
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
-                CGroupsTelemetry.track_cgroup(CpuCgroup(extension_name, cpu_cgroup_path))
+                cpu_cgroup = CpuCgroup(extension_name, cpu_cgroup_path)
+                CGroupsTelemetry.track_cgroup(cpu_cgroup)
 
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
@@ -301,7 +303,7 @@ class SystemdCgroupsApi(CGroupsApi):
         # Wait for process completion or timeout
         try:
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
-                                             stderr=stderr, error_code=error_code)
+                                             stderr=stderr, error_code=error_code, cpu_cgroup=cpu_cgroup)
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.

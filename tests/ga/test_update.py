@@ -38,7 +38,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentManifest, \
     VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.utils import fileutil, restutil, textutil
+from azurelinuxagent.common.utils import fileutil, restutil, textutil, timeutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
@@ -52,7 +52,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
 from tests.ga.mocks import mock_update_handler
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
 from tests.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances
 from tests.protocol import mockwiredata
@@ -2874,7 +2874,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
     def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
         data_file = self._prepare_fast_track_goal_state()
 
-        if HostPluginProtocol.get_fast_track_timestamp() is None:
+        if HostPluginProtocol.get_fast_track_timestamp() == timeutil.create_timestamp(datetime.min):
             raise Exception("The test setup did not save the Fast Track state")
 
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
@@ -2882,8 +2882,55 @@ class ProcessGoalStateTestCase(AgentTestCase):
                 with mock_update_handler(protocol) as update_handler:
                     update_handler.run()
 
-        self.assertIsNone(HostPluginProtocol.get_fast_track_timestamp(), "The Fast Track state was not cleared")
+        self.assertEqual(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_timestamp(datetime.min),
+            "The Fast Track state was not cleared")
 
+    def test_it_should_default_fast_track_timestamp_to_datetime_min(self):
+        data = DATA_FILE_VM_SETTINGS.copy()
+        # TODO: Currently, there's a limitation in the mocks where bumping the incarnation but the goal
+        # state will cause the agent to error out while trying to write the certificates to disk. These
+        # files have no dependencies on certs, so using them does not present that issue.
+        #
+        # Note that the scenario this test is representing does not depend on certificates at all, and
+        # can be changed to use the default files when the above limitation is addressed.
+        data["vm_settings"] = "hostgaplugin/vm_settings-fabric-no_thumbprints.json"
+        data['goal_state'] = 'wire/goal_state_no_certs.xml'
+
+        def vm_settings_no_change(url, *_, **__):
+            if HttpRequestPredicates.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.NOT_MODIFIED)
+            return None
+
+        def vm_settings_not_supported(url, *_, **__):
+            if HttpRequestPredicates.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(404)
+            return None
+        
+        with mock_wire_protocol(data) as protocol:
+
+            def mock_live_migration(iteration):
+                if iteration == 1:
+                    protocol.mock_wire_data.set_incarnation(2)
+                    protocol.set_http_handlers(http_get_handler=vm_settings_no_change)
+                elif iteration == 2:
+                    protocol.mock_wire_data.set_incarnation(3)
+                    protocol.set_http_handlers(http_get_handler=vm_settings_not_supported)
+            
+            with mock_update_handler(protocol, 3, on_new_iteration=mock_live_migration) as update_handler:
+                with patch("azurelinuxagent.ga.update.logger.error") as patched_error:
+                    def check_for_errors():
+                        msg_fragment = "Error fetching the goal state:"
+
+                        for (args, _) in filter(lambda a: len(a) > 0, patched_error.call_args_list):
+                            if msg_fragment in args[0]:
+                                self.fail("Found error: {}".format(args[0]))
+
+                    update_handler.run(debug=True)
+                    check_for_errors()
+                
+            timestamp = protocol.client.get_host_plugin()._fast_track_timestamp
+            self.assertEqual(timestamp, timeutil.create_timestamp(datetime.min),
+                "Expected fast track time stamp to be set to {0}, got {1}".format(datetime.min, timestamp))
 
 class HeartbeatTestCase(AgentTestCase):
 
