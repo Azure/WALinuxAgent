@@ -1,11 +1,11 @@
 #!/bin/bash
-# walinuxagent.sysvinit
-# sysvinit script to start and stop the waagent daemon.
+# walinuxagent
+# script to start and stop the waagent daemon.
 # 
 # This script takes into account the possibility that both daemon and
-# non-daemon instances of waagent may be running concurrently (e.g. when
-# "waagent -deprovision" is being run) and attempts to ensure that any
-# non-daemon instances are preserved when the daemon instance is stopped.
+# non-daemon instances of waagent may be running concurrently,
+# and attempts to ensure that any non-daemon instances are preserved 
+# when the daemon instance is stopped.
 # 
 ### BEGIN INIT INFO
 # Provides:          walinuxagent
@@ -42,11 +42,6 @@ check_non_daemon_instances() {
 	local NDPIDLIST i NDPIDCT
 	declare -a NDPIDLIST
 	debugmsg "check_non_daemon_instance: after init, #NDPIDLIST=${#NDPIDLIST[*]}"
-#	NDPIDLIST=$(	ps ax |
-#		grep -e "${INTERPRETER}" -e "${DAEMON}" -e "${DAEMON_ARGS}" |
-#		grep -v  -e 'grep' |
-#		awk '{ print $1 }')
-# use readarray so that we don't get a dummy first element
 	readarray -t NDPIDLIST < <( ps ax | 
 		grep "${INTERPRETER}" |
 		grep "${DAEMON}" |
@@ -141,22 +136,17 @@ start_waagent() {
 			# just start waagent
 			debugmsg "start_waagent: waagent is not currently running"
 			log_daemon_msg "Starting ${NAME} daemon"
-#			start-stop-daemon --start --quiet --pidfile ${PIDFILE} --background  --name "${NAME}" --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
-# we don't create a pidfile now
 			start-stop-daemon --start --quiet --background  --name "${NAME}" --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
 			log_end_msg $? || true
 		;;
 		2)
 			# get_status can't figure out what's going on.
-			# try doing a stop to clean up any mess, then attempt to start waagent
+			# try doing a stop to clean up, then attempt to start waagent
 			# will probably require manual intervention
-			# (REVISIT: in this case, maybe we should re-check the status?)
 			debugmsg "start_waagent: unable to determine current status"
 			debugmsg "start_waagent: trying to stop waagent first, and then start it"
 			stop_waagent
 			log_daemon_msg "Starting ${NAME} daemon"
-#			start-stop-daemon --start --quiet --pidfile ${PIDFILE} --background --name ${NAME} --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
-# we don't create a pidfile now
 			start-stop-daemon --start --quiet --background --name ${NAME} --exec ${INTERPRETER} -- ${DAEMON} ${DAEMON_ARGS}
 			log_end_msg $? || true
 		;;
