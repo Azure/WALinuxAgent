@@ -261,7 +261,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
 def debian_has_systemd():
     try:
         return subprocess.check_output(
-            ['cat', '/proc/1/comm']).strip() == 'systemd'
+            ['cat', '/proc/1/comm']).strip().decode() == 'systemd'
     except subprocess.CalledProcessError:
         return False
 

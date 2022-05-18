@@ -135,10 +135,10 @@ class WireProtocolData(object):
             "/HealthService": 0,
             "/vmAgentLog": 0,
             "goalstate": 0,
-            "hostingenvuri": 0,
-            "sharedconfiguri": 0,
-            "certificatesuri": 0,
-            "extensionsconfiguri": 0,
+            "hostingEnvironmentConfig": 0,
+            "sharedConfig": 0,
+            "certificates": 0,
+            "extensionsConfig": 0,
             "remoteaccessinfouri": 0,
             "extensionArtifact": 0,
             "agentArtifact": 0,
@@ -198,6 +198,10 @@ class WireProtocolData(object):
         if in_vm_artifacts_profile_file is not None:
             self.in_vm_artifacts_profile = load_data(in_vm_artifacts_profile_file)
 
+    def reset_call_counts(self):
+        for counter in self.call_counts:
+            self.call_counts[counter] = 0
+
     def mock_http_get(self, url, *_, **kwargs):
         content = ''
         response_headers = []
@@ -217,18 +221,18 @@ class WireProtocolData(object):
         elif "goalstate" in url:
             content = self.goal_state
             self.call_counts["goalstate"] += 1
-        elif "hostingenvuri" in url:
+        elif HttpRequestPredicates.is_hosting_environment_config_request(url):
             content = self.hosting_env
-            self.call_counts["hostingenvuri"] += 1
-        elif "sharedconfiguri" in url:
+            self.call_counts["hostingEnvironmentConfig"] += 1
+        elif HttpRequestPredicates.is_shared_config_request(url):
             content = self.shared_config
-            self.call_counts["sharedconfiguri"] += 1
-        elif "certificatesuri" in url:
+            self.call_counts["sharedConfig"] += 1
+        elif HttpRequestPredicates.is_certificates_request(url):
             content = self.certs
-            self.call_counts["certificatesuri"] += 1
-        elif "extensionsconfiguri" in url:
+            self.call_counts["certificates"] += 1
+        elif HttpRequestPredicates.is_extensions_config_request(url):
             content = self.ext_conf
-            self.call_counts["extensionsconfiguri"] += 1
+            self.call_counts["extensionsConfig"] += 1
         elif "remoteaccessinfouri" in url:
             content = self.remote_access
             self.call_counts["remoteaccessinfouri"] += 1

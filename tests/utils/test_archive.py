@@ -67,7 +67,10 @@ class TestArchive(AgentTestCase):
             test_directories.append(directory)
 
         test_subject = StateArchiver(self.tmp_dir)
-        test_subject.archive()
+        # NOTE: StateArchiver sorts the state directories by creation time, but the test files are created too fast and the
+        # time resolution is too coarse, so instead we mock getctime to simply return the path of the file
+        with patch("azurelinuxagent.common.utils.archive.os.path.getctime", side_effect=lambda path: path):
+            test_subject.archive()
 
         for directory in test_directories[0:2]:
             zip_file = directory + ".zip"
@@ -110,7 +113,10 @@ class TestArchive(AgentTestCase):
         self.assertEqual(total, len(os.listdir(self.history_dir)))
 
         test_subject = StateArchiver(self.tmp_dir)
-        test_subject.purge()
+        # NOTE: StateArchiver sorts the state directories by creation time, but the test files are created too fast and the
+        # time resolution is too coarse, so instead we mock getctime to simply return the path of the file
+        with patch("azurelinuxagent.common.utils.archive.os.path.getctime", side_effect=lambda path: path):
+            test_subject.purge()
 
         archived_entries = os.listdir(self.history_dir)
         self.assertEqual(_MAX_ARCHIVED_STATES, len(archived_entries))
@@ -135,7 +141,8 @@ class TestArchive(AgentTestCase):
                 'Microsoft.Azure.Extensions.CustomScript.1.xml',
                 'SharedConfig.xml',
                 'HostingEnvironmentConfig.xml',
-                'RemoteAccess.xml'
+                'RemoteAccess.xml',
+                'waagent_status.1.json'
             ]
             legacy_files = [os.path.join(self.tmp_dir, f) for f in legacy_files]
             for f in legacy_files:

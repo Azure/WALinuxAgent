@@ -38,7 +38,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentManifest, \
     VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.utils import fileutil, restutil, textutil
+from azurelinuxagent.common.utils import fileutil, restutil, textutil, timeutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
@@ -52,7 +52,7 @@ from azurelinuxagent.ga.update import GuestAgent, GuestAgentError, MAX_FAILURE, 
     READONLY_FILE_GLOBS, ExtensionsSummary, AgentUpgradeType
 from tests.ga.mocks import mock_update_handler
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT
+from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
 from tests.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances
 from tests.protocol import mockwiredata
@@ -1458,6 +1458,53 @@ class TestUpdate(UpdateTestCase):
         eh = Extension(name=name)
         eh.version = version
         return ExtHandlerInstance(eh, protocol)
+    
+    def test_update_handler_recovers_from_error_with_no_certs(self):
+        data = DATA_FILE.copy()
+        data['goal_state'] = 'wire/goal_state_no_certs.xml'
+
+        def fail_gs_fetch(url, *_, **__):
+            if HttpRequestPredicates.is_goal_state_request(url):
+                return MockHttpResponse(status=500)
+            return None
+
+        with mock_wire_protocol(data) as protocol:
+
+            def fail_fetch_on_second_iter(iteration):
+                if iteration == 2:
+                    protocol.set_http_handlers(http_get_handler=fail_gs_fetch)
+                if iteration > 2: # Zero out the fail handler for subsequent iterations.
+                    protocol.set_http_handlers(http_get_handler=None)
+
+            with mock_update_handler(protocol, 3, on_new_iteration=fail_fetch_on_second_iter) as update_handler:
+                with patch("azurelinuxagent.ga.update.logger.error") as patched_error:
+                    with patch("azurelinuxagent.ga.update.logger.info") as patched_info:
+                        def match_unexpected_errors():
+                            unexpected_msg_fragment = "Error fetching the goal state:"
+
+                            matching_errors = []
+                            for (args, _) in filter(lambda a: len(a) > 0, patched_error.call_args_list):
+                                if unexpected_msg_fragment in args[0]:
+                                    matching_errors.append(args[0])
+                            
+                            if len(matching_errors) > 1:
+                                self.fail("Guest Agent did not recover, with new error(s): {}"\
+                                    .format(matching_errors[1:]))
+
+                        def match_expected_info():
+                            expected_msg_fragment = "Fetching the goal state recovered from previous errors"
+
+                            for (call_args, _) in filter(lambda a: len(a) > 0, patched_info.call_args_list):
+                                if expected_msg_fragment in call_args[0]:
+                                    break
+                            else:
+                                self.fail("Expected the guest agent to recover with '{}', but it didn't"\
+                                    .format(expected_msg_fragment))
+
+                        update_handler.run(debug=True)
+                        match_unexpected_errors() # Match on errors first, they can provide more info.
+                        match_expected_info()
+
 
     def test_it_should_recreate_handler_env_on_service_startup(self):
         iterations = 5
@@ -1785,7 +1832,7 @@ class TestUpdate(UpdateTestCase):
 
     def test_it_should_wait_to_fetch_first_goal_state(self):
         with _get_update_handler() as (update_handler, protocol):
-            with patch("azurelinuxagent.common.logger.warn") as patch_warn:
+            with patch("azurelinuxagent.common.logger.error") as patch_error:
                 with patch("azurelinuxagent.common.logger.info") as patch_info:
                     # Fail GS fetching for the 1st 5 times the agent asks for it
                     update_handler._fail_gs_count = 5
@@ -1799,13 +1846,15 @@ class TestUpdate(UpdateTestCase):
                     protocol.set_http_handlers(http_get_handler=get_handler)
                     update_handler.run(debug=True)
 
-        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
-            patch_warn.call_args_list))
-        warn_msgs = [args[0] for (args, _) in patch_warn.call_args_list if
-                     "An error occurred while retrieving the goal state" in args[0]]
-        self.assertTrue(len(warn_msgs) > 0, "Error should've been reported when failed to retrieve GS")
+        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0; List of all errors logged by the agent: {0}".format(
+            patch_error.call_args_list))
+
+        error_msgs = [args[0] for (args, _) in patch_error.call_args_list if
+                     "Error fetching the goal state" in args[0]]
+        self.assertTrue(len(error_msgs) > 0, "Error should've been reported when failed to retrieve GS")
+
         info_msgs = [args[0] for (args, _) in patch_info.call_args_list if
-                     "Retrieving the goal state recovered from previous errors" in args[0]]
+                     "Fetching the goal state recovered from previous errors." in args[0]]
         self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
 
     def test_it_should_reset_legacy_blacklisted_agents_on_process_start(self):
@@ -2637,9 +2686,9 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             calls_to_strings = lambda calls: (str(c) for c in calls)
             filter_calls = lambda calls, regex=None: (c for c in calls_to_strings(calls) if regex is None or re.match(regex, c))
             logger_calls = lambda regex=None: [m for m in filter_calls(logger.method_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
-            warnings = lambda: logger_calls(r'call.warn\(.*An error occurred while retrieving the goal state.*')
-            periodic_warnings = lambda: logger_calls(r'call.periodic_warn\(.*Attempts to retrieve the goal state are failing.*')
-            success_messages = lambda: logger_calls(r'call.info\(.*Retrieving the goal state recovered from previous errors.*')
+            errors = lambda: logger_calls(r'call.error\(.*Error fetching the goal state.*')
+            periodic_errors = lambda: logger_calls(r'call.error\(.*Fetching the goal state is still failing*')
+            success_messages = lambda: logger_calls(r'call.info\(.*Fetching the goal state recovered from previous errors.*')
             telemetry_calls = lambda regex=None: [m for m in filter_calls(add_event.mock_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
             goal_state_events = lambda: telemetry_calls(r".*op='FetchGoalState'.*")
 
@@ -2664,10 +2713,8 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (logger, add_event):
                 update_handler._try_update_goal_state(protocol)
 
-                w = warnings()
-                pw = periodic_warnings()
-                self.assertEqual(1, len(w), "A failure should have produced a warning: [{0}]".format(w))
-                self.assertEqual(1, len(pw), "A failure should have produced a periodic warning: [{0}]".format(pw))
+                e = errors()
+                self.assertEqual(1, len(e), "A failure should have produced an error: [{0}]".format(e))
 
                 gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
@@ -2676,17 +2723,17 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             # ... and errors continue happening...
             #
             with create_log_and_telemetry_mocks() as (logger, add_event):
-                update_handler._try_update_goal_state(protocol)
-                update_handler._try_update_goal_state(protocol)
-                update_handler._try_update_goal_state(protocol)
+                for _ in range(5):
+                    update_handler._update_goal_state_last_error_report = datetime.now() + timedelta(days=1)
+                    update_handler._try_update_goal_state(protocol)
 
-                w = warnings()
-                pw = periodic_warnings()
-                self.assertTrue(len(w) == 0, "Subsequent failures should not produce warnings: [{0}]".format(w))
-                self.assertEqual(len(pw), 3, "Subsequent failures should produce periodic warnings: [{0}]".format(pw))
+                e = errors()
+                pe = periodic_errors()
+                self.assertEqual(2, len(e), "Two additional errors should have been reported: [{0}]".format(e))
+                self.assertEqual(len(pe), 3, "Subsequent failures should produce periodic errors: [{0}]".format(pe))
 
                 tc = telemetry_calls()
-                self.assertTrue(len(tc) == 0, "Subsequent failures should not produce any telemetry events: [{0}]".format(tc))
+                self.assertTrue(len(tc) == 5, "The failures should have produced telemetry events. Got: [{0}]".format(tc))
 
             #
             # ... until we finally succeed
@@ -2696,10 +2743,10 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 update_handler._try_update_goal_state(protocol)
 
                 s = success_messages()
-                w = warnings()
-                pw = periodic_warnings()
+                e = errors()
+                pe = periodic_errors()
                 self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(s))
-                self.assertTrue(len(w) == 0 and len(pw) == 0, "Recovering after failures should have not produced any warnings: [{0}] [{1}]".format(w, pw))
+                self.assertTrue(len(e) == 0 and len(pe) == 0, "Recovering after failures should have not produced any errors: [{0}] [{1}]".format(e, pe))
 
                 gs = goal_state_events()
                 self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
@@ -2827,7 +2874,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
     def test_it_should_clear_the_timestamp_for_the_most_recent_fast_track_goal_state(self):
         data_file = self._prepare_fast_track_goal_state()
 
-        if HostPluginProtocol.get_fast_track_timestamp() is None:
+        if HostPluginProtocol.get_fast_track_timestamp() == timeutil.create_timestamp(datetime.min):
             raise Exception("The test setup did not save the Fast Track state")
 
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
@@ -2835,8 +2882,55 @@ class ProcessGoalStateTestCase(AgentTestCase):
                 with mock_update_handler(protocol) as update_handler:
                     update_handler.run()
 
-        self.assertIsNone(HostPluginProtocol.get_fast_track_timestamp(), "The Fast Track state was not cleared")
+        self.assertEqual(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_timestamp(datetime.min),
+            "The Fast Track state was not cleared")
 
+    def test_it_should_default_fast_track_timestamp_to_datetime_min(self):
+        data = DATA_FILE_VM_SETTINGS.copy()
+        # TODO: Currently, there's a limitation in the mocks where bumping the incarnation but the goal
+        # state will cause the agent to error out while trying to write the certificates to disk. These
+        # files have no dependencies on certs, so using them does not present that issue.
+        #
+        # Note that the scenario this test is representing does not depend on certificates at all, and
+        # can be changed to use the default files when the above limitation is addressed.
+        data["vm_settings"] = "hostgaplugin/vm_settings-fabric-no_thumbprints.json"
+        data['goal_state'] = 'wire/goal_state_no_certs.xml'
+
+        def vm_settings_no_change(url, *_, **__):
+            if HttpRequestPredicates.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(httpclient.NOT_MODIFIED)
+            return None
+
+        def vm_settings_not_supported(url, *_, **__):
+            if HttpRequestPredicates.is_host_plugin_vm_settings_request(url):
+                return MockHttpResponse(404)
+            return None
+        
+        with mock_wire_protocol(data) as protocol:
+
+            def mock_live_migration(iteration):
+                if iteration == 1:
+                    protocol.mock_wire_data.set_incarnation(2)
+                    protocol.set_http_handlers(http_get_handler=vm_settings_no_change)
+                elif iteration == 2:
+                    protocol.mock_wire_data.set_incarnation(3)
+                    protocol.set_http_handlers(http_get_handler=vm_settings_not_supported)
+            
+            with mock_update_handler(protocol, 3, on_new_iteration=mock_live_migration) as update_handler:
+                with patch("azurelinuxagent.ga.update.logger.error") as patched_error:
+                    def check_for_errors():
+                        msg_fragment = "Error fetching the goal state:"
+
+                        for (args, _) in filter(lambda a: len(a) > 0, patched_error.call_args_list):
+                            if msg_fragment in args[0]:
+                                self.fail("Found error: {}".format(args[0]))
+
+                    update_handler.run(debug=True)
+                    check_for_errors()
+                
+            timestamp = protocol.client.get_host_plugin()._fast_track_timestamp
+            self.assertEqual(timestamp, timeutil.create_timestamp(datetime.min),
+                "Expected fast track time stamp to be set to {0}, got {1}".format(datetime.min, timestamp))
 
 class HeartbeatTestCase(AgentTestCase):
 

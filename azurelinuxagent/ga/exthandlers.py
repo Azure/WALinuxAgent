@@ -308,6 +308,7 @@ class ExtHandlersHandler(object):
             error = None
             message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
                 egs.id, egs.channel, egs.source, egs.activity_id, egs.correlation_id, egs.created_on_timestamp)
+            logger.info('')
             logger.info(message)
             add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
 
@@ -319,7 +320,7 @@ class ExtHandlersHandler(object):
             finally:
                 duration = elapsed_milliseconds(utc_start)
                 if error is None:
-                    message = 'ProcessExtensionsGoalState completed [{0} {1} ms]'.format(egs.id, duration)
+                    message = 'ProcessExtensionsGoalState completed [{0} {1} ms]\n'.format(egs.id, duration)
                     logger.info(message)
                 else:
                     message = 'ProcessExtensionsGoalState failed [{0} {1} ms]\n{2}'.format(egs.id, duration, error)
@@ -1361,7 +1362,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         resource_limits = man.get_resource_limits(extension_name, self.ext_handler.version)
         CGroupConfigurator.get_instance().setup_extension_slice(
-            extension_name=extension_name)
+            extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
         CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
     def create_status_file_if_not_exist(self, extension, status, code, operation, message):
@@ -2318,12 +2319,12 @@ class ResourceLimits(object):
 
     def get_extension_slice_cpu_quota(self):
         if self.data is not None:
-            return self.data.get('cpuQuota', None)
+            return self.data.get('cpuQuotaPercentage', None)
         return None
 
     def get_extension_slice_memory_quota(self):
         if self.data is not None:
-            return self.data.get('memoryQuota', None)
+            return self.data.get('memoryQuotaInMB', None)
         return None
 
     def get_service_list(self):

@@ -183,7 +183,7 @@ class TestCpuCgroup(AgentTestCase):
         cgroup.initialize_cpu_usage()
         shutil.copyfile(os.path.join(data_dir, "cgroups", "cpu.stat_t1"), test_file)  # throttled_time = 2075541442327
 
-        throttled_time = cgroup.get_throttled_time()
+        throttled_time = cgroup.get_cpu_throttled_time()
 
         self.assertEqual(throttled_time, float(2075541442327 - 50) / 1E9, "The value of throttled_time is incorrect")
 

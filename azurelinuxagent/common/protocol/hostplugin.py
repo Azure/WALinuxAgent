@@ -95,7 +95,7 @@ class HostPluginProtocol(object):
         if not os.path.exists(self._get_fast_track_state_file()):
             self._supports_vm_settings = False
             self._supports_vm_settings_next_check = datetime.datetime.now()
-            self._fast_track_timestamp = None
+            self._fast_track_timestamp = timeutil.create_timestamp(datetime.datetime.min)
         else:
             self._supports_vm_settings = True
             self._supports_vm_settings_next_check = datetime.datetime.now()
@@ -443,7 +443,7 @@ class HostPluginProtocol(object):
         goal state was Fabric or fetch_vm_settings() has not been invoked.
         """
         if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
-            return None
+            return timeutil.create_timestamp(datetime.datetime.min)
 
         try:
             with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
@@ -453,7 +453,7 @@ class HostPluginProtocol(object):
                     HostPluginProtocol._get_fast_track_state_file(), ustr(e))
         return timeutil.create_timestamp(datetime.datetime.utcnow())
 
-    def fetch_vm_settings(self):
+    def fetch_vm_settings(self, force_update=False):
         """
         Queries the vmSettings from the HostGAPlugin and returns an (ExtensionsGoalState, bool) tuple with the vmSettings and
         a boolean indicating if they are an updated (True) or a cached value (False).
@@ -491,7 +491,7 @@ class HostPluginProtocol(object):
                 # Raise VmSettingsNotSupported directly instead of using raise_not_supported() to avoid resetting the timestamp for the next check
                 raise VmSettingsNotSupported()
 
-            etag = None if self._cached_vm_settings is None else self._cached_vm_settings.etag
+            etag = None if force_update or self._cached_vm_settings is None else self._cached_vm_settings.etag
             correlation_id = str(uuid.uuid4())
 
             self._vm_settings_error_reporter.report_request()

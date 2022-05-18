@@ -9,7 +9,7 @@ import zipfile
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, timeutil
 
 # pylint: disable=W0105
 
@@ -42,13 +42,14 @@ ARCHIVE_DIRECTORY_NAME = 'history'
 _MAX_ARCHIVED_STATES = 50
 
 _CACHE_PATTERNS = [
-    re.compile(r"^VmSettings.\d+\.json$"),
+    re.compile(r"^VmSettings\.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
     re.compile(r"^SharedConfig\.xml$", re.IGNORECASE),
     re.compile(r"^HostingEnvironmentConfig\.xml$", re.IGNORECASE),
-    re.compile(r"^RemoteAccess\.xml$", re.IGNORECASE)
+    re.compile(r"^RemoteAccess\.xml$", re.IGNORECASE),
+    re.compile(r"^waagent_status\.\d+\.json$"),
 ]
 
 #
@@ -57,18 +58,21 @@ _CACHE_PATTERNS = [
 #   2018-04-06T08:21:37.142697.zip
 #   2018-04-06T08:21:37.142697_incarnation_N
 #   2018-04-06T08:21:37.142697_incarnation_N.zip
-#
-# Current names
-#
 #   2018-04-06T08:21:37.142697_N-M
 #   2018-04-06T08:21:37.142697_N-M.zip
 #
-_ARCHIVE_BASE_PATTERN = r"\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+((_incarnation)?_(\d+|status)(-\d+)?)?"
+# Current names
+#
+#   2018-04-06T08-21-37__N-M
+#   2018-04-06T08-21-37__N-M.zip
+#
+_ARCHIVE_BASE_PATTERN = r"\d{4}\-\d{2}\-\d{2}T\d{2}[:-]\d{2}[:-]\d{2}(\.\d+)?((_incarnation)?_+(\d+|status)(-\d+)?)?"
 _ARCHIVE_PATTERNS_DIRECTORY = re.compile(r'^{0}$'.format(_ARCHIVE_BASE_PATTERN))
 _ARCHIVE_PATTERNS_ZIP = re.compile(r'^{0}\.zip$'.format(_ARCHIVE_BASE_PATTERN))
 
 _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
+_CERTIFICATES_FILE_NAME = "Certificates.json"
 _HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 _SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 _REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
@@ -161,7 +165,6 @@ class StateArchiver(object):
         newest ones. Also, clean up any legacy history files.
         """
         states = self._get_archive_states()
-        states.sort(reverse=True)
 
         for state in states[_MAX_ARCHIVED_STATES:]:
             state.delete()
@@ -182,7 +185,6 @@ class StateArchiver(object):
 
     def archive(self):
         states = self._get_archive_states()
-        states.sort(reverse=True)
 
         if len(states) > 0:
             # Skip the most recent goal state, since it may still be in use
@@ -201,13 +203,16 @@ class StateArchiver(object):
             if match is not None:
                 states.append(StateZip(full_path, match.group(0)))
 
+        states.sort(key=lambda state: os.path.getctime(state._path), reverse=True)
+
         return states
 
 
 class GoalStateHistory(object):
-    def __init__(self, timestamp, tag):
+    def __init__(self, time, tag):
         self._errors = False
-        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}_{1}".format(timestamp, tag) if tag is not None else timestamp)
+        timestamp = timeutil.create_history_timestamp(time)
+        self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}__{1}".format(timestamp, tag) if tag is not None else timestamp)
 
     @staticmethod
     def tag_exists(tag):
@@ -238,6 +243,9 @@ class GoalStateHistory(object):
 
     def save_remote_access(self, text):
         self.save(text, _REMOTE_ACCESS_FILE_NAME)
+
+    def save_certificates(self, text):
+        self.save(text, _CERTIFICATES_FILE_NAME)
 
     def save_hosting_env(self, text):
         self.save(text, _HOSTING_ENV_FILE_NAME)
