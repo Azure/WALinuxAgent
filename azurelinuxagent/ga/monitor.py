@@ -25,7 +25,7 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric, report_periodic_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
@@ -56,7 +56,10 @@ class PollResourceUsage(PeriodicOperation):
         tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
         for metric in tracked_metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+            if metric.report_period is None:
+                report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+            else:
+                report_periodic_metric(metric.report_period, metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 

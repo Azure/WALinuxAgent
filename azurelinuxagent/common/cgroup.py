@@ -27,7 +27,8 @@ from azurelinuxagent.common.utils import fileutil
 
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
-MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value', 'report_period'])
+MetricValue.__new__.__defaults__ = (None,)  # namedtuple() assigns the values in the defaults iterable to the rightmost fields
 
 
 class MetricsCategory(object):
@@ -40,6 +41,7 @@ class MetricsCounter(object):
     TOTAL_MEM_USAGE = "Total Memory Usage"
     MAX_MEM_USAGE = "Max Memory Usage"
     THROTTLED_TIME = "Throttled Time"
+    TOTAL_SWAP_MEM_USAGE = "Total Swap Memory Usage"
 
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
@@ -166,7 +168,8 @@ class CpuCgroup(CGroup):
             #
             match = re_user_system_times.match(cpuacct_stat)
             if not match:
-                raise CGroupsException("The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpuacct_stat))
+                raise CGroupsException(
+                    "The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpuacct_stat))
             cpu_ticks = int(match.groups()[0]) + int(match.groups()[1])
 
         return cpu_ticks
@@ -239,7 +242,8 @@ class CpuCgroup(CGroup):
             return float(self.get_throttled_time() / 1E9)
 
         if not self._cpu_usage_initialized():
-            raise CGroupsException("initialize_cpu_usage() must be invoked before the first call to get_throttled_time()")
+            raise CGroupsException(
+                "initialize_cpu_usage() must be invoked before the first call to get_throttled_time()")
 
         self._previous_throttled_time = self._current_throttled_time
         self._current_throttled_time = self.get_throttled_time()
@@ -250,12 +254,14 @@ class CpuCgroup(CGroup):
         tracked = []
         cpu_usage = self.get_cpu_usage()
         if cpu_usage >= float(0):
-            tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
+            tracked.append(
+                MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
 
         if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
             throttled_time = self.get_cpu_throttled_time()
             if cpu_usage >= float(0) and throttled_time >= float(0):
-                tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
+                tracked.append(
+                    MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
 
         return tracked
 
@@ -263,40 +269,84 @@ class CpuCgroup(CGroup):
 class MemoryCgroup(CGroup):
     def get_memory_usage(self):
         """
-        Collect memory.usage_in_bytes from the cgroup.
+        Collect RSS+CACHE from memory.stat cgroup.
 
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = None
         try:
-            usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
-        except Exception as e:
-            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
-                raise
-            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
+            total_usage = 0
+            counters = 0
+            with open(os.path.join(self.path, 'memory.stat')) as memory_stat:
+                # cat /sys/fs/cgroup/memory/azure.slice/memory.stat
+                # cache 67178496
+                # rss 42340352
+                # rss_huge 6291456
+                for line in memory_stat:
+                    match = re.match(r'(cache|rss)\s+(\d+)', line)
+                    if match is not None:
+                        counters += 1
+                        total_usage = total_usage + int(match.groups()[1])
 
-        return int(usage)
+                if counters < 2:
+                    raise Exception("Cannot find cache/rss")
+                return total_usage
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                raise
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+
+    def get_swap_memory_usage(self):
+        """
+        Collect SWAP from memory.stat cgroup.
+
+        :return: Memory usage in bytes
+        :rtype: int
+        """
+        try:
+            with open(os.path.join(self.path, 'memory.stat')) as memory_stat:
+                # cat /sys/fs/cgroup/memory/azure.slice/memory.stat
+                # cache 67178496
+                # rss 42340352
+                # rss_huge 6291456
+                # swap 0
+                for line in memory_stat:
+                    match = re.match(r'swap\s+(\d+)', line)
+                    if match is not None:
+                        return int(match.groups()[0])
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                raise
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        return 0
 
     def get_max_memory_usage(self):
         """
-        Collect memory.usage_in_bytes from the cgroup.
+        Collect memory.max_usage_in_bytes from the cgroup.
 
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = None
+        usage = 0
         try:
-            usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+            usage = int(self._get_parameters('memory.max_usage_in_bytes', first_line_only=True))
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
                 raise
-            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
+            raise CGroupsException("Exception while attempting to read {0}".format("memory.max_usage_in_bytes"), e)
 
-        return int(usage)
+        return usage
 
     def get_tracked_metrics(self, **_):
         return [
-            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name, self.get_memory_usage()),
-            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name, self.get_max_memory_usage()),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name,
+                        self.get_memory_usage()),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
+                        self.get_max_memory_usage(), logger.EVERY_HOUR),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_SWAP_MEM_USAGE, self.name,
+                        self.get_swap_memory_usage(), logger.EVERY_HOUR)
         ]

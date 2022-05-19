@@ -77,6 +77,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
             self.assertTrue(any(cg for cg in tracked.values() if cg.name == AGENT_NAME_TELEMETRY and 'cpu' in cg.path),
                 "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
+            self.assertTrue(any(cg for cg in tracked.values() if cg.name == AGENT_NAME_TELEMETRY and 'memory' in cg.path),
+                "The Agent's Memory is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
         command_mocks = [MockCommand(r"^mount -t cgroup$",
@@ -147,6 +149,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
             agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
             agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
+            agent_drop_in_file_memory_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.memory_accounting)
 
             # The mock creates the slice unit files; delete them
             os.remove(azure_slice_unit_file)
@@ -158,6 +161,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertFalse(os.path.exists(extensions_slice_unit_file), "{0} should not have been created".format(extensions_slice_unit_file))
             self.assertFalse(os.path.exists(agent_drop_in_file_slice), "{0} should not have been created".format(agent_drop_in_file_slice))
             self.assertFalse(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} should not have been created".format(agent_drop_in_file_cpu_accounting))
+            self.assertFalse(os.path.exists(agent_drop_in_file_memory_accounting), "{0} should not have been created".format(agent_drop_in_file_memory_accounting))
 
     def test_initialize_should_create_unit_files_when_the_agent_service_file_is_not_updated(self):
         with self._get_cgroup_configurator(initialize=False) as configurator:
@@ -166,6 +170,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             extensions_slice_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.vmextensions)
             agent_drop_in_file_slice = configurator.mocks.get_mapped_path(UnitFilePaths.slice)
             agent_drop_in_file_cpu_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_accounting)
+            agent_drop_in_file_memory_accounting = configurator.mocks.get_mapped_path(UnitFilePaths.memory_accounting)
 
             # The mock creates the service and slice unit files; replace the former and delete the latter
             configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "walinuxagent.service.previous"), UnitFilePaths.walinuxagent)
@@ -180,6 +185,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(os.path.exists(extensions_slice_unit_file), "{0} was not created".format(extensions_slice_unit_file))
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
+            self.assertTrue(os.path.exists(agent_drop_in_file_memory_accounting), "{0} was not created".format(agent_drop_in_file_memory_accounting))
 
     def test_setup_extension_slice_should_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
@@ -229,12 +235,12 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 self.assertIn("Attempted to enable cgroups, but they are not supported on the current platform", str(context_manager.exception))
 
     def test_enable_should_set_agent_cpu_quota_and_track_throttled_time(self):
-        with self._get_cgroup_configurator(enable=False) as configurator:
+        with self._get_cgroup_configurator(initialize=False) as configurator:
             agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
             if os.path.exists(agent_drop_in_file_cpu_quota):
                 raise Exception("{0} should not have been created during test setup".format(agent_drop_in_file_cpu_quota))
 
-            configurator.enable()
+            configurator.initialize()
 
             expected_quota = "CPUQuota={0}%".format(conf.get_agent_cpu_quota())
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_quota), "{0} was not created".format(agent_drop_in_file_cpu_quota))
@@ -244,13 +250,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should be tracked")
 
     def test_enable_should_not_track_throttled_time_when_setting_the_cpu_quota_fails(self):
-        with self._get_cgroup_configurator(enable=False) as configurator:
+        with self._get_cgroup_configurator(initialize=False) as configurator:
             if CGroupsTelemetry.get_track_throttled_time():
                 raise Exception("Test setup should not start tracking Throttle Time")
 
             configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
 
-            configurator.enable()
+            configurator.initialize()
 
             self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked")
 
@@ -268,7 +274,9 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(
                 fileutil.findre_in_file(agent_drop_in_file_cpu_quota, "^CPUQuota=$"),
                 "CPUQuota was not set correctly. Expected an empty value. Got:\n{0}".format(fileutil.read_file(agent_drop_in_file_cpu_quota)))
-            self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should be tracked after disable. Tracking: {0}".format(CGroupsTelemetry._tracked))
+            self.assertEqual(len(CGroupsTelemetry._tracked), 1, "Memory cgroups should be tracked after disable. Tracking: {0}".format(CGroupsTelemetry._tracked))
+            self.assertFalse(any(cg for cg in CGroupsTelemetry._tracked.values() if cg.name == 'walinuxagent.service' and 'cpu' in cg.path),
+                "The Agent's cpu should not be tracked. Tracked: {0}".format(CGroupsTelemetry._tracked))
 
     def test_disable_should_reset_cpu_quota_for_all_cgroups(self):
         service_list = [

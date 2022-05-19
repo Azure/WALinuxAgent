@@ -206,10 +206,13 @@ class TestMemoryCgroup(AgentTestCase):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
 
         memory_usage = test_mem_cg.get_memory_usage()
-        self.assertEqual(100000, memory_usage)
+        self.assertEqual(150000, memory_usage)
 
         max_memory_usage = test_mem_cg.get_max_memory_usage()
         self.assertEqual(1000000, max_memory_usage)
+
+        swap_memory_usage = test_mem_cg.get_swap_memory_usage()
+        self.assertEqual(20000, swap_memory_usage)
 
     def test_get_metrics_when_files_not_present(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
@@ -223,3 +226,17 @@ class TestMemoryCgroup(AgentTestCase):
             test_mem_cg.get_max_memory_usage()
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
+
+        with self.assertRaises(IOError) as e:
+            test_mem_cg.get_swap_memory_usage()
+
+        self.assertEqual(e.exception.errno, errno.ENOENT)
+
+    def test_get_memory_usage_counters_not_found(self):
+        test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "missing_memory_counters"))
+
+        with self.assertRaises(CGroupsException):
+            test_mem_cg.get_memory_usage()
+
+        swap_memory_usage = test_mem_cg.get_swap_memory_usage()
+        self.assertEqual(0, swap_memory_usage)

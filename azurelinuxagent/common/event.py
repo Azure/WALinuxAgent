@@ -640,6 +640,34 @@ def report_periodic(delta, op, is_success=True, message=''):
                  op=op)
 
 
+def report_periodic_metric(delta, category, counter, instance, value, log_event=False, reporter=__event_logger__):
+    """
+    Send a telemetry event reporting a single instance of a performance counter.
+    :param datetime delta: The reporting period of the metric
+    :param str category: The category of the metric (cpu, memory, etc)
+    :param str counter: The name of the metric ("%idle", etc)
+    :param str instance: For instanced metrics, the identifier of the instance. E.g. a disk drive name, a cpu core#
+    :param     value: The value of the metric
+    :param bool log_event: If True, log the metric in the agent log as well
+    :param EventLogger reporter: The EventLogger instance to which metric events should be sent
+    """
+    if reporter.event_dir is None:
+        logger.warn("Cannot report metric event -- Event reporter is not initialized.")
+        message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
+        _log_event(AGENT_NAME, "METRIC", message, 0)
+        return
+
+    h = hash(category + counter + instance + ustr(value))
+    if reporter.is_period_elapsed(delta, h):
+        try:
+            reporter.add_metric(category, counter, instance, float(value), log_event)
+            reporter.periodic_events[h] = datetime.now()
+        except ValueError:
+            logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                 "[PERIODIC] Cannot cast the metric value. Details of the Metric - "
+                                 "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
+
+
 def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__):
     """
     Send a telemetry event reporting a single instance of a performance counter.
