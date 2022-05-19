@@ -134,10 +134,10 @@ class TestArchive(AgentTestCase):
     def test_purge_legacy_goal_state_history(self):
         with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=self.tmp_dir):
             legacy_files = [
-                'GoalState.1.xml',
-                'VmSettings.1.json',
-                'Prod.1.manifest.xml',
-                'ExtensionsConfig.1.xml',
+                'GoalState.2.xml',
+                'VmSettings.2.json',
+                'Prod.2.manifest.xml',
+                'ExtensionsConfig.2.xml',
                 'Microsoft.Azure.Extensions.CustomScript.1.xml',
                 'SharedConfig.xml',
                 'HostingEnvironmentConfig.xml',
