@@ -39,6 +39,10 @@ The timestamp is an ISO8601 formatted value.
 
 ARCHIVE_DIRECTORY_NAME = 'history'
 
+# TODO: See comment in GoalStateHistory._save_placeholder and remove this code when no longer needed
+_PLACEHOLDER_FILE_NAME = 'GoalState.1.xml'
+# END TODO
+
 _MAX_ARCHIVED_STATES = 50
 
 _CACHE_PATTERNS = [
@@ -173,6 +177,10 @@ class StateArchiver(object):
     def purge_legacy_goal_state_history():
         lib_dir = conf.get_lib_dir()
         for current_file in os.listdir(lib_dir):
+            # TODO: See comment in GoalStateHistory._save_placeholder and remove this code when no longer needed
+            if current_file == _PLACEHOLDER_FILE_NAME:
+                return
+            # END TODO
             full_path = os.path.join(lib_dir, current_file)
             for pattern in _CACHE_PATTERNS:
                 match = pattern.match(current_file)
@@ -232,8 +240,22 @@ class GoalStateHistory(object):
                 self._errors = True
                 logger.warn("Failed to save {0} to the goal state history: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
 
+    @staticmethod
+    def _save_placeholder():
+        """
+        Some internal components took a dependency in the legacy GoalState.*.xml file. We create it here while those components are updated to remove the dependency.
+        When removing this code, also remove the check in StateArchiver.purge_legacy_goal_state_history, and the definition of _PLACEHOLDER_FILE_NAME
+        """
+        try:
+            placeholder = os.path.join(conf.get_lib_dir(), _PLACEHOLDER_FILE_NAME)
+            with open(placeholder, "w") as handle:
+                handle.write("<xml>empty placeholder file</xml>")
+        except Exception as e:
+            logger.warn("Failed to save placeholder file ({0}): {1}".format(_PLACEHOLDER_FILE_NAME, e))
+
     def save_goal_state(self, text):
         self.save(text, _GOAL_STATE_FILE_NAME)
+        self._save_placeholder()
 
     def save_extensions_config(self, text):
         self.save(text, _EXT_CONF_FILE_NAME)
