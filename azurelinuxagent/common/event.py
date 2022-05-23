@@ -642,7 +642,7 @@ def report_periodic(delta, op, is_success=True, message=''):
 
 def report_periodic_metric(delta, category, counter, instance, value, log_event=False, reporter=__event_logger__):
     """
-    Send a telemetry event reporting a single instance of a performance counter.
+    Send a telemetry event reporting a single instance of a performance counter if reporting period elapsed or new data arrives
     :param datetime delta: The reporting period of the metric
     :param str category: The category of the metric (cpu, memory, etc)
     :param str counter: The name of the metric ("%idle", etc)

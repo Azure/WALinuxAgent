@@ -18,17 +18,21 @@ from collections import namedtuple
 import errno
 import os
 import re
+from datetime import timedelta
 
-from azurelinuxagent.common import logger
+from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
+REPORT_EVERY_HOUR = timedelta(hours=1)
+DEFAULT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
+
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
-MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value', 'report_period'])
-MetricValue.__new__.__defaults__ = (None,)  # namedtuple() assigns the values in the defaults iterable to the rightmost fields
+MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value', 'use_custom_report_period', 'report_period'])
+MetricValue.__new__.__defaults__ = (False, DEFAULT_PERIOD,)  # namedtuple() assigns the values in the defaults iterable to the rightmost fields
 
 
 class MetricsCategory(object):
@@ -41,7 +45,7 @@ class MetricsCounter(object):
     TOTAL_MEM_USAGE = "Total Memory Usage"
     MAX_MEM_USAGE = "Max Memory Usage"
     THROTTLED_TIME = "Throttled Time"
-    TOTAL_SWAP_MEM_USAGE = "Total Swap Memory Usage"
+    SWAP_MEM_USAGE = "Swap Memory Usage"
 
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
@@ -346,7 +350,7 @@ class MemoryCgroup(CGroup):
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name,
                         self.get_memory_usage()),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
-                        self.get_max_memory_usage(), logger.EVERY_HOUR),
-            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_SWAP_MEM_USAGE, self.name,
-                        self.get_swap_memory_usage(), logger.EVERY_HOUR)
+                        self.get_max_memory_usage(), True, REPORT_EVERY_HOUR),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
+                        self.get_swap_memory_usage(), True, REPORT_EVERY_HOUR)
         ]

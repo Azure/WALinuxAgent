@@ -47,6 +47,8 @@ class PollResourceUsage(PeriodicOperation):
     Periodic operation to poll the tracked cgroups for resource usage data.
 
     It also checks whether there are processes in the agent's cgroup that should not be there.
+
+    Note: Sends telemetry events on periodic polls or different period if custom period usage defined.
     """
     def __init__(self):
         super(PollResourceUsage, self).__init__(conf.get_cgroup_check_period())
@@ -56,7 +58,7 @@ class PollResourceUsage(PeriodicOperation):
         tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
         for metric in tracked_metrics:
-            if metric.report_period is None:
+            if not metric.use_custom_report_period:
                 report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
             else:
                 report_periodic_metric(metric.report_period, metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
