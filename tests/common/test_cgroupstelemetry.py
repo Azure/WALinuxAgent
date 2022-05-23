@@ -123,12 +123,12 @@ class TestCGroupsTelemetry(AgentTestCase):
                 self.assertEqual(metric.counter, "% Processor Time")
                 self.assertEqual(metric.value, cpu_metric_value)
             if metric.category == "Memory":
-                self.assertIn(metric.counter, ["Total Memory Usage", "Max Memory Usage", "Total Swap Memory Usage"])
+                self.assertIn(metric.counter, ["Total Memory Usage", "Max Memory Usage", "Swap Memory Usage"])
                 if metric.counter == "Total Memory Usage":
                     self.assertEqual(metric.value, memory_metric_value)
                 elif metric.counter == "Max Memory Usage":
                     self.assertEqual(metric.value, max_memory_metric_value)
-                elif metric.counter == "Total Swap Memory Usage":
+                elif metric.counter == "Swap Memory Usage":
                     self.assertEqual(metric.value, swap_memory_value)
 
     def test_telemetry_polling_with_active_cgroups(self, *args):  # pylint: disable=unused-argument
