@@ -375,7 +375,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                 self.assertEqual(0, len(metrics))
 
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
-    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_throttled_time")
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_throttled_time")
     @patch("azurelinuxagent.common.cgroup.CGroup.is_active")
     def test_cgroup_telemetry_should_not_report_cpu_negative_value(self, patch_is_active, path_get_throttled_time, patch_get_cpu_usage):
 
