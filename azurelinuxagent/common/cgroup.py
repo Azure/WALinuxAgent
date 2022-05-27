@@ -311,7 +311,8 @@ class MemoryCgroup(CGroup):
                 # rss_huge 6291456
                 # swap 0
                 for line in memory_stat:
-                    match = re.match(r"" + counter_name + "\s+(\d+)", line)
+                    re_memory_counter = r'{0}\s+(\d+)'.format(counter_name)
+                    match = re.match(re_memory_counter, line)
                     if match is not None:
                         return int(match.groups()[0])
         except (IOError, OSError) as e:
