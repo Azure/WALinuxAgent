@@ -21,7 +21,7 @@ import random
 import string
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue, REPORT_EVERY_HOUR
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue, REPORT_EVERY_HOUR, DEFAULT_REPORT_PERIOD
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.protocol.healthservice import HealthService
@@ -200,24 +200,10 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
                                               patch_add_metric, *args):
-        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
-                                               MetricValue("Memory", "Total Memory Usage", 1, 1),
-                                               MetricValue("Memory", "Max Memory Usage", 1, 1),
-                                               MetricValue("Memory", "Total Swap Memory Usage", 1, 1)
-                                               ]
-
-        PollResourceUsage().run()
-        self.assertEqual(1, patch_poll_all_tracked.call_count)
-        self.assertEqual(4, patch_add_metric.call_count)  # Four metrics being sent.
-
-    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
-    def test_send_extension_metrics_periodic_telemetry(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
-                                              patch_add_metric, *args):
-        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", "service", 1),
-                                               MetricValue("Memory", "Total Memory Usage", "service", 1),
-                                               MetricValue("Memory", "Max Memory Usage", "service", 1, True, REPORT_EVERY_HOUR),
-                                               MetricValue("Memory", "Total Swap Memory Usage", "service", 1, True, REPORT_EVERY_HOUR)
+        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1, DEFAULT_REPORT_PERIOD),
+                                               MetricValue("Memory", "Total Memory Usage", 1, 1, DEFAULT_REPORT_PERIOD),
+                                               MetricValue("Memory", "Max Memory Usage", 1, 1, DEFAULT_REPORT_PERIOD),
+                                               MetricValue("Memory", "Total Swap Memory Usage", 1, 1, REPORT_EVERY_HOUR)
                                                ]
 
         PollResourceUsage().run()

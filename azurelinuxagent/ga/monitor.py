@@ -58,9 +58,6 @@ class PollResourceUsage(PeriodicOperation):
         tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
         for metric in tracked_metrics:
-            if not metric.use_custom_report_period:
-                report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
-            else:
                 report_periodic_metric(metric.report_period, metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)

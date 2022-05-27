@@ -27,12 +27,11 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
 REPORT_EVERY_HOUR = timedelta(hours=1)
-DEFAULT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
+DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
-MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value', 'use_custom_report_period', 'report_period'])
-MetricValue.__new__.__defaults__ = (False, DEFAULT_PERIOD,)  # namedtuple() assigns the values in the defaults iterable to the rightmost fields
+MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value', 'report_period'])
 
 
 class MetricsCategory(object):
@@ -259,18 +258,43 @@ class CpuCgroup(CGroup):
         cpu_usage = self.get_cpu_usage()
         if cpu_usage >= float(0):
             tracked.append(
-                MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
+                MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage, DEFAULT_REPORT_PERIOD))
 
         if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
             throttled_time = self.get_cpu_throttled_time()
             if cpu_usage >= float(0) and throttled_time >= float(0):
                 tracked.append(
-                    MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
+                    MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time, DEFAULT_REPORT_PERIOD))
 
         return tracked
 
 
 class MemoryCgroup(CGroup):
+
+    def _get_memory_stat_counter(self, counter_name, raise_error_if_counter_not_present=True):
+        try:
+            with open(os.path.join(self.path, 'memory.stat')) as memory_stat:
+                # cat /sys/fs/cgroup/memory/azure.slice/memory.stat
+                # cache 67178496
+                # rss 42340352
+                # rss_huge 6291456
+                # swap 0
+                for line in memory_stat:
+                    match = re.match("r'" + counter_name + "\s+(\d+)", line)
+                    if match is not None:
+                        return int(match.groups()[0])
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                raise
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+
+        if raise_error_if_counter_not_present:
+            raise Exception("Cannot find counter: {0}".format(counter_name))
+        else:
+            return 0
+
     def get_memory_usage(self):
         """
         Collect RSS+CACHE from memory.stat cgroup.
@@ -279,26 +303,9 @@ class MemoryCgroup(CGroup):
         :rtype: int
         """
         try:
-            total_usage = 0
-            counters = 0
-            with open(os.path.join(self.path, 'memory.stat')) as memory_stat:
-                # cat /sys/fs/cgroup/memory/azure.slice/memory.stat
-                # cache 67178496
-                # rss 42340352
-                # rss_huge 6291456
-                for line in memory_stat:
-                    match = re.match(r'(cache|rss)\s+(\d+)', line)
-                    if match is not None:
-                        counters += 1
-                        total_usage = total_usage + int(match.groups()[1])
-
-                if counters < 2:
-                    raise Exception("Cannot find cache/rss")
-                return total_usage
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                raise
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+            cache = self._get_memory_stat_counter("cache")
+            rss = self._get_memory_stat_counter("rss")
+            return cache + rss
         except Exception as e:
             raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
 
@@ -308,25 +315,12 @@ class MemoryCgroup(CGroup):
 
         :return: Memory usage in bytes
         :rtype: int
+        Note: stat file is the only place to get the SWAP since other swap related file memory.memsw.usage_in_bytes is for total Memory+SWAP.
         """
         try:
-            with open(os.path.join(self.path, 'memory.stat')) as memory_stat:
-                # cat /sys/fs/cgroup/memory/azure.slice/memory.stat
-                # cache 67178496
-                # rss 42340352
-                # rss_huge 6291456
-                # swap 0
-                for line in memory_stat:
-                    match = re.match(r'swap\s+(\d+)', line)
-                    if match is not None:
-                        return int(match.groups()[0])
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                raise
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+            return self._get_memory_stat_counter("swap", raise_error_if_counter_not_present=False)
         except Exception as e:
             raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
-        return 0
 
     def get_max_memory_usage(self):
         """
@@ -348,9 +342,9 @@ class MemoryCgroup(CGroup):
     def get_tracked_metrics(self, **_):
         return [
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name,
-                        self.get_memory_usage()),
+                        self.get_memory_usage(), DEFAULT_REPORT_PERIOD),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
-                        self.get_max_memory_usage(), True, REPORT_EVERY_HOUR),
+                        self.get_max_memory_usage(), REPORT_EVERY_HOUR),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
-                        self.get_swap_memory_usage(), True, REPORT_EVERY_HOUR)
+                        self.get_swap_memory_usage(), REPORT_EVERY_HOUR)
         ]
