@@ -657,7 +657,7 @@ def report_periodic_metric(delta, category, counter, instance, value, log_event=
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
 
-    h = hash(category + counter + instance + ustr(value))
+    h = hash(category + counter + instance)
     if reporter.is_period_elapsed(delta, h):
         try:
             reporter.add_metric(category, counter, instance, float(value), log_event)
