@@ -203,7 +203,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
                                                MetricValue("Memory", "Total Memory Usage", 1, 1),
                                                MetricValue("Memory", "Max Memory Usage", 1, 1, REPORT_EVERY_HOUR),
-                                               MetricValue("Memory", "Total Swap Memory Usage", 1, 1, REPORT_EVERY_HOUR)
+                                               MetricValue("Memory", "Swap Memory Usage", 1, 1, REPORT_EVERY_HOUR)
                                                ]
 
         PollResourceUsage().run()

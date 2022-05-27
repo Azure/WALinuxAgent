@@ -311,7 +311,7 @@ class MemoryCgroup(CGroup):
                 # rss_huge 6291456
                 # swap 0
                 for line in memory_stat:
-                    match = re.match("r'" + counter_name + "\s+(\d+)", line)
+                    match = re.match(r"" + counter_name + "\s+(\d+)", line)
                     if match is not None:
                         return int(match.groups()[0])
         except (IOError, OSError) as e:
@@ -337,6 +337,10 @@ class MemoryCgroup(CGroup):
             cache = self._get_memory_stat_counter("cache")
             rss = self._get_memory_stat_counter("rss")
             return cache + rss
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                raise
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
         except Exception as e:
             raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
 
@@ -350,6 +354,10 @@ class MemoryCgroup(CGroup):
         """
         try:
             return self._get_memory_stat_counter("swap", raise_error_if_counter_not_present=False)
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                raise
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
         except Exception as e:
             raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
 
