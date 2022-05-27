@@ -21,7 +21,7 @@ import random
 import string
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue, REPORT_EVERY_HOUR, DEFAULT_REPORT_PERIOD
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue, REPORT_EVERY_HOUR
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.protocol.healthservice import HealthService
@@ -200,9 +200,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
                                               patch_add_metric, *args):
-        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1, DEFAULT_REPORT_PERIOD),
-                                               MetricValue("Memory", "Total Memory Usage", 1, 1, DEFAULT_REPORT_PERIOD),
-                                               MetricValue("Memory", "Max Memory Usage", 1, 1, DEFAULT_REPORT_PERIOD),
+        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
+                                               MetricValue("Memory", "Total Memory Usage", 1, 1),
+                                               MetricValue("Memory", "Max Memory Usage", 1, 1, REPORT_EVERY_HOUR),
                                                MetricValue("Memory", "Total Swap Memory Usage", 1, 1, REPORT_EVERY_HOUR)
                                                ]
 

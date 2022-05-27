@@ -13,7 +13,6 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-from collections import namedtuple
 
 import errno
 import os
@@ -31,7 +30,39 @@ DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
-MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value', 'report_period'])
+
+class MetricValue(object):
+
+    """
+    Class for defining all the required metric fields to send telemetry.
+    """
+
+    def __init__(self, category, counter, instance, value, report_period=DEFAULT_REPORT_PERIOD):
+        self.__category = category
+        self.__counter = counter
+        self.__instance = instance
+        self.__value = value
+        self.__report_period = report_period
+
+    @property
+    def category(self):
+        return self.__category
+
+    @property
+    def counter(self):
+        return self.__counter
+
+    @property
+    def instance(self):
+        return self.__instance
+
+    @property
+    def value(self):
+        return self.__value
+
+    @property
+    def report_period(self):
+        return self.__report_period
 
 
 class MetricsCategory(object):
@@ -258,13 +289,13 @@ class CpuCgroup(CGroup):
         cpu_usage = self.get_cpu_usage()
         if cpu_usage >= float(0):
             tracked.append(
-                MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage, DEFAULT_REPORT_PERIOD))
+                MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
 
         if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
             throttled_time = self.get_cpu_throttled_time()
             if cpu_usage >= float(0) and throttled_time >= float(0):
                 tracked.append(
-                    MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time, DEFAULT_REPORT_PERIOD))
+                    MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
 
         return tracked
 
@@ -342,7 +373,7 @@ class MemoryCgroup(CGroup):
     def get_tracked_metrics(self, **_):
         return [
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name,
-                        self.get_memory_usage(), DEFAULT_REPORT_PERIOD),
+                        self.get_memory_usage()),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
                         self.get_max_memory_usage(), REPORT_EVERY_HOUR),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
