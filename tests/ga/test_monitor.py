@@ -200,10 +200,10 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     def test_send_extension_metrics_telemetry(self, patch_poll_all_tracked,  # pylint: disable=unused-argument
                                               patch_add_metric, *args):
-        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
-                                               MetricValue("Memory", "Total Memory Usage", 1, 1),
-                                               MetricValue("Memory", "Max Memory Usage", 1, 1, REPORT_EVERY_HOUR),
-                                               MetricValue("Memory", "Swap Memory Usage", 1, 1, REPORT_EVERY_HOUR)
+        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", "service", 1),
+                                               MetricValue("Memory", "Total Memory Usage", "service", 1),
+                                               MetricValue("Memory", "Max Memory Usage", "service", 1, REPORT_EVERY_HOUR),
+                                               MetricValue("Memory", "Swap Memory Usage", "service", 1, REPORT_EVERY_HOUR)
                                                ]
 
         PollResourceUsage().run()
