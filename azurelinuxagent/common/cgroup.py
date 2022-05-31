@@ -319,9 +319,14 @@ class MemoryCgroup(CGroup):
                     match = re.match(re_memory_counter, line)
                     if match is not None:
                         return int(match.groups()[0])
-                raise CounterNotFound("Cannot find counter: {0}".format(counter_name))
-        except Exception:
-            raise 
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                raise
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+
+        raise CounterNotFound("Cannot find counter: {0}".format(counter_name))
 
     def get_memory_usage(self):
         """
@@ -334,12 +339,8 @@ class MemoryCgroup(CGroup):
             cache = self._get_memory_stat_counter("cache")
             rss = self._get_memory_stat_counter("rss")
             return cache + rss
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                raise
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
-        except Exception as e:
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception:
+            raise
 
     def get_swap_memory_usage(self):
         """
@@ -353,12 +354,8 @@ class MemoryCgroup(CGroup):
             return self._get_memory_stat_counter("swap")
         except CounterNotFound:
             return 0
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                raise
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
-        except Exception as e:
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception:
+            raise
 
     def get_max_memory_usage(self):
         """
