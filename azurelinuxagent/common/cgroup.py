@@ -335,12 +335,10 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        try:
-            cache = self._get_memory_stat_counter("cache")
-            rss = self._get_memory_stat_counter("rss")
-            return cache + rss
-        except Exception:
-            raise
+
+        cache = self._get_memory_stat_counter("cache")
+        rss = self._get_memory_stat_counter("rss")
+        return cache + rss
 
     def get_swap_memory_usage(self):
         """
@@ -354,8 +352,6 @@ class MemoryCgroup(CGroup):
             return self._get_memory_stat_counter("swap")
         except CounterNotFound:
             return 0
-        except Exception:
-            raise
 
     def get_max_memory_usage(self):
         """

@@ -22,7 +22,7 @@ import os
 import random
 import shutil
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricsCounter
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricsCounter, CounterNotFound
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
@@ -235,7 +235,7 @@ class TestMemoryCgroup(AgentTestCase):
     def test_get_memory_usage_counters_not_found(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "missing_memory_counters"))
 
-        with self.assertRaises(CGroupsException):
+        with self.assertRaises(CounterNotFound):
             test_mem_cg.get_memory_usage()
 
         swap_memory_usage = test_mem_cg.get_swap_memory_usage()
