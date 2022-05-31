@@ -97,7 +97,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     agent_bin_path = osutil.get_agent_bin_path()
 
     if name in ('redhat', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
-        if version.startswith("8"):
+        if version.startswith("8") or version.startswith("9"):
             # redhat8+ default to py3
             set_bin_files(data_files, dest=agent_bin_path,
                           src=["bin/py3/waagent", "bin/waagent2.0"])
@@ -106,7 +106,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
-        if version.startswith("8"):
+        if version.startswith("8") or version.startswith("9"):
             # redhat 8+ uses systemd and python3
             set_systemd_files(data_files, dest=systemd_dir_path,
                               src=["init/redhat/waagent.service",
