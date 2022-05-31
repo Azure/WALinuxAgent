@@ -31,6 +31,10 @@ DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
 
+class CounterNotFound(Exception):
+    pass
+
+
 class MetricValue(object):
 
     """
@@ -302,7 +306,7 @@ class CpuCgroup(CGroup):
 
 class MemoryCgroup(CGroup):
 
-    def _get_memory_stat_counter(self, counter_name, raise_error_if_counter_not_present=True):
+    def _get_memory_stat_counter(self, counter_name):
         try:
             with open(os.path.join(self.path, 'memory.stat')) as memory_stat:
                 # cat /sys/fs/cgroup/memory/azure.slice/memory.stat
@@ -315,17 +319,10 @@ class MemoryCgroup(CGroup):
                     match = re.match(re_memory_counter, line)
                     if match is not None:
                         return int(match.groups()[0])
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                raise
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
-        except Exception as e:
-            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception:
+            raise
 
-        if raise_error_if_counter_not_present:
-            raise Exception("Cannot find counter: {0}".format(counter_name))
-        else:
-            return 0
+        raise CounterNotFound("Cannot find counter: {0}".format(counter_name))
 
     def get_memory_usage(self):
         """
@@ -354,7 +351,9 @@ class MemoryCgroup(CGroup):
         Note: stat file is the only place to get the SWAP since other swap related file memory.memsw.usage_in_bytes is for total Memory+SWAP.
         """
         try:
-            return self._get_memory_stat_counter("swap", raise_error_if_counter_not_present=False)
+            return self._get_memory_stat_counter("swap")
+        except CounterNotFound:
+            return 0
         except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:
                 raise

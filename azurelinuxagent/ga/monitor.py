@@ -25,7 +25,7 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_periodic_metric
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
@@ -48,17 +48,20 @@ class PollResourceUsage(PeriodicOperation):
 
     It also checks whether there are processes in the agent's cgroup that should not be there.
 
-    Note: Sends telemetry events on periodic polls or different period if custom period usage defined.
     """
     def __init__(self):
         super(PollResourceUsage, self).__init__(conf.get_cgroup_check_period())
         self.__log_metrics = conf.get_cgroup_log_metrics()
+        self.__periodic_metrics = {}
 
     def _operation(self):
         tracked_metrics = CGroupsTelemetry.poll_all_tracked()
 
         for metric in tracked_metrics:
-            report_periodic_metric(metric.report_period, metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+            key = metric.category + metric.counter + metric.instance
+            if key not in self.__periodic_metrics or (self.__periodic_metrics[key] + metric.report_period) <= datetime.datetime.now():
+                report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+                self.__periodic_metrics[key] = datetime.datetime.now()
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
 

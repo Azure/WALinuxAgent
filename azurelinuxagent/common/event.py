@@ -640,10 +640,9 @@ def report_periodic(delta, op, is_success=True, message=''):
                  op=op)
 
 
-def report_periodic_metric(delta, category, counter, instance, value, log_event=False, reporter=__event_logger__):
+def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__):
     """
-    Send a telemetry event reporting a single instance of a performance counter if reporting period elapsed or new data arrives
-    :param datetime delta: The reporting period of the metric
+    Send a telemetry event reporting a single instance of a performance counter.
     :param str category: The category of the metric (cpu, memory, etc)
     :param str counter: The name of the metric ("%idle", etc)
     :param str instance: For instanced metrics, the identifier of the instance. E.g. a disk drive name, a cpu core#
@@ -656,16 +655,11 @@ def report_periodic_metric(delta, category, counter, instance, value, log_event=
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
-
-    h = hash(category + counter + instance)
-    if reporter.is_period_elapsed(delta, h):
-        try:
-            reporter.add_metric(category, counter, instance, float(value), log_event)
-            reporter.periodic_events[h] = datetime.now()
-        except ValueError:
-            logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                 "[PERIODIC] Cannot cast the metric value. Details of the Metric - "
-                                 "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
+    try:
+        reporter.add_metric(category, counter, instance, float(value), log_event)
+    except ValueError:
+        logger.periodic_warn(logger.EVERY_HALF_HOUR, "[PERIODIC] Cannot cast the metric value. Details of the Metric - "
+                                                     "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
 
 def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_logger__):

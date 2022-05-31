@@ -35,7 +35,7 @@ from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.event import add_event, add_periodic, add_log_event, elapsed_milliseconds, \
     WALAEventOperation, parse_xml_event, parse_json_event, AGENT_EVENT_FILE_EXTENSION, EVENTS_DIRECTORY, \
     TELEMETRY_EVENT_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID, \
-    report_periodic_metric
+    report_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, GuestAgentGenericLogsSchema, \
@@ -623,7 +623,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
     def test_report_periodic_metric_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(self):
         self._test_create_event_function_should_create_events_that_have_all_the_parameters_in_the_telemetry_schema(
-            create_event_function=lambda: report_periodic_metric(DEFAULT_REPORT_PERIOD, TestEvent._Category, "%idle", "total", 12.34),
+            create_event_function=lambda: report_metric(DEFAULT_REPORT_PERIOD, TestEvent._Category, "%idle", "total", 12.34),
             expected_parameters={
                 GuestAgentPerfCounterEventsSchema.Category: TestEvent._Category,
                 GuestAgentPerfCounterEventsSchema.Counter: '%idle',
@@ -839,7 +839,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 class TestMetrics(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
     def test_report_periodic_metric(self, mock_event):
-        event.report_periodic_metric(DEFAULT_REPORT_PERIOD, "cpu", "%idle", "_total", 10.0)
+        event.report_metric(DEFAULT_REPORT_PERIOD, "cpu", "%idle", "_total", 10.0)
         self.assertEqual(1, mock_event.call_count)
 
         event_json = mock_event.call_args[0][0]
