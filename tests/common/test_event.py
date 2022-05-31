@@ -28,7 +28,6 @@ from datetime import datetime, timedelta
 
 from mock import MagicMock
 
-from azurelinuxagent.common.cgroup import DEFAULT_REPORT_PERIOD
 from azurelinuxagent.common.utils import textutil, fileutil
 from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals

@@ -319,9 +319,9 @@ class MemoryCgroup(CGroup):
                     match = re.match(re_memory_counter, line)
                     if match is not None:
                         return int(match.groups()[0])
-            raise CounterNotFound("Cannot find counter: {0}".format(counter_name))
+                raise CounterNotFound("Cannot find counter: {0}".format(counter_name))
         except Exception:
-            raise
+            raise 
 
     def get_memory_usage(self):
         """
