@@ -221,7 +221,7 @@ class Certificates(object):
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
-                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
+                logger.info("Found private key matching thumbprint with length: {0}".format(len(thumbprint)))
             else:
                 # Since private key has *no* matching certificate,
                 # it will not be named correctly
