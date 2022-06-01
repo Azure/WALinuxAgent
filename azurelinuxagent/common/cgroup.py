@@ -25,8 +25,8 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
-REPORT_EVERY_HOUR = timedelta(hours=1)
-DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
+_REPORT_EVERY_HOUR = timedelta(hours=1)
+_DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
 
@@ -41,32 +41,32 @@ class MetricValue(object):
     Class for defining all the required metric fields to send telemetry.
     """
 
-    def __init__(self, category, counter, instance, value, report_period=DEFAULT_REPORT_PERIOD):
-        self.__category = category
-        self.__counter = counter
-        self.__instance = instance
-        self.__value = value
-        self.__report_period = report_period
+    def __init__(self, category, counter, instance, value, report_period=_DEFAULT_REPORT_PERIOD):
+        self._category = category
+        self._counter = counter
+        self._instance = instance
+        self._value = value
+        self._report_period = report_period
 
     @property
     def category(self):
-        return self.__category
+        return self._category
 
     @property
     def counter(self):
-        return self.__counter
+        return self._counter
 
     @property
     def instance(self):
-        return self.__instance
+        return self._instance
 
     @property
     def value(self):
-        return self.__value
+        return self._value
 
     @property
     def report_period(self):
-        return self.__report_period
+        return self._report_period
 
 
 class MetricsCategory(object):
@@ -375,7 +375,7 @@ class MemoryCgroup(CGroup):
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name,
                         self.get_memory_usage()),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
-                        self.get_max_memory_usage(), REPORT_EVERY_HOUR),
+                        self.get_max_memory_usage(), _REPORT_EVERY_HOUR),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
-                        self.get_swap_memory_usage(), REPORT_EVERY_HOUR)
+                        self.get_swap_memory_usage(), _REPORT_EVERY_HOUR)
         ]
