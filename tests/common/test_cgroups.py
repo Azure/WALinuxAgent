@@ -211,7 +211,7 @@ class TestMemoryCgroup(AgentTestCase):
         max_memory_usage = test_mem_cg.get_max_memory_usage()
         self.assertEqual(1000000, max_memory_usage)
 
-        swap_memory_usage = test_mem_cg.get_swap_memory_usage()
+        swap_memory_usage = test_mem_cg.try_swap_memory_usage()
         self.assertEqual(20000, swap_memory_usage)
 
     def test_get_metrics_when_files_not_present(self):
@@ -228,7 +228,7 @@ class TestMemoryCgroup(AgentTestCase):
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
         with self.assertRaises(IOError) as e:
-            test_mem_cg.get_swap_memory_usage()
+            test_mem_cg.try_swap_memory_usage()
 
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
@@ -238,5 +238,5 @@ class TestMemoryCgroup(AgentTestCase):
         with self.assertRaises(CounterNotFound):
             test_mem_cg.get_memory_usage()
 
-        swap_memory_usage = test_mem_cg.get_swap_memory_usage()
+        swap_memory_usage = test_mem_cg.try_swap_memory_usage()
         self.assertEqual(0, swap_memory_usage)

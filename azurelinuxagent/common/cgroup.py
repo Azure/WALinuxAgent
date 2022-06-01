@@ -305,6 +305,10 @@ class CpuCgroup(CGroup):
 
 
 class MemoryCgroup(CGroup):
+    def __init__(self, name, cgroup_path):
+        super(MemoryCgroup, self).__init__(name, cgroup_path)
+
+        self._counter_not_found_error_count = 0
 
     def _get_memory_stat_counter(self, counter_name):
         try:
@@ -340,7 +344,7 @@ class MemoryCgroup(CGroup):
         rss = self._get_memory_stat_counter("rss")
         return cache + rss
 
-    def get_swap_memory_usage(self):
+    def try_swap_memory_usage(self):
         """
         Collect SWAP from memory.stat cgroup.
 
@@ -350,7 +354,12 @@ class MemoryCgroup(CGroup):
         """
         try:
             return self._get_memory_stat_counter("swap")
-        except CounterNotFound:
+        except CounterNotFound as e:
+            if self._counter_not_found_error_count < 1:
+                logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                     'Could not find swap counter from "memory.stat" file in the cgroup: {0}.'
+                                     ' Internal error: {1}'.format(self.path, ustr(e)))
+                self._counter_not_found_error_count += 1
             return 0
 
     def get_max_memory_usage(self):
@@ -377,5 +386,5 @@ class MemoryCgroup(CGroup):
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
                         self.get_max_memory_usage(), _REPORT_EVERY_HOUR),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
-                        self.get_swap_memory_usage(), _REPORT_EVERY_HOUR)
+                        self.try_swap_memory_usage(), _REPORT_EVERY_HOUR)
         ]
