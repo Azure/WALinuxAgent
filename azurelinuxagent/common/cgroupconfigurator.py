@@ -23,7 +23,7 @@ import threading
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter
+from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
@@ -97,6 +97,13 @@ _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 # Do not edit.
 [Service]
 CPUQuota={0}
+"""
+_DROP_IN_FILE_MEMORY_ACCOUNTING = "13-MemoryAccounting.conf"
+_DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS = """
+# This drop-in unit file was created by the Azure VM Agent.
+# Do not edit.
+[Service]
+MemoryAccounting=yes
 """
 
 
@@ -176,10 +183,17 @@ class CGroupConfigurator(object):
                                                                                                        cpu_controller_root,
                                                                                                        memory_controller_root)
 
+                if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
+                    self.enable()
+
                 if self._agent_cpu_cgroup_path is not None:
                     _log_cgroup_info("Agent CPU cgroup: {0}", self._agent_cpu_cgroup_path)
-                    self.enable()
+                    self.__set_cpu_quota(conf.get_agent_cpu_quota())
                     CGroupsTelemetry.track_cgroup(CpuCgroup(AGENT_NAME_TELEMETRY, self._agent_cpu_cgroup_path))
+
+                if self._agent_memory_cgroup_path is not None:
+                    _log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
+                    CGroupsTelemetry.track_cgroup(MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path))
 
                 _log_cgroup_info('Agent cgroups enabled: {0}', self._agent_cgroups_enabled)
 
@@ -322,6 +336,7 @@ class CGroupConfigurator(object):
             agent_drop_in_path = systemd.get_agent_drop_in_path()
             agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
             agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_ACCOUNTING)
+            agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path, _DROP_IN_FILE_MEMORY_ACCOUNTING)
 
             files_to_create = []
 
@@ -348,6 +363,12 @@ class CGroupConfigurator(object):
             else:
                 if not os.path.exists(agent_drop_in_file_cpu_accounting):
                     files_to_create.append((agent_drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+
+            if fileutil.findre_in_file(agent_unit_file, r"MemoryAccounting=") is not None:
+                CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_memory_accounting)
+            else:
+                if not os.path.exists(agent_drop_in_file_memory_accounting):
+                    files_to_create.append((agent_drop_in_file_memory_accounting, _DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS))
 
             if len(files_to_create) > 0:
                 # create the unit files, but if 1 fails remove all and return
@@ -482,7 +503,6 @@ class CGroupConfigurator(object):
                     "Attempted to enable cgroups, but they are not supported on the current platform")
             self._agent_cgroups_enabled = True
             self._extensions_cgroups_enabled = True
-            self.__set_cpu_quota(conf.get_agent_cpu_quota())
 
         def disable(self, reason, disable_cgroups):
             if disable_cgroups == DisableCgroups.ALL:  # disable all
