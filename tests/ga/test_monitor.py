@@ -29,7 +29,7 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, SendImdsHeartbeat, \
     ResetPeriodicLogMessages, SendHostPluginHeartbeat, PollResourceUsage, \
-    ReportNetworkErrors, ReportNetworkConfigurationChanges
+    ReportNetworkErrors, ReportNetworkConfigurationChanges, PollSystemWideResourceUsage
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
@@ -74,6 +74,7 @@ class MonitorHandlerTestCase(AgentTestCase):
 
                                 expected_operations = [
                                     PollResourceUsage.__name__,
+                                    PollSystemWideResourceUsage.__name__,
                                     ReportNetworkErrors.__name__,
                                     ResetPeriodicLogMessages.__name__,
                                     SendHostPluginHeartbeat.__name__,
@@ -252,3 +253,24 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
+
+class TestPollSystemWideResourceUsage(AgentTestCase):
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_used_and_available_system_memory")
+    def test_send_system_memory_metrics(self, path_get_system_memory, patch_add_metric, *args): # pylint: disable=unused-argument
+        path_get_system_memory.return_value = (234.45, 123.45)
+        PollSystemWideResourceUsage().run()
+
+        self.assertEqual(1, path_get_system_memory.call_count)
+        self.assertEqual(2, patch_add_metric.call_count)  # 2 metrics being sent.
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
+    @patch("azurelinuxagent.ga.monitor.PollSystemWideResourceUsage.poll_system_memory_metrics")
+    def test_send_system_memory_metrics_empty(self, path_poll_system_memory_metrics, patch_add_metric, # pylint: disable=unused-argument
+                                        *args):
+        path_poll_system_memory_metrics.return_value = []
+        PollSystemWideResourceUsage().run()
+
+        self.assertEqual(1, path_poll_system_memory_metrics.call_count)
+        self.assertEqual(0, patch_add_metric.call_count)  # Zero metrics being sent.
