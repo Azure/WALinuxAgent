@@ -624,7 +624,7 @@ class _VmSettingsErrorReporter(object):
         self._error_count += 1
 
         if self._error_count <= _VmSettingsErrorReporter._MaxErrors:
-            add_event(op=WALAEventOperation.VmSettings, message="[{0}] {1}".format(category, error), is_success=True, log_event=False)
+            add_event(op=WALAEventOperation.VmSettings, message="[{0}] {1}".format(category, error), is_success=False, log_event=False)
 
         if category == _VmSettingsError.ClientError:
             self._client_error_count += 1
@@ -648,7 +648,7 @@ class _VmSettingsErrorReporter(object):
                 "failedRequests": self._request_failure_count
             }
             message = json.dumps(summary)
-            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=True, log_event=False)
             if self._error_count > 0:
                 logger.info("[VmSettingsSummary] {0}", message)
 
