@@ -648,7 +648,7 @@ class _VmSettingsErrorReporter(object):
                 "failedRequests": self._request_failure_count
             }
             message = json.dumps(summary)
-            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=False, log_event=False)
+            add_event(op=WALAEventOperation.VmSettingsSummary, message=message, is_success=True, log_event=False)
             if self._error_count > 0:
                 logger.info("[VmSettingsSummary] {0}", message)
 
