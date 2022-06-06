@@ -722,11 +722,11 @@ class UpdateHandler(object):
                 self._extensions_summary = extensions_summary
                 message = "Extension status: {0}".format(self._extensions_summary)
                 logger.info(message)
-                add_event(op=WALAEventOperation.GoalState, message=message)
+                add_event(op=WALAEventOperation.GoalState, message=message, is_success=True)
                 if self._extensions_summary.converged:
                     message = "All extensions in the goal state have reached a terminal state: {0}".format(extensions_summary)
                     logger.info(message)
-                    add_event(op=WALAEventOperation.GoalState, message=message)
+                    add_event(op=WALAEventOperation.GoalState, message=message, is_success=True)
                     if self._is_initial_goal_state:
                         self._on_initial_goal_state_completed(self._extensions_summary)
         except Exception as error:
