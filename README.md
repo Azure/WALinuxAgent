@@ -455,7 +455,7 @@ _Default: y_
 
 If set, agent logs will be periodically collected and uploaded to a secure location for improved supportability.
 
-NOTE: This feature is only supported ubuntu 16.04+; this flag will not take effect on any other distro.
+NOTE: This feature is only supported on ubuntu 16.04+, RHEL 7.4+, and centos 7.4+; this flag will not take effect on any other distro.
 
 #### __Logs.CollectPeriod__
 
