@@ -70,7 +70,7 @@ class PollResourceUsage(PeriodicOperation):
 class PollSystemWideResourceUsage(PeriodicOperation):
     def __init__(self):
         super(PollSystemWideResourceUsage, self).__init__(datetime.timedelta(hours=1))
-        self.__log_metrics = conf.get_log_system_wide_metrics()
+        self.__log_metrics = conf.get_cgroup_log_metrics()
         self.osutil = get_osutil()
 
     def poll_system_memory_metrics(self):

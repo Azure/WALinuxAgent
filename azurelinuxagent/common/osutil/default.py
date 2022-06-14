@@ -1425,15 +1425,12 @@ class DefaultOSUtil(object):
         """
         used_mem = available_mem = 0
         free_cmd = ["free", "-b"]
-        try:
-            memory = shellutil.run_command(free_cmd)
-            for line in memory.split("\n"):
-                if ALL_MEMS_REGEX.match(line):
-                    mems = line.split()
-                    used_mem = int(mems[2])
-                    available_mem = int(mems[6])  # see "man free" for a description of these fields
-        except CommandError as e:
-            logger.warn("Cannot get the memory table. {0} failed: {1}", ustr(free_cmd), ustr(e))
+        memory = shellutil.run_command(free_cmd)
+        for line in memory.split("\n"):
+            if ALL_MEMS_REGEX.match(line):
+                mems = line.split()
+                used_mem = int(mems[2])
+                available_mem = int(mems[6])  # see "man free" for a description of these fields
         return used_mem/(1024 ** 2), available_mem/(1024 ** 2)
 
     def get_nic_state(self, as_string=False):

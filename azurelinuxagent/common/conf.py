@@ -137,8 +137,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableFastTrack": True,
-    "Debug.EnableGAVersioning": False,
-    "Debug.LogSystemWideMetrics": False
+    "Debug.EnableGAVersioning": False
 }
 
 
@@ -499,15 +498,6 @@ def get_cgroups_enabled(conf=__conf__):
 
 def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
-
-
-def get_log_system_wide_metrics(conf=__conf__):
-    """
-    If True, system-wide resource usage metrics are written to the local log
-
-    NOTE: This option is experimental and may be removed in later versions of the Agent.
-    """
-    return conf.get_switch("Debug.LogSystemWideMetrics", False)
 
 
 def get_cgroup_check_period(conf=__conf__):
