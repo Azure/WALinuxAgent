@@ -982,8 +982,8 @@ Swap:             0           0           0   \n"
                           side_effect=exception) as patch_run:
             with self.assertRaises(shellutil.CommandError) as context_manager:
                 osutil.DefaultOSUtil().get_used_and_available_system_memory()
-                self.assertEqual(patch_run.call_count, 1)
-                self.assertEqual(context_manager.exception.returncode, 1)
+            self.assertEqual(patch_run.call_count, 1)
+            self.assertEqual(context_manager.exception.returncode, 1)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
         osutil_get_dhcp_pid_should_return_a_list_of_pids(self, osutil.DefaultOSUtil())
