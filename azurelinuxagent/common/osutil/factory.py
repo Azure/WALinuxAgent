@@ -34,7 +34,7 @@ from .mariner import MarinerOSUtil
 from .nsbsd import NSBSDOSUtil
 from .openbsd import OpenBSDOSUtil
 from .openwrt import OpenWRTOSUtil
-from .redhat import RedhatOSUtil, Redhat6xOSUtil
+from .redhat import RedhatOSUtil, Redhat6xOSUtil, RedhatOSModernUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
 from .photonos import PhotonOSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
@@ -105,6 +105,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name in ("redhat", "rhel", "centos", "oracle", "almalinux", "cloudlinux"):
         if Version(distro_version) < Version("7"):
             return Redhat6xOSUtil()
+
+        if Version(distro_version) == Version("8.6") or Version(distro_version) > Version("9"):
+            return RedhatOSModernUtil()
 
         return RedhatOSUtil()
 
