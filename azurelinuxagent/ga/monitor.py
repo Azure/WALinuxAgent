@@ -22,6 +22,7 @@ import threading
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
+from azurelinuxagent.common.cgroup import MetricValue, MetricsCategory, MetricsCounter
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
@@ -64,6 +65,27 @@ class PollResourceUsage(PeriodicOperation):
                 self.__periodic_metrics[key] = datetime.datetime.now()
 
         CGroupConfigurator.get_instance().check_cgroups(tracked_metrics)
+
+
+class PollSystemWideResourceUsage(PeriodicOperation):
+    def __init__(self):
+        super(PollSystemWideResourceUsage, self).__init__(datetime.timedelta(hours=1))
+        self.__log_metrics = conf.get_cgroup_log_metrics()
+        self.osutil = get_osutil()
+
+    def poll_system_memory_metrics(self):
+        used_mem, available_mem = self.osutil.get_used_and_available_system_memory()
+        return [
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.USED_MEM, "",
+                        used_mem),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.AVAILABLE_MEM, "",
+                        available_mem)
+        ]
+
+    def _operation(self):
+        metrics = self.poll_system_memory_metrics()
+        for metric in metrics:
+            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
 
 class ResetPeriodicLogMessages(PeriodicOperation):
@@ -274,6 +296,7 @@ class MonitorHandler(ThreadHandlerInterface):
                 ResetPeriodicLogMessages(),
                 ReportNetworkErrors(),
                 PollResourceUsage(),
+                PollSystemWideResourceUsage(),
                 SendHostPluginHeartbeat(protocol, health_service),
                 SendImdsHeartbeat(protocol_util, health_service)
             ]

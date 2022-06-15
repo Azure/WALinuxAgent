@@ -108,6 +108,7 @@ def get_firewall_delete_conntrack_drop_command(wait, destination):
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
 ALL_CPUS_REGEX = re.compile('^cpu .*')
+ALL_MEMS_REGEX = re.compile('^Mem.*')
 
 _enable_firewall = True
 
@@ -1410,6 +1411,27 @@ class DefaultOSUtil(object):
                         int(i) for i in line.split()[1:8])  # see "man proc" for a description of these fields
                     break
         return system_cpu
+
+    @staticmethod
+    def get_used_and_available_system_memory():
+        """
+        Get the contents of free -b in bytes.
+        # free -b
+        #              total        used        free      shared  buff/cache   available
+        # Mem:     8340144128   619352064  5236809728     1499136  2483982336  7426314240
+        # Swap:             0           0           0
+
+        :return: used and available memory in megabytes
+        """
+        used_mem = available_mem = 0
+        free_cmd = ["free", "-b"]
+        memory = shellutil.run_command(free_cmd)
+        for line in memory.split("\n"):
+            if ALL_MEMS_REGEX.match(line):
+                mems = line.split()
+                used_mem = int(mems[2])
+                available_mem = int(mems[6])  # see "man free" for a description of these fields
+        return used_mem/(1024 ** 2), available_mem/(1024 ** 2)
 
     def get_nic_state(self, as_string=False):
         """

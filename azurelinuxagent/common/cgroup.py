@@ -80,6 +80,8 @@ class MetricsCounter(object):
     MAX_MEM_USAGE = "Max Memory Usage"
     THROTTLED_TIME = "Throttled Time"
     SWAP_MEM_USAGE = "Swap Memory Usage"
+    AVAILABLE_MEM = "Available MBytes"
+    USED_MEM = "Used MBytes"
 
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
