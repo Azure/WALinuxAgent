@@ -69,9 +69,17 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             self.assertIsNone(extensions_goal_state.status_upload_blob, "Expected status upload blob to be None")
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
 
+    def test_it_should_parse_missing_agent_manifests_as_empty(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-no_manifests.json"
+        with mock_wire_protocol(data_file) as protocol:
+            extensions_goal_state = protocol.get_goal_state().extensions_goal_state
+            self.assertEqual(1, len(extensions_goal_state.agent_manifests), "Expected exactly one agent manifest. Got: {0}".format(extensions_goal_state.agent_manifests))
+            self.assertListEqual([], extensions_goal_state.agent_manifests[0].uris, "Expected an empty list of agent manifests")
+
     def test_it_should_parse_missing_extension_manifests_as_empty(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
-        data_file["vm_settings"] = "hostgaplugin/vm_settings-no_extension_manifests.json"
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-no_manifests.json"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
