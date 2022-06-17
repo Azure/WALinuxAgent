@@ -27,12 +27,7 @@
     },
     "gaFamilies": [
         {
-            "name": "Prod",
-            "uris": [
-                "https://zrdfepirv2dz5prdstr07a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentral_manifest.xml",
-                "https://rdfepirv2dm1prdstr09.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentral_manifest.xml",
-                "https://zrdfepirv2dm5prdstr06a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentral_manifest.xml"
-            ]
+            "name": "Prod"
         }
     ],
     "extensionGoalStates": [
