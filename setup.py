@@ -96,7 +96,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     systemd_dir_path = osutil.get_systemd_unit_file_install_path()
     agent_bin_path = osutil.get_agent_bin_path()
 
-    if name in ('redhat', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
+    if name in ('redhat', 'rhel', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
         if version.startswith("8") or version.startswith("9"):
             # redhat8+ default to py3
             set_bin_files(data_files, dest=agent_bin_path,
