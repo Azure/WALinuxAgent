@@ -56,6 +56,15 @@ RETRY_CODES = [
     429,  # Request Rate Limit Exceeded
 ]
 
+#
+# Currently the HostGAPlugin has an issue its cache that may produce a BAD_REQUEST failure for valid URIs when using the extensionArtifact API.
+# Add this status to the retryable codes, but use it only when requesting downloads via the HostGAPlugin. The retry logic in the download code
+# would give enough time to the HGAP to refresh its cache. Once the fix to address that issue is deployed, consider removing the use of
+# HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES.
+#
+HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES = RETRY_CODES.copy()
+HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES.append(httpclient.BAD_REQUEST)
+
 RESOURCE_GONE_CODES = [
     httpclient.GONE
 ]
