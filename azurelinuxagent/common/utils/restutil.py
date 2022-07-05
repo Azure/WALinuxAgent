@@ -62,7 +62,7 @@ RETRY_CODES = [
 # would give enough time to the HGAP to refresh its cache. Once the fix to address that issue is deployed, consider removing the use of
 # HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES.
 #
-HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES = RETRY_CODES.copy()
+HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES = RETRY_CODES[:]  # make a copy of RETRY_CODES
 HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES.append(httpclient.BAD_REQUEST)
 
 RESOURCE_GONE_CODES = [
