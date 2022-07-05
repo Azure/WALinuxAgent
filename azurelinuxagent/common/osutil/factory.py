@@ -107,7 +107,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         if Version(distro_version) < Version("7"):
             return Redhat6xOSUtil()
 
-        if Version(distro_version) == Version("8.6") or Version(distro_version) > Version("9"):
+        if Version(distro_version) >= Version("8.6"):
             return RedhatOSModernUtil()
 
         return RedhatOSUtil()
