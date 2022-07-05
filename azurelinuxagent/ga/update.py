@@ -1317,7 +1317,7 @@ class GuestAgent(object):
 
                 uri, headers = self.host.get_artifact_request(uri, self.host.manifest_uri)
                 try:
-                    if self._fetch(uri, headers=headers, use_proxy=False):
+                    if self._fetch(uri, headers=headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES):
                         if not HostPluginProtocol.is_default_channel:
                             logger.verbose("Setting host plugin as default channel")
                             HostPluginProtocol.is_default_channel = True
@@ -1344,12 +1344,12 @@ class GuestAgent(object):
                 message=msg)
             raise UpdateError(msg)
 
-    def _fetch(self, uri, headers=None, use_proxy=True):
+    def _fetch(self, uri, headers=None, use_proxy=True, retry_codes=None):
         package = None
         try:
             is_healthy = True
             error_response = ''
-            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers, max_retry=1)
+            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers, max_retry=3, retry_codes=retry_codes)  # Use only 3 retries, since there are usually 5 or 6 URIs and we try all of them
             if restutil.request_succeeded(resp):
                 package = resp.read()
                 fileutil.write_file(self.get_agent_pkg_path(),
