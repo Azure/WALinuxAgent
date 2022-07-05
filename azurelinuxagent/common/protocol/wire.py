@@ -147,7 +147,7 @@ class WireProtocol(DataContract):
     def _download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-        success = self.client.stream(uri, destination, headers=headers, use_proxy=False, max_retry=1)
+        success = self.client.stream(uri, destination, headers=headers, use_proxy=False, max_retry=1)  # set max_retry to 1 because extension packages already have a retry loop (see ExtHandlerInstance.download())
         return success
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):  # pylint: disable=W0613
@@ -652,7 +652,7 @@ class WireClient(object):
     def fetch_manifest_through_host(self, uri):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(uri)
-        response, _ = self.fetch(uri, headers, use_proxy=False, max_retry=1)
+        response, _ = self.fetch(uri, headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
         return response
 
     def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_ms=0):
@@ -675,9 +675,11 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version_uri, max_retry=1)[0]  # pylint: disable=W0640
+            # Disable W0640: OK to use version_uri in a lambda within the loop's body
+            direct_func = lambda: self.fetch(version_uri)[0]  # pylint: disable=W0640
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
+            # Disable W0640: OK to use version_uri in a lambda within the loop's body
             host_func = lambda: self.fetch_manifest_through_host(version_uri)  # pylint: disable=W0640
 
             try:
@@ -716,7 +718,7 @@ class WireClient(object):
 
         return success
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None, ok_codes=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None, retry_codes=None, ok_codes=None):
         """
         max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
 
@@ -725,14 +727,14 @@ class WireClient(object):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response_headers = None
-        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, ok_codes=ok_codes)
+        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, retry_codes=retry_codes, ok_codes=ok_codes)
         if response is not None and not restutil.request_failed(response, ok_codes=ok_codes):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
             response_headers = response.getheaders()
         return content, response_headers
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None, ok_codes=None):
+    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None, retry_codes=None, ok_codes=None):
         """
         max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
         """
@@ -743,7 +745,8 @@ class WireClient(object):
                 uri,
                 headers=headers,
                 use_proxy=use_proxy,
-                max_retry=max_retry)
+                max_retry=max_retry,
+                retry_codes=retry_codes)
 
             host_plugin = self.get_host_plugin()
 

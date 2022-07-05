@@ -25,6 +25,7 @@ from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
+from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -98,7 +99,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         def fetch_through_host():
             host = wire_client.get_host_plugin()
             uri, headers = host.get_artifact_request(artifacts_profile_blob)
-            content, _ = wire_client.fetch(uri, headers, use_proxy=False)
+            content, _ = wire_client.fetch(uri, headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
             return content
 
         logger.verbose("Retrieving the artifacts profile")
