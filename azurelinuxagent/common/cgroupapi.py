@@ -23,7 +23,7 @@ import threading
 import uuid
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
@@ -284,7 +284,7 @@ class SystemdCgroupsApi(CGroupsApi):
         try:
             cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
 
-            cpu_cgroup_mountpoint, _ = self.get_cgroup_mount_points()
+            cpu_cgroup_mountpoint, memory_cgroup_mountpoint = self.get_cgroup_mount_points()
 
             if cpu_cgroup_mountpoint is None:
                 logger.info("The CPU controller is not mounted; will not track resource usage")
@@ -292,6 +292,13 @@ class SystemdCgroupsApi(CGroupsApi):
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
                 cpu_cgroup = CpuCgroup(extension_name, cpu_cgroup_path)
                 CGroupsTelemetry.track_cgroup(cpu_cgroup)
+
+            if memory_cgroup_mountpoint is None:
+                logger.info("The Memory controller is not mounted; will not track resource usage")
+            else:
+                memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
+                memory_cgroup = MemoryCgroup(extension_name, memory_cgroup_path)
+                CGroupsTelemetry.track_cgroup(memory_cgroup)
 
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
