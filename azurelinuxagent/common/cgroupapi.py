@@ -265,7 +265,10 @@ class SystemdCgroupsApi(CGroupsApi):
         extension_slice_name = self.get_extension_slice_name(extension_name)
         with self._systemd_run_commands_lock:
             process = subprocess.Popen(  # pylint: disable=W1509
-                "systemd-run --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
+                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
+                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
+                # since slice unit file configured with accounting enabled.
+                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
