@@ -435,12 +435,18 @@ class CGroupConfigurator(object):
                     CGroupConfigurator._Impl.__cleanup_unit_file(unit_file)
                 return
 
-        def is_extension_resource_limits_setup_completed(self, extension_name):
+        def is_extension_resource_limits_setup_completed(self, extension_name, cpu_quota=None):
             unit_file_install_path = systemd.get_unit_file_install_path()
             extension_slice_path = os.path.join(unit_file_install_path,
                                                 SystemdCgroupsApi.get_extension_slice_name(extension_name))
+            cpu_quota = str(
+                cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
+            slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name,
+                                                              cpu_quota=cpu_quota)
             if os.path.exists(extension_slice_path):
-                return True
+                with open(extension_slice_path, "r") as file_:
+                    if file_.read() == slice_contents:
+                        return True
             return False
 
         def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
