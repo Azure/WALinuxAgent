@@ -16,27 +16,29 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
 import datetime
 import os
 import sys
+import tempfile
 import threading
 import time
 from azurelinuxagent.common import cgroupconfigurator, logcollector
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
-from azurelinuxagent.common.future import subprocess_dev_null, ustr
+from azurelinuxagent.common.cgroup import MetricsCounter
+from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation, report_metric
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
-from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH, GRACEFUL_KILL_ERRCODE
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, LOGCOLLECTOR_MEMORY_LIMIT
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 
-_INITIAL_LOG_COLLECTION_DELAY = 5 * 60 # Five minutes of delay
+_INITIAL_LOG_COLLECTION_DELAY = 5 * 60  # Five minutes of delay
+
 
 def get_collect_logs_handler():
     return CollectLogsHandler()
@@ -128,7 +130,10 @@ class CollectLogsHandler(ThreadHandlerInterface):
     def stop(self):
         self.should_run = False
         if self.is_alive():
-            self.join()
+            try:
+                self.join()
+            except RuntimeError:
+                pass
 
     def init_protocols(self):
         # The initialization of ProtocolUtil for the log collection thread should be done within the thread itself
@@ -170,7 +175,8 @@ class CollectLogsHandler(ThreadHandlerInterface):
         # Invoke the command line tool in the agent to collect logs, with resource limits on CPU and memory (RAM).
 
         systemd_cmd = [
-            "systemd-run", "--unit={0}".format(logcollector.CGROUPS_UNIT),
+            "systemd-run", "--property=CPUAccounting=no", "--property=MemoryAccounting=no",
+            "--unit={0}".format(logcollector.CGROUPS_UNIT),
             "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
         ]
 
@@ -178,21 +184,24 @@ class CollectLogsHandler(ThreadHandlerInterface):
         collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
         final_command = systemd_cmd + collect_logs_cmd
 
-        def exec_command(output_file):
+        def exec_command():
             start_time = datetime.datetime.utcnow()
             success = False
             msg = None
             try:
-                shellutil.run_command(final_command, log_error=False, stdout=output_file, stderr=output_file)
-                duration = elapsed_milliseconds(start_time)
-                archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
+                base_dir = conf.get_lib_dir()
+                with tempfile.TemporaryFile(dir=base_dir, mode="w+b") as stdout:
+                    with tempfile.TemporaryFile(dir=base_dir, mode="w+b") as stderr:
+                        shellutil.run_command(final_command, log_error=False, stdout=stdout, stderr=stderr)
+                        duration = elapsed_milliseconds(start_time)
+                        archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
 
-                msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
-                                                                                                    duration)
-                logger.info(msg)
-                success = True
+                        msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
+                                                                                                               duration)
+                        logger.info(msg)
+                        success = True
 
-                return True
+                        return True
             except Exception as e:
                 duration = elapsed_milliseconds(start_time)
                 err_msg = ustr(e)
@@ -201,16 +210,17 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     # pylint has limited (i.e. no) awareness of control flow w.r.t. typing. we disable=no-member
                     # here because we know e must be a CommandError but pylint still considers the case where
                     # e is a different type of exception.
-                    err_msg = ustr("Log Collector exited with code {0}").format(e.returncode) # pylint: disable=no-member
+                    err_msg = ustr("Log Collector exited with code {0}").format(
+                        e.returncode)  # pylint: disable=no-member
 
-                    if e.returncode == logcollector.INVALID_CGROUPS_ERRCODE: # pylint: disable=no-member
+                    if e.returncode == logcollector.INVALID_CGROUPS_ERRCODE:  # pylint: disable=no-member
                         logger.info("Disabling periodic log collection until service restart due to process error.")
                         self.stop()
-                    
-                    # When the OOM killer is invoked on the log collector process, this error code is
-                    # returned. Stop the periodic operation because it seems to be persistent.
-                    elif e.returncode == logcollector.FORCE_KILLED_ERRCODE: # pylint: disable=no-member
-                        logger.info("Disabling periodic log collection until service restart due to OOM error.")
+
+                    # When the log collector memory limit is exceeded, Agent gracefully exit the process with this error code.
+                    # Stop the periodic operation because it seems to be persistent.
+                    elif e.returncode == logcollector.GRACEFUL_KILL_ERRCODE:  # pylint: disable=no-member
+                        logger.info("Disabling periodic log collection until service restart due to exceeded process memory limit.")
                         self.stop()
                     else:
                         logger.info(err_msg)
@@ -227,17 +237,8 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     is_success=success,
                     message=msg,
                     log_event=False)
-        
-        try:
-            logfile = open(conf.get_agent_log_file(), "a+")
-        except Exception:
-            with subprocess_dev_null() as DEVNULL:
-                return exec_command(DEVNULL)
-        else:
-            return exec_command(logfile)
-        finally:
-            if logfile is not None:
-                logfile.close()
+
+        return exec_command()
 
     def _send_logs(self):
         msg = None
@@ -261,3 +262,98 @@ class CollectLogsHandler(ThreadHandlerInterface):
                 is_success=success,
                 message=msg,
                 log_event=False)
+
+
+def get_log_collector_monitor_handler(cgroups):
+    return LogCollectorMonitorHandler(cgroups)
+
+
+class LogCollectorMonitorHandler(ThreadHandlerInterface):
+    """
+    Periodically monitor and checks the Log collector Cgroups and sends telemetry to Kusto.
+    """
+
+    _THREAD_NAME = "LogCollectorMonitorHandler"
+
+    @staticmethod
+    def get_thread_name():
+        return LogCollectorMonitorHandler._THREAD_NAME
+
+    def __init__(self, cgroups):
+        self.event_thread = None
+        self.should_run = True
+        self.period = 2  # Log collector monitor runs every 2 secs.
+        self.cgroups = cgroups
+        self.__log_metrics = conf.get_cgroup_log_metrics()
+
+    def run(self):
+        self.start()
+
+    def stop(self):
+        self.should_run = False
+        if self.is_alive():
+            self.join()
+
+    def join(self):
+        self.event_thread.join()
+
+    def stopped(self):
+        return not self.should_run
+
+    def is_alive(self):
+        return self.event_thread is not None and self.event_thread.is_alive()
+
+    def start(self):
+        self.event_thread = threading.Thread(target=self.daemon)
+        self.event_thread.setDaemon(True)
+        self.event_thread.setName(self.get_thread_name())
+        self.event_thread.start()
+
+    def daemon(self):
+        try:
+            while not self.stopped():
+                try:
+                    metrics = self._poll_resource_usage()
+                    self._send_telemetry(metrics)
+                    self._verify_memory_limit(metrics)
+                except Exception as e:
+                    logger.error("An error occurred in the log collection monitor thread loop; "
+                                 "will skip the current iteration.\n{0}", ustr(e))
+                finally:
+                    time.sleep(self.period)
+        except Exception as e:
+            logger.error(
+                "An error occurred in the MonitorLogCollectorCgroupsHandler thread; will exit the thread.\n{0}",
+                ustr(e))
+
+    def _poll_resource_usage(self):
+        metrics = []
+        for cgroup in self.cgroups:
+            metrics.extend(cgroup.get_tracked_metrics(track_throttled_time=True))
+        return metrics
+
+    def _send_telemetry(self, metrics):
+        for metric in metrics:
+            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+
+    def _verify_memory_limit(self, metrics):
+        current_usage = 0
+        max_usage = 0
+        for metric in metrics:
+            if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
+                current_usage += metric.value
+            elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
+                current_usage += metric.value
+            elif metric.counter == MetricsCounter.MAX_MEM_USAGE:
+                max_usage = metric.value
+
+        current_max = max(current_usage, max_usage)
+        if current_max > LOGCOLLECTOR_MEMORY_LIMIT:
+            msg = "Log collector memory limit {0} bytes exceeded. The max reported usage is {1} bytes.".format(LOGCOLLECTOR_MEMORY_LIMIT, current_max)
+            logger.info(msg)
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.LogCollection,
+                message=msg)
+            os._exit(GRACEFUL_KILL_ERRCODE)
