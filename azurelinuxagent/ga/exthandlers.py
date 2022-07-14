@@ -1361,9 +1361,11 @@ class ExtHandlerInstance(object):
         # setup the resource limits for extension operations and it's services.
         man = self.load_manifest()
         resource_limits = man.get_resource_limits(extension_name, self.ext_handler.version)
-        CGroupConfigurator.get_instance().setup_extension_slice(
-            extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
-        CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
+        if not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(extension_name,
+                                                                                              cpu_quota=resource_limits.get_extension_slice_cpu_quota()):
+            CGroupConfigurator.get_instance().setup_extension_slice(
+                extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
+            CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
     def create_status_file_if_not_exist(self, extension, status, code, operation, message):
         _, status_path = self.get_status_file_path(extension)
@@ -1413,8 +1415,7 @@ class ExtHandlerInstance(object):
             ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code
         }
         # This check to call the setup if extension already installed and not called setup before
-        if not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(self.get_full_name()):
-            self.set_extension_resource_limits()
+        self.set_extension_resource_limits()
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()

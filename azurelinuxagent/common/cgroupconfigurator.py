@@ -50,6 +50,7 @@ DefaultDependencies=no
 Before=slices.target
 [Slice]
 CPUAccounting=yes
+MemoryAccounting=yes
 """
 _EXTENSION_SLICE_CONTENTS = """
 [Unit]
@@ -59,6 +60,7 @@ Before=slices.target
 [Slice]
 CPUAccounting=yes
 CPUQuota={cpu_quota}
+MemoryAccounting=yes
 """
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
@@ -142,7 +144,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
-            self._check_cgroups_lock = threading.RLock() # Protect the check_cgroups which is called from Monitor thread and main loop.
+            self._check_cgroups_lock = threading.RLock()  # Protect the check_cgroups which is called from Monitor thread and main loop.
 
         def initialize(self):
             try:
@@ -368,7 +370,8 @@ class CGroupConfigurator(object):
                 CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_memory_accounting)
             else:
                 if not os.path.exists(agent_drop_in_file_memory_accounting):
-                    files_to_create.append((agent_drop_in_file_memory_accounting, _DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS))
+                    files_to_create.append(
+                        (agent_drop_in_file_memory_accounting, _DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS))
 
             if len(files_to_create) > 0:
                 # create the unit files, but if 1 fails remove all and return
@@ -432,12 +435,18 @@ class CGroupConfigurator(object):
                     CGroupConfigurator._Impl.__cleanup_unit_file(unit_file)
                 return
 
-        def is_extension_resource_limits_setup_completed(self, extension_name):
+        def is_extension_resource_limits_setup_completed(self, extension_name, cpu_quota=None):
             unit_file_install_path = systemd.get_unit_file_install_path()
             extension_slice_path = os.path.join(unit_file_install_path,
                                                 SystemdCgroupsApi.get_extension_slice_name(extension_name))
+            cpu_quota = str(
+                cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
+            slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name,
+                                                              cpu_quota=cpu_quota)
             if os.path.exists(extension_slice_path):
-                return True
+                with open(extension_slice_path, "r") as file_:
+                    if file_.read() == slice_contents:
+                        return True
             return False
 
         def __get_agent_cgroups(self, agent_slice, cpu_controller_root, memory_controller_root):
@@ -550,7 +559,8 @@ class CGroupConfigurator(object):
             """
             logger.info("Resetting agent's CPUQuota")
             if CGroupConfigurator._Impl.__try_set_cpu_quota(''):  # setting an empty value resets to the default (infinity)
-                _log_cgroup_info('CPUQuota: {0}', systemd.get_unit_property(systemd.get_agent_unit_name(), "CPUQuotaPerSecUSec"))
+                _log_cgroup_info('CPUQuota: {0}',
+                                 systemd.get_unit_property(systemd.get_agent_unit_name(), "CPUQuotaPerSecUSec"))
 
         @staticmethod
         def __try_set_cpu_quota(quota):
@@ -722,12 +732,17 @@ class CGroupConfigurator(object):
             TODO: Start tracking Memory Cgroups
             """
             try:
-                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+                cpu_cgroup_path, memory_cgroup_path = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
                 if cpu_cgroup_path is None:
                     logger.info("The CPU controller is not mounted; will not track resource usage")
                 else:
                     CGroupsTelemetry.track_cgroup(CpuCgroup(unit_name, cpu_cgroup_path))
+
+                if memory_cgroup_path is None:
+                    logger.info("The Memory controller is not mounted; will not track resource usage")
+                else:
+                    CGroupsTelemetry.track_cgroup(MemoryCgroup(unit_name, memory_cgroup_path))
 
             except Exception as exception:
                 logger.info("Failed to start tracking resource usage for the extension: {0}", ustr(exception))
@@ -737,10 +752,13 @@ class CGroupConfigurator(object):
             TODO: remove Memory cgroups from tracked list.
             """
             try:
-                cpu_cgroup_path, _ = self._cgroups_api.get_unit_cgroup_paths(unit_name)
+                cpu_cgroup_path, memory_cgroup_path = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
                 if cpu_cgroup_path is not None:
                     CGroupsTelemetry.stop_tracking(CpuCgroup(unit_name, cpu_cgroup_path))
+
+                if memory_cgroup_path is not None:
+                    CGroupsTelemetry.stop_tracking(MemoryCgroup(unit_name, memory_cgroup_path))
 
             except Exception as exception:
                 logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
@@ -754,11 +772,15 @@ class CGroupConfigurator(object):
                 cgroup_relative_path = os.path.join(_AZURE_VMEXTENSIONS_SLICE,
                                                     extension_slice_name)
 
-                cpu_cgroup_mountpoint, _ = self._cgroups_api.get_cgroup_mount_points()
+                cpu_cgroup_mountpoint, memory_cgroup_mountpoint = self._cgroups_api.get_cgroup_mount_points()
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
+                memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
 
                 if cpu_cgroup_path is not None:
                     CGroupsTelemetry.stop_tracking(CpuCgroup(extension_name, cpu_cgroup_path))
+
+                if memory_cgroup_path is not None:
+                    CGroupsTelemetry.stop_tracking(MemoryCgroup(extension_name, memory_cgroup_path))
 
             except Exception as exception:
                 logger.info("Failed to stop tracking resource usage for the extension service: {0}", ustr(exception))
@@ -818,10 +840,13 @@ class CGroupConfigurator(object):
                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
                     cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
-                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name, cpu_quota=cpu_quota)
+                    _log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}", extension_name, cpu_quota)
+                    slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name,
+                                                                      cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
-                    _log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}", extension_name, ustr(exception))
+                    _log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}", extension_name,
+                                        ustr(exception))
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
 
         def remove_extension_slice(self, extension_name):
@@ -854,10 +879,15 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_create.append((drop_in_file_cpu_accounting, _DROP_IN_FILE_CPU_ACCOUNTING_CONTENTS))
+                        drop_in_file_memory_accounting = os.path.join(drop_in_path,
+                                                                      _DROP_IN_FILE_MEMORY_ACCOUNTING)
+                        files_to_create.append(
+                            (drop_in_file_memory_accounting, _DROP_IN_FILE_MEMORY_ACCOUNTING_CONTENTS))
 
                         cpu_quota = service.get('cpuQuotaPercentage', None)
                         if cpu_quota is not None:
                             cpu_quota = str(cpu_quota) + "%"
+                            _log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}", service_name, cpu_quota)
                             drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
                             cpu_quota_contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(cpu_quota)
                             files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
@@ -873,8 +903,8 @@ class CGroupConfigurator(object):
             over this setting.
             """
             if self.enabled() and services_list is not None:
+                service_name = None
                 try:
-                    service_name = None
                     for service in services_list:
                         service_name = service.get('name', None)
                         unit_file_path = systemd.get_unit_file_install_path()
@@ -907,6 +937,9 @@ class CGroupConfigurator(object):
                         drop_in_file_cpu_accounting = os.path.join(drop_in_path,
                                                                    _DROP_IN_FILE_CPU_ACCOUNTING)
                         files_to_cleanup.append(drop_in_file_cpu_accounting)
+                        drop_in_file_memory_accounting = os.path.join(drop_in_path,
+                                                                      _DROP_IN_FILE_MEMORY_ACCOUNTING)
+                        files_to_cleanup.append(drop_in_file_memory_accounting)
                         cpu_quota = service.get('cpuQuotaPercentage', None)
                         if cpu_quota is not None:
                             drop_in_file_cpu_quota = os.path.join(drop_in_path, _DROP_IN_FILE_CPU_QUOTA)

@@ -69,7 +69,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
     MockCommand(r"^systemctl stop ([^\s]+)"),
 
-    MockCommand(r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
+    MockCommand(r"^systemd-run (.+) --unit=([^\s]+) --scope ([^\s]+)",
 ''' 
 Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT

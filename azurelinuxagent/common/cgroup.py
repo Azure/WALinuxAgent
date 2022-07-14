@@ -358,7 +358,7 @@ class MemoryCgroup(CGroup):
             return self._get_memory_stat_counter("swap")
         except CounterNotFound as e:
             if self._counter_not_found_error_count < 1:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                logger.periodic_info(logger.EVERY_HALF_HOUR,
                                      'Could not find swap counter from "memory.stat" file in the cgroup: {0}.'
                                      ' Internal error: {1}'.format(self.path, ustr(e)))
                 self._counter_not_found_error_count += 1
