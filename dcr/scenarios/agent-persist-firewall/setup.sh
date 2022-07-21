@@ -9,7 +9,7 @@ ipt=$(which iptables)
 username="dcr"
 script_dir=$(dirname "$0")
 cp "$script_dir/access_wire_ip.sh" "/usr/bin/"
-chmod 777 "/usr/bin/access_wire_ip.sh"
+chmod 700 "/usr/bin/access_wire_ip.sh"
 mkdir -p /home/$username || echo "this is only needed for Suse VMs for running cron jobs as non-root"
 # Setup Cron jobs
 echo "@reboot ($d --utc +\\%FT\\%T.\\%3NZ && /usr/bin/access_wire_ip.sh $ipt) > /var/tmp/reboot-cron-root.log 2>&1" | crontab -u root -
