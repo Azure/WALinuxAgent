@@ -352,12 +352,12 @@ class GoalState(object):
             certs_uri = findtext(xml_doc, "Certificates")
             if certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
-                certs = Certificates(xml_text)
+                certs = Certificates(xml_text, self.logger)
                 # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
                 for c in certs.summary:
-                    logger.info("Downloaded certificate {0}".format(c))
+                    self.logger.info("Downloaded certificate {0}".format(c))
                 if len(certs.warnings) > 0:
-                    logger.warn(certs.warnings)
+                    self.logger.warn(certs.warnings)
                 self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
@@ -403,7 +403,7 @@ class SharedConfig(object):
 
 
 class Certificates(object):
-    def __init__(self, xml_text):
+    def __init__(self, xml_text, my_logger):
         self.cert_list = CertList()
         self.summary = []  # debugging info
         self.warnings = []
@@ -421,7 +421,7 @@ class Certificates(object):
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
         certificateFormat = findtext(xml_doc, "Format")
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
-            logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+            my_logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())

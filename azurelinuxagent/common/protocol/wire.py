@@ -767,7 +767,7 @@ class WireClient(object):
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
-            if force_update:
+            if force_update and not  silent:
                 logger.info("Forcing an update of the goal state.")
 
             if self._goal_state is None or force_update:
@@ -970,11 +970,13 @@ class WireClient(object):
 
         if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
-            self.update_goal_state(force_update=True)
+            self.update_goal_state(force_update=True, silent=True)
             extensions_goal_state = self.get_goal_state().extensions_goal_state
 
-        if extensions_goal_state.status_upload_blob is None:
-            raise ProtocolNotFoundError("Status upload uri is missing")
+            if extensions_goal_state.status_upload_blob is None:
+                raise ProtocolNotFoundError("Status upload uri is missing")
+
+            logger.info("Refreshed the goal state to get the status upload blob. New Goal State ID: {0}", extensions_goal_state.id)
 
         blob_type = extensions_goal_state.status_upload_blob_type
 
