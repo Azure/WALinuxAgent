@@ -162,17 +162,6 @@ class StateArchiver(object):
                 if exception.errno != errno.EEXIST:
                     logger.warn("{0} : {1}", self._source, exception.strerror)
 
-    def purge(self):
-        """
-        Delete "old" archive directories and .zip archives.  Old
-        is defined as any directories or files older than the X
-        newest ones. Also, clean up any legacy history files.
-        """
-        states = self._get_archive_states()
-
-        for state in states[_MAX_ARCHIVED_STATES:]:
-            state.delete()
-
     @staticmethod
     def purge_legacy_goal_state_history():
         lib_dir = conf.get_lib_dir()
@@ -222,6 +211,8 @@ class GoalStateHistory(object):
         timestamp = timeutil.create_history_timestamp(time)
         self._root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME, "{0}__{1}".format(timestamp, tag) if tag is not None else timestamp)
 
+        GoalStateHistory._purge()
+
     @staticmethod
     def tag_exists(tag):
         """
@@ -239,6 +230,44 @@ class GoalStateHistory(object):
             if not self._errors:  # report only 1 error per directory
                 self._errors = True
                 logger.warn("Failed to save {0} to the goal state history: {1} [no additional errors saving the goal state will be reported]".format(file_name, e))
+
+    _purge_error_count = 0
+
+    @staticmethod
+    def _purge():
+        """
+        Delete "old" history directories and .zip archives. Old is defined as any directories or files older than the X newest ones.
+        """
+        try:
+            history_root = os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME)
+
+            if not os.path.exists(history_root):
+                return
+
+            items = []
+            for current_item in os.listdir(history_root):
+                full_path = os.path.join(history_root, current_item)
+                items.append(full_path)
+            items.sort(key=os.path.getctime, reverse=True)
+
+            for current_item in items[_MAX_ARCHIVED_STATES:]:
+                if os.path.isfile(current_item):
+                    os.remove(current_item)
+                else:
+                    shutil.rmtree(current_item)
+
+            if GoalStateHistory._purge_error_count > 0:
+                GoalStateHistory._purge_error_count = 0
+                # Log a success message when we are recovering from errors.
+                logger.info("Successfully cleaned up the goal state history directory")
+
+        except Exception as e:
+            GoalStateHistory._purge_error_count += 1
+            if GoalStateHistory._purge_error_count < 5:
+                logger.warn("Failed to clean up the goal state history directory: {0}".format(e))
+            elif GoalStateHistory._purge_error_count == 5:
+                logger.warn("Failed to clean up the goal state history directory [will stop reporting these errors]: {0}".format(e))
+
 
     @staticmethod
     def _save_placeholder():
