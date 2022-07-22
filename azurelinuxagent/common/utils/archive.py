@@ -258,6 +258,7 @@ class GoalStateHistory(object):
 
             if GoalStateHistory._purge_error_count > 0:
                 GoalStateHistory._purge_error_count = 0
+                # Log a success message when we are recovering from errors.
                 logger.info("Successfully cleaned up the goal state history directory")
 
         except Exception as e:

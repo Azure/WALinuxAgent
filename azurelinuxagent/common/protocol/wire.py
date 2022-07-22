@@ -767,7 +767,7 @@ class WireClient(object):
         Updates the goal state if the incarnation or etag changed or if 'force_update' is True
         """
         try:
-            if force_update and not  silent:
+            if force_update and not silent:
                 logger.info("Forcing an update of the goal state.")
 
             if self._goal_state is None or force_update:
