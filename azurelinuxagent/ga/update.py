@@ -639,9 +639,9 @@ class UpdateHandler(object):
             if self._processing_new_incarnation():
                 remote_access_handler.run()
 
-            # lastly, cleanup the goal state history (but do it only on new goal states - no need to do it on every iteration)
+            # lastly, archive the goal state history (but do it only on new goal states - no need to do it on every iteration)
             if self._processing_new_extensions_goal_state():
-                UpdateHandler._cleanup_goal_state_history()
+                UpdateHandler._archive_goal_state_history()
 
         finally:
             if self._goal_state is not None:
@@ -649,10 +649,9 @@ class UpdateHandler(object):
                 self._last_extensions_gs_id = self._goal_state.extensions_goal_state.id
 
     @staticmethod
-    def _cleanup_goal_state_history():
+    def _archive_goal_state_history():
         try:
             archiver = StateArchiver(conf.get_lib_dir())
-            archiver.purge()
             archiver.archive()
         except Exception as exception:
             logger.warn("Error cleaning up the goal state history: {0}", ustr(exception))
