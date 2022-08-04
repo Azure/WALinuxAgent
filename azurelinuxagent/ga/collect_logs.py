@@ -172,7 +172,9 @@ class CollectLogsHandler(ThreadHandlerInterface):
     def _collect_logs(self):
         logger.info("Starting log collection...")
 
-        # Invoke the command line tool in the agent to collect logs, with resource limits on CPU and memory (RAM).
+        # Invoke the command line tool in the agent to collect logs, with resource limits on CPU.
+        # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the logcollector slice
+        # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in logcollector Cgroup
 
         systemd_cmd = [
             "systemd-run", "--property=CPUAccounting=no", "--property=MemoryAccounting=no",
@@ -189,19 +191,16 @@ class CollectLogsHandler(ThreadHandlerInterface):
             success = False
             msg = None
             try:
-                base_dir = conf.get_lib_dir()
-                with tempfile.TemporaryFile(dir=base_dir, mode="w+b") as stdout:
-                    with tempfile.TemporaryFile(dir=base_dir, mode="w+b") as stderr:
-                        shellutil.run_command(final_command, log_error=False, stdout=stdout, stderr=stderr)
-                        duration = elapsed_milliseconds(start_time)
-                        archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
+                shellutil.run_command(final_command, log_error=False)
+                duration = elapsed_milliseconds(start_time)
+                archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
 
-                        msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
-                                                                                                               duration)
-                        logger.info(msg)
-                        success = True
+                msg = "Successfully collected logs. Archive size: {0} b, elapsed time: {1} ms.".format(archive_size,
+                                                                                                       duration)
+                logger.info(msg)
+                success = True
 
-                        return True
+                return True
             except Exception as e:
                 duration = elapsed_milliseconds(start_time)
                 err_msg = ustr(e)
