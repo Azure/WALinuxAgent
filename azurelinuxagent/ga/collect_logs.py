@@ -19,7 +19,6 @@
 import datetime
 import os
 import sys
-import tempfile
 import threading
 import time
 from azurelinuxagent.common import cgroupconfigurator, logcollector
