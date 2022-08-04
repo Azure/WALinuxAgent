@@ -29,6 +29,7 @@ _REPORT_EVERY_HOUR = timedelta(hours=1)
 _DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
 AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
+AGENT_LOG_COLLECTOR = "azure-walinuxagent-logcollector"
 
 
 class CounterNotFound(Exception):
