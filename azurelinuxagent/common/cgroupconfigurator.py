@@ -74,10 +74,9 @@ Before=slices.target
 CPUAccounting=yes
 CPUQuota={cpu_quota}
 MemoryAccounting=yes
-MemoryLimit={memory_limit}
 """
 _LOGCOLLECTOR_CPU_QUOTA = "5%"
-_LOGCOLLECTOR_MEMORY_LIMIT = "30M"  # K for kb, M for mb
+LOGCOLLECTOR_MEMORY_LIMIT = 30 * 1024 ** 2  # 30Mb
 
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
@@ -349,8 +348,7 @@ class CGroupConfigurator(object):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if not os.path.exists(logcollector_slice):
-                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA,
-                                                                         memory_limit=_LOGCOLLECTOR_MEMORY_LIMIT)
+                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA)
 
                 files_to_create.append((logcollector_slice, slice_contents))
 

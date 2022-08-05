@@ -45,7 +45,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION, \
     get_daemon_version, set_daemon_version
-from azurelinuxagent.ga.collect_logs import CollectLogsHandler
+from azurelinuxagent.ga.collect_logs import CollectLogsHandler, get_log_collector_monitor_handler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 
@@ -196,36 +196,45 @@ class Agent(object):
             print("{0} = {1}".format(k, configuration[k]))
 
     def collect_logs(self, is_full_mode):
+        logger.set_prefix("LogCollector")
+
         if is_full_mode:
-            print("Running log collector mode full")
+            logger.info("Running log collector mode full")
         else:
-            print("Running log collector mode normal")
+            logger.info("Running log collector mode normal")
 
         # Check the cgroups unit
+        cpu_cgroup_path, memory_cgroup_path, log_collector_monitor = None, None, None
         if CollectLogsHandler.should_validate_cgroups():
-            cpu_cgroup_path, memory_cgroup_path = SystemdCgroupsApi.get_process_cgroup_relative_paths("self")
+            cgroups_api = SystemdCgroupsApi()
+            cpu_cgroup_path, memory_cgroup_path = cgroups_api.get_process_cgroup_paths("self")
 
             cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
             memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
 
             if not cpu_slice_matches or not memory_slice_matches:
-                print("The Log Collector process is not in the proper cgroups:")
+                logger.info("The Log Collector process is not in the proper cgroups:")
                 if not cpu_slice_matches:
-                    print("\tunexpected cpu slice")
+                    logger.info("\tunexpected cpu slice")
                 if not memory_slice_matches:
-                    print("\tunexpected memory slice")
+                    logger.info("\tunexpected memory slice")
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
         try:
-            log_collector = LogCollector(is_full_mode)
+            log_collector = LogCollector(is_full_mode, cpu_cgroup_path, memory_cgroup_path)
+            log_collector_monitor = get_log_collector_monitor_handler(log_collector.cgroups)
+            log_collector_monitor.run()
             archive = log_collector.collect_logs_and_get_archive()
-            print("Log collection successfully completed. Archive can be found at {0} "
+            logger.info("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
         except Exception as e:
-            print("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
-            print("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
+            logger.error("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
+            logger.info("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
             sys.exit(1)
+        finally:
+            if log_collector_monitor is not None:
+                log_collector_monitor.stop()
 
     @staticmethod
     def setup_firewall(firewall_metadata):

@@ -18,15 +18,18 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
+from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed, \
+    get_log_collector_monitor_handler
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mockwiredata import DATA_FILE
 from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances, skip_if_predicate_true, \
-    is_python_version_26
+    is_python_version_26, data_dir
 
 
 @contextlib.contextmanager
@@ -46,13 +49,14 @@ def _create_collect_logs_handler(iterations=1, cgroups_enabled=True, collect_log
         protocol_util = MagicMock()
         protocol_util.get_protocol = Mock(return_value=protocol)
         with patch("azurelinuxagent.ga.collect_logs.get_protocol_util", return_value=protocol_util):
-            with patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.stopped", side_effect=[False] * iterations + [True]):
+            with patch("azurelinuxagent.ga.collect_logs.CollectLogsHandler.stopped",
+                       side_effect=[False] * iterations + [True]):
                 with patch("time.sleep"):
-
                     # Grab the singleton to patch it
                     cgroups_configurator_singleton = CGroupConfigurator.get_instance()
                     with patch.object(cgroups_configurator_singleton, "enabled", return_value=cgroups_enabled):
-                        with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs", return_value=collect_logs_conf):
+                        with patch("azurelinuxagent.ga.collect_logs.conf.get_collect_logs",
+                                   return_value=collect_logs_conf):
                             def run_and_wait():
                                 collect_logs_handler.run()
                                 collect_logs_handler.join()
@@ -140,11 +144,14 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
                 collect_logs_handler.run_and_wait()
                 self.assertEqual(http_put_handler.counter, 1, "The PUT API to upload logs should have been called once")
                 self.assertTrue(os.path.exists(self.archive_path), "The archive file should exist on disk")
-                self.assertEqual(archive_size, len(http_put_handler.archive), "The archive file should have {0} bytes, not {1}".format(archive_size, len(http_put_handler.archive)))
+                self.assertEqual(archive_size, len(http_put_handler.archive),
+                                 "The archive file should have {0} bytes, not {1}".format(archive_size,
+                                                                                          len(http_put_handler.archive)))
 
     def test_it_does_not_upload_logs_when_collection_is_unsuccessful(self):
         with _create_collect_logs_handler() as collect_logs_handler:
-            with patch("azurelinuxagent.ga.collect_logs.shellutil.run_command", side_effect=Exception("test exception")):
+            with patch("azurelinuxagent.ga.collect_logs.shellutil.run_command",
+                       side_effect=Exception("test exception")):
                 def http_put_handler(url, _, **__):
                     if self.is_host_plugin_put_logs_request(url):
                         http_put_handler.counter += 1
@@ -158,3 +165,75 @@ class TestCollectLogs(AgentTestCase, HttpRequestPredicates):
                 collect_logs_handler.run_and_wait()
                 self.assertFalse(os.path.exists(self.archive_path), "The archive file should not exist on disk")
                 self.assertEqual(http_put_handler.counter, 0, "The PUT API to upload logs shouldn't have been called")
+
+
+@contextlib.contextmanager
+def _create_log_collector_monitor_handler(iterations=1):
+    """
+    Creates an instance of LogCollectorMonitorHandler that
+        * Runs its main loop only the number of times given in the 'iterations' parameter, and
+        * Does not sleep at the end of each iteration
+
+    The returned CollectLogsHandler is augmented with 2 methods:
+        * run_and_wait() - invokes run() and wait() on the CollectLogsHandler
+
+    """
+    with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler.stopped",
+               side_effect=[False] * iterations + [True]):
+        with patch("time.sleep"):
+
+            original_read_file = fileutil.read_file
+
+            def mock_read_file(filepath, **args):
+                if filepath == "/proc/stat":
+                    filepath = os.path.join(data_dir, "cgroups", "proc_stat_t0")
+                elif filepath.endswith("/cpuacct.stat"):
+                    filepath = os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+                return original_read_file(filepath, **args)
+
+            with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=mock_read_file):
+                def run_and_wait():
+                    monitor_log_collector.run()
+                    monitor_log_collector.join()
+
+                cgroups = [
+                    CpuCgroup("test", "dummy_cpu_path"),
+                    MemoryCgroup("test", "dummy_memory_path")
+                ]
+                monitor_log_collector = get_log_collector_monitor_handler(cgroups)
+                monitor_log_collector.run_and_wait = run_and_wait
+                yield monitor_log_collector
+
+
+class TestLogCollectorMonitorHandler(AgentTestCase):
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
+    @patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage")
+    def test_send_extension_metrics_telemetry(self, patch_poll_resource_usage, patch_add_metric):
+        with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
+            patch_poll_resource_usage.return_value = [MetricValue("Process", "% Processor Time", "service", 1),
+                                                      MetricValue("Process", "Throttled Time", "service", 1),
+                                                      MetricValue("Memory", "Total Memory Usage", "service", 1),
+                                                      MetricValue("Memory", "Max Memory Usage", "service", 1),
+                                                      MetricValue("Memory", "Swap Memory Usage", "service", 1)
+                                                      ]
+            log_collector_monitor_handler.run_and_wait()
+            self.assertEqual(1, patch_poll_resource_usage.call_count)
+            self.assertEqual(5, patch_add_metric.call_count)  # Five metrics being sent.
+
+    @patch("os._exit", side_effect=Exception)
+    @patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage")
+    def test_verify_log_collector_memory_limit_exceeded(self, patch_poll_resource_usage, mock_exit):
+        with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
+            with patch("azurelinuxagent.common.cgroupconfigurator.LOGCOLLECTOR_MEMORY_LIMIT", 8):
+                patch_poll_resource_usage.return_value = [MetricValue("Process", "% Processor Time", "service", 1),
+                                                          MetricValue("Process", "Throttled Time", "service", 1),
+                                                          MetricValue("Memory", "Total Memory Usage", "service", 9),
+                                                          MetricValue("Memory", "Max Memory Usage", "service", 7),
+                                                          MetricValue("Memory", "Swap Memory Usage", "service", 0)
+
+                                                          ]
+                try:
+                    log_collector_monitor_handler.run_and_wait()
+                except Exception:
+                    self.assertEqual(mock_exit.call_count, 1)
