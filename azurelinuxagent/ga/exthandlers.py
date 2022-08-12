@@ -21,7 +21,6 @@ import datetime
 import glob
 import json
 import os
-import random
 import re
 import shutil
 import stat
@@ -32,10 +31,10 @@ from distutils.version import LooseVersion
 from collections import defaultdict
 from functools import partial
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.version as version
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
+from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common import version
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -66,8 +65,6 @@ _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 HANDLER_NAME_PATTERN = re.compile(_HANDLER_NAME_PATTERN, re.IGNORECASE)
 HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
-
-NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
 # set the env variable value to NOT_RUN to reduce ambiguity for the extension publishers
@@ -1232,18 +1229,6 @@ class ExtHandlerInstance(object):
         add_event(name=name, version=ext_handler_version, message=message,
                   op=self.operation, is_success=is_success, duration=duration, log_event=log_event)
 
-    def _download_extension_package(self, source_uri, target_file):
-        self.logger.info("Downloading extension package: {0}", source_uri)
-        try:
-            if not self.protocol.download_ext_handler_pkg(source_uri, target_file):
-                raise Exception("Failed to download extension package from {0}".format(source_uri))
-        except Exception as exception:
-            self.logger.info("Error downloading extension package: {0}", ustr(exception))
-            if os.path.exists(target_file):
-                os.remove(target_file)
-            return False
-        return True
-
     def _unzip_extension_package(self, source_file, target_directory):
         self.logger.info("Unzipping extension package: {0}", source_file)
         try:
@@ -1274,33 +1259,8 @@ class ExtHandlerInstance(object):
                 self.logger.info("The existing extension package is invalid, will ignore it.")
 
         if not package_exists:
-            downloaded = False
-            i = 0
-            while i < NUMBER_OF_DOWNLOAD_RETRIES:
-                uris_shuffled = self.pkg.uris
-                random.shuffle(uris_shuffled)
-
-                for uri in uris_shuffled:
-                    if not self._download_extension_package(uri, destination):
-                        continue
-
-                    if self._unzip_extension_package(destination, self.get_base_dir()):
-                        downloaded = True
-                        break
-
-                if downloaded:
-                    break
-
-                self.logger.info("Failed to download the extension package from all uris, will retry after a minute")
-                time.sleep(60)
-                i += 1
-
-            if not downloaded:
-                raise ExtensionDownloadError("Failed to download extension",
-                                             code=ExtensionErrorCodes.PluginManifestDownloadError)
-
-            duration = elapsed_milliseconds(begin_utc)
-            self.report_event(message="Download succeeded", duration=duration)
+            self.protocol.client.download_extension(self.pkg.uris, destination, on_downloaded=lambda _: self._unzip_extension_package(destination, self.get_base_dir()))
+            self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
         self.pkg_file = destination
 
