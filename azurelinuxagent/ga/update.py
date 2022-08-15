@@ -378,6 +378,7 @@ class UpdateHandler(object):
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
             self._add_accept_tcp_firewall_rule_if_not_enabled(dst_ip=protocol.get_endpoint())
             self._reset_legacy_blacklisted_agents()
+            self._cleanup_legacy_goal_state_history()
 
             # Get all thread handlers
             telemetry_handler = get_send_telemetry_events_handler(self.protocol_util)
@@ -395,8 +396,6 @@ class UpdateHandler(object):
             self._start_threads(all_thread_handlers)
 
             logger.info("Goal State Period: {0} sec. This indicates how often the agent checks for new goal states and reports status.", self._goal_state_period)
-
-            self._cleanup_legacy_goal_state_history()
 
             while self.is_running:
                 self._check_daemon_running(debug)
