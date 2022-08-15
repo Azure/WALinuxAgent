@@ -33,7 +33,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsPars
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
 from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import GoalStateHistory
+from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib
 
@@ -345,8 +345,14 @@ class GoalState(object):
 
             shared_conf_uri = findtext(xml_doc, "SharedConfig")
             xml_text = self._wire_client.fetch_config(shared_conf_uri, self._wire_client.get_header())
-            shared_conf = SharedConfig(xml_text)
+            shared_config = SharedConfig(xml_text)
             self._history.save_shared_conf(xml_text)
+            # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband), so save it to the agent's root directory as well
+            shared_config_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
+            try:
+                fileutil.write_file(shared_config_file, xml_text)
+            except Exception as e:
+                logger.warn("Failed to save {0}: {1}".format(shared_config, e))
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
@@ -372,7 +378,7 @@ class GoalState(object):
             self._role_config_name = role_config_name
             self._container_id = container_id
             self._hosting_env = hosting_env
-            self._shared_conf = shared_conf
+            self._shared_conf = shared_config
             self._certs = certs
             self._remote_access = remote_access
 
