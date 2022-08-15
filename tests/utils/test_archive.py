@@ -154,7 +154,7 @@ class TestArchive(AgentTestCase):
 
             StateArchiver.purge_legacy_goal_state_history()
 
-            self.assertTrue(os.path.exists(shared_config), "{0} should not have been removed".format(f))
+            self.assertTrue(os.path.exists(shared_config), "{0} should not have been removed".format(shared_config))
 
             for f in legacy_files:
                 self.assertFalse(os.path.exists(f), "Legacy file {0} was not removed".format(f))
