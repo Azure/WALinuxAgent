@@ -133,26 +133,31 @@ class TestArchive(AgentTestCase):
 
     def test_purge_legacy_goal_state_history(self):
         with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=self.tmp_dir):
+            # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband); verify that we do not delete it
+            shared_config = os.path.join(self.tmp_dir, 'SharedConfig.xml')
+
             legacy_files = [
                 'GoalState.2.xml',
                 'VmSettings.2.json',
                 'Prod.2.manifest.xml',
                 'ExtensionsConfig.2.xml',
                 'Microsoft.Azure.Extensions.CustomScript.1.xml',
-                'SharedConfig.xml',
                 'HostingEnvironmentConfig.xml',
                 'RemoteAccess.xml',
                 'waagent_status.1.json'
             ]
             legacy_files = [os.path.join(self.tmp_dir, f) for f in legacy_files]
+
+            self._write_file(shared_config)
             for f in legacy_files:
                 self._write_file(f)
 
             StateArchiver.purge_legacy_goal_state_history()
 
+            self.assertTrue(os.path.exists(shared_config), "{0} should not have been removed".format(f))
+
             for f in legacy_files:
                 self.assertFalse(os.path.exists(f), "Legacy file {0} was not removed".format(f))
-
 
     @staticmethod
     def parse_isoformat(timestamp_str):
