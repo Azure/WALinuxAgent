@@ -1259,7 +1259,7 @@ class ExtHandlerInstance(object):
                 self.logger.info("The existing extension package is invalid, will ignore it.")
 
         if not package_exists:
-            self.protocol.client.download_extension(self.pkg.uris, destination, on_downloaded=lambda _: self._unzip_extension_package(destination, self.get_base_dir()))
+            self.protocol.client.download_extension(self.pkg.uris, destination, on_downloaded=lambda: self._unzip_extension_package(destination, self.get_base_dir()))
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
         self.pkg_file = destination

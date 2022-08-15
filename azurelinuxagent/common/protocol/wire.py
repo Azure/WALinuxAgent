@@ -573,8 +573,7 @@ class WireClient(object):
             raise
 
         except Exception as e:
-            raise ProtocolError("[Wireserver Exception] {0}".format(
-                ustr(e)))
+            raise ProtocolError("[Wireserver Exception] {0}".format(ustr(e)))
 
         return resp
 
@@ -586,18 +585,8 @@ class WireClient(object):
         return xml_text
 
     def fetch_config(self, uri, headers):
-        resp = self.call_wireserver(restutil.http_get,
-                                    uri,
-                                    headers=headers)
+        resp = self.call_wireserver(restutil.http_get, uri, headers=headers)
         return self.decode_config(resp.read())
-
-    def fetch_cache(self, local_file):
-        if not os.path.isfile(local_file):
-            raise ProtocolError("{0} is missing.".format(local_file))
-        try:
-            return fileutil.read_file(local_file)
-        except IOError as e:
-            raise ProtocolError("Failed to read cache: {0}".format(e))
 
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
@@ -608,16 +597,20 @@ class WireClient(object):
         return http_req(*args, **kwargs)
 
     def fetch_artifacts_profile_blob(self, uri):
-        return self._fetch_content("artifacts profile blob", [uri])
+        return self._fetch_content("artifacts profile blob", [uri])[1]  # _fetch_content returns a (uri, content) tuple
 
     def fetch_manifest(self, uris):
-        def on_downloaded(downloaded_uri):
-            self.get_host_plugin().update_manifest_uri(downloaded_uri)
-            return True
+        uri, content = self._fetch_content("manifest", uris)
+        self.get_host_plugin().update_manifest_uri(uri)
+        return content
 
-        return self._fetch_content("manifest", uris, on_downloaded=on_downloaded)
+    def _fetch_content(self, download_type, uris):
+        """
+        Walks the given list of 'uris' issuing HTTP GET requests; returns a tuple with the URI and the content of the first successful request.
 
-    def _fetch_content(self, download_type, uris, on_downloaded=None):
+        The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
+        (e.g. "manifest", "extension package", etc).
+        """
         host_ga_plugin = self.get_host_plugin()
 
         direct_download = lambda uri: self.fetch(uri)[0]
@@ -627,9 +620,16 @@ class WireClient(object):
             response, _ = self.fetch(request_uri, request_headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
             return response
 
-        return self._download_with_fallback_channel(download_type, uris, direct_download_function=direct_download, hgap_download_function=hgap_download, on_downloaded=on_downloaded)
+        return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_extension(self, uris, destination, on_downloaded=None):
+    def download_extension(self, uris, destination, on_downloaded=lambda: True):
+        """
+        Walks the given list of 'uris' issuing HTTP GET requests and saves the content of the first successful request to 'destination'.
+
+        When the download is successful, this method invokes the 'on_downloaded' callback function, which can be used to process the results of the download.
+        on_downloaded() should return True on success and False on failure (it should not raise any exceptions); ff the return value is False, the download
+        is considered a failure and the next URI is tried.
+        """
         host_ga_plugin = self.get_host_plugin()
 
         direct_download = lambda uri: self.stream(uri, destination, headers=None, use_proxy=True)
@@ -638,73 +638,92 @@ class WireClient(object):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, host_ga_plugin.manifest_uri)
             return self.stream(request_uri, destination, headers=request_headers, use_proxy=False)
 
-        self._download_with_fallback_channel("extension", uris, direct_download_function=direct_download, hgap_download_function=hgap_download, destination=destination, on_downloaded=on_downloaded)
+        self._download_with_fallback_channel("extension package", uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
 
-    def _download_with_fallback_channel(self, download_type, uris, direct_download_function, hgap_download_function, destination=None, on_downloaded=None):
+    def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=lambda: True):
+        """
+        Walks the given list of 'uris' issuing HTTP GET requests, attempting to download the content of each URI. The download is done using both the default and
+        the fallback channels, until one of them succeeds. The 'direct_download' and 'hgap_download' functions define the logic to do direct calls to the URI or
+        to use the HostGAPlugin as a proxy for the download. Initially the default channel is the direct download and the fallback channel is the HostGAPlugin,
+        but the default can be depending on the success/failure of each channel (see _download_using_appropriate_channel() for the logic to do this).
+
+        The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
+        (e.g. "manifest", "extension package", etc).
+
+        When the download is successful download_extension() invokes the 'on_downloaded' function, which can be used to process the results of the download. This
+        function should return True on success, and False on failure (it should not raise any exceptions). If the return value is False, the download is considered
+        a failure and the next URI is tried.
+
+        When the download succeeds, this method returns a (uri, response) tuple where the first item is the URI of the successful download and the second item is
+        the response returned by the successful channel (i.e. one of direct_download and hgap_download).
+
+        This method enforces a timeout (_DOWNLOAD_TIMEOUT) on the download and raises an exception if the limit is exceeded.
+        """
         logger.verbose("Downloading {0}", download_type)
         start_time = datetime.now()
 
         uris_shuffled = uris
         random.shuffle(uris_shuffled)
-        most_recent_error = None
+        most_recent_error = "None"
 
         for index, uri in enumerate(uris_shuffled):
             elapsed = datetime.now() - start_time
             if elapsed > _DOWNLOAD_TIMEOUT:
-                message = "Timeout downloading {0}. Elapsed: {1} URIs tried: {2}/{3}".format(download_type, elapsed, index, len(uris))
+                message = "Timeout downloading {0}. Elapsed: {1} URIs tried: {2}/{3}. Last error: {4}".format(download_type, elapsed, index, len(uris), ustr(most_recent_error))
                 raise ExtensionDownloadError(message, code=ExtensionErrorCodes.PluginManifestDownloadError)
 
             try:
                 # Disable W0640: OK to use uri in a lambda within the loop's body
-                response = self._download_using_appropriate_channel(lambda: direct_download_function(uri), lambda: hgap_download_function(uri))  # pylint: disable=W0640
+                response = self._download_using_appropriate_channel(lambda: direct_download(uri), lambda: hgap_download(uri))  # pylint: disable=W0640
 
-                if on_downloaded is not None and not on_downloaded(uri):
-                    continue
+                if on_downloaded():
+                    return uri, response
 
-                return response
             except Exception as exception:
                 most_recent_error = exception
-                if destination is not None and os.path.exists(destination):
+
+        raise ExtensionDownloadError("Failed to download {0} from all URIs. Last error: {1}".format(download_type, ustr(most_recent_error)), code=ExtensionErrorCodes.PluginManifestDownloadError)
+
+    def stream(self, uri, destination, headers=None, use_proxy=None):
+        """
+        Downloads the content of the given 'uri' and saves it to the 'destination' file.
+        """
+        try:
+            logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
+
+            response = self._fetch_response(uri, headers, use_proxy)
+            if response is not None and not restutil.request_failed(response):
+                chunk_size = 1024 * 1024  # 1MB buffer
+                with open(destination, 'wb', chunk_size) as destination_fh:
+                    complete = False
+                    while not complete:
+                        chunk = response.read(chunk_size)
+                        destination_fh.write(chunk)
+                        complete = len(chunk) < chunk_size
+            return ""
+        except:
+            if os.path.exists(destination):  # delete the destination file, in case we did a partial download
+                try:
                     os.remove(destination)
+                except Exception as exception:
+                    logger.warn("Can't delete {0}: {1}", destination, ustr(exception))
+            raise
 
-        raise ExtensionDownloadError("Failed to download {0} from all URIs: {1}".format(download_type, ustr(most_recent_error)), code=ExtensionErrorCodes.PluginManifestDownloadError)
-
-    def stream(self, uri, destination, headers=None, use_proxy=None, max_retry=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, retry_codes=None, ok_codes=None):
         """
-        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
-        """
-        logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
-
-        response = self._fetch_response(uri, headers, use_proxy,  max_retry=max_retry)
-        if response is not None and not restutil.request_failed(response):
-            chunk_size = 1024 * 1024  # 1MB buffer
-            with open(destination, 'wb', chunk_size) as destination_fh:
-                complete = False
-                while not complete:
-                    chunk = response.read(chunk_size)
-                    destination_fh.write(chunk)
-                    complete = len(chunk) < chunk_size
-
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None, retry_codes=None, ok_codes=None):
-        """
-        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
-
         Returns a tuple with the content and headers of the response. The headers are a list of (name, value) tuples.
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response_headers = None
-        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, retry_codes=retry_codes, ok_codes=ok_codes)
+        response = self._fetch_response(uri, headers, use_proxy, retry_codes=retry_codes, ok_codes=ok_codes)
         if response is not None and not restutil.request_failed(response, ok_codes=ok_codes):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
             response_headers = response.getheaders()
         return content, response_headers
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None, retry_codes=None, ok_codes=None):
-        """
-        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
-        """
+    def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None):
         resp = None
         try:
             resp = self.call_storage_service(
@@ -712,7 +731,6 @@ class WireClient(object):
                 uri,
                 headers=headers,
                 use_proxy=use_proxy,
-                max_retry=max_retry,
                 retry_codes=retry_codes)
 
             host_plugin = self.get_host_plugin()
@@ -882,18 +900,18 @@ class WireClient(object):
                              log_event=True)
                 raise
 
-    def _download_using_appropriate_channel(self, direct_download_function, hgap_download_function):
+    def _download_using_appropriate_channel(self, direct_download, hgap_download):
         """
         Does a download using both the default and fallback channels. By default, the primary channel is direct, host channel is the fallback.
         We call the primary channel first and return on success. If primary fails, we try the fallback. If fallback fails,
         we return and *don't* switch the default channel. If fallback succeeds, we change the default channel.
         """
-        hgap_download_function_with_retry = lambda: self._call_hostplugin_with_container_check(hgap_download_function)
+        hgap_download_function_with_retry = lambda: self._call_hostplugin_with_container_check(hgap_download)
 
         if HostPluginProtocol.is_default_channel:
-            primary_channel, secondary_channel = hgap_download_function_with_retry, direct_download_function
+            primary_channel, secondary_channel = hgap_download_function_with_retry, direct_download
         else:
-            primary_channel, secondary_channel = direct_download_function, hgap_download_function_with_retry
+            primary_channel, secondary_channel = direct_download, hgap_download_function_with_retry
 
         try:
             return primary_channel()
@@ -1108,9 +1126,12 @@ class WireClient(object):
         }
 
     def get_header_for_cert(self):
-        trans_cert_file = os.path.join(conf.get_lib_dir(),
-                                       TRANSPORT_CERT_FILE_NAME)
-        content = self.fetch_cache(trans_cert_file)
+        trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+        try:
+            content = fileutil.read_file(trans_cert_file)
+        except IOError as e:
+            raise ProtocolError("Failed to read {0}: {1}".format(trans_cert_file, e))
+
         cert = get_bytes_from_pem(content)
         return {
             "x-ms-agent-name": "WALinuxAgent",
