@@ -46,11 +46,13 @@ _PLACEHOLDER_FILE_NAME = 'GoalState.1.xml'
 _MAX_ARCHIVED_STATES = 50
 
 _CACHE_PATTERNS = [
+    #
+    # Note that SharedConfig.xml is not included here; this file is used by other components (Azsec and Singularity/HPC Infiniband)
+    #
     re.compile(r"^VmSettings\.\d+\.json$"),
     re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
     re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE),
-    re.compile(r"^SharedConfig\.xml$", re.IGNORECASE),
     re.compile(r"^HostingEnvironmentConfig\.xml$", re.IGNORECASE),
     re.compile(r"^RemoteAccess\.xml$", re.IGNORECASE),
     re.compile(r"^waagent_status\.\d+\.json$"),
@@ -78,12 +80,12 @@ _GOAL_STATE_FILE_NAME = "GoalState.xml"
 _VM_SETTINGS_FILE_NAME = "VmSettings.json"
 _CERTIFICATES_FILE_NAME = "Certificates.json"
 _HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
-_SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 _REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
 _EXT_CONF_FILE_NAME = "ExtensionsConfig.xml"
 _MANIFEST_FILE_NAME = "{0}.manifest.xml"
 
 AGENT_STATUS_FILE = "waagent_status.json"
+SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 
 # TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL.
 # @total_ordering first appeared in Python 2.7 and 3.2
@@ -166,9 +168,10 @@ class StateArchiver(object):
     def purge_legacy_goal_state_history():
         lib_dir = conf.get_lib_dir()
         for current_file in os.listdir(lib_dir):
+            # Don't remove the placeholder goal state file.
             # TODO: See comment in GoalStateHistory._save_placeholder and remove this code when no longer needed
             if current_file == _PLACEHOLDER_FILE_NAME:
-                return
+                continue
             # END TODO
             full_path = os.path.join(lib_dir, current_file)
             for pattern in _CACHE_PATTERNS:
@@ -302,4 +305,4 @@ class GoalStateHistory(object):
         self.save(text, _HOSTING_ENV_FILE_NAME)
 
     def save_shared_conf(self, text):
-        self.save(text, _SHARED_CONF_FILE_NAME)
+        self.save(text, SHARED_CONF_FILE_NAME)
