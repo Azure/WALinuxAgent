@@ -74,10 +74,9 @@ Before=slices.target
 CPUAccounting=yes
 CPUQuota={cpu_quota}
 MemoryAccounting=yes
-MemoryLimit={memory_limit}
 """
 _LOGCOLLECTOR_CPU_QUOTA = "5%"
-_LOGCOLLECTOR_MEMORY_LIMIT = "30M"  # K for kb, M for mb
+LOGCOLLECTOR_MEMORY_LIMIT = 30 * 1024 ** 2  # 30Mb
 
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
@@ -349,8 +348,7 @@ class CGroupConfigurator(object):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if not os.path.exists(logcollector_slice):
-                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA,
-                                                                         memory_limit=_LOGCOLLECTOR_MEMORY_LIMIT)
+                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA)
 
                 files_to_create.append((logcollector_slice, slice_contents))
 
@@ -652,8 +650,9 @@ class CGroupConfigurator(object):
                     current = process
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
-                    # Process started by agent will have a marker and check if that marker found in process environment.
-                    if current == 0 and not self.__is_process_descendant_of_the_agent(process):
+                    # Verify if Process started by agent based on the marker found in process environment or process is in Zombie state.
+                    # If so, consider it as valid process in agent cgroup.
+                    if current == 0 and not (self.__is_process_descendant_of_the_agent(process) or self.__is_zombie_process(process)):
                         unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
@@ -702,6 +701,23 @@ class CGroupConfigurator(object):
                         if environ and environ[-1] == '\x00':
                             environ = environ[:-1]
                         return "{0}={1}".format(shellutil.PARENT_PROCESS_NAME, shellutil.AZURE_GUEST_AGENT) in environ
+            except Exception:
+                pass
+            return False
+
+        @staticmethod
+        def __is_zombie_process(pid):
+            """
+            Returns True if process is in Zombie state otherwise False.
+
+            Ex: cat /proc/18171/stat
+            18171 (python3) S 18103 18103 18103 0 -1 4194624 57736 64902 0 3
+            """
+            try:
+                stat = '/proc/{0}/stat'.format(pid)
+                if os.path.exists(stat):
+                    with open(stat, "r") as stat_file:
+                        return stat_file.read().split()[2] == 'Z'
             except Exception:
                 pass
             return False
