@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
+import datetime
 import glob
 import json
 import os.path
@@ -41,6 +42,7 @@ from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloa
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, ExtHandlerStatus, \
     ExtensionStatus, ExtensionRequestedState
+from azurelinuxagent.common.protocol import wire
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
 
@@ -3302,9 +3304,13 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
         with mock_wire_protocol(self.test_data, http_get_handler=manifest_location_handler) as protocol:
             ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
 
-            with self.assertRaises(ExtensionDownloadError):
-                protocol.client.fetch_manifest(ext_handlers[0].manifest_uris,
-                    timeout_in_minutes=0, timeout_in_ms=200)
+            download_timeout = wire._DOWNLOAD_TIMEOUT
+            wire._DOWNLOAD_TIMEOUT = datetime.timedelta(minutes=0)
+            try:
+                with self.assertRaises(ExtensionDownloadError):
+                    protocol.client.fetch_manifest(ext_handlers[0].manifest_uris)
+            finally:
+                wire._DOWNLOAD_TIMEOUT = download_timeout
 
 
 # New test cases should be added here.This class uses mock_wire_protocol

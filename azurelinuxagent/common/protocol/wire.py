@@ -20,19 +20,20 @@ import json
 import os
 import random
 import time
-import xml.sax.saxutils as saxutils
+
 from collections import defaultdict
 from datetime import datetime, timedelta
+from xml.sax import saxutils
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp, SupportedFeatureNames
 from azurelinuxagent.common.datacontract import validate_param
 from azurelinuxagent.common.event import add_event, WALAEventOperation, report_event, \
     CollectOrReportEventDebugInfo, add_periodic
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-    ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
+    ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -57,6 +58,8 @@ ENDPOINT_FINE_NAME = "WireServer"
 SHORT_WAITING_INTERVAL = 1  # 1 second
 
 MAX_EVENT_BUFFER_SIZE = 2 ** 16 - 2 ** 10
+
+_DOWNLOAD_TIMEOUT = timedelta(minutes=5)
 
 
 class UploadError(HttpError):
@@ -126,25 +129,6 @@ class WireProtocol(DataContract):
 
     def get_goal_state(self):
         return self.client.get_goal_state()
-
-    def _download_ext_handler_pkg_through_host(self, uri, destination):
-        host = self.client.get_host_plugin()
-        uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-        success = self.client.stream(uri, destination, headers=headers, use_proxy=False, max_retry=1)  # set max_retry to 1 because extension packages already have a retry loop (see ExtHandlerInstance.download())
-        return success
-
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):  # pylint: disable=W0613
-        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True, max_retry=1)
-        # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
-        # in the lambda.
-        host_func = lambda: self._download_ext_handler_pkg_through_host(uri, destination)
-
-        try:
-            success = self.client.send_request_using_appropriate_channel(direct_func, host_func) is not None
-        except Exception:
-            success = False
-
-        return success
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
@@ -589,8 +573,7 @@ class WireClient(object):
             raise
 
         except Exception as e:
-            raise ProtocolError("[Wireserver Exception] {0}".format(
-                ustr(e)))
+            raise ProtocolError("[Wireserver Exception] {0}".format(ustr(e)))
 
         return resp
 
@@ -602,18 +585,8 @@ class WireClient(object):
         return xml_text
 
     def fetch_config(self, uri, headers):
-        resp = self.call_wireserver(restutil.http_get,
-                                    uri,
-                                    headers=headers)
+        resp = self.call_wireserver(restutil.http_get, uri, headers=headers)
         return self.decode_config(resp.read())
-
-    def fetch_cache(self, local_file):
-        if not os.path.isfile(local_file):
-            raise ProtocolError("{0} is missing.".format(local_file))
-        try:
-            return fileutil.read_file(local_file)
-        except IOError as e:
-            raise ProtocolError("Failed to read cache: {0}".format(e))
 
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
@@ -623,95 +596,134 @@ class WireClient(object):
 
         return http_req(*args, **kwargs)
 
-    def fetch_manifest_through_host(self, uri):
-        host = self.get_host_plugin()
-        uri, headers = host.get_artifact_request(uri)
-        response, _ = self.fetch(uri, headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
-        return response
+    def fetch_artifacts_profile_blob(self, uri):
+        return self._fetch_content("artifacts profile blob", [uri])[1]  # _fetch_content returns a (uri, content) tuple
 
-    def fetch_manifest(self, version_uris, timeout_in_minutes=5, timeout_in_ms=0):
-        logger.verbose("Fetch manifest")
-        version_uris_shuffled = version_uris
-        random.shuffle(version_uris_shuffled)
+    def fetch_manifest(self, uris):
+        uri, content = self._fetch_content("manifest", uris)
+        self.get_host_plugin().update_manifest_uri(uri)
+        return content
 
-        uris_tried = 0
+    def _fetch_content(self, download_type, uris):
+        """
+        Walks the given list of 'uris' issuing HTTP GET requests; returns a tuple with the URI and the content of the first successful request.
+
+        The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
+        (e.g. "manifest", "extension package", etc).
+        """
+        host_ga_plugin = self.get_host_plugin()
+
+        direct_download = lambda uri: self.fetch(uri)[0]
+
+        def hgap_download(uri):
+            request_uri, request_headers = host_ga_plugin.get_artifact_request(uri)
+            response, _ = self.fetch(request_uri, request_headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
+            return response
+
+        return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
+
+    def download_extension(self, uris, destination, on_downloaded=lambda: True):
+        """
+        Walks the given list of 'uris' issuing HTTP GET requests and saves the content of the first successful request to 'destination'.
+
+        When the download is successful, this method invokes the 'on_downloaded' callback function, which can be used to process the results of the download.
+        on_downloaded() should return True on success and False on failure (it should not raise any exceptions); ff the return value is False, the download
+        is considered a failure and the next URI is tried.
+        """
+        host_ga_plugin = self.get_host_plugin()
+
+        direct_download = lambda uri: self.stream(uri, destination, headers=None, use_proxy=True)
+
+        def hgap_download(uri):
+            request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, host_ga_plugin.manifest_uri)
+            return self.stream(request_uri, destination, headers=request_headers, use_proxy=False)
+
+        self._download_with_fallback_channel("extension package", uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
+
+    def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=lambda: True):
+        """
+        Walks the given list of 'uris' issuing HTTP GET requests, attempting to download the content of each URI. The download is done using both the default and
+        the fallback channels, until one of them succeeds. The 'direct_download' and 'hgap_download' functions define the logic to do direct calls to the URI or
+        to use the HostGAPlugin as a proxy for the download. Initially the default channel is the direct download and the fallback channel is the HostGAPlugin,
+        but the default can be depending on the success/failure of each channel (see _download_using_appropriate_channel() for the logic to do this).
+
+        The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
+        (e.g. "manifest", "extension package", etc).
+
+        When the download is successful download_extension() invokes the 'on_downloaded' function, which can be used to process the results of the download. This
+        function should return True on success, and False on failure (it should not raise any exceptions). If the return value is False, the download is considered
+        a failure and the next URI is tried.
+
+        When the download succeeds, this method returns a (uri, response) tuple where the first item is the URI of the successful download and the second item is
+        the response returned by the successful channel (i.e. one of direct_download and hgap_download).
+
+        This method enforces a timeout (_DOWNLOAD_TIMEOUT) on the download and raises an exception if the limit is exceeded.
+        """
+        logger.verbose("Downloading {0}", download_type)
         start_time = datetime.now()
-        for version_uri in version_uris_shuffled:
 
-            if datetime.now() - start_time > timedelta(minutes=timeout_in_minutes, milliseconds=timeout_in_ms):
-                logger.warn("Agent timed-out after {0} minutes while fetching extension manifests. {1}/{2} uris tried.",
-                    timeout_in_minutes, uris_tried, len(version_uris))
-                break
+        uris_shuffled = uris
+        random.shuffle(uris_shuffled)
+        most_recent_error = "None"
 
-            # GA expects a location and failoverLocation in ExtensionsConfig, but
-            # this is not always the case. See #1147.
-            if version_uri is None:
-                logger.verbose('The specified manifest URL is empty, ignored.')
-                continue
-
-            # Disable W0640: OK to use version_uri in a lambda within the loop's body
-            direct_func = lambda: self.fetch(version_uri)[0]  # pylint: disable=W0640
-            # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
-            # in the lambda.
-            # Disable W0640: OK to use version_uri in a lambda within the loop's body
-            host_func = lambda: self.fetch_manifest_through_host(version_uri)  # pylint: disable=W0640
+        for index, uri in enumerate(uris_shuffled):
+            elapsed = datetime.now() - start_time
+            if elapsed > _DOWNLOAD_TIMEOUT:
+                message = "Timeout downloading {0}. Elapsed: {1} URIs tried: {2}/{3}. Last error: {4}".format(download_type, elapsed, index, len(uris), ustr(most_recent_error))
+                raise ExtensionDownloadError(message, code=ExtensionErrorCodes.PluginManifestDownloadError)
 
             try:
-                manifest = self.send_request_using_appropriate_channel(direct_func, host_func)
-                if manifest is not None:
-                    host = self.get_host_plugin()
-                    host.update_manifest_uri(version_uri)
-                    return manifest
-            except Exception as error:
-                logger.warn("Failed to fetch manifest from {0}. Error: {1}", version_uri, ustr(error))
+                # Disable W0640: OK to use uri in a lambda within the loop's body
+                response = self._download_using_appropriate_channel(lambda: direct_download(uri), lambda: hgap_download(uri))  # pylint: disable=W0640
 
-            uris_tried += 1
+                if on_downloaded():
+                    return uri, response
 
-        raise ExtensionDownloadError("Failed to fetch manifest from all sources")
+            except Exception as exception:
+                most_recent_error = exception
 
-    def stream(self, uri, destination, headers=None, use_proxy=None, max_retry=None):
+        raise ExtensionDownloadError("Failed to download {0} from all URIs. Last error: {1}".format(download_type, ustr(most_recent_error)), code=ExtensionErrorCodes.PluginManifestDownloadError)
+
+    def stream(self, uri, destination, headers=None, use_proxy=None):
         """
-        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
+        Downloads the content of the given 'uri' and saves it to the 'destination' file.
         """
-        success = False
-        logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
+        try:
+            logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
 
-        response = self._fetch_response(uri, headers, use_proxy,  max_retry=max_retry)
-        if response is not None and not restutil.request_failed(response):
-            chunk_size = 1024 * 1024  # 1MB buffer
-            try:
+            response = self._fetch_response(uri, headers, use_proxy)
+            if response is not None and not restutil.request_failed(response):
+                chunk_size = 1024 * 1024  # 1MB buffer
                 with open(destination, 'wb', chunk_size) as destination_fh:
                     complete = False
                     while not complete:
                         chunk = response.read(chunk_size)
                         destination_fh.write(chunk)
                         complete = len(chunk) < chunk_size
-                success = True
-            except Exception as error:
-                logger.error('Error streaming {0} to {1}: {2}'.format(uri, destination, ustr(error)))
+            return ""
+        except:
+            if os.path.exists(destination):  # delete the destination file, in case we did a partial download
+                try:
+                    os.remove(destination)
+                except Exception as exception:
+                    logger.warn("Can't delete {0}: {1}", destination, ustr(exception))
+            raise
 
-        return success
-
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True, max_retry=None, retry_codes=None, ok_codes=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True, retry_codes=None, ok_codes=None):
         """
-        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
-
         Returns a tuple with the content and headers of the response. The headers are a list of (name, value) tuples.
         """
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response_headers = None
-        response = self._fetch_response(uri, headers, use_proxy, max_retry=max_retry, retry_codes=retry_codes, ok_codes=ok_codes)
+        response = self._fetch_response(uri, headers, use_proxy, retry_codes=retry_codes, ok_codes=ok_codes)
         if response is not None and not restutil.request_failed(response, ok_codes=ok_codes):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
             response_headers = response.getheaders()
         return content, response_headers
 
-    def _fetch_response(self, uri, headers=None, use_proxy=None, max_retry=None, retry_codes=None, ok_codes=None):
-        """
-        max_retry indicates the maximum number of retries for the HTTP request; None indicates that the default value should be used
-        """
+    def _fetch_response(self, uri, headers=None, use_proxy=None, retry_codes=None, ok_codes=None):
         resp = None
         try:
             resp = self.call_storage_service(
@@ -719,7 +731,6 @@ class WireClient(object):
                 uri,
                 headers=headers,
                 use_proxy=use_proxy,
-                max_retry=max_retry,
                 retry_codes=retry_codes)
 
             host_plugin = self.get_host_plugin()
@@ -743,10 +754,7 @@ class WireClient(object):
             msg = "Fetch failed: {0}".format(error)
             logger.warn(msg)
             report_event(op=WALAEventOperation.HttpGet, is_success=False, message=msg, log_event=False)
-
-            if isinstance(error, (InvalidContainerError, ResourceGoneError)):
-                # These are retryable errors that should force a goal state refresh in the host plugin
-                raise
+            raise
 
         return resp
 
@@ -844,14 +852,9 @@ class WireClient(object):
         """
         Calls host_func on host channel and accounts for stale resource (ResourceGoneError or InvalidContainerError).
         If stale, it refreshes the goal state and retries host_func.
-        This method can throw, so the callers need to handle that.
         """
         try:
-            ret = host_func()
-            if ret in (None, False):
-                raise Exception("Request failed using the host channel.")
-
-            return ret
+            return host_func()
         except (ResourceGoneError, InvalidContainerError) as error:
             host_plugin = self.get_host_plugin()
 
@@ -870,9 +873,6 @@ class WireClient(object):
 
             try:
                 ret = host_func()
-
-                if ret in (None, False):
-                    raise Exception("Request failed using the host channel after goal state refresh.")
 
                 msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
                       "ContainerId changed from {0} to {1}, " \
@@ -900,70 +900,36 @@ class WireClient(object):
                              log_event=True)
                 raise
 
-    def __send_request_using_host_channel(self, host_func):
+    def _download_using_appropriate_channel(self, direct_download, hgap_download):
         """
-        Calls the host_func on host channel with retries for stale goal state and handles any exceptions, consistent with the caller for direct channel.
-        At the time of writing, host_func internally calls either:
-        1) WireClient.stream which returns a boolean, or
-        2) WireClient.fetch which returns None or a HTTP response.
-        This method returns either None (failure case where host_func returned None or False), True or an HTTP response.
+        Does a download using both the default and fallback channels. By default, the primary channel is direct, host channel is the fallback.
+        We call the primary channel first and return on success. If primary fails, we try the fallback. If fallback fails,
+        we return and *don't* switch the default channel. If fallback succeeds, we change the default channel.
         """
-        ret = None
-        try:
-            ret = self._call_hostplugin_with_container_check(host_func)
-        except Exception as error:
-            logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the host channel. Error: {0}".format(ustr(error)))
-
-        return ret
-
-    @staticmethod
-    def __send_request_using_direct_channel(direct_func):
-        """
-        Calls the direct_func on direct channel and handles any exceptions, consistent with the caller for host channel.
-        At the time of writing, direct_func internally calls either:
-        1) WireClient.stream which returns a boolean, or
-        2) WireClient.fetch which returns None or a HTTP response.
-        This method returns either None (failure case where direct_func returned None or False), True or an HTTP response.
-        """
-        ret = None
-        try:
-            ret = direct_func()
-
-            if ret in (None, False):
-                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel.")
-                return None
-        except Exception as error:
-            logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel. Error: {0}".format(ustr(error)))
-
-        return ret
-
-    def send_request_using_appropriate_channel(self, direct_func, host_func):
-        """
-        Determines which communication channel to use. By default, the primary channel is direct, host channel is secondary.
-        We call the primary channel first and return on success. If primary fails, we try secondary. If secondary fails,
-        we return and *don't* switch the default channel. If secondary succeeds, we change the default channel.
-        This method doesn't raise since the calls to direct_func and host_func are already wrapped and handle any exceptions.
-        Possible return values are manifest, artifacts profile, True or None.
-        """
-        direct_channel = lambda: self.__send_request_using_direct_channel(direct_func)
-        host_channel = lambda: self.__send_request_using_host_channel(host_func)
+        hgap_download_function_with_retry = lambda: self._call_hostplugin_with_container_check(hgap_download)
 
         if HostPluginProtocol.is_default_channel:
-            primary_channel, secondary_channel = host_channel, direct_channel
+            primary_channel, secondary_channel = hgap_download_function_with_retry, direct_download
         else:
-            primary_channel, secondary_channel = direct_channel, host_channel
+            primary_channel, secondary_channel = direct_download, hgap_download_function_with_retry
 
-        ret = primary_channel()
-        if ret is not None:
-            return ret
+        try:
+            return primary_channel()
+        except Exception as exception:
+            primary_channel_error = exception
 
-        ret = secondary_channel()
-        if ret is not None:
+        try:
+            return_value = secondary_channel()
+
+            # Since the secondary channel succeeded, flip the default channel
             HostPluginProtocol.is_default_channel = not HostPluginProtocol.is_default_channel
-            message = "Default channel changed to {0} channel.".format("HostGA" if HostPluginProtocol.is_default_channel else "direct")
+            message = "Default channel changed to {0} channel.".format("HostGAPlugin" if HostPluginProtocol.is_default_channel else "Direct")
             logger.info(message)
             add_event(AGENT_NAME, op=WALAEventOperation.DefaultChannelChange, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
-        return ret
+
+            return return_value
+        except Exception as exception:
+            raise HttpError("Download failed both on the primary and fallback channels. Primary: [{0}] Fallback: [{1}]".format(ustr(primary_channel_error), ustr(exception)))
 
     def upload_status_blob(self):
         extensions_goal_state = self.get_goal_state().extensions_goal_state
@@ -1160,9 +1126,12 @@ class WireClient(object):
         }
 
     def get_header_for_cert(self):
-        trans_cert_file = os.path.join(conf.get_lib_dir(),
-                                       TRANSPORT_CERT_FILE_NAME)
-        content = self.fetch_cache(trans_cert_file)
+        trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
+        try:
+            content = fileutil.read_file(trans_cert_file)
+        except IOError as e:
+            raise ProtocolError("Failed to read {0}: {1}".format(trans_cert_file, e))
+
         cert = get_bytes_from_pem(content)
         return {
             "x-ms-agent-name": "WALinuxAgent",
@@ -1181,10 +1150,6 @@ class WireClient(object):
         return self.get_goal_state().extensions_goal_state.on_hold
 
     def upload_logs(self, content):
-        host_func = lambda: self._upload_logs_through_host(content)
-        return self._call_hostplugin_with_container_check(host_func)
-
-    def _upload_logs_through_host(self, content):
         host = self.get_host_plugin()
         return host.put_vm_log(content)
 

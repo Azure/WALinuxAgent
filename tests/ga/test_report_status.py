@@ -82,15 +82,18 @@ class ReportStatusTestCase(AgentTestCase):
                     self.assertEqual(0, logger_warn.call_count, "UpdateHandler._report_status() should not report WARNINGS when there are no errors")
 
                     with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", side_effect=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
+                        get_warnings = lambda: [args[0] for args, _ in logger_warn.call_args_list if "TEST EXCEPTION" in args[0]]
+
                         update_handler._report_status(exthandlers_handler)
                         update_handler._report_status(exthandlers_handler)
                         update_handler._report_status(exthandlers_handler)
-                        self.assertEqual(1, logger_warn.call_count, "UpdateHandler._report_status() should report only 1 WARNING when there are multiple errors within the same goal state")
+
+                        self.assertEqual(1, len(get_warnings()), "UpdateHandler._report_status() should report only 1 WARNING when there are multiple errors within the same goal state")
 
                         exthandlers_handler.protocol.mock_wire_data.set_incarnation(999)
                         update_handler._try_update_goal_state(exthandlers_handler.protocol)
                         update_handler._report_status(exthandlers_handler)
-                        self.assertEqual(2, logger_warn.call_count, "UpdateHandler._report_status() should continue reporting errors after a new goal state")
+                        self.assertEqual(2, len(get_warnings()), "UpdateHandler._report_status() should continue reporting errors after a new goal state")
 
     def test_update_handler_should_add_fast_track_to_supported_features_when_it_is_supported(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
