@@ -117,6 +117,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name == "uos":
         return RedhatOSUtil()
 
+    if distro_name == "anolis":
+        return RedhatOSUtil()
+
     if distro_name == "freebsd":
         return FreeBSDOSUtil()
 
