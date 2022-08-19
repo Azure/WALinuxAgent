@@ -37,11 +37,9 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.restapi import DataContract, ExtHandlerPackage, \
-    ExtHandlerPackageList, ProvisionStatus, VMInfo, VMStatus
+from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
-from azurelinuxagent.common.utils.archive import _MANIFEST_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
@@ -110,22 +108,6 @@ class WireProtocol(DataContract):
     def get_certs(self):
         certificates = self.client.get_certs()
         return certificates.cert_list
-
-    def get_vmagent_manifests(self):
-        goal_state = self.client.get_goal_state()
-        ext_conf = goal_state.extensions_goal_state
-        return ext_conf.agent_manifests, goal_state.incarnation
-
-    def get_vmagent_pkgs(self, vmagent_manifest):
-        goal_state = self.client.get_goal_state()
-        ga_manifest = self.client.fetch_gafamily_manifest(vmagent_manifest, goal_state)
-        valid_pkg_list = ga_manifest.pkg_list
-        return valid_pkg_list
-
-    def get_ext_handler_pkgs(self, ext_handler):
-        logger.verbose("Get extension handler package")
-        man = self.client.get_ext_manifest(ext_handler)
-        return man.pkg_list
 
     def get_goal_state(self):
         return self.client.get_goal_state()
@@ -597,14 +579,14 @@ class WireClient(object):
         return http_req(*args, **kwargs)
 
     def fetch_artifacts_profile_blob(self, uri):
-        return self._fetch_content("artifacts profile blob", [uri])[1]  # _fetch_content returns a (uri, content) tuple
+        return self._fetch_content("artifacts profile blob", [uri], use_verify_header=False)[1]  # _fetch_content returns a (uri, content) tuple
 
-    def fetch_manifest(self, uris):
-        uri, content = self._fetch_content("manifest", uris)
+    def fetch_manifest(self, uris, use_verify_header):
+        uri, content = self._fetch_content("manifest", uris, use_verify_header=use_verify_header)
         self.get_host_plugin().update_manifest_uri(uri)
         return content
 
-    def _fetch_content(self, download_type, uris):
+    def _fetch_content(self, download_type, uris, use_verify_header):
         """
         Walks the given list of 'uris' issuing HTTP GET requests; returns a tuple with the URI and the content of the first successful request.
 
@@ -616,13 +598,13 @@ class WireClient(object):
         direct_download = lambda uri: self.fetch(uri)[0]
 
         def hgap_download(uri):
-            request_uri, request_headers = host_ga_plugin.get_artifact_request(uri)
+            request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header)
             response, _ = self.fetch(request_uri, request_headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
             return response
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_extension(self, uris, destination, on_downloaded=lambda: True):
+    def download_extension(self, uris, destination, use_verify_header, on_downloaded=lambda: True):
         """
         Walks the given list of 'uris' issuing HTTP GET requests and saves the content of the first successful request to 'destination'.
 
@@ -635,7 +617,7 @@ class WireClient(object):
         direct_download = lambda uri: self.stream(uri, destination, headers=None, use_proxy=True)
 
         def hgap_download(uri):
-            request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, host_ga_plugin.manifest_uri)
+            request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header, artifact_manifest_url=host_ga_plugin.manifest_uri)
             return self.stream(request_uri, destination, headers=request_headers, use_proxy=False)
 
         self._download_with_fallback_channel("extension package", uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
@@ -808,29 +790,10 @@ class WireClient(object):
             raise ProtocolError("Trying to fetch Certificates before initialization!")
         return self._goal_state.certs
 
-    def get_ext_manifest(self, ext_handler):
-        if self._goal_state is None:
-            raise ProtocolError("Trying to fetch Extension Manifest before initialization!")
-
-        try:
-            xml_text = self.fetch_manifest(ext_handler.manifest_uris)
-            self._goal_state.save_to_history(xml_text, _MANIFEST_FILE_NAME.format(ext_handler.name))
-            return ExtensionManifest(xml_text)
-        except Exception as e:
-            raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
-
     def get_remote_access(self):
         if self._goal_state is None:
             raise ProtocolError("Trying to fetch Remote Access before initialization!")
         return self._goal_state.remote_access
-
-    def fetch_gafamily_manifest(self, vmagent_manifest, goal_state):
-        try:
-            xml_text = self.fetch_manifest(vmagent_manifest.uris)
-            goal_state.save_to_history(xml_text, _MANIFEST_FILE_NAME.format(vmagent_manifest.family))
-            return ExtensionManifest(xml_text)
-        except Exception as e:
-            raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.get_endpoint())
@@ -1184,48 +1147,6 @@ class VersionInfo(object):
 
     def get_supported(self):
         return self.supported
-
-
-class ExtensionManifest(object): 
-    def __init__(self, xml_text):
-        if xml_text is None:
-            raise ValueError("ExtensionManifest is None")
-        logger.verbose("Load ExtensionManifest.xml")
-        self.pkg_list = ExtHandlerPackageList()
-        self._parse(xml_text)
-
-    def _parse(self, xml_text):
-        xml_doc = parse_doc(xml_text)
-        self._handle_packages(findall(find(xml_doc,
-                                           "Plugins"),
-                                      "Plugin"),
-                              False)
-        self._handle_packages(findall(find(xml_doc,
-                                           "InternalPlugins"),
-                                      "Plugin"),
-                              True)
-
-    def _handle_packages(self, packages, isinternal):
-        for package in packages:
-            version = findtext(package, "Version")
-
-            disallow_major_upgrade = findtext(package,
-                                              "DisallowMajorVersionUpgrade")
-            if disallow_major_upgrade is None:
-                disallow_major_upgrade = ''
-            disallow_major_upgrade = disallow_major_upgrade.lower() == "true"
-
-            uris = find(package, "Uris")
-            uri_list = findall(uris, "Uri")
-            uri_list = [gettext(x) for x in uri_list]
-            pkg = ExtHandlerPackage()
-            pkg.version = version
-            pkg.disallow_major_upgrade = disallow_major_upgrade
-            for uri in uri_list:
-                pkg.uris.append(uri)
-
-            pkg.isinternal = isinternal
-            self.pkg_list.versions.append(pkg)
 
 
 # Do not extend this class

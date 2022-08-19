@@ -10,6 +10,8 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtHandlerState
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
 from tests.tools import AgentTestCase, patch, Mock
 
 
@@ -38,6 +40,12 @@ class DownloadExtensionTestCase(AgentTestCase):
         protocol = WireProtocol("http://Microsoft.CPlat.Core.RunCommandLinux/foo-bar")
         protocol.client.get_host_plugin = Mock()
         protocol.client.get_artifact_request = Mock(return_value=(None, None))
+
+        # create a dummy goal state, since downloads are done via the GoalState class
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as p:
+            goal_state = p.get_goal_state()
+            goal_state._wire_client = protocol.client
+            protocol.client._goal_state = goal_state
 
         self.pkg = ExtHandlerPackage()
         self.pkg.uris = [

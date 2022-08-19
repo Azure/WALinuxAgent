@@ -91,7 +91,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             protocol.get_certs()
             ext_handlers = protocol.get_goal_state().extensions_goal_state.extensions
             for ext_handler in ext_handlers:
-                protocol.get_ext_handler_pkgs(ext_handler)
+                protocol.get_goal_state().fetch_extension_manifest(ext_handler.name, ext_handler.manifest_uris)
 
             crt1 = os.path.join(self.tmp_dir,
                                 '38B85D88F03D1A8E1C671EB169274C09BC4D4703.crt')
@@ -471,9 +471,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
             self.assertEqual(0, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
-            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
-            self.assertEqual(0, len(extensions_goal_state.agent_manifests),
-                             "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
+            vmagent_families = [manifest.name for manifest in extensions_goal_state.agent_families]
+            self.assertEqual(0, len(extensions_goal_state.agent_families),
+                             "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_families))
             self.assertFalse(extensions_goal_state.on_hold,
                               "Extensions On Hold is expected to be False")
 
@@ -486,9 +486,9 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
             self.assertEqual(1, len(extensions_goal_state.extensions),
                              "Unexpected number of extension handlers in the extension config: [{0}]".format(ext_handlers_names))
-            vmagent_manifests = [manifest.family for manifest in extensions_goal_state.agent_manifests]
-            self.assertEqual(2, len(extensions_goal_state.agent_manifests),
-                             "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_manifests))
+            vmagent_families = [manifest.name for manifest in extensions_goal_state.agent_families]
+            self.assertEqual(2, len(extensions_goal_state.agent_families),
+                             "Unexpected number of vmagent manifests in the extension config: [{0}]".format(vmagent_families))
             self.assertEqual("https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&sp=rw"
                              "&se=9999-01-01&sk=key1&sv=2014-02-14&sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo",
                              extensions_goal_state.status_upload_blob, "Unexpected value for status upload blob URI")
@@ -511,7 +511,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            protocol.client.download_extension([extension_url], target_file)
+            protocol.client.download_extension([extension_url], target_file, use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -533,7 +533,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            protocol.client.download_extension([extension_url], target_file)
+            protocol.client.download_extension([extension_url], target_file, use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -569,7 +569,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-                protocol.client.download_extension([extension_url], target_file)
+                protocol.client.download_extension([extension_url], target_file, use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -602,7 +602,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.download_extension([extension_url], target_file)
+                protocol.client.download_extension([extension_url], target_file, use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -625,7 +625,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            manifest = protocol.client.fetch_manifest([manifest_url])
+            manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -648,7 +648,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
 
             try:
-                manifest = protocol.client.fetch_manifest([manifest_url])
+                manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -685,7 +685,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.client.get_host_plugin()
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
-                manifest = protocol.client.fetch_manifest([manifest_url])
+                manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml)
@@ -719,7 +719,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.fetch_manifest([manifest_url])
+                protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))

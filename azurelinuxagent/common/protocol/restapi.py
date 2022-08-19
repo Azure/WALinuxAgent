@@ -68,9 +68,9 @@ class CertList(DataContract):
         self.certificates = DataContractList(Cert)
 
 
-class VMAgentManifest(object):
-    def __init__(self, family, version=None):
-        self.family = family
+class VMAgentFamily(object):
+    def __init__(self, name, version=None):
+        self.name = name
         # This is the Requested version as specified by the Goal State, it defaults to 0.0.0.0 if not specified in GS
         self.requested_version_string = VERSION_0 if version is None else version
         self.uris = []
@@ -91,7 +91,7 @@ class VMAgentManifest(object):
         return self.__str__()
 
     def __str__(self):
-        return "[family: '{0}' uris: {1}]".format(self.family, self.uris)
+        return "[name: '{0}' uris: {1}]".format(self.name, self.uris)
 
 
 class ExtensionState(object):

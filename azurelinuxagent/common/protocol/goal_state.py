@@ -21,8 +21,8 @@ import re
 import time
 import json
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -31,11 +31,11 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
-from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList
+from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList, ExtHandlerPackage, ExtHandlerPackageList
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
 
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -128,6 +128,36 @@ class GoalState(object):
     @property
     def remote_access(self):
         return self._remote_access
+
+    def fetch_agent_manifest(self, family_name, uris):
+        """
+        This is a convenience method that wraps WireClient.fetch_manifest(), but adds the required 'use_verify_header' parameter and saves
+        the manifest to the history folder.
+        """
+        return self._fetch_manifest("agent", "waagent.{0}".format(family_name), uris)
+
+    def fetch_extension_manifest(self, extension_name, uris):
+        """
+        This is a convenience method that wraps WireClient.fetch_manifest(), but adds the required 'use_verify_header' parameter and saves
+        the manifest to the history folder.
+        """
+        return self._fetch_manifest("extension", extension_name, uris)
+
+    def _fetch_manifest(self, manifest_type, name, uris):
+        try:
+            is_fast_track = self.extensions_goal_state.source == GoalStateSource.FastTrack
+            xml_text = self._wire_client.fetch_manifest(uris, use_verify_header=is_fast_track)
+            self._history.save_manifest(name, xml_text)
+            return ExtensionManifest(xml_text)
+        except Exception as e:
+            raise ProtocolError("Failed to retrieve {0} manifest. Error: {1}".format(manifest_type, ustr(e)))
+
+    def download_extension(self, uris, destination, on_downloaded=lambda: True):
+        """
+        This is a convenience method that wraps WireClient.download_extension(), but adds the required 'use_verify_header' parameter.
+        """
+        is_fast_track = self.extensions_goal_state.source == GoalStateSource.FastTrack
+        self._wire_client.download_extension(uris, destination, use_verify_header=is_fast_track, on_downloaded=on_downloaded)
 
     @staticmethod
     def update_host_plugin_headers(wire_client):
@@ -561,4 +591,47 @@ class RemoteAccess(object):
         expiration = findtext(user, "Expiration")
         remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
         return remote_access_user
+
+
+class ExtensionManifest(object):
+    def __init__(self, xml_text):
+        if xml_text is None:
+            raise ValueError("ExtensionManifest is None")
+        logger.verbose("Load ExtensionManifest.xml")
+        self.pkg_list = ExtHandlerPackageList()
+        self._parse(xml_text)
+
+    def _parse(self, xml_text):
+        xml_doc = parse_doc(xml_text)
+        self._handle_packages(findall(find(xml_doc,
+                                           "Plugins"),
+                                      "Plugin"),
+                              False)
+        self._handle_packages(findall(find(xml_doc,
+                                           "InternalPlugins"),
+                                      "Plugin"),
+                              True)
+
+    def _handle_packages(self, packages, isinternal):
+        for package in packages:
+            version = findtext(package, "Version")
+
+            disallow_major_upgrade = findtext(package,
+                                              "DisallowMajorVersionUpgrade")
+            if disallow_major_upgrade is None:
+                disallow_major_upgrade = ''
+            disallow_major_upgrade = disallow_major_upgrade.lower() == "true"
+
+            uris = find(package, "Uris")
+            uri_list = findall(uris, "Uri")
+            uri_list = [gettext(x) for x in uri_list]
+            pkg = ExtHandlerPackage()
+            pkg.version = version
+            pkg.disallow_major_upgrade = disallow_major_upgrade
+            for uri in uri_list:
+                pkg.uris.append(uri)
+
+            pkg.isinternal = isinternal
+            self.pkg_list.versions.append(pkg)
+
 

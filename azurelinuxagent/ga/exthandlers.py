@@ -949,9 +949,9 @@ class ExtHandlersHandler(object):
         if status_blob_text is None:
             status_blob_text = ""
 
-        support_multi_config = dict()
+        support_multi_config = {}
         vm_status_data = get_properties(vm_status)
-        vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
+        vm_handler_statuses = vm_status_data.get('vmAgent', {}).get('extensionHandlers')
         for handler_status in vm_handler_statuses:
             if handler_status.get('name') is not None:
                 support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
@@ -1105,7 +1105,8 @@ class ExtHandlerInstance(object):
     def decide_version(self, target_state=None, extension=None):
         self.logger.verbose("Decide which version to use")
         try:
-            pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
+            manifest = self.protocol.get_goal_state().fetch_extension_manifest(self.ext_handler.name, self.ext_handler.manifest_uris)
+            pkg_list = manifest.pkg_list
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
         except ExtensionDownloadError:
@@ -1259,7 +1260,7 @@ class ExtHandlerInstance(object):
                 self.logger.info("The existing extension package is invalid, will ignore it.")
 
         if not package_exists:
-            self.protocol.client.download_extension(self.pkg.uris, destination, on_downloaded=lambda: self._unzip_extension_package(destination, self.get_base_dir()))
+            self.protocol.get_goal_state().download_extension(self.pkg.uris, destination, on_downloaded=lambda: self._unzip_extension_package(destination, self.get_base_dir()))
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
         self.pkg_file = destination
