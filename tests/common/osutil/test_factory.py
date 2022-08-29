@@ -20,7 +20,7 @@ from azurelinuxagent.common.osutil.arch import ArchUtil
 from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
 from azurelinuxagent.common.osutil.clearlinux import ClearLinuxUtil
 from azurelinuxagent.common.osutil.coreos import CoreOSUtil
-from azurelinuxagent.common.osutil.debian import DebianOSBaseUtil, DebianOSModernUtil
+from azurelinuxagent.common.osutil.debian import DebianOSUtil
 from azurelinuxagent.common.osutil.devuan import DevuanOSUtil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.osutil.factory import _get_osutil
@@ -134,8 +134,8 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(isinstance(ret, DebianOSBaseUtil))
-        self.assertEqual(ret.get_service_name(), "waagent")
+        self.assertTrue(isinstance(ret, DebianOSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_coreos(self):
         ret = _get_osutil(distro_name="coreos",
@@ -173,19 +173,11 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertTrue(isinstance(ret, SUSE11OSUtil))
         self.assertEqual(ret.get_service_name(), "waagent")
 
-    def test_get_osutil_it_should_return_debian(self):
         ret = _get_osutil(distro_name="debian",
                           distro_code_name="",
                           distro_full_name="",
-                          distro_version="7")
-        self.assertTrue(isinstance(ret, DebianOSBaseUtil))
-        self.assertEqual(ret.get_service_name(), "waagent")
-
-        ret = _get_osutil(distro_name="debian",
-                          distro_code_name="",
-                          distro_full_name="",
-                          distro_version="8")
-        self.assertTrue(isinstance(ret, DebianOSModernUtil))
+                          distro_version="")
+        self.assertTrue(isinstance(ret, DebianOSUtil))
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_devuan(self):
