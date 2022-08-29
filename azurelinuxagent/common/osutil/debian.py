@@ -13,27 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.6+ and Openssl 1.0+
+# Requires Python 3.7+ and Openssl 1.0+
 #
 
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
-class DebianOSBaseUtil(DefaultOSUtil):
+class DebianOSUtil(DefaultOSUtil):
 
     def __init__(self):
-        super(DebianOSBaseUtil, self).__init__()
+        super().__init__()
         self.jit_enabled = True
+        self.service_name = self.get_service_name()
+
+    @staticmethod
+    def get_service_name():
+        return "walinuxagent"
 
     def restart_ssh_service(self):
         return shellutil.run("systemctl --job-mode=ignore-dependencies try-reload-or-restart ssh", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("service azurelinuxagent stop", chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("service azurelinuxagent start", chk_err=False)
+        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
 
     def start_network(self):
         pass
@@ -46,21 +51,3 @@ class DebianOSBaseUtil(DefaultOSUtil):
 
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
-
-
-class DebianOSModernUtil(DebianOSBaseUtil):
-
-    def __init__(self):
-        super(DebianOSModernUtil, self).__init__()
-        self.jit_enabled = True
-        self.service_name = self.get_service_name()
-
-    @staticmethod
-    def get_service_name():
-        return "walinuxagent"
-
-    def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
-
-    def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)

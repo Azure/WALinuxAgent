@@ -25,7 +25,7 @@ from .arch import ArchUtil
 from .bigip import BigIpOSUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
-from .debian import DebianOSBaseUtil, DebianOSModernUtil
+from .debian import DebianOSUtil
 from .default import DefaultOSUtil
 from .devuan import DevuanOSUtil
 from .freebsd import FreeBSDOSUtil
@@ -84,7 +84,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         return AlpineOSUtil()
 
     if distro_name == "kali":
-        return DebianOSBaseUtil()
+        return DebianOSUtil()
 
     if distro_name in ("flatcar", "coreos") or distro_code_name in ("flatcar", "coreos"):
         return CoreOSUtil()
@@ -98,10 +98,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         return SUSEOSUtil()
 
     if distro_name == "debian":
-        if "sid" in distro_version or Version(distro_version) > Version("7"):
-            return DebianOSModernUtil()
-
-        return DebianOSBaseUtil()
+        return DebianOSUtil()
 
     # Devuan support only works with v4+ 
     # Reason is that Devuan v4 (Chimaera) uses python v3.9, in which the 
