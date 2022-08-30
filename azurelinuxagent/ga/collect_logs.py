@@ -336,18 +336,14 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
 
     def _verify_memory_limit(self, metrics):
         current_usage = 0
-        max_usage = 0
         for metric in metrics:
             if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
                 current_usage += metric.value
             elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
                 current_usage += metric.value
-            elif metric.counter == MetricsCounter.MAX_MEM_USAGE:
-                max_usage = metric.value
 
-        current_max = max(current_usage, max_usage)
-        if current_max > LOGCOLLECTOR_MEMORY_LIMIT:
-            msg = "Log collector memory limit {0} bytes exceeded. The max reported usage is {1} bytes.".format(LOGCOLLECTOR_MEMORY_LIMIT, current_max)
+        if current_usage > LOGCOLLECTOR_MEMORY_LIMIT:
+            msg = "Log collector memory limit {0} bytes exceeded. The max reported usage is {1} bytes.".format(LOGCOLLECTOR_MEMORY_LIMIT, current_usage)
             logger.info(msg)
             add_event(
                 name=AGENT_NAME,
