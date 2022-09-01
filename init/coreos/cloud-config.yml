@@ -26,6 +26,7 @@ coreos:
         Description=Microsoft Azure Agent
         Wants=network-online.target sshd-keygen.service
         After=network-online.target sshd-keygen.service
+        ConditionVirtualization=|microsoft
 
         [Service]
         Type=simple

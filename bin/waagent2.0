@@ -1569,6 +1569,7 @@ After=network.target
 After=sshd.service
 ConditionFileIsExecutable=/usr/sbin/waagent
 ConditionPathExists=/etc/waagent.conf
+ConditionVirtualization=|microsoft
 
 [Service]
 Type=simple

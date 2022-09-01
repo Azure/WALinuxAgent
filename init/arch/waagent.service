@@ -5,6 +5,7 @@ After=network-online.target
 
 ConditionFileIsExecutable=/usr/bin/waagent
 ConditionPathExists=/etc/waagent.conf
+ConditionVirtualization=|microsoft
 
 [Service]
 Type=simple

@@ -5,6 +5,7 @@ After=systemd-networkd-wait-online.service cloud-init.service
 
 ConditionFileIsExecutable=/usr/bin/waagent
 ConditionPathExists=/etc/waagent.conf
+ConditionVirtualization=|microsoft
 
 [Service]
 Type=simple
