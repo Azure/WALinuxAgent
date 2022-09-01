@@ -310,7 +310,7 @@ def redact_sas_tokens_in_urls(url):
 
 
 def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
-                  headers=None, proxy_host=None, proxy_port=None, redact_data=False):
+                  headers=None, proxy_host=None, proxy_port=None, redact_data=False, timeout=10):
 
     headers = {} if headers is None else headers
     headers['Connection'] = 'close'
@@ -334,13 +334,13 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     if secure:
         conn = httpclient.HTTPSConnection(conn_host,
                                           conn_port,
-                                          timeout=10)
+                                          timeout=timeout)
         if use_proxy:
             conn.set_tunnel(host, port)
     else:
         conn = httpclient.HTTPConnection(conn_host,
                                          conn_port,
-                                         timeout=10)
+                                         timeout=timeout)
 
     payload = data
     if redact_data:
@@ -364,7 +364,8 @@ def http_request(method,
                  retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
                  redact_data=False,
-                 return_raw_response=False):
+                 return_raw_response=False,
+                 timeout=10):
     """
     NOTE: This method provides some logic to handle errors in the HTTP request, including checking the HTTP status of the response
           and handling some exceptions. If return_raw_response is set to True all the error handling will be skipped and the
@@ -452,7 +453,8 @@ def http_request(method,
                                  headers=headers,
                                  proxy_host=proxy_host,
                                  proxy_port=proxy_port,
-                                 redact_data=redact_data)
+                                 redact_data=redact_data,
+                                 timeout=timeout)
 
             logger.verbose("[HTTP Response] Status Code {0}", resp.status)
 
@@ -577,7 +579,8 @@ def http_put(url,
              max_retry=None,
              retry_codes=None,
              retry_delay=DELAY_IN_SECONDS,
-             redact_data=False):
+             redact_data=False,
+             timeout=10):
 
     if max_retry is None:
         max_retry = DEFAULT_RETRIES
@@ -589,7 +592,8 @@ def http_put(url,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay,
-                        redact_data=redact_data)
+                        redact_data=redact_data,
+                        timeout=timeout)
 
 
 def http_delete(url,

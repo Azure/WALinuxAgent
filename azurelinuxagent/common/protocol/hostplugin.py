@@ -266,7 +266,8 @@ class HostPluginProtocol(object):
         response = restutil.http_put(url,
                                      data=content,
                                      headers=self._build_log_headers(),
-                                     redact_data=True)
+                                     redact_data=True,
+                                     timeout=30)
 
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
