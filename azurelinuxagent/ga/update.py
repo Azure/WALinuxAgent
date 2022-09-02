@@ -985,8 +985,7 @@ class UpdateHandler(object):
 
     def _load_agents(self):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
-        is_fast_track_goal_state = None if self._goal_state is None else self._goal_state.extensions_goal_state.source == GoalStateSource.FastTrack
-        return [GuestAgent(is_fast_track_goal_state=is_fast_track_goal_state, path=agent_dir)
+        return [GuestAgent(path=agent_dir)
                 for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
     def _partition(self):
@@ -1468,7 +1467,15 @@ class UpdateHandler(object):
 
 
 class GuestAgent(object):
-    def __init__(self, is_fast_track_goal_state, path=None, pkg=None, host=None):
+    def __init__(self, path=None, pkg=None, is_fast_track_goal_state=False, host=None):
+        """
+        If 'path' is given, the object is initialized to the version installed under that path.
+
+        If 'pkg' is given, the version specified in the package information is downloaded and the object is
+        initialized to that version.
+
+        'is_fast_track_goal_state' and 'host' are using only when a package is downloaded.
+        """
         self._is_fast_track_goal_state = is_fast_track_goal_state
         self.pkg = pkg
         self.host = host
