@@ -31,12 +31,10 @@ import uuid
 import zipfile
 from datetime import datetime, timedelta
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.protocol.imds import get_imds_client
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.restutil as restutil
-import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.utils import fileutil, restutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
@@ -45,6 +43,7 @@ from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, Exi
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.common.protocol.goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatus, VMAgentUpdateStatuses, ExtHandlerPackageList, \
     VERSION_0
@@ -576,7 +575,7 @@ class UpdateHandler(object):
             # The call to get_latest_agent_greater_than_daemon() also finds all agents in directory and sets the self.agents property.
             # This state is used to find the GuestAgent object with the current version later if requested version is available in last GS.
             available_agent = self.get_latest_agent_greater_than_daemon()
-            requested_version, _ = self.__get_requested_version_and_manifest_from_last_gs(protocol)
+            requested_version, _ = self.__get_requested_version_and_agent_family_from_last_gs()
             if requested_version is not None:
                 # If requested version specified, upgrade/downgrade to the specified version instantly as this is
                 # driven by the goal state (as compared to the agent periodically checking for new upgrades every hour)
@@ -662,7 +661,7 @@ class UpdateHandler(object):
         except Exception as exception:
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
-    def __get_vmagent_update_status(self, protocol, goal_state_changed):
+    def __get_vmagent_update_status(self, goal_state_changed):
         """
         This function gets the VMAgent update status as per the last GoalState.
         Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
@@ -673,7 +672,7 @@ class UpdateHandler(object):
         update_status = None
 
         try:
-            requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
+            requested_version, manifest = self.__get_requested_version_and_agent_family_from_last_gs()
             if manifest is None and goal_state_changed:
                 logger.info("Unable to report update status as no matching manifest found for family: {0}".format(
                     conf.get_autoupdate_gafamily()))
@@ -699,7 +698,7 @@ class UpdateHandler(object):
         return update_status
 
     def _report_status(self, exthandlers_handler):
-        vm_agent_update_status = self.__get_vmagent_update_status(exthandlers_handler.protocol, self._processing_new_extensions_goal_state())
+        vm_agent_update_status = self.__get_vmagent_update_status(self._processing_new_extensions_goal_state())
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         vm_status = exthandlers_handler.report_ext_handlers_status(
             goal_state_changed=self._processing_new_extensions_goal_state(),
@@ -1068,22 +1067,21 @@ class UpdateHandler(object):
                 str(e))
         return
 
-    @staticmethod
-    def __get_requested_version_and_manifest_from_last_gs(protocol):
+    def __get_requested_version_and_agent_family_from_last_gs(self):
         """
         Get the requested version and corresponding manifests from last GS if supported
         Returns: (Requested Version, Manifest) if supported and available
                  (None, None) if no manifests found in the last GS
                  (None, manifest) if not supported or not specified in GS
         """
-        family = conf.get_autoupdate_gafamily()
-        manifest_list, _ = protocol.get_vmagent_manifests()
-        manifests = [m for m in manifest_list if m.family == family and len(m.uris) > 0]
-        if len(manifests) == 0:
+        family_name = conf.get_autoupdate_gafamily()
+        agent_families = self._goal_state.extensions_goal_state.agent_families
+        agent_families = [m for m in agent_families if m.name == family_name and len(m.uris) > 0]
+        if len(agent_families) == 0:
             return None, None
-        if conf.get_enable_ga_versioning() and manifests[0].is_requested_version_specified:
-            return manifests[0].requested_version, manifests[0]
-        return None, manifests[0]
+        if conf.get_enable_ga_versioning() and agent_families[0].is_requested_version_specified:
+            return agent_families[0].requested_version, agent_families[0]
+        return None, agent_families[0]
 
     def _download_agent_if_upgrade_available(self, protocol, base_version=CURRENT_VERSION):
         """
@@ -1130,18 +1128,18 @@ class UpdateHandler(object):
                 return False
             return True
 
-        family = conf.get_autoupdate_gafamily()
+        agent_family_name = conf.get_autoupdate_gafamily()
         gs_updated = False
         daemon_version = self.__get_daemon_version_for_update()
         try:
             # Fetch the agent manifests from the latest Goal State
             goal_state_id = self._goal_state.extensions_goal_state.id
             gs_updated = self._processing_new_extensions_goal_state()
-            requested_version, manifest = self.__get_requested_version_and_manifest_from_last_gs(protocol)
-            if manifest is None:
+            requested_version, agent_family = self.__get_requested_version_and_agent_family_from_last_gs()
+            if agent_family is None:
                 logger.verbose(
                     u"No manifest links found for agent family: {0} for goal state {1}, skipping update check".format(
-                        family, goal_state_id))
+                        agent_family_name, goal_state_id))
                 return False
         except Exception as err:
             # If there's some issues in fetching the agent manifests, report it only on goal state change
@@ -1166,7 +1164,7 @@ class UpdateHandler(object):
                 return False
 
             logger.info("No requested version specified, checking for all versions for agent update (family: {0})",
-                        family)
+                        agent_family_name)
             self.last_attempt_time = now
 
         try:
@@ -1183,7 +1181,8 @@ class UpdateHandler(object):
                 logger.info(msg)
                 add_event(AGENT_NAME, op=WALAEventOperation.AgentUpgrade, is_success=True, message=msg)
             else:
-                pkg_list = protocol.get_vmagent_pkgs(manifest)
+                agent_manifest = self._goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
+                pkg_list = agent_manifest.pkg_list
                 packages_to_download = pkg_list.versions
 
             # Verify the requested version is in GA family manifest (if specified)
@@ -1202,7 +1201,7 @@ class UpdateHandler(object):
             # Set the agents to those available for download at least as current as the existing agent
             # or to the requested version (if specified)
             host = self._get_host_plugin(protocol=protocol)
-            agents_to_download = [GuestAgent(pkg=pkg, host=host) for pkg in packages_to_download]
+            agents_to_download = [GuestAgent(is_fast_track_goal_state=self._goal_state.extensions_goal_state.source == GoalStateSource.FastTrack, pkg=pkg, host=host) for pkg in packages_to_download]
 
             # Filter out the agents that were downloaded/extracted successfully. If the agent was not installed properly,
             # we delete the directory and the zip package from the filesystem
@@ -1468,7 +1467,16 @@ class UpdateHandler(object):
 
 
 class GuestAgent(object):
-    def __init__(self, path=None, pkg=None, host=None):
+    def __init__(self, path=None, pkg=None, is_fast_track_goal_state=False, host=None):
+        """
+        If 'path' is given, the object is initialized to the version installed under that path.
+
+        If 'pkg' is given, the version specified in the package information is downloaded and the object is
+        initialized to that version.
+
+        'is_fast_track_goal_state' and 'host' are using only when a package is downloaded.
+        """
+        self._is_fast_track_goal_state = is_fast_track_goal_state
         self.pkg = pkg
         self.host = host
         version = None
@@ -1614,7 +1622,7 @@ class GuestAgent(object):
                 else:
                     logger.verbose("Using host plugin as default channel")
 
-                uri, headers = self.host.get_artifact_request(uri, self.host.manifest_uri)
+                uri, headers = self.host.get_artifact_request(uri, use_verify_header=self._is_fast_track_goal_state, artifact_manifest_url=self.host.manifest_uri)
                 try:
                     if self._fetch(uri, headers=headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES):
                         if not HostPluginProtocol.is_default_channel:
@@ -1692,7 +1700,7 @@ class GuestAgent(object):
             try:
                 manifests = json.load(manifest_file)
             except Exception as e:
-                msg = u"Agent {0} has a malformed {1}".format(self.name, AGENT_MANIFEST_FILE)
+                msg = u"Agent {0} has a malformed {1} ({2})".format(self.name, AGENT_MANIFEST_FILE, ustr(e))
                 raise UpdateError(msg)
             if type(manifests) is list:
                 if len(manifests) <= 0:

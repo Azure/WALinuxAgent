@@ -24,7 +24,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, GoalStateSource
-from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
+from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentFamily, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -43,7 +43,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._activity_id = None
         self._correlation_id = None
         self._created_on_timestamp = None
-        self._agent_manifests = []
+        self._agent_families = []
         self._extensions = []
 
         try:
@@ -59,14 +59,14 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         ga_families = findall(ga_families_list, "GAFamily")
 
         for ga_family in ga_families:
-            family = findtext(ga_family, "Name")
+            name = findtext(ga_family, "Name")
             version = findtext(ga_family, "Version")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
-            manifest = VMAgentManifest(family, version)
+            family = VMAgentFamily(name, version)
             for uri in uris:
-                manifest.uris.append(gettext(uri))
-            self._agent_manifests.append(manifest)
+                family.uris.append(gettext(uri))
+            self._agent_families.append(family)
 
         self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
@@ -172,8 +172,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._on_hold
 
     @property
-    def agent_manifests(self):
-        return self._agent_manifests
+    def agent_families(self):
+        return self._agent_families
 
     @property
     def extensions(self):

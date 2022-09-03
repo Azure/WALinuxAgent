@@ -20,11 +20,11 @@ import json
 import re
 import sys
 
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.future import ustr
-import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, VmSettingsParseError
-from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
+from azurelinuxagent.common.protocol.restapi import VMAgentFamily, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 
@@ -48,7 +48,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         self._status_upload_blob_type = None
         self._required_features = []
         self._on_hold = False
-        self._agent_manifests = []
+        self._agent_families = []
         self._extensions = []
 
         try:
@@ -134,8 +134,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         return self._on_hold
 
     @property
-    def agent_manifests(self):
-        return self._agent_manifests
+    def agent_families(self):
+        return self._agent_families
 
     @property
     def extensions(self):
@@ -269,10 +269,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             uris = family.get("uris")
             if uris is None:
                 uris = []
-            manifest = VMAgentManifest(name, version)
+            agent_family = VMAgentFamily(name, version)
             for u in uris:
-                manifest.uris.append(u)
-            self._agent_manifests.append(manifest)
+                agent_family.uris.append(u)
+            self._agent_families.append(agent_family)
 
     def _parse_extensions(self, vm_settings):
         # Sample (NOTE: The first sample is single-config, the second multi-config):
