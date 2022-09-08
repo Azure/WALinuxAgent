@@ -1361,7 +1361,7 @@ class TestExtension_Deprecated(TestExtensionBase):
     def test_ext_handler_download_failure_permanent_ProtocolError(self, mock_add_event, mock_error_state, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-        protocol.get_ext_handler_pkgs = Mock(side_effect=ProtocolError)
+        protocol.get_goal_state().fetch_extension_manifest = Mock(side_effect=ProtocolError)
 
         mock_error_state.return_value = True
 
@@ -2496,7 +2496,7 @@ class TestExtensionSequencing(AgentTestCase):
         """
         Creates extensions with the given dependencyLevel
         """
-        handler_map = dict()
+        handler_map = {}
         all_handlers = []
         for handler_name, level in dependency_levels:
             if handler_map.get(handler_name) is None:
@@ -3308,7 +3308,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
             wire._DOWNLOAD_TIMEOUT = datetime.timedelta(minutes=0)
             try:
                 with self.assertRaises(ExtensionDownloadError):
-                    protocol.client.fetch_manifest(ext_handlers[0].manifest_uris)
+                    protocol.client.fetch_manifest(ext_handlers[0].manifest_uris, use_verify_header=False)
             finally:
                 wire._DOWNLOAD_TIMEOUT = download_timeout
 

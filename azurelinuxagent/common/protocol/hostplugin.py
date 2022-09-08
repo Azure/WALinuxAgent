@@ -55,6 +55,7 @@ _HEADER_VERSION = "x-ms-version"
 _HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 _HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
 _HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
+_HEADER_VERIFY_FROM_ARTIFACTS_BLOB = "x-ms-verify-from-artifacts-blob"
 
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
@@ -183,19 +184,21 @@ class HostPluginProtocol(object):
 
         return url, headers
 
-    def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
+    def get_artifact_request(self, artifact_url, use_verify_header, artifact_manifest_url=None):
         if not self.ensure_initialized():
             raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
 
         if textutil.is_str_none_or_whitespace(artifact_url):
             raise ProtocolError("HostGAPlugin: No extension artifact url was provided")
 
-        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
-                                                       HOST_PLUGIN_PORT)
-        headers = {_HEADER_VERSION: API_VERSION,
-                   _HEADER_CONTAINER_ID: self.container_id,
-                   _HEADER_HOST_CONFIG_NAME: self.role_config_name,
-                   _HEADER_ARTIFACT_LOCATION: artifact_url}
+        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT)
+        headers = {
+            _HEADER_VERSION: API_VERSION,
+               _HEADER_CONTAINER_ID: self.container_id,
+               _HEADER_HOST_CONFIG_NAME: self.role_config_name,
+               _HEADER_ARTIFACT_LOCATION: artifact_url}
+        if use_verify_header:
+            headers[_HEADER_VERIFY_FROM_ARTIFACTS_BLOB] = "true"
 
         if artifact_manifest_url is not None:
             headers[_HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
