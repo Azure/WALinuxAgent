@@ -70,10 +70,10 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     #
     original_http_request = restutil.http_request
 
-    def http_request(method, url, data, **kwargs):
+    def http_request(method, url, data, timeout, **kwargs):
         # call the original resutil.http_request if the request should be mocked
         if protocol.do_not_mock(method, url):
-            return original_http_request(method, url, data, **kwargs)
+            return original_http_request(method, url, data, timeout, **kwargs)
 
         # if there is a handler for the request, use it
         handler = None
@@ -109,7 +109,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
         # if there was not a response for the request then fail it or call the original resutil.http_request
         if fail_on_unknown_request:
             raise ValueError('Unknown HTTP request: {0} [{1}]'.format(url, method))
-        return original_http_request(method, url, data, **kwargs)
+        return original_http_request(method, url, data, timeout, **kwargs)
 
     #
     # functions to start/stop the mocks
