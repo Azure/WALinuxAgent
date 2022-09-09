@@ -68,7 +68,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
             request_headers = []  # we expect a retry with new headers and use this array to persist the headers of each request
 
-            def http_get_vm_settings(_method, _host, _relative_url, **kwargs):
+            def http_get_vm_settings(_method, _host, _relative_url, _timeout, **kwargs):
                 request_headers.append(kwargs["headers"])
                 if len(request_headers) == 1:
                     # Fail the first request with status GONE and update the mock data to return the new Container ID and RoleConfigName that should be

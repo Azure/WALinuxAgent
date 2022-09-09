@@ -405,7 +405,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
-        method, url, body_received = args  # pylint: disable=unused-variable
+        method, url, body_received, timeout = args  # pylint: disable=unused-variable
         headers = kwargs['headers']
 
         # the headers should include utf-8 encoding...
