@@ -352,7 +352,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar")
+        resp = restutil._http_request("GET", "foo", "/bar", 10)
 
         HTTPConnection.assert_has_calls([
             call("foo", 80, timeout=10)
@@ -375,7 +375,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar", secure=True)
+        resp = restutil._http_request("GET", "foo", "/bar", 10, secure=True)
 
         HTTPConnection.assert_not_called()
         HTTPSConnection.assert_has_calls([
@@ -398,7 +398,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar",
+        resp = restutil._http_request("GET", "foo", "/bar", 10,
                             proxy_host="foo.bar", proxy_port=23333)
 
         HTTPConnection.assert_has_calls([
@@ -530,7 +530,7 @@ class TestHttpOperations(AgentTestCase):
 
         HTTPSConnection.return_value = mock_conn
 
-        resp = restutil._http_request("GET", "foo", "/bar",
+        resp = restutil._http_request("GET", "foo", "/bar", 10,
                             proxy_host="foo.bar", proxy_port=23333,
                             secure=True)
 
