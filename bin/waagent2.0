@@ -2060,9 +2060,12 @@ class FreeBSDDistro(AbstractDistro):
         """
         global DiskActivated
         Run('cp /usr/sbin/waagent /tmp/')
-        SetFileContents('/tmp/bsd_activate_resource_disk.py',bsd_activate_resource_disk_txt)
+        SetFileContents('/tmp/bsd_activate_resource_disk.py', bsd_activate_resource_disk_txt)
         Run('chmod +x /tmp/bsd_activate_resource_disk.py')
-        pid = subprocess.Popen(["/tmp/bsd_activate_resource_disk.py", ""]).pid
+	try:
+            pid = subprocess.Popen(["/tmp/bsd_activate_resource_disk.py", ""]).pid
+	except:
+	    pid = subprocess.Popen(["python", "/tmp/bsd_activate_resource_disk.py"]).pid
         Log("Spawning bsd_activate_resource_disk.py")
         DiskActivated = True
         return
