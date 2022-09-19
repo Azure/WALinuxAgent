@@ -1235,6 +1235,8 @@ class ExtHandlerInstance(object):
         old_ext_mrseq_file = os.path.join(old_ext_dir, "mrseq")
         if os.path.isfile(old_ext_mrseq_file):
             shutil.copy2(old_ext_mrseq_file, new_ext_dir)
+        else: 
+            self.logger.info("Cannot find mrseq file at: {0}", old_ext_mrseq_file)
 
         old_ext_status_dir = old_ext_handler_i.get_status_dir()
         new_ext_status_dir = self.get_status_dir()
