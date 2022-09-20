@@ -561,10 +561,6 @@ def get_cgroup_monitor_expiry_time(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    cgroups monitoring for pilot extensions disabled after expiry time
-
-    NOTE: This option is experimental and may be removed in later versions of the Agent.
-    """
     return conf.get("Debug.CgroupMonitorExpiryTime", "2022-03-31")
 
 def get_cgroup_monitor_extension_name (conf=__conf__):
