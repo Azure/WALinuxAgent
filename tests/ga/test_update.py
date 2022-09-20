@@ -1322,6 +1322,7 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
+    # @skip_if_predicate_true(lambda: True, "This test has a dependency on the agent version being 9.9.* and breaks when updating the agent version during release")
     def test_get_latest_agent_should_return_latest_agent_even_on_bad_error_json(self):
         dst_ver = self.prepare_agents()
         # Add a malformed error.json file in all existing agents
@@ -1708,6 +1709,7 @@ class TestUpdate(UpdateTestCase):
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
                     with patch.object(osutil, '_enable_firewall', True):
                         # drop rule is present
+# <<<<<<< HEAD
                         mock_iptables.set_command(
                             AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
                                                                          mock_iptables.destination,
@@ -1741,6 +1743,21 @@ class TestUpdate(UpdateTestCase):
                         self.assertEqual(len(filtered_mock_iptable_calls), 3,
                                          "Incorrect number of calls to iptables: [{0}]".format(
                                              mock_iptables.command_calls))
+# =======
+#                         mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+#                         # non root tcp iptable rule is absent
+#                         mock_iptables.set_command(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
+#                         update_handler.run(debug=True)
+#
+#                         drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+#                         accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+#                         accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+#
+#                         # Filtering the mock iptable command calls with only the once related to this test.
+#                         filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+#
+#                         self.assertEqual(len(filtered_mock_iptable_calls), 3, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+# >>>>>>> master
                         self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
                                          "The first command should check the drop rule")
                         self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
@@ -1755,6 +1772,7 @@ class TestUpdate(UpdateTestCase):
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
                     with patch.object(osutil, '_enable_firewall', True):
                         # drop rule is not available
+# <<<<<<< HEAD
                         mock_iptables.set_command(
                             AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
                                                                          mock_iptables.destination,
@@ -1783,6 +1801,20 @@ class TestUpdate(UpdateTestCase):
                         self.assertEqual(len(filtered_mock_iptable_calls), 1,
                                          "Incorrect number of calls to iptables: [{0}]".format(
                                              mock_iptables.command_calls))
+# =======
+#                         mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=1)
+#
+#                         update_handler.run(debug=True)
+#
+#                         drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+#                         accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+#                         accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+#
+#                         # Filtering the mock iptable command calls with only the once related to this test.
+#                         filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+#
+#                         self.assertEqual(len(filtered_mock_iptable_calls), 1, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+# >>>>>>> master
                         self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
                                          "The first command should check the drop rule")
 
@@ -1793,6 +1825,7 @@ class TestUpdate(UpdateTestCase):
                 with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
                     with patch.object(osutil, '_enable_firewall', True):
                         # drop rule is available
+# <<<<<<< HEAD
                         mock_iptables.set_command(
                             AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
                                                                          mock_iptables.destination,
@@ -1826,6 +1859,22 @@ class TestUpdate(UpdateTestCase):
                         self.assertEqual(len(filtered_mock_iptable_calls), 2,
                                          "Incorrect number of calls to iptables: [{0}]".format(
                                              mock_iptables.command_calls))
+# =======
+#                         mock_iptables.set_command(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+#                         # non root tcp iptable rule is available
+#                         mock_iptables.set_command(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination), exit_code=0)
+#
+#                         update_handler.run(debug=True)
+#
+#                         drop_check_command = TestOSUtil._command_to_string(osutil.get_firewall_drop_command(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+#                         accept_tcp_check_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.CHECK_COMMAND, mock_iptables.destination))
+#                         accept_tcp_insert_rule = TestOSUtil._command_to_string(osutil.get_accept_tcp_rule(mock_iptables.wait, AddFirewallRules.INSERT_COMMAND, mock_iptables.destination))
+#
+#                         # Filtering the mock iptable command calls with only the once related to this test.
+#                         filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if cmd in [drop_check_command, accept_tcp_check_rule, accept_tcp_insert_rule]]
+#
+#                         self.assertEqual(len(filtered_mock_iptable_calls), 2, "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
+# >>>>>>> master
                         self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
                                          "The first command should check the drop rule")
                         self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
