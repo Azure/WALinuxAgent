@@ -21,10 +21,9 @@ import re
 import sys
 
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
-from azurelinuxagent.common.exception import VmSettingsError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState
+from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, VmSettingsParseError
 from azurelinuxagent.common.protocol.restapi import VMAgentManifest, Extension, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
@@ -32,10 +31,12 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     _MINIMUM_TIMESTAMP = datetime.datetime(1900, 1, 1, 0, 0)  # min value accepted by datetime.strftime()
 
-    def __init__(self, etag, json_text):
+    def __init__(self, etag, json_text, correlation_id):
         super(ExtensionsGoalStateFromVmSettings, self).__init__()
-        self._id = etag
+        self._id = "etag_{0}".format(etag)
         self._etag = etag
+        self._svd_sequence_number = 0
+        self._hostga_plugin_correlation_id = correlation_id
         self._text = json_text
         self._host_ga_plugin_version = FlexibleVersion('0.0.0.0')
         self._schema_version = FlexibleVersion('0.0.0.0')
@@ -54,7 +55,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             self._parse_vm_settings(json_text)
             self._do_common_validations()
         except Exception as e:
-            raise VmSettingsError("Error parsing vmSettings [HGAP: {0}]: {1}".format(self._host_ga_plugin_version, ustr(e)), etag, self.get_redacted_text())
+            message = "Error parsing vmSettings [HGAP: {0} Etag:{1}]: {2}".format(self._host_ga_plugin_version, etag, ustr(e))
+            raise VmSettingsParseError(message, etag, self.get_redacted_text())
 
     @property
     def id(self):
@@ -63,6 +65,10 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
     @property
     def etag(self):
         return self._etag
+
+    @property
+    def svd_sequence_number(self):
+        return self._svd_sequence_number
 
     @property
     def host_ga_plugin_version(self):
@@ -74,21 +80,38 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
     @property
     def activity_id(self):
+        """
+        The CRP activity id
+        """
         return self._activity_id
 
     @property
     def correlation_id(self):
+        """
+        The correlation id for the CRP operation
+        """
         return self._correlation_id
 
     @property
+    def hostga_plugin_correlation_id(self):
+        """
+        The correlation id for the call to the HostGAPlugin vmSettings API
+        """
+        return self._hostga_plugin_correlation_id
+
+    @property
     def created_on_timestamp(self):
+        """
+        Timestamp assigned by the CRP (time at which the goal state was created)
+        """
         return self._created_on_timestamp
 
     @property
+    def channel(self):
+        return GoalStateChannel.HostGAPlugin
+
+    @property
     def source(self):
-        """
-        Whether the goal state originated from Fabric or Fast Track
-        """
         return self._source
 
     @property
@@ -136,8 +159,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         "vmSettingsSchemaVersion": "0.0",
         #         "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
         #         "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+        #         "inSvdSeqNo": 1,
         #         "extensionsLastModifiedTickCount": 637726657706205217,
-        #         "extensionGoalStatesSource": "Fabric",
+        #         "extensionGoalStatesSource": "FastTrack",
         #         ...
         #     }
 
@@ -148,6 +172,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
 
         self._activity_id = self._string_to_id(vm_settings.get("activityId"))
         self._correlation_id = self._string_to_id(vm_settings.get("correlationId"))
+        self._svd_sequence_number = self._string_to_id(vm_settings.get("inSvdSeqNo"))
         self._created_on_timestamp = self._ticks_to_utc_timestamp(vm_settings.get("extensionsLastModifiedTickCount"))
 
         schema_version = vm_settings.get("vmSettingsSchemaVersion")
@@ -241,7 +266,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         for family in families:
             name = family["name"]
             version = family.get("version")
-            uris = family["uris"]
+            uris = family.get("uris")
+            if uris is None:
+                uris = []
             manifest = VMAgentManifest(name, version)
             for u in uris:
                 manifest.uris.append(u)
@@ -264,7 +291,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #             "settingsSeqNo": 0,
         #             "settings": [
         #                 {
-        #                     "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
+        #                     "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
         #                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
         #                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
         #                 }
@@ -331,7 +358,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 is_multi_config = extension_gs.get('isMultiConfig')
                 if is_multi_config is not None:
                     extension.supports_multi_config = is_multi_config
-                extension.manifest_uris.append(extension_gs['location'])
+                location = extension_gs.get('location')
+                if location is not None:
+                    extension.manifest_uris.append(location)
                 fail_over_location = extension_gs.get('failoverLocation')
                 if fail_over_location is not None:
                     extension.manifest_uris.append(fail_over_location)

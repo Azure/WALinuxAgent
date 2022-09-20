@@ -5,13 +5,15 @@ from dcr.scenario_utils.models import ExtensionMetaData
 
 
 class CustomScriptExtension(BaseExtensionTestClass):
+    META_DATA = ExtensionMetaData(
+        publisher='Microsoft.Azure.Extensions',
+        ext_type='CustomScript',
+        version="2.1"
+    )
+
     def __init__(self, extension_name: str):
-        extension_data = ExtensionMetaData(
-            publisher='Microsoft.Azure.Extensions',
-            ext_type='CustomScript',
-            version="2.1",
-            ext_name=extension_name
-        )
+        extension_data = self.META_DATA
+        extension_data.name = extension_name
         super().__init__(extension_data)
 
 

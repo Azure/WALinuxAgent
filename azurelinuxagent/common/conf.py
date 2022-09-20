@@ -168,8 +168,7 @@ __STRING_OPTIONS__ = {
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
     "Extensions.InitialGoalStatePeriod": 6,
-    "Extensions.GoalStateHistoryCleanupPeriod": 1800,
-    "OS.EnableFirewallPeriod": 30,
+    "OS.EnableFirewallPeriod": 300,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
     "OS.MonitorDhcpClientRestartPeriod": 30,
@@ -186,9 +185,11 @@ __INTEGER_OPTIONS__ = {
     #
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 75,
+    "Debug.AgentCpuThrottledTimeThreshold": 120,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
-    "Debug.AutoUpdateNormalFrequency": 86400
+    "Debug.AutoUpdateNormalFrequency": 86400,
+    "Debug.FirewallRulesLogPeriod": 86400
 }
 
 
@@ -229,7 +230,7 @@ def enable_firewall(conf=__conf__):
 
 
 def get_enable_firewall_period(conf=__conf__):
-    return conf.get_int("OS.EnableFirewallPeriod", 30)
+    return conf.get_int("OS.EnableFirewallPeriod", 300)
 
 
 def get_remove_persistent_net_rules_period(conf=__conf__):
@@ -374,10 +375,6 @@ def get_goal_state_period(conf=__conf__):
 
 def get_initial_goal_state_period(conf=__conf__):
     return conf.get_int("Extensions.InitialGoalStatePeriod", default_value=lambda: get_goal_state_period(conf=conf))
-
-
-def get_goal_state_history_cleanup_period(conf=__conf__):
-    return conf.get_int("Extensions.GoalStateHistoryCleanupPeriod", 1800)
 
 
 def get_allow_reset_sys_user(conf=__conf__):
@@ -548,7 +545,17 @@ def get_agent_cpu_quota(conf=__conf__):
     """
     return conf.get_int("Debug.AgentCpuQuota", 75)
 
-def get_cgroup_monitor_expiry_time (conf=__conf__):
+
+def get_agent_cpu_throttled_time_threshold(conf=__conf__):
+    """
+    Throttled time threshold for agent cpu in seconds.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentCpuThrottledTimeThreshold", 120)
+
+
+def get_cgroup_monitor_expiry_time(conf=__conf__):
     """
     cgroups monitoring for pilot extensions disabled after expiry time
 
@@ -605,3 +612,12 @@ def get_enable_ga_versioning(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableGAVersioning", False)
+
+
+def get_firewall_rules_log_period(conf=__conf__):
+    """
+    Determine the frequency to perform the periodic operation of logging firewall rules.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.FirewallRulesLogPeriod", 86400)

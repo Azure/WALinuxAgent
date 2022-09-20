@@ -11,7 +11,7 @@ class VMModelType(Enum):
 
 
 class ExtensionMetaData:
-    def __init__(self, publisher: str, ext_type: str, version: str, ext_name: str):
+    def __init__(self, publisher: str, ext_type: str, version: str, ext_name: str = ""):
         self.__publisher = publisher
         self.__ext_type = ext_type
         self.__version = version
@@ -30,8 +30,16 @@ class ExtensionMetaData:
         return self.__version
 
     @property
-    def name(self) -> str:
+    def name(self):
         return self.__ext_name
+
+    @name.setter
+    def name(self, ext_name):
+        self.__ext_name = ext_name
+
+    @property
+    def handler_name(self):
+        return f"{self.publisher}.{self.ext_type}"
 
 
 class VMMetaData:

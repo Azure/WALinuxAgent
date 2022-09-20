@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!./python.sh
 import json
 import os
 import re

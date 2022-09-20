@@ -16,7 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import os
 import subprocess
 import tempfile
 import threading
@@ -345,10 +345,23 @@ def quote(word_list):
 #
 _running_commands = []
 _running_commands_lock = threading.RLock()
+PARENT_PROCESS_NAME = "AZURE_GUEST_AGENT_PARENT_PROCESS_NAME"
+AZURE_GUEST_AGENT = "AZURE_GUEST_AGENT"
 
 
 def _popen(*args, **kwargs):
     with _running_commands_lock:
+        # Add the environment variables
+        env = {}
+        if 'env' in kwargs:
+            env.update(kwargs['env'])
+        else:
+            env.update(os.environ)
+
+        # Set the marker before process start
+        env[PARENT_PROCESS_NAME] = AZURE_GUEST_AGENT
+        kwargs['env'] = env
+
         process = subprocess.Popen(*args, **kwargs)
         _running_commands.append(process.pid)
         return process

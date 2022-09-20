@@ -42,5 +42,6 @@
     <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK"}}]}</RuntimeSettings>
   </Plugin>
 </PluginSettings>
+  <InVMGoalStateMetaData inSvdSeqNo="10" createdOnTicks="637726657706205217" activityId="a33f6f53-43d6-4625-b322-1a39651a00c9" correlationId="9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e" />
 <StatusUploadBlob>https://test.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo</StatusUploadBlob></Extensions>
 

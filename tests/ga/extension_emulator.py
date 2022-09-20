@@ -28,6 +28,8 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtCommandEnvVariable
 
 from tests.tools import Mock, patch
+from tests.protocol.mockwiredata import WireProtocolData
+from tests.protocol.mocks import MockHttpResponse
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 
 
@@ -111,9 +113,11 @@ def generate_put_handler(*emulators):
     def mock_put_handler(url, *args, **_):
 
         if HttpRequestPredicates.is_host_plugin_status_request(url):
-            return
+            status_blob = WireProtocolData.get_status_blob_from_hostgaplugin_put_status_request(args[0])
+        else:
+            status_blob = args[0]
 
-        handler_statuses = json.loads(args[0]).get("aggregateStatus", {}).get("handlerAggregateStatus", [])
+        handler_statuses = json.loads(status_blob).get("aggregateStatus", {}).get("handlerAggregateStatus", [])
 
         for handler_status in handler_statuses:
             supplied_name = handler_status.get("handlerName", None)
@@ -126,6 +130,7 @@ def generate_put_handler(*emulators):
             except StopIteration:
                 # Tests will want to know that the agent is running an extension they didn't specifically allocate.
                 raise Exception("Extension running, but not present in emulators: {0}, {1}".format(supplied_name, supplied_version))
+        return  MockHttpResponse(status=200)
 
     return mock_put_handler
 

@@ -50,12 +50,7 @@ INVALID_CGROUPS_ERRCODE = 2
 
 _MUST_COLLECT_FILES = [
     _AGENT_LOG,
-    os.path.join(_AGENT_LIB_DIR, "GoalState.*.xml"),
-    os.path.join(_AGENT_LIB_DIR, "ExtensionsConfig.*.xml"),
-    os.path.join(_AGENT_LIB_DIR, "HostingEnvironmentConfig.*.xml"),
-    os.path.join(_AGENT_LIB_DIR, "SharedConfig.*.xml"),
-    os.path.join(_AGENT_LIB_DIR, "*manifest.xml"),
-    os.path.join(_AGENT_LIB_DIR, "waagent_status.*.json"),
+    os.path.join(_AGENT_LIB_DIR, "waagent_status.json"),
     os.path.join(_AGENT_LIB_DIR, "history", "*.zip"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*"),
     os.path.join(_EXTENSION_LOG_DIR, "*", "*", "*"),

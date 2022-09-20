@@ -209,7 +209,7 @@ AGENT_LONG_NAME = "Azure Linux Agent"
 #
 #            When doing a release, be sure to use the actual agent version.
 #
-AGENT_VERSION = '2.7.3.0'
+AGENT_VERSION = '2.8.0.11'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -298,6 +298,3 @@ def set_goal_state_agent():
 
 GOAL_STATE_AGENT_VERSION = set_goal_state_agent()
 
-
-def is_current_agent_installed():
-    return CURRENT_AGENT == AGENT_LONG_VERSION

@@ -94,7 +94,6 @@ _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT = """
 [Service]
 CPUQuota={0}
 """
-_AGENT_THROTTLED_TIME_THRESHOLD = 120  # 2 minutes
 
 
 class DisableCgroups(object):
@@ -605,7 +604,8 @@ class CGroupConfigurator(object):
                     current = process
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
-                    if current == 0:
+                    # Process started by agent will have a marker and check if that marker found in process environment.
+                    if current == 0 and not self.__is_process_descendant_of_the_agent(process):
                         unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
@@ -641,10 +641,28 @@ class CGroupConfigurator(object):
             return "[PID: {0}] UNKNOWN".format(pid)
 
         @staticmethod
+        def __is_process_descendant_of_the_agent(pid):
+            """
+            Returns True if the process is descendant of the agent by looking at the env flag(AZURE_GUEST_AGENT_PARENT_PROCESS_NAME)
+            that we set when the process starts otherwise False.
+            """
+            try:
+                env = '/proc/{0}/environ'.format(pid)
+                if os.path.exists(env):
+                    with open(env, "r") as env_file:
+                        environ = env_file.read()
+                        if environ and environ[-1] == '\x00':
+                            environ = environ[:-1]
+                        return "{0}={1}".format(shellutil.PARENT_PROCESS_NAME, shellutil.AZURE_GUEST_AGENT) in environ
+            except Exception:
+                pass
+            return False
+
+        @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
             for metric in cgroup_metrics:
                 if metric.instance == AGENT_NAME_TELEMETRY and metric.counter == MetricsCounter.THROTTLED_TIME:
-                    if metric.value > _AGENT_THROTTLED_TIME_THRESHOLD:
+                    if metric.value > conf.get_agent_cpu_throttled_time_threshold():
                         raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
 
         @staticmethod
@@ -780,7 +798,7 @@ class CGroupConfigurator(object):
             if self.enabled() and services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
-                    unit_file_path = service.get('path', None)
+                    unit_file_path = systemd.get_unit_file_install_path()
                     if service_name is not None and unit_file_path is not None:
                         files_to_create = []
                         drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))
@@ -804,7 +822,7 @@ class CGroupConfigurator(object):
             if services_list is not None:
                 for service in services_list:
                     service_name = service.get('name', None)
-                    unit_file_path = service.get('path', None)
+                    unit_file_path = systemd.get_unit_file_install_path()
                     if service_name is not None and unit_file_path is not None:
                         files_to_cleanup = []
                         drop_in_path = os.path.join(unit_file_path, "{0}.d".format(service_name))

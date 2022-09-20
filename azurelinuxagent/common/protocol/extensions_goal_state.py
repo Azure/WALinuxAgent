@@ -23,10 +23,26 @@ from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.utils import textutil
 
 
-class GoalStateMismatchError(AgentError):
-    def __init__(self, message, attribute):
-        super(GoalStateMismatchError, self).__init__(message)
-        self.attribute = attribute
+class GoalStateChannel(object):
+    WireServer = "WireServer"
+    HostGAPlugin = "HostGAPlugin"
+    Empty = "Empty"
+
+
+class GoalStateSource(object):
+    Fabric = "Fabric"
+    FastTrack = "FastTrack"
+    Empty = "Empty"
+
+
+class VmSettingsParseError(AgentError):
+    """
+    Error raised when the VmSettings are malformed
+    """
+    def __init__(self, message, etag, vm_settings_text, inner=None):
+        super(VmSettingsParseError, self).__init__(message, inner)
+        self.etag = etag
+        self.vm_settings_text = vm_settings_text
 
 
 class ExtensionsGoalState(object):
@@ -37,12 +53,31 @@ class ExtensionsGoalState(object):
 
     NOTE: This is an abstract class. The corresponding concrete classes can be instantiated using the ExtensionsGoalStateFactory.
     """
+    def __init__(self):
+        self._is_outdated = False
+
     @property
     def id(self):
         """
-        Returns the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
+        Returns a string that includes the incarnation number if the ExtensionsGoalState was created from ExtensionsConfig, or the etag if it
         was created from vmSettings.
         """
+        raise NotImplementedError()
+
+    @property
+    def is_outdated(self):
+        """
+        A goal state can be outdated if, for example, the VM Agent is using Fast Track and support for it stops (e.g. the VM is migrated
+        to a node with an older version of the HostGAPlugin) and now the Agent is fetching goal states via the WireServer.
+        """
+        return self._is_outdated
+
+    @is_outdated.setter
+    def is_outdated(self, value):
+        self._is_outdated = value
+
+    @property
+    def svd_sequence_number(self):
         raise NotImplementedError()
 
     @property
@@ -55,6 +90,20 @@ class ExtensionsGoalState(object):
 
     @property
     def created_on_timestamp(self):
+        raise NotImplementedError()
+
+    @property
+    def channel(self):
+        """
+        Whether the goal state was retrieved from the WireServer or the HostGAPlugin
+        """
+        raise NotImplementedError()
+
+    @property
+    def source(self):
+        """
+        Whether the goal state originated from Fabric or Fast Track
+        """
         raise NotImplementedError()
 
     @property
@@ -89,85 +138,6 @@ class ExtensionsGoalState(object):
         Returns the raw text (either the ExtensionsConfig or the vmSettings) with any confidential data removed, or an empty string for empty goal states.
         """
         raise NotImplementedError()
-
-    @staticmethod
-    def compare(from_extensions_config, from_vm_settings):
-        """
-        Compares the two instances given as argument and logs a GoalStateMismatch message if they are different.
-
-        NOTE: The order of the two instances is important for the debug info to be logged correctly (ExtensionsConfig first, vmSettings second)
-        """
-        context = []  # used to keep track of the attribute that is being compared
-
-        def compare_goal_states(first, second):
-            # A mismatch on the timestamp or the activity ID (and maybe also on the correlation ID) most likely indicate that we are comparing two
-            # different goal states so we check them first (we raise an exception as soon as a mismatch is detected). A mismatch on the other
-            # attributes likely indicates an actual issue on vmSettings or extensionsConfig).
-            compare_attributes(first, second, "created_on_timestamp")
-            compare_attributes(first, second, "activity_id")
-            compare_attributes(first, second, "correlation_id")
-            compare_attributes(first, second, "status_upload_blob")
-            compare_attributes(first, second, "status_upload_blob_type")
-            compare_attributes(first, second, "required_features")
-            compare_attributes(first, second, "on_hold")
-            compare_array(first.agent_manifests, second.agent_manifests, compare_agent_manifests, "agent_manifests")
-            compare_array(first.extensions, second.extensions, compare_extensions, "extensions")
-
-        def compare_agent_manifests(first, second):
-            compare_attributes(first, second, "family")
-            compare_attributes(first, second, "requested_version_string")
-            compare_attributes(first, second, "uris", ignore_order=True)
-
-        def compare_extensions(first, second):
-            compare_attributes(first, second, "name")
-            compare_attributes(first, second, "version")
-            compare_attributes(first, second, "state")
-            compare_attributes(first, second, "supports_multi_config")
-            compare_attributes(first, second, "manifest_uris", ignore_order=True)
-            compare_array(first.settings, second.settings, compare_settings, "settings")
-
-        def compare_settings(first, second):
-            # Note that we do not compare protectedSettings since the same settings can be re-encrypted, resulting
-            # on different encrypted text for the same plain text.
-            compare_attributes(first, second, "name")
-            compare_attributes(first, second, "sequenceNumber")
-            compare_attributes(first, second, "publicSettings")
-            compare_attributes(first, second, "certificateThumbprint")
-            compare_attributes(first, second, "dependencyLevel")
-            compare_attributes(first, second, "state")
-
-        def compare_array(first, second, comparer, name):
-            if len(first) != len(second):
-                raise Exception("Number of items in {0} mismatch: {1} != {2}".format(name, len(first), len(second)))
-            for i in range(len(first)):
-                context.append("{0}[{1}]".format(name, i))
-                try:
-                    comparer(first[i], second[i])
-                finally:
-                    context.pop()
-
-        def compare_attributes(first, second, attribute, ignore_order=False):
-            context.append(attribute)
-            try:
-                first_value = getattr(first, attribute)
-                second_value = getattr(second, attribute)
-                if ignore_order:
-                    first_value = first_value[:]
-                    first_value.sort()
-                    second_value = second_value[:]
-                    second_value.sort()
-
-                if first_value != second_value:
-                    if attribute.lower() == 'publicsettings':
-                        mistmatch = "[REDACTED] != [REDACTED] (Attribute: {0})".format(".".join(context))
-                    else:
-                        mistmatch = "[{0}] != [{1}] (Attribute: {2})".format(first_value, second_value, ".".join(context))
-                    message = "Mismatch in Goal States [Incarnation {0}] != [Etag: {1}]: {2}".format(from_extensions_config.id, from_vm_settings.id, mistmatch)
-                    raise GoalStateMismatchError(message, attribute)
-            finally:
-                context.pop()
-
-        compare_goal_states(from_extensions_config, from_vm_settings)
 
     def _do_common_validations(self):
         """
@@ -206,9 +176,22 @@ class ExtensionsGoalState(object):
 
 
 class EmptyExtensionsGoalState(ExtensionsGoalState):
+    def __init__(self, incarnation):
+        super(EmptyExtensionsGoalState, self).__init__()
+        self._id = "incarnation_{0}".format(incarnation)
+        self._incarnation = incarnation
+
     @property
     def id(self):
-        return self._string_to_id(None)
+        return self._id
+
+    @property
+    def incarnation(self):
+        return self._incarnation
+
+    @property
+    def svd_sequence_number(self):
+        return self._incarnation
 
     @property
     def activity_id(self):
@@ -221,6 +204,14 @@ class EmptyExtensionsGoalState(ExtensionsGoalState):
     @property
     def created_on_timestamp(self):
         return datetime.datetime.min
+
+    @property
+    def channel(self):
+        return GoalStateChannel.Empty
+
+    @property
+    def source(self):
+        return GoalStateSource.Empty
 
     @property
     def status_upload_blob(self):
