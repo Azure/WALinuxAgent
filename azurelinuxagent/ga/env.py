@@ -26,12 +26,11 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
-from azurelinuxagent.common.event import add_periodic, WALAEventOperation
+from azurelinuxagent.common.event import add_periodic, WALAEventOperation, add_event
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
@@ -99,19 +98,6 @@ class MonitorDhcpClientRestart(PeriodicOperation):
         return pid
 
 
-class CleanupGoalStateHistory(PeriodicOperation):
-    def __init__(self):
-        super(CleanupGoalStateHistory, self).__init__(conf.get_goal_state_history_cleanup_period())
-        self.archiver = StateArchiver(conf.get_lib_dir())
-
-    def _operation(self):
-        """
-        Purge history and create a .zip of the history that has been preserved.
-        """
-        self.archiver.purge()
-        self.archiver.archive()
-
-
 class EnableFirewall(PeriodicOperation):
     def __init__(self, osutil, protocol):
         super(EnableFirewall, self).__init__(conf.get_enable_firewall_period())
@@ -131,7 +117,13 @@ class EnableFirewall(PeriodicOperation):
             self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
             self._try_remove_legacy_firewall_rule = True
 
-        success = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
+        success, is_firewall_rules_updated = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(),
+                                                                          uid=os.getuid())
+
+        if is_firewall_rules_updated:
+            msg = "Successfully added Azure fabric firewall rules. Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list())
+            logger.info(msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.Firewall, message=msg, log_event=False)
 
         add_periodic(
             logger.EVERY_HOUR,
@@ -140,6 +132,21 @@ class EnableFirewall(PeriodicOperation):
             op=WALAEventOperation.Firewall,
             is_success=success,
             log_event=False)
+
+
+class LogFirewallRules(PeriodicOperation):
+    """
+    Log firewall rules state once a day.
+    Goal is to capture the firewall state when the agent service startup,
+    in addition to add more debug data and would be more useful long term.
+    """
+    def __init__(self, osutil):
+        super(LogFirewallRules, self).__init__(conf.get_firewall_rules_log_period())
+        self._osutil = osutil
+
+    def _operation(self):
+        # Log firewall rules state once a day
+        logger.info("Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list()))
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):
@@ -218,11 +225,11 @@ class EnvHandler(ThreadHandlerInterface):
             periodic_operations = [
                 RemovePersistentNetworkRules(osutil),
                 MonitorDhcpClientRestart(osutil),
-                CleanupGoalStateHistory()
             ]
 
             if conf.enable_firewall():
                 periodic_operations.append(EnableFirewall(osutil, protocol))
+                periodic_operations.append(LogFirewallRules(osutil))
             if conf.get_root_device_scsi_timeout() is not None:
                 periodic_operations.append(SetRootDeviceScsiTimeout(osutil))
             if conf.get_monitor_hostname():

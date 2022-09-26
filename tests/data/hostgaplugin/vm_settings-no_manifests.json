@@ -1,0 +1,73 @@
+{
+    "hostGAPluginVersion": "1.0.8.124",
+    "vmSettingsSchemaVersion": "0.0",
+    "activityId": "89d50bf1-fa55-4257-8af3-3db0c9f81ab4",
+    "correlationId": "c143f8f0-a66b-4881-8c06-1efd278b0b02",
+    "inSvdSeqNo": 978,
+    "extensionsLastModifiedTickCount": 637829610574739741,
+    "extensionGoalStatesSource": "FastTrack",
+    "statusUploadBlob": {
+        "statusBlobType": "PageBlob",
+        "value": "https://md-ssd-xpdjf15s.blob.core.windows.net/$system/u-sqlwatcher.f338f67e.status?sv=2018-03-28&sr=b&sk=system-1&sig=88Y3NM%2b1aU%3d&se=9999-01-01T00%3a00%3a00Z&sp=rw"
+    },
+    "inVMMetadata": {
+        "subscriptionId": "8d3c2715-f063-40b8-9402-49784992ae8d",
+        "resourceGroupName": "SYSTEMCENTERCURRENTBRANCH",
+        "vmName": "ubuntu-sqlwatcher",
+        "location": "centralus",
+        "vmId": "f338f67e-5d06-4f13-892a-ff1b047ba5bf",
+        "vmSize": "Standard_D2s_v3",
+        "osType": "Linux",
+        "vmImage": {
+            "publisher": "Canonical",
+            "offer": "UbuntuServer",
+            "sku": "18.04-LTS",
+            "version": "18.04.202005220"
+        }
+    },
+    "gaFamilies": [
+        {
+            "name": "Prod"
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.Azure.Monitor.WorkloadInsights.Test.Workload.LinuxConfigAgent",
+            "version": "3.0",
+            "state": "uninstall",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "isMultiConfig": false
+        },
+        {
+            "name": "Microsoft.Azure.Monitor.WorkloadInsights.Test.Workload.LinuxInstallerAgent",
+            "version": "11.0",
+            "state": "uninstall",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "isMultiConfig": false
+        },
+        {
+            "name": "Microsoft.Azure.Monitor.Workloads.Workload.WLILinuxExtension",
+            "version": "0.2.127",
+            "location": "https://umsakzkwhng2ft0jjptl.blob.core.windows.net/deeb2df6-c025-e6fb-b015-449ed6a676bc/deeb2df6-c025-e6fb-b015-449ed6a676bc_manifest.xml",
+            "failoverLocation": "https://umsafmqfbv4hgrd1hqff.blob.core.windows.net/deeb2df6-c025-e6fb-b015-449ed6a676bc/deeb2df6-c025-e6fb-b015-449ed6a676bc_manifest.xml",
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 7,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "publicSettings": "{\"workloadConfig\": null}"
+                }
+            ]
+        }
+    ]
+}

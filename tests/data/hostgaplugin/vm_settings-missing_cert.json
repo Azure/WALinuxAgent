@@ -1,0 +1,68 @@
+{
+    "hostGAPluginVersion": "1.0.8.124",
+    "vmSettingsSchemaVersion": "0.0",
+    "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
+    "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
+    "inSvdSeqNo": 1,
+    "extensionsLastModifiedTickCount": 637726657706205299,
+    "extensionGoalStatesSource": "FastTrack",
+    "onHold": true,
+    "statusUploadBlob": {
+        "statusBlobType": "BlockBlob",
+        "value": "https://dcrcl3a0xs.blob.core.windows.net/$system/edp0plkw2b.86f4ae0a-61f8-48ae-9199-40f402d56864.status?sv=2018-03-28&sr=b&sk=system-1&sig=KNWgC2%3d&se=9999-01-01T00%3a00%3a00Z&sp=w"
+    },
+    "inVMMetadata": {
+        "subscriptionId": "8e037ad4-618f-4466-8bc8-5099d41ac15b",
+        "resourceGroupName": "rg-dc-86fjzhp",
+        "vmName": "edp0plkw2b",
+        "location": "CentralUSEUAP",
+        "vmId": "86f4ae0a-61f8-48ae-9199-40f402d56864",
+        "vmSize": "Standard_B2s",
+        "osType": "Linux"
+    },
+    "requiredFeatures": [
+        {
+            "name": "MultipleExtensionsPerHandler"
+        }
+    ],
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
+            ]
+        },
+        {
+            "name": "Test",
+            "uris": [
+                "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml",
+                "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml"
+            ]
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.OSTCExtensions.VMAccessForLinux",
+            "version": "1.5.11",
+            "location": "https://umsasc25p0kjg0c1dg4b.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "failoverlocation": "https://umsamfwlmfshvxx2lsjm.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "additionalLocations": [
+                "https://umsah3cwjlctnmhsvzqv.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": false,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "59A10F50FFE2A0408D3F03FE336C8FD5716CF25C",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpddesZQewdDBgegkxNzA1BgoJkgergres/Microsoft.OSTCExtensions.VMAccessForLinux=="
+                }
+            ]
+        }
+    ]
+}

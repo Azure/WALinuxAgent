@@ -48,7 +48,7 @@ class _MockedFileSystemTestCase(AgentTestCase):
 
 
 class CGroupsApiTestCase(_MockedFileSystemTestCase):
-    def test_cgroups_should_be_supported_only_on_ubuntu_16_and_later(self):
+    def test_cgroups_should_be_supported_only_on_ubuntu16_centos7dot4_redhat7dot4_and_later_versions(self):
         test_cases = [
             (['ubuntu', '16.04', 'xenial'], True),
             (['ubuntu', '16.10', 'yakkety'], True),
@@ -62,8 +62,11 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
             (['centos', '8.1', 'Source'], True),
             (['redhat', '8.2', 'Maipo'], True),
             (['redhat', '8.2.2111', 'Core'], True),
-            (['centos', '7.5', 'Source'], False),
-            (['redhat', '7.5', 'Maipo'], False),
+            (['centos', '7.4', 'Source'], True),
+            (['redhat', '7.4', 'Maipo'], True),
+            (['centos', '7.5', 'Source'], True),
+            (['centos', '7.3', 'Maipo'], False),
+            (['redhat', '7.2', 'Maipo'], False),
             (['bigip', '15.0.1', 'Final'], False),
             (['gaia', '273.562', 'R80.30'], False),
             (['debian', '9.1', ''], False),

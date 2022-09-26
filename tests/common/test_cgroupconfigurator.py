@@ -30,8 +30,7 @@ from nose.plugins.attrib import attr
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, _AGENT_THROTTLED_TIME_THRESHOLD, \
-    DisableCgroups
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, DisableCgroups
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
@@ -578,8 +577,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_set_extension_services_cpu_memory_quota(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system"
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:
@@ -598,8 +596,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_set_extension_services_when_quotas_not_defined(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:
@@ -617,8 +614,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_start_tracking_extension_services_cgroups(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:
@@ -633,8 +629,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_stop_tracking_extension_services_cgroups(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
 
@@ -653,8 +648,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     def test_it_should_remove_extension_services_drop_in_files(self):
         service_list = [
             {
-                "name": "extension.service",
-                "path": "/lib/systemd/system",
+                "name": "extension.service"
             }
         ]
         with self._get_cgroup_configurator() as configurator:
@@ -842,7 +836,7 @@ exit 0
                 thread.join(timeout=5)
 
     def test_check_agent_throttled_time_should_raise_a_cgroups_exception_when_the_threshold_is_exceeded(self):
-        metrics = [MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, AGENT_NAME_TELEMETRY, _AGENT_THROTTLED_TIME_THRESHOLD + 1)]
+        metrics = [MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, AGENT_NAME_TELEMETRY, conf.get_agent_cpu_throttled_time_threshold() + 1)]
 
         with self.assertRaises(CGroupsException) as context_manager:
             CGroupConfigurator._Impl._check_agent_throttled_time(metrics)

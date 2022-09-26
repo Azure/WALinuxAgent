@@ -23,14 +23,14 @@ from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings impo
 
 class ExtensionsGoalStateFactory(object):
     @staticmethod
-    def create_empty():
-        return EmptyExtensionsGoalState()
+    def create_empty(incarnation):
+        return EmptyExtensionsGoalState(incarnation)
 
     @staticmethod
     def create_from_extensions_config(incarnation, xml_text, wire_client):
         return ExtensionsGoalStateFromExtensionsConfig(incarnation, xml_text, wire_client)
 
     @staticmethod
-    def create_from_vm_settings(etag, json_text):
-        return ExtensionsGoalStateFromVmSettings(etag, json_text)
+    def create_from_vm_settings(etag, json_text, correlation_id):
+        return ExtensionsGoalStateFromVmSettings(etag, json_text, correlation_id)
 

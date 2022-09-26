@@ -343,9 +343,8 @@ class TestRemoteAccessHandler(AgentTestCase):
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")
     @patch('azurelinuxagent.common.osutil.get_osutil', return_value=MockOSUtil())
     @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol("12.34.56.78"))
-    @patch('azurelinuxagent.common.protocol.wire.WireProtocol.get_incarnation', return_value="1")
     @patch('azurelinuxagent.common.protocol.wire.WireClient.get_remote_access', return_value="asdf")
-    def test_remote_access_handler_run_bad_data(self, _1, _2, _3, _4, _5):
+    def test_remote_access_handler_run_bad_data(self, _1, _2, _3, _4):
         with patch("azurelinuxagent.ga.remoteaccess.get_osutil", return_value=MockOSUtil()):
             rah = RemoteAccessHandler(Mock())
             tstpassword = "]aPPEv}uNg1FPnl?"

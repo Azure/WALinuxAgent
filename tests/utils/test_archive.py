@@ -1,14 +1,14 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import os
-import shutil
 import tempfile
 import zipfile
 from datetime import datetime, timedelta
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, _MAX_ARCHIVED_STATES
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.utils import fileutil, timeutil
+from azurelinuxagent.common.utils.archive import GoalStateHistory, StateArchiver, _MAX_ARCHIVED_STATES, ARCHIVE_DIRECTORY_NAME
 from tests.tools import AgentTestCase, patch
 
 debug = False
@@ -23,16 +23,13 @@ if debug:
 
 class TestArchive(AgentTestCase):
     def setUp(self):
+        super(TestArchive, self).setUp()
         prefix = "{0}_".format(self.__class__.__name__)
 
         self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
 
-    def tearDown(self):
-        if not debug and self.tmp_dir is not None:
-            shutil.rmtree(self.tmp_dir)
-
     def _write_file(self, filename, contents=None):
-        full_name = os.path.join(self.tmp_dir, filename)
+        full_name = os.path.join(conf.get_lib_dir(), filename)
         fileutil.mkdir(os.path.dirname(full_name))
 
         with open(full_name, 'w') as file_handler:
@@ -42,7 +39,7 @@ class TestArchive(AgentTestCase):
 
     @property
     def history_dir(self):
-        return os.path.join(self.tmp_dir, 'history')
+        return os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME)
 
     @staticmethod
     def _parse_archive_name(name):
@@ -53,82 +50,43 @@ class TestArchive(AgentTestCase):
         incarnation_no_ext = os.path.splitext(incarnation_ext)[0]
         return timestamp_str, incarnation_no_ext
 
-    def test_archive00(self):
-        """
-        StateFlusher should move all 'goal state' files to a new directory
-        under the history folder that is timestamped.
-        """
-        temp_files = [
-            'GoalState.0.xml',
-            'Prod.0.manifest.xml',
-            'Prod.0.agentsManifest',
-            'Microsoft.Azure.Extensions.CustomScript.0.xml'
+    def test_archive_should_zip_all_but_the_latest_goal_state_in_the_history_folder(self):
+        test_files = [
+            'GoalState.xml',
+            'Prod.manifest.xml',
+            'Prod.agentsManifest',
+            'Microsoft.Azure.Extensions.CustomScript.xml'
         ]
 
-        for temp_file in temp_files:
-            self._write_file(temp_file)
+        # these directories match the pattern that StateArchiver.archive() searches for
+        test_directories = []
+        for i in range(0, 3):
+            timestamp = (datetime.utcnow() + timedelta(minutes=i)).isoformat()
+            directory = os.path.join(self.history_dir, "{0}_incarnation_{1}".format(timestamp, i))
+            for current_file in test_files:
+                self._write_file(os.path.join(directory, current_file))
+            test_directories.append(directory)
 
-        test_subject = StateFlusher(self.tmp_dir)
-        test_subject.flush()
+        test_subject = StateArchiver(conf.get_lib_dir())
+        # NOTE: StateArchiver sorts the state directories by creation time, but the test files are created too fast and the
+        # time resolution is too coarse, so instead we mock getctime to simply return the path of the file
+        with patch("azurelinuxagent.common.utils.archive.os.path.getctime", side_effect=lambda path: path):
+            test_subject.archive()
 
-        self.assertTrue(os.path.exists(self.history_dir))
-        self.assertTrue(os.path.isdir(self.history_dir))
+        for directory in test_directories[0:2]:
+            zip_file = directory + ".zip"
+            self.assertTrue(os.path.exists(zip_file), "{0} was not archived (could not find {1})".format(directory, zip_file))
 
-        timestamp_dirs = os.listdir(self.history_dir)
-        self.assertEqual(1, len(timestamp_dirs))
+            missing_file = self.assert_zip_contains(zip_file, test_files)
+            self.assertEqual(None, missing_file, missing_file)
 
-        timestamp_str, incarnation = self._parse_archive_name(timestamp_dirs[0])
-        self.assert_is_iso8601(timestamp_str)
-        timestamp = self.parse_isoformat(timestamp_str)
-        self.assert_datetime_close_to(timestamp, datetime.utcnow(), timedelta(seconds=30))
-        self.assertEqual("0", incarnation)
+            self.assertFalse(os.path.exists(directory), "{0} was not removed after being archived ".format(directory))
 
-        for temp_file in temp_files:
-            history_path = os.path.join(self.history_dir, timestamp_dirs[0], temp_file)
-            msg = "expected the temp file {0} to exist".format(history_path)
-            self.assertTrue(os.path.exists(history_path), msg)
+        self.assertTrue(os.path.exists(test_directories[2]), "{0}, the latest goal state, should not have being removed".format(test_directories[2]))
 
-    def test_archive01(self):
+    def test_goal_state_history_init_should_purge_old_items(self):
         """
-        StateArchiver should archive all history directories by
-
-          1. Creating a .zip of a timestamped directory's files
-          2. Saving the .zip to /var/lib/waagent/history/
-          2. Deleting the timestamped directory
-        """
-        temp_files = [
-            'GoalState.0.xml',
-            'Prod.0.manifest.xml',
-            'Prod.0.agentsManifest',
-            'Microsoft.Azure.Extensions.CustomScript.0.xml'
-        ]
-
-        for current_file in temp_files:
-            self._write_file(current_file)
-
-        flusher = StateFlusher(self.tmp_dir)
-        flusher.flush()
-
-        test_subject = StateArchiver(self.tmp_dir)
-        test_subject.archive()
-
-        timestamp_zips = os.listdir(self.history_dir)
-        self.assertEqual(1, len(timestamp_zips))
-
-        zip_fn = timestamp_zips[0]  # 2000-01-01T00:00:00.000000_incarnation_N.zip
-        timestamp_str, incarnation = self._parse_archive_name(zip_fn)
-
-        self.assert_is_iso8601(timestamp_str)
-        timestamp = self.parse_isoformat(timestamp_str)
-        self.assert_datetime_close_to(timestamp, datetime.utcnow(), timedelta(seconds=30))
-        self.assertEqual("0", incarnation)
-
-        zip_full = os.path.join(self.history_dir, zip_fn)
-        self.assertEqual(self.assert_zip_contains(zip_full, temp_files), None)
-
-    def test_archive02(self):
-        """
-        StateArchiver should purge the MAX_ARCHIVED_STATES oldest files
+        GoalStateHistory.__init__ should _purge the MAX_ARCHIVED_STATES oldest files
         or directories.  The oldest timestamps are purged first.
 
         This test case creates a mixture of archive files and directories.
@@ -147,16 +105,18 @@ class TestArchive(AgentTestCase):
             timestamps.append(timestamp)
 
             if i % 2 == 0:
-                filename = os.path.join('history', "{0}_incarnation_0".format(timestamp.isoformat()), 'Prod.0.manifest.xml')
+                filename = os.path.join('history', "{0}_0".format(timestamp.isoformat()), 'Prod.manifest.xml')
             else:
-                filename = os.path.join('history', "{0}_incarnation_0.zip".format(timestamp.isoformat()))
+                filename = os.path.join('history', "{0}_0.zip".format(timestamp.isoformat()))
 
             self._write_file(filename)
 
         self.assertEqual(total, len(os.listdir(self.history_dir)))
 
-        test_subject = StateArchiver(self.tmp_dir)
-        test_subject.purge()
+        # NOTE: The purge method sorts the items by creation time, but the test files are created too fast and the
+        # time resolution is too coarse, so instead we mock getctime to simply return the path of the file
+        with patch("azurelinuxagent.common.utils.archive.os.path.getctime", side_effect=lambda path: path):
+            GoalStateHistory(datetime.utcnow(), 'test')
 
         archived_entries = os.listdir(self.history_dir)
         self.assertEqual(_MAX_ARCHIVED_STATES, len(archived_entries))
@@ -166,47 +126,38 @@ class TestArchive(AgentTestCase):
         for i in range(0, _MAX_ARCHIVED_STATES):
             timestamp = timestamps[i + count].isoformat()
             if i % 2 == 0:
-                filename = "{0}_incarnation_0".format(timestamp)
+                filename = "{0}_0".format(timestamp)
             else:
-                filename = "{0}_incarnation_0.zip".format(timestamp)
+                filename = "{0}_0.zip".format(timestamp)
             self.assertTrue(filename in archived_entries, "'{0}' is not in the list of unpurged entires".format(filename))
 
-    def test_archive03(self):
-        """
-        All archives should be purged, both with the new naming (with incarnation number) and with the old naming.
-        """
-        start = datetime.now()
-        timestamp1 = start + timedelta(seconds=5)
-        timestamp2 = start + timedelta(seconds=10)
+    def test_purge_legacy_goal_state_history(self):
+        with patch("azurelinuxagent.common.conf.get_lib_dir", return_value=self.tmp_dir):
+            # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband); verify that we do not delete it
+            shared_config = os.path.join(self.tmp_dir, 'SharedConfig.xml')
 
-        dir_old = timestamp1.isoformat()
-        dir_new = "{0}_incarnation_1".format(timestamp2.isoformat())
+            legacy_files = [
+                'GoalState.2.xml',
+                'VmSettings.2.json',
+                'Prod.2.manifest.xml',
+                'ExtensionsConfig.2.xml',
+                'Microsoft.Azure.Extensions.CustomScript.1.xml',
+                'HostingEnvironmentConfig.xml',
+                'RemoteAccess.xml',
+                'waagent_status.1.json'
+            ]
+            legacy_files = [os.path.join(self.tmp_dir, f) for f in legacy_files]
 
-        archive_old = "{0}.zip".format(timestamp1.isoformat())
-        archive_new = "{0}_incarnation_1.zip".format(timestamp2.isoformat())
+            self._write_file(shared_config)
+            for f in legacy_files:
+                self._write_file(f)
 
-        self._write_file(os.path.join("history", dir_old, "Prod.0.manifest.xml"))
-        self._write_file(os.path.join("history", dir_new, "Prod.1.manifest.xml"))
-        self._write_file(os.path.join("history", archive_old))
-        self._write_file(os.path.join("history", archive_new))
+            StateArchiver.purge_legacy_goal_state_history()
 
-        self.assertEqual(4, len(os.listdir(self.history_dir)), "Not all entries were archived!")
+            self.assertTrue(os.path.exists(shared_config), "{0} should not have been removed".format(shared_config))
 
-        test_subject = StateArchiver(self.tmp_dir)
-        with patch("azurelinuxagent.common.utils.archive._MAX_ARCHIVED_STATES", 0):
-            test_subject.purge()
-
-        archived_entries = os.listdir(self.history_dir)
-        self.assertEqual(0, len(archived_entries), "Not all entries were purged!")
-
-    def test_archive04(self):
-        """
-        The archive directory is created if it does not exist.
-
-        This failure was caught when .purge() was called before .archive().
-        """
-        test_subject = StateArchiver(os.path.join(self.tmp_dir, 'does-not-exist'))
-        test_subject.purge()
+            for f in legacy_files:
+                self.assertFalse(os.path.exists(f), "Legacy file {0} was not removed".format(f))
 
     @staticmethod
     def parse_isoformat(timestamp_str):
@@ -219,20 +170,13 @@ class TestArchive(AgentTestCase):
         except:
             raise AssertionError("the value '{0}' is not an ISO8601 formatted timestamp".format(timestamp_str))
 
-    @staticmethod
-    def _total_seconds(delta):
-        """
-        Compute the total_seconds for a timedelta because 2.6 does not have total_seconds.
-        """
-        return (0.0 + delta.microseconds + (delta.seconds + delta.days * 24 * 60 * 60) * 10 ** 6) / 10 ** 6
-
     def assert_datetime_close_to(self, time1, time2, within):
         if time1 <= time2:
             diff = time2 - time1
         else:
             diff = time1 - time2
 
-        secs = self._total_seconds(within - diff)
+        secs = timeutil.total_seconds(within - diff)
         if secs < 0:
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 

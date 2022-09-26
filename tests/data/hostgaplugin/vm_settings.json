@@ -1,10 +1,11 @@
 {
-    "hostGAPluginVersion": "1.0.8.115",
+    "hostGAPluginVersion": "1.0.8.124",
     "vmSettingsSchemaVersion": "0.0",
     "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
     "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
-    "extensionsLastModifiedTickCount": 637726657706205217,
-    "extensionGoalStatesSource": "Fabric",
+    "inSvdSeqNo": 1,
+    "extensionsLastModifiedTickCount": 637726657706205299,
+    "extensionGoalStatesSource": "FastTrack",
     "onHold": true,
     "statusUploadBlob": {
         "statusBlobType": "BlockBlob",
@@ -55,8 +56,8 @@
             "settingsSeqNo": 0,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
-                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
+                    "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent==",
                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
                 }
             ]
@@ -75,8 +76,8 @@
             "settingsSeqNo": 0,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "4C4F304667711036E64AF4894B76EB208A863BD4",
-                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/IsZAEZFidXaW5kb3dzIEF6dXJlIENSUCBDZXJ0aWZpY2F0ZSBHZW5lcmF0b3ICEFpB/HKM/7evRk+DBz754wUwDQYJKoZIhvcNAQEBBQAEggEADPJwniDeIUXzxNrZCloitFdscQ59Bz1dj9DLBREAiM8jmxM0LLicTJDUv272Qm/4ZQgdqpFYBFjGab/9MX+Ih2x47FkVY1woBkckMaC/QOFv84gbboeQCmJYZC/rZJdh8rCMS+CEPq3uH1PVrvtSdZ9uxnaJ+E4exTPPviIiLIPtqWafNlzdbBt8HZjYaVw+SSe+CGzD2pAQeNttq3Rt/6NjCzrjG8ufKwvRoqnrInMs4x6nnN5/xvobKIBSv4/726usfk8Ug+9Q6Benvfpmre2+1M5PnGTfq78cO3o6mI3cPoBUjp5M0iJjAMGeMt81tyHkimZrEZm6pLa4NQMOEjArBgkqhkiG9w0BBwEwFAYIKoZIhvcNAwcECC5nVaiJaWt+gAhgeYvxUOYHXw==",
+                    "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent==",
                     "publicSettings": "{\"enableGenevaUpload\":true}"
                 }
             ]
@@ -191,8 +192,8 @@
             "isMultiConfig": false,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "59A10F50FFE2A0408D3F03FE336C8FD5716CF25C",
-                    "protectedSettings": "*** REDACTED ***"
+                    "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+                    "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpddesZQewdDBgegkxNzA1BgoJkgergres/Microsoft.OSTCExtensions.VMAccessForLinux=="
                 }
             ]
         }

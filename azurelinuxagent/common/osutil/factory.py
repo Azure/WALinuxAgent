@@ -102,7 +102,8 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
         return DebianOSBaseUtil()
 
-    if distro_name in ("redhat", "rhel", "centos", "oracle", "almalinux", "cloudlinux"):
+    if distro_name in ("redhat", "rhel", "centos", "oracle", "almalinux",
+                       "cloudlinux", "rocky"):
         if Version(distro_version) < Version("7"):
             return Redhat6xOSUtil()
 

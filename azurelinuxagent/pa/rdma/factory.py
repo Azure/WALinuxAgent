@@ -38,7 +38,9 @@ def get_rdma_handler(
     ):
         return SUSERDMAHandler()
 
-    if distro_full_name in ('CentOS Linux', 'CentOS', 'Red Hat Enterprise Linux Server', 'AlmaLinux', 'CloudLinux'):
+    if distro_full_name in ('CentOS Linux', 'CentOS',
+                            'Red Hat Enterprise Linux Server', 'AlmaLinux',
+                            'CloudLinux', 'Rocky Linux'):
         return CentOSRDMAHandler(distro_version)
 
     if distro_full_name == 'Ubuntu':

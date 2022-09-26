@@ -62,6 +62,8 @@ class TestProtocolUtil(AgentTestCase):
         if os.path.exists(endpoint_path):
             os.remove(endpoint_path)
 
+        super(TestProtocolUtil, self).tearDown()
+
     def test_get_protocol_util_should_return_same_object_for_same_thread(self, _):
         protocol_util1 = get_protocol_util()
         protocol_util2 = get_protocol_util()
@@ -174,6 +176,7 @@ class TestProtocolUtil(AgentTestCase):
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
         protocol_util.osutil = MagicMock()
+        protocol_util.osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
@@ -213,6 +216,7 @@ class TestProtocolUtil(AgentTestCase):
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
         protocol_util.osutil = MagicMock()
+        protocol_util.osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
         mock_wire_client.return_value = MagicMock()
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
