@@ -39,7 +39,8 @@ from azurelinuxagent.common.agent_supported_feature import get_supported_feature
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException
+from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException, \
+    CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
@@ -137,6 +138,7 @@ def get_update_handler():
 
 class UpdateHandler(object):
     TELEMETRY_HEARTBEAT_PERIOD = timedelta(minutes=30)
+    CHECK_MEMORY_USAGE_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -161,6 +163,9 @@ class UpdateHandler(object):
         self._last_telemetry_heartbeat = None
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
+
+        self._last_check_memory_usage = datetime.min
+        self._check_memory_usage_last_error_report = datetime.min
 
         # VM Size is reported via the heartbeat, default it here.
         self._vm_size = None
@@ -401,6 +406,7 @@ class UpdateHandler(object):
                 self._check_threads_running(all_thread_handlers)
                 self._process_goal_state(exthandlers_handler, remote_access_handler)
                 self._send_heartbeat_telemetry(protocol)
+                self._check_agent_memory_usage()
                 time.sleep(self._goal_state_period)
 
         except AgentUpgradeExitException as exitException:
@@ -1287,6 +1293,27 @@ class UpdateHandler(object):
             self._heartbeat_counter += 1
             self._heartbeat_update_goal_state_error_count = 0
             self._last_telemetry_heartbeat = datetime.utcnow()
+
+    def _check_agent_memory_usage(self):
+        """
+        This checks the agent current memory usage and safely exit the process if agent reaches the memory limit
+        """
+        try:
+            if conf.get_enable_agent_memory_usage_check() and self._extensions_summary.converged:
+                if self._last_check_memory_usage == datetime.min or datetime.utcnow() >= (self._last_check_memory_usage + UpdateHandler.CHECK_MEMORY_USAGE_PERIOD):
+                    self._last_check_memory_usage = datetime.utcnow()
+                    CGroupConfigurator.get_instance().check_agent_memory_usage()
+        except CGroupsException as exception:
+            msg = "Check on agent memory usage:\n{0}".format(ustr(exception))
+            logger.info(msg)
+            add_event(AGENT_NAME, op=WALAEventOperation.CGroupsInfo, is_success=True, message=msg)
+            raise ExitException("Agent {0} is reached memory limit -- exiting".format(CURRENT_AGENT))
+        except Exception as exception:
+            if self._check_memory_usage_last_error_report == datetime.min or (self._check_memory_usage_last_error_report + timedelta(hours=6)) > datetime.now():
+                self._check_memory_usage_last_error_report = datetime.now()
+                msg = "Error checking the agent's memory usage: {0}".format(ustr(exception))
+                logger.warn(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.CGroupsInfo, is_success=False, message=msg)
 
     @staticmethod
     def _ensure_extension_telemetry_state_configured_properly(protocol):

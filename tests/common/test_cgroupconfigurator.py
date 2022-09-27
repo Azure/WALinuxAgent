@@ -986,3 +986,15 @@ exit 0
                 finally:
                     for p in patchers:
                         p.stop()
+
+    def test_check_agent_memory_usage_should_raise_a_cgroups_exception_when_the_limit_is_exceeded(self):
+        metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1),
+                   MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1)]
+
+        with self.assertRaises(CGroupsException) as context_manager:
+            with self._get_cgroup_configurator() as configurator:
+                with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_tracked_metrics") as tracked_metrics:
+                    tracked_metrics.return_value = metrics
+                    configurator.check_agent_memory_usage()
+
+        self.assertIn("The agent memory limit {0} bytes exceeded".format(conf.get_agent_memory_quota()), ustr(context_manager.exception), "An incorrect exception was raised")

@@ -136,6 +136,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
+    "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": False
 }
@@ -186,6 +187,7 @@ __INTEGER_OPTIONS__ = {
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 50,
     "Debug.AgentCpuThrottledTimeThreshold": 120,
+    "Debug.AgentMemoryQuota": 31457280,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,
@@ -553,6 +555,24 @@ def get_agent_cpu_throttled_time_threshold(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.AgentCpuThrottledTimeThreshold", 120)
+
+
+def get_agent_memory_quota(conf=__conf__):
+    """
+    Memory quota for the agent in bytes.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.AgentMemoryQuota", 30 * 1024 ** 2)
+
+
+def get_enable_agent_memory_usage_check(conf=__conf__):
+    """
+    If True, Agent checks it's Memory usage.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableAgentMemoryUsageCheck", False)
 
 
 def get_cgroup_monitor_expiry_time(conf=__conf__):
