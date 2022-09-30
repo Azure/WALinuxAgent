@@ -192,7 +192,9 @@ class GoalState(object):
         incarnation, xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
         goal_state_updated = force_update or incarnation != self._incarnation
         if goal_state_updated:
-            self.logger.info('Fetched a new incarnation for the WireServer goal state [incarnation {0}]', incarnation)
+            message = 'Fetched a new incarnation for the WireServer goal state [incarnation {0}]'.format(incarnation)
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
         vm_settings, vm_settings_updated = None, False
         try:
@@ -203,11 +205,15 @@ class GoalState(object):
 
         if vm_settings_updated:
             self.logger.info('')
-            self.logger.info("Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]", vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
+            message = "Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]".format(vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
         # Ignore the vmSettings if their source is Fabric (processing a Fabric goal state may require the tenant certificate and the vmSettings don't include it.)
         if vm_settings is not None and vm_settings.source == GoalStateSource.Fabric:
             if vm_settings_updated:
-                self.logger.info("The vmSettings originated via Fabric; will ignore them.")
+                message = "The vmSettings originated via Fabric; will ignore them."
+                self.logger.info(message)
+                add_event(op=WALAEventOperation.GoalState, message=message)
             vm_settings, vm_settings_updated = None, False
 
         # If neither goal state has changed we are done with the update
@@ -265,7 +271,9 @@ class GoalState(object):
                     raise GoalStateInconsistentError(message)
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
-        self.logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
+        msg = 'The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.'
+        self.logger.info(msg)
+        add_event(op=WALAEventOperation.VmSettings, message=msg)
         self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
         self._history.save_goal_state(xml_text)
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
@@ -274,7 +282,7 @@ class GoalState(object):
             msg = "Fetched a Fabric goal state older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}".format(
                   self._extensions_goal_state.created_on_timestamp, vm_settings_support_stopped_error.timestamp)
             self.logger.info(msg)
-            add_event(op=WALAEventOperation.VmSettings, message=msg, is_success=True)
+            add_event(op=WALAEventOperation.VmSettings, message=msg)
 
     def save_to_history(self, data, file_name):
         self._history.save(data, file_name)
@@ -351,7 +359,9 @@ class GoalState(object):
         """
         try:
             self.logger.info('')
-            self.logger.info('Fetching full goal state from the WireServer [incarnation {0}]', incarnation)
+            message = 'Fetching full goal state from the WireServer [incarnation {0}]'.format(incarnation)
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
             role_instance = find(xml_doc, "RoleInstance")
             role_instance_id = findtext(role_instance, "InstanceId")
@@ -391,9 +401,12 @@ class GoalState(object):
                 certs = Certificates(xml_text, self.logger)
                 # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
                 for c in certs.summary:
-                    self.logger.info("Downloaded certificate {0}".format(c))
+                    message = "Downloaded certificate {0}".format(c)
+                    self.logger.info(message)
+                    add_event(op=WALAEventOperation.GoalState, message=message)
                 if len(certs.warnings) > 0:
                     self.logger.warn(certs.warnings)
+                    add_event(op=WALAEventOperation.GoalState, message=certs.warnings)
                 self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
@@ -455,9 +468,11 @@ class Certificates(object):
             return
 
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format")
-        if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
-            my_logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+        certificate_format = findtext(xml_doc, "Format")
+        if certificate_format and certificate_format != "Pkcs7BlobWithPfxContents":
+            message = "The Format is not Pkcs7BlobWithPfxContents. Format is {0}".format(certificate_format)
+            my_logger.warn(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
