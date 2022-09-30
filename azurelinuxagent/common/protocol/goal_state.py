@@ -431,7 +431,9 @@ class GoalState(object):
             self.logger.warn("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
-            self.logger.info('Fetch goal state completed')
+            message = 'Fetch goal state completed'
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
 
 class HostingEnv(object):
