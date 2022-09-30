@@ -491,7 +491,7 @@ class HostPluginProtocol(object):
         try:
             # Raise if VmSettings are not supported, but check again periodically since the HostGAPlugin could have been updated since the last check
             # Note that self._host_plugin_supports_vm_settings can be None, so we need to compare against False
-            if self._supports_vm_settings == False and self._supports_vm_settings_next_check > datetime.datetime.now():
+            if not self._supports_vm_settings and self._supports_vm_settings_next_check > datetime.datetime.now():
                 # Raise VmSettingsNotSupported directly instead of using raise_not_supported() to avoid resetting the timestamp for the next check
                 raise VmSettingsNotSupported()
 
@@ -551,8 +551,8 @@ class HostPluginProtocol(object):
                 logger.info(message)
                 add_event(op=WALAEventOperation.HostPlugin, message=message, is_success=True)
 
-            # Don't support HostGAPlugin versions older than 124
-            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.124"):
+            # Don't support HostGAPlugin versions older than 133
+            if vm_settings.host_ga_plugin_version < FlexibleVersion("1.0.8.133"):
                 raise_not_supported()
 
             self._supports_vm_settings = True
