@@ -26,7 +26,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
+from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.version import get_distro
@@ -143,6 +143,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
+            self._agent_memory_cgroup = None
             self._check_cgroups_lock = threading.RLock()  # Protect the check_cgroups which is called from Monitor thread and main loop.
 
         def initialize(self):
@@ -194,7 +195,8 @@ class CGroupConfigurator(object):
 
                 if self._agent_memory_cgroup_path is not None:
                     _log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path))
+                    self._agent_memory_cgroup = MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path)
+                    CGroupsTelemetry.track_cgroup(self._agent_memory_cgroup)
 
                 _log_cgroup_info('Agent cgroups enabled: {0}', self._agent_cgroups_enabled)
 
@@ -728,6 +730,19 @@ class CGroupConfigurator(object):
                 if metric.instance == AGENT_NAME_TELEMETRY and metric.counter == MetricsCounter.THROTTLED_TIME:
                     if metric.value > conf.get_agent_cpu_throttled_time_threshold():
                         raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
+
+        def check_agent_memory_usage(self):
+            if self.enabled() and self._agent_memory_cgroup:
+                metrics = self._agent_memory_cgroup.get_tracked_metrics()
+                current_usage = 0
+                for metric in metrics:
+                    if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
+                        current_usage += metric.value
+                    elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
+                        current_usage += metric.value
+
+                if current_usage > conf.get_agent_memory_quota():
+                    raise AgentMemoryExceededException("The agent memory limit {0} bytes exceeded. The current reported usage is {1} bytes.".format(conf.get_agent_memory_quota(), current_usage))
 
         @staticmethod
         def _get_parent(pid):
