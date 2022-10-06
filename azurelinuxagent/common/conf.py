@@ -187,7 +187,7 @@ __INTEGER_OPTIONS__ = {
     "Debug.CgroupCheckPeriod": 300,
     "Debug.AgentCpuQuota": 50,
     "Debug.AgentCpuThrottledTimeThreshold": 120,
-    "Debug.AgentMemoryQuota": 31457280,
+    "Debug.AgentMemoryQuota": 30 * 1024 ** 2,
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,

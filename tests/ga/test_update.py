@@ -29,7 +29,7 @@ _ORIGINAL_POPEN = subprocess.Popen
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError, CGroupsException, \
-    ExitException
+    ExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import URI_FORMAT_GET_API_VERSIONS, HOST_PLUGIN_PORT, \
@@ -2985,7 +2985,7 @@ class AgentMemoryCheckTestCase(AgentTestCase):
     @patch("azurelinuxagent.common.logger.info")
     @patch("azurelinuxagent.ga.update.add_event")
     def test_check_agent_memory_usage_raises_exit_exception(self, patch_add_event, patch_info, *_):
-        with patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=CGroupsException()):
+        with patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=AgentMemoryExceededException()):
             with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
                 with self.assertRaises(ExitException) as context_manager:
                     update_handler = get_update_handler()
@@ -3011,7 +3011,7 @@ class AgentMemoryCheckTestCase(AgentTestCase):
                                 "The memory check was not written to the agent's log")
                 self.assertEqual(1, patch_add_event.call_count)
                 add_events = [kwargs for _, kwargs in patch_add_event.call_args_list if
-                                kwargs["op"] == WALAEventOperation.CGroupsInfo]
+                                kwargs["op"] == WALAEventOperation.AgentMemory]
                 self.assertTrue(
                     len(add_events) == 1,
                     "Exactly 1 event should have been emitted when memory usage check fails. Got: {0}".format(add_events))

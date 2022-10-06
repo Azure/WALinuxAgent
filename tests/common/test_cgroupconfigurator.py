@@ -33,7 +33,8 @@ from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, 
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, DisableCgroups
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes, \
+    AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.common.mock_environment import MockCommand
@@ -991,7 +992,7 @@ exit 0
         metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1),
                    MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1)]
 
-        with self.assertRaises(CGroupsException) as context_manager:
+        with self.assertRaises(AgentMemoryExceededException) as context_manager:
             with self._get_cgroup_configurator() as configurator:
                 with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_tracked_metrics") as tracked_metrics:
                     tracked_metrics.return_value = metrics
