@@ -28,7 +28,7 @@ _ORIGINAL_POPEN = subprocess.Popen
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
-from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError, CGroupsException, \
+from azurelinuxagent.common.exception import ProtocolError, UpdateError, ResourceGoneError, HttpError, \
     ExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
