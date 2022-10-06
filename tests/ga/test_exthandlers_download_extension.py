@@ -96,6 +96,9 @@ class DownloadExtensionTestCase(AgentTestCase):
         with open(filename, "w") as file:  # pylint: disable=redefined-builtin
             file.write("An invalid ZIP file\n")
 
+    def _get_extension_base_dir(self):
+        return self.extension_dir
+
     def _get_extension_package_file(self):
         return os.path.join(self.agent_dir, self.ext_handler_instance.get_extension_package_zipfile_name())
 
@@ -103,7 +106,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         return os.path.join(self.extension_dir, DownloadExtensionTestCase._extension_command)
 
     def _assert_download_and_expand_succeeded(self):
-        self.assertTrue(os.path.exists(self._get_extension_package_file()), "The extension package was not downloaded to the expected location")
+        self.assertTrue(os.path.exists(self._get_extension_base_dir()), "The extension package was not downloaded to the expected location")
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
 
     @staticmethod
@@ -246,9 +249,11 @@ class DownloadExtensionTestCase(AgentTestCase):
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_raise_an_exception_when_all_downloads_fail(self):
-        def stream(_, __, **___):
-            DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
+        def stream(_, target_file, **___):
+            stream.target_file = target_file
+            DownloadExtensionTestCase._create_invalid_zip_file(target_file)
             return True
+        stream.target_file = None
 
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             with self.assertRaises(ExtensionDownloadError) as context_manager:
@@ -260,5 +265,5 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError)
 
         self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
-        self.assertFalse(os.path.exists(self._get_extension_package_file()), "The extension package was not removed")
+        self.assertFalse(os.path.exists(stream.target_file), "The extension package was not removed")
 

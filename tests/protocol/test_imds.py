@@ -20,18 +20,18 @@ import json
 import os
 import unittest
 
-import azurelinuxagent.common.protocol.imds as imds
+from azurelinuxagent.common.protocol import imds
 
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.utils import restutil
-from tests.ga.test_update import ResponseMock
+from tests.protocol.mocks import MockHttpResponse
 from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch
 
 
 def get_mock_compute_response():
-    return ResponseMock(response='''{
+    return MockHttpResponse(status=httpclient.OK, body='''{
     "location": "westcentralus",
     "name": "unit_test",
     "offer": "UnitOffer",
@@ -52,7 +52,7 @@ def get_mock_compute_response():
 
 class TestImds(AgentTestCase):
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.common.protocol.imds.restutil.http_get")
     def test_get(self, mock_http_get):
         mock_http_get.return_value = get_mock_compute_response()
 
@@ -67,23 +67,23 @@ class TestImds(AgentTestCase):
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.common.protocol.imds.restutil.http_get")
     def test_get_bad_request(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
+        mock_http_get.return_value = MockHttpResponse(status=restutil.httpclient.BAD_REQUEST)
 
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(HttpError, test_subject.get_compute)
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.common.protocol.imds.restutil.http_get")
     def test_get_internal_service_error(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(status=restutil.httpclient.INTERNAL_SERVER_ERROR)
+        mock_http_get.return_value = MockHttpResponse(status=restutil.httpclient.INTERNAL_SERVER_ERROR)
 
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(HttpError, test_subject.get_compute)
 
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.common.protocol.imds.restutil.http_get")
     def test_get_empty_response(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(response=''.encode('utf-8'))
+        mock_http_get.return_value = MockHttpResponse(status=httpclient.OK, body=''.encode('utf-8'))
 
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         self.assertRaises(ValueError, test_subject.get_compute)
@@ -361,9 +361,9 @@ class TestImds(AgentTestCase):
     def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
         test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
         with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
-            mock_http_get.return_value = ResponseMock(status=http_status_code,
+            mock_http_get.return_value = MockHttpResponse(status=http_status_code,
                                                       reason='reason',
-                                                      response=http_response)
+                                                      body=http_response)
             validate_response = test_subject.validate()
 
         self.assertEqual(1, mock_http_get.call_count)
