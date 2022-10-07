@@ -28,7 +28,8 @@ _ORIGINAL_POPEN = subprocess.Popen
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
-from azurelinuxagent.common.exception import ProtocolError, UpdateError, HttpError
+from azurelinuxagent.common.exception import ProtocolError, UpdateError, HttpError, \
+    ExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -1306,7 +1307,7 @@ class TestUpdate(UpdateTestCase):
         eh = Extension(name=name)
         eh.version = version
         return ExtHandlerInstance(eh, protocol)
-    
+
     def test_update_handler_recovers_from_error_with_no_certs(self):
         data = DATA_FILE.copy()
         data['goal_state'] = 'wire/goal_state_no_certs.xml'
@@ -1334,7 +1335,7 @@ class TestUpdate(UpdateTestCase):
                             for (args, _) in filter(lambda a: len(a) > 0, patched_error.call_args_list):
                                 if unexpected_msg_fragment in args[0]:
                                     matching_errors.append(args[0])
-                            
+
                             if len(matching_errors) > 1:
                                 self.fail("Guest Agent did not recover, with new error(s): {}"\
                                     .format(matching_errors[1:]))
@@ -2728,7 +2729,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
             if HttpRequestPredicates.is_host_plugin_vm_settings_request(url):
                 return MockHttpResponse(404)
             return None
-        
+
         with mock_wire_protocol(data) as protocol:
 
             def mock_live_migration(iteration):
@@ -2738,7 +2739,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
                 elif iteration == 2:
                     protocol.mock_wire_data.set_incarnation(3)
                     protocol.set_http_handlers(http_get_handler=vm_settings_not_supported)
-            
+
             with mock_update_handler(protocol, 3, on_new_iteration=mock_live_migration) as update_handler:
                 with patch("azurelinuxagent.ga.update.logger.error") as patched_error:
                     def check_for_errors():
@@ -2750,7 +2751,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
 
                     update_handler.run(debug=True)
                     check_for_errors()
-                
+
             timestamp = protocol.client.get_host_plugin()._fast_track_timestamp
             self.assertEqual(timestamp, timeutil.create_timestamp(datetime.min),
                 "Expected fast track time stamp to be set to {0}, got {1}".format(datetime.min, timestamp))
@@ -2760,16 +2761,16 @@ class HeartbeatTestCase(AgentTestCase):
     @patch("azurelinuxagent.common.logger.info")
     @patch("azurelinuxagent.ga.update.add_event")
     def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
-        
+
         with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
             update_handler = get_update_handler()
-            
+
             update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
             update_handler._send_heartbeat_telemetry(mock_protocol)
             self.assertEqual(1, patch_add_event.call_count)
             self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
-    
+
     @patch("azurelinuxagent.ga.update.add_event")
     @patch("azurelinuxagent.common.protocol.imds.ImdsClient")
     def test_telemetry_heartbeat_retries_failed_vm_size_fetch(self, mock_imds_factory, patch_add_event, *_):
@@ -2787,7 +2788,7 @@ class HeartbeatTestCase(AgentTestCase):
             self.assertTrue(telemetry_message.endswith(vm_size),
                 "Expected HeartBeat message ('{0}') to end with the test vmSize value, {1}."\
                 .format(telemetry_message, vm_size))
-        
+
         with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
             update_handler = get_update_handler()
             update_handler.protocol_util.get_protocol = Mock(return_value=mock_protocol)
@@ -2811,6 +2812,47 @@ class HeartbeatTestCase(AgentTestCase):
             update_handler._send_heartbeat_telemetry(mock_protocol)
 
             validate_single_heartbeat_event_matches_vm_size("TestVmSizeValue")
+
+
+class AgentMemoryCheckTestCase(AgentTestCase):
+
+    @patch("azurelinuxagent.common.logger.info")
+    @patch("azurelinuxagent.ga.update.add_event")
+    def test_check_agent_memory_usage_raises_exit_exception(self, patch_add_event, patch_info, *_):
+        with patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=AgentMemoryExceededException()):
+            with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
+                with self.assertRaises(ExitException) as context_manager:
+                    update_handler = get_update_handler()
+
+                    update_handler._check_agent_memory_usage()
+                    self.assertEqual(1, patch_add_event.call_count)
+                    self.assertTrue(any("Check on agent memory usage" in call_args[0]
+                                        for call_args in patch_info.call_args),
+                                    "The memory check was not written to the agent's log")
+                    self.assertIn("Agent {0} is reached memory limit -- exiting".format(CURRENT_AGENT),
+                                  ustr(context_manager.exception), "An incorrect exception was raised")
+
+    @patch("azurelinuxagent.common.logger.warn")
+    @patch("azurelinuxagent.ga.update.add_event")
+    def test_check_agent_memory_usage_fails(self, patch_add_event, patch_warn, *_):
+        with patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=Exception()):
+            with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
+                update_handler = get_update_handler()
+
+                update_handler._check_agent_memory_usage()
+                self.assertTrue(any("Error checking the agent's memory usage" in call_args[0]
+                                    for call_args in patch_warn.call_args),
+                                "The memory check was not written to the agent's log")
+                self.assertEqual(1, patch_add_event.call_count)
+                add_events = [kwargs for _, kwargs in patch_add_event.call_args_list if
+                                kwargs["op"] == WALAEventOperation.AgentMemory]
+                self.assertTrue(
+                    len(add_events) == 1,
+                    "Exactly 1 event should have been emitted when memory usage check fails. Got: {0}".format(add_events))
+                self.assertIn(
+                    "Error checking the agent's memory usage",
+                    add_events[0]["message"],
+                    "The error message is not correct when memory usage check failed")
 
 
 class GoalStateIntervalTestCase(AgentTestCase):

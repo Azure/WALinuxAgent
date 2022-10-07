@@ -58,6 +58,14 @@ class AgentConfigError(AgentError):
         super(AgentConfigError, self).__init__(msg, inner)
 
 
+class AgentMemoryExceededException(AgentError):
+    """
+    When Agent memory limit reached.
+    """
+    def __init__(self, msg=None, inner=None):
+        super(AgentMemoryExceededException, self).__init__(msg, inner)
+
+
 class AgentNetworkError(AgentError):
     """
     When network is not available.
