@@ -1607,7 +1607,7 @@ class GuestAgent(object):
 
     def _download(self):
         try:
-            self._protocol.client.download_extension(self.pkg.uris, self.get_agent_pkg_path(), self.get_agent_dir(), use_verify_header=self._is_fast_track_goal_state)
+            self._protocol.client.download_zip_package("agent package", self.pkg.uris, self.get_agent_pkg_path(), self.get_agent_dir(), use_verify_header=self._is_fast_track_goal_state)
         except Exception as exception:
             msg = "Unable to download Agent {0}: {1}".format(self.name, ustr(exception))
             add_event(

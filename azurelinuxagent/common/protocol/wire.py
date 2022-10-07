@@ -606,10 +606,13 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_extension(self, uris, target_file, target_directory, use_verify_header):
+    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header):
         """
-        Downloads the ZIP package specified in 'uris' saving it to 'target_file' and then expanding its contents to 'target_directory'. Deletes the target file after
-        it has been expanded.
+        Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
+        its contents to 'target_directory'. Deletes the target file after it has been expanded.
+
+        The 'package_type' is only used in log messages and has no other semantics. It should specify the contents of the ZIP, e.g. "extension package"
+        or "agent package"
 
         The 'use_verify_header' parameter indicates whether the verify header should be added when using the extensionArtifact API of the HostGAPlugin.
         """
@@ -621,9 +624,9 @@ class WireClient(object):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header, artifact_manifest_url=host_ga_plugin.manifest_uri)
             return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
 
-        on_downloaded = lambda: WireClient._try_expand_zip_package(target_file, target_directory)
+        on_downloaded = lambda: WireClient._try_expand_zip_package(package_type, target_file, target_directory)
 
-        self._download_with_fallback_channel("extension package", uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
+        self._download_with_fallback_channel(package_type, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
 
     def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=None):
         """
@@ -633,7 +636,7 @@ class WireClient(object):
         but the default can be depending on the success/failure of each channel (see _download_using_appropriate_channel() for the logic to do this).
 
         The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
-        (e.g. "manifest", "extension package", etc).
+        (e.g. "manifest", "extension package, "agent package", etc).
 
         When the download is successful, _download_with_fallback_channel invokes the 'on_downloaded' function, which can be used to process the results of the download. This
         function should return True on success, and False on failure (it should not raise any exceptions). If the return value is False, the download is considered
@@ -671,12 +674,12 @@ class WireClient(object):
         raise ExtensionDownloadError("Failed to download {0} from all URIs. Last error: {1}".format(download_type, ustr(most_recent_error)), code=ExtensionErrorCodes.PluginManifestDownloadError)
 
     @staticmethod
-    def _try_expand_zip_package(target_file, target_directory):
-        logger.info("Unzipping extension package: {0}", target_file)
+    def _try_expand_zip_package(package_type, target_file, target_directory):
+        logger.info("Unzipping {0}: {1}", package_type, target_file)
         try:
             zipfile.ZipFile(target_file).extractall(target_directory)
         except Exception as exception:
-            logger.error("Error while unzipping extension package: {0}", ustr(exception))
+            logger.error("Error while unzipping {0}: {1}", package_type, ustr(exception))
             if os.path.exists(target_directory):
                 try:
                     shutil.rmtree(target_directory)

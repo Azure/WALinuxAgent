@@ -497,7 +497,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(extensions_goal_state.on_hold,
                               "Extensions On Hold is expected to be False")
 
-    def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
+    def test_download_zip_package_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
         target_directory = os.path.join(self.tmp_dir, "fake_extension")
@@ -512,7 +512,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            protocol.client.download_extension([extension_url], target_file, target_directory, use_verify_header=False)
+            protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 1, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -520,7 +520,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
             self.assertFalse(HostPluginProtocol.is_default_channel, "The host channel should not have been set as the default")
 
-    def test_download_ext_handler_pkg_should_use_host_channel_when_direct_channel_fails_and_set_host_as_default(self):
+    def test_download_zip_package_should_use_host_channel_when_direct_channel_fails_and_set_host_as_default(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
         target_directory = os.path.join(self.tmp_dir, "fake_extension")
@@ -535,7 +535,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            protocol.client.download_extension([extension_url], target_file, target_directory, use_verify_header=False)
+            protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -544,7 +544,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(os.path.exists(target_directory), 'The extension package was not downloaded')
             self.assertTrue(HostPluginProtocol.is_default_channel, "The host channel should have been set as the default")
 
-    def test_download_ext_handler_pkg_should_retry_the_host_channel_after_refreshing_host_plugin(self):
+    def test_download_zip_package_should_retry_the_host_channel_after_refreshing_host_plugin(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
         target_directory = os.path.join(self.tmp_dir, "fake_extension")
@@ -572,7 +572,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-                protocol.client.download_extension([extension_url], target_file, target_directory, use_verify_header=False)
+                protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -585,7 +585,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             finally:
                 HostPluginProtocol.is_default_channel = False
 
-    def test_download_ext_handler_pkg_should_not_change_default_channel_when_all_channels_fail(self):
+    def test_download_zip_package_should_not_change_default_channel_when_all_channels_fail(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, "fake_extension.zip")
         target_directory = os.path.join(self.tmp_dir, "fake_extension")
@@ -606,7 +606,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.download_extension([extension_url], target_file, target_directory, use_verify_header=False)
+                protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 2, "Unexpected number of HTTP requests: [{0}]".format(urls))
@@ -629,7 +629,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.download_extension([extension_url], target_file, target_directory, use_verify_header=False)
+                protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
 
             self.assertFalse(os.path.exists(target_file), "The extension package should have been deleted")
             self.assertFalse(os.path.exists(target_directory), "The extension directory should not have been created")
