@@ -497,6 +497,22 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             self.assertFalse(extensions_goal_state.on_hold,
                               "Extensions On Hold is expected to be False")
 
+    def test_download_zip_package_should_expand_and_delete_the_package(self):
+        extension_url = 'https://fake_host/fake_extension.zip'
+        target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
+        target_directory = os.path.join(self.tmp_dir, "fake_extension")
+
+        def http_get_handler(url, *_, **__):
+            if url == extension_url or self.is_host_plugin_extension_artifact_request(url):
+                return MockHttpResponse(200, body=load_bin_data("ga/fake_extension.zip"))
+            return None
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+            protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
+
+            self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
+            self.assertFalse(os.path.exists(target_file), "The extension package was not deleted")
+
     def test_download_zip_package_should_not_invoke_host_channel_when_direct_channel_succeeds(self):
         extension_url = 'https://fake_host/fake_extension.zip'
         target_file = os.path.join(self.tmp_dir, 'fake_extension.zip')
