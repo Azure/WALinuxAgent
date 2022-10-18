@@ -232,14 +232,13 @@ class TestAgent(AgentTestCase):
         try:
             CollectLogsHandler.enable_cgroups_validation()
 
-            @staticmethod
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
                     relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
                     return (cgroupconfigurator.LOGCOLLECTOR_SLICE, relative_path)
                 return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
 
-            with patch.object(SystemdCgroupsApi, "get_process_cgroup_relative_paths", mock_cgroup_paths):
+            with patch("azurelinuxagent.agent.SystemdCgroupsApi.get_process_cgroup_paths", side_effect=mock_cgroup_paths):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                 agent.collect_logs(is_full_mode=True)
                 
@@ -251,13 +250,12 @@ class TestAgent(AgentTestCase):
         try:
             CollectLogsHandler.enable_cgroups_validation()
 
-            @staticmethod
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
                     return ("NOT_THE_CORRECT_PATH", "NOT_THE_CORRECT_PATH")
                 return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
 
-            with patch.object(SystemdCgroupsApi, "get_process_cgroup_relative_paths", mock_cgroup_paths):
+            with patch("azurelinuxagent.agent.SystemdCgroupsApi.get_process_cgroup_paths", side_effect=mock_cgroup_paths):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
                 exit_error = RuntimeError("Exiting")

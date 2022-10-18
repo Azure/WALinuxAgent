@@ -46,6 +46,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionsGoalStateError, \
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
@@ -1252,21 +1253,23 @@ class ExtHandlerInstance(object):
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
             raise ExtensionDownloadError("No package uri found")
 
-        destination = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
+        package_file = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
 
         package_exists = False
-        if os.path.exists(destination):
-            self.logger.info("Using existing extension package: {0}", destination)
-            if self._unzip_extension_package(destination, self.get_base_dir()):
+        if os.path.exists(package_file):
+            self.logger.info("Using existing extension package: {0}", package_file)
+            if self._unzip_extension_package(package_file, self.get_base_dir()):
                 package_exists = True
             else:
                 self.logger.info("The existing extension package is invalid, will ignore it.")
 
         if not package_exists:
-            self.protocol.get_goal_state().download_extension(self.pkg.uris, destination, on_downloaded=lambda: self._unzip_extension_package(destination, self.get_base_dir()))
+            is_fast_track_goal_state = self.protocol.get_goal_state().extensions_goal_state.source == GoalStateSource.FastTrack
+            self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state)
             self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
-        self.pkg_file = destination
+        self.pkg_file = package_file
+
 
     def ensure_consistent_data_for_mc(self):
         # If CRP expects Handler to support MC, ensure the HandlerManifest also reflects that.

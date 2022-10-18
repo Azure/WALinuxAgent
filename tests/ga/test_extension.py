@@ -79,6 +79,7 @@ def raise_ioerror(*args):  # pylint: disable=unused-argument
     e.errno = EIO
     raise e
 
+
 class TestExtensionCleanup(AgentTestCase):
 
     def setUp(self):
@@ -140,8 +141,6 @@ class TestExtensionCleanup(AgentTestCase):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
-            self.assertEqual(no_of_exts, TestExtensionCleanup._count_packages(),
-                             "No of extensions in config doesn't match the packages")
             self.assertEqual(no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories doesnt match the no of extensions in GS")
             self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=no_of_exts,
@@ -151,8 +150,6 @@ class TestExtensionCleanup(AgentTestCase):
         with self._setup_test_env(mockwiredata.DATA_FILE_MULTIPLE_EXT) as (exthandlers_handler, protocol, no_of_exts):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
-            self.assertEqual(no_of_exts, TestExtensionCleanup._count_packages(),
-                             "No of extensions in config doesn't match the packages")
             self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=no_of_exts,
                                             version="1.0.0")
 
@@ -242,8 +239,6 @@ class TestExtensionCleanup(AgentTestCase):
             # Run 1 - GS has no required features and contains 5 extensions
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
-            self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_packages(),
-                             "No of extensions in config doesn't match the packages")
             self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories doesnt match the no of extensions in GS")
             self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=orig_no_of_exts,
@@ -261,8 +256,6 @@ class TestExtensionCleanup(AgentTestCase):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             self.assertGreater(orig_no_of_exts, 1, "No of extensions to check should be > 1")
-            self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_packages(),
-                             "No of extensions should not be changed")
             self.assertEqual(orig_no_of_exts, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories should not be changed")
             self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=orig_no_of_exts,
@@ -286,8 +279,6 @@ class TestExtensionCleanup(AgentTestCase):
             protocol.client.update_goal_state()
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
-            self.assertEqual(1, TestExtensionCleanup._count_packages(),
-                             "No of extensions should not be changed")
             self.assertEqual(1, TestExtensionCleanup._count_extension_directories(),
                              "No of extension directories should not be changed")
             self._assert_ext_handler_status(protocol.aggregate_status, "Ready", expected_ext_handler_count=1,
@@ -682,120 +673,6 @@ class TestExtension_Deprecated(TestExtensionBase):
             expected_handlers.remove(handler.name)
         self.assertEqual(0, len(expected_handlers), "All handlers not reported status")
 
-    def test_ext_zip_file_packages_removed_in_update_case(self, *args):
-        # Test enable scenario.
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_vm_status, "success", 0)
-        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.0.0")
-
-        # Update the package
-        test_data.set_incarnation(2)
-        test_data.set_extensions_config_sequence_number(1)
-        test_data.set_extensions_config_version("1.1.0")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
-        self._assert_ext_status(protocol.report_vm_status, "success", 1)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.0.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.1.0")
-
-        # Update the package second time
-        test_data.set_incarnation(3)
-        test_data.set_extensions_config_sequence_number(2)
-        test_data.set_extensions_config_version("1.2.0")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_vm_status, "success", 2)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.1.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.2.0")
-
-    def test_ext_zip_file_packages_removed_in_uninstall_case(self, *args):
-        # Test enable scenario.
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-        extension_version = "1.0.0"
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, extension_version)
-        self._assert_ext_status(protocol.report_vm_status, "success", 0)
-        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version=extension_version)
-
-        # Test uninstall
-        test_data.set_incarnation(2)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_no_handler_status(protocol.report_vm_status)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version=extension_version)
-
-    def test_ext_zip_file_packages_removed_in_update_and_uninstall_case(self, *args):
-        # Test enable scenario.
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_vm_status, "success", 0)
-        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.0.0")
-
-        # Update the package
-        test_data.set_incarnation(2)
-        test_data.set_extensions_config_sequence_number(1)
-        test_data.set_extensions_config_version("1.1.0")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
-        self._assert_ext_status(protocol.report_vm_status, "success", 1)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.0.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.1.0")
-
-        # Update the package second time
-        test_data.set_incarnation(3)
-        test_data.set_extensions_config_sequence_number(2)
-        test_data.set_extensions_config_version("1.2.0")
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_vm_status, "success", 2)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.1.0")
-        self._assert_ext_pkg_file_status(expected_to_be_present=True, extension_version="1.2.0")
-
-        # Test uninstall
-        test_data.set_incarnation(4)
-        test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-        protocol.update_goal_state()
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_no_handler_status(protocol.report_vm_status)
-        self._assert_ext_pkg_file_status(expected_to_be_present=False, extension_version="1.2.0")
 
     def test_it_should_ignore_case_when_parsing_plugin_settings(self, mock_get, mock_crypt_util, *args):
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_CASE_MISMATCH_EXT)

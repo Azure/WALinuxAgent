@@ -19,7 +19,6 @@
 import glob
 import json
 import os
-import random
 import re
 import shutil
 import signal
@@ -28,19 +27,17 @@ import subprocess
 import sys
 import time
 import uuid
-import zipfile
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.protocol.imds import get_imds_client
-from azurelinuxagent.common.utils import fileutil, restutil, textutil
+from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
-from azurelinuxagent.common.exception import ResourceGoneError, UpdateError, ExitException, AgentUpgradeExitException, \
-    AgentMemoryExceededException
+from azurelinuxagent.common.exception import UpdateError, ExitException, AgentUpgradeExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
@@ -950,9 +947,6 @@ class UpdateHandler(object):
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
 
-    def _get_host_plugin(self, protocol):
-        return protocol.client.get_host_plugin() if protocol and protocol.client else None
-
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
         pid_dir = os.path.dirname(pid_file)
@@ -991,7 +985,7 @@ class UpdateHandler(object):
 
     def _load_agents(self):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
-        return [GuestAgent(path=agent_dir)
+        return [GuestAgent.from_installed_agent(agent_dir)
                 for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
     def _partition(self):
@@ -1206,8 +1200,8 @@ class UpdateHandler(object):
 
             # Set the agents to those available for download at least as current as the existing agent
             # or to the requested version (if specified)
-            host = self._get_host_plugin(protocol=protocol)
-            agents_to_download = [GuestAgent(is_fast_track_goal_state=self._goal_state.extensions_goal_state.source == GoalStateSource.FastTrack, pkg=pkg, host=host) for pkg in packages_to_download]
+            is_fast_track_goal_state = self._goal_state.extensions_goal_state.source == GoalStateSource.FastTrack
+            agents_to_download = [GuestAgent.from_agent_package(pkg, protocol, is_fast_track_goal_state) for pkg in packages_to_download]
 
             # Filter out the agents that were downloaded/extracted successfully. If the agent was not installed properly,
             # we delete the directory and the zip package from the filesystem
@@ -1494,18 +1488,20 @@ class UpdateHandler(object):
 
 
 class GuestAgent(object):
-    def __init__(self, path=None, pkg=None, is_fast_track_goal_state=False, host=None):
+    def __init__(self, path, pkg, protocol, is_fast_track_goal_state):
         """
         If 'path' is given, the object is initialized to the version installed under that path.
 
         If 'pkg' is given, the version specified in the package information is downloaded and the object is
         initialized to that version.
 
-        'is_fast_track_goal_state' and 'host' are using only when a package is downloaded.
+        'is_fast_track_goal_state' and 'protocol' are used only when a package is downloaded.
+
+        NOTE: Prefer using the from_installed_agent and from_agent_package methods instead of calling __init__ directly
         """
         self._is_fast_track_goal_state = is_fast_track_goal_state
         self.pkg = pkg
-        self.host = host
+        self._protocol = protocol
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
@@ -1529,26 +1525,12 @@ class GuestAgent(object):
             self._ensure_downloaded()
             self._ensure_loaded()
         except Exception as e:
-            if isinstance(e, ResourceGoneError):
-                raise
-
-            # The agent was improperly blacklisting versions due to a timeout
-            # encountered while downloading a later version. Errors of type
-            # socket.error are IOError, so this should provide sufficient
-            # protection against a large class of I/O operation failures.
-            if isinstance(e, IOError):
-                raise
-
-            # If we're unable to download/unpack the agent, delete the Agent directory and the zip file (if exists) to
-            # ensure we try downloading again in the next round.
+            # If we're unable to download/unpack the agent, delete the Agent directory
             try:
                 if os.path.isdir(self.get_agent_dir()):
                     shutil.rmtree(self.get_agent_dir(), ignore_errors=True)
-                if os.path.isfile(self.get_agent_pkg_path()):
-                    os.remove(self.get_agent_pkg_path())
             except Exception as err:
                 logger.warn("Unable to delete Agent files: {0}".format(err))
-
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
             detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
@@ -1558,6 +1540,20 @@ class GuestAgent(object):
                 op=WALAEventOperation.Install,
                 is_success=False,
                 message=detailed_msg)
+
+    @staticmethod
+    def from_installed_agent(path):
+        """
+        Creates an instance of GuestAgent using the agent installed in the given 'path'.
+        """
+        return GuestAgent(path, None, None, False)
+
+    @staticmethod
+    def from_agent_package(package, protocol, is_fast_track_goal_state):
+        """
+        Creates an instance of GuestAgent using the information provided in the 'package'; if that version of the agent is not installed it, it installs it.
+        """
+        return GuestAgent(None, package, protocol, is_fast_track_goal_state)
 
     @property
     def name(self):
@@ -1621,7 +1617,6 @@ class GuestAgent(object):
                 self.name))
 
         self._download()
-        self._unpack()
 
         msg = u"Agent {0} downloaded successfully".format(self.name)
         logger.verbose(msg)
@@ -1637,39 +1632,10 @@ class GuestAgent(object):
         self._load_error()
 
     def _download(self):
-        uris_shuffled = self.pkg.uris
-        random.shuffle(uris_shuffled)
-        for uri in uris_shuffled:
-            if not HostPluginProtocol.is_default_channel and self._fetch(uri):
-                break
-
-            elif self.host is not None and self.host.ensure_initialized():
-                if not HostPluginProtocol.is_default_channel:
-                    logger.warn("Download failed, switching to host plugin")
-                else:
-                    logger.verbose("Using host plugin as default channel")
-
-                uri, headers = self.host.get_artifact_request(uri, use_verify_header=self._is_fast_track_goal_state, artifact_manifest_url=self.host.manifest_uri)
-                try:
-                    if self._fetch(uri, headers=headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES):
-                        if not HostPluginProtocol.is_default_channel:
-                            logger.verbose("Setting host plugin as default channel")
-                            HostPluginProtocol.is_default_channel = True
-                        break
-                    else:
-                        logger.warn("Host plugin download failed")
-
-                # If the HostPlugin rejects the request,
-                # let the error continue, but set to use the HostPlugin
-                except ResourceGoneError:
-                    HostPluginProtocol.is_default_channel = True
-                    raise
-
-            else:
-                logger.error("No download channels available")
-
-        if not os.path.isfile(self.get_agent_pkg_path()):
-            msg = u"Unable to download Agent {0} from any URI".format(self.name)
+        try:
+            self._protocol.client.download_zip_package("agent package", self.pkg.uris, self.get_agent_pkg_path(), self.get_agent_dir(), use_verify_header=self._is_fast_track_goal_state)
+        except Exception as exception:
+            msg = "Unable to download Agent {0}: {1}".format(self.name, ustr(exception))
             add_event(
                 AGENT_NAME,
                 op=WALAEventOperation.Download,
@@ -1677,37 +1643,6 @@ class GuestAgent(object):
                 is_success=False,
                 message=msg)
             raise UpdateError(msg)
-
-    def _fetch(self, uri, headers=None, use_proxy=True, retry_codes=None):
-        package = None
-        try:
-            is_healthy = True
-            error_response = ''
-            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers, max_retry=3, retry_codes=retry_codes)  # Use only 3 retries, since there are usually 5 or 6 URIs and we try all of them
-            if restutil.request_succeeded(resp):
-                package = resp.read()
-                fileutil.write_file(self.get_agent_pkg_path(),
-                                    bytearray(package),
-                                    asbin=True)
-                logger.verbose(u"Agent {0} downloaded from {1}", self.name, uri)
-            else:
-                error_response = restutil.read_response_error(resp)
-                logger.verbose("Fetch was unsuccessful [{0}]", error_response)
-                is_healthy = not restutil.request_failed_at_hostplugin(resp)
-
-            if self.host is not None:
-                self.host.report_fetch_health(uri, is_healthy, source='GuestAgent', response=error_response)
-
-        except restutil.HttpError as http_error:
-            if isinstance(http_error, ResourceGoneError):
-                raise
-
-            logger.verbose(u"Agent {0} download from {1} failed [{2}]",
-                           self.name,
-                           uri,
-                           http_error)
-
-        return package is not None
 
     def _load_error(self):
         try:
@@ -1756,35 +1691,6 @@ class GuestAgent(object):
                        self.name,
                        AGENT_MANIFEST_FILE,
                        ustr(self.manifest.data))
-        return
-
-    def _unpack(self):
-        try:
-            if os.path.isdir(self.get_agent_dir()):
-                shutil.rmtree(self.get_agent_dir())
-
-            zipfile.ZipFile(self.get_agent_pkg_path()).extractall(self.get_agent_dir())
-
-        except Exception as e:
-            fileutil.clean_ioerror(e,
-                                   paths=[self.get_agent_dir(), self.get_agent_pkg_path()])
-
-            msg = u"Exception unpacking Agent {0} from {1}: {2}".format(
-                self.name,
-                self.get_agent_pkg_path(),
-                ustr(e))
-            raise UpdateError(msg)
-
-        if not os.path.isdir(self.get_agent_dir()):
-            msg = u"Unpacking Agent {0} failed to create directory {1}".format(
-                self.name,
-                self.get_agent_dir())
-            raise UpdateError(msg)
-
-        logger.verbose(
-            u"Agent {0} unpacked successfully to {1}",
-            self.name,
-            self.get_agent_dir())
         return
 
 

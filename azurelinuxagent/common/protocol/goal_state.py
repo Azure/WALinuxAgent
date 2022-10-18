@@ -152,13 +152,6 @@ class GoalState(object):
         except Exception as e:
             raise ProtocolError("Failed to retrieve {0} manifest. Error: {1}".format(manifest_type, ustr(e)))
 
-    def download_extension(self, uris, destination, on_downloaded=lambda: True):
-        """
-        This is a convenience method that wraps WireClient.download_extension(), but adds the required 'use_verify_header' parameter.
-        """
-        is_fast_track = self.extensions_goal_state.source == GoalStateSource.FastTrack
-        self._wire_client.download_extension(uris, destination, use_verify_header=is_fast_track, on_downloaded=on_downloaded)
-
     @staticmethod
     def update_host_plugin_headers(wire_client):
         """
