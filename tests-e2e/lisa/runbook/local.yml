@@ -1,0 +1,12 @@
+extension:
+  - "../testsuites"
+environment:
+  environments:
+    - nodes:
+        - type: local
+notifier:
+  - type: console
+  - type: html
+testcase:
+  - criteria:
+      area: bvt

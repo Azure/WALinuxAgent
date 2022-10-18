@@ -1,0 +1,76 @@
+parameters:
+  - name: scenarios
+    type: object
+    default:
+      - agent-bvt
+      - extension-telemetry-pipeline
+
+  - name: distros
+    type: object
+    default:
+      - publisher: "Canonical"
+        offer: "UbuntuServer"
+        version: "latest"
+        sku: "18.04-LTS"
+        name: "ubuntu18"
+
+trigger:
+  - develop
+
+# no PR triggers
+pr: none
+
+#schedules:
+#  - cron: "0 */8 * * *" # Run every 8 hours
+#    displayName: Daily validation builds
+#    branches:
+#      include:
+#      - develop
+#    always: true
+#
+
+variables:
+  - template: templates/vars.yml
+  - name: SSH_PUBLIC
+    value: "$(sshPublicKey)" # set in GUI variables
+  - name: rgNamePrefix
+    value: "$(rgPrefix)$(Build.BuildId)"
+  - name: testsSourcesDirectory
+    value: "$(Build.SourcesDirectory)/tests-e2e"
+
+
+pool: # larohra-dcrvmsspool
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: "Execute"
+    jobs:
+      - template: 'templates/execute-tests.yml'
+        parameters:
+          scenarios:
+            - ${{ parameters.scenarios }}
+          distros:
+            - ${{ parameters.distros }}
+          rgPrefix: $(rgNamePrefix)
+
+#  - stage: "Cleanup"
+#    condition: succeededOrFailed()
+#    jobs:
+#      - job: "Wait"
+#        pool: server
+#        # ToDo: Add a parameter to force wait before deleting the Test VMs
+#        condition: in(stageDependencies.Execute.CreateVM.result, 'Failed', 'SucceededWithIssues')
+#        steps:
+#          - task: ManualValidation@0
+#            timeoutInMinutes: 50
+#            inputs:
+#              notifyUsers: 'narrieta'
+#              onTimeout: 'resume'
+#
+#      - template: templates/cleanup.yml
+#        parameters:
+#          scenarios:
+#            - ${{ parameters.scenarios }}
+#          distros:
+#            - ${{ parameters.distros }}
+#          rgPrefix: $(rgNamePrefix)

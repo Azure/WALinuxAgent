@@ -1,0 +1,22 @@
+Distro coverage (marketplace)  "OpenLogic CentOS 6.10 latest" - SSH issue
+Custom VHD - OK
+Custom images (?)
+Filter scenarios by distro at run time - OK
+Clouds: Public, MC, FF
+Execute tests on specific Azure Regions - OK
+VM template (e.g. NSG, VM size/SKU)
+Scale sets
+Windows
+
+Debuggability - OK
+Log capture
+SSH to test VMs - No SSH jumps
+Run on an existing VM -
+Support - OK
+Documentation - Poor
+
+Run tests over SSH - OK
+Run extensions remotely - OK
+Test results: Integration with Azure Pipelines
+Github repo/branch/tag - OK
+Setup agent (waagent.conf, setup.py, OS)
