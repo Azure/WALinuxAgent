@@ -1001,7 +1001,8 @@ class ExtHandlersHandler(object):
                     heartbeat = ext_handler_i.collect_heartbeat()
                     if heartbeat is not None:
                         handler_status.status = heartbeat.get('status')
-                        handler_status.message = parse_formatted_message(heartbeat.get('formattedMessage'))
+                        if 'formattedMessage' in heartbeat:
+                            handler_status.message = parse_formatted_message(heartbeat.get('formattedMessage'))
                 except ExtensionError as e:
                     ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
