@@ -19,21 +19,10 @@ trigger:
 # no PR triggers
 pr: none
 
-#schedules:
-#  - cron: "0 */8 * * *" # Run every 8 hours
-#    displayName: Daily validation builds
-#    branches:
-#      include:
-#      - develop
-#    always: true
-#
-
 variables:
   - template: templates/vars.yml
   - name: SSH_PUBLIC
     value: "$(sshPublicKey)" # set in GUI variables
-  - name: rgNamePrefix
-    value: "$(rgPrefix)$(Build.BuildId)"
   - name: testsSourcesDirectory
     value: "$(Build.SourcesDirectory)/tests_e2e"
 
@@ -50,5 +39,4 @@ stages:
             - ${{ parameters.scenarios }}
           distros:
             - ${{ parameters.distros }}
-          rgPrefix: $(rgNamePrefix)
 

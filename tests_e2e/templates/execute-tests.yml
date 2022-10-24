@@ -5,9 +5,6 @@ parameters:
   - name: distros
     type: object
 
-  - name: rgPrefix
-    type: string
-
 jobs:
   - job: ""
 
@@ -37,13 +34,9 @@ jobs:
       - bash: $(testsSourcesDirectory)/scripts/install_dependencies.sh
         displayName: "Install Dependencies"
 
-      - bash: $(testsSourcesDirectory)/scripts/build_agent_zip.sh
-        displayName: "Build Agent ZIP"
-
       - bash: $(testsSourcesDirectory)/scripts/execute_tests.sh
         displayName: "Execute tests"
         env:
-#          PYTHONPATH: $(Build.SourcesDirectory)
           # Add all KeyVault secrets explicitly as they're not added by default to the environment vars
           AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
           AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
