@@ -2,13 +2,13 @@
 
 set -euxo pipefail
 
-ls -l ~/.ssh
-find ~ -name id_rsa
-find $BUILD_SOURCESDIRECTORY -name id_rsa
-
 export PYTHONPATH=$BUILD_SOURCESDIRECTORY
 
 cd $BUILD_SOURCESDIRECTORY/lisa
+
+# LISA needs both the public and private keys; generate the former
+chmod 700 $SSHKEY_SECUREFILEPATH
+ssh-keygen -y -f $SSHKEY_SECUREFILEPATH > "$SSHKEY_SECUREFILEPATH".pub
 
 ./lisa.sh --runbook $BUILD_SOURCESDIRECTORY/tests_e2e/lisa/runbook/azure.yml \
   --log_path $HOME/tmp \
