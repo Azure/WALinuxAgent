@@ -1,0 +1,64 @@
+parameters:
+  - name: scenarios
+    type: object
+
+  - name: distros
+    type: object
+
+  - name: rgPrefix
+    type: string
+
+jobs:
+  - job: ""
+
+    strategy:
+      matrix:
+        ${{ each scenario in parameters.scenarios }}:
+          ${{ format('{0}', scenario) }}:
+            scenarioName: ${{ scenario }}
+            rgName: ${{ format('{0}-{1}', parameters.rgPrefix, scenario) }}
+      maxParallel: 50
+
+    steps:
+      - task: InstallSSHKey@0
+        displayName: 'Install SSH Key'
+        name: "InstallKey"
+        inputs:
+          knownHostsEntry: 'SHA256:key somebody@somewhere.com' # Dummy value for required parameter.
+          sshPublicKey: '$(SSH_PUBLIC)'
+          sshKeySecureFile: 'id_rsa'
+
+      - task: AzureKeyVault@2
+        displayName: "Fetch secrets from KV"
+        inputs:
+          azureSubscription: '$(azureConnection)'
+          KeyVaultName: 'dcrV2SPs'
+          SecretsFilter: '*'
+          RunAsPreJob: true
+
+      - task: DownloadSecureFile@1
+        name: sshKey
+        inputs:
+          secureFile: 'id_rsa'
+
+      - task: UsePythonVersion@0
+        displayName: "Set Python Version"
+        inputs:
+          versionSpec: '3.10'
+          addToPath: true
+          architecture: 'x64'
+
+      - bash: $(testsSourcesDirectory)/scripts/install_dependencies.sh
+        displayName: "Install Dependencies"
+
+      - bash: $(testsSourcesDirectory)/scripts/build_agent_zip.sh
+        displayName: "Build Agent ZIP"
+
+      - bash: $(testsSourcesDirectory)/scripts/execute_tests.sh
+        displayName: "Execute tests"
+        env:
+#          PYTHONPATH: $(Build.SourcesDirectory)
+          # Add all KeyVault secrets explicitly as they're not added by default to the environment vars
+          AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
+          AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
+          AZURE_TENANT_ID: $(AZURE-TENANT-ID)

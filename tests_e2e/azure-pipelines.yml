@@ -3,7 +3,6 @@ parameters:
     type: object
     default:
       - agent-bvt
-      - extension-telemetry-pipeline
 
   - name: distros
     type: object
@@ -36,10 +35,10 @@ variables:
   - name: rgNamePrefix
     value: "$(rgPrefix)$(Build.BuildId)"
   - name: testsSourcesDirectory
-    value: "$(Build.SourcesDirectory)/tests-e2e"
+    value: "$(Build.SourcesDirectory)/tests_e2e"
 
 
-pool: # larohra-dcrvmsspool
+pool:
   vmImage: ubuntu-latest
 
 stages:
@@ -53,24 +52,3 @@ stages:
             - ${{ parameters.distros }}
           rgPrefix: $(rgNamePrefix)
 
-#  - stage: "Cleanup"
-#    condition: succeededOrFailed()
-#    jobs:
-#      - job: "Wait"
-#        pool: server
-#        # ToDo: Add a parameter to force wait before deleting the Test VMs
-#        condition: in(stageDependencies.Execute.CreateVM.result, 'Failed', 'SucceededWithIssues')
-#        steps:
-#          - task: ManualValidation@0
-#            timeoutInMinutes: 50
-#            inputs:
-#              notifyUsers: 'narrieta'
-#              onTimeout: 'resume'
-#
-#      - template: templates/cleanup.yml
-#        parameters:
-#          scenarios:
-#            - ${{ parameters.scenarios }}
-#          distros:
-#            - ${{ parameters.distros }}
-#          rgPrefix: $(rgNamePrefix)

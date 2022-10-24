@@ -1,0 +1,12 @@
+# Template file for the common variables between the 2 pipelines
+
+variables:
+  rgPrefix: 'waagent-tests'
+
+  vmName: 'WaagentTest'
+  adminUsername: 'waagenttest'
+
+  # Public Cloud Data
+  azureConnection: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+  subId: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
+  location: 'East US 2'

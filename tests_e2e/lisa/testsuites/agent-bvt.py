@@ -1,6 +1,6 @@
 from assertpy import assert_that
 from pathlib import Path
-from tests.agent_bvt import custom_script
+from tests_e2e.lisa.tests.agent_bvt import custom_script
 
 from lisa import (
     CustomScriptBuilder,

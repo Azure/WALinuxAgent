@@ -27,7 +27,7 @@ sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
 # Move the older agent log file to ensure we have a clean slate when testing agent logs
 mv /var/log/waagent.log /var/log/waagent.old.log
 
-sudo cp -r ./tests-e2e/*-$version /var/lib/waagent
+sudo cp -r ./tests_e2e/*-$version /var/lib/waagent
 sudo systemctl daemon-reload && sudo systemctl start $agent
 
 sudo systemctl status $agent --no-pager
