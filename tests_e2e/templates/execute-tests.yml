@@ -1,0 +1,36 @@
+jobs:
+  - job: ""
+
+    steps:
+
+      - task: DownloadSecureFile@1
+        name: sshKey
+        displayName: "Download SSH key"
+        inputs:
+          secureFile: 'id_rsa'
+
+      - task: AzureKeyVault@2
+        displayName: "Fetch secrets from KV"
+        inputs:
+          azureSubscription: '$(azureConnection)'
+          KeyVaultName: 'dcrV2SPs'
+          SecretsFilter: '*'
+          RunAsPreJob: true
+
+      - task: UsePythonVersion@0
+        displayName: "Set Python Version"
+        inputs:
+          versionSpec: '3.10'
+          addToPath: true
+          architecture: 'x64'
+
+      - bash: $(testsSourcesDirectory)/scripts/install_dependencies.sh
+        displayName: "Install Dependencies"
+
+      - bash: $(testsSourcesDirectory)/scripts/execute_tests.sh
+        displayName: "Execute tests"
+        env:
+          # Add all KeyVault secrets explicitly as they're not added by default to the environment vars
+          AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
+          AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
+          AZURE_TENANT_ID: $(AZURE-TENANT-ID)
