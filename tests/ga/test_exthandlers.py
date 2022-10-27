@@ -296,7 +296,7 @@ class TestExtHandlers(AgentTestCase):
             with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat",
                        side_effect=heartbeat_with_message):
                 with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_state",
-                           return_value={ExtHandlerState.Enabled}):
+                           return_value=ExtHandlerState.Enabled):
                     exthandlers_handler = get_exthandlers_handler(protocol)
                     exthandlers_handler.run()
                     vm_status = exthandlers_handler.report_ext_handlers_status()
