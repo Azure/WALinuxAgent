@@ -156,8 +156,14 @@ class CGroupConfigurator(object):
                     try:
                         if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
                             files_to_cleanup = []
-                            for file_name in os.listdir(agent_drop_in_path):
-                                files_to_cleanup.append(os.path.join(agent_drop_in_path, file_name))
+                            agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
+                            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
+                                                                             _DROP_IN_FILE_CPU_ACCOUNTING)
+                            agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
+                                                                                _DROP_IN_FILE_MEMORY_ACCOUNTING)
+                            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
+                            files_to_cleanup.extend([agent_drop_in_file_slice, agent_drop_in_file_cpu_accounting,
+                                                     agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
                             self.__cleanup_all_files(files_to_cleanup)
                             self.__reload_systemd_config()
                             logger.info("Agent reset the quotas if distro: {0} goes from supported to unsupported list", get_distro())
