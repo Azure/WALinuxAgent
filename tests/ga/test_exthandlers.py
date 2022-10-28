@@ -292,7 +292,7 @@ class TestExtHandlers(AgentTestCase):
             return {'code': 0, 'formattedMessage': {'lang': 'en-US', 'message': 'This is a heartbeat message'},
                     'status': 'ready'}
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_put_handler) as protocol:
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
             with patch("azurelinuxagent.common.protocol.wire.WireProtocol.report_vm_status", return_value=None):
                 with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat",
                            side_effect=heartbeat_with_message):
@@ -309,9 +309,6 @@ class TestExtHandlers(AgentTestCase):
                                              "Extension handler messages don't match")
                             self.assertEqual(ext_handler.status, heartbeat_with_message().get('status'),
                                              "Extension handler statuses don't match")
-
-def http_put_handler():
-    return None
 
 class LaunchCommandTestCase(AgentTestCase):
     """
