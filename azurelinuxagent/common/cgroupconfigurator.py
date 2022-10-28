@@ -153,9 +153,13 @@ class CGroupConfigurator(object):
                 # This check is to reset the quotas if agent goes from cgroup supported to unsupported distros later in time.
                 if not CGroupsApi.cgroups_supported():
                     agent_drop_in_path = systemd.get_agent_drop_in_path()
-                    if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
-                        shutil.rmtree(agent_drop_in_path)
-                        self.__reload_systemd_config()
+                    try:
+                        if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
+                            shutil.rmtree(agent_drop_in_path)
+                            self.__reload_systemd_config()
+                            logger.info("Agent reset the quotas if distro: {0} goes from supported to unsupported list", get_distro())
+                    except Exception as err:
+                        logger.warn("Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
 
                 # check whether cgroup monitoring is supported on the current distro
                 self._cgroups_supported = CGroupsApi.cgroups_supported()
