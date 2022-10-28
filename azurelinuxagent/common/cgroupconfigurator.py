@@ -18,6 +18,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 
@@ -149,6 +150,12 @@ class CGroupConfigurator(object):
             try:
                 if self._initialized:
                     return
+                # This check is to reset the quotas if agent goes from cgroup supported to unsupported distros later in time.
+                if not CGroupsApi.cgroups_supported():
+                    agent_drop_in_path = systemd.get_agent_drop_in_path()
+                    if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
+                        shutil.rmtree(agent_drop_in_path)
+                        self.__reload_systemd_config()
 
                 # check whether cgroup monitoring is supported on the current distro
                 self._cgroups_supported = CGroupsApi.cgroups_supported()
