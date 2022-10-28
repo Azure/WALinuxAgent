@@ -160,7 +160,7 @@ class CGroupConfigurator(object):
                                                                              _DROP_IN_FILE_CPU_ACCOUNTING)
                             agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
                                                                                 _DROP_IN_FILE_MEMORY_ACCOUNTING)
-                            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
+                            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
                             files_to_cleanup.extend([agent_drop_in_file_slice, agent_drop_in_file_cpu_accounting,
                                                      agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
                             self.__cleanup_all_files(files_to_cleanup)
