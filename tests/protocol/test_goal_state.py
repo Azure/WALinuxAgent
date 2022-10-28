@@ -8,6 +8,7 @@ import os
 import re
 import time
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource, GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
@@ -67,7 +68,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
             request_headers = []  # we expect a retry with new headers and use this array to persist the headers of each request
 
-            def http_get_vm_settings(_method, _host, _relative_url, **kwargs):
+            def http_get_vm_settings(_method, _host, _relative_url, _timeout, **kwargs):
                 request_headers.append(kwargs["headers"])
                 if len(request_headers) == 1:
                     # Fail the first request with status GONE and update the mock data to return the new Container ID and RoleConfigName that should be
@@ -96,7 +97,15 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                     GoalState(protocol.client)
                 self.assertEqual(_GET_GOAL_STATE_MAX_ATTEMPTS, mock_sleep.call_count, "Unexpected number of retries")
 
-    def test_instantiating_goal_state_should_save_the_goal_state_to_the_history_directory(self):
+    def test_fetching_the_goal_state_should_save_the_shared_config(self):
+        # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband); verify that we do not delete it
+        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            _ = GoalState(protocol.client)
+
+            shared_config = os.path.join(conf.get_lib_dir(), 'SharedConfig.xml')
+            self.assertTrue(os.path.exists(shared_config), "{0} should have been created".format(shared_config))
+
+    def test_fetching_the_goal_state_should_save_the_goal_state_to_the_history_directory(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(999)
             protocol.mock_wire_data.set_etag(888)

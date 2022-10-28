@@ -26,7 +26,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
+from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.version import get_distro
@@ -74,10 +74,9 @@ Before=slices.target
 CPUAccounting=yes
 CPUQuota={cpu_quota}
 MemoryAccounting=yes
-MemoryLimit={memory_limit}
 """
 _LOGCOLLECTOR_CPU_QUOTA = "5%"
-_LOGCOLLECTOR_MEMORY_LIMIT = "30M"  # K for kb, M for mb
+LOGCOLLECTOR_MEMORY_LIMIT = 30 * 1024 ** 2  # 30Mb
 
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
@@ -144,6 +143,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
+            self._agent_memory_cgroup = None
             self._check_cgroups_lock = threading.RLock()  # Protect the check_cgroups which is called from Monitor thread and main loop.
 
         def initialize(self):
@@ -195,7 +195,8 @@ class CGroupConfigurator(object):
 
                 if self._agent_memory_cgroup_path is not None:
                     _log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path))
+                    self._agent_memory_cgroup = MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path)
+                    CGroupsTelemetry.track_cgroup(self._agent_memory_cgroup)
 
                 _log_cgroup_info('Agent cgroups enabled: {0}', self._agent_cgroups_enabled)
 
@@ -349,8 +350,7 @@ class CGroupConfigurator(object):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             if not os.path.exists(logcollector_slice):
-                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA,
-                                                                         memory_limit=_LOGCOLLECTOR_MEMORY_LIMIT)
+                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA)
 
                 files_to_create.append((logcollector_slice, slice_contents))
 
@@ -652,8 +652,9 @@ class CGroupConfigurator(object):
                     current = process
                     while current != 0 and current not in agent_commands:
                         current = self._get_parent(current)
-                    # Process started by agent will have a marker and check if that marker found in process environment.
-                    if current == 0 and not self.__is_process_descendant_of_the_agent(process):
+                    # Verify if Process started by agent based on the marker found in process environment or process is in Zombie state.
+                    # If so, consider it as valid process in agent cgroup.
+                    if current == 0 and not (self.__is_process_descendant_of_the_agent(process) or self.__is_zombie_process(process)):
                         unexpected.append(self.__format_process(process))
                         if len(unexpected) >= 5:  # collect just a small sample
                             break
@@ -707,11 +708,41 @@ class CGroupConfigurator(object):
             return False
 
         @staticmethod
+        def __is_zombie_process(pid):
+            """
+            Returns True if process is in Zombie state otherwise False.
+
+            Ex: cat /proc/18171/stat
+            18171 (python3) S 18103 18103 18103 0 -1 4194624 57736 64902 0 3
+            """
+            try:
+                stat = '/proc/{0}/stat'.format(pid)
+                if os.path.exists(stat):
+                    with open(stat, "r") as stat_file:
+                        return stat_file.read().split()[2] == 'Z'
+            except Exception:
+                pass
+            return False
+
+        @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
             for metric in cgroup_metrics:
                 if metric.instance == AGENT_NAME_TELEMETRY and metric.counter == MetricsCounter.THROTTLED_TIME:
                     if metric.value > conf.get_agent_cpu_throttled_time_threshold():
                         raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
+
+        def check_agent_memory_usage(self):
+            if self.enabled() and self._agent_memory_cgroup:
+                metrics = self._agent_memory_cgroup.get_tracked_metrics()
+                current_usage = 0
+                for metric in metrics:
+                    if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
+                        current_usage += metric.value
+                    elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
+                        current_usage += metric.value
+
+                if current_usage > conf.get_agent_memory_quota():
+                    raise AgentMemoryExceededException("The agent memory limit {0} bytes exceeded. The current reported usage is {1} bytes.".format(conf.get_agent_memory_quota(), current_usage))
 
         @staticmethod
         def _get_parent(pid):

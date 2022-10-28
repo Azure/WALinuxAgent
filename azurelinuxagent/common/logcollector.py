@@ -26,12 +26,15 @@ import zipfile
 from datetime import datetime
 from heapq import heappush, heappop
 
+from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_LOG_COLLECTOR, MemoryCgroup
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
+from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
 # Please note: be careful when adding agent dependencies in this module.
 # This module uses its own logger and logs to its own file, not to the agent log.
+from azurelinuxagent.common.protocol.util import get_protocol_util
 
 _EXTENSION_LOG_DIR = get_ext_log_dir()
 _AGENT_LIB_DIR = get_lib_dir()
@@ -45,7 +48,7 @@ COMPRESSED_ARCHIVE_PATH = os.path.join(_LOG_COLLECTOR_DIR, "logs.zip")
 
 CGROUPS_UNIT = "collect-logs.scope"
 
-FORCE_KILLED_ERRCODE = -9
+GRACEFUL_KILL_ERRCODE = 3
 INVALID_CGROUPS_ERRCODE = 2
 
 _MUST_COLLECT_FILES = [
@@ -67,12 +70,14 @@ class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
-    def __init__(self, is_full_mode=False):
+    def __init__(self, is_full_mode=False, cpu_cgroup_path=None, memory_cgroup_path=None):
         self._is_full_mode = is_full_mode
         self._manifest = MANIFEST_FULL if is_full_mode else MANIFEST_NORMAL
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
+        self._initialize_telemetry()
+        self.cgroups = self._set_resource_usage_cgroups(cpu_cgroup_path, memory_cgroup_path)
 
     @staticmethod
     def _mkdir(dirname):
@@ -98,6 +103,24 @@ class LogCollector(object):
         _f_handler.setFormatter(_f_format)
         _LOGGER.addHandler(_f_handler)
         _LOGGER.setLevel(logging.INFO)
+
+    @staticmethod
+    def _set_resource_usage_cgroups(cpu_cgroup_path, memory_cgroup_path):
+        cpu_cgroup = CpuCgroup(AGENT_LOG_COLLECTOR, cpu_cgroup_path)
+        msg = "Started tracking cpu cgroup {0}".format(cpu_cgroup)
+        _LOGGER.info(msg)
+        cpu_cgroup.initialize_cpu_usage()
+        memory_cgroup = MemoryCgroup(AGENT_LOG_COLLECTOR, memory_cgroup_path)
+        msg = "Started tracking memory cgroup {0}".format(memory_cgroup)
+        _LOGGER.info(msg)
+        return [cpu_cgroup, memory_cgroup]
+
+    @staticmethod
+    def _initialize_telemetry():
+        protocol = get_protocol_util().get_protocol()
+        protocol.client.update_goal_state(force_update=True)
+        # Initialize the common parameters for telemetry events
+        initialize_event_logger_vminfo_common_parameters(protocol)
 
     @staticmethod
     def _run_shell_command(command, stdout=subprocess.PIPE, log_output=False):

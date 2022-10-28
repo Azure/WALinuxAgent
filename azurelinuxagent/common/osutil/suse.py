@@ -110,7 +110,8 @@ class SUSEOSUtil(SUSE11OSUtil):
         )
         if hostname_send_setting:
             value = hostname_send_setting.split('=')[-1]
-            if value == '"AUTO"' or value == '"{0}"'.format(hostname):
+            # wicked's source accepts values with double quotes, single quotes, and no quotes at all.
+            if value in ('"AUTO"', "'AUTO'", 'AUTO') or value == '"{0}"'.format(hostname):
                 # Return if auto send host-name is configured or the current
                 # hostname is already set up to be sent
                 return

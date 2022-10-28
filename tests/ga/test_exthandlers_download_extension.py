@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 
+import contextlib
 import os
 import time
 import zipfile
@@ -8,8 +9,10 @@ import zipfile
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOAD_RETRIES, ExtHandlerState
-from tests.tools import AgentTestCase, patch, mock_sleep
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtHandlerState
+from tests.protocol import mockwiredata
+from tests.protocol.mocks import mock_wire_protocol
+from tests.tools import AgentTestCase, patch, Mock
 
 
 class DownloadExtensionTestCase(AgentTestCase):
@@ -35,6 +38,14 @@ class DownloadExtensionTestCase(AgentTestCase):
         ext_handler.version = "1.0.0"
 
         protocol = WireProtocol("http://Microsoft.CPlat.Core.RunCommandLinux/foo-bar")
+        protocol.client.get_host_plugin = Mock()
+        protocol.client.get_artifact_request = Mock(return_value=(None, None))
+
+        # create a dummy goal state, since downloads are done via the GoalState class
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as p:
+            goal_state = p.get_goal_state()
+            goal_state._wire_client = protocol.client
+            protocol.client._goal_state = goal_state
 
         self.pkg = ExtHandlerPackage()
         self.pkg.uris = [
@@ -85,6 +96,9 @@ class DownloadExtensionTestCase(AgentTestCase):
         with open(filename, "w") as file:  # pylint: disable=redefined-builtin
             file.write("An invalid ZIP file\n")
 
+    def _get_extension_base_dir(self):
+        return self.extension_dir
+
     def _get_extension_package_file(self):
         return os.path.join(self.agent_dir, self.ext_handler_instance.get_extension_package_zipfile_name())
 
@@ -92,20 +106,28 @@ class DownloadExtensionTestCase(AgentTestCase):
         return os.path.join(self.extension_dir, DownloadExtensionTestCase._extension_command)
 
     def _assert_download_and_expand_succeeded(self):
-        self.assertTrue(os.path.exists(self._get_extension_package_file()), "The extension package was not downloaded to the expected location")
+        self.assertTrue(os.path.exists(self._get_extension_base_dir()), "The extension package was not downloaded to the expected location")
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
 
+    @staticmethod
+    @contextlib.contextmanager
+    def create_mock_stream(stream_function):
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", side_effect=stream_function) as mock_stream:
+            mock_stream.download_failures = 0
+            with patch('time.sleep'):  # don't sleep in-between retries
+                yield mock_stream
+
     def test_it_should_download_and_expand_extension_package(self):
-        def download_ext_handler_pkg(_uri, destination):
+        def stream(_, destination, **__):
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
+        with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event") as mock_report_event:
                 self.ext_handler_instance.download()
 
         # first download attempt should succeed
-        mock_download_ext_handler_pkg.assert_called_once()
+        mock_stream.assert_called_once()
         mock_report_event.assert_called_once()
 
         self._assert_download_and_expand_succeeded()
@@ -113,26 +135,26 @@ class DownloadExtensionTestCase(AgentTestCase):
     def test_it_should_use_existing_extension_package_when_already_downloaded(self):
         DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg") as mock_download_ext_handler_pkg:
+        with DownloadExtensionTestCase.create_mock_stream(lambda: None) as mock_stream:
             with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event") as mock_report_event:
                 self.ext_handler_instance.download()
 
-        mock_download_ext_handler_pkg.assert_not_called()
+        mock_stream.assert_not_called()
         mock_report_event.assert_not_called()
 
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
 
     def test_it_should_ignore_existing_extension_package_when_it_is_invalid(self):
-        def download_ext_handler_pkg(_uri, destination):
+        def stream(_, destination, **__):
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
         DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
+        with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             self.ext_handler_instance.download()
 
-        mock_download_ext_handler_pkg.assert_called_once()
+        mock_stream.assert_called_once()
 
         self._assert_download_and_expand_succeeded()
 
@@ -147,112 +169,101 @@ class DownloadExtensionTestCase(AgentTestCase):
                          "Ensure that the state is maintained for extension HandlerState")
 
     def test_it_should_maintain_extension_handler_state_when_bad_zip_exists_and_recovers_with_good_zip(self):
-        def download_ext_handler_pkg(_uri, destination):
+        def stream(_, destination, **__):
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
         DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg",
-                   side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
+        with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             self.ext_handler_instance.download()
 
-        mock_download_ext_handler_pkg.assert_called_once()
+        mock_stream.assert_called_once()
         self._assert_download_and_expand_succeeded()
         self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
                          "Ensure that the state is maintained for extension HandlerState")
 
-    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-    def test_it_should_maintain_extension_handler_state_when_it_downloads_bad_zips(self, _):
-        def download_ext_handler_pkg(_uri, destination):
+    def test_it_should_maintain_extension_handler_state_when_it_downloads_bad_zips(self):
+        def stream(_, destination, **__):
             DownloadExtensionTestCase._create_invalid_zip_file(destination)
             return True
 
         self.ext_handler_instance.set_handler_state(ExtHandlerState.NotInstalled)
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg",
-                   side_effect=download_ext_handler_pkg):
+        with DownloadExtensionTestCase.create_mock_stream(stream):
             with self.assertRaises(ExtensionDownloadError):
                 self.ext_handler_instance.download()
 
-        self.assertFalse(os.path.exists(self._get_extension_package_file()),
-                        "The bad zip extension package should not be downloaded to the expected location")
-        self.assertFalse(os.path.exists(self._get_extension_command_file()),
-                        "The extension package should not expanded be to the expected location due to bad zip")
-        self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
-                         "Ensure that the state is maintained for extension HandlerState")
+        self.assertFalse(os.path.exists(self._get_extension_package_file()), "The bad zip extension package should not be downloaded to the expected location")
+        self.assertFalse(os.path.exists(self._get_extension_command_file()), "The extension package should not expanded be to the expected location due to bad zip")
+        self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled, "Ensure that the state is maintained for extension HandlerState")
 
     def test_it_should_use_alternate_uris_when_download_fails(self):
-        self.download_failures = 0  # pylint: disable=attribute-defined-outside-init
-
-        def download_ext_handler_pkg(_uri, destination):
+        def stream(_, destination, **__):
             # fail a few times, then succeed
-            if self.download_failures < 3:
-                self.download_failures += 1
-                return False
+            if mock_stream.download_failures < 3:
+                mock_stream.download_failures += 1
+                return None
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
+        with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             self.ext_handler_instance.download()
 
-        self.assertEqual(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
+        self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_use_alternate_uris_when_download_raises_an_exception(self):
-        self.download_failures = 0  # pylint: disable=attribute-defined-outside-init
-
-        def download_ext_handler_pkg(_uri, destination):
+        def stream(_, destination, **__):
             # fail a few times, then succeed
-            if self.download_failures < 3:
-                self.download_failures += 1
+            if mock_stream.download_failures < 3:
+                mock_stream.download_failures += 1
                 raise Exception("Download failed")
             DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
+        with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             self.ext_handler_instance.download()
 
-        self.assertEqual(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
+        self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_use_alternate_uris_when_it_downloads_an_invalid_package(self):
-        self.download_failures = 0  # pylint: disable=attribute-defined-outside-init
-
-        def download_ext_handler_pkg(_uri, destination):
+        def stream(_, destination, **__):
             # fail a few times, then succeed
-            if self.download_failures < 3:
-                self.download_failures += 1
+            if mock_stream.download_failures < 3:
+                mock_stream.download_failures += 1
                 DownloadExtensionTestCase._create_invalid_zip_file(destination)
             else:
                 DownloadExtensionTestCase._create_zip_file(destination)
             return True
 
-        with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
+        with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             self.ext_handler_instance.download()
 
-        self.assertEqual(mock_download_ext_handler_pkg.call_count, self.download_failures + 1)
+        self.assertEqual(mock_stream.call_count, mock_stream.download_failures + 1)
 
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_raise_an_exception_when_all_downloads_fail(self):
-        def download_ext_handler_pkg(_uri, _destination):
-            DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
+        def stream(_, target_file, **___):
+            stream.target_file = target_file
+            DownloadExtensionTestCase._create_invalid_zip_file(target_file)
             return True
+        stream.target_file = None
 
-        with patch("time.sleep", lambda *_: None):
-            with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
-                with self.assertRaises(ExtensionDownloadError) as context_manager:
-                    self.ext_handler_instance.download()
+        with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
+            with self.assertRaises(ExtensionDownloadError) as context_manager:
+                self.ext_handler_instance.download()
 
-        self.assertEqual(mock_download_ext_handler_pkg.call_count, NUMBER_OF_DOWNLOAD_RETRIES * len(self.pkg.uris))
+        self.assertEqual(mock_stream.call_count, len(self.pkg.uris))
 
         self.assertRegex(str(context_manager.exception), "Failed to download extension")
         self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError)
 
         self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
-        self.assertFalse(os.path.exists(self._get_extension_package_file()), "The extension package was not removed")
+        self.assertFalse(os.path.exists(stream.target_file), "The extension package was not removed")
 

@@ -21,8 +21,8 @@ import re
 import time
 import json
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.AgentGlobals import AgentGlobals
 from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -31,11 +31,11 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state_factory import ExtensionsGoalStateFactory
 from azurelinuxagent.common.protocol.extensions_goal_state import VmSettingsParseError, GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import VmSettingsNotSupported, VmSettingsSupportStopped
-from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList
+from azurelinuxagent.common.protocol.restapi import Cert, CertList, RemoteAccessUser, RemoteAccessUsersList, ExtHandlerPackage, ExtHandlerPackageList
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.archive import GoalStateHistory
+from azurelinuxagent.common.utils.archive import GoalStateHistory, SHARED_CONF_FILE_NAME
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, getattrib, gettext
 
 
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -129,6 +129,29 @@ class GoalState(object):
     def remote_access(self):
         return self._remote_access
 
+    def fetch_agent_manifest(self, family_name, uris):
+        """
+        This is a convenience method that wraps WireClient.fetch_manifest(), but adds the required 'use_verify_header' parameter and saves
+        the manifest to the history folder.
+        """
+        return self._fetch_manifest("agent", "waagent.{0}".format(family_name), uris)
+
+    def fetch_extension_manifest(self, extension_name, uris):
+        """
+        This is a convenience method that wraps WireClient.fetch_manifest(), but adds the required 'use_verify_header' parameter and saves
+        the manifest to the history folder.
+        """
+        return self._fetch_manifest("extension", extension_name, uris)
+
+    def _fetch_manifest(self, manifest_type, name, uris):
+        try:
+            is_fast_track = self.extensions_goal_state.source == GoalStateSource.FastTrack
+            xml_text = self._wire_client.fetch_manifest(uris, use_verify_header=is_fast_track)
+            self._history.save_manifest(name, xml_text)
+            return ExtensionManifest(xml_text)
+        except Exception as e:
+            raise ProtocolError("Failed to retrieve {0} manifest. Error: {1}".format(manifest_type, ustr(e)))
+
     @staticmethod
     def update_host_plugin_headers(wire_client):
         """
@@ -162,7 +185,9 @@ class GoalState(object):
         incarnation, xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
         goal_state_updated = force_update or incarnation != self._incarnation
         if goal_state_updated:
-            self.logger.info('Fetched a new incarnation for the WireServer goal state [incarnation {0}]', incarnation)
+            message = 'Fetched a new incarnation for the WireServer goal state [incarnation {0}]'.format(incarnation)
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
         vm_settings, vm_settings_updated = None, False
         try:
@@ -173,11 +198,15 @@ class GoalState(object):
 
         if vm_settings_updated:
             self.logger.info('')
-            self.logger.info("Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]", vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
+            message = "Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]".format(vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
         # Ignore the vmSettings if their source is Fabric (processing a Fabric goal state may require the tenant certificate and the vmSettings don't include it.)
         if vm_settings is not None and vm_settings.source == GoalStateSource.Fabric:
             if vm_settings_updated:
-                self.logger.info("The vmSettings originated via Fabric; will ignore them.")
+                message = "The vmSettings originated via Fabric; will ignore them."
+                self.logger.info(message)
+                add_event(op=WALAEventOperation.GoalState, message=message)
             vm_settings, vm_settings_updated = None, False
 
         # If neither goal state has changed we are done with the update
@@ -235,7 +264,9 @@ class GoalState(object):
                     raise GoalStateInconsistentError(message)
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
-        self.logger.info('The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.')
+        msg = 'The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.'
+        self.logger.info(msg)
+        add_event(op=WALAEventOperation.VmSettings, message=msg)
         self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
         self._history.save_goal_state(xml_text)
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
@@ -244,7 +275,7 @@ class GoalState(object):
             msg = "Fetched a Fabric goal state older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}".format(
                   self._extensions_goal_state.created_on_timestamp, vm_settings_support_stopped_error.timestamp)
             self.logger.info(msg)
-            add_event(op=WALAEventOperation.VmSettings, message=msg, is_success=True)
+            add_event(op=WALAEventOperation.VmSettings, message=msg)
 
     def save_to_history(self, data, file_name):
         self._history.save(data, file_name)
@@ -321,7 +352,9 @@ class GoalState(object):
         """
         try:
             self.logger.info('')
-            self.logger.info('Fetching full goal state from the WireServer [incarnation {0}]', incarnation)
+            message = 'Fetching full goal state from the WireServer [incarnation {0}]'.format(incarnation)
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
             role_instance = find(xml_doc, "RoleInstance")
             role_instance_id = findtext(role_instance, "InstanceId")
@@ -345,8 +378,14 @@ class GoalState(object):
 
             shared_conf_uri = findtext(xml_doc, "SharedConfig")
             xml_text = self._wire_client.fetch_config(shared_conf_uri, self._wire_client.get_header())
-            shared_conf = SharedConfig(xml_text)
+            shared_config = SharedConfig(xml_text)
             self._history.save_shared_conf(xml_text)
+            # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband), so save it to the agent's root directory as well
+            shared_config_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
+            try:
+                fileutil.write_file(shared_config_file, xml_text)
+            except Exception as e:
+                logger.warn("Failed to save {0}: {1}".format(shared_config, e))
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
@@ -355,9 +394,12 @@ class GoalState(object):
                 certs = Certificates(xml_text, self.logger)
                 # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
                 for c in certs.summary:
-                    self.logger.info("Downloaded certificate {0}".format(c))
+                    message = "Downloaded certificate {0}".format(c)
+                    self.logger.info(message)
+                    add_event(op=WALAEventOperation.GoalState, message=message)
                 if len(certs.warnings) > 0:
                     self.logger.warn(certs.warnings)
+                    add_event(op=WALAEventOperation.GoalState, message=certs.warnings)
                 self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
@@ -372,7 +414,7 @@ class GoalState(object):
             self._role_config_name = role_config_name
             self._container_id = container_id
             self._hosting_env = hosting_env
-            self._shared_conf = shared_conf
+            self._shared_conf = shared_config
             self._certs = certs
             self._remote_access = remote_access
 
@@ -382,7 +424,9 @@ class GoalState(object):
             self.logger.warn("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
-            self.logger.info('Fetch goal state completed')
+            message = 'Fetch goal state completed'
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
 
 class HostingEnv(object):
@@ -419,9 +463,11 @@ class Certificates(object):
             return
 
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
-        certificateFormat = findtext(xml_doc, "Format")
-        if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
-            my_logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+        certificate_format = findtext(xml_doc, "Format")
+        if certificate_format and certificate_format != "Pkcs7BlobWithPfxContents":
+            message = "The Format is not Pkcs7BlobWithPfxContents. Format is {0}".format(certificate_format)
+            my_logger.warn(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
@@ -555,4 +601,47 @@ class RemoteAccess(object):
         expiration = findtext(user, "Expiration")
         remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
         return remote_access_user
+
+
+class ExtensionManifest(object):
+    def __init__(self, xml_text):
+        if xml_text is None:
+            raise ValueError("ExtensionManifest is None")
+        logger.verbose("Load ExtensionManifest.xml")
+        self.pkg_list = ExtHandlerPackageList()
+        self._parse(xml_text)
+
+    def _parse(self, xml_text):
+        xml_doc = parse_doc(xml_text)
+        self._handle_packages(findall(find(xml_doc,
+                                           "Plugins"),
+                                      "Plugin"),
+                              False)
+        self._handle_packages(findall(find(xml_doc,
+                                           "InternalPlugins"),
+                                      "Plugin"),
+                              True)
+
+    def _handle_packages(self, packages, isinternal):
+        for package in packages:
+            version = findtext(package, "Version")
+
+            disallow_major_upgrade = findtext(package,
+                                              "DisallowMajorVersionUpgrade")
+            if disallow_major_upgrade is None:
+                disallow_major_upgrade = ''
+            disallow_major_upgrade = disallow_major_upgrade.lower() == "true"
+
+            uris = find(package, "Uris")
+            uri_list = findall(uris, "Uri")
+            uri_list = [gettext(x) for x in uri_list]
+            pkg = ExtHandlerPackage()
+            pkg.version = version
+            pkg.disallow_major_upgrade = disallow_major_upgrade
+            for uri in uri_list:
+                pkg.uris.append(uri)
+
+            pkg.isinternal = isinternal
+            self.pkg_list.versions.append(pkg)
+
 

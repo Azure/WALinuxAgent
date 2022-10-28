@@ -206,6 +206,26 @@ class TestTextUtil(AgentTestCase):
         self.assertRaises(ValueError, textutil.format_memory_value, 'KiloBytes', 1)
         self.assertRaises(TypeError, textutil.format_memory_value, 'bytes', None)
 
+    def test_format_exception(self):
+        """
+        Test formatting of exception into human-readable format
+        """
+
+        def raise_exception(count=3):
+            if count <= 1:
+                raise Exception("Test Exception")
+            raise_exception(count - 1)
+
+        msg = ""
+        try:
+            raise_exception()
+        except Exception as e:
+            msg = textutil.format_exception(e)
+
+        self.assertIn("Test Exception", msg)
+        # Raise exception at count 1 after two nested calls since count starts at 3
+        self.assertEqual(2, msg.count("raise_exception(count - 1)"))
+
 
 if __name__ == '__main__':
     unittest.main()

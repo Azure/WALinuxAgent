@@ -1,5 +1,5 @@
 {
-    "hostGAPluginVersion": "1.0.8.124",
+    "hostGAPluginVersion": "1.0.8.133",
     "vmSettingsSchemaVersion": "0.0",
     "activityId": "a33f6f53-43d6-4625-b322-1a39651a00c9",
     "correlationId": "9a47a2a2-e740-4bfc-b11b-4f2f7cfe7d2e",
@@ -56,7 +56,7 @@
             "settingsSeqNo": 0,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+                    "protectedSettingsCertThumbprint": "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F",
                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent==",
                     "publicSettings": "{\"GCS_AUTO_CONFIG\":true}"
                 }
@@ -76,7 +76,7 @@
             "settingsSeqNo": 0,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+                    "protectedSettingsCertThumbprint": "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F",
                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent==",
                     "publicSettings": "{\"enableGenevaUpload\":true}"
                 }
@@ -192,7 +192,7 @@
             "isMultiConfig": false,
             "settings": [
                 {
-                    "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+                    "protectedSettingsCertThumbprint": "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F",
                     "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpddesZQewdDBgegkxNzA1BgoJkgergres/Microsoft.OSTCExtensions.VMAccessForLinux=="
                 }
             ]

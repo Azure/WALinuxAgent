@@ -21,7 +21,6 @@ import datetime
 import glob
 import json
 import os
-import random
 import re
 import shutil
 import stat
@@ -32,10 +31,10 @@ from distutils.version import LooseVersion
 from collections import defaultdict
 from functools import partial
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.version as version
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
+from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common import version
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
@@ -47,6 +46,7 @@ from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionEr
     ExtensionOperationError, ExtensionUpdateError, ProtocolError, ProtocolNotFoundError, ExtensionsGoalStateError, \
     GoalStateAggregateStatusCodes, MultiConfigExtensionEnableError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
+from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSubStatus, Extension, ExtHandlerStatus, \
     VMStatus, GoalStateAggregateStatus, ExtensionState, ExtensionRequestedState, ExtensionSettings
 from azurelinuxagent.common.utils import textutil
@@ -66,8 +66,6 @@ _VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 HANDLER_NAME_PATTERN = re.compile(_HANDLER_NAME_PATTERN, re.IGNORECASE)
 HANDLER_COMPLETE_NAME_PATTERN = re.compile(_HANDLER_PATTERN + r'$', re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
-
-NUMBER_OF_DOWNLOAD_RETRIES = 2
 
 # This is the default value for the env variables, whenever we call a command which is not an update scenario, we
 # set the env variable value to NOT_RUN to reduce ambiguity for the extension publishers
@@ -952,9 +950,9 @@ class ExtHandlersHandler(object):
         if status_blob_text is None:
             status_blob_text = ""
 
-        support_multi_config = dict()
+        support_multi_config = {}
         vm_status_data = get_properties(vm_status)
-        vm_handler_statuses = vm_status_data.get('vmAgent', dict()).get('extensionHandlers')
+        vm_handler_statuses = vm_status_data.get('vmAgent', {}).get('extensionHandlers')
         for handler_status in vm_handler_statuses:
             if handler_status.get('name') is not None:
                 support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
@@ -1108,7 +1106,8 @@ class ExtHandlerInstance(object):
     def decide_version(self, target_state=None, extension=None):
         self.logger.verbose("Decide which version to use")
         try:
-            pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
+            manifest = self.protocol.get_goal_state().fetch_extension_manifest(self.ext_handler.name, self.ext_handler.manifest_uris)
+            pkg_list = manifest.pkg_list
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
         except ExtensionDownloadError:
@@ -1212,7 +1211,10 @@ class ExtHandlerInstance(object):
 
         old_ext_mrseq_file = os.path.join(old_ext_dir, "mrseq")
         if os.path.isfile(old_ext_mrseq_file):
+            logger.info("Migrating {0} to {1}.", old_ext_mrseq_file, new_ext_dir)
             shutil.copy2(old_ext_mrseq_file, new_ext_dir)
+        else:
+            logger.info("{0} does not exist, no migration is needed.", old_ext_mrseq_file)
 
         old_ext_status_dir = old_ext_handler_i.get_status_dir()
         new_ext_status_dir = self.get_status_dir()
@@ -1231,18 +1233,6 @@ class ExtHandlerInstance(object):
         name = self.ext_handler.name if name is None else name
         add_event(name=name, version=ext_handler_version, message=message,
                   op=self.operation, is_success=is_success, duration=duration, log_event=log_event)
-
-    def _download_extension_package(self, source_uri, target_file):
-        self.logger.info("Downloading extension package: {0}", source_uri)
-        try:
-            if not self.protocol.download_ext_handler_pkg(source_uri, target_file):
-                raise Exception("Failed to download extension package from {0}".format(source_uri))
-        except Exception as exception:
-            self.logger.info("Error downloading extension package: {0}", ustr(exception))
-            if os.path.exists(target_file):
-                os.remove(target_file)
-            return False
-        return True
 
     def _unzip_extension_package(self, source_file, target_directory):
         self.logger.info("Unzipping extension package: {0}", source_file)
@@ -1263,46 +1253,23 @@ class ExtHandlerInstance(object):
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
             raise ExtensionDownloadError("No package uri found")
 
-        destination = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
+        package_file = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
 
         package_exists = False
-        if os.path.exists(destination):
-            self.logger.info("Using existing extension package: {0}", destination)
-            if self._unzip_extension_package(destination, self.get_base_dir()):
+        if os.path.exists(package_file):
+            self.logger.info("Using existing extension package: {0}", package_file)
+            if self._unzip_extension_package(package_file, self.get_base_dir()):
                 package_exists = True
             else:
                 self.logger.info("The existing extension package is invalid, will ignore it.")
 
         if not package_exists:
-            downloaded = False
-            i = 0
-            while i < NUMBER_OF_DOWNLOAD_RETRIES:
-                uris_shuffled = self.pkg.uris
-                random.shuffle(uris_shuffled)
+            is_fast_track_goal_state = self.protocol.get_goal_state().extensions_goal_state.source == GoalStateSource.FastTrack
+            self.protocol.client.download_zip_package("extension package", self.pkg.uris, package_file, self.get_base_dir(), use_verify_header=is_fast_track_goal_state)
+            self.report_event(message="Download succeeded", duration=elapsed_milliseconds(begin_utc))
 
-                for uri in uris_shuffled:
-                    if not self._download_extension_package(uri, destination):
-                        continue
+        self.pkg_file = package_file
 
-                    if self._unzip_extension_package(destination, self.get_base_dir()):
-                        downloaded = True
-                        break
-
-                if downloaded:
-                    break
-
-                self.logger.info("Failed to download the extension package from all uris, will retry after a minute")
-                time.sleep(60)
-                i += 1
-
-            if not downloaded:
-                raise ExtensionDownloadError("Failed to download extension",
-                                             code=ExtensionErrorCodes.PluginManifestDownloadError)
-
-            duration = elapsed_milliseconds(begin_utc)
-            self.report_event(message="Download succeeded", duration=duration)
-
-        self.pkg_file = destination
 
     def ensure_consistent_data_for_mc(self):
         # If CRP expects Handler to support MC, ensure the HandlerManifest also reflects that.
