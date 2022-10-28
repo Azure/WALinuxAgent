@@ -292,20 +292,26 @@ class TestExtHandlers(AgentTestCase):
             return {'code': 0, 'formattedMessage': {'lang': 'en-US', 'message': 'This is a heartbeat message'},
                     'status': 'ready'}
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat",
-                       side_effect=heartbeat_with_message):
-                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_state",
-                           return_value=ExtHandlerState.Enabled):
-                    exthandlers_handler = get_exthandlers_handler(protocol)
-                    exthandlers_handler.run()
-                    vm_status = exthandlers_handler.report_ext_handlers_status()
-                    ext_handler = vm_status.vmAgent.extensionHandlers[0]
-                    self.assertEqual(ext_handler.message,
-                                     heartbeat_with_message().get('formattedMessage').get('message'),
-                                     "Extension handler messages don't match")
-                    self.assertEqual(ext_handler.status, heartbeat_with_message().get('status'),
-                                     "Extension handler statuses don't match")
+        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_put_handler) as protocol:
+            with patch("azurelinuxagent.common.protocol.wire.WireProtocol.report_vm_status", return_value=None):
+                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat",
+                           side_effect=heartbeat_with_message):
+                    with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_state",
+                               return_value=ExtHandlerState.Enabled):
+                        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_ext_status",
+                                   return_value=None):
+                            exthandlers_handler = get_exthandlers_handler(protocol)
+                            exthandlers_handler.run()
+                            vm_status = exthandlers_handler.report_ext_handlers_status()
+                            ext_handler = vm_status.vmAgent.extensionHandlers[0]
+                            self.assertEqual(ext_handler.message,
+                                             heartbeat_with_message().get('formattedMessage').get('message'),
+                                             "Extension handler messages don't match")
+                            self.assertEqual(ext_handler.status, heartbeat_with_message().get('status'),
+                                             "Extension handler statuses don't match")
+
+def http_put_handler():
+    return None
 
 class LaunchCommandTestCase(AgentTestCase):
     """
