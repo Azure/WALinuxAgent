@@ -155,7 +155,10 @@ class CGroupConfigurator(object):
                     agent_drop_in_path = systemd.get_agent_drop_in_path()
                     try:
                         if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
-                            shutil.rmtree(agent_drop_in_path)
+                            files_to_cleanup = []
+                            for file_name in os.listdir(agent_drop_in_path):
+                                files_to_cleanup.append(os.path.join(agent_drop_in_path, file_name))
+                            self.__cleanup_all_files(files_to_cleanup)
                             self.__reload_systemd_config()
                             logger.info("Agent reset the quotas if distro: {0} goes from supported to unsupported list", get_distro())
                     except Exception as err:
