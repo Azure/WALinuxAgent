@@ -149,6 +149,25 @@ class CGroupConfigurator(object):
             try:
                 if self._initialized:
                     return
+                # This check is to reset the quotas if agent goes from cgroup supported to unsupported distros later in time.
+                if not CGroupsApi.cgroups_supported():
+                    agent_drop_in_path = systemd.get_agent_drop_in_path()
+                    try:
+                        if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
+                            files_to_cleanup = []
+                            agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
+                            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
+                                                                             _DROP_IN_FILE_CPU_ACCOUNTING)
+                            agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
+                                                                                _DROP_IN_FILE_MEMORY_ACCOUNTING)
+                            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                            files_to_cleanup.extend([agent_drop_in_file_slice, agent_drop_in_file_cpu_accounting,
+                                                     agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
+                            self.__cleanup_all_files(files_to_cleanup)
+                            self.__reload_systemd_config()
+                            logger.info("Agent reset the quotas if distro: {0} goes from supported to unsupported list", get_distro())
+                    except Exception as err:
+                        logger.warn("Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
 
                 # check whether cgroup monitoring is supported on the current distro
                 self._cgroups_supported = CGroupsApi.cgroups_supported()
