@@ -248,6 +248,12 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files, src=["config/photonos/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/photonos/waagent.service"])
+    elif name == 'fedora':
+        set_bin_files(data_files, dest=agent_bin_path)
+        set_conf_files(data_files)
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        set_systemd_files(data_files, dest=systemd_dir_path)
     else:
         # Use default setting
         set_bin_files(data_files, dest=agent_bin_path)
