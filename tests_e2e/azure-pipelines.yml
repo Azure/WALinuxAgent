@@ -1,6 +1,6 @@
 variables:
   - name: azureConnection
-    value: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
+    value: 'azuremanagement'
   - name: subId
     value: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
   - name: testsSourcesDirectory

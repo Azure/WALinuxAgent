@@ -1,4 +1,7 @@
+import json
 import os
+import re
+import subprocess
 from enum import Enum, auto
 from typing import List
 
@@ -52,13 +55,10 @@ class VMMetaData:
         self.__location = location
         self.__admin_username = admin_username
 
-        vm_ips, vmss_ips = _get_ips(admin_username)
+        vm_ips = self._get_ips()
         # By default assume the test is running on a VM
         self.__type = VMModelType.VM
         self.__ips = vm_ips
-        if any(vmss_ips):
-            self.__type = VMModelType.VMSS
-            self.__ips = vmss_ips
 
         if ips is not None:
             self.__ips = ips
@@ -93,32 +93,55 @@ class VMMetaData:
     def model_type(self):
         return self.__type
 
+    def _get_ips(self) -> (list):
+        self._az_login()
 
-def _get_ips(username) -> (list, list):
-    """
-    Try fetching Ips from the files that we create via az-cli.
-    We do a best effort to fetch this from both orchestrator or the test VM. Its located in different locations on both
-    scenarios.
-    Returns: Tuple of (VmIps, VMSSIps).
-    """
+        details_text = _execute_command([
+            'az', 'vm', 'show', '--show-details',
+            '--subscription', self.sub_id,
+            '--resource-group', self.rg_name,
+            '--name', self.name
+        ])
+        details = json.loads(details_text)
+        try:
+            public_ip = details['publicIps']
+        except KeyError:
+            print("Can't find publicIps in vm details.\n%s", json.dumps(details, indent=2))
+            raise
+        # currently we support only 1 ip address; error out if that is not the case
+        if re.match(r'^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$', public_ip) is None:
+            print("Unexpected format for publicIps in vm details.\n%s", json.dumps(details, indent=2))
+            raise Exception("Unexpected format for publicIps in vm details: {0}".format(public_ip))
+        return [public_ip]
 
-    vms, vmss = [], []
-    orchestrator_path = os.path.join(os.environ['BUILD_SOURCESDIRECTORY'], "dcr")
-    test_vm_path = os.path.join("/home", username, "dcr")
+    def _az_login(self):
+        if VMMetaData.__logged_in:
+            return
 
-    for ip_path in [orchestrator_path, test_vm_path]:
+        print("Executing [az cloud set]...")
+        _execute_command(['az', 'cloud', 'set', '--name', 'AzureCloud'])
 
-        vm_ip_path = os.path.join(ip_path, ".vm_ips")
-        if os.path.exists(vm_ip_path):
-            with open(vm_ip_path, 'r') as vm_ips:
-                vms.extend(ip.strip() for ip in vm_ips.readlines())
+        print("Executing [az login]...")
+        _execute_command([
+            'az', 'login',
+            '--service-principal',
+            '--username', os.environ['AZURE_CLIENT_ID'],
+            '--password', os.environ['AZURE_CLIENT_SECRET'],
+            '--tenant', os.environ['AZURE_TENANT_ID']
+        ])
+        VMMetaData.__logged_in = True
 
-        vmss_ip_path = os.path.join(ip_path, ".vmss_ips")
-        if os.path.exists(vmss_ip_path):
-            with open(vmss_ip_path, 'r') as vmss_ips:
-                vmss.extend(ip.strip() for ip in vmss_ips.readlines())
+    __logged_in = False
 
-    return vms, vmss
+
+def _execute_command(command):
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = process.communicate()
+    stdout = bytes.decode(output[0])
+    stderr = bytes.decode(output[1])
+    if process.returncode != 0:
+        raise Exception("Error return code {0} : {1}".format(process.returncode, stderr))
+    return stdout
 
 
 def get_vm_data_from_env() -> VMMetaData:
@@ -134,4 +157,3 @@ def get_vm_data_from_env() -> VMMetaData:
 
 
 get_vm_data_from_env.__instance = None
-

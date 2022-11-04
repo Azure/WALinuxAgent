@@ -12,8 +12,7 @@ def main(subscription_id, resource_group_name, vm_name):
     os.environ["SUBID"] = subscription_id
     os.environ["SCENARIONAME"] = "BVT"
     os.environ["LOCATION"] = "westus2"
-    os.environ["ADMINUSERNAME"] = "somebody"
-    os.environ["BUILD_SOURCESDIRECTORY"] = "/somewhere"
+    os.environ["ADMINUSERNAME"] = "waagent"
 
     cse = CustomScriptExtension(extension_name="testCSE")
 

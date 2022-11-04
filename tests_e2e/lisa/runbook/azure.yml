@@ -46,6 +46,7 @@ variable:
 notifier:
   - type: html
   - type: env_stats
+  - type: junit
 platform:
   - type: azure
     admin_username: $(user)

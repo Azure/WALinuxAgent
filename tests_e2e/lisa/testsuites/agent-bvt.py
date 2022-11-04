@@ -1,5 +1,9 @@
+from typing import Any
+
 from assertpy import assert_that
 from pathlib import Path
+
+from tests_e2e.common_utils.execute_ssh_on_vm import execute_run
 from tests_e2e.lisa.tests.agent_bvt import custom_script
 
 from lisa import (
@@ -10,6 +14,7 @@ from lisa import (
     TestCaseMetadata,
     TestSuite,
     TestSuiteMetadata,
+    constants,
 )
 from lisa.sut_orchestrator.azure.common import get_node_context
 
@@ -39,3 +44,7 @@ class AgentBvt(TestSuite):
         resource_group_name = node_context.resource_group_name
         vm_name = node_context.vm_name
         custom_script.main(subscription_id, resource_group_name, vm_name)
+
+    def after_suite(self, log: Logger, **kwargs: Any) -> None:
+        log.info("Fetch harvest logs")
+        execute_run("harvest")
