@@ -2,17 +2,19 @@
 
 set -euxo pipefail
 
-export PYTHONPATH=$BUILD_SOURCESDIRECTORY
+# The private ssh key is shared from the container host as $HOME/id_rsa; copy it to
+# HOME/.ssh, set the correct mode and generate the public key.
+mkdir "$HOME/.ssh"
+cp "$HOME/id_rsa" "$HOME/.ssh"
+chmod 700 "$HOME/.ssh/id_rsa"
+ssh-keygen -y -f "$HOME/.ssh/id_rsa" > "$HOME/.ssh/id_rsa.pub"
 
-cd $BUILD_SOURCESDIRECTORY/lisa
+# Execute the tests, this needs to be done from the LISA root directory
+cd "$HOME/lisa"
 
-# LISA needs both the public and private keys; generate the former
-chmod 700 $SSHKEY_SECUREFILEPATH
-ssh-keygen -y -f $SSHKEY_SECUREFILEPATH > "$SSHKEY_SECUREFILEPATH".pub
-
-./lisa.sh --runbook $BUILD_SOURCESDIRECTORY/tests_e2e/lisa/runbook/azure.yml \
-  --log_path $HOME/tmp \
-  --working_path $HOME/tmp \
-  -v subscription_id:$SUBID \
-  -v identity_file:$SSHKEY_SECUREFILEPATH
-
+./lisa.sh \
+  --runbook "$HOME/WALinuxAgent/tests_e2e/lisa/runbook/azure.yml" \
+  --log_path "$HOME/logs" \
+  --working_path "$HOME/logs" \
+  -v subscription_id:"$SUBSCRIPTION_ID" \
+  -v identity_file:"$HOME/.ssh/id_rsa.pub"

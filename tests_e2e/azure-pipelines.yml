@@ -1,10 +1,6 @@
 variables:
   - name: azureConnection
-    value: 'AzLinux DCR Public (8e037ad4-618f-4466-8bc8-5099d41ac15b)'
-  - name: subId
-    value: '8e037ad4-618f-4466-8bc8-5099d41ac15b'
-  - name: testsSourcesDirectory
-    value: "$(Build.SourcesDirectory)/tests_e2e"
+    value: 'azuremanagement'
 
 trigger:
   - develop
@@ -15,7 +11,8 @@ pool:
   vmImage: ubuntu-latest
 
 stages:
-  - stage: "Execute"
+  - stage: "ExecuteTests"
+
     jobs:
       - template: 'templates/execute-tests.yml'
 
