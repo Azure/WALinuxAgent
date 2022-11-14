@@ -2,9 +2,9 @@
 
 set -euxo pipefail
 
-az login --service-principal --username "$AZURE_CLIENT_ID" --password "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID"
+az login --service-principal --username "$AZURE_CLIENT_ID" --password "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" > /dev/null
 
-az acr login --name waagenttests > /dev/null
+az acr login --name waagenttests
 
 docker pull waagenttests.azurecr.io/waagenttests:latest
 

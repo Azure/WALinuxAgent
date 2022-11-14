@@ -58,7 +58,6 @@ RUN \
     cd lisa                                                                                                   && \
     poetry config virtualenvs.in-project true                                                                 && \
     make setup                                                                                                && \
-    chmod +r /home/waagent/.config/pypoetry/config.toml                                                       && \
                                                                                                                  \
     #                                                                                                            \
     # Install additional test dependencies                                                                       \
