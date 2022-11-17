@@ -4,10 +4,6 @@
         xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
         <GAFamilies>
             <GAFamily>
-                <Name>Prod</Name>
-                <Uris />
-            </GAFamily>
-            <GAFamily>
                 <Name>Test</Name>
                 <Uris>
                     <Uri>https://mock-goal-state/rdfepirv2bl2prdstr01.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
