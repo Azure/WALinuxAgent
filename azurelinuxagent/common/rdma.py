@@ -424,10 +424,7 @@ class RDMADeviceHandler(object):
         n = 0
         found_ib0 = None
         while not found_ib0 and n < total_retries:
-            ret, output = shellutil.run_get_output("ifconfig -a")
-            if ret != 0:
-                raise Exception("Failed to list network interfaces")
-            found_ib0 = re.search("ib0", output, re.IGNORECASE)
+            found_ib0 = os.path.exists('/sys/class/net/ib0')
             if found_ib0:
                 break
             time.sleep(check_interval_sec)
@@ -439,8 +436,8 @@ class RDMADeviceHandler(object):
         netmask = 16
         logger.info("RDMA: configuring IPv4 addr and netmask on ipoib interface")
         addr = '{0}/{1}'.format(ipv4_addr, netmask)
-        if shellutil.run("ifconfig ib0 {0}".format(addr)) != 0:
-            raise Exception("Could set addr to {0} on ib0".format(addr))
+        if shellutil.run("ip addr add {0} dev ib0".format(addr)) != 0:
+            raise Exception("Could not set addr to {0} on ib0".format(addr))
         logger.info("RDMA: ipoib address and netmask configured on interface")
 
     @staticmethod
@@ -533,27 +530,20 @@ class RDMADeviceHandler(object):
         if_name = RDMADeviceHandler.get_interface_by_mac(mac_addr)
         logger.info("RDMA: network interface found: {0}", if_name)
         logger.info("RDMA: bringing network interface up")
-        if shellutil.run("ifconfig {0} up".format(if_name)) != 0:
+        if shellutil.run("ip link set dev {0} up".format(if_name)) != 0:
             raise Exception("Could not bring up RMDA interface: {0}".format(if_name))
 
         logger.info("RDMA: configuring IPv4 addr and netmask on interface")
         addr = '{0}/{1}'.format(ipv4_addr, netmask)
-        if shellutil.run("ifconfig {0} {1}".format(if_name, addr)) != 0:
+        if shellutil.run("ip addr add {0} dev {1}".format(addr, if_name)) != 0:
             raise Exception("Could set addr to {1} on {0}".format(if_name, addr))
         logger.info("RDMA: network address and netmask configured on interface")
 
     @staticmethod
     def get_interface_by_mac(mac):
-        ret, output = shellutil.run_get_output("ifconfig -a")
-        if ret != 0:
-            raise Exception("Failed to list network interfaces")
-        output = output.replace('\n', '')
-        match = re.search(r"(eth\d).*(HWaddr|ether) {0}".format(mac),
-                          output, re.IGNORECASE)
-        if match is None:
-            raise Exception("Failed to get ifname with mac: {0}".format(mac))
-        output = match.group(0)
-        eths = re.findall(r"eth\d", output)
-        if eths is None or len(eths) == 0:
-            raise Exception("ifname with mac: {0} not found".format(mac))
-        return eths[-1]
+        for iface in os.scandir('/sys/class/net'):
+            addr_file = os.path.join('/sys/class/net', iface, 'address')
+            if os.path.exists(addr_file):
+                if open(addr_file, 'r').read() == mac.lower():
+                    return iface
+        raise Exception("Failed to get ifname with mac: {0}".format(mac))
