@@ -32,3 +32,14 @@ jobs:
           AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
           AZURE_TENANT_ID: $(AZURE-TENANT-ID)
           SUBSCRIPTION_ID: $(SUBSCRIPTION-ID)
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: '**/*junit.xml'
+          searchFolder: $(Build.ArtifactStagingDirectory)
+          testRunTitle: 'Publish test results'
+
+      - publish: $(Build.ArtifactStagingDirectory)
+        artifact: 'test-logs'
+        displayName: 'Publish test logs'

@@ -1,17 +1,13 @@
 from assertpy import assert_that
-from pathlib import Path
+
+from tests_e2e.lisa.testsuites.agent_test_suite import AgentTestSuite
 from tests_e2e.lisa.tests.agent_bvt import custom_script
 
 from lisa import (
-    CustomScriptBuilder,
-    Logger,
-    Node,
     simple_requirement,
     TestCaseMetadata,
-    TestSuite,
     TestSuiteMetadata,
 )
-from lisa.sut_orchestrator.azure.common import get_node_context
 
 
 @TestSuiteMetadata(
@@ -22,20 +18,17 @@ from lisa.sut_orchestrator.azure.common import get_node_context
     """,
     requirement=simple_requirement(unsupported_os=[]),
 )
-class AgentBvt(TestSuite):
+class AgentBvt(AgentTestSuite):
     @TestCaseMetadata(description="", priority=0)
-    def check_agent_version(self, node: Node, log: Logger) -> None:
-        script_path = CustomScriptBuilder(Path(__file__).parent.parent.joinpath("tests", "agent_bvt"), ["check_agent_version.py"])
-        script = node.tools[script_path]
-        result = script.run()
-        log.info(result.stdout)
-        log.error(result.stderr)
-        assert_that(result.exit_code).is_equal_to(0)
+    def main(self, *_, **__) -> None:
+        self.check_agent_version()
+        self.custom_script()
 
-    @TestCaseMetadata(description="", priority=0)
-    def custom_script(self, node: Node) -> None:
-        node_context = get_node_context(node)
-        subscription_id = node.features._platform.subscription_id
-        resource_group_name = node_context.resource_group_name
-        vm_name = node_context.vm_name
-        custom_script.main(subscription_id, resource_group_name, vm_name)
+    def check_agent_version(self) -> None:
+        exit_code = self._execute_remote_script(self._test_root.joinpath("lisa", "tests", "agent_bvt"), "check_agent_version.py")
+        assert_that(exit_code).is_equal_to(0)
+
+    def custom_script(self) -> None:
+        custom_script.main(self._subscription_id, self._resource_group_name, self._vm_name)
+
+
