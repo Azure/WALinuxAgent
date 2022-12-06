@@ -33,7 +33,7 @@ class AgentTestSuite(TestSuite):
     def after_case(self, *_, **__) -> None:
         # Collect the logs on the test machine into a compressed tarball
         self._log.info("Collecting logs on test machine [%s]...", self._node.name)
-        self._execute_remote_script(self._test_root.joinpath("scripts"), "collect_logs.sh")
+        self._execute_remote_script(self._test_root.joinpath("scenarios", "scripts"), "collect_logs.sh")
 
         # Copy the tarball to the local logs directory
         remote_path = PurePath('/home') / self._node.connection_info['username'] / 'logs.tgz'

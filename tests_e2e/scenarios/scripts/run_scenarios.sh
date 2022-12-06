@@ -13,7 +13,7 @@ ssh-keygen -y -f "$HOME/.ssh/id_rsa" > "$HOME/.ssh/id_rsa.pub"
 cd "$HOME/lisa"
 
 ./lisa.sh \
-  --runbook "$HOME/WALinuxAgent/tests_e2e/lisa/runbook/azure.yml" \
+  --runbook "$HOME/WALinuxAgent/tests_e2e/scenarios/runbook/scenarios.yml" \
   --log_path "$HOME/logs" \
   --working_path "$HOME/logs" \
   -v subscription_id:"$SUBSCRIPTION_ID" \

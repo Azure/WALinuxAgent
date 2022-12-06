@@ -24,7 +24,7 @@ jobs:
           addToPath: true
           architecture: 'x64'
 
-      - bash: $(Build.SourcesDirectory)/tests_e2e/scripts/execute_tests_container.sh
+      - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/execute_tests.sh
         displayName: "Execute tests"
         env:
           # Add all KeyVault secrets explicitly as they're not added by default to the environment vars
