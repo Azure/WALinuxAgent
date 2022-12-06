@@ -75,9 +75,9 @@ testcase:
 #
 # Set to do SSH proxy jumps
 #
-dev:
-  mock_tcp_ping: True
-  jump_boxes:
-    - private_key_file: $(proxy_identity_file)
-      address: $(proxy_host)
-      username: $(proxy_user)
+#dev:
+#  mock_tcp_ping: True
+#  jump_boxes:
+#    - private_key_file: $(proxy_identity_file)
+#      address: $(proxy_host)
+#      username: $(proxy_user)
