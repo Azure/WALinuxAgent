@@ -1,7 +1,7 @@
 from assertpy import assert_that
 
-from tests_e2e.lisa.testsuites.agent_test_suite import AgentTestSuite
-from tests_e2e.lisa.tests.agent_bvt import custom_script
+from tests_e2e.scenarios.testsuites.agent_test_suite import AgentTestSuite
+from tests_e2e.scenarios.tests.bvts import custom_script
 
 from lisa import (
     simple_requirement,
@@ -25,7 +25,7 @@ class AgentBvt(AgentTestSuite):
         self.custom_script()
 
     def check_agent_version(self) -> None:
-        exit_code = self._execute_remote_script(self._test_root.joinpath("lisa", "tests", "agent_bvt"), "check_agent_version.py")
+        exit_code = self._execute_remote_script(self._test_root.joinpath("scenarios", "tests"), "check_agent_version.py")
         assert_that(exit_code).is_equal_to(0)
 
     def custom_script(self) -> None:

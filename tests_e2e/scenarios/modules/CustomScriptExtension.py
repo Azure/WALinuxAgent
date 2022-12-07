@@ -1,7 +1,7 @@
 import uuid
 
-from tests_e2e.scenario_utils.extensions.BaseExtensionTestClass import BaseExtensionTestClass
-from tests_e2e.scenario_utils.models import ExtensionMetaData
+from tests_e2e.scenarios.modules.BaseExtensionTestClass import BaseExtensionTestClass
+from tests_e2e.scenarios.modules.models import ExtensionMetaData
 
 
 class CustomScriptExtension(BaseExtensionTestClass):
