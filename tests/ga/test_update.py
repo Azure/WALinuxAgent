@@ -1427,8 +1427,10 @@ class TestAgentUpgrade(UpdateTestCase):
                     yield
 
     @contextlib.contextmanager
-    def __get_update_handler(self, iterations=1, test_data=DATA_FILE,
+    def __get_update_handler(self, iterations=1, test_data=None,
                              reload_conf=None, autoupdate_frequency=0.001):
+
+        test_data = DATA_FILE if test_data is None else test_data
 
         with _get_update_handler(iterations, test_data) as (update_handler, protocol):
 

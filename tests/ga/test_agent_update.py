@@ -26,7 +26,9 @@ class TestAgentUpdate(UpdateTestCase):
         clear_singleton_instances(ProtocolUtil)
 
     @contextlib.contextmanager
-    def __get_agent_update_handler(self, test_data=DATA_FILE, autoupdate_frequency=0.001, autoupdate_enabled=True):
+    def __get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True):
+        test_data = DATA_FILE if test_data is None else test_data
+
         with mock_wire_protocol(test_data) as protocol:
 
             def get_handler(url, **kwargs):
