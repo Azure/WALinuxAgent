@@ -29,8 +29,8 @@ RUN \
     #                                                                                                            \
     # Install LISA dependencies                                                                                  \
     #                                                                                                            \
-    apt-get install -y git gcc libgirepository1.0-dev libcairo2-dev qemu-utils libvirt-dev python3-venv       && \
-                                                                                                                 \
+    apt-get install -y git gcc libgirepository1.0-dev libcairo2-dev qemu-utils libvirt-dev                       \
+            python3-pip python3-venv                                                                          && \
     #                                                                                                            \
     # Create user waagent, which is used to execute the tests                                                    \
     #                                                                                                            \
@@ -44,10 +44,6 @@ RUN \
 USER waagent
 
 RUN \
-    #                                                                                                            \
-    # Install Poetry                                                                                             \
-    #                                                                                                            \
-    curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python3 -     && \
     export PATH="$HOME/.local/bin:$PATH"                                                                      && \
                                                                                                                  \
     #                                                                                                            \
@@ -56,13 +52,14 @@ RUN \
     cd $HOME                                                                                                  && \
     git clone https://github.com/microsoft/lisa.git                                                           && \
     cd lisa                                                                                                   && \
-    poetry config virtualenvs.in-project true                                                                 && \
-    make setup                                                                                                && \
+                                                                                                                 \
+    python3 -m pip install --upgrade pip                                                                      && \
+    python3 -m pip install --editable .[azure,libvirt] --config-settings editable_mode=compat                 && \
                                                                                                                  \
     #                                                                                                            \
     # Install additional test dependencies                                                                       \
     #                                                                                                            \
-    poetry add msrestazure &&                                                                                    \
+    python3 -m pip install msrestazure                                                                        && \
                                                                                                                  \
     #                                                                                                            \
     # The setup for the tests depends on a couple of paths; add those to the profile                             \
