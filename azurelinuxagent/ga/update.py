@@ -51,12 +51,13 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, AGENT_VERSION, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
-from azurelinuxagent.ga.agent_update import get_agent_update_handler, GuestAgent
+from azurelinuxagent.ga.agent_update import get_agent_update_handler
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, list_agent_lib_directory, \
     ExtensionStatusValue, ExtHandlerStatusValue
+from azurelinuxagent.ga.guestagent import GuestAgent
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 
@@ -128,11 +129,6 @@ class UpdateHandler(object):
         self.protocol_util = get_protocol_util()
 
         self._is_running = True
-
-        # Member variables to keep track of the Agent AutoUpgrade
-        self.last_attempt_time = None
-        self._last_hotfix_upgrade_time = None
-        self._last_normal_upgrade_time = None
 
         self.agents = []
 
@@ -525,12 +521,13 @@ class UpdateHandler(object):
         # update self._goal_state
         if not self._try_update_goal_state(protocol):
             # agent updates and status reporting should be done even when the goal state is not updated
-            agent_update_handler.run()
-            self._report_status(exthandlers_handler, agent_update_handler, gs_updated=False)
+            agent_update_handler.run(self._goal_state)
+            agent_update_status = agent_update_handler.get_vmagent_update_status(self._goal_state)
+            self._report_status(exthandlers_handler, agent_update_status)
             return
 
-        gs_updated = self._processing_new_extensions_goal_state() or self._processing_new_incarnation()
-        agent_update_handler.run()
+        # Now agent update logic always depends on requested version in GS and removed old logic of self-update.
+        agent_update_handler.run(self._goal_state)
 
         try:
             if self._processing_new_extensions_goal_state():
@@ -548,7 +545,8 @@ class UpdateHandler(object):
                 CGroupConfigurator.get_instance().check_cgroups(cgroup_metrics=[])
 
             # report status before processing the remote access, since that operation can take a long time
-            self._report_status(exthandlers_handler, agent_update_handler, gs_updated=gs_updated)
+            agent_update_status = agent_update_handler.get_vmagent_update_status(self._goal_state)
+            self._report_status(exthandlers_handler, agent_update_status)
 
             if self._processing_new_incarnation():
                 remote_access_handler.run()
@@ -577,8 +575,7 @@ class UpdateHandler(object):
         except Exception as exception:
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
-    def _report_status(self, exthandlers_handler, agent_update_handler, gs_updated):
-        vm_agent_update_status = agent_update_handler.get_vmagent_update_status(gs_updated=gs_updated)
+    def _report_status(self, exthandlers_handler, vm_agent_update_status):
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         vm_status = exthandlers_handler.report_ext_handlers_status(
             goal_state_changed=self._processing_new_extensions_goal_state(),

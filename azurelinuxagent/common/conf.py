@@ -626,15 +626,6 @@ def get_normal_upgrade_frequency(conf=__conf__):
     return conf.get_int("Debug.AutoUpdateNormalFrequency", 24 * 60 * 60)
 
 
-def get_enable_ga_versioning(conf=__conf__):
-    """
-    If True, the agent uses GA Versioning for auto-updating the agent vs automatically auto-updating to the highest version.
-
-    NOTE: This option is experimental and may be removed in later versions of the Agent.
-    """
-    return conf.get_switch("Debug.EnableGAVersioning", False)
-
-
 def get_firewall_rules_log_period(conf=__conf__):
     """
     Determine the frequency to perform the periodic operation of logging firewall rules.
