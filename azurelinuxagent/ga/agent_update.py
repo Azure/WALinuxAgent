@@ -156,7 +156,7 @@ class AgentUpdateHandler(object):
 
     @staticmethod
     def __get_available_agents_on_disk():
-        available_agents = [agent for agent in AgentUpdateHandler.__get_all_agents_on_disk() if not agent.is_blacklisted]
+        available_agents = [agent for agent in AgentUpdateHandler.__get_all_agents_on_disk() if agent.is_available]
         return sorted(available_agents, key=lambda agent: agent.version, reverse=True)
 
     @staticmethod
