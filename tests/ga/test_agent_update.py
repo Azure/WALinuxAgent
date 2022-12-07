@@ -89,7 +89,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
             self.assertEqual(0, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
                                      "requesting a new agent version" in kwarg['message'] and kwarg[
-                                         'op'] == WALAEventOperation.AgentUpgrade]), "Unwanted upgrade")
+                                         'op'] == WALAEventOperation.AgentUpgrade]), "should not check for requested version")
 
     def test_it_should_not_agent_update_if_last_attempted_update_time_not_elapsed(self):
         self.prepare_agents(count=1)
