@@ -34,6 +34,7 @@ from azurelinuxagent.common.logcollector_manifests import MANIFEST_NORMAL, MANIF
 
 # Please note: be careful when adding agent dependencies in this module.
 # This module uses its own logger and logs to its own file, not to the agent log.
+from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
 from azurelinuxagent.common.protocol.util import get_protocol_util
 
 _EXTENSION_LOG_DIR = get_ext_log_dir()
@@ -117,8 +118,10 @@ class LogCollector(object):
 
     @staticmethod
     def _initialize_telemetry():
-        protocol = get_protocol_util().get_protocol()
-        protocol.client.update_goal_state(force_update=True)
+        protocol = get_protocol_util().get_protocol()           # fetches full goal state underneath
+        protocol.client.update_goal_state(
+            goalstate_properties=[GoalStateProperties.RoleConfig, GoalStateProperties.HostingEnv],
+            force_update=True)
         # Initialize the common parameters for telemetry events
         initialize_event_logger_vminfo_common_parameters(protocol)
 
