@@ -85,7 +85,7 @@ class WireProtocol(DataContract):
 
         # Initialize the goal state, including all the inner properties
         logger.info('Initializing goal state during protocol detection')
-        self.client.update_goal_state(include=[GoalStateProperties.RoleConfig, GoalStateProperties.HostingEnv], force_update=True)
+        self.client.update_goal_state(goalstate_properties=[GoalStateProperties.RoleConfig, GoalStateProperties.HostingEnv], force_update=True)
 
     def update_goal_state(self, silent=False):
         self.client.update_goal_state(silent=silent)
