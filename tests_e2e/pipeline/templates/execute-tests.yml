@@ -1,10 +1,10 @@
 jobs:
-  - job: ""
+  - job: "ExecuteTests"
 
     steps:
 
       - task: DownloadSecureFile@1
-        name: sshKey
+        name: downloadSshKey
         displayName: "Download SSH key"
         inputs:
           secureFile: 'id_rsa'
@@ -24,13 +24,22 @@ jobs:
           addToPath: true
           architecture: 'x64'
 
-      - bash: $(testsSourcesDirectory)/scripts/install_dependencies.sh
-        displayName: "Install Dependencies"
-
-      - bash: $(testsSourcesDirectory)/scripts/execute_tests.sh
+      - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/execute_tests.sh
         displayName: "Execute tests"
         env:
           # Add all KeyVault secrets explicitly as they're not added by default to the environment vars
           AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
           AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
           AZURE_TENANT_ID: $(AZURE-TENANT-ID)
+          SUBSCRIPTION_ID: $(SUBSCRIPTION-ID)
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: '**/*junit.xml'
+          searchFolder: $(Build.ArtifactStagingDirectory)
+          testRunTitle: 'Publish test results'
+
+      - publish: $(Build.ArtifactStagingDirectory)
+        artifact: 'test-logs'
+        displayName: 'Publish test logs'

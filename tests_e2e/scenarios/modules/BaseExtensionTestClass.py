@@ -3,9 +3,9 @@ from typing import List
 
 from azure.core.polling import LROPoller
 
-from dcr.scenario_utils.azure_models import ComputeManager
-from dcr.scenario_utils.logging_utils import LoggingHandler
-from dcr.scenario_utils.models import ExtensionMetaData, get_vm_data_from_env
+from tests_e2e.scenarios.modules.azure_models import ComputeManager
+from tests_e2e.scenarios.modules.logging_utils import LoggingHandler
+from tests_e2e.scenarios.modules.models import ExtensionMetaData, get_vm_data_from_env
 
 
 class BaseExtensionTestClass(LoggingHandler):

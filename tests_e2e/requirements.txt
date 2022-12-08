@@ -10,4 +10,3 @@ cryptography
 distro
 junitparser
 msrestazure
-python-dotenv

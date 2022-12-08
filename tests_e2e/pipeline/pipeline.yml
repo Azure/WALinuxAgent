@@ -1,0 +1,18 @@
+variables:
+  - name: azureConnection
+    value: 'azuremanagement'
+
+trigger:
+  - develop
+
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: "ExecuteTests"
+
+    jobs:
+      - template: 'templates/execute-tests.yml'
+
