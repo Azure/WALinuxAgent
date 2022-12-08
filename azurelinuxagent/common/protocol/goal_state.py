@@ -20,7 +20,6 @@ import os
 import re
 import time
 import json
-from enum import Enum
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -49,7 +48,7 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 _GET_GOAL_STATE_MAX_ATTEMPTS = 6
 
 
-class GoalStateProperties(Enum):
+class GoalStateProperties(object):
     """
     Enum for defining the properties that we fetch in the goal state
     """
