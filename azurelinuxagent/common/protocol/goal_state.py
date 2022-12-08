@@ -171,7 +171,7 @@ class GoalState(object):
         # Fetching the goal state updates the HostGAPlugin so simply trigger the request
         GoalState._fetch_goal_state(wire_client)
 
-    def update(self, goalstate_properties, silent=False):
+    def update(self, goalstate_properties=GoalStateProperties, silent=False):
         """
         Updates the current GoalState instance fetching values from the WireServer/HostGAPlugin as needed
         """
