@@ -52,11 +52,16 @@ class GoalStateProperties(object):
     """
     Enum for defining the properties that we fetch in the goal state
     """
-    RoleConfig = "ConfigName"
-    HostingEnv = "HostingEnvironmentConfig"
-    SharedConfig = "SharedConfig"
-    ExtensionsConfig_Certs = "ExtensionsConfig_Certificates"
-    RemoteAccessInfo = "RemoteAccessInfo"
+    RoleConfig = 1
+    HostingEnv = 2
+    SharedConfig = 4
+    ExtensionsConfig_Certs = 8
+    RemoteAccessInfo = 16
+
+    @staticmethod
+    def default_properties():
+        return GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv | GoalStateProperties.SharedConfig | \
+               GoalStateProperties.ExtensionsConfig_Certs | GoalStateProperties.RemoteAccessInfo
 
 
 class GoalStateInconsistentError(ProtocolError):
@@ -68,7 +73,7 @@ class GoalStateInconsistentError(ProtocolError):
 
 
 class GoalState(object):
-    def __init__(self, wire_client, goalstate_properties=GoalStateProperties, silent=False):
+    def __init__(self, wire_client, goalstate_properties=GoalStateProperties.default_properties(), silent=False):
         """
         Fetches the goal state using the given wire client.
 
@@ -171,7 +176,7 @@ class GoalState(object):
         # Fetching the goal state updates the HostGAPlugin so simply trigger the request
         GoalState._fetch_goal_state(wire_client)
 
-    def update(self, goalstate_properties=GoalStateProperties, silent=False):
+    def update(self, goalstate_properties=GoalStateProperties.default_properties(), silent=False):
         """
         Updates the current GoalState instance fetching values from the WireServer/HostGAPlugin as needed
         """
@@ -354,7 +359,7 @@ class GoalState(object):
 
         return vm_settings, vm_settings_updated
 
-    def _fetch_full_wire_server_goal_state(self, incarnation, xml_doc, goalstate_properties=GoalStateProperties):
+    def _fetch_full_wire_server_goal_state(self, incarnation, xml_doc, goalstate_properties=GoalStateProperties.default_properties()):
         """
         Issues HTTP requests (to the WireServer) for each of the URIs in the goal state (ExtensionsConfig, Certificate, Remote Access users, etc)
         and populates the corresponding properties.
@@ -370,7 +375,7 @@ class GoalState(object):
             role_instance_id = None
             role_config_name = None
             container_id = None
-            if GoalStateProperties.RoleConfig in goalstate_properties:
+            if GoalStateProperties.RoleConfig & goalstate_properties:
                 role_instance = find(xml_doc, "RoleInstance")
                 role_instance_id = findtext(role_instance, "InstanceId")
                 role_config = find(role_instance, "Configuration")
@@ -379,7 +384,7 @@ class GoalState(object):
                 container_id = findtext(container, "ContainerId")
 
             extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
-            if GoalStateProperties.ExtensionsConfig_Certs not in goalstate_properties or extensions_config_uri is None:
+            if not (GoalStateProperties.ExtensionsConfig_Certs & goalstate_properties) or extensions_config_uri is None:
                 extensions_config = ExtensionsGoalStateFactory.create_empty(incarnation)
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
@@ -387,14 +392,14 @@ class GoalState(object):
                 self._history.save_extensions_config(extensions_config.get_redacted_text())
 
             hosting_env = None
-            if GoalStateProperties.HostingEnv in goalstate_properties:
+            if GoalStateProperties.HostingEnv & goalstate_properties:
                 hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
                 xml_text = self._wire_client.fetch_config(hosting_env_uri, self._wire_client.get_header())
                 hosting_env = HostingEnv(xml_text)
                 self._history.save_hosting_env(xml_text)
 
             shared_config = None
-            if GoalStateProperties.SharedConfig in goalstate_properties:
+            if GoalStateProperties.SharedConfig & goalstate_properties:
                 shared_conf_uri = findtext(xml_doc, "SharedConfig")
                 xml_text = self._wire_client.fetch_config(shared_conf_uri, self._wire_client.get_header())
                 shared_config = SharedConfig(xml_text)
@@ -408,7 +413,7 @@ class GoalState(object):
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
-            if GoalStateProperties.ExtensionsConfig_Certs in goalstate_properties and certs_uri is not None:
+            if (GoalStateProperties.ExtensionsConfig_Certs & goalstate_properties) and certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
                 certs = Certificates(xml_text, self.logger)
                 # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
@@ -422,7 +427,7 @@ class GoalState(object):
                 self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
-            if GoalStateProperties.RemoteAccessInfo in goalstate_properties:
+            if GoalStateProperties.RemoteAccessInfo & goalstate_properties:
                 remote_access_uri = findtext(container, "RemoteAccessInfo")
                 if remote_access_uri is not None:
                     xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_cert())
