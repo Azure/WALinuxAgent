@@ -1253,7 +1253,6 @@ class TestUpdate(UpdateTestCase):
 
                     def get_handler(url, **kwargs):
                         if HttpRequestPredicates.is_agent_package_request(url):
-                            agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
                             return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
                         return protocol.mock_wire_data.mock_http_get(url, **kwargs)
 
@@ -1517,7 +1516,7 @@ class TestAgentUpgrade(UpdateTestCase):
         self.prepare_agents(1)
         test_frequency = 10
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file,
-                                       autoupdate_frequency=test_frequency) as (update_handler, mock_telemetry):
+                                       autoupdate_frequency=test_frequency) as (update_handler, _):
             update_handler._protocol.mock_wire_data.set_ga_manifest_version_version("5.2.0.1")
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
@@ -1528,7 +1527,7 @@ class TestAgentUpgrade(UpdateTestCase):
                              "New agent directory should not be found")
 
     def test_it_should_not_auto_upgrade_if_auto_update_disabled(self):
-        with self.__get_update_handler(iterations=10) as (update_handler, mock_telemetry):
+        with self.__get_update_handler(iterations=10) as (update_handler, _):
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
                 update_handler.run(debug=True)
 
@@ -1688,7 +1687,7 @@ class TestAgentUpgrade(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+        with self.__get_update_handler(test_data=data_file) as (update_handler, _):
             update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)

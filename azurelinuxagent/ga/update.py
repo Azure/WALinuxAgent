@@ -525,6 +525,7 @@ class UpdateHandler(object):
             self._report_status(exthandlers_handler, agent_update_status)
             return
 
+        # check for agent updates
         agent_update_handler.run(self._goal_state)
 
         try:
