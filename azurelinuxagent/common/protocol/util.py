@@ -26,6 +26,7 @@ import threading
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
 from azurelinuxagent.common.singletonperthread import SingletonPerThread
 
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
@@ -188,7 +189,7 @@ class ProtocolUtil(SingletonPerThread):
                 return
             logger.error("Failed to clear wiresever endpoint: {0}", e)
 
-    def _detect_protocol(self):
+    def _detect_protocol(self, goalstate_properties=GoalStateProperties.default_properties()):
         """
         Probe protocol endpoints in turn.
         """
@@ -217,7 +218,7 @@ class ProtocolUtil(SingletonPerThread):
 
                 try:
                     protocol = WireProtocol(endpoint)
-                    protocol.detect()
+                    protocol.detect(goalstate_properties=goalstate_properties)
                     self._set_wireserver_endpoint(endpoint)
                     return protocol
 
@@ -268,7 +269,7 @@ class ProtocolUtil(SingletonPerThread):
         finally:
             self._lock.release()
 
-    def get_protocol(self):
+    def get_protocol(self, goalstate_properties=GoalStateProperties.default_properties()):
         """
         Detect protocol by endpoint.
         :returns: protocol instance
@@ -296,7 +297,7 @@ class ProtocolUtil(SingletonPerThread):
 
             logger.info("Detect protocol endpoint")
 
-            protocol = self._detect_protocol()
+            protocol = self._detect_protocol(goalstate_properties=goalstate_properties)
 
             IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
             self._save_protocol(WIRE_PROTOCOL_NAME)

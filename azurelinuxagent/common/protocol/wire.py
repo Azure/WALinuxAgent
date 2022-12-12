@@ -73,7 +73,7 @@ class WireProtocol(DataContract):
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
 
-    def detect(self):
+    def detect(self, goalstate_properties=GoalStateProperties.default_properties()):
         self.client.check_wire_protocol_version()
 
         trans_prv_file = os.path.join(conf.get_lib_dir(),
@@ -85,7 +85,7 @@ class WireProtocol(DataContract):
 
         # Initialize the goal state, including all the inner properties
         logger.info('Initializing goal state during protocol detection')
-        self.client.update_goal_state(goalstate_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv, force_update=True)
+        self.client.update_goal_state(goalstate_properties=goalstate_properties, force_update=True)
 
     def update_goal_state(self, silent=False):
         self.client.update_goal_state(silent=silent)
