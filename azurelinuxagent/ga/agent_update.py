@@ -208,14 +208,15 @@ class AgentUpdateHandler(object):
             if requested_version == CURRENT_VERSION:
                 return
 
+            # Check if an update is allowed
+            if not self.__should_update_agent(requested_version):
+                return
+
+            msg_ = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
+                self._gs_id, str(requested_version))
+            self.__log_event(LogLevel.INFO, msg_)
+
             try:
-                # Check if an update is allowed
-                if not self.__should_update_agent(requested_version):
-                    return
-
-                msg_ = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(self._gs_id, str(requested_version))
-                self.__log_event(LogLevel.INFO, msg_)
-
                 agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
 
                 if not agent.is_available:
