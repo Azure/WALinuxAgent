@@ -2,6 +2,7 @@ import contextlib
 import json
 import os
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr, httpclient
@@ -10,6 +11,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.agent_update import get_agent_update_handler
+from azurelinuxagent.ga.guestagent import GAUpdateReportState
 from tests.ga.test_update import UpdateTestCase
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
 from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
@@ -27,6 +29,8 @@ class TestAgentUpdate(UpdateTestCase):
 
     @contextlib.contextmanager
     def __get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True):
+        # Default to DATA_FILE of test_data parameter raises the pylint warning
+        # W0102: Dangerous default value DATA_FILE (builtins.dict) as argument (dangerous-default-value)
         test_data = DATA_FILE if test_data is None else test_data
 
         with mock_wire_protocol(test_data) as protocol:
@@ -91,6 +95,20 @@ class TestAgentUpdate(UpdateTestCase):
                                      "requesting a new agent version" in kwarg['message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "should not check for requested version")
 
+    def test_it_should_update_to_largest_version_if_ga_versioning_disabled(self):
+        self.prepare_agents(count=1)
+
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=False):
+                with self.assertRaises(AgentUpgradeExitException) as context:
+                    agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+                    self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
+                    self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
+                    self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
+
+
     def test_it_should_not_agent_update_if_last_attempted_update_time_not_elapsed(self):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
@@ -109,18 +127,17 @@ class TestAgentUpdate(UpdateTestCase):
             self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version=version)
             self.__assert_no_agent_package_telemetry_emitted(mock_telemetry, version=version)
 
-    def test_it_should_not_update_if_requested_version_not_available(self):
+    def test_it_should_update_to_largest_version_if_requested_version_not_available(self):
         self.prepare_agents(count=1)
 
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf.xml"
         with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
-            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
-
-            self.assertEqual(0, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "requesting a new agent version" in kwarg['message'] and kwarg[
-                                         'op'] == WALAEventOperation.AgentUpgrade]), "requested version should not be in GS")
-            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
+            with self.assertRaises(AgentUpgradeExitException) as context:
+                agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+                self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
+                self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
+                self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
 
     def test_it_should_not_agent_update_if_requested_version_is_same_as_current_version(self):
         data_file = DATA_FILE.copy()
@@ -224,11 +241,13 @@ class TestAgentUpdate(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
 
         with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            GAUpdateReportState.report_error_msg = ""
             agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(
                 str(CURRENT_VERSION))
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
             agent_update_handler._protocol.update_goal_state()
-            vm_agent_update_status = agent_update_handler.get_vmagent_update_status(agent_update_handler._protocol.get_goal_state())
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Success, vm_agent_update_status.status)
             self.assertEqual(0, vm_agent_update_status.code)
             self.assertEqual(str(CURRENT_VERSION), vm_agent_update_status.expected_version)
@@ -255,9 +274,38 @@ class TestAgentUpdate(UpdateTestCase):
                             yield agent_update_handler_local
 
         with mock_agent_update_handler(test_data=data_file) as (agent_update_handler):
+            GAUpdateReportState.report_error_msg = ""
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
-            vm_agent_update_status = agent_update_handler.get_vmagent_update_status(agent_update_handler._protocol.get_goal_state())
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
             self.assertIn("Unable to download Agent", vm_agent_update_status.message)
+
+    def test_it_should_report_update_status_with_missing_requested_version_error(self):
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf.xml"
+
+        @contextlib.contextmanager
+        def mock_agent_update_handler(test_data):
+            with mock_wire_protocol(test_data) as protocol:
+                def get_handler(url, **kwargs):
+                    if HttpRequestPredicates.is_agent_package_request(url):
+                        return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
+                    return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+
+                protocol.set_http_handlers(http_get_handler=get_handler)
+
+                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
+                    with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=0.001):
+                        with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
+                            agent_update_handler_local = get_agent_update_handler(protocol)
+                            yield agent_update_handler_local
+
+        with mock_agent_update_handler(test_data=data_file) as (agent_update_handler):
+            GAUpdateReportState.report_error_msg = ""
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+            self.assertEqual(1, vm_agent_update_status.code)
+            self.assertIn("Missing requested version", vm_agent_update_status.message)

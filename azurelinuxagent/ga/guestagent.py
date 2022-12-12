@@ -24,6 +24,7 @@ class GAUpdateReportState(object):
     This state will be persisted throughout the current service run and might be modified by external classes.
     """
     report_error_msg = ""
+    report_expected_version = FlexibleVersion("0.0.0.0")
 
 
 class GuestAgent(object):
@@ -73,7 +74,8 @@ class GuestAgent(object):
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
             detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
-            GAUpdateReportState.report_error_msg = detailed_msg  # capture the download errors to report back
+            if "Missing requested version" not in GAUpdateReportState.report_error_msg:
+                GAUpdateReportState.report_error_msg = detailed_msg  # capture the download errors to report back
             add_event(
                 AGENT_NAME,
                 version=self.version,

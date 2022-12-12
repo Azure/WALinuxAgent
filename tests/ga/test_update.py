@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 from threading import current_thread
 from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, \
-    AGENT_ERROR_FILE
+    AGENT_ERROR_FILE, GAUpdateReportState
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
 
@@ -1251,41 +1251,45 @@ class TestUpdate(UpdateTestCase):
                     protocol.aggregate_status = None
                     protocol.incarnation = 1
 
-                    def mock_http_put(url, *args, **_):
+                    def get_handler(url, **kwargs):
+                        if HttpRequestPredicates.is_agent_package_request(url):
+                            agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
+                            return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
+                        return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+
+                    def put_handler(url, *args, **_):
                         if HttpRequestPredicates.is_host_plugin_status_request(url):
                             # Skip reading the HostGA request data as its encoded
                             return MockHttpResponse(status=500)
                         protocol.aggregate_status = json.loads(args[0])
                         return MockHttpResponse(status=201)
 
-                    def update_goal_state_and_run_handler():
+                    def update_goal_state_and_run_handler(autoupdate_enabled = True):
                         protocol.incarnation += 1
                         protocol.mock_wire_data.set_incarnation(protocol.incarnation)
                         self._add_write_permission_to_goal_state_files()
-                        with _get_update_handler(iterations=1, protocol=protocol, autoupdate_enabled=False) as (update_handler, _):
+                        with _get_update_handler(iterations=1, protocol=protocol, autoupdate_enabled=autoupdate_enabled) as (update_handler, _):
+                            GAUpdateReportState.report_error_msg = ""
                             update_handler.run(debug=True)
                         self.assertEqual(0, update_handler.get_exit_code(),
                                          "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
                                              patch_warn.call_args_list))
 
-                    protocol.set_http_handlers(http_put_handler=mock_http_put)
+                    protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
 
-                    # Case 1: No requested version in GS; updateStatus should not be reported
-                    update_goal_state_and_run_handler()
-                    self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                                     "updateStatus should not be reported if not asked in GS")
-
-                    # Case 2: Requested version in GS != Current Version; updateStatus should be error
-                    protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
+                    # Case 1: Requested version removed in GS; report missing requested version errr
+                    protocol.mock_wire_data.set_extension_config("wire/ext_conf.xml")
+                    protocol.mock_wire_data.reload()
                     update_goal_state_and_run_handler()
                     self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                                    "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
+                                     "updateStatus should be reported")
                     update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                     self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-                    self.assertEqual(update_status['expectedVersion'], "9.9.9.10", "incorrect version reported")
                     self.assertEqual(update_status['code'], 1, "incorrect code reported")
+                    self.assertIn("Missing requested version", update_status['formattedMessage']['message'], "incorrect message reported")
 
-                    # Case 3: Requested version in GS == Current Version; updateStatus should be Success
+                    # Case 2: Requested version in GS == Current Version; updateStatus should be Success
+                    protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
                     protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
                     update_goal_state_and_run_handler()
                     self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
@@ -1295,11 +1299,16 @@ class TestUpdate(UpdateTestCase):
                     self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
                     self.assertEqual(update_status['code'], 0, "incorrect code reported")
 
-                    # Case 4: Requested version removed in GS; no updateStatus should be reported
-                    protocol.mock_wire_data.reload()
+                    # Case 3: Requested version in GS != Current Version; update fail and report error
+                    protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
+                    protocol.mock_wire_data.set_extension_config_requested_version("5.2.0.1")
                     update_goal_state_and_run_handler()
-                    self.assertFalse("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                                     "updateStatus should not be reported if not asked in GS")
+                    self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                    "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
+                    update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                    self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
+                    self.assertEqual(update_status['expectedVersion'], "5.2.0.1", "incorrect version reported")
+                    self.assertEqual(update_status['code'], 1, "incorrect code reported")
 
     def test_it_should_wait_to_fetch_first_goal_state(self):
         with _get_update_handler() as (update_handler, protocol):
@@ -1482,11 +1491,6 @@ class TestAgentUpgrade(UpdateTestCase):
         self.assertFalse(any(other_agents),
                          "All other agents should be purged from agent dir: {0}".format(other_agents))
 
-    def __assert_no_agent_upgrade_telemetry(self, mock_telemetry):
-        self.assertEqual(0, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                 "Agent update found, Exiting current process" in kwarg['message'] and kwarg[
-                                     'op'] == WALAEventOperation.AgentUpgrade]), "Unwanted upgrade")
-
     def __assert_ga_version_in_status(self, aggregate_status, version=str(CURRENT_VERSION)):
         self.assertIsNotNone(aggregate_status, "Status should be reported")
         self.assertEqual(aggregate_status['aggregateStatus']['guestAgentStatus']['version'], version,
@@ -1510,7 +1514,7 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf_requested_version.xml"
 
-        self.prepare_agent(1)
+        self.prepare_agents(1)
         test_frequency = 10
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file,
                                        autoupdate_frequency=test_frequency) as (update_handler, mock_telemetry):
@@ -1520,8 +1524,8 @@ class TestAgentUpgrade(UpdateTestCase):
 
             self.__assert_exit_code_successful(update_handler)
             self.assertEqual(no_of_iterations, update_handler.get_iterations(), "Update handler should've run its course")
-            # Ensure the new agent versions were also downloaded once the manifest was updated
-            self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
+            self.assertFalse(os.path.exists(self.agent_dir("5.2.0.1")),
+                             "New agent directory should not be found")
 
     def test_it_should_not_auto_upgrade_if_auto_update_disabled(self):
         with self.__get_update_handler(iterations=10) as (update_handler, mock_telemetry):
@@ -1530,7 +1534,6 @@ class TestAgentUpgrade(UpdateTestCase):
 
                 self.__assert_exit_code_successful(update_handler)
                 self.assertGreaterEqual(update_handler.get_iterations(), 10, "Update handler should've run 10 times")
-                self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
                 self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
                                  "New agent directory should not be found")
 
@@ -1543,6 +1546,17 @@ class TestAgentUpgrade(UpdateTestCase):
         self.__assert_exit_code_successful(update_handler)
         self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="9.9.9.10")
         self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10"])
+
+    def test_it_should_download_largest_version_if_ga_versioning_disabled(self):
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
+            with patch.object(conf, "get_enable_ga_versioning", return_value=False):
+                update_handler.run(debug=True)
+
+        self.__assert_exit_code_successful(update_handler)
+        self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="99999.0.0.0")
+        self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0"])
 
     def test_it_should_cleanup_all_agents_except_requested_version_and_current_version(self):
         data_file = mockwiredata.DATA_FILE.copy()
@@ -1560,13 +1574,14 @@ class TestAgentUpgrade(UpdateTestCase):
         self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
 
     def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
+        self.prepare_agents(1)
         data_file = mockwiredata.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_missing_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_requested_version_missing_in_manifest.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
 
         self.__assert_exit_code_successful(update_handler)
-        self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
+        self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
         agent_msgs = [kwarg for _, kwarg in mock_telemetry.call_args_list if
                       kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
         # This will throw if corresponding message not found so not asserting on that
@@ -1624,7 +1639,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertGreaterEqual(update_handler._protocol.mock_wire_data.call_counts["manifest_of_ga.xml"], 1,
                              "only 1 agent manifest call should've been made - 1 per incarnation")
 
-    def test_it_should_not_update_if_requested_version_not_available(self):
+    def test_it_should_update_to_largest_version_if_requested_version_not_available(self):
         no_of_iterations = 100
 
         # Set the test environment by adding 20 random agents to the agent directory
@@ -1662,9 +1677,8 @@ class TestAgentUpgrade(UpdateTestCase):
 
             self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
             self.__assert_exit_code_successful(update_handler)
-            self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
-            self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
-                             "New agent directory should not be found")
+            self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="99999.0.0.0")
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
 
     def test_it_should_not_download_anything_if_requested_version_is_current_version(self):
         data_file = mockwiredata.DATA_FILE.copy()
@@ -1680,7 +1694,6 @@ class TestAgentUpgrade(UpdateTestCase):
             update_handler.run(debug=True)
 
             self.__assert_exit_code_successful(update_handler)
-            self.__assert_no_agent_upgrade_telemetry(mock_telemetry)
             self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
                              "New agent directory should not be found")
 

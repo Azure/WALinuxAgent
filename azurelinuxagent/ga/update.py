@@ -520,13 +520,11 @@ class UpdateHandler(object):
 
         # update self._goal_state
         if not self._try_update_goal_state(protocol):
-            # agent updates and status reporting should be done even when the goal state is not updated
-            agent_update_handler.run(self._goal_state)
-            agent_update_status = agent_update_handler.get_vmagent_update_status(self._goal_state)
+            # status reporting should be done even when the goal state is not updated
+            agent_update_status = agent_update_handler.get_vmagent_update_status()
             self._report_status(exthandlers_handler, agent_update_status)
             return
 
-        # Now agent update logic always depends on requested version in GS and removed old logic of self-update.
         agent_update_handler.run(self._goal_state)
 
         try:
@@ -545,7 +543,7 @@ class UpdateHandler(object):
                 CGroupConfigurator.get_instance().check_cgroups(cgroup_metrics=[])
 
             # report status before processing the remote access, since that operation can take a long time
-            agent_update_status = agent_update_handler.get_vmagent_update_status(self._goal_state)
+            agent_update_status = agent_update_handler.get_vmagent_update_status()
             self._report_status(exthandlers_handler, agent_update_status)
 
             if self._processing_new_incarnation():

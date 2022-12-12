@@ -80,9 +80,9 @@ class ReportStatusTestCase(AgentTestCase):
                     update_handler._goal_state = protocol.get_goal_state()  # these tests skip the initialization of the goal state. so do that here
                     exthandlers_handler = ExtHandlersHandler(protocol)
                     agent_update_handler = get_agent_update_handler(protocol)
-                    agent_update_status = agent_update_handler.get_vmagent_update_status(update_handler._goal_state)
+                    agent_update_status = agent_update_handler.get_vmagent_update_status()
                     update_handler._report_status(exthandlers_handler, agent_update_status)
-                    self.assertEqual(1, logger_warn.call_count, "UpdateHandler._report_status() should report only agent updatre status call warnings")
+                    self.assertEqual(0, logger_warn.call_count, "UpdateHandler._report_status() should not report WARNINGS when there are no errors")
 
                     with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", side_effect=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
                         get_warnings = lambda: [args[0] for args, _ in logger_warn.call_args_list if "TEST EXCEPTION" in args[0]]

@@ -44,9 +44,6 @@ class AgentUpdateHandler(object):
 
         if next_attempt_time > now:
             return False
-
-        self._last_attempted_update_time = now
-        self._last_attempted_update_version = requested_version
         # The time limit elapsed for us to allow updates.
         return True
 
@@ -65,24 +62,33 @@ class AgentUpdateHandler(object):
                     self._ga_family, self._gs_id))
         return agent_family_manifests[0]
 
-    def __get_requested_version(self, agent_family):
+    @staticmethod
+    def __get_requested_version(agent_family):
         """
         Get the requested version from agent family
         Returns: Requested version if supported and available
-                 Exception if no requested version found
+                 None if requested version missing or GA versioning not enabled
         """
-        if agent_family.is_requested_version_specified:
+        if conf.get_enable_ga_versioning() and agent_family.is_requested_version_specified:
             if agent_family.requested_version is not None:
                 return FlexibleVersion(agent_family.requested_version)
-        raise Exception(
-            u"No requested version found for agent family: {0} for incarnation: {1}, skipping agent update".format(
-                self._ga_family, self._gs_id))
+        return None
 
-    def __download_and_get_agent(self, goal_state, agent_family, requested_version):
+    @staticmethod
+    def __get_largest_version(agent_manifest):
+        largest_version = FlexibleVersion("0.0.0.0")
+        for pkg in agent_manifest.pkg_list.versions:
+            pkg_version = FlexibleVersion(pkg.version)
+            if pkg_version > largest_version:
+                largest_version = pkg_version
+        return largest_version
+
+    def __download_and_get_agent(self, goal_state, agent_family, agent_manifest, requested_version):
         """
         This function downloads the new agent(requested version) and returns the downloaded version.
         """
-        agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
+        if agent_manifest is None:  # Fetch agent manifest if it's not already done
+            agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
         package_to_download = self.__get_agent_package_to_download(agent_manifest, requested_version)
         is_fast_track_goal_state = goal_state.extensions_goal_state.source == GoalStateSource.FastTrack
         agent = GuestAgent.from_agent_package(package_to_download, self._protocol, is_fast_track_goal_state)
@@ -183,55 +189,70 @@ class AgentUpdateHandler(object):
             self._gs_id = goal_state.extensions_goal_state.id
             agent_family = self.__get_agent_family_from_last_gs(goal_state)
             requested_version = self.__get_requested_version(agent_family)
+            agent_manifest = None  # This is to make sure fetch agent manifest once per update
+
+            if requested_version is None:
+                if conf.get_enable_ga_versioning():  # log the warning only when ga versioning is enabled
+                    warn_msg = "Missing requested version in agent family: {0} for incarnation: {1}, fallback to largest version update".format(self._ga_family, self._gs_id)
+                    self.__log_event(LogLevel.WARNING, warn_msg)
+                    GAUpdateReportState.report_error_msg = warn_msg
+                agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
+                requested_version = self.__get_largest_version(agent_manifest)
+            else:
+                # Save the requested version to report back
+                GAUpdateReportState.report_expected_version = requested_version
+                # Remove the missing requested version warning once requested version becomes available
+                if "Missing requested version" in GAUpdateReportState.report_error_msg:
+                    GAUpdateReportState.report_error_msg = ""
 
             if requested_version == CURRENT_VERSION:
                 return
 
-            # Check if an update is allowed
-            if not self.__should_update_agent(requested_version):
-                return
+            try:
+                # Check if an update is allowed
+                if not self.__should_update_agent(requested_version):
+                    return
 
-            msg_ = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(self._gs_id, str(requested_version))
-            self.__log_event(LogLevel.INFO, msg_)
+                msg_ = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(self._gs_id, str(requested_version))
+                self.__log_event(LogLevel.INFO, msg_)
 
-            agent = self.__download_and_get_agent(goal_state, agent_family, requested_version)
+                agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
 
-            if not agent.is_available:
-                msg = "Unable to download/unpack the agent version : {0} , skipping agent update".format(
-                    str(agent.version))
-                self.__log_event(LogLevel.WARNING, msg)
-                return
+                if not agent.is_available:
+                    msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
+                        str(agent.version))
+                    self.__log_event(LogLevel.WARNING, msg)
+                    return
 
-            # We delete the directory and the zip package from the filesystem except current version and target version
-            self.__purge_extra_agents_from_disk(known_agents=[agent])
-            self.__proceed_with_update(requested_version)
+                # We delete the directory and the zip package from the filesystem except current version and target version
+                self.__purge_extra_agents_from_disk(known_agents=[agent])
+                self.__proceed_with_update(requested_version)
+
+            finally:
+                self._last_attempted_update_time = datetime.datetime.now()
+                self._last_attempted_update_version = requested_version
 
         except Exception as err:
             if isinstance(err, AgentUpgradeExitException):
                 raise err
-            GAUpdateReportState.report_error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
+            if "Missing requested version" not in GAUpdateReportState.report_error_msg:
+                GAUpdateReportState.report_error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
             self.__log_event(LogLevel.WARNING, GAUpdateReportState.report_error_msg, success_=False)
 
-    def get_vmagent_update_status(self, goal_state):
+    def get_vmagent_update_status(self):
         """
-        This function gets the VMAgent update status as per the last GoalState.
-        Returns: None if the last GS does not ask for requested version else VMAgentUpdateStatus
+        This function gets the VMAgent update status as per the last attempted update.
+        Returns: None if fail to report or update never attempted with requested version
         """
         try:
-            agent_family = self.__get_agent_family_from_last_gs(goal_state)
-            target_version = self.__get_requested_version(agent_family)
-
-            if target_version is not None:
-                if CURRENT_VERSION == target_version:
+            if conf.get_enable_ga_versioning():
+                if not GAUpdateReportState.report_error_msg:
                     status = VMAgentUpdateStatuses.Success
                     code = 0
-                    message = ""
                 else:
                     status = VMAgentUpdateStatuses.Error
                     code = 1
-                    message = GAUpdateReportState.report_error_msg
-                GAUpdateReportState.report_error_msg = ""
-                return VMAgentUpdateStatus(expected_version=str(target_version), status=status, code=code, message=message)
+                return VMAgentUpdateStatus(expected_version=str(GAUpdateReportState.report_expected_version), status=status, code=code, message=GAUpdateReportState.report_error_msg)
         except Exception as err:
             self.__log_event(LogLevel.WARNING, "Unable to report agent update status: {0}".format(
                                                        textutil.format_exception(err)), success_=False)
