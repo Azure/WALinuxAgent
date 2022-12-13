@@ -11,6 +11,7 @@ set -euxo pipefail
 cd "$HOME"
 
 python3 -m pip install distro
+sudo apt-get install zip unzip
 
 # The private ssh key is shared from the container host as $HOME/id_rsa; copy it to
 # HOME/.ssh, set the correct mode and generate the public key.
