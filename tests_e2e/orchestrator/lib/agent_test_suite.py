@@ -24,6 +24,7 @@ from lisa import (
     CustomScriptBuilder,
     Logger,
     Node,
+    TestCaseMetadata,
     TestSuite,
     TestSuiteMetadata,
 )
@@ -32,9 +33,16 @@ from lisa.sut_orchestrator.azure.common import get_node_context
 from azurelinuxagent.common.version import AGENT_VERSION
 
 
+@TestSuiteMetadata(
+    area="bvt",
+    category="functional",
+    description="""
+    A POC test suite for the waagent BVTs.
+    """,
+)
 class AgentTestSuite(TestSuite):
     """
-    Base class for VM Agent tests. It provides initialization, cleanup, and common utilities for all of the VM Agent test suites.
+    Base class for VM Agent tests. It provides initialization, cleanup, and utilities common to all VM Agent test suites.
     """
     def __init__(self, metadata: TestSuiteMetadata):
         super().__init__(metadata)
@@ -171,17 +179,6 @@ class AgentTestSuite(TestSuite):
         self._log.info(f"Executing {script_path} {parameters}")
         result = custom_script.run(parameters=parameters, sudo=sudo)
 
-        # # Currently LISA appends stderr to stdout so use info or warning depending on the exit code
-        # if result.exit_code == 0:
-        #     log = self._log.info
-        # else:
-        #     log = self._log.error
-        #
-        # if result.stdout != '':
-        #     log(f"{result.stdout}")
-        # if result.stderr != '':
-        #     log(f"{result.stderr}")
-        #
         return result.exit_code
 
 

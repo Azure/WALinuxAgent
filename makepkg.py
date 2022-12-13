@@ -52,9 +52,9 @@ PUBLISH_MANIFEST_FILE = 'manifest.xml'
 
 def do(*args):
     try:
-        subprocess.check_output(args, stderr=subprocess.STDOUT)
+        return subprocess.check_output(args, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:  # pylint: disable=C0103
-        raise Exception("[{0}] failed:\n{1}".format(" ".join(args), str(e)))
+        raise Exception("[{0}] failed:\n{1}\n{2}".format(" ".join(args), str(e), e.stdout))
 
 
 def run(agent_family, output_directory, log):
