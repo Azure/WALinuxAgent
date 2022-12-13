@@ -24,7 +24,6 @@ from lisa import (
     CustomScriptBuilder,
     Logger,
     Node,
-    TestCaseMetadata,
     TestSuite,
     TestSuiteMetadata,
 )
@@ -33,13 +32,6 @@ from lisa.sut_orchestrator.azure.common import get_node_context
 from azurelinuxagent.common.version import AGENT_VERSION
 
 
-@TestSuiteMetadata(
-    area="bvt",
-    category="functional",
-    description="""
-    A POC test suite for the waagent BVTs.
-    """,
-)
 class AgentTestSuite(TestSuite):
     """
     Base class for VM Agent tests. It provides initialization, cleanup, and utilities common to all VM Agent test suites.
