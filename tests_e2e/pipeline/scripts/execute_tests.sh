@@ -2,6 +2,11 @@
 
 set -euxo pipefail
 
+# Install tools needed to setup/execute the tests
+sudo apt-get update
+sudo apt-get install zip unzip
+
+# Pull the container image used to execute the tests
 az login --service-principal --username "$AZURE_CLIENT_ID" --password "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" > /dev/null
 
 az acr login --name waagenttests
