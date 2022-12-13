@@ -20,7 +20,7 @@ docker run --rm \
       --env AZURE_CLIENT_SECRET \
       --env AZURE_TENANT_ID \
       waagenttests.azurecr.io/waagenttests \
-      bash --login -c '$HOME/WALinuxAgent/tests_e2e/scenarios/scripts/run_scenarios.sh'
+      bash --login -c '$HOME/WALinuxAgent/tests_e2e/orchestrator/scripts/run-scenarios'
 
 # Retake ownership of the staging directory
 sudo find "$BUILD_ARTIFACTSTAGINGDIRECTORY" -exec chown "$USER" {} \;

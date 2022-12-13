@@ -3,7 +3,7 @@ import os
 import uuid
 import sys
 
-from tests_e2e.scenarios.modules.CustomScriptExtension import CustomScriptExtension
+from tests_e2e.scenarios.lib.CustomScriptExtension import CustomScriptExtension
 
 
 def main(subscription_id, resource_group_name, vm_name):

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#
+#
+#
+set -euo pipefail
+
+usage() (
+    echo "Usage: install-agent -p|--package <path> -v|--version <version>"
+    exit 1
+)
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--package)
+            shift
+            if [ "$#" -lt 1 ]; then
+                usage
+            fi
+            package=$1
+            shift
+            ;;
+        -v|--version)
+            shift
+            if [ "$#" -lt 1 ]; then
+                usage
+            fi
+            version=$1
+            shift
+            ;;
+        *)
+            usage
+    esac
+done
+if [ "$#" -ne 0 ] || [ -z ${package+x} ] || [ -z ${version+x} ]; then
+    usage
+fi
+
+#
+# The service name is walinuxagent in Ubuntu and waagent elsewhere
+#
+if service walinuxagent status > /dev/null;then
+    service_name="walinuxagent"
+else
+    service_name="waagent"
+fi
+echo "Service name: $service_name"
+
+#
+# Install the package
+#
+echo "Installing $package..."
+unzip -d "/var/lib/waagent/WALinuxAgent-$version" -o "$package"
+sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
+
+#
+# Restart the service
+#
+echo "Restarting service..."
+service $service_name stop
+
+# Rename the previous log to ensure the new log starts with the agent we just installed
+mv /var/log/waagent.log /var/log/waagent.pre-install.log
+
+if command -v systemctl &> /dev/null; then
+  systemctl daemon-reload
+fi
+
+service $service_name start
+
+#
+# Verify that the new agent is running and output its status. Note that the extension handler
+# may take some time to start so give 1 minute.
+#
+echo "Verifying agent installation..."
+check-version() {
+  for i in {0..5}
+  do
+    if waagent --version | grep -E "Goal state agent:\s+$1" > /dev/null; then
+      return 0
+    fi
+    sleep 10
+  done
+
+  return 1
+}
+
+if check-version "$version"; then
+  printf "\nThe agent was installed installed successfully\n"
+  exit_code=0
+else
+  printf "\nThe agent was installed installed successfully\n"
+  exit_code=1
+fi
+
+waagent --version
+
+printf "\n"
+
+if command -v systemctl &> /dev/null; then
+  systemctl --no-pager -l status $service_name
+else
+  service $service_name status
+fi
+
+exit $exit_code

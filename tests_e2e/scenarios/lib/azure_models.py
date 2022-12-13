@@ -12,8 +12,8 @@ from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineSca
 from azure.mgmt.resource import ResourceManagementClient
 from msrestazure.azure_exceptions import CloudError
 
-from tests_e2e.scenarios.modules.logging_utils import LoggingHandler
-from tests_e2e.scenarios.modules.models import get_vm_data_from_env, VMModelType, VMMetaData
+from tests_e2e.scenarios.lib.logging_utils import LoggingHandler
+from tests_e2e.scenarios.lib.models import get_vm_data_from_env, VMModelType, VMMetaData
 
 
 class AzureComputeBaseClass(ABC, LoggingHandler):

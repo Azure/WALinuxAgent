@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-
+#
+# This script runs on the container executing the tests. It creates the SSH keys (private and public) used
+# to manage the test VMs taking the initial key value from the file shared by the container host, then it
+# executes the daily test runbook.
+#
+# TODO: The runbook should be parameterized.
+#
 set -euxo pipefail
 
 cd "$HOME"
@@ -11,6 +17,7 @@ cp "$HOME/id_rsa" "$HOME/.ssh"
 chmod 700 "$HOME/.ssh/id_rsa"
 ssh-keygen -y -f "$HOME/.ssh/id_rsa" > "$HOME/.ssh/id_rsa.pub"
 
+# Now start the runbook
 lisa \
   --runbook "$HOME/WALinuxAgent/tests_e2e/scenarios/runbooks/daily.yml" \
   --log_path "$HOME/logs" \
