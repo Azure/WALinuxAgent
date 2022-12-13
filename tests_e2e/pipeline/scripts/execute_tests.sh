@@ -10,7 +10,7 @@ docker pull waagenttests.azurecr.io/waagenttests:latest
 
 # Building the agent package writes the egg info to the source code directory, and test write their logs to the staging directory.
 # Make waagent (UID 1000 in the container) the owner of both locations, so that it can write to them.
-sudo chown 1000 "$BUILD_BUILD_SOURCESDIRECTORY"
+sudo chown 1000 "$BUILD_SOURCESDIRECTORY"
 sudo chown 1000 "$BUILD_ARTIFACTSTAGINGDIRECTORY"
 
 docker run --rm \
@@ -25,7 +25,7 @@ docker run --rm \
       bash --login -c '$HOME/WALinuxAgent/tests_e2e/orchestrator/scripts/run-scenarios'
 
 # Retake ownership of the source and staging directory (note that the former does not need to be done recursively)
-sudo chown "$USER" "$BUILD_BUILD_SOURCESDIRECTORY"
+sudo chown "$USER" "$BUILD_SOURCESDIRECTORY"
 sudo find "$BUILD_ARTIFACTSTAGINGDIRECTORY" -exec chown "$USER" {} \;
 
 # LISA organizes its logs in a tree similar to
