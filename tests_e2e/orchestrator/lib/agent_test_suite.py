@@ -139,8 +139,13 @@ class AgentTestSuite(TestSuite):
             self._log.info(f"Package {agent_package} is already installed on {self._vm_name}...")
             return
 
+        # The install script needs to unzip the agent package; ensure unzip is installed on the test node
+        self._log.info(f"Installing unzip on {self._vm_name}...")
+        self._node.os.install_packages("unzip")
+
         self._log.info(f"Installing {agent_package} on {self._vm_name}...")
         agent_package_remote_path = self._node_home_directory/agent_package.name
+        self._log.info(f"Copying {agent_package} to {self._vm_name}:{agent_package_remote_path}")
         self._node.shell.copy(agent_package, agent_package_remote_path)
         self._execute_script_on_node(
             self._test_source_directory/"orchestrator"/"scripts"/"install-agent",
@@ -168,8 +173,15 @@ class AgentTestSuite(TestSuite):
         custom_script_builder = CustomScriptBuilder(script_path.parent, [script_path.name])
         custom_script = self._node.tools[custom_script_builder]
 
-        self._log.info(f"Executing {script_path} {parameters}")
+        command_line = f"{script_path} {parameters}"
+        self._log.info(f"Executing {command_line}")
         result = custom_script.run(parameters=parameters, sudo=sudo)
+
+        # LISA appends stderr to stdout so no need to check for stderr
+        if result.exit_code != 0:
+            raise Exception(f"[{command_line}] failed.\n{result.stdout}")
+
+        self._log.info(f"{result.stdout}")
 
         return result.exit_code
 
