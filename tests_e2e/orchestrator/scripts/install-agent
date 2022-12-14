@@ -85,10 +85,10 @@ check-version() {
 }
 
 if check-version "$version"; then
-  printf "\nThe agent was installed installed successfully\n"
+  printf "\nThe agent was installed successfully\n"
   exit_code=0
 else
-  printf "\nThe agent was installed installed successfully\n"
+  printf "\nThe agent was not installed correctly; expected version %s\n" "$version"
   exit_code=1
 fi
 
