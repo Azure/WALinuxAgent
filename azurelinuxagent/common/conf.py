@@ -629,10 +629,9 @@ def get_normal_upgrade_frequency(conf=__conf__):
 def get_enable_ga_versioning(conf=__conf__):
     """
     If True, the agent uses GA Versioning for auto-updating the agent vs automatically auto-updating to the highest version.
-
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableGAVersioning", False)
+    return conf.get_switch("Debug.EnableGAVersioning", True)
 
 
 def get_firewall_rules_log_period(conf=__conf__):
