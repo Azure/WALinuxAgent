@@ -181,8 +181,6 @@ class AgentTestSuite(TestSuite):
         if result.exit_code != 0:
             raise Exception(f"[{command_line}] failed.\n{result.stdout}")
 
-        self._log.info(f"{result.stdout}")
-
         return result.exit_code
 
 
