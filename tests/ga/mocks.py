@@ -18,6 +18,8 @@
 import contextlib
 
 from mock import PropertyMock
+
+from azurelinuxagent.ga.agent_update import AgentUpdateHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from azurelinuxagent.ga.update import UpdateHandler, get_update_handler
@@ -30,6 +32,7 @@ def mock_update_handler(protocol,
                         on_new_iteration=lambda _: None,
                         exthandlers_handler=None,
                         remote_access_handler=None,
+                        agent_update_handler=None,
                         autoupdate_enabled=False,
                         check_daemon_running=False,
                         start_background_threads=False,
@@ -71,6 +74,9 @@ def mock_update_handler(protocol,
     if remote_access_handler is None:
         remote_access_handler = RemoteAccessHandler(protocol)
 
+    if agent_update_handler is None:
+        agent_update_handler = AgentUpdateHandler(protocol)
+
     cleanup_functions = []
 
     def patch_object(target, attribute):
@@ -80,39 +86,40 @@ def mock_update_handler(protocol,
 
     try:
         with patch("azurelinuxagent.ga.exthandlers.get_exthandlers_handler", return_value=exthandlers_handler):
-            with patch("azurelinuxagent.ga.remoteaccess.get_remote_access_handler", return_value=remote_access_handler):
-                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
-                    with patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=is_running)):
-                        with patch('azurelinuxagent.ga.update.time.sleep', side_effect=lambda _: mock_sleep(0.001)) as sleep:
-                            with patch('sys.exit', side_effect=lambda _: 0) as mock_exit:
-                                if not check_daemon_running:
-                                    patch_object(UpdateHandler, "_check_daemon_running")
-                                if not start_background_threads:
-                                    patch_object(UpdateHandler, "_start_threads")
-                                if not check_background_threads:
-                                    patch_object(UpdateHandler, "_check_threads_running")
+            with patch("azurelinuxagent.ga.agent_update.get_agent_update_handler", return_value=agent_update_handler):
+                with patch("azurelinuxagent.ga.remoteaccess.get_remote_access_handler", return_value=remote_access_handler):
+                    with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
+                        with patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=is_running)):
+                            with patch('azurelinuxagent.ga.update.time.sleep', side_effect=lambda _: mock_sleep(0.001)) as sleep:
+                                with patch('sys.exit', side_effect=lambda _: 0) as mock_exit:
+                                    if not check_daemon_running:
+                                        patch_object(UpdateHandler, "_check_daemon_running")
+                                    if not start_background_threads:
+                                        patch_object(UpdateHandler, "_start_threads")
+                                    if not check_background_threads:
+                                        patch_object(UpdateHandler, "_check_threads_running")
 
-                                def get_exit_code():
-                                    if mock_exit.call_count == 0:
-                                        raise Exception("The UpdateHandler did not exit")
-                                    if mock_exit.call_count != 1:
-                                        raise Exception("The UpdateHandler exited multiple times ({0})".format(mock_exit.call_count))
-                                    args, _ = mock_exit.call_args
-                                    return args[0]
+                                    def get_exit_code():
+                                        if mock_exit.call_count == 0:
+                                            raise Exception("The UpdateHandler did not exit")
+                                        if mock_exit.call_count != 1:
+                                            raise Exception("The UpdateHandler exited multiple times ({0})".format(mock_exit.call_count))
+                                        args, _ = mock_exit.call_args
+                                        return args[0]
 
-                                def get_iterations():
-                                    return iteration_count[0]
+                                    def get_iterations():
+                                        return iteration_count[0]
 
-                                def get_iterations_completed():
-                                    return sleep.call_count
+                                    def get_iterations_completed():
+                                        return sleep.call_count
 
-                                update_handler = get_update_handler()
-                                update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
-                                update_handler.get_exit_code = get_exit_code
-                                update_handler.get_iterations = get_iterations
-                                update_handler.get_iterations_completed = get_iterations_completed
+                                    update_handler = get_update_handler()
+                                    update_handler.protocol_util.get_protocol = Mock(return_value=protocol)
+                                    update_handler.get_exit_code = get_exit_code
+                                    update_handler.get_iterations = get_iterations
+                                    update_handler.get_iterations_completed = get_iterations_completed
 
-                                yield update_handler
+                                    yield update_handler
     finally:
         for f in cleanup_functions:
             f()
