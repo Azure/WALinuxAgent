@@ -3,6 +3,7 @@
 
 import json
 
+from azurelinuxagent.ga.agent_update import get_agent_update_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
 from azurelinuxagent.ga.update import get_update_handler
 from tests.ga.mocks import mock_update_handler
@@ -78,21 +79,23 @@ class ReportStatusTestCase(AgentTestCase):
                     update_handler = get_update_handler()
                     update_handler._goal_state = protocol.get_goal_state()  # these tests skip the initialization of the goal state. so do that here
                     exthandlers_handler = ExtHandlersHandler(protocol)
-                    update_handler._report_status(exthandlers_handler)
+                    agent_update_handler = get_agent_update_handler(protocol)
+                    agent_update_status = agent_update_handler.get_vmagent_update_status()
+                    update_handler._report_status(exthandlers_handler, agent_update_status)
                     self.assertEqual(0, logger_warn.call_count, "UpdateHandler._report_status() should not report WARNINGS when there are no errors")
 
                     with patch("azurelinuxagent.ga.update.ExtensionsSummary.__init__", side_effect=Exception("TEST EXCEPTION")):  # simulate an error during _report_status()
                         get_warnings = lambda: [args[0] for args, _ in logger_warn.call_args_list if "TEST EXCEPTION" in args[0]]
 
-                        update_handler._report_status(exthandlers_handler)
-                        update_handler._report_status(exthandlers_handler)
-                        update_handler._report_status(exthandlers_handler)
+                        update_handler._report_status(exthandlers_handler, agent_update_status)
+                        update_handler._report_status(exthandlers_handler, agent_update_status)
+                        update_handler._report_status(exthandlers_handler, agent_update_status)
 
                         self.assertEqual(1, len(get_warnings()), "UpdateHandler._report_status() should report only 1 WARNING when there are multiple errors within the same goal state")
 
                         exthandlers_handler.protocol.mock_wire_data.set_incarnation(999)
                         update_handler._try_update_goal_state(exthandlers_handler.protocol)
-                        update_handler._report_status(exthandlers_handler)
+                        update_handler._report_status(exthandlers_handler, agent_update_status)
                         self.assertEqual(2, len(get_warnings()), "UpdateHandler._report_status() should continue reporting errors after a new goal state")
 
     def test_update_handler_should_add_fast_track_to_supported_features_when_it_is_supported(self):

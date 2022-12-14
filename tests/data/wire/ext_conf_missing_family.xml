@@ -4,27 +4,6 @@
         xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
         <GAFamilies>
             <GAFamily>
-                <Name>Prod</Name>
-                <Uris />
-            </GAFamily>
-            <GAFamily>
-                <Name>Test</Name>
-                <Uris>
-                    <Uri>https://mock-goal-state/rdfepirv2bl2prdstr01.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/rdfepirv2bl2prdstr02.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/rdfepirv2bl2prdstr03.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/rdfepirv2bl2prdstr04.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/rdfepirv2bl3prdstr01.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/rdfepirv2bl3prdstr02.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/rdfepirv2bl3prdstr03.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/zrdfepirv2bl4prdstr01.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/zrdfepirv2bl4prdstr03.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/zrdfepirv2bl5prdstr02.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/zrdfepirv2bl5prdstr04.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/zrdfepirv2bl5prdstr06.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/zrdfepirv2bl5prdstr09a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                    <Uri>https://mock-goal-state/zrdfepirv2bl6prdstr02a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
-                </Uris>
             </GAFamily>
         </GAFamilies>
         <Location>eastus</Location>
