@@ -1,7 +1,8 @@
 from tests_e2e.orchestrator.lib.agent_test_suite import AgentTestSuite
 from tests_e2e.scenarios.tests.bvts import custom_script
 
-from lisa import (
+# E0401: Unable to import 'lisa' (import-error)
+from lisa import (  # pylint: disable=E0401
     TestCaseMetadata,
     TestSuiteMetadata,
 )

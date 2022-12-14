@@ -20,14 +20,16 @@ import shutil
 
 import makepkg
 
-from lisa import (
+# E0401: Unable to import 'lisa' (import-error)
+from lisa import (  # pylint: disable=E0401
     CustomScriptBuilder,
     Logger,
     Node,
     TestSuite,
     TestSuiteMetadata,
 )
-from lisa.sut_orchestrator.azure.common import get_node_context
+# E0401: Unable to import 'lisa.sut_orchestrator.azure.common' (import-error)
+from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
 
 from azurelinuxagent.common.version import AGENT_VERSION
 
@@ -41,10 +43,12 @@ class AgentTestSuite(TestSuite):
         # The actual initialization happens in _initialize()
         self._log = None
         self._node = None
-        self._test_source_directory = None
         self._subscription_id = None
         self._resource_group_name = None
         self._vm_name = None
+        self._test_source_directory = None
+        self._working_directory = None
+        self._node_home_directory = None
 
     def before_case(self, *_, **kwargs) -> None:
         self._initialize(kwargs['node'], kwargs['log'])
@@ -114,7 +118,7 @@ class AgentTestSuite(TestSuite):
         # the same suite on one or more test VMs; we use this file to mark the build is already done
         build_done_path = self._working_directory/"build.done"
         if build_done_path.exists():
-            self._log.info(f"The agent build is already completed, will use existing package.")
+            self._log.info("The agent build is already completed, will use existing package.")
         else:
             self._log.info(f"Building agent package to {build_path}")
             makepkg.run(agent_family="Test", output_directory=str(build_path), log=self._log)
@@ -152,7 +156,7 @@ class AgentTestSuite(TestSuite):
             parameters=f"--package {agent_package_remote_path} --version {AGENT_VERSION}",
             sudo=True)
 
-        self._log.info(f"The agent was installed successfully.")
+        self._log.info("The agent was installed successfully.")
         install_done_path.touch()
 
     def _collect_node_logs(self) -> None:
