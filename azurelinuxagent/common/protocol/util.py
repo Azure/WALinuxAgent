@@ -26,7 +26,6 @@ import threading
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
-from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
 from azurelinuxagent.common.singletonperthread import SingletonPerThread
 
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
