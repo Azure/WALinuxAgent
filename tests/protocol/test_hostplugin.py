@@ -244,7 +244,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             wire_protocol.client.upload_status_blob()
@@ -277,7 +277,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             wire_protocol.client.upload_status_blob()
@@ -311,7 +311,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             wire_protocol.client.upload_status_blob()
@@ -345,7 +345,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             self.assertRaises(wire.ProtocolError, wire_protocol.client.upload_status_blob)
