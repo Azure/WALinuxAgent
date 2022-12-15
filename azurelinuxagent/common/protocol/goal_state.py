@@ -55,9 +55,10 @@ class GoalStateProperties(object):
     RoleConfig = 0x1
     HostingEnv = 0x2
     SharedConfig = 0x4
-    ExtensionsConfig_Certs = 0x8
-    RemoteAccessInfo = 0x10
-    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsConfig_Certs | RemoteAccessInfo
+    ExtensionsConfig = 0x8
+    Certificates = 0x10
+    RemoteAccessInfo = 0x20
+    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsConfig | Certificates | RemoteAccessInfo
 
 
 class GoalStateInconsistentError(ProtocolError):
@@ -133,14 +134,14 @@ class GoalState(object):
 
     @property
     def extensions_goal_state(self):
-        if not self._goal_state_properties & GoalStateProperties.ExtensionsConfig_Certs:
+        if not self._goal_state_properties & GoalStateProperties.ExtensionsConfig:
             raise ProtocolError("ExtensionsConfig is not in goal state properties")
         else:
             return self._extensions_goal_state
 
     @property
     def certs(self):
-        if not self._goal_state_properties & GoalStateProperties.ExtensionsConfig_Certs:
+        if not self._goal_state_properties & GoalStateProperties.Certificates:
             raise ProtocolError("Certificates is not in goal state properties")
         else:
             return self._certs
@@ -405,7 +406,7 @@ class GoalState(object):
                 container_id = findtext(container, "ContainerId")
 
             extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
-            if not (GoalStateProperties.ExtensionsConfig_Certs & self._goal_state_properties) or extensions_config_uri is None:
+            if not (GoalStateProperties.ExtensionsConfig & self._goal_state_properties) or extensions_config_uri is None:
                 extensions_config = ExtensionsGoalStateFactory.create_empty(incarnation)
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
@@ -434,7 +435,7 @@ class GoalState(object):
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
-            if (GoalStateProperties.ExtensionsConfig_Certs & self._goal_state_properties) and certs_uri is not None:
+            if (GoalStateProperties.Certificates & self._goal_state_properties) and certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
                 certs = Certificates(xml_text, self.logger)
                 # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
