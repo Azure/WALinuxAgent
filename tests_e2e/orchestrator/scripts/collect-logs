@@ -15,5 +15,11 @@ tar --exclude='journal/*' --exclude='omsbundle' --exclude='omsagent' --exclude='
     /var/lib/waagent/ \
     /etc/waagent.conf
 
+# tar exits with 1 on warnings; ignore those
+exit_code=$?
+if [ "$exit_code" != "1" ] && [ "$exit_code" != "0" ]; then
+    exit $exit_code
+fi
+
 chmod +r "$logs_file_name"
 
