@@ -189,7 +189,7 @@ class ProtocolUtil(SingletonPerThread):
                 return
             logger.error("Failed to clear wiresever endpoint: {0}", e)
 
-    def _detect_protocol(self, goalstate_properties=GoalStateProperties.All):
+    def _detect_protocol(self):
         """
         Probe protocol endpoints in turn.
         """
