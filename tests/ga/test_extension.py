@@ -510,7 +510,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_incarnation(2)
         test_data.set_extensions_config_version("1.0.1")
         test_data.set_manifest_version('1.0.1')
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         # Ensure the patched command fails
         patch_command.return_value = "exit 1"
@@ -542,7 +542,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test goal state changed
         test_data.set_incarnation(2)
         test_data.set_extensions_config_sequence_number(1)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -555,7 +555,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_incarnation(3)
         test_data.set_extensions_config_version("1.1.1")
         test_data.set_extensions_config_sequence_number(2)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -567,7 +567,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_incarnation(4)
         test_data.set_extensions_config_version("1.2.0")
         test_data.set_extensions_config_sequence_number(3)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -578,7 +578,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test disable
         test_data.set_incarnation(5)
         test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -588,7 +588,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test uninstall
         test_data.set_incarnation(6)
         test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -597,7 +597,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         # Test uninstall again!
         test_data.set_incarnation(7)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -620,7 +620,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         # Update Incarnation
         test_data.set_incarnation(2)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -720,7 +720,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Uninstall the Plugin and make sure Disable called
         test_data.set_incarnation(2)
         test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         with enable_invocations(test_ext) as invocation_record:
             exthandlers_handler.run()
@@ -799,7 +799,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         dep_ext_level_4 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"", "dependencyLevel=\"3\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"", "dependencyLevel=\"4\"")
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         with enable_invocations(dep_ext_level_3, dep_ext_level_4) as invocation_record:
             exthandlers_handler.run()
@@ -826,7 +826,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # the last one disabled.
         test_data.set_incarnation(3)
         test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         with enable_invocations(dep_ext_level_3, dep_ext_level_4) as invocation_record:
             exthandlers_handler.run()
@@ -858,7 +858,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         dep_ext_level_6 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"", "dependencyLevel=\"6\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"", "dependencyLevel=\"5\"")
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         with enable_invocations(dep_ext_level_5, dep_ext_level_6) as invocation_record:
             exthandlers_handler.run()
@@ -938,7 +938,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                 _assert_event_reported_only_on_incarnation_change(expected_count=1)
 
                 test_data.set_incarnation(2)
-                protocol.update_goal_state()
+                protocol.client.update_goal_state()
 
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
@@ -949,7 +949,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test it recovers on a new goal state if Handler succeeds
         test_data.set_incarnation(3)
         test_data.set_extensions_config_sequence_number(1)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -961,7 +961,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         # Update incarnation to confirm extension invocation order
         test_data.set_incarnation(4)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         dep_ext_level_2 = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux")
         dep_ext_level_1 = extension_emulator(name="OSTCExtensions.OtherExampleHandlerLinux")
@@ -1023,7 +1023,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         # Test goal state changed
         test_data.set_incarnation(2)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1034,7 +1034,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test minor version bump
         test_data.set_incarnation(3)
         test_data.set_extensions_config_version("1.1.0")
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1045,7 +1045,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test hotfix version bump
         test_data.set_incarnation(4)
         test_data.set_extensions_config_version("1.1.1")
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1056,7 +1056,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test disable
         test_data.set_incarnation(5)
         test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1066,7 +1066,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test uninstall
         test_data.set_incarnation(6)
         test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1075,7 +1075,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         # Test uninstall again!
         test_data.set_incarnation(7)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1085,7 +1085,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test re-install
         test_data.set_incarnation(8)
         test_data.set_extensions_config_state(ExtensionRequestedState.Enabled)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1096,7 +1096,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test version bump post-re-install
         test_data.set_incarnation(9)
         test_data.set_extensions_config_version("1.2.0")
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1107,7 +1107,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Test rollback
         test_data.set_incarnation(10)
         test_data.set_extensions_config_version("1.1.0")
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1170,7 +1170,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             # Uninstall extensions now
             test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
             test_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
@@ -1192,7 +1192,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Since the installed version is not in PIR anymore, we need to also remove it from manifest file
         test_data.manifest = test_data.manifest.replace("1.0.0", "9.9.9")
         test_data.set_incarnation(2)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1666,7 +1666,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         test_data.set_incarnation(2)
         test_data.set_extensions_config_version("1.0.1")
         test_data.set_manifest_version('1.0.1')
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         # Ensure new extension can be enabled
         exthandlers_handler.run()
@@ -1753,7 +1753,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
         test_data.set_extensions_config_state(ExtensionRequestedState.Disabled)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1784,7 +1784,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         # Next incarnation, disable extension
         test_data.set_incarnation(2)
         test_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
 
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
@@ -1841,7 +1841,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             # If the incarnation number changes (there's a new goal state), ensure we go through the entire upgrade
             # process again.
             test_data.set_incarnation(3)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
@@ -1888,7 +1888,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
             # Force a new goal state incarnation, only then will we attempt the upgrade again
             test_data.set_incarnation(3)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             # Ensure disable won't fail by making launch_command a no-op
             with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command:  # pylint: disable=unused-variable
@@ -2111,7 +2111,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             # Initiating another run which shouldn't have any failed env variables in it if no failures
             # Updating Incarnation
             test_data.set_incarnation(3)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
@@ -3355,7 +3355,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
 
                 # Update GoalState
                 protocol.mock_wire_data.set_incarnation(2)
-                protocol.update_goal_state()
+                protocol.client.update_goal_state()
 
                 with patch.object(conf, 'get_extensions_enabled', return_value=False):
                     assert_extensions_called(exthandlers_handler, expected_call_count=0)

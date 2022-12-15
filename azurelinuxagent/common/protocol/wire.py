@@ -87,9 +87,6 @@ class WireProtocol(DataContract):
         logger.info('Initializing goal state during protocol detection')
         self.client.reset_goal_state()
 
-    def update_goal_state(self, silent=False):
-        self.client.update_goal_state(silent=silent)
-
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
 

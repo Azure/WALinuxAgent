@@ -253,7 +253,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_disabled_extensions.xml')
         protocol.mock_wire_data = WireProtocolData(self.test_data)
         protocol.mock_wire_data.set_incarnation(2)
-        protocol.update_goal_state()
+        protocol.client.update_goal_state()
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
@@ -319,7 +319,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             # Case 3: Uninstall Multi-config handler (with enabled extensions) and single config extension
             protocol.mock_wire_data.set_incarnation(3)
             protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             self.assertEqual(0, len(protocol.aggregate_status['aggregateStatus']['handlerAggregateStatus']),
@@ -333,7 +333,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             failing_version = "19.12.1221"
             protocol.mock_wire_data.set_extensions_config_version(failing_version)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
             self.assertEqual(no_of_extensions,
@@ -411,7 +411,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             new_version = "1.1.0"
             new_first_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.firstExtension",
@@ -460,7 +460,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             new_version = "1.1.0"
             _, fail_action = Actions.generate_unique_fail()
@@ -529,7 +529,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_update_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             new_version = "1.1.0"
             fail_code, fail_action = Actions.generate_unique_fail()
@@ -655,7 +655,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, 'ext_conf_mc_disabled_extensions.xml')
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             ext_handler.run()
             ext_handler.report_ext_handlers_status()
@@ -781,7 +781,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                           'ext_conf_mc_update_extensions.xml')
                 protocol.mock_wire_data = WireProtocolData(self.test_data)
                 protocol.mock_wire_data.set_incarnation(2)
-                protocol.update_goal_state()
+                protocol.client.update_goal_state()
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
@@ -961,7 +961,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
             self.test_data['ext_conf'] = "wire/ext_conf_required_features.xml"
             protocol.mock_wire_data = WireProtocolData(self.test_data)
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             # Assert the extension status is the same as we reported for Incarnation 1.
             self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions=4, with_message=False)
 
@@ -1021,7 +1021,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         with self.__setup_generic_test_env() as (exthandlers_handler, protocol, old_exts):
 
             protocol.mock_wire_data.set_incarnation(2)
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
 
             # Mock manifest to not support multiple extensions
             with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.supports_multiple_extensions', return_value=False):
