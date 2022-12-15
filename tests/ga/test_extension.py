@@ -3369,7 +3369,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
 
                 # Enabled on_hold property in artifact_blob
                 mock_in_vm_artifacts_profile_response = MockHttpResponse(200, body='{ "onHold": true }'.encode('utf-8'))
-                protocol.client.update_goal_state(force_update=True)
+                protocol.client.reset_goal_state()
 
                 with patch.object(conf, 'get_extensions_enabled', return_value=True):
                     with patch.object(conf, "get_enable_overprovisioning", return_value=True):
@@ -3377,7 +3377,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
 
                 # Disabled on_hold property in artifact_blob
                 mock_in_vm_artifacts_profile_response = MockHttpResponse(200, body='{ "onHold": false }'.encode('utf-8'))
-                protocol.client.update_goal_state(force_update=True)
+                protocol.client.reset_goal_state()
 
                 with patch.object(conf, 'get_extensions_enabled', return_value=True):
                     with patch.object(conf, "get_enable_overprovisioning", return_value=True):
@@ -3410,7 +3410,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                         return None
                     protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-                    protocol.client.update_goal_state(force_update=True)
+                    protocol.client.reset_goal_state()
 
                     exthandlers_handler.run()
                     exthandlers_handler.report_ext_handlers_status()

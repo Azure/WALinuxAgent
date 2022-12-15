@@ -271,23 +271,23 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             mock_response = MockHttpResponse(200, body=None)
-            protocol.client.update_goal_state(force_update=True)
+            protocol.client.reset_goal_state()
             extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
             self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response body is None")
 
             mock_response = MockHttpResponse(200, '   '.encode('utf-8'))
-            protocol.client.update_goal_state(force_update=True)
+            protocol.client.reset_goal_state()
             extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
             self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is an empty string")
 
             mock_response = MockHttpResponse(200, '{ }'.encode('utf-8'))
-            protocol.client.update_goal_state(force_update=True)
+            protocol.client.reset_goal_state()
             extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
             self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is an empty json object")
 
             with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.add_event") as add_event:
                 mock_response = MockHttpResponse(200, 'invalid json'.encode('utf-8'))
-                protocol.client.update_goal_state(force_update=True)
+                protocol.client.reset_goal_state()
 
                 extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
                 self.assertFalse(extensions_on_hold, "Extensions should not be on hold when the in-vm artifacts profile response is not valid json")
@@ -780,7 +780,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             HostPluginProtocol.is_default_channel = False
 
-            protocol.client.update_goal_state(force_update=True)
+            protocol.client.reset_goal_state()
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 1, "Unexpected HTTP requests: [{0}]".format(urls))
@@ -799,7 +799,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             HostPluginProtocol.is_default_channel = False
             try:
-                protocol.client.update_goal_state(force_update=True)
+                protocol.client.reset_goal_state()
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 2, "Invalid number of requests: [{0}]".format(urls))
@@ -832,7 +832,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-                protocol.client.update_goal_state(force_update=True)
+                protocol.client.reset_goal_state()
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
@@ -864,7 +864,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
-            protocol.client.update_goal_state(force_update=True)
+            protocol.client.reset_goal_state()
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Invalid number of requests: [{0}]".format(urls))
@@ -1036,7 +1036,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 '''
 
                 if forced:
-                    protocol.client.update_goal_state(force_update=True)
+                    protocol.client.reset_goal_state()
                 else:
                     protocol.client.update_goal_state()
 
@@ -1090,7 +1090,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             protocol.mock_wire_data.set_role_config_name(new_role_config_name)
             protocol.mock_wire_data.shared_config = new_shared_conf
 
-            protocol.client.update_goal_state(force_update=True)
+            protocol.client.reset_goal_state()
 
             self.assertEqual(protocol.client.get_goal_state().incarnation, incarnation)
             self.assertEqual(protocol.client.get_shared_conf().xml_text, new_shared_conf)
