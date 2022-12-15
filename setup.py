@@ -288,7 +288,10 @@ class install(_install):  # pylint: disable=C0103
         self.lnx_distro_version = DISTRO_VERSION
         self.lnx_distro_fullname = DISTRO_FULL_NAME
         self.register_service = False
-        self.skip_data_files = False
+        # All our data files are system-wide files that are not included in the egg; skip them when
+        # creating an egg.
+        self.skip_data_files = "bdist_egg" in sys.argv
+
         # pylint: enable=attribute-defined-outside-init
 
     def finalize_options(self):
