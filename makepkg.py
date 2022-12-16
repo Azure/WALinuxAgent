@@ -4,7 +4,6 @@ import argparse
 import glob
 import logging
 import os.path
-import pathlib
 import shutil
 import subprocess
 import sys
@@ -75,8 +74,7 @@ def run(agent_family, output_directory, log):
     os.makedirs(bin_path)
     log.info("Created {0} directory".format(target_path))
 
-    setup_script = str(pathlib.Path(__file__).parent.joinpath("setup.py"))
-    args = ["python3", setup_script, "bdist_egg", "--dist-dir={0}".format(bin_path)]
+    args = ["python3", "setup.py", "bdist_egg", "--dist-dir={0}".format(bin_path)]
 
     log.info("Creating egg {0}".format(egg_path))
     do(*args)
