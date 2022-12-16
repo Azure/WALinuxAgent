@@ -15,7 +15,8 @@
 # limitations under the License.
 #
 
-from lisa import (
+# E0401: Unable to import 'lisa' (import-error)
+from lisa import (  # pylint: disable=E0401
     Logger,
     Node,
     TestCaseMetadata,
