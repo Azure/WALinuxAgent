@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+from collections.abc import Callable
 from pathlib import Path
-import shutil
+from shutil import rmtree
 
 import makepkg
 
@@ -25,8 +25,6 @@ from lisa import (  # pylint: disable=E0401
     CustomScriptBuilder,
     Logger,
     Node,
-    TestSuite,
-    TestSuiteMetadata,
 )
 # E0401: Unable to import 'lisa.sut_orchestrator.azure.common' (import-error)
 from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
@@ -34,60 +32,35 @@ from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disab
 from azurelinuxagent.common.version import AGENT_VERSION
 
 
-class AgentTestSuite(TestSuite):
+class AgentTestScenario(object):
     """
-    Base class for VM Agent tests. It provides initialization, cleanup, and utilities common to all VM Agent test suites.
+    Instances of this class are used to execute Agent test scenarios. It also provides facilities to execute commands over SSH.
     """
-    def __init__(self, metadata: TestSuiteMetadata):
-        super().__init__(metadata)
-        # The actual initialization happens in _initialize()
-        self._log = None
-        self._node = None
-        self._subscription_id = None
-        self._resource_group_name = None
-        self._vm_name = None
-        self._test_source_directory = None
-        self._working_directory = None
-        self._node_home_directory = None
 
-    def before_case(self, *_, **kwargs) -> None:
-        self._initialize(kwargs['node'], kwargs['log'])
-        self._setup_node()
+    class Context:
+        """
+        Execution context for test scenarios, this information is passed to test scenarios by AgentTestScenario.execute()
+        """
+        subscription_id: str
+        resource_group_name: str
+        vm_name: str
+        test_source_directory: Path
+        working_directory: Path
+        node_home_directory: Path
 
-    def after_case(self, *_, **__) -> None:
-        try:
-            self._collect_node_logs()
-        finally:
-            self._clean_up()
-
-    def _initialize(self, node: Node, log: Logger) -> None:
-        self._node = node
-        self._log = log
+    def __init__(self, node: Node, log: Logger) -> None:
+        self._node: Node = node
+        self._log: Logger = log
 
         node_context = get_node_context(node)
-        self._subscription_id = node.features._platform.subscription_id
-        self._resource_group_name = node_context.resource_group_name
-        self._vm_name = node_context.vm_name
+        self._context:  AgentTestScenario.Context = AgentTestScenario.Context()
+        self._context.subscription_id = node.features._platform.subscription_id
+        self._context.resource_group_name = node_context.resource_group_name
+        self._context.vm_name = node_context.vm_name
 
-        self._test_source_directory = AgentTestSuite._get_test_source_directory()
-        self._working_directory = Path().home()/"waagent-tmp"
-        self._node_home_directory = Path('/home')/self._node.connection_info['username']
-
-        self._log.info(f"Test Node: {self._vm_name}")
-        self._log.info(f"Resource Group: {self._resource_group_name}")
-        self._log.info(f"Working directory: {self._working_directory}...")
-
-        if self._working_directory.exists():
-            self._log.info(f"Removing existing working directory: {self._working_directory}...")
-            try:
-                shutil.rmtree(self._working_directory.as_posix())
-            except Exception as exception:
-                self._log.warning(f"Failed to remove the working directory: {exception}")
-        self._working_directory.mkdir()
-
-    def _clean_up(self) -> None:
-        self._log.info(f"Removing {self._working_directory}...")
-        shutil.rmtree(self._working_directory.as_posix(), ignore_errors=True)
+        self._context.test_source_directory = AgentTestScenario._get_test_source_directory()
+        self._context.working_directory = Path().home()/"waagent-tmp"
+        self._context.node_home_directory = Path('/home')/node.connection_info['username']
 
     @staticmethod
     def _get_test_source_directory() -> Path:
@@ -101,6 +74,29 @@ class AgentTestSuite(TestSuite):
             path = path.parent
         raise Exception("Can't find the test root directory (tests_e2e)")
 
+    def _setup(self) -> None:
+        """
+        Prepares the test scenario for execution
+        """
+        self._log.info(f"Test Node: {self._context.vm_name}")
+        self._log.info(f"Resource Group: {self._context.resource_group_name}")
+        self._log.info(f"Working directory: {self._context.working_directory}...")
+
+        if self._context.working_directory.exists():
+            self._log.info(f"Removing existing working directory: {self._context.working_directory}...")
+            try:
+                rmtree(self._context.working_directory.as_posix())
+            except Exception as exception:
+                self._log.warning(f"Failed to remove the working directory: {exception}")
+        self._context.working_directory.mkdir()
+
+    def _clean_up(self) -> None:
+        """
+        Cleans up any leftovers from the test scenario run.
+        """
+        self._log.info(f"Removing {self._context.working_directory}...")
+        rmtree(self._context.working_directory.as_posix(), ignore_errors=True)
+
     def _setup_node(self) -> None:
         """
         Prepares the remote node for executing the test suite.
@@ -112,18 +108,10 @@ class AgentTestSuite(TestSuite):
         """
         Builds the agent package and returns the path to the package.
         """
-        build_path = self._working_directory/"build"
+        build_path = self._context.working_directory/"build"
 
-        # The same orchestrator machine may be executing multiple suites on the same test VM, or
-        # the same suite on one or more test VMs; we use this file to mark the build is already done
-        build_done_path = self._working_directory/"build.done"
-        if build_done_path.exists():
-            self._log.info("The agent build is already completed, will use existing package.")
-        else:
-            self._log.info(f"Building agent package to {build_path}")
-            makepkg.run(agent_family="Test", output_directory=str(build_path), log=self._log)
-            build_done_path.touch()
-
+        self._log.info(f"Building agent package to {build_path}")
+        makepkg.run(agent_family="Test", output_directory=str(build_path), log=self._log)
         package_path = build_path/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
         if not package_path.exists():
             raise Exception(f"Can't find the agent package at {package_path}")
@@ -136,54 +124,70 @@ class AgentTestSuite(TestSuite):
         """
         Installs the given agent package on the test node.
         """
-        # The same orchestrator machine may be executing multiple suites on the same test VM,
-        # we use this file to mark the agent is already installed on the test VM.
-        install_done_path = self._working_directory/f"agent-install.{self._vm_name}.done"
-        if install_done_path.exists():
-            self._log.info(f"Package {agent_package} is already installed on {self._vm_name}...")
-            return
-
         # The install script needs to unzip the agent package; ensure unzip is installed on the test node
-        self._log.info(f"Installing unzip on {self._vm_name}...")
+        self._log.info(f"Installing unzip on {self._context.vm_name}...")
         self._node.os.install_packages("unzip")
 
-        self._log.info(f"Installing {agent_package} on {self._vm_name}...")
-        agent_package_remote_path = self._node_home_directory/agent_package.name
-        self._log.info(f"Copying {agent_package} to {self._vm_name}:{agent_package_remote_path}")
+        self._log.info(f"Installing {agent_package} on {self._context.vm_name}...")
+        agent_package_remote_path = self._context.node_home_directory/agent_package.name
+        self._log.info(f"Copying {agent_package} to {self._context.vm_name}:{agent_package_remote_path}")
         self._node.shell.copy(agent_package, agent_package_remote_path)
-        self._execute_script_on_node(
-            self._test_source_directory/"orchestrator"/"scripts"/"install-agent",
+        self.execute_script_on_node(
+            self._context.test_source_directory/"orchestrator"/"scripts"/"install-agent",
             parameters=f"--package {agent_package_remote_path} --version {AGENT_VERSION}",
             sudo=True)
 
         self._log.info("The agent was installed successfully.")
-        install_done_path.touch()
 
     def _collect_node_logs(self) -> None:
         """
-        Collects the test logs from the remote machine and copied them to the local machine
+        Collects the test logs from the remote machine and copies them to the local machine
         """
-        # Collect the logs on the test machine into a compressed tarball
-        self._log.info("Collecting logs on test machine [%s]...", self._node.name)
-        self._execute_script_on_node(self._test_source_directory/"orchestrator"/"scripts"/"collect-logs", sudo=True)
+        try:
+            # Collect the logs on the test machine into a compressed tarball
+            self._log.info("Collecting logs on test machine [%s]...", self._node.name)
+            self.execute_script_on_node(self._context.test_source_directory/"orchestrator"/"scripts"/"collect-logs", sudo=True)
 
-        # Copy the tarball to the local logs directory
-        remote_path = self._node_home_directory/"logs.tgz"
-        local_path = Path.home()/'logs'/'vm-logs-{0}.tgz'.format(self._node.name)
-        self._log.info(f"Copying {self._node.name}:{remote_path} to {local_path}")
-        self._node.shell.copy_back(remote_path, local_path)
+            # Copy the tarball to the local logs directory
+            remote_path = self._context.node_home_directory/"logs.tgz"
+            local_path = Path.home()/'logs'/'vm-logs-{0}.tgz'.format(self._node.name)
+            self._log.info(f"Copying {self._node.name}:{remote_path} to {local_path}")
+            self._node.shell.copy_back(remote_path, local_path)
+        except Exception as e:
+            self._log.warning(f"Failed to collect logs from the test machine: {e}")
 
-    def _execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
+    def execute(self, scenario: Callable[[Context], None]) -> None:
+        """
+        Executes the given scenario
+        """
+        try:
+            self._setup()
+            try:
+                self._setup_node()
+                scenario(self._context)
+            finally:
+                self._collect_node_logs()
+        finally:
+            self._clean_up()
+
+    def execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
+        """
+        Executes the given script on the test node; if 'sudo' is True, the script is executed using the sudo command.
+        """
         custom_script_builder = CustomScriptBuilder(script_path.parent, [script_path.name])
         custom_script = self._node.tools[custom_script_builder]
 
-        command_line = f"{script_path} {parameters}"
-        self._log.info(f"Executing {command_line}")
+        if parameters == '':
+            command_line = f"{script_path}"
+        else:
+            command_line = f"{script_path} {parameters}"
+
+        self._log.info(f"Executing [{command_line}]")
         result = custom_script.run(parameters=parameters, sudo=sudo)
 
         # LISA appends stderr to stdout so no need to check for stderr
         if result.exit_code != 0:
-            raise Exception(f"[{command_line}] failed.\n{result.stdout}")
+            raise Exception(f"Command [{command_line}] failed.\n{result.stdout}")
 
         return result.exit_code
 
