@@ -781,10 +781,10 @@ class WireClient(object):
         Updates the goal state if the incarnation or etag changed
         """
         try:
-            if not silent:
-                logger.info("Forcing an update of the goal state.")
-
-            self._goal_state.update(silent=silent)
+            if self._goal_state is None:
+                self._goal_state = GoalState(self, silent=silent)
+            else:
+                self._goal_state.update(silent=silent)
 
         except ProtocolError:
             raise

@@ -55,10 +55,10 @@ class GoalStateProperties(object):
     RoleConfig = 0x1
     HostingEnv = 0x2
     SharedConfig = 0x4
-    ExtensionsConfig = 0x8
+    ExtensionsGoalState = 0x8
     Certificates = 0x10
     RemoteAccessInfo = 0x20
-    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsConfig | Certificates | RemoteAccessInfo
+    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsGoalState | Certificates | RemoteAccessInfo
 
 
 class GoalStateInconsistentError(ProtocolError):
@@ -114,14 +114,14 @@ class GoalState(object):
     @property
     def container_id(self):
         if not self._goal_state_properties & GoalStateProperties.RoleConfig:
-            raise ProtocolError("RoleConfig is not in goal state properties")
+            raise ProtocolError("ContainerId is not in goal state properties")
         else:
             return self._container_id
 
     @property
     def role_instance_id(self):
         if not self._goal_state_properties & GoalStateProperties.RoleConfig:
-            raise ProtocolError("RoleConfig is not in goal state properties")
+            raise ProtocolError("RoleInstanceId is not in goal state properties")
         else:
             return self._role_instance_id
 
@@ -134,8 +134,8 @@ class GoalState(object):
 
     @property
     def extensions_goal_state(self):
-        if not self._goal_state_properties & GoalStateProperties.ExtensionsConfig:
-            raise ProtocolError("ExtensionsConfig is not in goal state properties")
+        if not self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+            raise ProtocolError("ExtensionsGoalState is not in goal state properties")
         else:
             return self._extensions_goal_state
 
@@ -228,11 +228,12 @@ class GoalState(object):
             add_event(op=WALAEventOperation.GoalState, message=message)
 
         vm_settings, vm_settings_updated = None, False
-        try:
-            vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client, force_update=force_update)
-        except VmSettingsSupportStopped as exception:  # If the HGAP stopped supporting vmSettings, we need to use the goal state from the WireServer
-            self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
-            return
+        if self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+            try:
+                vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client, force_update=force_update)
+            except VmSettingsSupportStopped as exception:  # If the HGAP stopped supporting vmSettings, we need to use the goal state from the WireServer
+                self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
+                return
 
         if vm_settings_updated:
             self.logger.info('')
@@ -406,7 +407,7 @@ class GoalState(object):
                 container_id = findtext(container, "ContainerId")
 
             extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
-            if not (GoalStateProperties.ExtensionsConfig & self._goal_state_properties) or extensions_config_uri is None:
+            if not (GoalStateProperties.ExtensionsGoalState & self._goal_state_properties) or extensions_config_uri is None:
                 extensions_config = ExtensionsGoalStateFactory.create_empty(incarnation)
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
