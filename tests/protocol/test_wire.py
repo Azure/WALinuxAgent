@@ -30,6 +30,7 @@ from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ResourceGoneError, ProtocolError, \
     ExtensionDownloadError, HttpError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
+from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol, WireClient, \
     StatusBlob, VMStatus
@@ -991,7 +992,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
 
 class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """
-    Tests for WireClient.update_goal_state()
+    Tests for WireClient.update_goal_state() and WireClient.reset_goal_state()
     """
 
     def test_it_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_changes(self):
@@ -1097,6 +1098,16 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             self.assertEqual(protocol.client.get_host_plugin().container_id, new_container_id)
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
+
+    def test_reset_should_init_provided_goal_state_properties(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.All & ~GoalStateProperties.Certificates)
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = protocol.client.get_certs()
+
+            expected_message = "Certificates is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
 
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):

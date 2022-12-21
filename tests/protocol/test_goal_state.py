@@ -421,18 +421,42 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                     if settings.protectedSettings is not None:
                         self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
 
-    def test_it_should_raise_when_goal_state_property_not_initialized(self):
+    def test_it_should_raise_when_goal_state_properties_not_initialized(self):
         with GoalStateTestCase._create_protocol_ws_and_hgap_in_sync() as protocol:
             goal_state = GoalState(
                 protocol.client,
-                goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
+                goal_state_properties=~GoalStateProperties.All)
 
             goal_state.update()
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.container_id
+
+            expected_message = "ContainerId is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.role_config_name
+
+            expected_message = "RoleConfig is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.role_instance_id
+
+            expected_message = "RoleInstanceId is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
 
             with self.assertRaises(ProtocolError) as context:
                 _ = goal_state.extensions_goal_state
 
             expected_message = "ExtensionsGoalState is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.hosting_env
+
+            expected_message = "HostingEnvironment is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
 
             with self.assertRaises(ProtocolError) as context:
@@ -451,4 +475,19 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 _ = goal_state.remote_access
 
             expected_message = "RemoteAccessInfo is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            goal_state = GoalState(
+                protocol.client,
+                goal_state_properties=GoalStateProperties.All & ~GoalStateProperties.HostingEnv)
+
+            goal_state.update()
+
+            _ = goal_state.container_id, goal_state.role_instance_id, goal_state.role_config_name, \
+                goal_state.extensions_goal_state, goal_state.certs, goal_state.shared_conf, goal_state.remote_access
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.hosting_env
+
+            expected_message = "HostingEnvironment is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
