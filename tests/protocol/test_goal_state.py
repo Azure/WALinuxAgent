@@ -14,7 +14,8 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateInconsistentError, _GET_GOAL_STATE_MAX_ATTEMPTS
+from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateInconsistentError, \
+    _GET_GOAL_STATE_MAX_ATTEMPTS, GoalStateProperties
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
@@ -419,3 +420,35 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 for settings in extension.settings:
                     if settings.protectedSettings is not None:
                         self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
+
+    def test_it_should_raise_when_goal_state_property_not_initialized(self):
+        with GoalStateTestCase._create_protocol_ws_and_hgap_in_sync() as protocol:
+            goal_state = GoalState(
+                protocol.client,
+                goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
+
+            goal_state.update()
+
+            with self.assertRaises(ProtocolError) as context:
+                goal_state.extensions_goal_state
+
+            expected_message = "ExtensionsGoalState is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                goal_state.certs
+
+            expected_message = "Certificates is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                goal_state.shared_conf
+
+            expected_message = "SharedConfig is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                goal_state.remote_access
+
+            expected_message = "RemoteAccessInfo is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
