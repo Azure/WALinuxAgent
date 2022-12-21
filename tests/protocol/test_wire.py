@@ -1109,6 +1109,18 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             expected_message = "Certificates is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
 
+    def test_reset_should_init_the_goal_state(self):
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            new_container_id = str(uuid.uuid4())
+            new_role_config_name = str(uuid.uuid4())
+            protocol.mock_wire_data.set_container_id(new_container_id)
+            protocol.mock_wire_data.set_role_config_name(new_role_config_name)
+
+            protocol.client.reset_goal_state()
+
+            self.assertEqual(protocol.client.get_goal_state().container_id, new_container_id)
+            self.assertEqual(protocol.client.get_goal_state().role_config_name, new_role_config_name)
+
 
 class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     """
