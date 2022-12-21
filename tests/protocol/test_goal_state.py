@@ -430,25 +430,25 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state.update()
 
             with self.assertRaises(ProtocolError) as context:
-                goal_state.extensions_goal_state
+                _ = goal_state.extensions_goal_state
 
             expected_message = "ExtensionsGoalState is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
 
             with self.assertRaises(ProtocolError) as context:
-                goal_state.certs
+                _ = goal_state.certs
 
             expected_message = "Certificates is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
 
             with self.assertRaises(ProtocolError) as context:
-                goal_state.shared_conf
+                _ = goal_state.shared_conf
 
             expected_message = "SharedConfig is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
 
             with self.assertRaises(ProtocolError) as context:
-                goal_state.remote_access
+                _ = goal_state.remote_access
 
             expected_message = "RemoteAccessInfo is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
