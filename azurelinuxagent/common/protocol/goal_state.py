@@ -139,6 +139,13 @@ class GoalState(object):
             return self._extensions_goal_state
 
     @property
+    def certs(self):
+        if not self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+            raise ProtocolError("Certificates is not in goal state properties")
+        else:
+            return self._certs
+
+    @property
     def hosting_env(self):
         if not self._goal_state_properties & GoalStateProperties.HostingEnv:
             raise ProtocolError("HostingEnvironment is not in goal state properties")
