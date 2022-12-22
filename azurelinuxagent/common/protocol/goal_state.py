@@ -56,9 +56,8 @@ class GoalStateProperties(object):
     HostingEnv = 0x2
     SharedConfig = 0x4
     ExtensionsGoalState = 0x8
-    Certificates = 0x10
-    RemoteAccessInfo = 0x20
-    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsGoalState | Certificates | RemoteAccessInfo
+    RemoteAccessInfo = 0x10
+    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsGoalState | RemoteAccessInfo
 
 
 class GoalStateInconsistentError(ProtocolError):
@@ -138,13 +137,6 @@ class GoalState(object):
             raise ProtocolError("ExtensionsGoalState is not in goal state properties")
         else:
             return self._extensions_goal_state
-
-    @property
-    def certs(self):
-        if not self._goal_state_properties & GoalStateProperties.Certificates:
-            raise ProtocolError("Certificates is not in goal state properties")
-        else:
-            return self._certs
 
     @property
     def hosting_env(self):
@@ -436,7 +428,7 @@ class GoalState(object):
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
-            if (GoalStateProperties.Certificates & self._goal_state_properties) and certs_uri is not None:
+            if (GoalStateProperties.ExtensionsGoalState & self._goal_state_properties) and certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
                 certs = Certificates(xml_text, self.logger)
                 # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
