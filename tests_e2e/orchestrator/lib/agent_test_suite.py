@@ -26,7 +26,6 @@ from shutil import rmtree
 #     E0401: Unable to import 'lisa.sut_orchestrator.azure.common' (import-error)
 from lisa import (  # pylint: disable=E0401
     CustomScriptBuilder,
-    Logger,
     Node
 )
 from lisa.sut_orchestrator import AZURE  # pylintd: disable=E0401
@@ -35,6 +34,8 @@ from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 from tests_e2e.scenarios.lib.identifiers import VmIdentifier
+from tests_e2e.scenarios.lib.logging import log
+
 
 class AgentTestScenario(object):
     """
@@ -50,14 +51,13 @@ class AgentTestScenario(object):
         working_directory: Path
         node_home_directory: Path
 
-    def __init__(self, node: Node, log: Logger) -> None:
-        self._node: Node = node
-        self._log: Logger = log
-
-        self._context: AgentTestScenario.Context = AgentTestScenario.Context()
-
+    def __init__(self, node: Node) -> None:
         node_context = get_node_context(node)
+
         runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
+
+        self._node: Node = node
+        self._context: AgentTestScenario.Context = AgentTestScenario.Context()
         self._context.vm = VmIdentifier(
             location=runbook.location,
             subscription=node.features._platform.subscription_id,
@@ -83,23 +83,23 @@ class AgentTestScenario(object):
         """
         Prepares the test scenario for execution
         """
-        self._log.info(f"Test Node: {self._context.vm.name}")
-        self._log.info(f"Resource Group: {self._context.vm.resource_group}")
-        self._log.info(f"Working directory: {self._context.working_directory}...")
+        log.info("Test Node: %s", self._context.vm.name)
+        log.info("Resource Group: %s", self._context.vm.resource_group)
+        log.info("Working directory: %s", self._context.working_directory)
 
         if self._context.working_directory.exists():
-            self._log.info(f"Removing existing working directory: {self._context.working_directory}...")
+            log.info("Removing existing working directory: %s", self._context.working_directory)
             try:
                 rmtree(self._context.working_directory.as_posix())
             except Exception as exception:
-                self._log.warning(f"Failed to remove the working directory: {exception}")
+                log.warning("Failed to remove the working directory: %s", exception)
         self._context.working_directory.mkdir()
 
     def _clean_up(self) -> None:
         """
         Cleans up any leftovers from the test scenario run.
         """
-        self._log.info(f"Removing {self._context.working_directory}...")
+        log.info("Removing %s", self._context.working_directory)
         rmtree(self._context.working_directory.as_posix(), ignore_errors=True)
 
     def _setup_node(self) -> None:
@@ -115,13 +115,13 @@ class AgentTestScenario(object):
         """
         build_path = self._context.working_directory/"build"
 
-        self._log.info(f"Building agent package to {build_path}")
+        log.info("Building agent package to %s", build_path)
 
         # makepkg must be executed from the root source code directory
         cwd = os.getcwd()
         os.chdir(self._context.source_code_directory)
         try:
-            makepkg.run(agent_family="Test", output_directory=str(build_path), log=self._log)
+            makepkg.run(agent_family="Test", output_directory=str(build_path), log=log)
         finally:
             os.chdir(cwd)
 
@@ -129,7 +129,7 @@ class AgentTestScenario(object):
         if not package_path.exists():
             raise Exception(f"Can't find the agent package at {package_path}")
 
-        self._log.info(f"Agent package: {package_path}")
+        log.info("Agent package: %s", package_path)
 
         return package_path
 
@@ -138,19 +138,19 @@ class AgentTestScenario(object):
         Installs the given agent package on the test node.
         """
         # The install script needs to unzip the agent package; ensure unzip is installed on the test node
-        self._log.info(f"Installing unzip on {self._node.name}...")
+        log.info("Installing unzip tool on %s", self._node.name)
         self._node.os.install_packages("unzip")
 
-        self._log.info(f"Installing {agent_package} on {self._node.name}...")
+        log.info("Installing %s on %s", agent_package, self._node.name)
         agent_package_remote_path = self._context.node_home_directory/agent_package.name
-        self._log.info(f"Copying {agent_package} to {self._node.name}:{agent_package_remote_path}")
+        log.info("Copying %s to %s:%s", agent_package, self._node.name, agent_package_remote_path)
         self._node.shell.copy(agent_package, agent_package_remote_path)
         self.execute_script_on_node(
             self._context.source_code_directory / "tests_e2e" / "orchestrator" / "scripts" / "install-agent",
             parameters=f"--package {agent_package_remote_path} --version {AGENT_VERSION}",
             sudo=True)
 
-        self._log.info("The agent was installed successfully.")
+        log.info("The agent was installed successfully.")
 
     def _collect_node_logs(self) -> None:
         """
@@ -158,21 +158,25 @@ class AgentTestScenario(object):
         """
         try:
             # Collect the logs on the test machine into a compressed tarball
-            self._log.info("Collecting logs on test machine [%s]...", self._node.name)
+            log.info("Collecting logs on test machine [%s]...", self._node.name)
             self.execute_script_on_node(self._context.source_code_directory / "tests_e2e" / "orchestrator" / "scripts" / "collect-logs", sudo=True)
 
             # Copy the tarball to the local logs directory
             remote_path = self._context.node_home_directory/"logs.tgz"
             local_path = Path.home()/'logs'/'vm-logs-{0}.tgz'.format(self._node.name)
-            self._log.info(f"Copying {self._node.name}:{remote_path} to {local_path}")
+            log.info("Copying %s:%s to %s", self._node.name, remote_path, local_path)
             self._node.shell.copy_back(remote_path, local_path)
         except Exception as e:
-            self._log.warning(f"Failed to collect logs from the test machine: {e}")
+            log.warning("Failed to collect logs from the test machine: %s", e)
 
     def execute(self, scenario: Callable[[Context], None]) -> None:
         """
         Executes the given scenario
         """
+        log.info("")
+        log.info("**************************************** waagent ****************************************")
+        log.info("")
+
         try:
             self._setup()
             try:
@@ -182,6 +186,9 @@ class AgentTestScenario(object):
                 self._collect_node_logs()
         finally:
             self._clean_up()
+            log.info("")
+            log.info("************************************ end waagent ************************************")
+            log.info("")
 
     def execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
         """
@@ -195,7 +202,7 @@ class AgentTestScenario(object):
         else:
             command_line = f"{script_path} {parameters}"
 
-        self._log.info(f"Executing [{command_line}]")
+        log.info("Executing [%s]", command_line)
 
         result = custom_script.run(parameters=parameters, sudo=sudo)
 
@@ -205,10 +212,10 @@ class AgentTestScenario(object):
 
         if result.stdout != "":
             separator = "\n" if "\n" in result.stdout else " "
-            self._log.info(f"stdout:{separator}{result.stdout}")
+            log.info("stdout:%s%s", separator, result.stdout)
         if result.stderr != "":
             separator = "\n" if "\n" in result.stderr else " "
-            self._log.error(f"stderr:{separator}{result.stderr}")
+            log.error("stderr:%s%s", separator, result.stderr)
 
         return result.exit_code
 

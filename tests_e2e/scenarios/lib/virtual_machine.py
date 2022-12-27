@@ -30,11 +30,11 @@ from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineSca
 from azure.mgmt.resource import ResourceManagementClient
 
 from tests_e2e.scenarios.lib.identifiers import VmIdentifier
-from tests_e2e.scenarios.lib.logging_utils import LoggingHandler
+from tests_e2e.scenarios.lib.logging import log
 from tests_e2e.scenarios.lib.retry import execute_with_retry
 
 
-class VirtualMachineBaseClass(ABC, LoggingHandler):
+class VirtualMachineBaseClass(ABC):
     """
     Abstract base class for VirtualMachine and VmScaleSet.
 
@@ -62,7 +62,7 @@ class VirtualMachineBaseClass(ABC, LoggingHandler):
         """
         Restarts the virtual machine or scale set
         """
-        self.log.info("Initiating restart of %s", self._identifier)
+        log.info("Initiating restart of %s", self._identifier)
 
         poller: LROPoller = execute_with_retry(self._begin_restart)
 
@@ -71,7 +71,7 @@ class VirtualMachineBaseClass(ABC, LoggingHandler):
         if not poller.done():
             raise TimeoutError(f"Failed to restart {self._identifier.name} after {timeout} seconds")
 
-        self.log.info("Restarted %s", self._identifier.name)
+        log.info("Restarted %s", self._identifier.name)
 
     @abstractmethod
     def _begin_restart(self) -> LROPoller:
@@ -82,7 +82,7 @@ class VirtualMachineBaseClass(ABC, LoggingHandler):
 
 class VirtualMachine(VirtualMachineBaseClass):
     def get_instance_view(self) -> VirtualMachineInstanceView:
-        self.log.info("Retrieving instance view for %s", self._identifier)
+        log.info("Retrieving instance view for %s", self._identifier)
         return execute_with_retry(self._compute_client.virtual_machines.get(
             resource_group_name=self._identifier.resource_group,
             vm_name=self._identifier.name,
@@ -90,7 +90,7 @@ class VirtualMachine(VirtualMachineBaseClass):
         ).instance_view)
 
     def get_extensions(self) -> List[VirtualMachineExtension]:
-        self.log.info("Retrieving extensions for %s", self._identifier)
+        log.info("Retrieving extensions for %s", self._identifier)
         return execute_with_retry(self._compute_client.virtual_machine_extensions.list(
             resource_group_name=self._identifier.resource_group,
             vm_name=self._identifier.name))
@@ -103,7 +103,7 @@ class VirtualMachine(VirtualMachineBaseClass):
 
 class VmScaleSet(VirtualMachineBaseClass):
     def get_instance_view(self) -> VirtualMachineScaleSetInstanceView:
-        self.log.info("Retrieving instance view for %s", self._identifier)
+        log.info("Retrieving instance view for %s", self._identifier)
 
         # TODO: Revisit this implementation. Currently this method returns the instance view of the first VM instance available.
         # For the instance view of the complete VMSS, use the compute_client.virtual_machine_scale_sets function
@@ -115,7 +115,7 @@ class VmScaleSet(VirtualMachineBaseClass):
                     vm_scale_set_name=self._identifier.name,
                     instance_id=vm.instance_id))
             except Exception as e:
-                self.log.warning("Unable to retrieve instance view for scale set instance %s. Trying out other instances.\nError: %s", vm, e)
+                log.warning("Unable to retrieve instance view for scale set instance %s. Trying out other instances.\nError: %s", vm, e)
 
         raise Exception(f"Unable to retrieve instance view of any instances for scale set {self._identifier}")
 
@@ -129,7 +129,7 @@ class VmScaleSet(VirtualMachineBaseClass):
         return self._compute_client.virtual_machine_scale_set_extensions
 
     def get_extensions(self) -> List[VirtualMachineScaleSetExtension]:
-        self.log.info("Retrieving extensions for %s", self._identifier)
+        log.info("Retrieving extensions for %s", self._identifier)
         return execute_with_retry(self._compute_client.virtual_machine_scale_set_extensions.list(
             resource_group_name=self._identifier.resource_group,
             vm_scale_set_name=self._identifier.name))

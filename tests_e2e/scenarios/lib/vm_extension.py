@@ -31,14 +31,14 @@ from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineSca
 from azure.identity import DefaultAzureCredential
 
 from tests_e2e.scenarios.lib.identifiers import VmIdentifier, VmExtensionIdentifier
-from tests_e2e.scenarios.lib.logging_utils import LoggingHandler
+from tests_e2e.scenarios.lib.logging import log
 from tests_e2e.scenarios.lib.retry import execute_with_retry
 
 
 _TIMEOUT = 5 * 60  # Timeout for extension operations (in seconds)
 
 
-class _VmExtensionBaseClass(ABC, LoggingHandler):
+class _VmExtensionBaseClass(ABC):
     """
     Abstract base class for VmExtension and VmssExtension.
 
@@ -78,7 +78,7 @@ class _VmExtensionBaseClass(ABC, LoggingHandler):
             "force_update_tag": force_update_tag
         }
 
-        self.log.info("Enabling %s: %s", self._identifier, kwargs)
+        log.info("Enabling %s: %s", self._identifier, kwargs)
 
         result: VirtualMachineExtension = execute_with_retry(lambda: self._begin_enable(**kwargs).result(timeout=_TIMEOUT))
 
@@ -139,7 +139,7 @@ class VmExtension(_VmExtensionBaseClass):
             vme)
 
     def get_instance_view(self) -> VirtualMachineExtensionInstanceView:
-        self.log.info("Retrieving instance view for %s...", self._identifier)
+        log.info("Retrieving instance view for %s...", self._identifier)
 
         return execute_with_retry(lambda: self._compute_client.virtual_machine_extensions.get(
             resource_group_name=self._vm.resource_group,
@@ -149,7 +149,7 @@ class VmExtension(_VmExtensionBaseClass):
         ).instance_view)
 
     def delete(self) -> None:
-        self.log.info("Removing %s", self._identifier)
+        log.info("Removing %s", self._identifier)
 
         execute_with_retry(lambda: self._compute_client.virtual_machine_extensions.begin_delete(
             self._vm.resource_group,
@@ -187,7 +187,7 @@ class VmssExtension(_VmExtensionBaseClass):
             vmsse)
 
     def get_instance_view(self) -> VirtualMachineExtensionInstanceView:  # TODO: Check return type
-        self.log.info("Retrieving instance view for %s...", self._identifier)
+        log.info("Retrieving instance view for %s...", self._identifier)
 
         return execute_with_retry(lambda: self._compute_client.virtual_machine_scale_set_extensions.get(
                 resource_group_name=self._vm.resource_group,
@@ -200,7 +200,7 @@ class VmssExtension(_VmExtensionBaseClass):
         raise NotImplementedError()
 
     def delete_from_instance(self, instance_id: str) -> None:
-        self.log.info("Removing %s", self._identifier)
+        log.info("Removing %s", self._identifier)
 
         execute_with_retry(lambda: self._compute_client.virtual_machine_scale_set_vm_extensions.begin_delete(
             resource_group_name=self._vm.resource_group,
