@@ -14,23 +14,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import os
+
 from collections.abc import Callable
 from pathlib import Path
 from shutil import rmtree
 
-import makepkg
-
-# E0401: Unable to import 'lisa' (import-error)
+# Disable those warnings, since 'lisa' is an external, non-standard, dependency
+#     E0401: Unable to import 'lisa' (import-error)
+#     E0401: Unable to import 'lisa.sut_orchestrator' (import-error)
+#     E0401: Unable to import 'lisa.sut_orchestrator.azure.common' (import-error)
 from lisa import (  # pylint: disable=E0401
     CustomScriptBuilder,
     Logger,
-    Node,
+    Node
 )
-# E0401: Unable to import 'lisa.sut_orchestrator.azure.common' (import-error)
-from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
+from lisa.sut_orchestrator import AZURE  # pylintd: disable=E0401
+from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema  # pylint: disable=E0401
 
+import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
-
+from tests_e2e.scenarios.lib.identifiers import VmIdentifier
 
 class AgentTestScenario(object):
     """
@@ -39,12 +43,10 @@ class AgentTestScenario(object):
 
     class Context:
         """
-        Execution context for test scenarios, this information is passed to test scenarios by AgentTestScenario.execute()
+        Execution context for test scenarios, this information is passed to the test scenarios by AgentTestScenario.execute()
         """
-        subscription_id: str
-        resource_group_name: str
-        vm_name: str
-        test_source_directory: Path
+        vm: VmIdentifier
+        source_code_directory: Path
         working_directory: Path
         node_home_directory: Path
 
@@ -52,34 +54,37 @@ class AgentTestScenario(object):
         self._node: Node = node
         self._log: Logger = log
 
-        node_context = get_node_context(node)
-        self._context:  AgentTestScenario.Context = AgentTestScenario.Context()
-        self._context.subscription_id = node.features._platform.subscription_id
-        self._context.resource_group_name = node_context.resource_group_name
-        self._context.vm_name = node_context.vm_name
+        self._context: AgentTestScenario.Context = AgentTestScenario.Context()
 
-        self._context.test_source_directory = AgentTestScenario._get_test_source_directory()
+        node_context = get_node_context(node)
+        runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
+        self._context.vm = VmIdentifier(
+            location=runbook.location,
+            subscription=node.features._platform.subscription_id,
+            resource_group=node_context.resource_group_name,
+            name=node_context.vm_name)
+        self._context.source_code_directory = AgentTestScenario._get_source_code_directory()
         self._context.working_directory = Path().home()/"waagent-tmp"
         self._context.node_home_directory = Path('/home')/node.connection_info['username']
 
     @staticmethod
-    def _get_test_source_directory() -> Path:
+    def _get_source_code_directory() -> Path:
         """
-        Returns the root directory of the source code for the end-to-end tests (".../WALinuxAgent/tests_e2e")
+        Returns the root directory of the source code ("WALinuxAgent")
         """
         path = Path(__file__)
         while path.name != '':
-            if path.name == "tests_e2e":
+            if path.name == "WALinuxAgent":
                 return path
             path = path.parent
-        raise Exception("Can't find the test root directory (tests_e2e)")
+        raise Exception("Can't find the source code root directory (WALinuxAgent)")
 
     def _setup(self) -> None:
         """
         Prepares the test scenario for execution
         """
-        self._log.info(f"Test Node: {self._context.vm_name}")
-        self._log.info(f"Resource Group: {self._context.resource_group_name}")
+        self._log.info(f"Test Node: {self._context.vm.name}")
+        self._log.info(f"Resource Group: {self._context.vm.resource_group}")
         self._log.info(f"Working directory: {self._context.working_directory}...")
 
         if self._context.working_directory.exists():
@@ -111,7 +116,15 @@ class AgentTestScenario(object):
         build_path = self._context.working_directory/"build"
 
         self._log.info(f"Building agent package to {build_path}")
-        makepkg.run(agent_family="Test", output_directory=str(build_path), log=self._log)
+
+        # makepkg must be executed from the root source code directory
+        cwd = os.getcwd()
+        os.chdir(self._context.source_code_directory)
+        try:
+            makepkg.run(agent_family="Test", output_directory=str(build_path), log=self._log)
+        finally:
+            os.chdir(cwd)
+
         package_path = build_path/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
         if not package_path.exists():
             raise Exception(f"Can't find the agent package at {package_path}")
@@ -125,15 +138,15 @@ class AgentTestScenario(object):
         Installs the given agent package on the test node.
         """
         # The install script needs to unzip the agent package; ensure unzip is installed on the test node
-        self._log.info(f"Installing unzip on {self._context.vm_name}...")
+        self._log.info(f"Installing unzip on {self._node.name}...")
         self._node.os.install_packages("unzip")
 
-        self._log.info(f"Installing {agent_package} on {self._context.vm_name}...")
+        self._log.info(f"Installing {agent_package} on {self._node.name}...")
         agent_package_remote_path = self._context.node_home_directory/agent_package.name
-        self._log.info(f"Copying {agent_package} to {self._context.vm_name}:{agent_package_remote_path}")
+        self._log.info(f"Copying {agent_package} to {self._node.name}:{agent_package_remote_path}")
         self._node.shell.copy(agent_package, agent_package_remote_path)
         self.execute_script_on_node(
-            self._context.test_source_directory/"orchestrator"/"scripts"/"install-agent",
+            self._context.source_code_directory / "tests_e2e" / "orchestrator" / "scripts" / "install-agent",
             parameters=f"--package {agent_package_remote_path} --version {AGENT_VERSION}",
             sudo=True)
 
@@ -146,7 +159,7 @@ class AgentTestScenario(object):
         try:
             # Collect the logs on the test machine into a compressed tarball
             self._log.info("Collecting logs on test machine [%s]...", self._node.name)
-            self.execute_script_on_node(self._context.test_source_directory/"orchestrator"/"scripts"/"collect-logs", sudo=True)
+            self.execute_script_on_node(self._context.source_code_directory / "tests_e2e" / "orchestrator" / "scripts" / "collect-logs", sudo=True)
 
             # Copy the tarball to the local logs directory
             remote_path = self._context.node_home_directory/"logs.tgz"
@@ -183,11 +196,19 @@ class AgentTestScenario(object):
             command_line = f"{script_path} {parameters}"
 
         self._log.info(f"Executing [{command_line}]")
+
         result = custom_script.run(parameters=parameters, sudo=sudo)
 
-        # LISA appends stderr to stdout so no need to check for stderr
         if result.exit_code != 0:
-            raise Exception(f"Command [{command_line}] failed.\n{result.stdout}")
+            output = result.stdout if result.stderr == "" else f"{result.stdout}\n{result.stderr}"
+            raise Exception(f"[{command_line}] failed:\n{output}")
+
+        if result.stdout != "":
+            separator = "\n" if "\n" in result.stdout else " "
+            self._log.info(f"stdout:{separator}{result.stdout}")
+        if result.stderr != "":
+            separator = "\n" if "\n" in result.stderr else " "
+            self._log.error(f"stderr:{separator}{result.stderr}")
 
         return result.exit_code
 
