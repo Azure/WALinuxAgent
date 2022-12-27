@@ -109,6 +109,9 @@ class _VmExtensionBaseClass(ABC):
         Performs a delete operation on the extension
         """
 
+    def __str__(self):
+        return f"{self._identifier}"
+
 
 class VmExtension(_VmExtensionBaseClass):
     """

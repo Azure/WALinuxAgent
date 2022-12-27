@@ -52,5 +52,6 @@ class VmExtensionIds(object):
     """
     A set of extensions used by the tests, listed here for convenience (easy to reference them by name)
     """
-    CustomScript: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.1")
-
+    CustomScript_2_0: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
+    CustomScript_2_1: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.1")
+    CustomScript: VmExtensionIdentifier = CustomScript_2_1

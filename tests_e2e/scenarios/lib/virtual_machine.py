@@ -79,6 +79,9 @@ class VirtualMachineBaseClass(ABC):
         Derived classes must provide the implementation for this method using their corresponding begin_restart() implementation
         """
 
+    def __str__(self):
+        return f"{self._identifier}"
+
 
 class VirtualMachine(VirtualMachineBaseClass):
     def get_instance_view(self) -> VirtualMachineInstanceView:
