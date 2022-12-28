@@ -16,6 +16,7 @@
 #
 
 from tests_e2e.orchestrator.lib.agent_test_suite import AgentTestScenario
+from tests_e2e.scenarios.lib.agent_test_context import AgentTestContext
 from tests_e2e.scenarios.tests.bvts import extension_operations
 
 # E0401: Unable to import 'lisa' (import-error)
@@ -34,8 +35,8 @@ class AgentBvt(TestSuite):
     """
     @TestCaseMetadata(description="", priority=0)
     def main(self, node: Node) -> None:
-        def tests(ctx: AgentTestScenario.Context) -> None:
-            extension_operations.main(ctx.vm)
+        def tests(ctx: AgentTestContext) -> None:
+            extension_operations.main(ctx)
 
         AgentTestScenario(node).execute(tests)
 

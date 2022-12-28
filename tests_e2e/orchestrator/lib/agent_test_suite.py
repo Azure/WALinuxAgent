@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import os
-
 from collections.abc import Callable
 from pathlib import Path
 from shutil import rmtree
@@ -33,6 +31,7 @@ from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
+from tests_e2e.scenarios.lib.agent_test_context import AgentTestContext
 from tests_e2e.scenarios.lib.identifiers import VmIdentifier
 from tests_e2e.scenarios.lib.logging import log
 
@@ -41,43 +40,19 @@ class AgentTestScenario(object):
     """
     Instances of this class are used to execute Agent test scenarios. It also provides facilities to execute commands over SSH.
     """
-
-    class Context:
-        """
-        Execution context for test scenarios, this information is passed to the test scenarios by AgentTestScenario.execute()
-        """
-        vm: VmIdentifier
-        source_code_directory: Path
-        working_directory: Path
-        node_home_directory: Path
-
     def __init__(self, node: Node) -> None:
         node_context = get_node_context(node)
 
         runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
 
         self._node: Node = node
-        self._context: AgentTestScenario.Context = AgentTestScenario.Context()
-        self._context.vm = VmIdentifier(
-            location=runbook.location,
-            subscription=node.features._platform.subscription_id,
-            resource_group=node_context.resource_group_name,
-            name=node_context.vm_name)
-        self._context.source_code_directory = AgentTestScenario._get_source_code_directory()
-        self._context.working_directory = Path().home()/"waagent-tmp"
-        self._context.node_home_directory = Path('/home')/node.connection_info['username']
-
-    @staticmethod
-    def _get_source_code_directory() -> Path:
-        """
-        Returns the root directory of the source code ("WALinuxAgent")
-        """
-        path = Path(__file__)
-        while path.name != '':
-            if path.name == "WALinuxAgent":
-                return path
-            path = path.parent
-        raise Exception("Can't find the source code root directory (WALinuxAgent)")
+        self._context: AgentTestContext = AgentTestContext(
+            VmIdentifier(
+                location=runbook.location,
+                subscription=node.features._platform.subscription_id,
+                resource_group=node_context.resource_group_name,
+                name=node_context.vm_name),
+            remote_working_directory=Path('/home')/node.connection_info['username'])
 
     def _setup(self) -> None:
         """
@@ -117,13 +92,7 @@ class AgentTestScenario(object):
 
         log.info("Building agent package to %s", build_path)
 
-        # makepkg must be executed from the root source code directory
-        cwd = os.getcwd()
-        os.chdir(self._context.source_code_directory)
-        try:
-            makepkg.run(agent_family="Test", output_directory=str(build_path), log=log)
-        finally:
-            os.chdir(cwd)
+        makepkg.run(agent_family="Test", output_directory=str(build_path), log=log)
 
         package_path = build_path/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
         if not package_path.exists():
@@ -142,11 +111,11 @@ class AgentTestScenario(object):
         self._node.os.install_packages("unzip")
 
         log.info("Installing %s on %s", agent_package, self._node.name)
-        agent_package_remote_path = self._context.node_home_directory/agent_package.name
+        agent_package_remote_path = self._context.remote_working_directory / agent_package.name
         log.info("Copying %s to %s:%s", agent_package, self._node.name, agent_package_remote_path)
         self._node.shell.copy(agent_package, agent_package_remote_path)
         self.execute_script_on_node(
-            self._context.source_code_directory / "tests_e2e" / "orchestrator" / "scripts" / "install-agent",
+            self._context.test_source_directory/"orchestrator"/"scripts"/"install-agent",
             parameters=f"--package {agent_package_remote_path} --version {AGENT_VERSION}",
             sudo=True)
 
@@ -159,17 +128,17 @@ class AgentTestScenario(object):
         try:
             # Collect the logs on the test machine into a compressed tarball
             log.info("Collecting logs on test machine [%s]...", self._node.name)
-            self.execute_script_on_node(self._context.source_code_directory / "tests_e2e" / "orchestrator" / "scripts" / "collect-logs", sudo=True)
+            self.execute_script_on_node(self._context.test_source_directory/"orchestrator"/"scripts"/"collect-logs", sudo=True)
 
             # Copy the tarball to the local logs directory
-            remote_path = self._context.node_home_directory/"logs.tgz"
+            remote_path = self._context.remote_working_directory / "logs.tgz"
             local_path = Path.home()/'logs'/'vm-logs-{0}.tgz'.format(self._node.name)
             log.info("Copying %s:%s to %s", self._node.name, remote_path, local_path)
             self._node.shell.copy_back(remote_path, local_path)
         except Exception as e:
             log.warning("Failed to collect logs from the test machine: %s", e)
 
-    def execute(self, scenario: Callable[[Context], None]) -> None:
+    def execute(self, scenario: Callable[[AgentTestContext], None]) -> None:
         """
         Executes the given scenario
         """
