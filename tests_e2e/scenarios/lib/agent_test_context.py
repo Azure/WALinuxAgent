@@ -25,7 +25,7 @@ from tests_e2e.scenarios.lib.identifiers import VmIdentifier
 
 class AgentTestContext:
     """
-    Execution context for tests. Defines the test VM and working directories for the test.
+    Execution context for agent tests. Defines the test VM and working directories for the test.
     """
     def __init__(
         self,
@@ -42,22 +42,37 @@ class AgentTestContext:
 
     @property
     def vm(self) -> VmIdentifier:
+        """
+        The test VM (the VM on which the tested Agent is running)
+        """
         return self._vm
 
     @property
     def test_source_directory(self) -> Path:
+        """
+        Root directory for the source code of the tests. Used to build paths to specific scripts.
+        """
         return self._test_source_directory
 
     @property
     def working_directory(self) -> Path:
+        """
+        Tests create temporary files under this directory
+        """
         return self._working_directory
 
     @property
     def remote_working_directory(self) -> Path:
+        """
+        Tests create temporary files under this directory on the test VM
+        """
         return self._remote_working_directory
 
     @staticmethod
     def from_args():
+        """
+        Creates an AgentTestContext from the command line arguments.
+        """
         parser = argparse.ArgumentParser()
         parser.add_argument('--location', required=True)
         parser.add_argument('--subscription', required=True)

@@ -15,30 +15,28 @@
 # limitations under the License.
 #
 
-from tests_e2e.orchestrator.lib.agent_test_suite import AgentTestScenario
-from tests_e2e.scenarios.lib.agent_test_context import AgentTestContext
-from tests_e2e.scenarios.tests.bvts import extension_operations
+from tests_e2e.orchestrator.lib.agent_test_suite import AgentTestSuite
+from tests_e2e.scenarios.tests.bvts.extension_operations import ExtensionOperationsBvt
 
 # E0401: Unable to import 'lisa' (import-error)
 from lisa import (  # pylint: disable=E0401
     Node,
     TestCaseMetadata,
-    TestSuite,
     TestSuiteMetadata,
 )
 
 
 @TestSuiteMetadata(area="bvt", category="", description="Test suite for Agent BVTs")
-class AgentBvt(TestSuite):
+class AgentBvt(AgentTestSuite):
     """
     Test suite for Agent BVTs
     """
     @TestCaseMetadata(description="", priority=0)
     def main(self, node: Node) -> None:
-        def tests(ctx: AgentTestContext) -> None:
-            extension_operations.main(ctx)
-
-        AgentTestScenario(node).execute(tests)
+        self.execute(node, [
+            # Executes the basic extension operations (install, enable, update, uninstall) using CustomScript
+            ExtensionOperationsBvt
+        ])
 
 
 
