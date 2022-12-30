@@ -78,7 +78,11 @@ class _VmExtensionBaseClass(ABC):
             "force_update_tag": force_update_tag
         }
 
-        log.info("Enabling %s: %s", self._identifier, kwargs)
+        kwargs_redacted = kwargs.copy()
+        if "protected_settings" in kwargs_redacted:
+            kwargs_redacted["protected_settings"] = "*****[REDACTED]*****"
+
+        log.info("Enabling %s: %s", self._identifier, kwargs_redacted)
 
         result: VirtualMachineExtension = execute_with_retry(lambda: self._begin_enable(**kwargs).result(timeout=_TIMEOUT))
 

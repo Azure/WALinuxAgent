@@ -27,25 +27,31 @@ class AgentTestContext:
     """
     Execution context for agent tests. Defines the test VM, working directories and connection info for the tests.
     """
+
     class Paths:
+        # E1101: Instance of 'list' has no '_path' member (no-member)
+        DEFAULT_TEST_SOURCE_DIRECTORY = Path(tests_e2e.__path__._path[0])  # pylint: disable=E1101
+        DEFAULT_WORKING_DIRECTORY = Path().home() / "waagent-tmp"
+
         def __init__(
             self,
             remote_working_directory: Path,
-            # E1101: Instance of 'list' has no '_path' member (no-member)
-            test_source_directory: Path = Path(tests_e2e.__path__._path[0]),  # pylint: disable=E1101
-            working_directory: Path = Path().home()/"waagent-tmp"
+            test_source_directory: Path = DEFAULT_TEST_SOURCE_DIRECTORY,
+            working_directory: Path = DEFAULT_WORKING_DIRECTORY
         ):
             self._test_source_directory: Path = test_source_directory
             self._working_directory: Path = working_directory
             self._remote_working_directory: Path = remote_working_directory
 
     class Connection:
+        DEFAULT_SSH_PORT = 22
+
         def __init__(
             self,
             ip_address: str,
             username: str,
             private_key_file: Path,
-            ssh_port: int = 22
+            ssh_port: int = DEFAULT_SSH_PORT
         ):
             self._ip_address: str = ip_address
             self._username: str = username
@@ -119,35 +125,25 @@ class AgentTestContext:
         Creates an AgentTestContext from the command line arguments.
         """
         parser = argparse.ArgumentParser()
-        parser.add_argument('--group', required=True)
-        parser.add_argument('--location', required=True)
-        parser.add_argument('--subscription', required=True)
-        parser.add_argument('--vm', required=True)
+        parser.add_argument('-g', '--group', required=True)
+        parser.add_argument('-l', '--location', required=True)
+        parser.add_argument('-s', '--subscription', required=True)
+        parser.add_argument('-vm', '--vm', required=True)
 
-        parser.add_argument('--remote_working_directory', required=False, default=Path('/home')/os.getenv("USER"))
-        parser.add_argument('--test_source_directory', required=False)  # Use the default defined by AgentTestContext.Paths
-        parser.add_argument('--working_directory', required=False)  # Use the default defined by AgentTestContext.Paths
+        parser.add_argument('-rw', '--remote-working-directory', dest="remote_working_directory", required=False, default=str(Path('/home')/os.getenv("USER")))
+        parser.add_argument('-t', '--test-source-directory', dest="test_source_directory", required=False, default=str(AgentTestContext.Paths.DEFAULT_TEST_SOURCE_DIRECTORY))
+        parser.add_argument('-w', '--working-directory', dest="working_directory", required=False, default=str(AgentTestContext.Paths.DEFAULT_WORKING_DIRECTORY))
 
-        parser.add_argument('--ip_address', required=False)  # Use the vm name as default
-        parser.add_argument('--username', required=False, default=os.getenv("USER"))
-        parser.add_argument('--private_key_file', required=False, default=Path.home()/".ssh"/"id_rsa")
-        parser.add_argument('--ssh_port', required=False)  # Use the default defined by AgentTestContext.Connections
+        parser.add_argument('-a', '--ip-address', dest="ip_address", required=False)  # Use the vm name as default
+        parser.add_argument('-u', '--username', required=False, default=os.getenv("USER"))
+        parser.add_argument('-k', '--private-key-file', dest="private_key_file", required=False, default=Path.home()/".ssh"/"id_rsa")
+        parser.add_argument('-p', '--ssh-port', dest="ssh_port", required=False, default=AgentTestContext.Connection.DEFAULT_SSH_PORT)
 
         args = parser.parse_args()
 
-        paths_kwargs = {"remote_working_directory": args.remote_working_directory}
-        if args.test_source_directory is not None:
-            paths_kwargs["test_source_directory"] = args.test_source_directory
-        if args.working_directory is not None:
-            paths_kwargs["working_directory"] = args.working_directory
-
-        connection_kwargs = {
-            "ip_address": args.ip_address if args.ip_address is not None else args.vm,
-            "username": args.username,
-            "private_key_file": args.private_key_file
-        }
-        if args.ssh_port is not None:
-            connection_kwargs["ssh_port"] = args.ssh_port
+        working_directory = Path(args.working_directory)
+        if not working_directory.exists():
+            working_directory.mkdir(exist_ok=True)
 
         return AgentTestContext(
             vm=VmIdentifier(
@@ -155,5 +151,12 @@ class AgentTestContext:
                 subscription=args.subscription,
                 resource_group=args.group,
                 name=args.vm),
-            paths=AgentTestContext.Paths(**paths_kwargs),
-            connection=AgentTestContext.Connection(**connection_kwargs))
+            paths=AgentTestContext.Paths(
+                remote_working_directory=Path(args.remote_working_directory),
+                test_source_directory=Path(args.test_source_directory),
+                working_directory=working_directory),
+            connection=AgentTestContext.Connection(
+                ip_address=args.ip_address if args.ip_address is not None else args.vm,
+                username=args.username,
+                private_key_file=Path(args.private_key_file),
+                ssh_port=args.ssh_port))
