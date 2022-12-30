@@ -65,10 +65,11 @@ class VmAccessBvt(AgentTest):
         )
         assert_instance_view(vm_access)
 
+        # Verify the user was added correctly by starting an SSH session to the VM
         log.info("Verifying SSH connection to the test VM")
-        ssh = SshClient(ip_address=self._context.vm_ip_address, username=self._context.username, private_key_file=self._context.private_key_file)
+        ssh = SshClient(ip_address=self._context.vm_ip_address, username=username, private_key_file=private_key_file)
         stdout = ssh.run_command("echo $(hostname):$USER")
-        assert_that(stdout.rstrip()).described_as("Output from SSH command").is_equal_to(f"{self._context.vm.name}:{self._context.username}")
+        assert_that(stdout.rstrip()).described_as("Output from SSH command").is_equal_to(f"{self._context.vm.name}:{username}")
         log.info("SSH command output: %s", stdout)
 
 

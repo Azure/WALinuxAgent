@@ -35,4 +35,4 @@ class SshClient(object):
         """
         destination = f"ssh://{self._username}@{self._ip_address}:{self._port}"
 
-        return shell.run_command(["ssh", "-o", "StrictHostKeyChecking=no", destination, command])
+        return shell.run_command(["ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination, command])
