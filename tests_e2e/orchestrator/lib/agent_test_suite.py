@@ -45,7 +45,15 @@ class AgentLisaTestContext(AgentTestContext):
     Execution context for LISA tests.
     """
     def __init__(self, vm: VmIdentifier, node: Node):
-        super().__init__(vm=vm, remote_working_directory=Path('/home')/node.connection_info['username'])
+        super().__init__(
+            vm=vm,
+            paths=AgentTestContext.Paths(remote_working_directory=Path('/home')/node.connection_info['username']),
+            connection=AgentTestContext.Connection(
+                ip_address=node.connection_info['address'],
+                username=node.connection_info['username'],
+                private_key_file=node.connection_info['private_key_file'],
+                ssh_port=node.connection_info['port'])
+        )
         self._node = node
 
     @property

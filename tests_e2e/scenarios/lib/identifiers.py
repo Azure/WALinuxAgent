@@ -55,3 +55,4 @@ class VmExtensionIds(object):
     CustomScript_2_0: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
     CustomScript_2_1: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.1")
     CustomScript: VmExtensionIdentifier = CustomScript_2_1
+    VmAccess: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions', ext_type='VMAccessForLinux', version="1.5")

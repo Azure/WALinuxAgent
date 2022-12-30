@@ -31,6 +31,7 @@ from assertpy import assert_that
 
 from azure.core.exceptions import ResourceNotFoundError
 
+from tests_e2e.scenarios.lib.agent_assert import assert_instance_view
 from tests_e2e.scenarios.lib.agent_test import AgentTest
 from tests_e2e.scenarios.lib.identifiers import VmExtensionIds
 from tests_e2e.scenarios.lib.logging import log
@@ -44,33 +45,28 @@ class ExtensionOperationsBvt(AgentTest):
 
         log.info("Installing %s", custom_script_2_0)
         message = f"Hello {uuid.uuid4()}!"
-        custom_script_2_0.enable(settings={'commandToExecute': f"echo \'{message}\'"}, auto_upgrade_minor_version=False)
-        self._validate(custom_script_2_0, "2.0", message)
+        custom_script_2_0.enable(
+            settings={
+                'commandToExecute': f"echo \'{message}\'"
+            },
+            auto_upgrade_minor_version=False
+        )
+        assert_instance_view(custom_script_2_0, expected_version="2.0", expected_message=message)
 
         log.info("Updating %s to %s", custom_script_2_0, custom_script_2_1)
         message = f"Hello {uuid.uuid4()}!"
-        custom_script_2_1.enable(settings={'commandToExecute': f"echo \'{message}\'"})
-        self._validate(custom_script_2_1, "2.1", message)
+        custom_script_2_1.enable(
+            settings={
+                'commandToExecute': f"echo \'{message}\'"
+            }
+        )
+        assert_instance_view(custom_script_2_1, expected_version="2.1", expected_message=message)
 
         custom_script_2_1.delete()
 
         assert_that(custom_script_2_1.get_instance_view).\
             described_as("Fetching the instance view should fail after removing the extension").\
             raises(ResourceNotFoundError)
-
-    @staticmethod
-    def _validate(extension: VmExtension, expected_version: str, expected_message: str):
-        instance_view = extension.get_instance_view()
-
-        # Compare only the major and minor versions (i.e. the first 2 items in the result of split()
-        installed_version = instance_view.type_handler_version
-        assert_that(expected_version.split(".")[0:2]).described_as("Unexpected extension version").is_equal_to(installed_version.split(".")[0:2])
-
-        assert_that(instance_view.statuses).described_as(f"Expected 1 status, got: {instance_view.statuses}").is_length(1)
-        status = instance_view.statuses[0]
-        assert_that(status.code).described_as("InstanceView status code").is_equal_to('ProvisioningState/succeeded')
-
-        assert_that(expected_message in status.message).described_as(f"{expected_message} should be in the InstanceView message ({status.message})").is_true()
 
 
 if __name__ == "__main__":
