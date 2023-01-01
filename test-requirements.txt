@@ -13,3 +13,9 @@ wrapt==1.12.0; python_version > '2.6' and python_version < '3.6'
 pylint; python_version > '2.6' and python_version < '3.6'
 pylint==2.8.3; python_version >= '3.6'
 
+# Dependencies for end-to-end tests
+assertpy
+azure-core
+azure-identity
+azure-mgmt-compute>=22.1.0
+azure-mgmt-resource>=15.0.0
