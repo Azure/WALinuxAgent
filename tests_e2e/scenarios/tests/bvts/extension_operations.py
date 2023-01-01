@@ -31,17 +31,23 @@ from assertpy import assert_that
 
 from azure.core.exceptions import ResourceNotFoundError
 
-from tests_e2e.scenarios.lib.agent_assert import assert_instance_view
 from tests_e2e.scenarios.lib.agent_test import AgentTest
-from tests_e2e.scenarios.lib.identifiers import VmExtensionIds
+from tests_e2e.scenarios.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.scenarios.lib.logging import log
 from tests_e2e.scenarios.lib.vm_extension import VmExtension
 
 
 class ExtensionOperationsBvt(AgentTest):
     def run(self):
-        custom_script_2_0 = VmExtension(self._context.vm, VmExtensionIds.CustomScript_2_0, resource_name="CustomScript")
-        custom_script_2_1 = VmExtension(self._context.vm, VmExtensionIds.CustomScript_2_1, resource_name="CustomScript")
+        custom_script_2_0 = VmExtension(
+            self._context.vm,
+            VmExtensionIds.CustomScript,
+            resource_name="CustomScript")
+
+        custom_script_2_1 = VmExtension(
+            self._context.vm,
+            VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
+            resource_name="CustomScript")
 
         log.info("Installing %s", custom_script_2_0)
         message = f"Hello {uuid.uuid4()}!"
@@ -51,7 +57,7 @@ class ExtensionOperationsBvt(AgentTest):
             },
             auto_upgrade_minor_version=False
         )
-        assert_instance_view(custom_script_2_0, expected_version="2.0", expected_message=message)
+        custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
 
         log.info("Updating %s to %s", custom_script_2_0, custom_script_2_1)
         message = f"Hello {uuid.uuid4()}!"
@@ -60,7 +66,7 @@ class ExtensionOperationsBvt(AgentTest):
                 'commandToExecute': f"echo \'{message}\'"
             }
         )
-        assert_instance_view(custom_script_2_1, expected_version="2.1", expected_message=message)
+        custom_script_2_1.assert_instance_view(expected_version="2.1", expected_message=message)
 
         custom_script_2_1.delete()
 

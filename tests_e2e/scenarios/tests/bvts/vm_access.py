@@ -28,7 +28,6 @@ import uuid
 from assertpy import assert_that
 from pathlib import Path
 
-from tests_e2e.scenarios.lib.agent_assert import assert_instance_view
 from tests_e2e.scenarios.lib.agent_test import AgentTest
 from tests_e2e.scenarios.lib.identifiers import VmExtensionIds
 from tests_e2e.scenarios.lib.logging import log
@@ -63,7 +62,7 @@ class VmAccessBvt(AgentTest):
                 'reset_ssh': 'false'
             }
         )
-        assert_instance_view(vm_access)
+        vm_access.assert_instance_view()
 
         # Verify the user was added correctly by starting an SSH session to the VM
         log.info("Verifying SSH connection to the test VM")

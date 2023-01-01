@@ -45,14 +45,19 @@ class VmExtensionIdentifier(object):
         self.version: str = version
 
     def __str__(self):
-        return f"{self.publisher}.{self.type}-{self.version}"
+        return f"{self.publisher}.{self.type}"
 
 
 class VmExtensionIds(object):
     """
-    A set of extensions used by the tests, listed here for convenience (easy to reference them by name)
+    A set of extensions used by the tests, listed here for convenience (easy to reference them by name).
+
+    Only the major version is specified, and the minor version is set to 0 (set autoUpgradeMinorVersion to True in the call to enable
+    to use the latest version)
     """
-    CustomScript_2_0: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
-    CustomScript_2_1: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.1")
-    CustomScript: VmExtensionIdentifier = CustomScript_2_1
-    VmAccess: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions', ext_type='VMAccessForLinux', version="1.5")
+    CustomScript: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions', ext_type='CustomScript', version="2.0")
+    # Older run command extension, still used by the Portal as of Dec 2022
+    RunCommand: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='RunCommandLinux', version="1.0")
+    # New run command extension, with support for multi-config
+    RunCommandHandler: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.CPlat.Core', ext_type='RunCommandHandlerLinux', version="1.0")
+    VmAccess: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.OSTCExtensions', ext_type='VMAccessForLinux', version="1.0")

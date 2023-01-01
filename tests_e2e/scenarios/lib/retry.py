@@ -32,7 +32,7 @@ def execute_with_retry(operation: Callable[[], Any]) -> Any:
         try:
             return operation()
         except Exception as e:
-            # TODO: Do we need to retry on azure.core.exceptions.HttpResponseError and msrestazure.azure_exceptions.CloudError?
+            # TODO: Do we need to retry on msrestazure.azure_exceptions.CloudError?
             if "RetryableError" not in str(e) or attempts == 0:
                 raise
         log.warning("The operation failed with a RetryableError, retrying in 30 secs. Error: %s", e)

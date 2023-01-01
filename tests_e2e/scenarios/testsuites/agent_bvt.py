@@ -18,6 +18,7 @@
 from tests_e2e.orchestrator.lib.agent_test_suite import AgentTestSuite
 from tests_e2e.scenarios.tests.bvts.extension_operations import ExtensionOperationsBvt
 from tests_e2e.scenarios.tests.bvts.vm_access import VmAccessBvt
+from tests_e2e.scenarios.tests.bvts.run_command import RunCommandBvt
 
 # E0401: Unable to import 'lisa' (import-error)
 from lisa import (  # pylint: disable=E0401
@@ -34,12 +35,14 @@ class AgentBvt(AgentTestSuite):
     """
     @TestCaseMetadata(description="", priority=0)
     def main(self, node: Node) -> None:
-        self.execute(node, [
-            # Executes the basic extension operations (install, enable, update, uninstall) using CustomScript
-            ExtensionOperationsBvt,
-            # The next set of tests exercise commonly used extensions
-            VmAccessBvt
-        ])
+        self.execute(
+            node,
+            [
+                ExtensionOperationsBvt,  # Tests the basic operations (install, enable, update, uninstall) using CustomScript
+                RunCommandBvt,
+                VmAccessBvt
+            ]
+        )
 
 
 
