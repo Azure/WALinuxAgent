@@ -66,8 +66,8 @@ class VmAccessBvt(AgentTest):
 
         # Verify the user was added correctly by starting an SSH session to the VM
         log.info("Verifying SSH connection to the test VM")
-        stdout = ssh.run_command("echo $USER")
-        assert_that(stdout.rstrip()).described_as("Output from SSH command").is_equal_to(username)
+        stdout = ssh.run_command("echo -n $USER")
+        assert_that(stdout).described_as("Output from SSH command").is_equal_to(username)
         log.info("SSH command output ($USER): %s", stdout)
 
 
