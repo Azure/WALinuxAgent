@@ -16,6 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import os
 from pathlib import Path
 
 from tests_e2e.scenarios.lib import shell
@@ -36,3 +37,12 @@ class SshClient(object):
         destination = f"ssh://{self._username}@{self._ip_address}:{self._port}"
 
         return shell.run_command(["ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination, command])
+
+    @staticmethod
+    def generate_ssh_key(private_key_file: Path):
+        """
+        Generates an SSH key on the given Path
+        """
+        shell.run_command(["ssh-keygen", "-m", "PEM", "-t", "rsa", "-b", "4096", "-q", "-N", "", "-f", str(private_key_file)])
+        os.chmod(private_key_file, 0o600)  # SSH requires this mode on the private key file
+

@@ -29,7 +29,7 @@ from lisa import (  # pylint: disable=E0401
     TestSuite,
     TestSuiteMetadata
 )
-from lisa.sut_orchestrator import AZURE  # pylintd: disable=E0401
+from lisa.sut_orchestrator import AZURE  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema  # pylint: disable=E0401
 
 import makepkg
