@@ -44,5 +44,4 @@ class SshClient(object):
         Generates an SSH key on the given Path
         """
         shell.run_command(["ssh-keygen", "-m", "PEM", "-t", "rsa", "-b", "4096", "-q", "-N", "", "-f", str(private_key_file)])
-        os.chmod(private_key_file, 0o600)  # SSH requires this mode on the private key file
 
