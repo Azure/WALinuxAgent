@@ -23,7 +23,7 @@ import logging
 # Otherwise, it references a new Logger named 'waagent'.
 #
 
-log = logging.getLogger("lisa")
+log: logging.Logger = logging.getLogger("lisa")
 
 if not log.hasHandlers():
     log = logging.getLogger("waagent")
