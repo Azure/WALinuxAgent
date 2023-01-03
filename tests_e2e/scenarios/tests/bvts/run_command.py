@@ -21,9 +21,9 @@
 # BVT for RunCommand.
 #
 # Note that there are two incarnations of RunCommand (which are actually two different extensions):
-# Microsoft.CPlat.Core.RunCommandHandlerLinux and Microsoft.OSTCExtensions.VMAccessForLinux. This
-# test exercises both using the same strategy: execute the extension to create a file on the test
-# VM, then fetch the contents of the file over SSH and compare against the known value.
+# Microsoft.CPlat.Core.RunCommandHandlerLinux and Microsoft.CPlat.Core.RunCommandLinux. This test
+# exercises both using the same strategy: execute the extension to create a file on the test VM,
+# then fetch the contents of the file over SSH and compare against the known value.
 #
 import base64
 import uuid

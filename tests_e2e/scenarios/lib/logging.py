@@ -30,7 +30,7 @@ if not log.hasHandlers():
     console_handler = logging.StreamHandler()
     log.addHandler(console_handler)
 
-log .setLevel(logging.INFO)
+log.setLevel(logging.INFO)
 
 formatter = logging.Formatter('%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s', datefmt="%Y-%m-%dT%H:%M:%SZ")
 for handler in log.handlers:
