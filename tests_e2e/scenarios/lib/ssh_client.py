@@ -16,7 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import os
 from pathlib import Path
 
 from tests_e2e.scenarios.lib import shell
