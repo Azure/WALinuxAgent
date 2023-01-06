@@ -10,6 +10,7 @@ echo "Collecting logs to $logs_file_name ..."
 
 tar --exclude='journal/*' --exclude='omsbundle' --exclude='omsagent' --exclude='mdsd' --exclude='scx*' \
     --exclude='*.so' --exclude='*__LinuxDiagnostic__*' --exclude='*.zip' --exclude='*.deb' --exclude='*.rpm' \
+    --warning=no-file-changed \
     -czf "$logs_file_name" \
     /var/log \
     /var/lib/waagent/ \

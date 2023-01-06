@@ -1,0 +1,65 @@
+# Microsoft Azure Linux Agent
+#
+# Copyright 2018 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#
+# Executes the test suites on an existing VM
+#
+name: ExistingVM
+
+testcase:
+  - criteria:
+      area: bvt
+
+extension:
+  - "../../testsuites"
+
+variable:
+  - name: subscription_id
+    value: ""
+
+  - name: resource_group_name
+    value: ""
+  - name: vm_name
+    value: ""
+  - name: location
+    value: ""
+
+  - name: user
+    value: ""
+  - name: identity_file
+    value: ""
+    is_secret: true
+
+platform:
+  - type: azure
+    admin_username: $(user)
+    admin_private_key_file: $(identity_file)
+    azure:
+      resource_group_name: $(resource_group_name)
+      deploy: false
+      subscription_id: $(subscription_id)
+    requirement:
+      azure:
+        location: $(location)
+        name: $(vm_name)
+
+notifier:
+  - type: env_stats
+  - type: junit
+
+include:
+  - path: ../include/ssh_proxy.yml
