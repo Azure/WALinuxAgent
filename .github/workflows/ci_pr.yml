@@ -56,7 +56,7 @@ jobs:
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
           - python-version: 3.9
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=azure_models.py,BaseExtensionTestClass.py"
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
     
     name: "Python ${{ matrix.python-version }} Unit Tests"
