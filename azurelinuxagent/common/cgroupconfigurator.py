@@ -646,7 +646,7 @@ class CGroupConfigurator(object):
             Raises a CGroupsException if the check fails
             """
             unexpected = []
-
+            agent_cgroup_proc_names = []
             try:
                 daemon = os.getppid()
                 extension_handler = os.getpid()
@@ -660,8 +660,9 @@ class CGroupConfigurator(object):
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
                 for process in agent_cgroup:
+                    agent_cgroup_proc_names.append(self.__format_process(process))
                     # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't.
-                    if process in (daemon, extension_handler) or process in systemd_run_commands:
+                    if process in (daemon, extension_handler) or process in systemd_run_commands or self._check_systemd_run_process(process):
                         continue
                     # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
                     if self._get_parent(process) in systemd_run_commands and self._get_command(
@@ -681,6 +682,7 @@ class CGroupConfigurator(object):
                 _log_cgroup_warning("Error checking the processes in the agent's cgroup: {0}".format(ustr(exception)))
 
             if len(unexpected) > 0:
+                self._report_agent_cgroups_procs(agent_cgroup_proc_names, unexpected)
                 raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(unexpected))
 
         @staticmethod
@@ -695,7 +697,7 @@ class CGroupConfigurator(object):
                 return "UNKNOWN"
 
         @staticmethod
-        def __format_process(pid):
+        def __format_process(pid, truncate_chars=True):
             """
             Formats the given PID as a string containing the PID and the corresponding command line truncated to 64 chars
             """
@@ -703,7 +705,10 @@ class CGroupConfigurator(object):
                 cmdline = '/proc/{0}/cmdline'.format(pid)
                 if os.path.exists(cmdline):
                     with open(cmdline, "r") as cmdline_file:
-                        return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
+                        if truncate_chars:
+                            return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
+                        else:
+                            return "[PID: {0}] {1}".format(pid, cmdline_file.read())
             except Exception:
                 pass
             return "[PID: {0}] UNKNOWN".format(pid)
@@ -742,6 +747,28 @@ class CGroupConfigurator(object):
             except Exception:
                 pass
             return False
+
+        def _check_systemd_run_process(self, process):
+            """
+            Returns True if process is systemd-run process started by agent otherwise False.
+
+            Ex: sh,7345 -c systemd-run --unit=enable_7c5cab19-eb79-4661-95d9-9e5091bd5ae0 --scope --slice=azure-vmextensions-Microsoft.OSTCExtensions.VMAccessForLinux_1.5.11.slice /var/lib/waagent/Microsoft.OSTCExtensions.VMAccessForLinux-1.5.11/processes.sh
+            """
+            try:
+                process_name = self.__format_process(process, truncate_chars=False)
+                match = re.search(r'systemd-run.*--unit=.*--scope.*--slice=azure-vmextensions.*', process_name)
+                if match is not None:
+                    return True
+            except Exception:
+                pass
+            return False
+
+        @staticmethod
+        def _report_agent_cgroups_procs(agent_cgroup_proc_names, unexpected):
+            for proc_name in unexpected:
+                if 'UNKNOWN' in proc_name:
+                    msg = "Agent includes following processes when UNKNOWN process found: {0}".format("\n".join([ustr(proc) for proc in agent_cgroup_proc_names]))
+                    add_event(op=WALAEventOperation.CGroupsInfo, message=msg)
 
         @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
