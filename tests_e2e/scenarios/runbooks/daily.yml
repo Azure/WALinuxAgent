@@ -44,7 +44,6 @@ variable:
     value: ""
     is_secret: true
 notifier:
-  - type: html
   - type: env_stats
   - type: junit
 platform:
