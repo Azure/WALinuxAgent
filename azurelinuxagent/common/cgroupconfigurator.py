@@ -662,7 +662,10 @@ class CGroupConfigurator(object):
                 for process in agent_cgroup:
                     agent_cgroup_proc_names.append(self.__format_process(process))
                     # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't.
-                    if process in (daemon, extension_handler) or process in systemd_run_commands or self._check_systemd_run_process(process):
+                    if process in (daemon, extension_handler) or process in systemd_run_commands:
+                        continue
+                    # check shell systemd_run process if above condition didn't catch it
+                    if self._check_systemd_run_process(process):
                         continue
                     # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
                     if self._get_parent(process) in systemd_run_commands and self._get_command(
@@ -697,7 +700,7 @@ class CGroupConfigurator(object):
                 return "UNKNOWN"
 
         @staticmethod
-        def __format_process(pid, truncate_chars=True):
+        def __format_process(pid):
             """
             Formats the given PID as a string containing the PID and the corresponding command line truncated to 64 chars
             """
@@ -705,10 +708,7 @@ class CGroupConfigurator(object):
                 cmdline = '/proc/{0}/cmdline'.format(pid)
                 if os.path.exists(cmdline):
                     with open(cmdline, "r") as cmdline_file:
-                        if truncate_chars:
-                            return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
-                        else:
-                            return "[PID: {0}] {1}".format(pid, cmdline_file.read())
+                        return "[PID: {0}] {1:64.64}".format(pid, cmdline_file.read())
             except Exception:
                 pass
             return "[PID: {0}] UNKNOWN".format(pid)
@@ -748,14 +748,19 @@ class CGroupConfigurator(object):
                 pass
             return False
 
-        def _check_systemd_run_process(self, process):
+        @staticmethod
+        def _check_systemd_run_process(process):
             """
-            Returns True if process is systemd-run process started by agent otherwise False.
+            Returns True if process is shell systemd-run process started by agent otherwise False.
 
             Ex: sh,7345 -c systemd-run --unit=enable_7c5cab19-eb79-4661-95d9-9e5091bd5ae0 --scope --slice=azure-vmextensions-Microsoft.OSTCExtensions.VMAccessForLinux_1.5.11.slice /var/lib/waagent/Microsoft.OSTCExtensions.VMAccessForLinux-1.5.11/processes.sh
             """
             try:
-                process_name = self.__format_process(process, truncate_chars=False)
+                process_name = "UNKNOWN"
+                cmdline = '/proc/{0}/cmdline'.format(process)
+                if os.path.exists(cmdline):
+                    with open(cmdline, "r") as cmdline_file:
+                        process_name = "{0}".format(cmdline_file.read())
                 match = re.search(r'systemd-run.*--unit=.*--scope.*--slice=azure-vmextensions.*', process_name)
                 if match is not None:
                     return True
