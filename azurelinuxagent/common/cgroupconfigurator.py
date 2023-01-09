@@ -664,7 +664,7 @@ class CGroupConfigurator(object):
                     # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't.
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
                         continue
-                    # check shell systemd_run process if above condition didn't catch it
+                    # check shell systemd_run process if above process check didn't catch it
                     if self._check_systemd_run_process(process):
                         continue
                     # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
