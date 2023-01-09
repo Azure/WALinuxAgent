@@ -161,12 +161,12 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(contained_id, 'c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2', "Incorrect container ID")
 
             protocol.mock_wire_data.set_container_id('AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE')
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             contained_id = create_event_and_return_container_id()
             self.assertEqual(contained_id, 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE', "Incorrect container ID")
 
             protocol.mock_wire_data.set_container_id('11111111-2222-3333-4444-555555555555')
-            protocol.update_goal_state()
+            protocol.client.update_goal_state()
             contained_id = create_event_and_return_container_id()
             self.assertEqual(contained_id, '11111111-2222-3333-4444-555555555555', "Incorrect container ID")
 
