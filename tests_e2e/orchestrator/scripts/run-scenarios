@@ -41,4 +41,4 @@ lisa \
   --log_path "$HOME/logs" \
   --working_path "$HOME/logs" \
   -v subscription_id:"$SUBSCRIPTION_ID" \
-  -v identity_file:"$HOME/.ssh/id_rsa.pub"
+  -v identity_file:"$HOME/.ssh/id_rsa"

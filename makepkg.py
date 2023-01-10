@@ -74,7 +74,8 @@ def run(agent_family, output_directory, log):
     os.makedirs(bin_path)
     log.info("Created {0} directory".format(target_path))
 
-    args = ["python3", "setup.py", "bdist_egg", "--dist-dir={0}".format(bin_path)]
+    setup_path = os.path.join(os.path.dirname(__file__), "setup.py")
+    args = ["python3", setup_path, "bdist_egg", "--dist-dir={0}".format(bin_path)]
 
     log.info("Creating egg {0}".format(egg_path))
     do(*args)

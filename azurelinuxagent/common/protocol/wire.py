@@ -37,7 +37,8 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
-from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
+from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
+    GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
@@ -72,7 +73,7 @@ class WireProtocol(DataContract):
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
 
-    def detect(self):
+    def detect(self, init_goal_state=True):
         self.client.check_wire_protocol_version()
 
         trans_prv_file = os.path.join(conf.get_lib_dir(),
@@ -83,11 +84,9 @@ class WireProtocol(DataContract):
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         # Initialize the goal state, including all the inner properties
-        logger.info('Initializing goal state during protocol detection')
-        self.client.update_goal_state(force_update=True)
-
-    def update_goal_state(self, silent=False):
-        self.client.update_goal_state(silent=silent)
+        if init_goal_state:
+            logger.info('Initializing goal state during protocol detection')
+            self.client.reset_goal_state()
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -778,18 +777,30 @@ class WireClient(object):
             self._host_plugin.update_container_id(container_id)
             self._host_plugin.update_role_config_name(role_config_name)
 
-    def update_goal_state(self, force_update=False, silent=False):
+    def update_goal_state(self, silent=False):
         """
-        Updates the goal state if the incarnation or etag changed or if 'force_update' is True
+        Updates the goal state if the incarnation or etag changed
         """
         try:
-            if force_update and not silent:
-                logger.info("Forcing an update of the goal state.")
-
-            if self._goal_state is None or force_update:
+            if self._goal_state is None:
                 self._goal_state = GoalState(self, silent=silent)
             else:
                 self._goal_state.update(silent=silent)
+
+        except ProtocolError:
+            raise
+        except Exception as exception:
+            raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
+
+    def reset_goal_state(self, goal_state_properties=GoalStateProperties.All, silent=False):
+        """
+        Resets the goal state
+        """
+        try:
+            if not silent:
+                logger.info("Forcing an update of the goal state.")
+
+            self._goal_state = GoalState(self, goal_state_properties=goal_state_properties, silent=silent)
 
         except ProtocolError:
             raise
@@ -925,7 +936,7 @@ class WireClient(object):
 
         if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
-            self.update_goal_state(force_update=True, silent=True)
+            self.reset_goal_state(silent=True)
             extensions_goal_state = self.get_goal_state().extensions_goal_state
 
             if extensions_goal_state.status_upload_blob is None:
