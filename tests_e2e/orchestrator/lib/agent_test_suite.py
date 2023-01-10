@@ -48,12 +48,10 @@ class AgentTestSuite(TestSuite):
     classes use the execute() method to run the tests in their corresponding suites.
     """
 
-    class Context(AgentTestContext):
+    class _Context(AgentTestContext):
         def __init__(self, vm: VmIdentifier, paths: AgentTestContext.Paths, connection: AgentTestContext.Connection):
             super().__init__(vm=vm, paths=paths, connection=connection)
             # These are initialized by AgentTestSuite._set_context().
-            # The same runbook execution may execute multiple test suites concurrently. We use 'setup_lock' to ensure
-            # only 1 thread executes setup.
             self.node: Node = None
             self.runbook_name: str = None
             self.suite_name: str = None
@@ -61,7 +59,7 @@ class AgentTestSuite(TestSuite):
     def __init__(self, metadata: TestSuiteMetadata) -> None:
         super().__init__(metadata)
         # The context is initialized by _set_context() via the call to execute()
-        self.__context: AgentTestSuite.Context = None
+        self.__context: AgentTestSuite._Context = None
 
     def _set_context(self, node: Node):
         connection_info = node.connection_info
@@ -70,7 +68,7 @@ class AgentTestSuite(TestSuite):
         # Remove the resource group and node suffix, e.g. "e1-n0" in "lisa-20230110-162242-963-e1-n0"
         runbook_name = re.sub(r"-\w+-\w+$", "", runbook.name)
 
-        self.__context = AgentTestSuite.Context(
+        self.__context = AgentTestSuite._Context(
             vm=VmIdentifier(
                 location=runbook.location,
                 subscription=node.features._platform.subscription_id,
