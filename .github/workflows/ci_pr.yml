@@ -41,19 +41,19 @@ jobs:
         include:
 
           - python-version: 2.7
-            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
+            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc --ignore=tests_e2e,makepkg.py"
 
           - python-version: 3.4
-            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc"
+            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc --ignore=tests_e2e,makepkg.py"
 
           - python-version: 3.6
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
           - python-version: 3.7
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
             
           - python-version: 3.8
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
           - python-version: 3.9
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
@@ -64,7 +64,7 @@ jobs:
 
     env:
       PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
-      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests"
+      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests tests_e2e"
       NOSEOPTS: "--with-timer ${{ matrix.additional-nose-opts }}"
       PYTHON_VERSION: ${{ matrix.python-version }}
 

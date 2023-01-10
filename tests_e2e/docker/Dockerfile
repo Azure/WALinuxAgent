@@ -59,7 +59,7 @@ RUN \
     #                                                                                                            \
     # Install additional test dependencies                                                                       \
     #                                                                                                            \
-    python3 -m pip install msrestazure                                                                        && \
+    python3 -m pip install distro msrestazure                                                                 && \
                                                                                                                  \
     #                                                                                                            \
     # The setup for the tests depends on a couple of paths; add those to the profile                             \
