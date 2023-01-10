@@ -188,7 +188,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         CGroupsTelemetry.reset()
         clear_singleton_instances(ProtocolUtil)
         protocol = WireProtocol('endpoint')
-        protocol.update_goal_state = MagicMock()
+        protocol.client.update_goal_state = MagicMock()
         self.get_protocol = patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=protocol)
         self.get_protocol.start()
 

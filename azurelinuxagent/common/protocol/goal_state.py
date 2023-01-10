@@ -48,6 +48,18 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 _GET_GOAL_STATE_MAX_ATTEMPTS = 6
 
 
+class GoalStateProperties(object):
+    """
+    Enum for defining the properties that we fetch in the goal state
+    """
+    RoleConfig = 0x1
+    HostingEnv = 0x2
+    SharedConfig = 0x4
+    ExtensionsGoalState = 0x8
+    RemoteAccessInfo = 0x10
+    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsGoalState | RemoteAccessInfo
+
+
 class GoalStateInconsistentError(ProtocolError):
     """
     Indicates an inconsistency in the goal state (e.g. missing tenant certificate)
@@ -57,7 +69,7 @@ class GoalStateInconsistentError(ProtocolError):
 
 
 class GoalState(object):
-    def __init__(self, wire_client, silent=False):
+    def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False):
         """
         Fetches the goal state using the given wire client.
 
@@ -72,6 +84,7 @@ class GoalState(object):
             self._wire_client = wire_client
             self._history = None
             self._extensions_goal_state = None  # populated from vmSettings or extensionsConfig
+            self._goal_state_properties = goal_state_properties
             self.logger = logger.Logger(logger.DEFAULT_LOGGER)
             self.logger.silent = silent
 
@@ -99,35 +112,59 @@ class GoalState(object):
 
     @property
     def container_id(self):
-        return self._container_id
+        if not self._goal_state_properties & GoalStateProperties.RoleConfig:
+            raise ProtocolError("ContainerId is not in goal state properties")
+        else:
+            return self._container_id
 
     @property
     def role_instance_id(self):
-        return self._role_instance_id
+        if not self._goal_state_properties & GoalStateProperties.RoleConfig:
+            raise ProtocolError("RoleInstanceId is not in goal state properties")
+        else:
+            return self._role_instance_id
 
     @property
     def role_config_name(self):
-        return self._role_config_name
+        if not self._goal_state_properties & GoalStateProperties.RoleConfig:
+            raise ProtocolError("RoleConfig is not in goal state properties")
+        else:
+            return self._role_config_name
 
     @property
     def extensions_goal_state(self):
-        return self._extensions_goal_state
+        if not self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+            raise ProtocolError("ExtensionsGoalState is not in goal state properties")
+        else:
+            return self._extensions_goal_state
 
     @property
     def certs(self):
-        return self._certs
+        if not self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+            raise ProtocolError("Certificates is not in goal state properties")
+        else:
+            return self._certs
 
     @property
     def hosting_env(self):
-        return self._hosting_env
+        if not self._goal_state_properties & GoalStateProperties.HostingEnv:
+            raise ProtocolError("HostingEnvironment is not in goal state properties")
+        else:
+            return self._hosting_env
 
     @property
     def shared_conf(self):
-        return self._shared_conf
+        if not self._goal_state_properties & GoalStateProperties.SharedConfig:
+            raise ProtocolError("SharedConfig is not in goal state properties")
+        else:
+            return self._shared_conf
 
     @property
     def remote_access(self):
-        return self._remote_access
+        if not self._goal_state_properties & GoalStateProperties.RemoteAccessInfo:
+            raise ProtocolError("RemoteAccessInfo is not in goal state properties")
+        else:
+            return self._remote_access
 
     def fetch_agent_manifest(self, family_name, uris):
         """
@@ -190,11 +227,12 @@ class GoalState(object):
             add_event(op=WALAEventOperation.GoalState, message=message)
 
         vm_settings, vm_settings_updated = None, False
-        try:
-            vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client, force_update=force_update)
-        except VmSettingsSupportStopped as exception:  # If the HGAP stopped supporting vmSettings, we need to use the goal state from the WireServer
-            self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
-            return
+        if self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+            try:
+                vm_settings, vm_settings_updated = GoalState._fetch_vm_settings(self._wire_client, force_update=force_update)
+            except VmSettingsSupportStopped as exception:  # If the HGAP stopped supporting vmSettings, we need to use the goal state from the WireServer
+                self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
+                return
 
         if vm_settings_updated:
             self.logger.info('')
@@ -356,40 +394,48 @@ class GoalState(object):
             self.logger.info(message)
             add_event(op=WALAEventOperation.GoalState, message=message)
 
-            role_instance = find(xml_doc, "RoleInstance")
-            role_instance_id = findtext(role_instance, "InstanceId")
-            role_config = find(role_instance, "Configuration")
-            role_config_name = findtext(role_config, "ConfigName")
-            container = find(xml_doc, "Container")
-            container_id = findtext(container, "ContainerId")
+            role_instance_id = None
+            role_config_name = None
+            container_id = None
+            if GoalStateProperties.RoleConfig & self._goal_state_properties:
+                role_instance = find(xml_doc, "RoleInstance")
+                role_instance_id = findtext(role_instance, "InstanceId")
+                role_config = find(role_instance, "Configuration")
+                role_config_name = findtext(role_config, "ConfigName")
+                container = find(xml_doc, "Container")
+                container_id = findtext(container, "ContainerId")
 
             extensions_config_uri = findtext(xml_doc, "ExtensionsConfig")
-            if extensions_config_uri is None:
+            if not (GoalStateProperties.ExtensionsGoalState & self._goal_state_properties) or extensions_config_uri is None:
                 extensions_config = ExtensionsGoalStateFactory.create_empty(incarnation)
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
                 extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(incarnation, xml_text, self._wire_client)
                 self._history.save_extensions_config(extensions_config.get_redacted_text())
 
-            hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
-            xml_text = self._wire_client.fetch_config(hosting_env_uri, self._wire_client.get_header())
-            hosting_env = HostingEnv(xml_text)
-            self._history.save_hosting_env(xml_text)
+            hosting_env = None
+            if GoalStateProperties.HostingEnv & self._goal_state_properties:
+                hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
+                xml_text = self._wire_client.fetch_config(hosting_env_uri, self._wire_client.get_header())
+                hosting_env = HostingEnv(xml_text)
+                self._history.save_hosting_env(xml_text)
 
-            shared_conf_uri = findtext(xml_doc, "SharedConfig")
-            xml_text = self._wire_client.fetch_config(shared_conf_uri, self._wire_client.get_header())
-            shared_config = SharedConfig(xml_text)
-            self._history.save_shared_conf(xml_text)
-            # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband), so save it to the agent's root directory as well
-            shared_config_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
-            try:
-                fileutil.write_file(shared_config_file, xml_text)
-            except Exception as e:
-                logger.warn("Failed to save {0}: {1}".format(shared_config, e))
+            shared_config = None
+            if GoalStateProperties.SharedConfig & self._goal_state_properties:
+                shared_conf_uri = findtext(xml_doc, "SharedConfig")
+                xml_text = self._wire_client.fetch_config(shared_conf_uri, self._wire_client.get_header())
+                shared_config = SharedConfig(xml_text)
+                self._history.save_shared_conf(xml_text)
+                # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband), so save it to the agent's root directory as well
+                shared_config_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
+                try:
+                    fileutil.write_file(shared_config_file, xml_text)
+                except Exception as e:
+                    logger.warn("Failed to save {0}: {1}".format(shared_config, e))
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
-            if certs_uri is not None:
+            if (GoalStateProperties.ExtensionsGoalState & self._goal_state_properties) and certs_uri is not None:
                 xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
                 certs = Certificates(xml_text, self.logger)
                 # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
@@ -403,11 +449,12 @@ class GoalState(object):
                 self._history.save_certificates(json.dumps(certs.summary))
 
             remote_access = None
-            remote_access_uri = findtext(container, "RemoteAccessInfo")
-            if remote_access_uri is not None:
-                xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_cert())
-                remote_access = RemoteAccess(xml_text)
-                self._history.save_remote_access(xml_text)
+            if GoalStateProperties.RemoteAccessInfo & self._goal_state_properties:
+                remote_access_uri = findtext(container, "RemoteAccessInfo")
+                if remote_access_uri is not None:
+                    xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_cert())
+                    remote_access = RemoteAccess(xml_text)
+                    self._history.save_remote_access(xml_text)
 
             self._incarnation = incarnation
             self._role_instance_id = role_instance_id

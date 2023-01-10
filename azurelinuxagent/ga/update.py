@@ -485,7 +485,7 @@ class UpdateHandler(object):
         try:
             max_errors_to_log = 3
 
-            protocol.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log)
+            protocol.client.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log)
 
             self._goal_state = protocol.get_goal_state()
 

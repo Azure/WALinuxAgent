@@ -188,7 +188,7 @@ class ProtocolUtil(SingletonPerThread):
                 return
             logger.error("Failed to clear wiresever endpoint: {0}", e)
 
-    def _detect_protocol(self):
+    def _detect_protocol(self, init_goal_state=True):
         """
         Probe protocol endpoints in turn.
         """
@@ -217,7 +217,7 @@ class ProtocolUtil(SingletonPerThread):
 
                 try:
                     protocol = WireProtocol(endpoint)
-                    protocol.detect()
+                    protocol.detect(init_goal_state=init_goal_state)
                     self._set_wireserver_endpoint(endpoint)
                     return protocol
 
@@ -268,7 +268,7 @@ class ProtocolUtil(SingletonPerThread):
         finally:
             self._lock.release()
 
-    def get_protocol(self):
+    def get_protocol(self, init_goal_state=True):
         """
         Detect protocol by endpoint.
         :returns: protocol instance
@@ -296,7 +296,7 @@ class ProtocolUtil(SingletonPerThread):
 
             logger.info("Detect protocol endpoint")
 
-            protocol = self._detect_protocol()
+            protocol = self._detect_protocol(init_goal_state=init_goal_state)
 
             IOErrorCounter.set_protocol_endpoint(endpoint=protocol.get_endpoint())
             self._save_protocol(WIRE_PROTOCOL_NAME)
