@@ -26,18 +26,20 @@ from tests_e2e.scenarios.lib.identifiers import VmIdentifier
 class AgentTestContext:
     """
     Execution context for agent tests. Defines the test VM, working directories and connection info for the tests.
-    """
 
+    NOTE: The context is shared by all tests in the same runbook execution. Tests within the same test suite
+          are executed sequentially, but multiple test suites may be executed concurrently depending on the
+          concurrency level of the runbook.
+    """
     class Paths:
         # E1101: Instance of 'list' has no '_path' member (no-member)
         DEFAULT_TEST_SOURCE_DIRECTORY = Path(tests_e2e.__path__._path[0])  # pylint: disable=E1101
-        DEFAULT_WORKING_DIRECTORY = Path().home() / "waagent-tmp"
 
         def __init__(
             self,
+            working_directory: Path,
             remote_working_directory: Path,
-            test_source_directory: Path = DEFAULT_TEST_SOURCE_DIRECTORY,
-            working_directory: Path = DEFAULT_WORKING_DIRECTORY
+            test_source_directory: Path = DEFAULT_TEST_SOURCE_DIRECTORY
         ):
             self._test_source_directory: Path = test_source_directory
             self._working_directory: Path = working_directory
@@ -87,14 +89,15 @@ class AgentTestContext:
     @property
     def working_directory(self) -> Path:
         """
-        Tests create temporary files under this directory
+        Tests can create temporary files under this directory.
+
         """
         return self._paths._working_directory
 
     @property
     def remote_working_directory(self) -> Path:
         """
-        Tests create temporary files under this directory on the test VM
+        Tests can create temporary files under this directory on the test VM.
         """
         return self._paths._remote_working_directory
 
@@ -132,7 +135,7 @@ class AgentTestContext:
 
         parser.add_argument('-rw', '--remote-working-directory', dest="remote_working_directory", required=False, default=str(Path('/home')/os.getenv("USER")))
         parser.add_argument('-t', '--test-source-directory', dest="test_source_directory", required=False, default=str(AgentTestContext.Paths.DEFAULT_TEST_SOURCE_DIRECTORY))
-        parser.add_argument('-w', '--working-directory', dest="working_directory", required=False, default=str(AgentTestContext.Paths.DEFAULT_WORKING_DIRECTORY))
+        parser.add_argument('-w', '--working-directory', dest="working_directory", required=False, default=str(Path().home()/"tmp"))
 
         parser.add_argument('-a', '--ip-address', dest="ip_address", required=False)  # Use the vm name as default
         parser.add_argument('-u', '--username', required=False, default=os.getenv("USER"))
@@ -152,9 +155,9 @@ class AgentTestContext:
                 resource_group=args.group,
                 name=args.vm),
             paths=AgentTestContext.Paths(
+                working_directory=working_directory,
                 remote_working_directory=Path(args.remote_working_directory),
-                test_source_directory=Path(args.test_source_directory),
-                working_directory=working_directory),
+                test_source_directory=Path(args.test_source_directory)),
             connection=AgentTestContext.Connection(
                 ip_address=args.ip_address if args.ip_address is not None else args.vm,
                 username=args.username,
