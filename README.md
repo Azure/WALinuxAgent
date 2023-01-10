@@ -62,7 +62,9 @@ The agent will use an HTTP proxy if provided via the `http_proxy` (for `http` re
 `https_proxy` (for `https` requests) environment variables. The `HttpProxy.Host` and
 `HttpProxy.Port` configuration variables (see below), if used, will override the environment
 settings. Due to limitations of Python, the agent *does not* support HTTP proxies requiring
-authentication.
+authentication. Note that when the agent service is managed by systemd, environment variables 
+such as `http_proxy` and `https_proxy` should be defined using one the mechanisms provided by 
+systemd (e.g. by using Environment or EnvironmentFile in the service file).
 
 ## Requirements
 
