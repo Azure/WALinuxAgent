@@ -29,6 +29,6 @@ elif [ "$exit_code" != "0" ]; then
     exit $exit_code
 fi
 
-chmod +r "$logs_file_name"
+chmod a+r "$logs_file_name"
 
 ls -l "$logs_file_name"

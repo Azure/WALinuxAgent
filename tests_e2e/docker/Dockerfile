@@ -23,7 +23,7 @@ RUN \
     #                                                                                                            \
     # Install basic dependencies                                                                                 \
     #                                                                                                            \
-    apt-get install -y git python3.10 python3.10-dev curl                                                     && \
+    apt-get install -y git python3.10 python3.10-dev                                                          && \
     ln /usr/bin/python3.10 /usr/bin/python3                                                                   && \
                                                                                                                  \
     #                                                                                                            \
@@ -31,6 +31,12 @@ RUN \
     #                                                                                                            \
     apt-get install -y git gcc libgirepository1.0-dev libcairo2-dev qemu-utils libvirt-dev                       \
             python3-pip python3-venv                                                                          && \
+                                                                                                                 \
+    #                                                                                                            \
+    # Install test dependencies                                                                                  \
+    #                                                                                                            \
+    apt-get install -y zip                                                                                    && \
+                                                                                                                 \
     #                                                                                                            \
     # Create user waagent, which is used to execute the tests                                                    \
     #                                                                                                            \
