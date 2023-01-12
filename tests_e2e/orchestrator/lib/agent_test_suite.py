@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from assertpy import assert_that
+import re
+
+from assertpy import fail
 from pathlib import Path
-from shutil import rmtree
+from threading import current_thread, RLock
 from typing import List, Type
 
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
@@ -40,121 +42,145 @@ from tests_e2e.scenarios.lib.identifiers import VmIdentifier
 from tests_e2e.scenarios.lib.logging import log
 
 
-class AgentLisaTestContext(AgentTestContext):
-    """
-    Execution context for LISA tests.
-    """
-    def __init__(self, vm: VmIdentifier, node: Node):
-        super().__init__(
-            vm=vm,
-            paths=AgentTestContext.Paths(remote_working_directory=Path('/home')/node.connection_info['username']),
-            connection=AgentTestContext.Connection(
-                ip_address=node.connection_info['address'],
-                username=node.connection_info['username'],
-                private_key_file=node.connection_info['private_key_file'],
-                ssh_port=node.connection_info['port'])
-        )
-        self._node = node
-
-    @property
-    def node(self) -> Node:
-        return self._node
-
-
 class AgentTestSuite(TestSuite):
     """
     Base class for Agent test suites. It provides facilities for setup, execution of tests and reporting results. Derived
     classes use the execute() method to run the tests in their corresponding suites.
     """
+
+    class _Context(AgentTestContext):
+        def __init__(self, vm: VmIdentifier, paths: AgentTestContext.Paths, connection: AgentTestContext.Connection):
+            super().__init__(vm=vm, paths=paths, connection=connection)
+            # These are initialized by AgentTestSuite._set_context().
+            self.node: Node = None
+            self.runbook_name: str = None
+            self.suite_name: str = None
+
     def __init__(self, metadata: TestSuiteMetadata) -> None:
         super().__init__(metadata)
-        # The context is initialized by execute()
-        self.__context: AgentLisaTestContext = None
+        # The context is initialized by _set_context() via the call to execute()
+        self.__context: AgentTestSuite._Context = None
+
+    def _set_context(self, node: Node):
+        connection_info = node.connection_info
+        node_context = get_node_context(node)
+        runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
+        # Remove the resource group and node suffix, e.g. "e1-n0" in "lisa-20230110-162242-963-e1-n0"
+        runbook_name = re.sub(r"-\w+-\w+$", "", runbook.name)
+
+        self.__context = AgentTestSuite._Context(
+            vm=VmIdentifier(
+                location=runbook.location,
+                subscription=node.features._platform.subscription_id,
+                resource_group=node_context.resource_group_name,
+                name=node_context.vm_name),
+            paths=AgentTestContext.Paths(
+                # The runbook name is unique on each run, so we will use different working directory every time
+                working_directory=Path().home()/"tmp"/runbook_name,
+                remote_working_directory=Path('/home')/connection_info['username']),
+            connection=AgentTestContext.Connection(
+                ip_address=connection_info['address'],
+                username=connection_info['username'],
+                private_key_file=connection_info['private_key_file'],
+                ssh_port=connection_info['port']))
+
+        self.__context.node = node
+        self.__context.suite_name = f"{self._metadata.full_name}:{runbook.marketplace.offer}-{runbook.marketplace.sku}"
 
     @property
-    def context(self) -> AgentLisaTestContext:
+    def context(self):
         if self.__context is None:
             raise Exception("The context for the AgentTestSuite has not been initialized")
         return self.__context
 
-    def _set_context(self, node: Node):
-        node_context = get_node_context(node)
-
-        runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
-
-        self.__context = AgentLisaTestContext(
-            VmIdentifier(
-                location=runbook.location,
-                subscription=node.features._platform.subscription_id,
-                resource_group=node_context.resource_group_name,
-                name=node_context.vm_name
-            ),
-            node
-        )
+    #
+    # Test suites within the same runbook may be executed concurrently, and setup needs to be done only once.
+    # We use this lock to allow only 1 thread to do the setup. Setup completion is marked using the 'completed'
+    # file: the thread doing the setup creates the file and threads that find that the file already exists
+    # simply skip setup.
+    #
+    _setup_lock = RLock()
 
     def _setup(self) -> None:
         """
-        Prepares the test suite for execution
-        """
-        log.info("Test Node: %s", self.context.vm.name)
-        log.info("Resource Group: %s", self.context.vm.resource_group)
-        log.info("Working directory: %s", self.context.working_directory)
+        Prepares the test suite for execution (currently, it just builds the agent package)
 
-        if self.context.working_directory.exists():
-            log.info("Removing existing working directory: %s", self.context.working_directory)
-            try:
-                rmtree(self.context.working_directory.as_posix())
-            except Exception as exception:
-                log.warning("Failed to remove the working directory: %s", exception)
-        self.context.working_directory.mkdir()
+        Returns the path to the agent package.
+        """
+        AgentTestSuite._setup_lock.acquire()
+
+        try:
+            log.info("")
+            log.info("**************************************** [Build] ****************************************")
+            log.info("")
+            completed: Path = self.context.working_directory/"completed"
+
+            if completed.exists():
+                log.info("Found %s. Build has already been done, skipping", completed)
+                return
+
+            log.info("Creating working directory: %s", self.context.working_directory)
+            self.context.working_directory.mkdir(parents=True)
+            self._build_agent_package()
+
+            log.info("Completed setup, creating %s", completed)
+            completed.touch()
+
+        finally:
+            AgentTestSuite._setup_lock.release()
+
+    def _build_agent_package(self) -> None:
+        """
+        Builds the agent package and returns the path to the package.
+        """
+        log.info("Building agent package to %s", self.context.working_directory)
+
+        makepkg.run(agent_family="Test", output_directory=str(self.context.working_directory), log=log)
+
+        package_path: Path = self._get_agent_package_path()
+        if not package_path.exists():
+            raise Exception(f"Can't find the agent package at {package_path}")
+
+        log.info("Built agent package as %s", package_path)
+
+    def _get_agent_package_path(self) -> Path:
+        """
+        Returns the path to the agent package.
+        """
+        return self.context.working_directory/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
 
     def _clean_up(self) -> None:
         """
-        Cleans up any leftovers from the test suite run.
+        Cleans up any leftovers from the test suite run. Currently just an empty placeholder for future use.
         """
-        try:
-            log.info("Removing %s", self.context.working_directory)
-            rmtree(self.context.working_directory.as_posix(), ignore_errors=True)
-        except:  # pylint: disable=bare-except
-            log.exception("Failed to cleanup the test run")
 
     def _setup_node(self) -> None:
         """
         Prepares the remote node for executing the test suite.
         """
-        agent_package_path = self._build_agent_package()
-        self._install_agent_on_node(agent_package_path)
+        log.info("")
+        log.info("************************************** [Node Setup] **************************************")
+        log.info("")
+        log.info("Test Node: %s", self.context.vm.name)
+        log.info("Resource Group: %s", self.context.vm.resource_group)
+        log.info("")
 
-    def _build_agent_package(self) -> Path:
-        """
-        Builds the agent package and returns the path to the package.
-        """
-        build_path = self.context.working_directory/"build"
+        self._install_agent_on_node()
 
-        log.info("Building agent package to %s", build_path)
-
-        makepkg.run(agent_family="Test", output_directory=str(build_path), log=log)
-
-        package_path = build_path/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
-        if not package_path.exists():
-            raise Exception(f"Can't find the agent package at {package_path}")
-
-        log.info("Agent package: %s", package_path)
-
-        return package_path
-
-    def _install_agent_on_node(self, agent_package: Path) -> None:
+    def _install_agent_on_node(self) -> None:
         """
         Installs the given agent package on the test node.
         """
+        agent_package_path: Path = self._get_agent_package_path()
+
         # The install script needs to unzip the agent package; ensure unzip is installed on the test node
         log.info("Installing unzip tool on %s", self.context.node.name)
         self.context.node.os.install_packages("unzip")
 
-        log.info("Installing %s on %s", agent_package, self.context.node.name)
-        agent_package_remote_path = self.context.remote_working_directory / agent_package.name
-        log.info("Copying %s to %s:%s", agent_package, self.context.node.name, agent_package_remote_path)
-        self.context.node.shell.copy(agent_package, agent_package_remote_path)
+        log.info("Installing %s on %s", agent_package_path, self.context.node.name)
+        agent_package_remote_path = self.context.remote_working_directory/agent_package_path.name
+        log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, agent_package_remote_path)
+        self.context.node.shell.copy(agent_package_path, agent_package_remote_path)
         self.execute_script_on_node(
             self.context.test_source_directory/"orchestrator"/"scripts"/"install-agent",
             parameters=f"--package {agent_package_remote_path} --version {AGENT_VERSION}",
@@ -172,8 +198,8 @@ class AgentTestSuite(TestSuite):
             self.execute_script_on_node(self.context.test_source_directory/"orchestrator"/"scripts"/"collect-logs", sudo=True)
 
             # Copy the tarball to the local logs directory
-            remote_path = self.context.remote_working_directory / "logs.tgz"
-            local_path = Path.home()/'logs'/'vm-logs-{0}.tgz'.format(self.context.node.name)
+            remote_path = "/tmp/waagent-logs.tgz"
+            local_path = Path.home()/'logs'/'vm-logs-{0}.tgz'.format(self.context.suite_name)
             log.info("Copying %s:%s to %s", self.context.node.name, remote_path, local_path)
             self.context.node.shell.copy_back(remote_path, local_path)
         except:  # pylint: disable=bare-except
@@ -186,11 +212,10 @@ class AgentTestSuite(TestSuite):
         """
         self._set_context(node)
 
-        log.info("")
-        log.info("**************************************** [Setup] ****************************************")
-        log.info("")
-
         failed: List[str] = []
+
+        thread_name = current_thread().name
+        current_thread().name = self.context.suite_name
 
         try:
             self._setup()
@@ -233,15 +258,21 @@ class AgentTestSuite(TestSuite):
                 for r in results:
                     log.info("\t%s", r)
                 log.info("")
-
             finally:
                 self._collect_node_logs()
 
+        except:   # pylint: disable=bare-except
+            # Log the error here so the it is decorated with the thread name, then re-raise
+            log.exception("Test suite failed")
+            raise
+
         finally:
             self._clean_up()
+            current_thread().name = thread_name
 
         # Fail the entire test suite if any test failed
-        assert_that(failed).described_as("One or more tests failed").is_length(0)
+        if len(failed) > 0:
+            fail(f"{[self.context.suite_name]} One or more tests failed: {failed}")
 
     def execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
         """
@@ -259,16 +290,15 @@ class AgentTestSuite(TestSuite):
 
         result = custom_script.run(parameters=parameters, sudo=sudo)
 
-        if result.exit_code != 0:
-            output = result.stdout if result.stderr == "" else f"{result.stdout}\n{result.stderr}"
-            raise Exception(f"[{command_line}] failed:\n{output}")
-
         if result.stdout != "":
             separator = "\n" if "\n" in result.stdout else " "
             log.info("stdout:%s%s", separator, result.stdout)
         if result.stderr != "":
             separator = "\n" if "\n" in result.stderr else " "
             log.error("stderr:%s%s", separator, result.stderr)
+
+        if result.exit_code != 0:
+            raise Exception(f"[{command_line}] failed. Exit code: {result.exit_code}")
 
         return result.exit_code
 

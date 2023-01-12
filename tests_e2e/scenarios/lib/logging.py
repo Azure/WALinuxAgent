@@ -32,6 +32,6 @@ if not log.hasHandlers():
 
 log.setLevel(logging.INFO)
 
-formatter = logging.Formatter('%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s', datefmt="%Y-%m-%dT%H:%M:%SZ")
+formatter = logging.Formatter('%(asctime)s.%(msecs)03d [%(levelname)s] [%(threadName)s] %(message)s', datefmt="%Y-%m-%dT%H:%M:%SZ")
 for handler in log.handlers:
     handler.setFormatter(formatter)

@@ -1,29 +1,23 @@
-name: azure
+name: Daily
+
+testcase:
+  - criteria:
+      area: bvt
+
 extension:
   - "../testsuites"
+
 variable:
   - name: location
     value: "westus2"
   - name: subscription_id
     value: ""
-  - name: resource_group_name
-    value: ""
-    #
-    # Set the vm_name to run on an existing VM
-    #
-  - name: vm_name
-    value: ""
   - name: marketplace_image
-    value: "Canonical UbuntuServer 18.04-LTS latest"
+    value: ""
   - name: vhd
     value: ""
   - name: vm_size
     value: ""
-    #
-    # Turn off deploy to run on an existing VM
-    #
-  - name: deploy
-    value: true
   - name: keep_environment
     value: "no"
   - name: wait_delete
@@ -36,16 +30,7 @@ variable:
   - name: admin_password
     value: ""
     is_secret: true
-  - name: proxy_host
-    value: ""
-  - name: proxy_user
-    value: ""
-  - name: proxy_identity_file
-    value: ""
-    is_secret: true
-notifier:
-  - type: env_stats
-  - type: junit
+
 platform:
   - type: azure
     admin_username: $(user)
@@ -53,8 +38,7 @@ platform:
     admin_password: $(admin_password)
     keep_environment: $(keep_environment)
     azure:
-      resource_group_name: $(resource_group_name)
-      deploy: $(deploy)
+      deploy: True
       subscription_id: $(subscription_id)
       wait_delete: $(wait_delete)
     requirement:
@@ -64,19 +48,27 @@ platform:
         marketplace: "$(marketplace_image)"
         vhd: $(vhd)
         location: $(location)
-        name: $(vm_name)
         vm_size: $(vm_size)
 
-testcase:
-  - criteria:
-      area: bvt
+combinator:
+  type: grid
+  items:
+    - name: marketplace_image
+      value:
+        - "Canonical UbuntuServer 18.04-LTS latest"
+        - "Debian debian-10 10 latest"
+        - "OpenLogic CentOS 7_9 latest"
+        - "SUSE sles-15-sp2-basic gen2 latest"
+        - "RedHat RHEL 7-RAW latest"
+        - "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
+        - "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
 
-#
-# Set to do SSH proxy jumps
-#
-#dev:
-#  mock_tcp_ping: True
-#  jump_boxes:
-#    - private_key_file: $(proxy_identity_file)
-#      address: $(proxy_host)
-#      username: $(proxy_user)
+concurrency: 10
+
+notifier:
+  - type: env_stats
+  - type: junit
+
+include:
+  - path: ./include/ssh_proxy.yml
+

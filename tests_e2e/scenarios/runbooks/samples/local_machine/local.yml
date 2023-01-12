@@ -15,6 +15,10 @@
 # limitations under the License.
 #
 
+#
+# Executes the test suites on the local machine
+#
+
 extension:
   - "."
 environment:
