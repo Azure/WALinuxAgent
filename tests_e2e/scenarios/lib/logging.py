@@ -45,14 +45,10 @@ class _AgentLoggingHandler(Handler):
     """
     def __init__(self):
         super().__init__()
-        self.formatter: Formatter = _AgentLoggingHandler.create_formatter()
+        self.formatter: Formatter = Formatter('%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s', datefmt="%Y-%m-%dT%H:%M:%SZ")
         self.default_handler = StreamHandler()
         self.default_handler.setFormatter(self.formatter)
         self.per_thread_handlers: Dict[int, FileHandler] = {}
-
-    @staticmethod
-    def create_formatter() -> Formatter:
-        return Formatter('%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s', datefmt="%Y-%m-%dT%H:%M:%SZ")
 
     def set_thread_log(self, thread_ident: int, log_file: Path) -> None:
         self.close_current_thread_log()
@@ -110,9 +106,11 @@ class AgentLogger(Logger):
         self._handler: _AgentLoggingHandler = _AgentLoggingHandler()
         self.addHandler(self._handler)
 
-    @staticmethod
-    def create_formatter() -> Formatter:
-        return _AgentLoggingHandler.create_formatter()
+    def set_thread_log(self, thread_ident: int, log_file: Path) -> None:
+        self._handler.set_thread_log(thread_ident, log_file)
+
+    def close_thread_log(self, thread_ident: int) -> None:
+        self._handler.close_thread_log(thread_ident)
 
     def set_current_thread_log(self, log_file: Path) -> None:
         self._handler.set_current_thread_log(log_file)

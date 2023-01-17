@@ -55,11 +55,11 @@ combinator:
   items:
     - name: marketplace_image
       value:
-#        - "Canonical UbuntuServer 18.04-LTS latest"
-#        - "Debian debian-10 10 latest"
-#        - "OpenLogic CentOS 7_9 latest"
-#        - "SUSE sles-15-sp2-basic gen2 latest"
-#        - "RedHat RHEL 7-RAW latest"
+        - "Canonical UbuntuServer 18.04-LTS latest"
+        - "Debian debian-10 10 latest"
+        - "OpenLogic CentOS 7_9 latest"
+        - "SUSE sles-15-sp2-basic gen2 latest"
+        - "RedHat RHEL 7-RAW latest"
         - "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
         - "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
         #

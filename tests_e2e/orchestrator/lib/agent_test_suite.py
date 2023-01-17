@@ -123,6 +123,9 @@ class AgentTestSuite(TestSuite):
 
     @property
     def _log(self) -> Logger:
+        """
+        Returns a reference to the LISA Logger.
+        """
         return self.context.log
 
     #
@@ -251,14 +254,7 @@ class AgentTestSuite(TestSuite):
         current_thread().name = self.context.suite_name
 
         # We create a separate log file for the test suite.
-        # Make self._log write to this file as well, and set this file as the log for 'agent_test_logger',
-        # which is the logger used by the tests.
         suite_log_file: Path = Path.home()/'logs'/f"{self.context.suite_name}.log"
-
-        suite_log_handler = logging.FileHandler(str(suite_log_file))
-        suite_log_handler.setFormatter(agent_test_logger.create_formatter())
-        self._log.addHandler(suite_log_handler)
-
         agent_test_logger.set_current_thread_log(suite_log_file)
 
         try:
@@ -267,18 +263,18 @@ class AgentTestSuite(TestSuite):
             try:
                 self._setup_node()
 
-                self._log.info("")
-                self._log.info("**************************************** %s ****************************************", self.context.suite_name)
-                self._log.info("")
+                agent_test_logger.info("")
+                agent_test_logger.info("**************************************** %s ****************************************", self.context.suite_name)
+                agent_test_logger.info("")
 
                 results: List[str] = []
 
                 for test in test_suite:
                     result: str = "[UNKNOWN]"
                     test_full_name = f"{self.context.suite_name} {test.__name__}"
+                    agent_test_logger.info("******** Executing %s", test_full_name)
                     self._log.info("******** Executing %s", test_full_name)
-                    self._log.info("******** Executing %s", test_full_name)
-                    self._log.info("")
+                    agent_test_logger.info("")
 
                     try:
                         test(self.context).run()
@@ -288,36 +284,40 @@ class AgentTestSuite(TestSuite):
                         result = f"[Failed] {test_full_name}"
                         self._log.error("%s", e)
                         agent_test_logger.error("%s", e)
+                        self._log.error("%s", e)
                     except:  # pylint: disable=bare-except
                         failed.append(test.__name__)
                         result = f"[Error] {test_full_name}"
-                        self._log.exception("UNHANDLED EXCEPTION")
-                        agent_test_logger.exception("UNHANDLED EXCEPTION")
+                        agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
+                        self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
 
+                    agent_test_logger.info("******** %s", result)
+                    agent_test_logger.info("")
                     self._log.info("******** %s", result)
-                    self._log.info("******** %s", result)
-                    self._log.info("")
                     results.append(result)
 
-                self._log.info("")
-                self._log.info("********* [Test Results]")
-                self._log.info("")
+                agent_test_logger.info("")
+                agent_test_logger.info("********* [Test Results]")
+                agent_test_logger.info("")
                 for r in results:
-                    self._log.info("\t%s", r)
-                self._log.info("")
+                    agent_test_logger.info("\t%s", r)
+                agent_test_logger.info("")
 
             finally:
                 self._collect_node_logs()
 
         except:   # pylint: disable=bare-except
-            # Log the error here so the it is decorated with the thread name, then re-raise
-            self._log.exception("Unhandled exception in test suite")
+            agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", self.context.suite_name)
+            # Note that we report the error to the LISA log and then re-raise it. We log it here
+            # so that the message is decorated with the thread name in the LISA log; we re-raise
+            # to let LISA know the test errored out (LISA will report that error one more time
+            # in its log)
+            self._log.exception("UNHANDLED EXCEPTION IN %s", self.context.suite_name)
             raise
 
         finally:
             self._clean_up()
             agent_test_logger.close_current_thread_log()
-            self._log.removeHandler(suite_log_handler)
             current_thread().name = thread_name
 
         # Fail the entire test suite if any test failed; this exception is handled by LISA
