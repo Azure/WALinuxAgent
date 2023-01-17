@@ -35,10 +35,15 @@ cp "$HOME/id_rsa" "$HOME/.ssh"
 chmod 700 "$HOME/.ssh/id_rsa"
 ssh-keygen -y -f "$HOME/.ssh/id_rsa" > "$HOME/.ssh/id_rsa.pub"
 
+#
 # Now start the runbook
+#
+lisa_logs="$HOME/logs/lisa"
+
 lisa \
   --runbook "$HOME/WALinuxAgent/tests_e2e/scenarios/runbooks/daily.yml" \
-  --log_path "$HOME/logs" \
-  --working_path "$HOME/logs" \
+  --log_path "$lisa_logs" \
+  --working_path "$lisa_logs" \
   -v subscription_id:"$SUBSCRIPTION_ID" \
-  -v identity_file:"$HOME/.ssh/id_rsa"
+  -v identity_file:"$HOME/.ssh/id_rsa" \
+  || true # force a success exit code to allow execution to continue when a test fails

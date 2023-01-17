@@ -29,17 +29,17 @@ docker run --rm \
 sudo chown "$USER" "$BUILD_SOURCESDIRECTORY"
 sudo find "$BUILD_ARTIFACTSTAGINGDIRECTORY" -exec chown "$USER" {} \;
 
-# LISA organizes its logs in a tree similar to
+# The LISA run will produce a tree similar to
 #
-#    .../20221130
-#    .../20221130/20221130-160013-749
-#    .../20221130/20221130-160013-749/environments
-#    .../20221130/20221130-160013-749/lisa-20221130-160013-749.log
-#    .../20221130/20221130-160013-749/lisa.junit.xml
+#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130
+#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749
+#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749/environments
+#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749/lisa-20221130-160013-749.log
+#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749/lisa.junit.xml
 #    etc
 #
-# Remove the first 2 levels of the tree (which indicate the time of the test run) to make navigation
+# Remove the 2 levels of the tree that indicate the time of the test run to make navigation
 # in the Azure Pipelines UI easier.
 #
-mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"
-rm -r "$BUILD_ARTIFACTSTAGINGDIRECTORY"/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]
+mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa
+rm -r "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]
