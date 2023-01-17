@@ -63,7 +63,7 @@ combinator:
         - "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
         - "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
         #
-        #  TODO: Addd this distro, currently available in eastus
+        #  TODO: Add this distro, currently available in eastus
         #
         # - "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
         #
