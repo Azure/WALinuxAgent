@@ -32,8 +32,7 @@ class AgentTestContext:
           concurrency level of the runbook.
     """
     class Paths:
-        # E1101: Instance of 'list' has no '_path' member (no-member)
-        DEFAULT_TEST_SOURCE_DIRECTORY = Path(tests_e2e.__path__._path[0])  # pylint: disable=E1101
+        DEFAULT_TEST_SOURCE_DIRECTORY = Path(tests_e2e.__path__[0])
 
         def __init__(
             self,

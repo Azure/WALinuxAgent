@@ -22,6 +22,7 @@ from tests_e2e.scenarios.tests.bvts.run_command import RunCommandBvt
 
 # E0401: Unable to import 'lisa' (import-error)
 from lisa import (  # pylint: disable=E0401
+    Logger,
     Node,
     TestCaseMetadata,
     TestSuiteMetadata,
@@ -34,15 +35,13 @@ class AgentBvt(AgentTestSuite):
     Test suite for Agent BVTs
     """
     @TestCaseMetadata(description="", priority=0)
-    def main(self, node: Node) -> None:
+    def main(self, node: Node, log: Logger) -> None:
         self.execute(
             node,
+            log,
             [
                 ExtensionOperationsBvt,  # Tests the basic operations (install, enable, update, uninstall) using CustomScript
                 RunCommandBvt,
                 VmAccessBvt
             ]
         )
-
-
-
