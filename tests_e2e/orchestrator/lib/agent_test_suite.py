@@ -282,7 +282,6 @@ class AgentTestSuite(TestSuite):
                     except AssertionError as e:
                         failed.append(test.__name__)
                         result = f"[Failed] {test_full_name}"
-                        self._log.error("%s", e)
                         agent_test_logger.error("%s", e)
                         self._log.error("%s", e)
                     except:  # pylint: disable=bare-except
