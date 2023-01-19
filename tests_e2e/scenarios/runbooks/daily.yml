@@ -72,7 +72,7 @@ concurrency: 10
 
 notifier:
   - type: env_stats
-  - type: junit
+  - type: agent.junit
 
 include:
   - path: ./include/ssh_proxy.yml

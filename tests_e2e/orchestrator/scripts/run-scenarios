@@ -45,5 +45,5 @@ lisa \
   --log_path "$lisa_logs" \
   --working_path "$lisa_logs" \
   -v subscription_id:"$SUBSCRIPTION_ID" \
-  -v identity_file:"$HOME/.ssh/id_rsa" \
-  || true # force a success exit code to allow execution to continue when a test fails
+  -v identity_file:"$HOME/.ssh/id_rsa"
+
