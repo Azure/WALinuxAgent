@@ -13,15 +13,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-from dataclasses import dataclass
+
 from typing import Type
 
-from dataclasses_json import dataclass_json
-
-from lisa.notifiers.junit import JUnit
-from lisa import schema
-from lisa.messages import (
+#
+# Disable those warnings, since 'lisa' is an external, non-standard, dependency
+#     E0401: Unable to import 'dataclasses_json' (import-error)
+#     E0401: Unable to import 'lisa.notifiers.junit' (import-error)
+#     E0401: Unable to import 'lisa' (import-error)
+#     E0401: Unable to import 'lisa.messages' (import-error)
+from dataclasses import dataclass  # pylint: disable=E0401
+from dataclasses_json import dataclass_json  # pylint: disable=E0401
+from lisa.notifiers.junit import JUnit  # pylint: disable=E0401
+from lisa import schema  # pylint: disable=E0401
+from lisa.messages import (  # pylint: disable=E0401
     MessageBase,
     TestResultMessage,
 )
