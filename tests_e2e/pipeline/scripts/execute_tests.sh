@@ -14,6 +14,10 @@ docker pull waagenttests.azurecr.io/waagenttests:latest
 sudo chown 1000 "$BUILD_SOURCESDIRECTORY"
 sudo chown 1000 "$BUILD_ARTIFACTSTAGINGDIRECTORY"
 
+# A test failure will cause automation to exit with an error code and we don't want this script to stop so we force the command
+# to succeed and capture the exit code to return it at the end of the script.
+echo "exit 0" > /tmp/exit.sh
+
 docker run --rm \
       --volume "$BUILD_SOURCESDIRECTORY:/home/waagent/WALinuxAgent" \
       --volume "$DOWNLOADSSHKEY_SECUREFILEPATH:/home/waagent/id_rsa" \
@@ -23,7 +27,8 @@ docker run --rm \
       --env AZURE_CLIENT_SECRET \
       --env AZURE_TENANT_ID \
       waagenttests.azurecr.io/waagenttests \
-      bash --login -c '$HOME/WALinuxAgent/tests_e2e/orchestrator/scripts/run-scenarios'
+      bash --login -c '$HOME/WALinuxAgent/tests_e2e/orchestrator/scripts/run-scenarios' \
+|| echo "exit $?" > /tmp/exit.sh
 
 # Retake ownership of the source and staging directory (note that the former does not need to be done recursively)
 sudo chown "$USER" "$BUILD_SOURCESDIRECTORY"
@@ -43,3 +48,6 @@ sudo find "$BUILD_ARTIFACTSTAGINGDIRECTORY" -exec chown "$USER" {} \;
 #
 mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa
 rm -r "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]
+
+cat /tmp/exit.sh
+bash /tmp/exit.sh
