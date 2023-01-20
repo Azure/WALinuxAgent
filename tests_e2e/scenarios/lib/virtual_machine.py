@@ -86,7 +86,7 @@ class VirtualMachineBaseClass(ABC):
 class VirtualMachine(VirtualMachineBaseClass):
     def get_instance_view(self) -> VirtualMachineInstanceView:
         log.info("Retrieving instance view for %s", self._identifier)
-        return execute_with_retry(self._compute_client.virtual_machines.get(
+        return execute_with_retry(lambda: self._compute_client.virtual_machines.get(
             resource_group_name=self._identifier.resource_group,
             vm_name=self._identifier.name,
             expand="instanceView"
@@ -94,7 +94,7 @@ class VirtualMachine(VirtualMachineBaseClass):
 
     def get_extensions(self) -> List[VirtualMachineExtension]:
         log.info("Retrieving extensions for %s", self._identifier)
-        return execute_with_retry(self._compute_client.virtual_machine_extensions.list(
+        return execute_with_retry(lambda: self._compute_client.virtual_machine_extensions.list(
             resource_group_name=self._identifier.resource_group,
             vm_name=self._identifier.name))
 
@@ -133,7 +133,7 @@ class VmScaleSet(VirtualMachineBaseClass):
 
     def get_extensions(self) -> List[VirtualMachineScaleSetExtension]:
         log.info("Retrieving extensions for %s", self._identifier)
-        return execute_with_retry(self._compute_client.virtual_machine_scale_set_extensions.list(
+        return execute_with_retry(lambda: self._compute_client.virtual_machine_scale_set_extensions.list(
             resource_group_name=self._identifier.resource_group,
             vm_scale_set_name=self._identifier.name))
 
