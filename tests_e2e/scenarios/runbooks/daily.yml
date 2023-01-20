@@ -8,13 +8,7 @@ extension:
   - "../testsuites"
 
 variable:
-  - name: location
-    value: "westus2"
   - name: subscription_id
-    value: ""
-  - name: marketplace_image
-    value: ""
-  - name: vhd
     value: ""
   - name: vm_size
     value: ""
@@ -31,6 +25,14 @@ variable:
     value: ""
     is_secret: true
 
+  # The image and location are set by the combinator
+  - name: marketplace_image
+    value: ""
+  - name: location
+    value: ""
+  - name: default_location
+    value: "westus2"
+
 platform:
   - type: azure
     admin_username: $(user)
@@ -46,32 +48,34 @@ platform:
         min: 2
       azure:
         marketplace: "$(marketplace_image)"
-        vhd: $(vhd)
+        vhd: ""
         location: $(location)
         vm_size: $(vm_size)
 
 combinator:
-  type: grid
+  type: batch
   items:
-    - name: marketplace_image
-      value:
-        - "Canonical UbuntuServer 18.04-LTS latest"
-        - "Debian debian-10 10 latest"
-        - "OpenLogic CentOS 7_9 latest"
-        - "SUSE sles-15-sp2-basic gen2 latest"
-        - "RedHat RHEL 7-RAW latest"
-        - "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
-        - "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
-        #
-        #  TODO: Add this distro, currently available in eastus
-        #
-        # - "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
-        #
+    - marketplace_image: "Canonical UbuntuServer 18.04-LTS latest"
+      location: $(default_location)
+    - marketplace_image: "Debian debian-10 10 latest"
+      location: $(default_location)
+    - marketplace_image: "OpenLogic CentOS 7_9 latest"
+      location: $(default_location)
+    - marketplace_image: "SUSE sles-15-sp2-basic gen2 latest"
+      location: $(default_location)
+    - marketplace_image: "RedHat RHEL 7-RAW latest"
+      location: $(default_location)
+    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
+      location: $(default_location)
+    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
+      location: $(default_location)
+    # Mariner 2 ARM64 is not available in westus2 currently; use eastus.
+    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+      location: "eastus"
 
 concurrency: 10
 
 notifier:
-  - type: env_stats
   - type: agent.junit
 
 include:

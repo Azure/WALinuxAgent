@@ -28,7 +28,7 @@ from lisa.notifiers.junit import JUnit  # pylint: disable=E0401
 from lisa import schema  # pylint: disable=E0401
 from lisa.messages import (  # pylint: disable=E0401
     MessageBase,
-    TestResultMessage,
+    TestResultMessageBase,
 )
 
 
@@ -48,8 +48,8 @@ class AgentJUnit(JUnit):
         return AgentJUnitSchema
 
     def _received_message(self, message: MessageBase) -> None:
-        if isinstance(message, TestResultMessage):
-            distro = message.information.get('distro_version')
-            if distro is not None:
-                message.name = distro
+        if isinstance(message, TestResultMessageBase):
+            image = message.information.get('image')
+            if image is not None:
+                message.name = image
         super()._received_message(message)

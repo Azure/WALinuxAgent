@@ -34,32 +34,47 @@ from azure.core.exceptions import ResourceNotFoundError
 from tests_e2e.scenarios.lib.agent_test import AgentTest
 from tests_e2e.scenarios.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.scenarios.lib.logging import log
+from tests_e2e.scenarios.lib.ssh_client import SshClient
 from tests_e2e.scenarios.lib.vm_extension import VmExtension
 
 
 class ExtensionOperationsBvt(AgentTest):
     def run(self):
+        ssh_client: SshClient = SshClient(
+            ip_address=self._context.vm_ip_address,
+            username=self._context.username,
+            private_key_file=self._context.private_key_file)
+
+        is_arm64: bool = ssh_client.get_architecture() == "aarch64"
+
         custom_script_2_0 = VmExtension(
             self._context.vm,
             VmExtensionIds.CustomScript,
             resource_name="CustomScript")
+
+        if is_arm64:
+            log.info("Will skip the update scenario, since currently there is only 1 version of CSE on ARM64")
+        else:
+            log.info("Installing %s", custom_script_2_0)
+            message = f"Hello {uuid.uuid4()}!"
+            custom_script_2_0.enable(
+                settings={
+                    'commandToExecute': f"echo \'{message}\'"
+                },
+                auto_upgrade_minor_version=False
+            )
+            custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
 
         custom_script_2_1 = VmExtension(
             self._context.vm,
             VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
             resource_name="CustomScript")
 
-        log.info("Installing %s", custom_script_2_0)
-        message = f"Hello {uuid.uuid4()}!"
-        custom_script_2_0.enable(
-            settings={
-                'commandToExecute': f"echo \'{message}\'"
-            },
-            auto_upgrade_minor_version=False
-        )
-        custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
+        if is_arm64:
+            log.info("Installing %s", custom_script_2_1)
+        else:
+            log.info("Updating %s to %s", custom_script_2_0, custom_script_2_1)
 
-        log.info("Updating %s to %s", custom_script_2_0, custom_script_2_1)
         message = f"Hello {uuid.uuid4()}!"
         custom_script_2_1.enable(
             settings={
