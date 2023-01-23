@@ -69,9 +69,12 @@ combinator:
       location: $(default_location)
     - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
       location: $(default_location)
-    # Mariner 2 ARM64 is not available in westus2 currently; use eastus.
-    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
-      location: "eastus"
+#
+# TODO: Add this image (currently there are allocation issues trying to use it)
+#
+#    # Mariner 2 ARM64 is not available in westus2 currently; use eastus.
+#    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+#      location: "eastus"
 
 concurrency: 10
 
