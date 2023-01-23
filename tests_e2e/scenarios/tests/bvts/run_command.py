@@ -45,25 +45,30 @@ class RunCommandBvt(AgentTest):
             self.get_settings = get_settings
 
     def run(self):
+        ssh_client = SshClient(
+            ip_address=self._context.vm_ip_address,
+            username=self._context.username,
+            private_key_file=self._context.private_key_file)
+
         test_cases = [
             RunCommandBvt.TestCase(
                 VmExtension(self._context.vm, VmExtensionIds.RunCommand, resource_name="RunCommand"),
                 lambda s: {
                     "script": base64.standard_b64encode(bytearray(s, 'utf-8')).decode('utf-8')
-                }),
-            RunCommandBvt.TestCase(
-                VmExtension(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
-                lambda s: {
-                    "source": {
-                        "script": s
-                    }
                 })
         ]
 
-        ssh_client = SshClient(
-            ip_address=self._context.vm_ip_address,
-            username=self._context.username,
-            private_key_file=self._context.private_key_file)
+        if ssh_client.get_architecture() == "aarch64":
+            log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.RunCommandHandler)
+        else:
+            test_cases.append(
+                RunCommandBvt.TestCase(
+                    VmExtension(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
+                    lambda s: {
+                        "source": {
+                            "script": s
+                        }
+                    }))
 
         with soft_assertions():
             for t in test_cases:
