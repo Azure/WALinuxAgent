@@ -20,7 +20,10 @@
 import os
 import unittest
 
-import mock
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 
 import azurelinuxagent.daemon.scvmm as scvmm
 from azurelinuxagent.common import conf

@@ -26,7 +26,10 @@ import threading
 import xml.dom
 from datetime import datetime, timedelta
 
-from mock import MagicMock
+try:
+    from unittest.mock import MagicMock
+except ImportError:
+    from mock import MagicMock
 
 from azurelinuxagent.common.utils import textutil, fileutil
 from azurelinuxagent.common import event, logger

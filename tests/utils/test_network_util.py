@@ -16,7 +16,10 @@
 #
 import subprocess
 
-from mock.mock import patch
+try:
+    from unittest.mock import patch
+except ImportError:
+    from mock import patch
 
 import azurelinuxagent.common.utils.networkutil as networkutil
 from tests.tools import AgentTestCase

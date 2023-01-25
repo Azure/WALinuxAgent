@@ -26,7 +26,10 @@ import azurelinuxagent.common.osutil.default as osutil
 
 _ORIGINAL_POPEN = subprocess.Popen
 
-from mock import PropertyMock
+try:
+    from unittest.mock import PropertyMock
+except ImportError:
+    from mock import PropertyMock
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation

@@ -17,7 +17,10 @@
 
 import contextlib
 
-from mock import PropertyMock
+try:
+    from unittest.mock import PropertyMock
+except ImportError:
+    from mock import PropertyMock
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from azurelinuxagent.ga.update import UpdateHandler, get_update_handler

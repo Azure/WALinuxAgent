@@ -20,7 +20,10 @@ from __future__ import print_function
 import os
 import textwrap
 
-import mock
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr

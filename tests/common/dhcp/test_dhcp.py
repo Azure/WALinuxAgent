@@ -15,7 +15,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import mock
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 import azurelinuxagent.common.dhcp as dhcp
 import azurelinuxagent.common.osutil.default as osutil
 from tests.tools import AgentTestCase, open_patch, patch

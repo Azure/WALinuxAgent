@@ -24,7 +24,10 @@ import time
 import uuid
 from datetime import datetime, timedelta
 
-from mock import MagicMock, Mock, patch, PropertyMock
+try:
+    from unittest.mock import MagicMock, Mock, patch, PropertyMock
+except ImportError:
+    from mock import MagicMock, Mock, patch, PropertyMock
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.datacontract import get_properties

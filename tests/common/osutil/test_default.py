@@ -22,7 +22,10 @@ import subprocess
 import tempfile
 import unittest
 
-import mock
+try:
+    from unittest import mock
+except ImportError:
+    import mock
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.osutil.default as osutil
