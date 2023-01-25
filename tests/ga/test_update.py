@@ -1268,8 +1268,9 @@ class TestUpdate(UpdateTestCase):
                         protocol.mock_wire_data.set_incarnation(protocol.incarnation)
                         self._add_write_permission_to_goal_state_files()
                         with _get_update_handler(iterations=1, protocol=protocol, autoupdate_enabled=autoupdate_enabled) as (update_handler, _):
-                            GAUpdateReportState.report_error_msg = ""
-                            update_handler.run(debug=True)
+                            with patch("azurelinuxagent.common.conf.get_enable_agent_update_in_dcr", return_value=True):
+                                GAUpdateReportState.report_error_msg = ""
+                                update_handler.run(debug=True)
                         self.assertEqual(0, update_handler.get_exit_code(),
                                          "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
                                              patch_warn.call_args_list))
@@ -1432,7 +1433,8 @@ class TestAgentUpgrade(UpdateTestCase):
         with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
             with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                    yield
+                    with patch("azurelinuxagent.common.conf.get_enable_agent_update_in_dcr", return_value=True):
+                        yield
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None,

@@ -182,8 +182,8 @@ class AgentUpdateHandler(object):
 
     def run(self, goal_state):
         try:
-            # Ignore new agents if update is disabled
-            if not self._autoupdate_enabled:
+            # Ignore new agents if update is disabled. The DCR flag will be removed after testing
+            if not self._autoupdate_enabled or not conf.get_enable_agent_update_in_dcr():
                 return
 
             self._gs_id = goal_state.extensions_goal_state.id
