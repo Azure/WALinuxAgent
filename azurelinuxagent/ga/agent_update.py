@@ -183,7 +183,7 @@ class AgentUpdateHandler(object):
     def run(self, goal_state):
         try:
             # Ignore new agents if update is disabled. The latter flag only used in e2e tests.
-            if not self._autoupdate_enabled or not conf.get_enable_ga_updates():
+            if not self._autoupdate_enabled or not conf.get_ga_updates_enabled():
                 return
 
             self._gs_id = goal_state.extensions_goal_state.id
