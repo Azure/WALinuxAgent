@@ -46,6 +46,7 @@ Debug.EnableGAVersioning = False
 Debug.EtpCollectionPeriod = 300
 Debug.FirewallRulesLogPeriod = 86400
 DetectScvmmEnv = False
+EnableGAUpdates = True
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure
 Extensions.Enabled = True
