@@ -37,9 +37,11 @@ variable:
     is_secret: true
 
   #
-  # The image and location are set by the combinator
+  # The image, vm_size, and location are set by the combinator
   #
   - name: marketplace_image
+    value: ""
+  - name: vm_size
     value: ""
   - name: location
     value: ""
@@ -47,19 +49,19 @@ variable:
     value: "westus2"
 
   #
-  # These variables define parameters for the AgentTestSuite
+  # These variables define parameters for the AgentTestSuite; see the test wiki for details
   #
-  # The test suites to execute; see the test wiki for details
+  # The test suites to execute
   - name: test_suites
     value: "agent_bvt"
     is_case_visible: true
 
-  # Whether to collect logs from the test VM; see the test wiki for details
+  # Whether to collect logs from the test VM
   - name: collect_logs
     value: "failed"
     is_case_visible: true
 
-  # Whether to skip setup of the test VM; see the test wiki for details
+  # Whether to skip setup of the test VM
   - name: skip_setup
     value: false
     is_case_visible: true
@@ -89,24 +91,28 @@ combinator:
   items:
     - marketplace_image: "Canonical UbuntuServer 18.04-LTS latest"
       location: $(default_location)
+      vm_size: ""
     - marketplace_image: "Debian debian-10 10 latest"
       location: $(default_location)
+      vm_size: ""
     - marketplace_image: "OpenLogic CentOS 7_9 latest"
       location: $(default_location)
+      vm_size: ""
     - marketplace_image: "SUSE sles-15-sp2-basic gen2 latest"
       location: $(default_location)
+      vm_size: ""
     - marketplace_image: "RedHat RHEL 7-RAW latest"
       location: $(default_location)
+      vm_size: ""
     - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
       location: $(default_location)
+      vm_size: ""
     - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
       location: $(default_location)
-#
-# TODO: Add this image (currently there are allocation issues trying to use it)
-#
-#    # Mariner 2 ARM64 is not available in westus2 currently; use eastus.
-#    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
-#      location: "eastus"
+      vm_size: ""
+    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+      location: "eastus"
+      vm_size: "Standard_D2pls_v5"
 
 concurrency: 10
 
