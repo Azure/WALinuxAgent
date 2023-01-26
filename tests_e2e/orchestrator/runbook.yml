@@ -25,7 +25,9 @@ variable:
     value: ""
     is_secret: true
 
+  #
   # Set these to use an SSH proxy
+  #
   - name: proxy
     value: False
   - name: proxy_host
@@ -40,8 +42,6 @@ variable:
   # The image, vm_size, and location are set by the combinator
   #
   - name: marketplace_image
-    value: ""
-  - name: vm_size
     value: ""
   - name: location
     value: ""
