@@ -10,8 +10,6 @@ extension:
 variable:
   - name: subscription_id
     value: ""
-  - name: vm_size
-    value: ""
   - name: keep_environment
     value: "no"
   - name: wait_delete
@@ -42,6 +40,8 @@ variable:
   # The image, vm_size, and location are set by the combinator
   #
   - name: marketplace_image
+    value: ""
+  - name: vm_size
     value: ""
   - name: location
     value: ""
