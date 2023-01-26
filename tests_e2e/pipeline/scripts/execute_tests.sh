@@ -27,7 +27,8 @@ docker run --rm \
       --env AZURE_CLIENT_SECRET \
       --env AZURE_TENANT_ID \
       waagenttests.azurecr.io/waagenttests \
-      bash --login -c '$HOME/WALinuxAgent/tests_e2e/orchestrator/scripts/run-scenarios' \
+      bash --login -c \
+        "\$HOME/WALinuxAgent/tests_e2e/orchestrator/scripts/run-scenarios -t $TEST_SUITES -l $COLLECT_LOGS -k $SKIP_SETUP" \
 || echo "exit $?" > /tmp/exit.sh
 
 # Retake ownership of the source and staging directory (note that the former does not need to be done recursively)

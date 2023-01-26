@@ -1,11 +1,11 @@
-name: Daily
+name: WALinuxAgent
 
 testcase:
   - criteria:
-      area: bvt
+      area: waagent
 
 extension:
-  - "../testsuites"
+  - "./lib"
 
 variable:
   - name: subscription_id
@@ -25,13 +25,45 @@ variable:
     value: ""
     is_secret: true
 
+  # Set these to use an SSH proxy
+  - name: proxy
+    value: False
+  - name: proxy_host
+    value: ""
+  - name: proxy_user
+    value: "foo"
+  - name: proxy_identity_file
+    value: ""
+    is_secret: true
+
+  #
   # The image and location are set by the combinator
+  #
   - name: marketplace_image
     value: ""
   - name: location
     value: ""
   - name: default_location
     value: "westus2"
+
+  #
+  # These variables define parameters for the AgentTestSuite
+  #
+  # The test suites to execute; see the test wiki for details
+  - name: test_suites
+    value: "agent_bvt"
+    is_case_visible: true
+
+  # Whether to collect logs from the test VM; see the test wiki for details
+  - name: collect_logs
+    value: "failed"
+    is_case_visible: true
+
+  # Whether to skip setup of the test VM; see the test wiki for details
+  - name: skip_setup
+    value: false
+    is_case_visible: true
+
 
 platform:
   - type: azure
@@ -81,6 +113,12 @@ concurrency: 10
 notifier:
   - type: agent.junit
 
-include:
-  - path: ./include/ssh_proxy.yml
+dev:
+  enabled: $(proxy)
+  mock_tcp_ping: $(proxy)
+  jump_boxes:
+    - private_key_file: $(proxy_identity_file)
+      address: $(proxy_host)
+      username: $(proxy_user)
+      password: "dummy"
 
