@@ -22,10 +22,10 @@ name: ExistingVM
 
 testcase:
   - criteria:
-      area: bvt
+      area: waagent
 
 extension:
-  - "../../testsuites"
+  - "../lib"
 
 variable:
   - name: subscription_id
@@ -44,6 +44,30 @@ variable:
     value: ""
     is_secret: true
 
+  # Set these to use an SSH proxy
+  - name: proxy
+    value: False
+  - name: proxy_host
+    value: ""
+  - name: proxy_user
+    value: "foo"
+  - name: proxy_identity_file
+    value: ""
+    is_secret: true
+
+  # These variables define parameters for the AgentTestSuite
+  - name: test_suites
+    value: "agent_bvt"
+    is_case_visible: true
+
+  - name: collect_logs
+    value: "failed"
+    is_case_visible: true
+
+  - name: skip_setup
+    value: true
+    is_case_visible: true
+
 platform:
   - type: azure
     admin_username: $(user)
@@ -61,5 +85,11 @@ notifier:
   - type: env_stats
   - type: agent.junit
 
-include:
-  - path: ../include/ssh_proxy.yml
+dev:
+  enabled: $(proxy)
+  mock_tcp_ping: $(proxy)
+  jump_boxes:
+    - private_key_file: $(proxy_identity_file)
+      address: $(proxy_host)
+      username: $(proxy_user)
+      password: "dummy"

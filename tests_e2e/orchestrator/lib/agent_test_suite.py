@@ -14,13 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import contextlib
 import logging
 import re
 
 from assertpy import fail
+from enum import Enum
 from pathlib import Path
 from threading import current_thread, RLock
-from typing import List, Type
+from typing import Any, Dict, List
 
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)
@@ -31,17 +33,19 @@ from lisa import (  # pylint: disable=E0401
     Logger,
     Node,
     TestSuite,
-    TestSuiteMetadata
+    TestSuiteMetadata,
+    TestCaseMetadata,
 )
 from lisa.sut_orchestrator import AZURE  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema  # pylint: disable=E0401
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
-from tests_e2e.scenarios.lib.agent_test import AgentTest
+from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, TestSuiteDescription
 from tests_e2e.scenarios.lib.agent_test_context import AgentTestContext
 from tests_e2e.scenarios.lib.identifiers import VmIdentifier
 from tests_e2e.scenarios.lib.logging import log as agent_test_logger  # Logger used by the tests
+from tests_e2e.scenarios.lib.logging import set_current_thread_log
 
 
 def _initialize_lisa_logger():
@@ -68,6 +72,29 @@ def _initialize_lisa_logger():
 _initialize_lisa_logger()
 
 
+#
+# Helper to change the current thread name temporarily
+#
+@contextlib.contextmanager
+def _set_thread_name(name: str):
+    initial_name = current_thread().name
+    current_thread().name = name
+    try:
+        yield
+    finally:
+        current_thread().name = initial_name
+
+
+#
+# Possible values for the collect_logs parameter
+#
+class CollectLogs(Enum):
+    Always = 'always'   # Always collect logs
+    Failed = 'failed'   # Collect logs only on test failures
+    No = 'no'           # Never collect logs
+
+
+@TestSuiteMetadata(area="waagent", category="", description="")
 class AgentTestSuite(TestSuite):
     """
     Base class for Agent test suites. It provides facilities for setup, execution of tests and reporting results. Derived
@@ -81,14 +108,17 @@ class AgentTestSuite(TestSuite):
             self.log: Logger = None
             self.node: Node = None
             self.runbook_name: str = None
-            self.suite_name: str = None
+            self.image_name: str = None
+            self.test_suites: List[str] = None
+            self.collect_logs: str = None
+            self.skip_setup: bool = None
 
     def __init__(self, metadata: TestSuiteMetadata) -> None:
         super().__init__(metadata)
         # The context is initialized by _set_context() via the call to execute()
         self.__context: AgentTestSuite._Context = None
 
-    def _set_context(self, node: Node, log: Logger):
+    def _set_context(self, node: Node, variables: Dict[str, Any], log: Logger):
         connection_info = node.connection_info
         node_context = get_node_context(node)
         runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
@@ -113,7 +143,23 @@ class AgentTestSuite(TestSuite):
 
         self.__context.log = log
         self.__context.node = node
-        self.__context.suite_name = f"{self._metadata.full_name}_{runbook.marketplace.offer}-{runbook.marketplace.sku}"
+        self.__context.image_name = f"{runbook.marketplace.offer}-{runbook.marketplace.sku}"
+        self.__context.test_suites = AgentTestSuite._get_required_parameter(variables, "test_suites")
+        self.__context.collect_logs = AgentTestSuite._get_required_parameter(variables, "collect_logs")
+        self.__context.skip_setup = AgentTestSuite._get_required_parameter(variables, "skip_setup")
+
+        self._log.info(
+            "Test suite parameters: [skip_setup: %s] [collect_logs: %s] [test_suites: %s]",
+            self.context.skip_setup,
+            self.context.collect_logs,
+            self.context.test_suites)
+
+    @staticmethod
+    def _get_required_parameter(variables: Dict[str, Any], name: str) -> Any:
+        value = variables.get(name)
+        if value is None:
+            raise Exception(f"The runbook is missing required parameter '{name}'")
+        return value
 
     @property
     def context(self):
@@ -234,94 +280,103 @@ class AgentTestSuite(TestSuite):
 
             # Copy the tarball to the local logs directory
             remote_path = "/tmp/waagent-logs.tgz"
-            local_path = Path.home()/'logs'/'{0}.tgz'.format(self.context.suite_name)
+            local_path = Path.home()/'logs'/'{0}.tgz'.format(self.context.image_name)
             self._log.info("Copying %s:%s to %s", self.context.node.name, remote_path, local_path)
             self.context.node.shell.copy_back(remote_path, local_path)
         except:  # pylint: disable=bare-except
             self._log.exception("Failed to collect logs from the test machine")
 
-    def execute(self, node: Node, log: Logger, test_suite: List[Type[AgentTest]]) -> None:
+    @TestCaseMetadata(description="", priority=0)
+    def execute(self, node: Node, variables: Dict[str, Any], log: Logger) -> None:
         """
         Executes each of the AgentTests in the given List. Note that 'test_suite' is a list of test classes, rather than
         instances of the test class (this method will instantiate each of these test classes).
         """
-        self._set_context(node, log)
+        self._set_context(node, variables, log)
 
         failed: List[str] = []  # List of failed tests (names only)
 
-        # The thread name is added to self._log, set it to the current test suite while we execute it
-        thread_name = current_thread().name
-        current_thread().name = self.context.suite_name
-
-        # We create a separate log file for the test suite.
-        suite_log_file: Path = Path.home()/'logs'/f"{self.context.suite_name}.log"
-        agent_test_logger.set_current_thread_log(suite_log_file)
-
-        try:
-            self._setup()
-
+        with _set_thread_name(self.context.image_name):  # The thread name is added to self._log
             try:
-                self._setup_node()
+                if not self.context.skip_setup:
+                    self._setup()
 
-                agent_test_logger.info("")
-                agent_test_logger.info("**************************************** %s ****************************************", self.context.suite_name)
-                agent_test_logger.info("")
+                try:
+                    if not self.context.skip_setup:
+                        self._setup_node()
 
-                results: List[str] = []
+                    test_suites: List[TestSuiteDescription] = AgentTestLoader(self.context.test_source_directory).load(self.context.test_suites)
 
-                for test in test_suite:
-                    result: str = "[UNKNOWN]"
-                    test_full_name = f"{self.context.suite_name} {test.__name__}"
-                    agent_test_logger.info("******** Executing %s", test_full_name)
-                    self._log.info("******** Executing %s", test_full_name)
-                    agent_test_logger.info("")
+                    for suite in test_suites:
+                        failed.extend(self._execute_test_suite(suite))
 
-                    try:
-                        test(self.context).run()
-                        result = f"[Passed] {test_full_name}"
-                    except AssertionError as e:
-                        failed.append(test.__name__)
-                        result = f"[Failed] {test_full_name}"
-                        agent_test_logger.error("%s", e)
-                        self._log.error("%s", e)
-                    except:  # pylint: disable=bare-except
-                        failed.append(test.__name__)
-                        result = f"[Error] {test_full_name}"
-                        agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
-                        self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
+                finally:
+                    collect = self.context.collect_logs
+                    if collect == CollectLogs.Always or collect == CollectLogs.Failed and len(failed) > 0:
+                        self._collect_node_logs()
 
-                    agent_test_logger.info("******** %s", result)
-                    agent_test_logger.info("")
-                    self._log.info("******** %s", result)
-                    results.append(result)
-
-                agent_test_logger.info("")
-                agent_test_logger.info("********* [Test Results]")
-                agent_test_logger.info("")
-                for r in results:
-                    agent_test_logger.info("\t%s", r)
-                agent_test_logger.info("")
+            except:   # pylint: disable=bare-except
+                # Note that we report the error to the LISA log and then re-raise it. We log it here
+                # so that the message is decorated with the thread name in the LISA log; we re-raise
+                # to let LISA know the test errored out (LISA will report that error one more time
+                # in its log)
+                self._log.exception("UNHANDLED EXCEPTION")
+                raise
 
             finally:
-                self._collect_node_logs()
-
-        except:   # pylint: disable=bare-except
-            agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", self.context.suite_name)
-            # Note that we report the error to the LISA log and then re-raise it. We log it here
-            # so that the message is decorated with the thread name in the LISA log; we re-raise
-            # to let LISA know the test errored out (LISA will report that error one more time
-            # in its log)
-            self._log.exception("UNHANDLED EXCEPTION IN %s", self.context.suite_name)
-            raise
-
-        finally:
-            self._clean_up()
-            agent_test_logger.close_current_thread_log()
-            current_thread().name = thread_name
+                self._clean_up()
 
         # Fail the entire test suite if any test failed; this exception is handled by LISA
         if len(failed) > 0:
-            fail(f"{[self.context.suite_name]} One or more tests failed: {failed}")
+            fail(f"{[self.context.image_name]} One or more tests failed: {failed}")
+
+    def _execute_test_suite(self, suite: TestSuiteDescription) -> List[str]:
+        suite_name = suite.name
+        suite_full_name = f"{suite_name}-{self.context.image_name}"
+
+        with _set_thread_name(suite_full_name):  # The thread name is added to self._log
+            with set_current_thread_log(Path.home()/'logs'/f"{suite_full_name}.log"):
+                agent_test_logger.info("")
+                agent_test_logger.info("**************************************** %s ****************************************", suite_name)
+                agent_test_logger.info("")
+
+                failed: List[str] = []
+                summary: List[str] = []
+
+                for test in suite.tests:
+                    test_name = test.__name__
+                    test_full_name = f"{suite_name}-{test_name}"
+
+                    agent_test_logger.info("******** Executing %s", test_name)
+                    self._log.info("******** Executing %s", test_full_name)
+
+                    try:
+
+                        test(self.context).run()
+
+                        summary.append(f"[Passed] {test_name}")
+                        agent_test_logger.info("******** [Passed] %s", test_name)
+                        self._log.info("******** [Passed] %s", test_full_name)
+                    except AssertionError as e:
+                        summary.append(f"[Failed] {test_name}")
+                        failed.append(test_full_name)
+                        agent_test_logger.error("******** [Failed] %s: %s", test_name, e)
+                        self._log.error("******** [Failed] %s", test_full_name)
+                    except:  # pylint: disable=bare-except
+                        summary.append(f"[Error] {test_name}")
+                        failed.append(test_full_name)
+                        agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_name)
+                        self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
+
+                    agent_test_logger.info("")
+
+                agent_test_logger.info("********* [Test Results]")
+                agent_test_logger.info("")
+                for r in summary:
+                    agent_test_logger.info("\t%s", r)
+                agent_test_logger.info("")
+
+        return failed
 
     def execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
         """

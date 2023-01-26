@@ -1,0 +1,4 @@
+{
+  "name": "FailingTests",
+  "tests": ["fail_test.py", "error_test.py"]
+}

@@ -22,18 +22,52 @@
 # to manage the test VMs taking the initial key value from the file shared by the container host, then it
 # executes the daily test runbook.
 #
-# TODO: The runbook should be parameterized.
-#
 set -euxo pipefail
 
-cd "$HOME"
+usage() (
+    echo "Usage: run-scenarios  [-t|--test-suites <test suites>] [-l|--collect-logs <always|failed|no>] [-k|--skip-setup <True|False>]"
+    exit 1
+)
+
+test_suite_parameters=""
+
+while [[ $# -gt 0 ]]
+do
+    case $1 in
+        -t|--test-suites)
+            shift
+            if [ "$#" -lt 1 ]; then
+                usage
+            fi
+            test_suite_parameters="$test_suite_parameters -v test_suites:$1"
+            ;;
+        -l|--collect-logs)
+            shift
+            if [ "$#" -lt 1 ]; then
+                usage
+            fi
+            test_suite_parameters="$test_suite_parameters -v collect_logs:$1"
+            ;;
+        -k|--skip-setup)
+            shift
+            if [ "$#" -lt 1 ]; then
+                usage
+            fi
+            test_suite_parameters="$test_suite_parameters -v skip_setup:$1"
+            ;;
+        *)
+          usage
+    esac
+    shift
+done
 
 # The private ssh key is shared from the container host as $HOME/id_rsa; copy it to
-# HOME/.ssh, set the correct mode and generate the public key.
-mkdir "$HOME/.ssh"
-cp "$HOME/id_rsa" "$HOME/.ssh"
-chmod 700 "$HOME/.ssh/id_rsa"
-ssh-keygen -y -f "$HOME/.ssh/id_rsa" > "$HOME/.ssh/id_rsa.pub"
+# $HOME/.ssh, set the correct mode and generate the public key.
+cd "$HOME"
+mkdir .ssh
+cp id_rsa .ssh
+chmod 700 .ssh/id_rsa
+ssh-keygen -y -f .ssh/id_rsa > .ssh/id_rsa.pub
 
 #
 # Now start the runbook
@@ -41,9 +75,9 @@ ssh-keygen -y -f "$HOME/.ssh/id_rsa" > "$HOME/.ssh/id_rsa.pub"
 lisa_logs="$HOME/logs/lisa"
 
 lisa \
-  --runbook "$HOME/WALinuxAgent/tests_e2e/scenarios/runbooks/daily.yml" \
+  --runbook "$HOME/WALinuxAgent/tests_e2e/orchestrator/runbook.yml" \
   --log_path "$lisa_logs" \
   --working_path "$lisa_logs" \
   -v subscription_id:"$SUBSCRIPTION_ID" \
-  -v identity_file:"$HOME/.ssh/id_rsa"
-
+  -v identity_file:"$HOME/.ssh/id_rsa" \
+  $test_suite_parameters

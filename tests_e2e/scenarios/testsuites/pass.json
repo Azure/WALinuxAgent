@@ -1,0 +1,4 @@
+{
+  "name": "PassingTest",
+  "tests": ["pass_test.py"]
+}

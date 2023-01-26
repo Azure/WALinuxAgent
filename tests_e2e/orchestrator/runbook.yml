@@ -1,14 +1,16 @@
-name: Daily
+name: WALinuxAgent
 
 testcase:
   - criteria:
-      area: bvt
+      area: waagent
 
 extension:
-  - "../testsuites"
+  - "./lib"
 
 variable:
   - name: subscription_id
+    value: ""
+  - name: vm_size
     value: ""
   - name: keep_environment
     value: "no"
@@ -23,15 +25,45 @@ variable:
     value: ""
     is_secret: true
 
-  # The image, vm_size, and location are set by the combinator
-  - name: marketplace_image
+  # Set these to use an SSH proxy
+  - name: proxy
+    value: False
+  - name: proxy_host
     value: ""
-  - name: vm_size
+  - name: proxy_user
+    value: "foo"
+  - name: proxy_identity_file
+    value: ""
+    is_secret: true
+
+  #
+  # The image and location are set by the combinator
+  #
+  - name: marketplace_image
     value: ""
   - name: location
     value: ""
   - name: default_location
     value: "westus2"
+
+  #
+  # These variables define parameters for the AgentTestSuite
+  #
+  # The test suites to execute; see the test wiki for details
+  - name: test_suites
+    value: "agent_bvt"
+    is_case_visible: true
+
+  # Whether to collect logs from the test VM; see the test wiki for details
+  - name: collect_logs
+    value: "failed"
+    is_case_visible: true
+
+  # Whether to skip setup of the test VM; see the test wiki for details
+  - name: skip_setup
+    value: false
+    is_case_visible: true
+
 
 platform:
   - type: azure
@@ -57,34 +89,36 @@ combinator:
   items:
     - marketplace_image: "Canonical UbuntuServer 18.04-LTS latest"
       location: $(default_location)
-      vm_size: ""
     - marketplace_image: "Debian debian-10 10 latest"
       location: $(default_location)
-      vm_size: ""
     - marketplace_image: "OpenLogic CentOS 7_9 latest"
       location: $(default_location)
-      vm_size: ""
     - marketplace_image: "SUSE sles-15-sp2-basic gen2 latest"
       location: $(default_location)
-      vm_size: ""
     - marketplace_image: "RedHat RHEL 7-RAW latest"
       location: $(default_location)
-      vm_size: ""
     - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
       location: $(default_location)
-      vm_size: ""
     - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
       location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
-      location: "eastus"
-      vm_size: "Standard_D2pls_v5"
+#
+# TODO: Add this image (currently there are allocation issues trying to use it)
+#
+#    # Mariner 2 ARM64 is not available in westus2 currently; use eastus.
+#    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+#      location: "eastus"
 
 concurrency: 10
 
 notifier:
   - type: agent.junit
 
-include:
-  - path: ./include/ssh_proxy.yml
+dev:
+  enabled: $(proxy)
+  mock_tcp_ping: $(proxy)
+  jump_boxes:
+    - private_key_file: $(proxy_identity_file)
+      address: $(proxy_host)
+      username: $(proxy_user)
+      password: "dummy"
 
