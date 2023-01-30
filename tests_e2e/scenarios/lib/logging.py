@@ -19,7 +19,7 @@
 # This module defines a single object, 'log', of type AgentLogger, which the end-to-end tests and libraries use
 # for logging.
 #
-
+import contextlib
 from logging import FileHandler, Formatter, Handler, Logger, StreamHandler, INFO
 from pathlib import  Path
 from threading import current_thread
@@ -121,3 +121,14 @@ class AgentLogger(Logger):
 
 log: AgentLogger = AgentLogger()
 
+
+@contextlib.contextmanager
+def set_current_thread_log(log_file: Path):
+    """
+    Context Manager to set the log file for the current thread temporarily
+    """
+    log.set_current_thread_log(log_file)
+    try:
+        yield
+    finally:
+        log.close_current_thread_log()
