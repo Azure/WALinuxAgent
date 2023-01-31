@@ -18,7 +18,7 @@ import time
 
 from typing import Callable, Any
 
-from tests_e2e.scenarios.lib.logging import log
+from tests_e2e.tests.lib.logging import log
 
 
 def execute_with_retry(operation: Callable[[], Any]) -> Any:

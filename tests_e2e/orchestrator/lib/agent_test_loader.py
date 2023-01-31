@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Type
 
-from tests_e2e.scenarios.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentTest
 
 
 class TestSuiteDescription(object):
@@ -39,7 +39,7 @@ class AgentTestLoader(object):
         """
         The test_source_directory parameter must be the root directory of the end-to-end tests (".../WALinuxAgent/tests_e2e")
         """
-        self._root: Path = test_source_directory/"scenarios"
+        self._root: Path = test_source_directory
 
     def load(self, test_suites: str) -> List[TestSuiteDescription]:
         """
@@ -47,10 +47,10 @@ class AgentTestLoader(object):
         of a single test_suite.
 
         When given as a comma-separated list, each item must correspond to the name of the JSON files describing s suite (those
-         files are located under the .../WALinuxAgent/tests_e2e/scenarios/testsuites directory). For example,
-         if test_suites == "agent_bvt, fast-track" then this method will load files agent_bvt.json and fast-track.json.
+        files are located under the .../WALinuxAgent/tests_e2e/test_suites directory). For example, if test_suites == "agent_bvt, fast-track"
+        then this method will load files agent_bvt.json and fast-track.json.
 
-         When given as a JSON string, the value must correspond to the description a single test suite, for example
+        When given as a JSON string, the value must correspond to the description a single test suite, for example
 
             {
               "name": "AgentBvt",
@@ -69,7 +69,7 @@ class AgentTestLoader(object):
             pass
 
         # Else, it should be a comma-separated list of description files
-        description_files: List[Path] = [self._root/"testsuites"/f"{t.strip()}.json" for t in test_suites.split(',')]
+        description_files: List[Path] = [self._root/"test_suites"/f"{t.strip()}.json" for t in test_suites.split(',')]
         return [self._load_test_suite(AgentTestLoader._load_file(s)) for s in description_files]
 
     def _load_test_suite(self, test_suite: Dict[str, Any]) -> TestSuiteDescription:
@@ -89,7 +89,7 @@ class AgentTestLoader(object):
         """
         Takes a 'source_file', which must be a Python module, and returns a list of all the classes derived from AgentTest.
         """
-        spec = importlib.util.spec_from_file_location(f"tests_e2e.scenarios.{source_file.name}", str(source_file))
+        spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.{source_file.name}", str(source_file))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         # return all the classes in the module that are subclasses of AgentTest but are not AgentTest itself.

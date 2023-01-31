@@ -17,17 +17,17 @@
 # limitations under the License.
 #
 
-from assertpy import fail
-from tests_e2e.scenarios.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.logging import log
 
 
-class FailTest(AgentTest):
+class PassTest(AgentTest):
     """
-    A trivial test that fails
+    A trivial test that passes.
     """
     def run(self):
-        fail("* FAILED *")
+        log.info("* PASSED *")
 
 
 if __name__ == "__main__":
-    FailTest.run_from_command_line()
+    PassTest.run_from_command_line()
