@@ -50,8 +50,7 @@ steps:
           --url-parameters api-version=2021-04-01 \$expand=createdTime \
           --output json \
           --query value \
-        | jq --arg date "$date" '.[] \
-        | select (.createdTime < $date).name' \
+        | jq --arg date "$date" '.[] | select (.createdTime < $date).name' \
         | grep "$(rgPrefix)" \
         | xargs -l -t -r az group delete --no-wait -y -n \
         || echo "No resource groups found to delete"
