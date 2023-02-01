@@ -14,10 +14,14 @@ parameters:
     - failed
     - no
 
-  - name: skip_setup
-    displayName: Skip setup of the test VMs
-    type: boolean
-    default: false
+  - name: keep_environment
+    displayName: Keep the test VMs (do not delete them)
+    type: string
+    default: no
+    values:
+    - always
+    - failed
+    - no
 
 variables:
   - name: azureConnection
@@ -26,8 +30,8 @@ variables:
     value: ${{ parameters.test_suites }}
   - name: collect_logs
     value: ${{ parameters.collect_logs }}
-  - name: skip_setup
-    value: ${{ parameters.skip_setup }}
+  - name: keep_environment
+    value: ${{ parameters.keep_environment }}
 
 trigger:
   - develop
