@@ -18,7 +18,7 @@
 #
 from pathlib import Path
 
-from tests_e2e.scenarios.lib import shell
+from tests_e2e.tests.lib import shell
 
 
 class SshClient(object):

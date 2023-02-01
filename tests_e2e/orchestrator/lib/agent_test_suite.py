@@ -15,10 +15,12 @@
 # limitations under the License.
 #
 import contextlib
+import datetime
 import logging
 import re
+import traceback
+import uuid
 
-from assertpy import fail
 from enum import Enum
 from pathlib import Path
 from threading import current_thread, RLock
@@ -26,26 +28,27 @@ from typing import Any, Dict, List
 
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)
-#     E0401: Unable to import 'lisa.sut_orchestrator' (import-error)
-#     E0401: Unable to import 'lisa.sut_orchestrator.azure.common' (import-error)
+#     etc
 from lisa import (  # pylint: disable=E0401
     CustomScriptBuilder,
     Logger,
     Node,
+    notifier,
+    TestCaseMetadata,
     TestSuite,
     TestSuiteMetadata,
-    TestCaseMetadata,
 )
+from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.sut_orchestrator import AZURE  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema  # pylint: disable=E0401
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, TestSuiteDescription
-from tests_e2e.scenarios.lib.agent_test_context import AgentTestContext
-from tests_e2e.scenarios.lib.identifiers import VmIdentifier
-from tests_e2e.scenarios.lib.logging import log as agent_test_logger  # Logger used by the tests
-from tests_e2e.scenarios.lib.logging import set_current_thread_log
+from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.identifiers import VmIdentifier
+from tests_e2e.tests.lib.logging import log as agent_test_logger  # Logger used by the tests
+from tests_e2e.tests.lib.logging import set_current_thread_log
 
 
 def _initialize_lisa_logger():
@@ -97,8 +100,8 @@ class CollectLogs(Enum):
 @TestSuiteMetadata(area="waagent", category="", description="")
 class AgentTestSuite(TestSuite):
     """
-    Base class for Agent test suites. It provides facilities for setup, execution of tests and reporting results. Derived
-    classes use the execute() method to run the tests in their corresponding suites.
+    Manages the setup of test VMs and execution of Agent test suites. This class acts as the interface with the LISA framework, which
+    will invoke the execute() method when a runbook is executed.
     """
 
     class _Context(AgentTestContext):
@@ -294,7 +297,7 @@ class AgentTestSuite(TestSuite):
         """
         self._set_context(node, variables, log)
 
-        failed: List[str] = []  # List of failed tests (names only)
+        test_suite_success = True
 
         with _set_thread_name(self.context.image_name):  # The thread name is added to self._log
             try:
@@ -308,11 +311,11 @@ class AgentTestSuite(TestSuite):
                     test_suites: List[TestSuiteDescription] = AgentTestLoader(self.context.test_source_directory).load(self.context.test_suites)
 
                     for suite in test_suites:
-                        failed.extend(self._execute_test_suite(suite))
+                        test_suite_success = self._execute_test_suite(suite) and test_suite_success
 
                 finally:
                     collect = self.context.collect_logs
-                    if collect == CollectLogs.Always or collect == CollectLogs.Failed and len(failed) > 0:
+                    if collect == CollectLogs.Always or collect == CollectLogs.Failed and not test_suite_success:
                         self._collect_node_logs()
 
             except:   # pylint: disable=bare-except
@@ -326,57 +329,84 @@ class AgentTestSuite(TestSuite):
             finally:
                 self._clean_up()
 
-        # Fail the entire test suite if any test failed; this exception is handled by LISA
-        if len(failed) > 0:
-            fail(f"{[self.context.image_name]} One or more tests failed: {failed}")
-
-    def _execute_test_suite(self, suite: TestSuiteDescription) -> List[str]:
+    def _execute_test_suite(self, suite: TestSuiteDescription) -> bool:
+        """
+        Executes the given test suite and returns True if all the tests in the suite succeeded.
+        """
         suite_name = suite.name
         suite_full_name = f"{suite_name}-{self.context.image_name}"
 
         with _set_thread_name(suite_full_name):  # The thread name is added to self._log
             with set_current_thread_log(Path.home()/'logs'/f"{suite_full_name}.log"):
-                agent_test_logger.info("")
-                agent_test_logger.info("**************************************** %s ****************************************", suite_name)
-                agent_test_logger.info("")
+                start_time: datetime.datetime = datetime.datetime.now()
 
-                failed: List[str] = []
-                summary: List[str] = []
+                message: TestResultMessage = TestResultMessage()
+                message.type = "AgentTestResultMessage"
+                message.id_ = str(uuid.uuid4())
+                message.status = TestStatus.RUNNING
+                message.suite_full_name = suite_name
+                message.suite_name = message.suite_full_name
+                message.full_name = f"{suite_name}-{self.context.image_name}"
+                message.name = message.full_name
+                message.elapsed = 0
+                notifier.notify(message)
 
-                for test in suite.tests:
-                    test_name = test.__name__
-                    test_full_name = f"{suite_name}-{test_name}"
-
-                    agent_test_logger.info("******** Executing %s", test_name)
-                    self._log.info("******** Executing %s", test_full_name)
-
-                    try:
-
-                        test(self.context).run()
-
-                        summary.append(f"[Passed] {test_name}")
-                        agent_test_logger.info("******** [Passed] %s", test_name)
-                        self._log.info("******** [Passed] %s", test_full_name)
-                    except AssertionError as e:
-                        summary.append(f"[Failed] {test_name}")
-                        failed.append(test_full_name)
-                        agent_test_logger.error("******** [Failed] %s: %s", test_name, e)
-                        self._log.error("******** [Failed] %s", test_full_name)
-                    except:  # pylint: disable=bare-except
-                        summary.append(f"[Error] {test_name}")
-                        failed.append(test_full_name)
-                        agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_name)
-                        self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
-
+                try:
+                    agent_test_logger.info("")
+                    agent_test_logger.info("**************************************** %s ****************************************", suite_name)
                     agent_test_logger.info("")
 
-                agent_test_logger.info("********* [Test Results]")
-                agent_test_logger.info("")
-                for r in summary:
-                    agent_test_logger.info("\t%s", r)
-                agent_test_logger.info("")
+                    failed: List[str] = []
+                    summary: List[str] = []
 
-        return failed
+                    for test in suite.tests:
+                        test_name = test.__name__
+                        test_full_name = f"{suite_name}-{test_name}"
+
+                        agent_test_logger.info("******** Executing %s", test_name)
+                        self._log.info("******** Executing %s", test_full_name)
+
+                        try:
+
+                            test(self.context).run()
+
+                            summary.append(f"[Passed] {test_name}")
+                            agent_test_logger.info("******** [Passed] %s", test_name)
+                            self._log.info("******** [Passed] %s", test_full_name)
+                        except AssertionError as e:
+                            summary.append(f"[Failed] {test_name}")
+                            failed.append(test_name)
+                            agent_test_logger.error("******** [Failed] %s: %s", test_name, e)
+                            self._log.error("******** [Failed] %s", test_full_name)
+                        except:  # pylint: disable=bare-except
+                            summary.append(f"[Error] {test_name}")
+                            failed.append(test_name)
+                            agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_name)
+                            self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
+
+                        agent_test_logger.info("")
+
+                    agent_test_logger.info("********* [Test Results]")
+                    agent_test_logger.info("")
+                    for r in summary:
+                        agent_test_logger.info("\t%s", r)
+                    agent_test_logger.info("")
+
+                    if len(failed) == 0:
+                        message.status = TestStatus.PASSED
+                    else:
+                        message.status = TestStatus.FAILED
+                        message.message = f"Tests failed: {failed}"
+
+                except:  # pylint: disable=bare-except
+                    message.status = TestStatus.FAILED
+                    message.message = "Unhandled exception while executing test suite."
+                    message.stacktrace = traceback.format_exc()
+                finally:
+                    message.elapsed = (datetime.datetime.now() - start_time).total_seconds()
+                    notifier.notify(message)
+
+                return len(failed) == 0
 
     def execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
         """

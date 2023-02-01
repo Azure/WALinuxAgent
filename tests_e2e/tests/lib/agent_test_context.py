@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 import tests_e2e
-from tests_e2e.scenarios.lib.identifiers import VmIdentifier
+from tests_e2e.tests.lib.identifiers import VmIdentifier
 
 
 class AgentTestContext:

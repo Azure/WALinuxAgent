@@ -28,7 +28,7 @@ from lisa.notifiers.junit import JUnit  # pylint: disable=E0401
 from lisa import schema  # pylint: disable=E0401
 from lisa.messages import (  # pylint: disable=E0401
     MessageBase,
-    TestResultMessageBase,
+    TestResultMessage,
 )
 
 
@@ -48,8 +48,11 @@ class AgentJUnit(JUnit):
         return AgentJUnitSchema
 
     def _received_message(self, message: MessageBase) -> None:
-        if isinstance(message, TestResultMessageBase):
+        if isinstance(message, TestResultMessage) and message.type != "AgentTestResultMessage":
+            message.suite_full_name = "_Setup_"
+            message.suite_name = message.suite_full_name
             image = message.information.get('image')
             if image is not None:
-                message.name = image
+                message.full_name = image
+                message.name = message.full_name
         super()._received_message(message)

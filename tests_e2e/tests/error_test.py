@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-from tests_e2e.scenarios.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentTest
 
 
 class ErrorTest(AgentTest):

@@ -29,9 +29,9 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineScaleSetExtension, VirtualMachineInstanceView, VirtualMachineScaleSetInstanceView
 from azure.mgmt.resource import ResourceManagementClient
 
-from tests_e2e.scenarios.lib.identifiers import VmIdentifier
-from tests_e2e.scenarios.lib.logging import log
-from tests_e2e.scenarios.lib.retry import execute_with_retry
+from tests_e2e.tests.lib.identifiers import VmIdentifier
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.retry import execute_with_retry
 
 
 class VirtualMachineBaseClass(ABC):
