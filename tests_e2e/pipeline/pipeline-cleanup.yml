@@ -47,7 +47,7 @@ steps:
   
         az rest --method GET \
           --url "https://management.azure.com/subscriptions/$(SUBSCRIPTION-ID)/resourcegroups" \
-          --url-parameters api-version=2021-04-01 \$expand=createdTime \ 
+          --url-parameters api-version=2021-04-01 \$expand=createdTime \
           --output json \
           --query value \
         | jq --arg date "$date" '.[] \
