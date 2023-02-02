@@ -400,6 +400,7 @@ class AgentTestSuite(TestSuite):
                     agent_test_logger.info("")
 
                 except:  # pylint: disable=bare-except
+                    failed = True
                     self._report_test_result(
                         suite_full_name,
                         suite_name,
