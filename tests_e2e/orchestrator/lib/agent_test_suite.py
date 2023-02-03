@@ -335,33 +335,22 @@ class AgentTestSuite(TestSuite):
         """
         suite_name = suite.name
         suite_full_name = f"{suite_name}-{self.context.image_name}"
+        suite_start_time: datetime.datetime = datetime.datetime.now()
 
         with _set_thread_name(suite_full_name):  # The thread name is added to self._log
             with set_current_thread_log(Path.home()/'logs'/f"{suite_full_name}.log"):
-                start_time: datetime.datetime = datetime.datetime.now()
-
-                message: TestResultMessage = TestResultMessage()
-                message.type = "AgentTestResultMessage"
-                message.id_ = str(uuid.uuid4())
-                message.status = TestStatus.RUNNING
-                message.suite_full_name = suite_name
-                message.suite_name = message.suite_full_name
-                message.full_name = f"{suite_name}-{self.context.image_name}"
-                message.name = message.full_name
-                message.elapsed = 0
-                notifier.notify(message)
-
                 try:
                     agent_test_logger.info("")
                     agent_test_logger.info("**************************************** %s ****************************************", suite_name)
                     agent_test_logger.info("")
 
-                    failed: List[str] = []
+                    failed: bool = False  # True if any test fails
                     summary: List[str] = []
 
                     for test in suite.tests:
                         test_name = test.__name__
                         test_full_name = f"{suite_name}-{test_name}"
+                        test_start_time: datetime.datetime = datetime.datetime.now()
 
                         agent_test_logger.info("******** Executing %s", test_name)
                         self._log.info("******** Executing %s", test_full_name)
@@ -373,16 +362,34 @@ class AgentTestSuite(TestSuite):
                             summary.append(f"[Passed] {test_name}")
                             agent_test_logger.info("******** [Passed] %s", test_name)
                             self._log.info("******** [Passed] %s", test_full_name)
+                            self._report_test_result(
+                                suite_full_name,
+                                test_name,
+                                TestStatus.PASSED,
+                                test_start_time)
                         except AssertionError as e:
+                            failed = True
                             summary.append(f"[Failed] {test_name}")
-                            failed.append(test_name)
                             agent_test_logger.error("******** [Failed] %s: %s", test_name, e)
                             self._log.error("******** [Failed] %s", test_full_name)
+                            self._report_test_result(
+                                suite_full_name,
+                                test_name,
+                                TestStatus.FAILED,
+                                test_start_time,
+                                message=str(e))
                         except:  # pylint: disable=bare-except
+                            failed = True
                             summary.append(f"[Error] {test_name}")
-                            failed.append(test_name)
                             agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_name)
                             self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
+                            self._report_test_result(
+                                suite_full_name,
+                                test_name,
+                                TestStatus.FAILED,
+                                test_start_time,
+                                message="Unhandled exception.",
+                                add_exception_stack_trace=True)
 
                         agent_test_logger.info("")
 
@@ -392,21 +399,52 @@ class AgentTestSuite(TestSuite):
                         agent_test_logger.info("\t%s", r)
                     agent_test_logger.info("")
 
-                    if len(failed) == 0:
-                        message.status = TestStatus.PASSED
-                    else:
-                        message.status = TestStatus.FAILED
-                        message.message = f"Tests failed: {failed}"
-
                 except:  # pylint: disable=bare-except
-                    message.status = TestStatus.FAILED
-                    message.message = "Unhandled exception while executing test suite."
-                    message.stacktrace = traceback.format_exc()
-                finally:
-                    message.elapsed = (datetime.datetime.now() - start_time).total_seconds()
-                    notifier.notify(message)
+                    failed = True
+                    self._report_test_result(
+                        suite_full_name,
+                        suite_name,
+                        TestStatus.FAILED,
+                        suite_start_time,
+                        message=f"Unhandled exception while executing test suite {suite_name}.",
+                        add_exception_stack_trace=True)
 
-                return len(failed) == 0
+                return failed
+
+    @staticmethod
+    def _report_test_result(
+            suite_name: str,
+            test_name: str,
+            status: TestStatus,
+            start_time: datetime.datetime,
+            message: str = "",
+            add_exception_stack_trace: bool = False
+    ) -> None:
+        """
+        Reports a test result to the junit notifier
+        """
+        # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
+        msg: TestResultMessage = TestResultMessage()
+        msg.type = "AgentTestResultMessage"
+        msg.id_ = str(uuid.uuid4())
+        msg.status = TestStatus.RUNNING
+        msg.suite_full_name = suite_name
+        msg.suite_name = msg.suite_full_name
+        msg.full_name = test_name
+        msg.name = msg.full_name
+        msg.elapsed = 0
+
+        notifier.notify(msg)
+
+        # Now send the actual result. The notifier pipeline makes a deep copy of the message so it is OK to re-use the
+        # same object and just update a few fields. If using a different object, be sure that the "id_" is the same.
+        msg.status = status
+        msg.message = message
+        if add_exception_stack_trace:
+            msg.stacktrace = traceback.format_exc()
+        msg.elapsed = (datetime.datetime.now() - start_time).total_seconds()
+
+        notifier.notify(msg)
 
     def execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
         """
