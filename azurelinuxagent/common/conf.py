@@ -129,6 +129,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
+    "GAUpdates.Enabled": True,
     #
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
@@ -500,6 +501,14 @@ def get_cgroups_enabled(conf=__conf__):
 
 def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
+
+
+def get_ga_updates_enabled(conf=__conf__):
+    """
+    If True, the agent go through update logic to look for new agents otherwise it will stop agent updates.
+    NOTE: This option is needed in e2e tests to control agent updates.
+    """
+    return conf.get_switch("GAUpdates.Enabled", True)
 
 
 def get_cgroup_check_period(conf=__conf__):

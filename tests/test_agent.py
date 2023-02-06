@@ -51,6 +51,7 @@ Extension.LogDir = /var/log/azure
 Extensions.Enabled = True
 Extensions.GoalStatePeriod = 6
 Extensions.InitialGoalStatePeriod = 6
+GAUpdates.Enabled = True
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
