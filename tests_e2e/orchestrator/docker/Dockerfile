@@ -73,5 +73,6 @@ RUN \
     #                                                                                                            \
     echo 'export PYTHONPATH="$HOME/WALinuxAgent"' >> $HOME/.bash_profile                                      && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> $HOME/.bash_profile                                        && \
+    echo 'cd $HOME' >> $HOME/.bash_profile                                                                    && \
     :
 

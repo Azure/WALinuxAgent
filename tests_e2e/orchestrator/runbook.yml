@@ -8,12 +8,11 @@ extension:
   - "./lib"
 
 variable:
+  #
+  # These variables define runbook parameters; they are handled by LISA.
+  #
   - name: subscription_id
     value: ""
-  - name: keep_environment
-    value: "no"
-  - name: wait_delete
-    value: false
   - name: user
     value: "waagent"
   - name: identity_file
@@ -22,9 +21,28 @@ variable:
   - name: admin_password
     value: ""
     is_secret: true
+  - name: keep_environment
+    value: "no"
+  #
+  # These variables define parameters for the AgentTestSuite; see the test wiki for details.
+  #
+  # The test suites to execute
+  - name: test_suites
+    value: "agent_bvt"
+    is_case_visible: true
+
+  # Whether to collect logs from the test VM
+  - name: collect_logs
+    value: "failed"
+    is_case_visible: true
+
+  # Whether to skip setup of the test VM
+  - name: skip_setup
+    value: false
+    is_case_visible: true
 
   #
-  # Set these to use an SSH proxy
+  # Set these to use an SSH proxy when executing the runbook
   #
   - name: proxy
     value: False
@@ -48,25 +66,6 @@ variable:
   - name: default_location
     value: "westus2"
 
-  #
-  # These variables define parameters for the AgentTestSuite; see the test wiki for details
-  #
-  # The test suites to execute
-  - name: test_suites
-    value: "agent_bvt"
-    is_case_visible: true
-
-  # Whether to collect logs from the test VM
-  - name: collect_logs
-    value: "failed"
-    is_case_visible: true
-
-  # Whether to skip setup of the test VM
-  - name: skip_setup
-    value: false
-    is_case_visible: true
-
-
 platform:
   - type: azure
     admin_username: $(user)
@@ -76,7 +75,7 @@ platform:
     azure:
       deploy: True
       subscription_id: $(subscription_id)
-      wait_delete: $(wait_delete)
+      wait_delete: false
     requirement:
       core_count:
         min: 2
