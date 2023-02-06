@@ -53,3 +53,21 @@ class TestAgentSupportedFeature(AgentTestCase):
         self.assertEqual(SupportedFeatureNames.ExtensionTelemetryPipeline,
                          get_supported_feature_by_name(SupportedFeatureNames.ExtensionTelemetryPipeline).name,
                          "Invalid/Wrong feature returned")
+
+    def test_it_should_return_ga_versioning_governance_feature_properly(self):
+        with patch("azurelinuxagent.common.agent_supported_feature._GAVersioningGovernanceFeature.is_supported", True):
+            self.assertIn(SupportedFeatureNames.GAVersioningGovernance, get_agent_supported_features_list_for_crp(),
+                          "GAVersioningGovernance should be fetched in crp_supported_features")
+
+        with patch("azurelinuxagent.common.agent_supported_feature._GAVersioningGovernanceFeature.is_supported", False):
+            self.assertNotIn(SupportedFeatureNames.GAVersioningGovernance, get_agent_supported_features_list_for_crp(),
+                             "GAVersioningGovernance should not be fetched in crp_supported_features as not supported")
+
+        self.assertEqual(SupportedFeatureNames.GAVersioningGovernance,
+                         get_supported_feature_by_name(SupportedFeatureNames.GAVersioningGovernance).name,
+                         "Invalid/Wrong feature returned")
+
+        # Raise error if feature name not found
+        with self.assertRaises(NotImplementedError):
+            get_supported_feature_by_name("ABC")
+
