@@ -23,6 +23,7 @@ class SupportedFeatureNames(object):
     MultiConfig = "MultipleExtensionsPerHandler"
     ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
     FastTrack = "FastTrack"
+    GAVersioningGovernance = "VersioningGovernance"  # Guest Agent Versioning
 
 
 class AgentSupportedFeature(object):
@@ -72,9 +73,22 @@ class _ETPFeature(AgentSupportedFeature):
                                           supported=self.__SUPPORTED)
 
 
+class _GAVersioningGovernanceFeature(AgentSupportedFeature):
+
+    __NAME = SupportedFeatureNames.GAVersioningGovernance
+    __VERSION = "1.0"
+    __SUPPORTED = True
+
+    def __init__(self):
+        super(_GAVersioningGovernanceFeature, self).__init__(name=self.__NAME,
+                                                             version=self.__VERSION,
+                                                             supported=self.__SUPPORTED)
+
+
 # This is the list of features that Agent supports and we advertise to CRP
 __CRP_ADVERTISED_FEATURES = {
-    SupportedFeatureNames.MultiConfig: _MultiConfigFeature()
+    SupportedFeatureNames.MultiConfig: _MultiConfigFeature(),
+    SupportedFeatureNames.GAVersioningGovernance: _GAVersioningGovernanceFeature()
 }
 
 
