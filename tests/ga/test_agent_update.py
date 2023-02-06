@@ -117,7 +117,7 @@ class TestAgentUpdate(UpdateTestCase):
         with self.__get_agent_update_handler(test_data=data_file, autoupdate_frequency=10) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
-            agent_update_handler._protocol.update_goal_state()
+            agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
 
             self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version=version)
@@ -151,7 +151,7 @@ class TestAgentUpdate(UpdateTestCase):
             agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(
                 str(CURRENT_VERSION))
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
-            agent_update_handler._protocol.update_goal_state()
+            agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             self.assertEqual(0, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
                                      "requesting a new agent version" in kwarg['message'] and kwarg[
@@ -187,7 +187,7 @@ class TestAgentUpdate(UpdateTestCase):
         with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(downgraded_version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
-            agent_update_handler._protocol.update_goal_state()
+            agent_update_handler._protocol.client.update_goal_state()
             with self.assertRaises(AgentUpgradeExitException) as context:
                 agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version=downgraded_version)
@@ -208,7 +208,7 @@ class TestAgentUpdate(UpdateTestCase):
         with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
-            agent_update_handler._protocol.update_goal_state()
+            agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
 
             self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version=version)
@@ -245,7 +245,7 @@ class TestAgentUpdate(UpdateTestCase):
             agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(
                 str(CURRENT_VERSION))
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
-            agent_update_handler._protocol.update_goal_state()
+            agent_update_handler._protocol.client.update_goal_state()
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Success, vm_agent_update_status.status)
