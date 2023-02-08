@@ -36,7 +36,7 @@ class AgentTestSuitesCombinator(Combinator):
     """
     def __init__(self, runbook: AgentTestSuitesCombinatorSchema) -> None:
         super().__init__(runbook)
-        self._items = self.create_test_environment_list(self.runbook.test_suites)
+        self._items = self.create_environment_list(self.runbook.test_suites)
         self._index = 0
 
     @classmethod
