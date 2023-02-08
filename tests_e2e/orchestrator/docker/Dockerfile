@@ -23,7 +23,7 @@ RUN \
     #                                                                                                            \
     # Install basic dependencies                                                                                 \
     #                                                                                                            \
-    apt-get install -y git python3.10 python3.10-dev curl                                                     && \
+    apt-get install -y git python3.10 python3.10-dev                                                          && \
     ln /usr/bin/python3.10 /usr/bin/python3                                                                   && \
                                                                                                                  \
     #                                                                                                            \
@@ -31,6 +31,12 @@ RUN \
     #                                                                                                            \
     apt-get install -y git gcc libgirepository1.0-dev libcairo2-dev qemu-utils libvirt-dev                       \
             python3-pip python3-venv                                                                          && \
+                                                                                                                 \
+    #                                                                                                            \
+    # Install test dependencies                                                                                  \
+    #                                                                                                            \
+    apt-get install -y zip                                                                                    && \
+                                                                                                                 \
     #                                                                                                            \
     # Create user waagent, which is used to execute the tests                                                    \
     #                                                                                                            \
@@ -60,11 +66,13 @@ RUN \
     # Install additional test dependencies                                                                       \
     #                                                                                                            \
     python3 -m pip install distro msrestazure                                                                 && \
+    python3 -m pip install azure-mgmt-compute --upgrade                                                       && \
                                                                                                                  \
     #                                                                                                            \
     # The setup for the tests depends on a couple of paths; add those to the profile                             \
     #                                                                                                            \
     echo 'export PYTHONPATH="$HOME/WALinuxAgent"' >> $HOME/.bash_profile                                      && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> $HOME/.bash_profile                                        && \
+    echo 'cd $HOME' >> $HOME/.bash_profile                                                                    && \
     :
 

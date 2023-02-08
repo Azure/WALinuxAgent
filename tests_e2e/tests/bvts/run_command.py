@@ -31,11 +31,11 @@ import uuid
 from assertpy import assert_that, soft_assertions
 from typing import Callable, Dict
 
-from tests_e2e.scenarios.lib.agent_test import AgentTest
-from tests_e2e.scenarios.lib.identifiers import VmExtensionIds
-from tests_e2e.scenarios.lib.logging import log
-from tests_e2e.scenarios.lib.ssh_client import SshClient
-from tests_e2e.scenarios.lib.vm_extension import VmExtension
+from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.identifiers import VmExtensionIds
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.ssh_client import SshClient
+from tests_e2e.tests.lib.vm_extension import VmExtension
 
 
 class RunCommandBvt(AgentTest):
@@ -45,25 +45,30 @@ class RunCommandBvt(AgentTest):
             self.get_settings = get_settings
 
     def run(self):
+        ssh_client = SshClient(
+            ip_address=self._context.vm_ip_address,
+            username=self._context.username,
+            private_key_file=self._context.private_key_file)
+
         test_cases = [
             RunCommandBvt.TestCase(
                 VmExtension(self._context.vm, VmExtensionIds.RunCommand, resource_name="RunCommand"),
                 lambda s: {
                     "script": base64.standard_b64encode(bytearray(s, 'utf-8')).decode('utf-8')
-                }),
-            RunCommandBvt.TestCase(
-                VmExtension(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
-                lambda s: {
-                    "source": {
-                        "script": s
-                    }
                 })
         ]
 
-        ssh_client = SshClient(
-            ip_address=self._context.vm_ip_address,
-            username=self._context.username,
-            private_key_file=self._context.private_key_file)
+        if ssh_client.get_architecture() == "aarch64":
+            log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.RunCommandHandler)
+        else:
+            test_cases.append(
+                RunCommandBvt.TestCase(
+                    VmExtension(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
+                    lambda s: {
+                        "source": {
+                            "script": s
+                        }
+                    }))
 
         with soft_assertions():
             for t in test_cases:

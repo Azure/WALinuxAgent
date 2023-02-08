@@ -18,7 +18,7 @@
 #
 from pathlib import Path
 
-from tests_e2e.scenarios.lib import shell
+from tests_e2e.tests.lib import shell
 
 
 class SshClient(object):
@@ -44,3 +44,5 @@ class SshClient(object):
         """
         shell.run_command(["ssh-keygen", "-m", "PEM", "-t", "rsa", "-b", "4096", "-q", "-N", "", "-f", str(private_key_file)])
 
+    def get_architecture(self):
+        return self.run_command("uname -m").rstrip()

@@ -53,7 +53,7 @@ def do(*args):
     try:
         return subprocess.check_output(args, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:  # pylint: disable=C0103
-        raise Exception("[{0}] failed:\n{1}\n{2}".format(" ".join(args), str(e), e.stdout))
+        raise Exception("[{0}] failed:\n{1}\n{2}".format(" ".join(args), str(e), e.output))
 
 
 def run(agent_family, output_directory, log):

@@ -1,0 +1,129 @@
+name: WALinuxAgent
+
+testcase:
+  - criteria:
+      area: waagent
+
+extension:
+  - "./lib"
+
+variable:
+  #
+  # These variables define runbook parameters; they are handled by LISA.
+  #
+  - name: subscription_id
+    value: ""
+  - name: user
+    value: "waagent"
+  - name: identity_file
+    value: ""
+    is_secret: true
+  - name: admin_password
+    value: ""
+    is_secret: true
+  - name: keep_environment
+    value: "no"
+  #
+  # These variables define parameters for the AgentTestSuite; see the test wiki for details.
+  #
+  # The test suites to execute
+  - name: test_suites
+    value: "agent_bvt"
+    is_case_visible: true
+
+  # Whether to collect logs from the test VM
+  - name: collect_logs
+    value: "failed"
+    is_case_visible: true
+
+  # Whether to skip setup of the test VM
+  - name: skip_setup
+    value: false
+    is_case_visible: true
+
+  #
+  # Set these to use an SSH proxy when executing the runbook
+  #
+  - name: proxy
+    value: False
+  - name: proxy_host
+    value: ""
+  - name: proxy_user
+    value: "foo"
+  - name: proxy_identity_file
+    value: ""
+    is_secret: true
+
+  #
+  # The image, vm_size, and location are set by the combinator
+  #
+  - name: marketplace_image
+    value: ""
+  - name: vm_size
+    value: ""
+  - name: location
+    value: ""
+  - name: default_location
+    value: "westus2"
+
+platform:
+  - type: azure
+    admin_username: $(user)
+    admin_private_key_file: $(identity_file)
+    admin_password: $(admin_password)
+    keep_environment: $(keep_environment)
+    azure:
+      deploy: True
+      subscription_id: $(subscription_id)
+      wait_delete: false
+    requirement:
+      core_count:
+        min: 2
+      azure:
+        marketplace: "$(marketplace_image)"
+        vhd: ""
+        location: $(location)
+        vm_size: $(vm_size)
+
+combinator:
+  type: batch
+  items:
+    - marketplace_image: "Canonical UbuntuServer 18.04-LTS latest"
+      location: $(default_location)
+      vm_size: ""
+    - marketplace_image: "Debian debian-10 10 latest"
+      location: $(default_location)
+      vm_size: ""
+    - marketplace_image: "OpenLogic CentOS 7_9 latest"
+      location: $(default_location)
+      vm_size: ""
+    - marketplace_image: "SUSE sles-15-sp2-basic gen2 latest"
+      location: $(default_location)
+      vm_size: ""
+    - marketplace_image: "RedHat RHEL 7-RAW latest"
+      location: $(default_location)
+      vm_size: ""
+    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
+      location: $(default_location)
+      vm_size: ""
+    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
+      location: $(default_location)
+      vm_size: ""
+    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+      location: "eastus"
+      vm_size: "Standard_D2pls_v5"
+
+concurrency: 10
+
+notifier:
+  - type: agent.junit
+
+dev:
+  enabled: $(proxy)
+  mock_tcp_ping: $(proxy)
+  jump_boxes:
+    - private_key_file: $(proxy_identity_file)
+      address: $(proxy_host)
+      username: $(proxy_user)
+      password: "dummy"
+

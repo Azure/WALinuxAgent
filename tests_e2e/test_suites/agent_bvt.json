@@ -1,0 +1,9 @@
+{
+  "name": "AgentBvt",
+
+  "tests": [
+    "bvts/extension_operations.py",
+    "bvts/run_command.py",
+    "bvts/vm_access.py"
+  ]
+}

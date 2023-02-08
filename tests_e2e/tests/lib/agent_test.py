@@ -21,8 +21,8 @@ import sys
 
 from abc import ABC, abstractmethod
 
-from tests_e2e.scenarios.lib.agent_test_context import AgentTestContext
-from tests_e2e.scenarios.lib.logging import log
+from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.logging import log
 
 
 class AgentTest(ABC):
