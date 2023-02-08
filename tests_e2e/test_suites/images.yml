@@ -1,0 +1,61 @@
+#
+# Image sets are used to group images
+#
+image-sets:
+   # Endorsed distros that are tested on the daily runs
+   endorsed:
+      - "centos_610"
+      - "centos_79"
+      - "debian_8"
+      - "debian_10"
+      - "debian_9"
+      - "suse_12"
+      - "mariner_1"
+      - "mariner_2"
+      - "mariner_2_arm64"
+      - "suse_15"
+      - "rhel_79"
+      - "rhel_82"
+      - "ubuntu_1604"
+      - "ubuntu_1804"
+      - "ubuntu_2004"
+
+#
+# An image can be specified by a string giving its urn, as in
+#
+#    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts"
+#
+# or by an object with 3 properties: urn, locations and vm_sizes, as in
+#
+#   mariner_2_arm64:
+#      urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+#      locations:
+#         - "eastus"
+#      vm_sizes:
+#         - "Standard_D2pls_v5"
+#
+# 'urn' is required, while 'locations' and 'vm_sizes' are optional. The latter
+# two properties can be used to specify that the image is available only in
+# some locations, or that it can be used only on some VM sizes.
+#
+images:
+   centos_610: "OpenLogic CentOS 6.10 latest"
+   centos_79: "OpenLogic CentOS 7_9 latest"
+   debian_8: "credativ Debian 8 latest"
+   debian_9: "credativ Debian 9 latest"
+   debian_10: "Debian debian-10 10 latest"
+   mariner_1: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
+   mariner_2: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
+   mariner_2_arm64:
+      urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
+      locations:
+         - "eastus"
+      vm_sizes:
+         - "Standard_D2pls_v5"
+   suse_12: "SUSE sles-12-sp5-basic gen1 latest"
+   suse_15: "SUSE sles-15-sp2-basic gen2 latest"
+   rhel_79: "RedHat RHEL 7.9 latest"
+   rhel_82: "RedHat RHEL 8.2 latest"
+   ubuntu_1604: "Canonical UbuntuServer 16.04-LTS latest"
+   ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
+   ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts"

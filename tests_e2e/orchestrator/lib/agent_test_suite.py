@@ -35,7 +35,7 @@ from lisa import (  # pylint: disable=E0401
     Node,
     notifier,
     TestCaseMetadata,
-    TestSuite,
+    TestSuite as LisaTestSuite,
     TestSuiteMetadata,
 )
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
@@ -44,7 +44,7 @@ from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
-from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, TestSuiteDescription
+from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, TestSuiteInfo
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log as agent_test_logger  # Logger used by the tests
@@ -98,7 +98,7 @@ class CollectLogs(Enum):
 
 
 @TestSuiteMetadata(area="waagent", category="", description="")
-class AgentTestSuite(TestSuite):
+class AgentTestSuite(LisaTestSuite):
     """
     Manages the setup of test VMs and execution of Agent test suites. This class acts as the interface with the LISA framework, which
     will invoke the execute() method when a runbook is executed.
@@ -308,9 +308,9 @@ class AgentTestSuite(TestSuite):
                     if not self.context.skip_setup:
                         self._setup_node()
 
-                    test_suites: List[TestSuiteDescription] = AgentTestLoader(self.context.test_source_directory).load(self.context.test_suites)
+                    loader: AgentTestLoader = AgentTestLoader(self.context.test_suites)
 
-                    for suite in test_suites:
+                    for suite in loader.test_suites:
                         test_suite_success = self._execute_test_suite(suite) and test_suite_success
 
                 finally:
@@ -329,7 +329,7 @@ class AgentTestSuite(TestSuite):
             finally:
                 self._clean_up()
 
-    def _execute_test_suite(self, suite: TestSuiteDescription) -> bool:
+    def _execute_test_suite(self, suite: TestSuiteInfo) -> bool:
         """
         Executes the given test suite and returns True if all the tests in the suite succeeded.
         """

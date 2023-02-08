@@ -26,6 +26,8 @@ variable:
   #
   # These variables define parameters for the AgentTestSuite; see the test wiki for details.
   #
+  # (NOTE: test_suites is also a parameter to the agent_test_suites combinator)
+  #
   # The test suites to execute
   - name: test_suites
     value: "agent_bvt"
@@ -42,7 +44,19 @@ variable:
     is_case_visible: true
 
   #
-  # Set these to use an SSH proxy when executing the runbook
+  # These variables are set by the agent_test_suites combinator
+  #
+  - name: marketplace_image
+    value: ""
+  - name: vm_size
+    value: ""
+  - name: location
+    value: ""
+  - name: vhd
+    value: ""
+
+  #
+  # Set these variables to use an SSH proxy when executing the runbook
   #
   - name: proxy
     value: False
@@ -53,18 +67,6 @@ variable:
   - name: proxy_identity_file
     value: ""
     is_secret: true
-
-  #
-  # The image, vm_size, and location are set by the combinator
-  #
-  - name: marketplace_image
-    value: ""
-  - name: vm_size
-    value: ""
-  - name: location
-    value: ""
-  - name: default_location
-    value: "westus2"
 
 platform:
   - type: azure
@@ -80,38 +82,14 @@ platform:
       core_count:
         min: 2
       azure:
-        marketplace: "$(marketplace_image)"
-        vhd: ""
+        marketplace: $(marketplace_image)
+        vhd: $(vhd)
         location: $(location)
         vm_size: $(vm_size)
 
 combinator:
-  type: batch
-  items:
-    - marketplace_image: "Canonical UbuntuServer 18.04-LTS latest"
-      location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "Debian debian-10 10 latest"
-      location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "OpenLogic CentOS 7_9 latest"
-      location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "SUSE sles-15-sp2-basic gen2 latest"
-      location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "RedHat RHEL 7-RAW latest"
-      location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
-      location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
-      location: $(default_location)
-      vm_size: ""
-    - marketplace_image: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
-      location: "eastus"
-      vm_size: "Standard_D2pls_v5"
+  type: agent_test_suites
+  test_suites: $(test_suites)
 
 concurrency: 10
 
