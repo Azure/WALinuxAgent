@@ -42,9 +42,12 @@ image-sets:
 # '<Publisher>:<Offer>:<Sku>:<Version>'
 #
 images:
-   centos_610: "OpenLogic CentOS 6.10 latest"
+#
+# TODO: Add CentOS 6.10 and Debian 8
+#
+#   centos_610: "OpenLogic CentOS 6.10 latest"
    centos_79: "OpenLogic CentOS 7_9 latest"
-   debian_8: "credativ Debian 8 latest"
+#   debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
    mariner_1: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"

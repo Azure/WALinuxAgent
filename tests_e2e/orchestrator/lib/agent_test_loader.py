@@ -15,7 +15,8 @@
 # limitations under the License.
 #
 import importlib.util
-import yaml
+# E0401: Unable to import 'yaml' (import-error)
+import yaml  # pylint: disable=E0401
 
 from pathlib import Path
 from typing import Any, Dict, List, Type
@@ -65,8 +66,8 @@ class AgentTestLoader(object):
         of a single test_suite.
 
         When given as a comma-separated list, each item must correspond to the name of the YAML files describing s suite (those
-        files are located under the .../WALinuxAgent/tests_e2e/test_suites directory). For example, if test_suites == "agent_bvt, fast-track"
-        then this method will load files agent_bvt.yml and fast-track.yml.
+        files are located under the .../WALinuxAgent/tests_e2e/test_suites directory). For example, if test_suites == "agent_bvt, fast_track"
+        then this method will load files agent_bvt.yml and fast_track.yml.
 
         When given as a YAML string, the value must correspond to the description a single test suite, for example
 
