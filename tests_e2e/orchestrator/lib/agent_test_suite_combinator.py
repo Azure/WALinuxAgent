@@ -5,7 +5,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Type
 
-from dataclasses_json import dataclass_json
+# E0401: Unable to import 'dataclasses_json' (import-error)
+from dataclasses_json import dataclass_json  # pylint: disable=E0401
 
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)

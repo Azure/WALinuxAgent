@@ -307,7 +307,9 @@ class AgentTestSuite(LisaTestSuite):
                     if not self.context.skip_setup:
                         self._setup_node()
 
-                    for suite in self.context.test_suites:
+                    # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
+                    #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+                    for suite in self.context.test_suites:  # pylint: disable=E1133
                         test_suite_success = self._execute_test_suite(suite) and test_suite_success
 
                 finally:
