@@ -4,9 +4,12 @@
 image-sets:
    # Endorsed distros that are tested on the daily runs
    endorsed:
-      - "centos_610"
+#
+# TODO: Add CentOS 6.10 and Debian 8
+#
+#      - "centos_610"
       - "centos_79"
-      - "debian_8"
+#      - "debian_8"
       - "debian_10"
       - "debian_9"
       - "suse_12"
