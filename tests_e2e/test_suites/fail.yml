@@ -2,3 +2,4 @@ name: "Fail"
 tests:
   - "fail_test.py"
   - "error_test.py"
+images: "ubuntu_1804"

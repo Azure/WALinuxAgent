@@ -26,13 +26,6 @@ variable:
   #
   # These variables define parameters for the AgentTestSuite; see the test wiki for details.
   #
-  # (NOTE: test_suites is also a parameter to the agent_test_suites combinator)
-  #
-  # The test suites to execute
-  - name: test_suites
-    value: "agent_bvt"
-    is_case_visible: true
-
   # Whether to collect logs from the test VM
   - name: collect_logs
     value: "failed"
@@ -44,7 +37,15 @@ variable:
     is_case_visible: true
 
   #
-  # These variables are set by the agent_test_suites combinator
+  # These variables parameters for the AgentTestSuitesCombinator combinator
+  #
+  # The test suites to execute
+  - name: test_suites
+    value: "agent_bvt"
+    is_case_visible: true
+
+  #
+  # These variables are set by the AgentTestSuitesCombinator combinator
   #
   - name: marketplace_image
     value: ""
@@ -54,6 +55,9 @@ variable:
     value: ""
   - name: vhd
     value: ""
+  - name: test_suites_info
+    value: []
+    is_case_visible: true
 
   #
   # Set these variables to use an SSH proxy when executing the runbook

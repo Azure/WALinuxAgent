@@ -4,7 +4,7 @@
 # Runs every 3 hours and deletes any resource groups that are more than a day old and contain string "lisa-WALinuxAgent-"
 #
 schedules:
-  - cron: "0 */3 * * *" # Run every 3 hours
+  - cron: "0 */12 * * *" # Run twice a day (every 12 hours)
     displayName: cleanup build
     branches:
       include:

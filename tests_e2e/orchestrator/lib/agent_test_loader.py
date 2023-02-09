@@ -36,9 +36,11 @@ class TestSuiteInfo(object):
     images: str
     # The location (region) on which the suite must run; if empty, the suite can run on any location
     location: str
+    # Whether this suite must run on its own test VM
+    owns_vm: bool
 
     def __str__(self):
-        return f"{self.name} {[t.__name__ for t in self.tests]}"
+        return self.name
 
 
 class VmImageInfo(object):
@@ -57,7 +59,7 @@ class AgentTestLoader(object):
     """
     Loads a given set of test suites from the YAML configuration files.
     """
-    def __init__(self, test_suites: str, load_tests: bool = True):
+    def __init__(self, test_suites: str):
         """
         Loads the specified 'test_suites', which are given as a string of comma-separated suite names or a YAML description
         of a single test_suite.
@@ -74,7 +76,7 @@ class AgentTestLoader(object):
               - "bvts/run_command.py"
               - "bvts/vm_access.py"
         """
-        self.__test_suites: List[TestSuiteInfo] = self._load_test_suites(test_suites, load_tests)
+        self.__test_suites: List[TestSuiteInfo] = self._load_test_suites(test_suites)
         self.__images: Dict[str, List[VmImageInfo]] = self._load_images()
         self._validate()
 
@@ -107,14 +109,11 @@ class AgentTestLoader(object):
                     raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but no images in {suite.images} are available in that location")
 
     @staticmethod
-    def _load_test_suites(test_suites: str, load_tests: bool) -> List[TestSuiteInfo]:
+    def _load_test_suites(test_suites: str) -> List[TestSuiteInfo]:
         #
         # Attempt to parse 'test_suites' as the YML description of a single suite
         #
-        try:
-            parsed = yaml.safe_load(test_suites)
-        except yaml.scanner.ScannerError:  # Looks like YML, but the syntax is not quite right
-            raise
+        parsed = yaml.safe_load(test_suites)
 
         #
         # A comma-separated list (e.g. "foo", "foo, bar", etc.) is valid YAML, but it is parsed as a string. An actual test suite would
@@ -127,14 +126,14 @@ class AgentTestLoader(object):
         # If test_suites is not YML, then it should be a comma-separated list of description files
         #
         description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/f"{t.strip()}.yml" for t in test_suites.split(',')]
-        return [AgentTestLoader._load_test_suite(f, load_tests) for f in description_files]
+        return [AgentTestLoader._load_test_suite(f) for f in description_files]
 
     @staticmethod
-    def _load_test_suite(description_file: Path, load_tests: bool) -> TestSuiteInfo:
+    def _load_test_suite(description_file: Path) -> TestSuiteInfo:
         """
-        Loads the description of a TestSuite from its YAML file. A test suite has 4 properties: name, tests, images, and location.
+        Loads the description of a TestSuite from its YAML file.
 
-        For example:
+        A test suite has 5 properties: name, tests, images, location, and owns-vm. For example:
 
             name: "AgentBvt"
             tests:
@@ -143,6 +142,7 @@ class AgentTestLoader(object):
               - "bvts/vm_access.py"
             images: "endorsed"
             location: "eastuseaup"
+            owns-vm: true
 
         * name     - A string used to identify the test suite
         * tests    - A list of the tests in the suite. Each test is specified by the path for its source code relative to
@@ -150,8 +150,15 @@ class AgentTestLoader(object):
         * images   - A string specifying the images on which the test suite must be executed. The value can be the name
                      of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The names for
                      images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
-        * location - [Optional] A string; if given, the test suite must be executed on that location. If not specified,
-                     or set to an empty string, the test suite will be executed in the default location.
+        * location - [Optional; string] If given, the test suite must be executed on that location. If not specified,
+                     or set to an empty string, the test suite will be executed in the default location. This is useful
+                     for test suites that exercise a feature that is enabled only in certain regions.
+        * owns-vm - [Optional; boolean] By default all suites in a test run are executed on the same test VMs; if this
+                    value is set to True, new test VMs will be created and will be used exclusively for this test suite.
+                    This is useful for suites that modify the test VMs in such a way that the setup may cause problems
+                    in other test suites (for example, some tests targeted to the HGAP block internet access in order to
+                    force the agent to use the HGAP).
+
         """
         test_suite: Dict[str, Any] = AgentTestLoader._load_file(description_file)
 
@@ -163,16 +170,17 @@ class AgentTestLoader(object):
         test_suite_info.name = test_suite["name"]
 
         test_suite_info.tests = []
-        if load_tests:
-            source_files = [AgentTestLoader._SOURCE_CODE_ROOT/"tests"/t for t in test_suite["tests"]]
-            for f in source_files:
-                test_suite_info.tests.extend(AgentTestLoader._load_test_classes(f))
+        source_files = [AgentTestLoader._SOURCE_CODE_ROOT/"tests"/t for t in test_suite["tests"]]
+        for f in source_files:
+            test_suite_info.tests.extend(AgentTestLoader._load_test_classes(f))
 
         test_suite_info.images = test_suite["images"]
 
         test_suite_info.location = test_suite.get("location")
         if test_suite_info.location is None:
             test_suite_info.location = ""
+
+        test_suite_info.owns_vm = "owns-vm" in test_suite and test_suite["owns-vm"]
 
         return test_suite_info
 

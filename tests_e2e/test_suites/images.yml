@@ -14,7 +14,7 @@ image-sets:
       - "mariner_2"
       - "mariner_2_arm64"
       - "suse_15"
-      - "rhel_79"
+      - "rhel_78"
       - "rhel_82"
       - "ubuntu_1604"
       - "ubuntu_1804"
@@ -23,7 +23,7 @@ image-sets:
 #
 # An image can be specified by a string giving its urn, as in
 #
-#    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts"
+#    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
 #
 # or by an object with 3 properties: urn, locations and vm_sizes, as in
 #
@@ -37,6 +37,9 @@ image-sets:
 # 'urn' is required, while 'locations' and 'vm_sizes' are optional. The latter
 # two properties can be used to specify that the image is available only in
 # some locations, or that it can be used only on some VM sizes.
+#
+# URNs follow the format '<Publisher> <Offer> <Sku> <Version>' or
+# '<Publisher>:<Offer>:<Sku>:<Version>'
 #
 images:
    centos_610: "OpenLogic CentOS 6.10 latest"
@@ -54,8 +57,8 @@ images:
          - "Standard_D2pls_v5"
    suse_12: "SUSE sles-12-sp5-basic gen1 latest"
    suse_15: "SUSE sles-15-sp2-basic gen2 latest"
-   rhel_79: "RedHat RHEL 7.9 latest"
+   rhel_78: "RedHat RHEL 7.8 latest"
    rhel_82: "RedHat RHEL 8.2 latest"
    ubuntu_1604: "Canonical UbuntuServer 16.04-LTS latest"
    ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
-   ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts"
+   ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
