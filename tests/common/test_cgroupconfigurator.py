@@ -196,11 +196,11 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             # The mock creates the slice unit file with memory limit
             configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "azure-walinuxagent-logcollector.slice"),
                                              UnitFilePaths.logcollector)
-            self.assertTrue(os.path.exists(log_collector_unit_file),
-                            "{0} was not created".format(log_collector_unit_file))
-            self.assertTrue(fileutil.findre_in_file(log_collector_unit_file, original_memory_limit),
-                            "MemoryLimit was not set correctly. Expected: {0}. Got:\n{1}".format(
-                                original_memory_limit, fileutil.read_file(log_collector_unit_file)))
+            if not os.path.exists(log_collector_unit_file):
+                raise Exception("{0} should have been created during test setup".format(log_collector_unit_file))
+            if not fileutil.findre_in_file(log_collector_unit_file, original_memory_limit):
+                raise Exception("MemoryLimit was not set correctly. Expected: {0}. Got:\n{1}".format(
+                    original_memory_limit, fileutil.read_file(log_collector_unit_file)))
 
             configurator.initialize()
 
