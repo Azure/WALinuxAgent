@@ -368,7 +368,7 @@ class CGroupConfigurator(object):
             if not os.path.exists(vmextensions_slice):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
-            ## Log collector slice should be updated to remove MemoryLimit quota from previous GA versions
+            # Update log collector slice contents
             slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA)
             files_to_create.append((logcollector_slice, slice_contents))
 
