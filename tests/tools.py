@@ -120,8 +120,10 @@ def i_am_root():
 def is_python_version_26():
     return sys.version_info[0] == 2 and sys.version_info[1] == 6
 
+
 def is_python_version_34():
     return sys.version_info[0] == 3 and sys.version_info[1] == 4
+
 
 def is_python_version_26_or_34():
     return is_python_version_26() or is_python_version_34()
