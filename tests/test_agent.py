@@ -22,7 +22,7 @@ from azurelinuxagent.common import cgroupconfigurator, conf, logcollector
 from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
-from tests.tools import AgentTestCase, is_python_version_26, data_dir, Mock, patch, skip_if_predicate_true
+from tests.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True
@@ -219,6 +219,8 @@ class TestAgent(AgentTestCase):
     def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args):  # pylint: disable=unused-argument
         agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
+        mock_log_collector.run = Mock()
+
         agent.collect_logs(is_full_mode=True)
         full_mode = mock_log_collector.call_args_list[0][0][0]
         self.assertTrue(full_mode)
@@ -231,6 +233,7 @@ class TestAgent(AgentTestCase):
     def test_calls_collect_logs_on_valid_cgroups(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_cgroups_validation()
+            mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
@@ -246,10 +249,10 @@ class TestAgent(AgentTestCase):
         finally:
             CollectLogsHandler.disable_cgroups_validation()
 
-    @skip_if_predicate_true(is_python_version_26, "Disabled on Python 2.6 for now. Need to revisit to fix it")
     def test_doesnt_call_collect_logs_on_invalid_cgroups(self):
         try:
             CollectLogsHandler.enable_cgroups_validation()
+            mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":

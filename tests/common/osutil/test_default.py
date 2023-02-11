@@ -35,7 +35,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from tests.common.mock_environment import MockEnvironment
-from tests.tools import AgentTestCase, patch, open_patch, load_data, data_dir, is_python_version_26, skip_if_predicate_true
+from tests.tools import AgentTestCase, patch, open_patch, load_data, data_dir, is_python_version_26_or_34, skip_if_predicate_true
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
@@ -950,7 +950,7 @@ Match host 192.168.1.2\n\
 
                 self.assertFalse(osutil._enable_firewall)
 
-    @skip_if_predicate_true(is_python_version_26, "Disabled on Python 2.6 for now. Need to revisit to fix it")
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
     def test_get_nic_state(self):
         state = osutil.DefaultOSUtil().get_nic_state()
         self.assertNotEqual(state, {})

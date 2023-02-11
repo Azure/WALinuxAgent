@@ -10,7 +10,14 @@ on:
 jobs:
   test-legacy-python-versions:
     
-    name: "Python 2.6 Unit Tests"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: 2.6
+          - python-version: 3.4
+
+    name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-20.04
     container:
       image: ubuntu:16.04
@@ -20,24 +27,26 @@ jobs:
       run:
         shell: bash -l {0}
 
-    strategy:
-      fail-fast: false
     env:
       NOSEOPTS: "--verbose"
 
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install Python 2.6
+    - name: Install Python ${{ matrix.python-version }}
       run: |
         apt-get update
         apt-get install -y curl bzip2 sudo python3
-        curl https://dcrdata.blob.core.windows.net/python/python-2.6.tar.bz2 -o python-2.6.tar.bz2
-        sudo tar xjvf python-2.6.tar.bz2 --directory /
+        curl https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2 -o python-${{ matrix.python-version }}.tar.bz2
+        sudo tar xjvf python-${{ matrix.python-version }}.tar.bz2 --directory /
 
     - name: Test with nosetests
       run: |
-        source /home/waagent/virtualenv/python2.6.9/bin/activate
+        if [[ ${{ matrix.python-version }} == 2.6 ]]; then
+          source /home/waagent/virtualenv/python2.6.9/bin/activate
+        else
+          source /home/waagent/virtualenv/python3.4.8/bin/activate
+        fi
         ./ci/nosetests.sh
         exit $?
 
