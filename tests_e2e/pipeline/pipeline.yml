@@ -1,9 +1,30 @@
 parameters:
-    # see the test wiki for a description of the parameters
+    # See the test wiki for a description of the parameters
   - name: test_suites
     displayName: Test Suites
     type: string
     default: agent_bvt
+
+    # NOTES:
+    #         * 'image', 'location' and 'vm_size' override any values in the test suites/images definition
+    #            files. Those parameters are useful for 1-off tests, like testing a VHD or checking if
+    #            an image is supported in a particular location.
+    #         * Azure Pipelines do not allow empty string for the parameter value, using "-" instead.
+    #
+  - name: image
+    displayName: Image (image/image set name, URN, or VHD)
+    type: string
+    default: "-"
+
+  - name: location
+    displayName: Location (region)
+    type: string
+    default: "-"
+
+  - name: vm_size
+    displayName: VM size
+    type: string
+    default: "-"
 
   - name: collect_logs
     displayName: Collect logs from test VMs
@@ -26,8 +47,15 @@ parameters:
 variables:
   - name: azureConnection
     value: 'azuremanagement'
+    # These variables exposed the above parameters as environment variables
   - name: test_suites
     value: ${{ parameters.test_suites }}
+  - name: image
+    value: ${{ parameters.image }}
+  - name: location
+    value: ${{ parameters.location }}
+  - name: vm_size
+    value: ${{ parameters.vm_size }}
   - name: collect_logs
     value: ${{ parameters.collect_logs }}
   - name: keep_environment
