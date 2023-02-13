@@ -59,7 +59,7 @@ class TestAgentSupportedFeature(AgentTestCase):
             self.assertIn(SupportedFeatureNames.GAVersioningGovernance, get_agent_supported_features_list_for_crp(),
                           "GAVersioningGovernance should be fetched in crp_supported_features")
 
-        with patch("azurelinuxagent.common.agent_supported_feature._GAVersioningGovernanceFeature.is_supported", False):
+        with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):
             self.assertNotIn(SupportedFeatureNames.GAVersioningGovernance, get_agent_supported_features_list_for_crp(),
                              "GAVersioningGovernance should not be fetched in crp_supported_features as not supported")
 
