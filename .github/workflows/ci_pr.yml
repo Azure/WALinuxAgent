@@ -10,31 +10,48 @@ on:
 jobs:
   test-legacy-python-versions:
     
-    name: "Python 2.6 Unit Tests"
-    runs-on: ubuntu-18.04
-
     strategy:
       fail-fast: false
+      matrix:
+        include:
+          - python-version: 2.6
+          - python-version: 3.4
+
+    name: "Python ${{ matrix.python-version }} Unit Tests"
+    runs-on: ubuntu-20.04
+    container:
+      image: ubuntu:16.04
+      volumes:
+        - /home/waagent:/home/waagent
+    defaults:
+      run:
+        shell: bash -l {0}
+
     env:
       NOSEOPTS: "--verbose"
 
     steps:
+    - uses: actions/checkout@v3
 
-    - name: Install Python 2.6
+    - name: Install Python ${{ matrix.python-version }}
       run: |
-        curl https://dcrdata.blob.core.windows.net/python/python-2.6.tar.bz2 -o python-2.6.tar.bz2
-        sudo tar xjvf python-2.6.tar.bz2 --directory /
-
-    - uses: actions/checkout@v2
+        apt-get update
+        apt-get install -y curl bzip2 sudo python3
+        curl https://dcrdata.blob.core.windows.net/python/python-${{ matrix.python-version }}.tar.bz2 -o python-${{ matrix.python-version }}.tar.bz2
+        sudo tar xjvf python-${{ matrix.python-version }}.tar.bz2 --directory /
 
     - name: Test with nosetests
       run: |
-        source /home/waagent/virtualenv/python2.6.9/bin/activate
+        if [[ ${{ matrix.python-version }} == 2.6 ]]; then
+          source /home/waagent/virtualenv/python2.6.9/bin/activate
+        else
+          source /home/waagent/virtualenv/python3.4.8/bin/activate
+        fi
         ./ci/nosetests.sh
         exit $?
 
   test-current-python-versions:
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -43,24 +60,24 @@ jobs:
           - python-version: 2.7
             PYLINTOPTS: "--rcfile=ci/2.7.pylintrc --ignore=tests_e2e,makepkg.py"
 
-          - python-version: 3.4
-            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc --ignore=tests_e2e,makepkg.py"
+          - python-version: 3.5
+            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e,makepkg.py"
 
           - python-version: 3.6
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
           - python-version: 3.7
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
-            
+
           - python-version: 3.8
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
           - python-version: 3.9
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
-    
+
     name: "Python ${{ matrix.python-version }} Unit Tests"
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     env:
       PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
@@ -69,15 +86,15 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python-version }}
 
     steps:
-    
+
     - name: Checkout WALinuxAgent repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - name: Install dependencies
       id: install-dependencies
       run: |
@@ -106,6 +123,6 @@ jobs:
 
     - name: Upload Coverage
       if: matrix.python-version == 3.9
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v2
       with:
         file: ./coverage.xml

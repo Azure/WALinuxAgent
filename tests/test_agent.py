@@ -218,6 +218,7 @@ class TestAgent(AgentTestCase):
     @patch("azurelinuxagent.agent.LogCollector")
     def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args):  # pylint: disable=unused-argument
         agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        mock_log_collector.run = Mock()
 
         agent.collect_logs(is_full_mode=True)
         full_mode = mock_log_collector.call_args_list[0][0][0]
@@ -231,6 +232,7 @@ class TestAgent(AgentTestCase):
     def test_calls_collect_logs_on_valid_cgroups(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_cgroups_validation()
+            mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
@@ -246,9 +248,11 @@ class TestAgent(AgentTestCase):
         finally:
             CollectLogsHandler.disable_cgroups_validation()
 
-    def test_doesnt_call_collect_logs_on_invalid_cgroups(self):
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_doesnt_call_collect_logs_on_invalid_cgroups(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_cgroups_validation()
+            mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":

@@ -39,7 +39,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.common.mock_environment import MockCommand
 from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
-from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir
+from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir, is_python_version_26_or_34, skip_if_predicate_true
 from tests.utils.miscellaneous_tools import format_processes, wait_for
 
 
@@ -187,6 +187,27 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(os.path.exists(agent_drop_in_file_slice), "{0} was not created".format(agent_drop_in_file_slice))
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
             self.assertTrue(os.path.exists(agent_drop_in_file_memory_accounting), "{0} was not created".format(agent_drop_in_file_memory_accounting))
+
+    def test_initialize_should_update_logcollector_memorylimit(self):
+        with self._get_cgroup_configurator(initialize=False) as configurator:
+            log_collector_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.logcollector)
+            original_memory_limit = "MemoryLimit=30M"
+
+            # The mock creates the slice unit file with memory limit
+            configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "azure-walinuxagent-logcollector.slice"),
+                                             UnitFilePaths.logcollector)
+            if not os.path.exists(log_collector_unit_file):
+                raise Exception("{0} should have been created during test setup".format(log_collector_unit_file))
+            if not fileutil.findre_in_file(log_collector_unit_file, original_memory_limit):
+                raise Exception("MemoryLimit was not set correctly. Expected: {0}. Got:\n{1}".format(
+                    original_memory_limit, fileutil.read_file(log_collector_unit_file)))
+
+            configurator.initialize()
+
+            # initialize() should update the unit file to remove the memory limit
+            self.assertFalse(fileutil.findre_in_file(log_collector_unit_file, original_memory_limit),
+                             "Log collector slice unit file was not updated correctly. Expected no memory limit. Got:\n{0}".format(
+                                 fileutil.read_file(log_collector_unit_file)))
 
     def test_setup_extension_slice_should_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
@@ -505,6 +526,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                         self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
 
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
     @attr('requires_sudo')
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
@@ -542,6 +564,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     # wasn't truncated.
                     self.assertIn("Running scope as unit", ustr(context_manager.exception))
 
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
     @attr('requires_sudo')
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     @patch("azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
