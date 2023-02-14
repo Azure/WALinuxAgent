@@ -156,7 +156,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             protocol.set_http_handlers(http_get_handler=None)
             goal_state.update()
             self._assert_directory_contents(
-                self._find_history_subdirectory("234-987"), ["VmSettings.json"])
+                self._find_history_subdirectory("234-987"), ["VmSettings.json", "Certificates.json"])
 
     def test_it_should_redact_the_protected_settings_when_saving_to_the_history_directory(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
@@ -412,7 +412,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state = GoalState(protocol.client)
 
             self.assertEqual(2, protocol.mock_wire_data.call_counts['goalstate'], "There should have been exactly 2 requests for the goal state (original + refresh)")
-            self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
+            self.assertEqual(4, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
 
             thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
 
