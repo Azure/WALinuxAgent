@@ -56,8 +56,9 @@ class GoalStateProperties(object):
     HostingEnv = 0x2
     SharedConfig = 0x4
     ExtensionsGoalState = 0x8
-    RemoteAccessInfo = 0x10
-    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsGoalState | RemoteAccessInfo
+    Certificates = 0x10
+    RemoteAccessInfo = 0x20
+    All = RoleConfig | HostingEnv | SharedConfig | ExtensionsGoalState | Certificates | RemoteAccessInfo
 
 
 class GoalStateInconsistentError(ProtocolError):
@@ -140,7 +141,7 @@ class GoalState(object):
 
     @property
     def certs(self):
-        if not self._goal_state_properties & GoalStateProperties.ExtensionsGoalState:
+        if not self._goal_state_properties & GoalStateProperties.Certificates:
             raise ProtocolError("Certificates is not in goal state properties")
         else:
             return self._certs
@@ -289,6 +290,9 @@ class GoalState(object):
         # case, to ensure it fetches the new certificate.
         #
         if self._extensions_goal_state.source == GoalStateSource.FastTrack:
+            certs_uri = findtext(xml_doc, "Certificates")
+            if certs_uri is not None:
+                self._download_certificates(certs_uri)
             self._check_certificates()
 
     def _check_certificates(self):
@@ -300,6 +304,20 @@ class GoalState(object):
                 if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
                     message = "Certificate {0} needed by {1} is missing from the goal state".format(settings.certificateThumbprint, extension.name)
                     raise GoalStateInconsistentError(message)
+
+    def _download_certificates(self, certs_uri):
+        xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
+        certs = Certificates(xml_text, self.logger)
+        # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
+        for c in certs.summary:
+            message = "Downloaded certificate {0}".format(c)
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
+        if len(certs.warnings) > 0:
+            self.logger.warn(certs.warnings)
+            add_event(op=WALAEventOperation.GoalState, message=certs.warnings)
+        self._history.save_certificates(json.dumps(certs.summary))
+        return certs
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
         msg = 'The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.'
@@ -435,18 +453,8 @@ class GoalState(object):
 
             certs = EmptyCertificates()
             certs_uri = findtext(xml_doc, "Certificates")
-            if (GoalStateProperties.ExtensionsGoalState & self._goal_state_properties) and certs_uri is not None:
-                xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
-                certs = Certificates(xml_text, self.logger)
-                # Log and save the certificates summary (i.e. the thumbprint but not the certificate itself) to the goal state history
-                for c in certs.summary:
-                    message = "Downloaded certificate {0}".format(c)
-                    self.logger.info(message)
-                    add_event(op=WALAEventOperation.GoalState, message=message)
-                if len(certs.warnings) > 0:
-                    self.logger.warn(certs.warnings)
-                    add_event(op=WALAEventOperation.GoalState, message=certs.warnings)
-                self._history.save_certificates(json.dumps(certs.summary))
+            if (GoalStateProperties.Certificates & self._goal_state_properties) and certs_uri is not None:
+                certs = self._download_certificates(certs_uri)
 
             remote_access = None
             if GoalStateProperties.RemoteAccessInfo & self._goal_state_properties:
