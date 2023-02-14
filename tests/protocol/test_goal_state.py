@@ -412,7 +412,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state = GoalState(protocol.client)
 
             self.assertEqual(2, protocol.mock_wire_data.call_counts['goalstate'], "There should have been exactly 2 requests for the goal state (original + refresh)")
-            self.assertEqual(4, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
+            self.assertEqual(4, http_get_handler.certificate_requests, "There should have been exactly 4 requests for the goal state certificates (2x original + 2x refresh)")
 
             thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
 
