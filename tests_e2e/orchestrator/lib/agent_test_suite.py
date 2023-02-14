@@ -147,7 +147,7 @@ class AgentTestSuite(LisaTestSuite):
 
         self.__context.log = log
         self.__context.node = node
-        self.__context.is_vhd = 'c_vhd' in variables
+        self.__context.is_vhd = self._get_required_parameter(variables, "c_test_suites") != ""
         self.__context.image_name = f"{node.os.name}-vhd" if self.__context.is_vhd else f"{runbook.marketplace.offer}-{runbook.marketplace.sku}"
         self.__context.test_suites = self._get_required_parameter(variables, "c_test_suites")
         self.__context.collect_logs = self._get_required_parameter(variables, "collect_logs")

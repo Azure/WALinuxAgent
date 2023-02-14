@@ -163,7 +163,7 @@ class AgentTestSuitesCombinator(Combinator):
         log.info("******** Environments *****")
         for e in environment_list:
             log.info(
-                "{ marketplace_image: '%s', location: '%s', vm_size: '%s', vhd: '%s', test_suites: '%s' }",
+                "{ c_marketplace_image: '%s', c_location: '%s', c_vm_size: '%s', c_vhd: '%s', c_test_suites: '%s' }",
                 e['c_marketplace_image'], e['c_location'], e['c_vm_size'], e['c_vhd'], [s.name for s in e['c_test_suites']])
         log.info("***************************")
 
