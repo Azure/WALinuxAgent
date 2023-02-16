@@ -104,10 +104,12 @@ class AgentTestLoader(object):
             if suite.images not in self.images:
                 raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {suite.images} in images.yml")
 
-            # If the suite specifies a location, validate that the images are available in that location
+            # If the suite specifies a location, validate that the images it uses are available in that location
             if suite.location != '':
-                if not any(suite.location in i.locations for i in self.images[suite.images]):
-                    raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but no images in {suite.images} are available in that location")
+                for image in self.images[suite.images]:
+                    if len(image.locations) > 0:
+                        if suite.location not in image.locations:
+                            raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
 
     @staticmethod
     def _load_test_suites(test_suites: str) -> List[TestSuiteInfo]:

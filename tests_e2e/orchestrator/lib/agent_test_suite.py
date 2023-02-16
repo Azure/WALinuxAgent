@@ -21,7 +21,6 @@ import re
 import traceback
 import uuid
 
-from enum import Enum
 from pathlib import Path
 from threading import current_thread, RLock
 from typing import Any, Dict, List
@@ -91,7 +90,7 @@ def _set_thread_name(name: str):
 #
 # Possible values for the collect_logs parameter
 #
-class CollectLogs(Enum):
+class CollectLogs(object):
     Always = 'always'   # Always collect logs
     Failed = 'failed'   # Collect logs only on test failures
     No = 'no'           # Never collect logs
@@ -341,6 +340,8 @@ class AgentTestSuite(LisaTestSuite):
         suite_full_name = f"{suite_name}-{self.context.image_name}"
         suite_start_time: datetime.datetime = datetime.datetime.now()
 
+        success: bool = True  # True if all the tests succeed
+
         with _set_thread_name(suite_full_name):  # The thread name is added to self._log
             with set_current_thread_log(Path.home()/'logs'/f"{suite_full_name}.log"):
                 try:
@@ -348,7 +349,6 @@ class AgentTestSuite(LisaTestSuite):
                     agent_test_logger.info("**************************************** %s ****************************************", suite_name)
                     agent_test_logger.info("")
 
-                    failed: bool = False  # True if any test fails
                     summary: List[str] = []
 
                     for test in suite.tests:
@@ -372,7 +372,7 @@ class AgentTestSuite(LisaTestSuite):
                                 TestStatus.PASSED,
                                 test_start_time)
                         except AssertionError as e:
-                            failed = True
+                            success = False
                             summary.append(f"[Failed] {test_name}")
                             agent_test_logger.error("******** [Failed] %s: %s", test_name, e)
                             self._log.error("******** [Failed] %s", test_full_name)
@@ -383,7 +383,7 @@ class AgentTestSuite(LisaTestSuite):
                                 test_start_time,
                                 message=str(e))
                         except:  # pylint: disable=bare-except
-                            failed = True
+                            success = False
                             summary.append(f"[Error] {test_name}")
                             agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_name)
                             self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
@@ -404,7 +404,7 @@ class AgentTestSuite(LisaTestSuite):
                     agent_test_logger.info("")
 
                 except:  # pylint: disable=bare-except
-                    failed = True
+                    success = False
                     self._report_test_result(
                         suite_full_name,
                         suite_name,
@@ -413,7 +413,7 @@ class AgentTestSuite(LisaTestSuite):
                         message=f"Unhandled exception while executing test suite {suite_name}.",
                         add_exception_stack_trace=True)
 
-                return failed
+        return success
 
     @staticmethod
     def _report_test_result(
