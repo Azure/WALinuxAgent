@@ -33,8 +33,8 @@ class TestSuiteInfo(object):
     name: str
     # The tests that comprise the suite
     tests: List[Type[AgentTest]]
-    # An image or image set (as defined in images.yml) specifying the images the suite must run on.
-    images: str
+    # Images or image sets (as defined in images.yml) on which the suite must run.
+    images: List[str]
     # The location (region) on which the suite must run; if empty, the suite can run on any location
     location: str
     # Whether this suite must run on its own test VM
@@ -101,15 +101,17 @@ class AgentTestLoader(object):
         """
         for suite in self.test_suites:
             # Validate that the images the suite must run on are in images.yml
-            if suite.images not in self.images:
-                raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {suite.images} in images.yml")
+            for image in suite.images:
+                if image not in self.images:
+                    raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
 
             # If the suite specifies a location, validate that the images it uses are available in that location
             if suite.location != '':
-                for image in self.images[suite.images]:
-                    if len(image.locations) > 0:
-                        if suite.location not in image.locations:
-                            raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
+                for suite_image in suite.images:
+                    for image in self.images[suite_image]:
+                        if len(image.locations) > 0:
+                            if suite.location not in image.locations:
+                                raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
 
     @staticmethod
     def _load_test_suites(test_suites: str) -> List[TestSuiteInfo]:
@@ -150,9 +152,9 @@ class AgentTestLoader(object):
         * name     - A string used to identify the test suite
         * tests    - A list of the tests in the suite. Each test is specified by the path for its source code relative to
                      WALinuxAgent/tests_e2e/tests.
-        * images   - A string specifying the images on which the test suite must be executed. The value can be the name
-                     of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The names for
-                     images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
+        * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
+                     can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The
+                     names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
         * location - [Optional; string] If given, the test suite must be executed on that location. If not specified,
                      or set to an empty string, the test suite will be executed in the default location. This is useful
                      for test suites that exercise a feature that is enabled only in certain regions.
@@ -177,7 +179,11 @@ class AgentTestLoader(object):
         for f in source_files:
             test_suite_info.tests.extend(AgentTestLoader._load_test_classes(f))
 
-        test_suite_info.images = test_suite["images"]
+        images = test_suite["images"]
+        if isinstance(images, str):
+            test_suite_info.images = [images]
+        else:
+            test_suite_info.images = images
 
         test_suite_info.location = test_suite.get("location")
         if test_suite_info.location is None:
