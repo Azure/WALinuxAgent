@@ -30,6 +30,18 @@ az acr login --name waagenttests
 
 docker pull waagenttests.azurecr.io/waagenttests:latest
 
+# Azure Pipelines does not allow an empty string as the value for a pipeline parameter; instead we use "-" to indicate
+# an empty value. Change "-" to "" for the variables that capture the parameter values.
+if [[ $IMAGE == "-" ]]; then
+    IMAGE=""
+fi
+if [[ $LOCATION == "-" ]]; then
+    LOCATION=""
+fi
+if [[ $VM_SIZE == "-" ]]; then
+    VM_SIZE=""
+fi
+
 # A test failure will cause automation to exit with an error code and we don't want this script to stop so we force the command
 # to succeed and capture the exit code to return it at the end of the script.
 echo "exit 0" > /tmp/exit.sh
@@ -51,7 +63,10 @@ docker run --rm \
           -v identity_file:\$HOME/.ssh/id_rsa \
           -v test_suites:\"$TEST_SUITES\" \
           -v collect_logs:\"$COLLECT_LOGS\" \
-          -v keep_environment:\"$KEEP_ENVIRONMENT\"" \
+          -v keep_environment:\"$KEEP_ENVIRONMENT\" \
+          -v image:\"$IMAGE\" \
+          -v location:\"$LOCATION\" \
+          -v vm_size:\"$VM_SIZE\"" \
 || echo "exit $?" > /tmp/exit.sh
 
 #
