@@ -103,7 +103,16 @@ class AgentTestSuitesCombinator(Combinator):
         shared_environments: Dict[str, Dict[str, Any]] = {}
 
         for suite_info in loader.test_suites:
-            images_info = runbook_images if len(runbook_images) > 0 else loader.images[suite_info.images]
+            if len(runbook_images) > 0:
+                images_info = runbook_images
+            else:
+                # The test suite may be referencing multiple image sets, and sets can intersect, so we need to ensure
+                # we eliminate any duplicates.
+                unique_images: Dict[str, str] = {}
+                for image in suite_info.images:
+                    for i in loader.images[image]:
+                        unique_images[i] = i
+                images_info = unique_images.values()
 
             for image in images_info:
                 # The URN can be a VHD if the runbook provided a VHD in the 'images' parameter

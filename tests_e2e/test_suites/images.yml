@@ -15,13 +15,16 @@ image-sets:
       - "suse_12"
       - "mariner_1"
       - "mariner_2"
-      - "mariner_2_arm64"
       - "suse_15"
       - "rhel_78"
       - "rhel_82"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
+
+   # Endorsed distros (ARM64) that are tested on the daily runs
+   endorsed-arm64:
+      - "mariner_2_arm64"
 
 #
 # An image can be specified by a string giving its urn, as in
