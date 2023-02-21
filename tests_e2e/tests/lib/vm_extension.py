@@ -99,9 +99,9 @@ class _VmExtensionBaseClass(ABC):
                 extension_parameters
             ).result(timeout=_TIMEOUT))
 
-        if result.provisioning_state != 'Succeeded':
+        if result.provisioning_state not in ('Succeeded', 'Updating'):
             raise Exception(f"Enable {self._identifier} failed. Provisioning state: {result.provisioning_state}")
-        log.info("Enable succeeded.")
+        log.info("Enable completed (provisioning state: %s).", result.provisioning_state)
 
     def get_instance_view(self) -> VirtualMachineExtensionInstanceView:  # TODO: Check type for scale sets
         """
