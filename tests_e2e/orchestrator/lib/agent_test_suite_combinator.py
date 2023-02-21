@@ -39,7 +39,7 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
 
 class AgentTestSuitesCombinator(Combinator):
     """
-    The "agent_test_suites" combinator returns a list of items containing five variables that specify the environments
+    The "agent_test_suites" combinator returns a list of items containing six variables that specify the environments
     that the agent test suites must be executed on:
 
         * c_marketplace_image: e.g. "Canonical UbuntuServer 18.04-LTS latest",
@@ -47,6 +47,7 @@ class AgentTestSuitesCombinator(Combinator):
         * c_vm_size: e.g. "Standard_D2pls_v5"
         * c_vhd: e.g "https://rhel.blob.core.windows.net/images/RHEL_8_Standard-8.3.202006170423.vhd?se=..."
         * c_test_suites: e.g. [AgentBvt, FastTrack]
+        * c_name: Unique name for the image, e.g. "0001-com-ubuntu-server-focal-20_04-lts-westus2"
 
     (c_marketplace_image, c_location, c_vm_size) and vhd are mutually exclusive and define the environment (i.e. the test VM)
     in which the test will be executed. c_test_suites defines the test suites that should be executed in that
@@ -115,13 +116,18 @@ class AgentTestSuitesCombinator(Combinator):
                 images_info = unique_images.values()
 
             for image in images_info:
-                # The URN can be a VHD if the runbook provided a VHD in the 'images' parameter
+                # The URN can actually point to a VHD if the runbook provided a VHD in the 'images' parameter
                 if self._is_vhd(image.urn):
                     marketplace_image = ""
                     vhd = image.urn
+                    name = "vhd"
                 else:
                     marketplace_image = image.urn
                     vhd = ""
+                    match = AgentTestSuitesCombinator._URN.match(image.urn)
+                    if match is None:
+                        raise Exception(f"Invalid URN: {image.urn}")
+                    name = f"{match.group('offer')}-{match.group('sku')}"
 
                 # If the runbook specified a location, use it. Then try the suite location, if any. Otherwise, check if the image specifies
                 # a list of locations and use any of them. If no location is specified so far, use the default.
@@ -150,11 +156,12 @@ class AgentTestSuitesCombinator(Combinator):
                         "c_location": location,
                         "c_vm_size": vm_size,
                         "c_vhd": vhd,
-                        "c_test_suites": [suite_info]
+                        "c_test_suites": [suite_info],
+                        "c_name": f"{name}-{suite_info.name}"
                     })
                 else:
                     # add this suite to the shared environments
-                    key: str = f"{image.urn}:{location}"
+                    key: str = f"{name}-{location}"
                     if key in shared_environments:
                         shared_environments[key]["c_test_suites"].append(suite_info)
                     else:
@@ -163,7 +170,8 @@ class AgentTestSuitesCombinator(Combinator):
                             "c_location": location,
                             "c_vm_size": vm_size,
                             "c_vhd": vhd,
-                            "c_test_suites": [suite_info]
+                            "c_test_suites": [suite_info],
+                            "c_name": key
                         }
 
         environment_list.extend(shared_environments.values())
@@ -172,16 +180,18 @@ class AgentTestSuitesCombinator(Combinator):
         log.info("******** Environments *****")
         for e in environment_list:
             log.info(
-                "{ c_marketplace_image: '%s', c_location: '%s', c_vm_size: '%s', c_vhd: '%s', c_test_suites: '%s' }",
-                e['c_marketplace_image'], e['c_location'], e['c_vm_size'], e['c_vhd'], [s.name for s in e['c_test_suites']])
+                "{ c_marketplace_image: '%s', c_location: '%s', c_vm_size: '%s', c_vhd: '%s', c_test_suites: '%s', c_name: '%s' }",
+                e['c_marketplace_image'], e['c_location'], e['c_vm_size'], e['c_vhd'], [s.name for s in e['c_test_suites']], e['c_name'])
         log.info("***************************")
 
         return environment_list
 
+    _URN = re.compile(r"(?P<publisher>[^\s:]+)[\s:](?P<offer>[^\s:]+)[\s:](?P<sku>[^\s:]+)[\s:](?P<version>[^\s:]+)")
+
     @staticmethod
     def _is_urn(urn: str) -> bool:
         # URNs can be given as '<Publisher> <Offer> <Sku> <Version>' or '<Publisher>:<Offer>:<Sku>:<Version>'
-        return re.match(r"(\S+\s\S+\s\S+\s\S+)|([^:]+:[^:]+:[^:]+:[^:]+)", urn) is not None
+        return AgentTestSuitesCombinator._URN.match(urn) is not None
 
     @staticmethod
     def _is_vhd(vhd: str) -> bool:
