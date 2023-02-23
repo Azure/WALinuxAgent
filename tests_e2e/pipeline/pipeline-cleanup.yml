@@ -11,7 +11,9 @@ schedules:
       - develop
     always: true
 
-# no PR triggers
+trigger:
+  - develop
+
 pr: none
 
 pool:
