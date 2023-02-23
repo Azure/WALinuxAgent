@@ -62,6 +62,7 @@ docker run --rm \
           -v subscription_id:$SUBSCRIPTION_ID \
           -v identity_file:\$HOME/.ssh/id_rsa \
           -v test_suites:\"$TEST_SUITES\" \
+          -v log_path:\$HOME/logs \
           -v collect_logs:\"$COLLECT_LOGS\" \
           -v keep_environment:\"$KEEP_ENVIRONMENT\" \
           -v image:\"$IMAGE\" \
@@ -86,10 +87,13 @@ sudo find "$BUILD_ARTIFACTSTAGINGDIRECTORY" -exec chown "$USER" {} \;
 #    etc
 #
 # Remove the 2 levels of the tree that indicate the time of the test run to make navigation
-# in the Azure Pipelines UI easier.
+# in the Azure Pipelines UI easier. Also, move the lisa log one level up and remove some of
+# the logs that are not needed
 #
 mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa
 rm -r "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]
+mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/lisa-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+rm "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/messages.log
 
 cat /tmp/exit.sh
 bash /tmp/exit.sh

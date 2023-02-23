@@ -97,6 +97,9 @@ variable:
   - name: c_test_suites
     value: []
     is_case_visible: true
+  - name: c_name
+    value: ""
+    is_case_visible: true
 
   #
   # Set these variables to use an SSH proxy when executing the runbook
