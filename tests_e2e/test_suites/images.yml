@@ -8,23 +8,32 @@ image-sets:
 # TODO: Add CentOS 6.10 and Debian 8
 #
 #      - "centos_610"
-      - "centos_79"
 #      - "debian_8"
-      - "debian_10"
+#
+      - "alma_9"
+      - "centos_79"
       - "debian_9"
+      - "debian_10"
+      - "debian_11"
       - "suse_12"
       - "mariner_1"
       - "mariner_2"
       - "suse_15"
-      - "rhel_78"
+      - "rhel_79"
       - "rhel_82"
+      - "rhel_90"
+      - "rocky_9"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
+      - "ubuntu_2204"
 
    # Endorsed distros (ARM64) that are tested on the daily runs
    endorsed-arm64:
+      - "debian_11_arm64"
       - "mariner_2_arm64"
+      - "rhel_90_arm64"
+      - "ubuntu_2204_arm64"
 
 #
 # An image can be specified by a string giving its urn, as in
@@ -52,10 +61,14 @@ images:
 # TODO: Add CentOS 6.10 and Debian 8
 #
 #   centos_610: "OpenLogic CentOS 6.10 latest"
-   centos_79: "OpenLogic CentOS 7_9 latest"
 #   debian_8: "credativ Debian 8 latest"
+#
+   alma_9: "almalinux almalinux 9-gen2 latest"
+   centos_79: "OpenLogic CentOS 7_9 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
+   debian_11: "Debian debian-11 11 latest"
+   debian_11_arm64: "Debian debian-11 11-backports-arm64 latest"
    mariner_1: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
    mariner_2: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
    mariner_2_arm64:
@@ -64,10 +77,15 @@ images:
          - "eastus"
       vm_sizes:
          - "Standard_D2pls_v5"
+   rocky_9: "erockyenterprisesoftwarefoundationinc1653071250513 rockylinux-9 rockylinux-9 latest"
    suse_12: "SUSE sles-12-sp5-basic gen1 latest"
    suse_15: "SUSE sles-15-sp2-basic gen2 latest"
-   rhel_78: "RedHat RHEL 7.8 latest"
+   rhel_79: "RedHat RHEL 7_9 latest"
    rhel_82: "RedHat RHEL 8.2 latest"
+   rhel_90: "RedHat RHEL 9_0 latest"
+   rhel_90_arm64: "RedHat rhel-arm64 9_0-arm64 latest"
    ubuntu_1604: "Canonical UbuntuServer 16.04-LTS latest"
    ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
+   ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
+   ubuntu_2204_arm64: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
