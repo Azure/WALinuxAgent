@@ -426,6 +426,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 raise Exception("{0}.crt was not removed.".format(cert))
 
             # Update goal state and check that .crt was downloaded
+            protocol.mock_wire_data.set_incarnation(999)
             goal_state.update()
             self.assertTrue(os.path.isfile(crt_path))
 
