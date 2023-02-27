@@ -382,6 +382,53 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             expected_message = "Certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C needed by Microsoft.OSTCExtensions.VMAccessForLinux is missing from the goal state"
             self.assertIn(expected_message, str(context.exception))
 
+    def test_it_should_always_download_certs_when_source_is_fast_track(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+
+        with mock_wire_protocol(data_file) as protocol:
+            goal_state = GoalState(protocol.client)
+
+            cert = "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F"
+            crt_path = os.path.join(self.tmp_dir, cert + ".crt")
+            prv_path = os.path.join(self.tmp_dir, cert + ".prv")
+
+            # Check that crt and prv files are downloaded after processing goal state
+            self.assertTrue(os.path.isfile(crt_path))
+            self.assertTrue(os.path.isfile(prv_path))
+
+            # Remove .crt file
+            os.remove(crt_path)
+            if os.path.isfile(crt_path):
+                raise Exception("{0}.crt was not removed.".format(cert))
+
+            # Update goal state and check that .crt was downloaded
+            goal_state.update()
+            self.assertTrue(os.path.isfile(crt_path))
+
+    def test_it_should_always_download_certs_when_source_is_fabric(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.Fabric)
+            goal_state = GoalState(protocol.client)
+
+            cert = "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F"
+            crt_path = os.path.join(self.tmp_dir, cert + ".crt")
+            prv_path = os.path.join(self.tmp_dir, cert + ".prv")
+
+            # Check that crt and prv files are downloaded after processing goal state
+            self.assertTrue(os.path.isfile(crt_path))
+            self.assertTrue(os.path.isfile(prv_path))
+
+            # Remove .crt file
+            os.remove(crt_path)
+            if os.path.isfile(crt_path):
+                raise Exception("{0}.crt was not removed.".format(cert))
+
+            # Update goal state and check that .crt was downloaded
+            goal_state.update()
+            self.assertTrue(os.path.isfile(crt_path))
+
     def test_it_should_refresh_the_goal_state_when_it_is_inconsistent(self):
         #
         # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
