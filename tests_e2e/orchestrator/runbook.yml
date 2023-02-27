@@ -50,6 +50,8 @@ variable:
   # The test suites to execute
   - name: test_suites
     value: "agent_bvt"
+  - name: cloud
+    value: "public"
   - name: image
     value: ""
   - name: location
@@ -119,6 +121,7 @@ platform:
 combinator:
   type: agent_test_suites
   test_suites: $(test_suites)
+  cloud: $(cloud)
   image: $(image)
   location: $(location)
   vm_size: $(vm_size)

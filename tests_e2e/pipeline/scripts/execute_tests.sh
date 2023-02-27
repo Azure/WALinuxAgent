@@ -24,9 +24,7 @@ sudo chown 1000 "$BUILD_ARTIFACTSTAGINGDIRECTORY"
 #
 # Pull the container image used to execute the tests
 #
-az login --service-principal --username "$AZURE_CLIENT_ID" --password "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" > /dev/null
-
-az acr login --name waagenttests
+az acr login --name waagenttests --username "$CR_USER" --password "$CR_SECRET"
 
 docker pull waagenttests.azurecr.io/waagenttests:latest
 
@@ -59,6 +57,7 @@ docker run --rm \
           --runbook \$HOME/WALinuxAgent/tests_e2e/orchestrator/runbook.yml \
           --log_path \$HOME/logs/lisa \
           --working_path \$HOME/logs/lisa \
+          -v cloud:$CLOUD \
           -v subscription_id:$SUBSCRIPTION_ID \
           -v identity_file:\$HOME/.ssh/id_rsa \
           -v test_suites:\"$TEST_SUITES\" \
