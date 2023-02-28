@@ -165,6 +165,7 @@ class WireProtocolData(object):
         self.in_vm_artifacts_profile = None
         self.vm_settings = None
         self.etag = None
+        self.prev_etag = None
         self.imds_info = None
 
         self.reload()
@@ -242,9 +243,12 @@ class WireProtocolData(object):
         elif "/vmSettings" in url:
             if self.vm_settings is None:
                 resp.status = httpclient.NOT_FOUND
+            elif self.call_counts["vm_settings"] > 0 and self.prev_etag == self.etag:
+                resp.status = httpclient.NOT_MODIFIED
             else:
                 content = self.vm_settings
                 response_headers = [('ETag', self.etag)]
+                self.prev_etag = self.etag
             self.call_counts["vm_settings"] += 1
         elif '{0}/metadata/compute'.format(IMDS_ENDPOINT) in url:
             content = json.dumps(self.imds_info.get("compute", "{}"))
