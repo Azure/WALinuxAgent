@@ -382,7 +382,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             expected_message = "Certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C needed by Microsoft.OSTCExtensions.VMAccessForLinux is missing from the goal state"
             self.assertIn(expected_message, str(context.exception))
 
-    def test_it_should_always_download_certs_when_source_is_fast_track(self):
+    def test_it_should_download_certs_on_a_new_fast_track_goal_state(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
 
         with mock_wire_protocol(data_file) as protocol:
@@ -402,10 +402,11 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 raise Exception("{0}.crt was not removed.".format(cert))
 
             # Update goal state and check that .crt was downloaded
+            # protocol.mock_wire_data.set_etag(888)
             goal_state.update()
             self.assertTrue(os.path.isfile(crt_path))
 
-    def test_it_should_always_download_certs_when_source_is_fabric(self):
+    def test_it_should_download_certs_on_a_new_fabric_goal_state(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
 
         with mock_wire_protocol(data_file) as protocol:
