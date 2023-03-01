@@ -26,6 +26,9 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     test_suites: str = field(
         default_factory=str, metadata=field_metadata(required=True)
     )
+    cloud: str = field(
+        default_factory=str, metadata=field_metadata(required=True)
+    )
     image: str = field(
         default_factory=str, metadata=field_metadata(required=True)
     )
@@ -58,6 +61,9 @@ class AgentTestSuitesCombinator(Combinator):
         self._environments = self.create_environment_list()
         self._index = 0
 
+        if self.runbook.cloud not in self._DEFAULT_LOCATIONS:
+            raise Exception(f"Invalid cloud: {self.runbook.cloud}")
+
     @classmethod
     def type_name(cls) -> str:
         return "agent_test_suites"
@@ -73,7 +79,11 @@ class AgentTestSuitesCombinator(Combinator):
             self._index += 1
         return result
 
-    _DEFAULT_LOCATION = "westus2"
+    _DEFAULT_LOCATIONS = {
+        "china": "china north 2",
+        "government": "usgovarizona",
+        "public": "westus2"
+    }
 
     def create_environment_list(self) -> List[Dict[str, Any]]:
         loader = AgentTestLoader(self.runbook.test_suites)
@@ -138,7 +148,7 @@ class AgentTestSuitesCombinator(Combinator):
                 elif len(image.locations) > 0:
                     location = image.locations[0]
                 else:
-                    location = AgentTestSuitesCombinator._DEFAULT_LOCATION
+                    location = AgentTestSuitesCombinator._DEFAULT_LOCATIONS[self.runbook.cloud]
 
                 # If the runbook specified a VM size, use it. Else if the image specifies a list of VM sizes, use any of them. Otherwise,
                 # set the size to empty and let LISA choose it.
