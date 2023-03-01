@@ -28,6 +28,7 @@ from tests.tools import AgentTestCase, patch, load_data
 class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
     def test_it_should_use_vm_settings_by_default(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_etag(888)
             extensions_goal_state = GoalState(protocol.client).extensions_goal_state
             self.assertTrue(
                 isinstance(extensions_goal_state, ExtensionsGoalStateFromVmSettings),
@@ -199,7 +200,6 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
             data_file["vm_settings"] = invalid_vm_settings_file
             protocol.mock_wire_data = mockwiredata.WireProtocolData(data_file)
-            protocol.mock_wire_data.set_etag(888)
 
             with self.assertRaises(ProtocolError):  # the parsing error will cause an exception
                 _ = GoalState(protocol.client)
@@ -207,6 +207,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             # Do an extra call to update the goal state; this should save the vmsettings to the history directory
             # only once (self._find_history_subdirectory asserts 1 single match)
             time.sleep(0.1)  # add a short delay to ensure that a new timestamp would be saved in the history folder
+            protocol.mock_wire_data.set_etag(888)
             with self.assertRaises(ProtocolError):
                 _ = GoalState(protocol.client)
 
@@ -376,6 +377,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
         with mock_wire_protocol(data_file) as protocol:
             data_file["vm_settings"] = "hostgaplugin/vm_settings-missing_cert.json"
             protocol.mock_wire_data.reload()
+            protocol.mock_wire_data.set_etag(888)
 
             with self.assertRaises(GoalStateInconsistentError) as context:
                 _ = GoalState(protocol.client)
