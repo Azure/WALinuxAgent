@@ -161,6 +161,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
     def test_it_should_redact_the_protected_settings_when_saving_to_the_history_directory(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(888)
+            protocol.mock_wire_data.set_etag(888)
 
             goal_state = GoalState(protocol.client)
 
@@ -173,7 +174,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             if len(protected_settings) == 0:
                 raise Exception("The test goal state does not include any protected settings")
 
-            history_directory = self._find_history_subdirectory("888-1")
+            history_directory = self._find_history_subdirectory("888-888")
             extensions_config_file = os.path.join(history_directory, "ExtensionsConfig.xml")
             vm_settings_file = os.path.join(history_directory, "VmSettings.json")
             for file_name in extensions_config_file, vm_settings_file:
