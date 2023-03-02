@@ -20,9 +20,10 @@
 #
 # BVT for the agent update scenario
 #
+# The test verifies agent update for rsm workflow. This test covers three scenarios downgrade, upgrade and no update.
+# For each scenario, we intiaite the rsm request with target version and then verify agent updated to that target version.
+#
 import json
-import os.path
-import time
 
 import requests
 from assertpy import assert_that
@@ -32,6 +33,7 @@ from azure.mgmt.compute.models import VirtualMachine
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.retry import retry_if_not_found
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine import VmMachine
 
@@ -40,19 +42,17 @@ class RsmUpdateBvt(AgentTest):
 
     def __init__(self, context: AgentTestContext):
         super().__init__(context)
-        self._ssh_client = None
-
-    def run(self):
         self._ssh_client = SshClient(
             ip_address=self._context.vm_ip_address,
             username=self._context.username,
             private_key_file=self._context.private_key_file)
 
+    def run(self) -> None:
         # Allow agent to send supported feature flag
-        time.sleep(60)
+        self._verify_agent_reported_supported_feature_flag()
 
         log.info("*******Verifying the Agent Downgrade scenario*******")
-        self._prepare_rsm_update("1.3.0.0")
+        self._mock_rsm_update("1.3.0.0")
         self._prepare_agent()
 
         # Verify downgrade scenario
@@ -60,7 +60,7 @@ class RsmUpdateBvt(AgentTest):
 
         # Verify upgrade scenario
         log.info("*******Verifying the Agent Upgrade scenario*******")
-        self._prepare_rsm_update("1.3.1.0")
+        self._mock_rsm_update("1.3.1.0")
         self._verify_guest_agent_update("1.3.1.0")
 
         # verify no version update. There is bug in CRP and will enable once it's fixed
@@ -68,21 +68,22 @@ class RsmUpdateBvt(AgentTest):
         # self._prepare_rsm_update("1.3.1.0")
         # self._verify_guest_agent_update("1.3.1.0")
 
-    def _prepare_agent(self):
+    def _prepare_agent(self) -> None:
+        """
+        This method is to ensure agent is ready for accepting rsm updates. As part of that we update following flags
+        1) Changing daemon version since daemon has a hard check on agent version in order to update agent. It doesn't allow versions which are less than daemon version.
+        2) Updating GAFamily type "Test" and GAUpdates flag to process agent updates on test versions.
+        """
         local_path = self._context.test_source_directory/"tests"/"scripts"/"agent-python"
         remote_path = self._context.remote_working_directory/"agent-python"
         self._ssh_client.copy(local_path, remote_path)
-        python = self._ssh_client.run_command(f"sudo {remote_path}").rstrip()
-        version_file_dir = self._ssh_client.run_command(f"{python} -c 'import azurelinuxagent.common.version as v; import os; print(os.path.dirname(v.__file__))'").rstrip()
-        version_file__full_path = os.path.join(version_file_dir, "version.py")
-        # E0401: W1401: Anomalous backslash in string: '\s'. String constant might be missing an r prefix. (anomalous-backslash-in-string).
-        self._ssh_client.run_command(f"sudo sed -E -i \"s/AGENT_VERSION\s+=\s+'[0-9.]+'/AGENT_VERSION = '1.0.0.0'/\" {version_file__full_path}")  # pylint: disable=W1401
-        self._ssh_client.run_command("sudo sed -i 's/GAUpdates.Enabled=n/GAUpdates.Enabled=y/g' /etc/waagent.conf")
-        self._ssh_client.run_command("sudo sed -i '$a AutoUpdate.GAFamily=Test' /etc/waagent.conf")
         local_path = self._context.test_source_directory/"tests"/"scripts"/"agent-service"
         remote_path = self._context.remote_working_directory/"agent-service"
         self._ssh_client.copy(local_path, remote_path)
-        self._ssh_client.run_command(f"sudo {remote_path} --cmd restart")
+        local_path = self._context.test_source_directory/"tests"/"scripts"/"agent-update-config"
+        remote_path = self._context.remote_working_directory/"agent-update-config"
+        self._ssh_client.copy(local_path, remote_path)
+        self._ssh_client.run_command(f"sudo {remote_path}")
 
     @staticmethod
     def _verify_agent_update_flag_enabled(vm: VmMachine) -> bool:
@@ -92,7 +93,7 @@ class RsmUpdateBvt(AgentTest):
             return False
         return flag
 
-    def _enable_agent_update_flag(self, vm: VmMachine):
+    def _enable_agent_update_flag(self, vm: VmMachine) -> None:
         osprofile = {
             "location": self._context.vm.location,  # location is required field
             "properties": {
@@ -105,8 +106,12 @@ class RsmUpdateBvt(AgentTest):
         }
         vm.create_or_update(osprofile)
 
-    def _prepare_rsm_update(self, requested_version):
-        vm = VmMachine(self._context.vm)
+    def _mock_rsm_update(self, requested_version: str) -> None:
+        """
+        This method is to simulate the rsm request.
+        First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
+        """
+        vm: VmMachine = VmMachine(self._context.vm)
         if not self._verify_agent_update_flag_enabled(vm):
             # enable the flag
             self._enable_agent_update_flag(vm)
@@ -117,6 +122,8 @@ class RsmUpdateBvt(AgentTest):
         credential = DefaultAzureCredential()
         token = credential.get_token("https://management.azure.com/.default")
         headers = {'Authorization': 'Bearer ' + token.token, 'Content-Type': 'application/json'}
+        # Later this api call will be replaced by azure-python-sdk wrapper
+        # Todo: management endpoints are different for national clouds. we need to change this.
         url = "https://management.azure.com/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Compute/virtualMachines/{2}/" \
               "UpgradeVMAgent?api-version=2022-08-01".format(self._context.vm.subscription, self._context.vm.resource_group, self._context.vm.name)
         data = {
@@ -130,13 +137,36 @@ class RsmUpdateBvt(AgentTest):
         else:
             raise Exception("Error occurred while RSM upgrade request. Status code : {0} and msg: {1}".format(response.status_code, response.content))
 
-    def _verify_guest_agent_update(self, requested_version):
-        # Allow agent to update to requested version
-        time.sleep(60)
-        stdout = self._ssh_client.run_command("sudo waagent --version")
-        assert_that(stdout).described_as("Guest agent didn't update to requested version {0} but found \n {1}".format(requested_version, stdout))\
-            .contains(f"Goal state agent: {requested_version}")
-        log.info(f"current agent version running: \n {stdout}")
+    def _verify_guest_agent_update(self, requested_version: str) -> None:
+        """
+        Verify current agent version running on rsm requested version
+        """
+        def _check_agent_version(requested_version: str) -> bool:
+            stdout: str = self._ssh_client.run_command("sudo waagent --version")
+            assert_that(stdout).described_as("Guest agent didn't update to requested version {0} but found \n {1}".format(requested_version, stdout))\
+                .contains(f"Goal state agent: {requested_version}")
+            return True
+
+        log.info("Verifying agent updated to requested version")
+        retry_if_not_found(lambda: _check_agent_version(requested_version))
+        stdout: str = self._ssh_client.run_command("sudo waagent --version")
+        log.info(f"Verified agent updated to requested version. Current agent version running:\n {stdout}")
+
+    def _verify_agent_reported_supported_feature_flag(self):
+        """
+        RSM update rely on supported flag that agent sends to CRP.So, checking if GA reports feature flag from the agent log
+        """
+        def _check_agent_supports_versioning() -> bool:
+            found: str = self._ssh_client.run_command("grep -q 'Agent.*supports GA Versioning' /var/log/waagent.log && echo true || echo false").rstrip()
+            return True if found == "true" else False
+
+        log.info("Verifying agent reported supported feature flag")
+        found: bool = retry_if_not_found(lambda: _check_agent_supports_versioning())
+
+        if not found:
+            raise Exception("Agent failed to report supported feature flag, so skipping agent update validations")
+        else:
+            log.info("Successfully verified agent reported supported feature flag")
 
 
 if __name__ == "__main__":

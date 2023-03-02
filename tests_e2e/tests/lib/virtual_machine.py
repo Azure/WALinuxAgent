@@ -87,7 +87,7 @@ class VirtualMachineBaseClass(ABC):
 
     def create_or_update(self, parameters=None, timeout=5 * 60) -> None:
         """
-        Create or update the virtual machine or scale set with custom settings
+        Creates or updates the virtual machine or scale set with custom settings
         """
         if parameters is None:
             parameters = {}
@@ -184,7 +184,7 @@ class VmScaleSet(VirtualMachineBaseClass):
                 vmss_vm_list.append(vmss_vm)
 
             except Exception as e:
-                log.warning("Unable to retrieve instance view for scale set instance %s. Trying out other instances.\nError: %s", vm, e)
+                log.warning("Unable to retrieve vm information for scale set instance %s. Trying out other instances.\nError: %s", vm, e)
 
         return vmss_vm_list
 

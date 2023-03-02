@@ -24,24 +24,16 @@ set -euo pipefail
 #
 
 usage() (
-    echo "Usage: service-command -c|--cmd name"
+    echo "Usage: agent-service command"
     exit 1
 )
 
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        -c|--cmd)
-            shift
-            if [ "$#" -lt 1 ]; then
-                usage
-            fi
-            cmd=$1
-            shift
-            ;;
-        *)
-            usage
-    esac
-done
+if [ "$#" -lt 1 ]; then
+    usage
+fi
+cmd=$1
+shift
+
 if [ "$#" -ne 0 ] || [ -z ${cmd+x} ] ; then
     usage
 fi
