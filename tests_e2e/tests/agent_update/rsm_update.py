@@ -143,7 +143,8 @@ class RsmUpdateBvt(AgentTest):
         """
         def _check_agent_version(requested_version: str) -> bool:
             stdout: str = self._ssh_client.run_command("sudo waagent --version")
-            assert_that(stdout).described_as("Guest agent didn't update to requested version {0} but found \n {1}".format(requested_version, stdout))\
+            assert_that(stdout).described_as("Guest agent didn't update to requested version {0} but found \n {1}. \n "
+                                             "To debug verify if CRP has upgrade operation around that time and also check if agent log has any errors ".format(requested_version, stdout))\
                 .contains(f"Goal state agent: {requested_version}")
             return True
 
@@ -161,7 +162,7 @@ class RsmUpdateBvt(AgentTest):
             return True if found == "true" else False
 
         log.info("Verifying agent reported supported feature flag")
-        found: bool = retry_if_not_found(lambda: _check_agent_supports_versioning())
+        found: bool = retry_if_not_found(_check_agent_supports_versioning)
 
         if not found:
             raise Exception("Agent failed to report supported feature flag, so skipping agent update validations")

@@ -50,7 +50,7 @@ def retry_if_not_found(operation: Callable[[], bool], attempts: int = 5) -> bool
         attempts -= 1
         try:
             found = operation()
-        except Exception as e:
+        except Exception:
             if attempts == 0:
                 raise
         if not found:
