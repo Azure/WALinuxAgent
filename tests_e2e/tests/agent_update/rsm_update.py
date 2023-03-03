@@ -26,7 +26,6 @@
 import json
 
 import requests
-from assertpy import assert_that
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute.models import VirtualMachine
 
