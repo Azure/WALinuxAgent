@@ -143,10 +143,12 @@ class RsmUpdateBvt(AgentTest):
         """
         def _check_agent_version(requested_version: str) -> bool:
             stdout: str = self._ssh_client.run_command("sudo waagent --version")
-            assert_that(stdout).described_as("Guest agent didn't update to requested version {0} but found \n {1}. \n "
-                                             "To debug verify if CRP has upgrade operation around that time and also check if agent log has any errors ".format(requested_version, stdout))\
-                .contains(f"Goal state agent: {requested_version}")
-            return True
+            expected_version = f"Goal state agent: {requested_version}"
+            if expected_version in stdout:
+                return True
+            else:
+                raise Exception("Guest agent didn't update to requested version {0} but found \n {1}. \n "
+                                             "To debug verify if CRP has upgrade operation around that time and also check if agent log has any errors ".format(requested_version, stdout))
 
         log.info("Verifying agent updated to requested version")
         retry_if_not_found(lambda: _check_agent_version(requested_version))

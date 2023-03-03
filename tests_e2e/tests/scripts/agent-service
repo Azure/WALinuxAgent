@@ -22,6 +22,7 @@ set -euo pipefail
 #
 # The service name is walinuxagent in Ubuntu/debian and waagent elsewhere
 #
+# TODO: Update install-agent to use this script
 
 usage() (
     echo "Usage: agent-service command"
