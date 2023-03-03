@@ -207,7 +207,7 @@ AGENT_LONG_NAME = "Azure Linux Agent"
 # IMPORTANT: Please be sure that the version is always 9.9.9.9 on the develop branch. Automation requires this, otherwise
 #            DCR may test the wrong agent version.
 #
-#            When doing a release, be sure to use the actual agent version. Current agent version: 2.4.0.0
+#            When doing a release, be sure to use the actual agent version.
 #
 AGENT_VERSION = '2.9.0.4'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
