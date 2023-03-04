@@ -109,6 +109,12 @@ def get_linux_distribution_from_distro(get_full_name):
     )
     full_name = distro.linux_distribution()[0].strip()
     osinfo.append(full_name)
+
+    # Fixing is the problem https://github.com/Azure/WALinuxAgent/issues/2715. Distro.linux_distribution method not retuning full version
+    # If best is true, the most precise version number out of all examined sources is returned.
+    if osinfo and "mariner" in osinfo[0].lower():
+        osinfo[1] = distro.version(best=True)
+
     return osinfo
 
 
