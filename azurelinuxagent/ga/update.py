@@ -32,7 +32,8 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.utils import fileutil, textutil
-from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames
+from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
+    get_agent_supported_features_list_for_crp
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
@@ -148,6 +149,9 @@ class UpdateHandler(object):
 
         # VM Size is reported via the heartbeat, default it here.
         self._vm_size = None
+
+        # Flag is Used to log if GA supports versioning on agent start
+        self._agent_supports_versioning_logged = False
 
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
@@ -523,6 +527,7 @@ class UpdateHandler(object):
             # status reporting should be done even when the goal state is not updated
             agent_update_status = agent_update_handler.get_vmagent_update_status()
             self._report_status(exthandlers_handler, agent_update_status)
+            self._log_agent_supports_versioning_or_not()
             return
 
         # check for agent updates
@@ -546,6 +551,9 @@ class UpdateHandler(object):
             # report status before processing the remote access, since that operation can take a long time
             agent_update_status = agent_update_handler.get_vmagent_update_status()
             self._report_status(exthandlers_handler, agent_update_status)
+
+            # Logging after agent reports supported feature flag so this msg in sync with report status
+            self._log_agent_supports_versioning_or_not()
 
             if self._processing_new_incarnation():
                 remote_access_handler.run()
@@ -609,6 +617,24 @@ class UpdateHandler(object):
                 msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
                 logger.warn(msg)
                 add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
+
+    def _log_agent_supports_versioning_or_not(self):
+        def _log_event(msg):
+            logger.info(msg)
+            add_event(AGENT_NAME, op=WALAEventOperation.FeatureFlag, message=msg)
+        if not self._agent_supports_versioning_logged:
+            supports_ga_versioning = False
+            for _, feature in get_agent_supported_features_list_for_crp().items():
+                if feature.name == SupportedFeatureNames.GAVersioningGovernance:
+                    supports_ga_versioning = True
+                    break
+            if supports_ga_versioning:
+                msg = "Agent : {0} supports GA Versioning".format(CURRENT_VERSION)
+                _log_event(msg)
+            else:
+                msg = "Agent : {0} doesn't support GA Versioning".format(CURRENT_VERSION)
+                _log_event(msg)
+            self._agent_supports_versioning_logged = True
 
     def _on_initial_goal_state_completed(self, extensions_summary):
         fileutil.write_file(self._initial_goal_state_file_path(), ustr(extensions_summary))
