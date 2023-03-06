@@ -26,7 +26,7 @@ from typing import Any, List
 from azure.core.polling import LROPoller
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineScaleSetExtension, VirtualMachineInstanceView, VirtualMachineScaleSetInstanceView
+from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineScaleSetExtension, VirtualMachineInstanceView, VirtualMachineScaleSetInstanceView, VirtualMachine, VirtualMachineScaleSetVM
 from azure.mgmt.resource import ResourceManagementClient
 from msrestazure.azure_cloud import Cloud
 
@@ -91,11 +91,39 @@ class VirtualMachineBaseClass(ABC):
         Derived classes must provide the implementation for this method using their corresponding begin_restart() implementation
         """
 
+    @abstractmethod
+    def get(self) -> Any:
+        """
+        Retrieves the information about the virtual machine or scale set
+        """
+
+    def create_or_update(self, parameters=None, timeout=5 * 60) -> None:
+        """
+        Creates or updates the virtual machine or scale set with custom settings
+        """
+        if parameters is None:
+            parameters = {}
+
+        log.info("Creating/Updating VM for %s", self._identifier)
+
+        poller: LROPoller = execute_with_retry(lambda: self._begin_create_or_update(parameters))
+
+        poller.wait(timeout=timeout)
+
+        if not poller.done():
+            raise TimeoutError(f"Failed to restart {self._identifier.name} after {timeout} seconds")
+
+    @abstractmethod
+    def _begin_create_or_update(self, parameters) -> Any:
+        """
+        Derived classes must provide the implementation for this method using their corresponding begin_create_or_update() implementation
+        """
+
     def __str__(self):
         return f"{self._identifier}"
 
 
-class VirtualMachine(VirtualMachineBaseClass):
+class VmMachine(VirtualMachineBaseClass):
     def get_instance_view(self) -> VirtualMachineInstanceView:
         log.info("Retrieving instance view for %s", self._identifier)
         return execute_with_retry(lambda: self._compute_client.virtual_machines.get(
@@ -110,10 +138,19 @@ class VirtualMachine(VirtualMachineBaseClass):
             resource_group_name=self._identifier.resource_group,
             vm_name=self._identifier.name))
 
+    def get(self) -> VirtualMachine:
+        log.info("Retrieving vm information for %s", self._identifier)
+        return execute_with_retry(lambda: self._compute_client.virtual_machines.get(
+            resource_group_name=self._identifier.resource_group,
+            vm_name=self._identifier.name))
+
     def _begin_restart(self) -> LROPoller:
         return self._compute_client.virtual_machines.begin_restart(
             resource_group_name=self._identifier.resource_group,
             vm_name=self._identifier.name)
+
+    def _begin_create_or_update(self, parameters) -> LROPoller:
+        return self._compute_client.virtual_machines.begin_create_or_update(self._identifier.resource_group, self._identifier.name, parameters)
 
 
 class VmScaleSet(VirtualMachineBaseClass):
@@ -149,7 +186,25 @@ class VmScaleSet(VirtualMachineBaseClass):
             resource_group_name=self._identifier.resource_group,
             vm_scale_set_name=self._identifier.name))
 
+    def get(self) -> List[VirtualMachineScaleSetVM]:
+        log.info("Retrieving vm information for %s", self._identifier)
+        vmss_vm_list: List[VirtualMachineScaleSetVM] = []
+        for vm in execute_with_retry(lambda: self._compute_client.virtual_machine_scale_set_vms.list(self._identifier.resource_group, self._identifier.name)):
+            try:
+                vmss_vm: VirtualMachineScaleSetVM = execute_with_retry(self._compute_client.virtual_machine_scale_set_vms.get(
+                    resource_group_name=self._identifier.resource_group, vm_scale_set_name=self._identifier.name, instance_id=vm.instance_id))
+                vmss_vm_list.append(vmss_vm)
+
+            except Exception as e:
+                log.warning("Unable to retrieve vm information for scale set instance %s. Trying out other instances.\nError: %s", vm, e)
+
+        return vmss_vm_list
+
     def _begin_restart(self) -> LROPoller:
         return self._compute_client.virtual_machine_scale_sets.begin_restart(
             resource_group_name=self._identifier.resource_group,
             vm_scale_set_name=self._identifier.name)
+
+    def _begin_create_or_update(self, parameters) -> None:
+        # TODO: Revisit this implementation
+        return
