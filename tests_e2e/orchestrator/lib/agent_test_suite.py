@@ -29,7 +29,6 @@ from typing import Any, Dict, List
 #     E0401: Unable to import 'lisa' (import-error)
 #     etc
 from lisa import (  # pylint: disable=E0401
-    CustomScriptBuilder,
     Logger,
     Node,
     notifier,
@@ -48,6 +47,8 @@ from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log as agent_test_logger  # Logger used by the tests
 from tests_e2e.tests.lib.logging import set_current_thread_log
+from tests_e2e.tests.lib.shell import run_command
+from tests_e2e.tests.lib.ssh_client import SshClient
 
 
 def _initialize_lisa_logger():
@@ -116,6 +117,7 @@ class AgentTestSuite(LisaTestSuite):
             self.test_suites: List[AgentTestSuite] = None
             self.collect_logs: str = None
             self.skip_setup: bool = None
+            self.ssh_client: SshClient = None
 
     def __init__(self, metadata: TestSuiteMetadata) -> None:
         super().__init__(metadata)
@@ -148,23 +150,25 @@ class AgentTestSuite(LisaTestSuite):
         self.__context.log_path = self._get_log_path(variables, lisa_log_path)
         self.__context.log = log
         self.__context.node = node
-        self.__context.is_vhd = self._get_required_parameter(variables, "c_vhd") != ""
-        self.__context.image_name = f"{node.os.name}-vhd" if self.__context.is_vhd else self._get_required_parameter(variables, "c_name")
+        self.__context.is_vhd = self._get_optional_parameter(variables, "c_vhd") != ""
+        self.__context.image_name = f"{node.os.name}-vhd" if self.__context.is_vhd else self._get_required_parameter(variables, "c_env_name")
         self.__context.test_suites = self._get_required_parameter(variables, "c_test_suites")
         self.__context.collect_logs = self._get_required_parameter(variables, "collect_logs")
         self.__context.skip_setup = self._get_required_parameter(variables, "skip_setup")
-
-        self._log.info(
-            "Test suite parameters: [skip_setup: %s] [collect_logs: %s] [test_suites: %s]",
-            self.context.skip_setup,
-            self.context.collect_logs,
-            [t.name for t in self.context.test_suites])
+        self.__context.ssh_client = SshClient(ip_address=self.__context.vm_ip_address, username=self.__context.username, private_key_file=self.__context.private_key_file)
 
     @staticmethod
     def _get_required_parameter(variables: Dict[str, Any], name: str) -> Any:
         value = variables.get(name)
         if value is None:
             raise Exception(f"The runbook is missing required parameter '{name}'")
+        return value
+
+    @staticmethod
+    def _get_optional_parameter(variables: Dict[str, Any], name: str, default_value: Any = "") -> Any:
+        value = variables.get(name)
+        if value is None:
+            return default_value
         return value
 
     @staticmethod
@@ -211,7 +215,7 @@ class AgentTestSuite(LisaTestSuite):
             completed: Path = self.context.working_directory/"completed"
 
             if completed.exists():
-                self._log.info("Found %s. Build has already been done, skipping", completed)
+                self._log.info("Found %s. Build has already been done, skipping.", completed)
                 return
 
             self._log.info("Creating working directory: %s", self.context.working_directory)
@@ -260,10 +264,33 @@ class AgentTestSuite(LisaTestSuite):
         self._log.info("Resource Group: %s", self.context.vm.resource_group)
         self._log.info("")
 
+        self._install_tools_on_node()
+
         if self.context.is_vhd:
             self._log.info("Using a VHD; will not install the test Agent.")
         else:
             self._install_agent_on_node()
+
+    def _install_tools_on_node(self) -> None:
+        """
+        Installs the test tools on the test node
+        """
+        self.context.ssh_client.run_command("mkdir -p ~/bin")
+
+        tools_path = self.context.test_source_directory/"orchestrator"/"scripts"
+        self._log.info(f"Copying {tools_path} to the test node")
+        self.context.ssh_client.copy(tools_path, Path("~/bin"), remote_target=True, recursive=True)
+
+        pypy_path = Path("/tmp/pypy3.7.tar.bz2")
+        if not pypy_path.exists():
+            pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2"
+            self._log.info(f"Downloading {pypy_download} to {pypy_path}")
+            run_command(["wget", pypy_download, "-O",  pypy_path])
+        self._log.info(f"Copying {pypy_path} to the test node")
+        self.context.ssh_client.copy(pypy_path, Path("~/bin"), remote_target=True)
+
+        self._log.info(f'Installing tools on the test node\n{self.context.ssh_client.run_command("~/bin/scripts/install-tools")}')
+        self._log.info(f'Remote commands will use {self.context.ssh_client.run_command("which python3")}')
 
     def _install_agent_on_node(self) -> None:
         """
@@ -271,18 +298,12 @@ class AgentTestSuite(LisaTestSuite):
         """
         agent_package_path: Path = self._get_agent_package_path()
 
-        # The install script needs to unzip the agent package; ensure unzip is installed on the test node
-        self._log.info("Installing unzip tool on %s", self.context.node.name)
-        self.context.node.os.install_packages("unzip")
-
         self._log.info("Installing %s on %s", agent_package_path, self.context.node.name)
         agent_package_remote_path = self.context.remote_working_directory/agent_package_path.name
         self._log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, agent_package_remote_path)
-        self.context.node.shell.copy(agent_package_path, agent_package_remote_path)
-        self.execute_script_on_node(
-            self.context.test_source_directory/"orchestrator"/"scripts"/"install-agent",
-            parameters=f"--package {agent_package_remote_path} --version {AGENT_VERSION}",
-            sudo=True)
+        self.context.ssh_client.copy(agent_package_path, agent_package_remote_path, remote_target=True)
+        stdout = self.context.ssh_client.run_command(f"install-agent --package {agent_package_remote_path} --version {AGENT_VERSION}", use_sudo=True)
+        self._log.info(stdout)
 
         self._log.info("The agent was installed successfully.")
 
@@ -293,13 +314,14 @@ class AgentTestSuite(LisaTestSuite):
         try:
             # Collect the logs on the test machine into a compressed tarball
             self._log.info("Collecting logs on test machine [%s]...", self.context.node.name)
-            self.execute_script_on_node(self.context.test_source_directory/"orchestrator"/"scripts"/"collect-logs", sudo=True)
+            stdout = self.context.ssh_client.run_command("collect-logs", use_sudo=True)
+            self._log.info(stdout)
 
             # Copy the tarball to the local logs directory
             remote_path = "/tmp/waagent-logs.tgz"
             local_path = self.context.log_path/'{0}.tgz'.format(self.context.image_name)
             self._log.info("Copying %s:%s to %s", self.context.node.name, remote_path, local_path)
-            self.context.node.shell.copy_back(remote_path, local_path)
+            self.context.ssh_client.copy(remote_path, local_path, remote_source=True)
         except:  # pylint: disable=bare-except
             self._log.exception("Failed to collect logs from the test machine")
 
@@ -310,9 +332,13 @@ class AgentTestSuite(LisaTestSuite):
         """
         self._set_context(node, variables, log_path, log)
 
-        test_suite_success = True
-
         with _set_thread_name(self.context.image_name):  # The thread name is added to self._log
+            self._log.info(
+                "Test suite parameters:  [test_suites: %s] [skip_setup: %s] [collect_logs: %s]",
+                [t.name for t in self.context.test_suites], self.context.skip_setup, self.context.collect_logs)
+
+            test_suite_success = True
+
             try:
                 if not self.context.skip_setup:
                     self._setup()
@@ -332,12 +358,9 @@ class AgentTestSuite(LisaTestSuite):
                         self._collect_node_logs()
 
             except:   # pylint: disable=bare-except
-                # Note that we report the error to the LISA log and then re-raise it. We log it here
-                # so that the message is decorated with the thread name in the LISA log; we re-raise
-                # to let LISA know the test errored out (LISA will report that error one more time
-                # in its log)
-                self._log.exception("UNHANDLED EXCEPTION")
-                raise
+                # Report the error and raise and exception to let LISA know that the test errored out.
+                self._log.exception("TEST FAILURE DUE TO AN UNEXPECTED ERROR")
+                raise Exception("Stopping test execution due to an unexpected error in the test suite")
 
             finally:
                 self._clean_up()
@@ -459,33 +482,5 @@ class AgentTestSuite(LisaTestSuite):
         msg.elapsed = (datetime.datetime.now() - start_time).total_seconds()
 
         notifier.notify(msg)
-
-    def execute_script_on_node(self, script_path: Path, parameters: str = "", sudo: bool = False) -> int:
-        """
-        Executes the given script on the test node; if 'sudo' is True, the script is executed using the sudo command.
-        """
-        custom_script_builder = CustomScriptBuilder(script_path.parent, [script_path.name])
-        custom_script = self.context.node.tools[custom_script_builder]
-
-        if parameters == '':
-            command_line = f"{script_path}"
-        else:
-            command_line = f"{script_path} {parameters}"
-
-        self._log.info("Executing [%s]", command_line)
-
-        result = custom_script.run(parameters=parameters, sudo=sudo)
-
-        if result.stdout != "":
-            separator = "\n" if "\n" in result.stdout else " "
-            self._log.info("stdout:%s%s", separator, result.stdout)
-        if result.stderr != "":
-            separator = "\n" if "\n" in result.stderr else " "
-            self._log.error("stderr:%s%s", separator, result.stderr)
-
-        if result.exit_code != 0:
-            raise Exception(f"[{command_line}] failed. Exit code: {result.exit_code}")
-
-        return result.exit_code
 
 

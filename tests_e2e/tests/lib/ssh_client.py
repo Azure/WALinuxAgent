@@ -28,14 +28,19 @@ class SshClient(object):
         self._private_key_file: Path = private_key_file
         self._port: int = port
 
-    def run_command(self, command: str) -> str:
+    def run_command(self, command: str, use_sudo: bool = False) -> str:
         """
         Executes the given command over SSH and returns its stdout. If the command returns a non-zero exit code,
         the function raises a RunCommandException.
         """
         destination = f"ssh://{self._username}@{self._ip_address}:{self._port}"
 
-        return shell.run_command(["ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination, command])
+        # Note that we add ~/bin to the remote PATH, since Python (Pypy) and other test tools are installed there.
+        # Note, too, that when using sudo we need to carry over the value of PATH to the sudo session
+        sudo = "sudo env PATH=$PATH" if use_sudo else ''
+        return shell.run_command([
+            "ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination,
+            f"PATH=~/bin:$PATH;{sudo} {command}"])
 
     @staticmethod
     def generate_ssh_key(private_key_file: Path):
@@ -46,3 +51,19 @@ class SshClient(object):
 
     def get_architecture(self):
         return self.run_command("uname -m").rstrip()
+
+    def copy(self, source: Path, target: Path, remote_source: bool = False, remote_target: bool = False, recursive: bool = False):
+        """
+        Copy file from local to remote machine
+        """
+        if remote_source:
+            source = f"{self._username}@{self._ip_address}:{source}"
+        if remote_target:
+            target = f"{self._username}@{self._ip_address}:{target}"
+
+        command = ["scp", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file]
+        if recursive:
+            command.append("-r")
+        command.extend([str(source), str(target)])
+
+        shell.run_command(command)

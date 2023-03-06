@@ -57,18 +57,19 @@ image-sets:
 # '<Publisher>:<Offer>:<Sku>:<Version>'
 #
 images:
-#
-# TODO: Add CentOS 6.10 and Debian 8
-#
-#   centos_610: "OpenLogic CentOS 6.10 latest"
-#   debian_8: "credativ Debian 8 latest"
-#
    alma_9: "almalinux almalinux 9-gen2 latest"
+   centos_610: "OpenLogic CentOS 6.10 latest"
    centos_79: "OpenLogic CentOS 7_9 latest"
+   debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
    debian_11: "Debian debian-11 11 latest"
    debian_11_arm64: "Debian debian-11 11-backports-arm64 latest"
+   flatcar: "kinvolk flatcar-container-linux-free stable latest"
+   flatcar_arm64:
+      urn: "kinvolk flatcar-container-linux-corevm stable latest"
+      vm_sizes:
+         - "Standard_D2pls_v5"
    mariner_1: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
    mariner_2: "microsoftcblmariner cbl-mariner cbl-mariner-2 latest"
    mariner_2_arm64:

@@ -65,11 +65,14 @@ variable:
   # the command line.
   #
   # c_marketplace_image, c_vm_size, c_location, and c_vhd are handled by LISA and define
-  # the set of test VMs that need to be created, while c_test_suites and c_name are parameters
+  # the set of test VMs that need to be created, while c_test_suites and c_env_name are parameters
   # for the AgentTestSuite; the former defines the test suites that must be executed on each
   # of those test VMs and the latter is the name of the environment, which is used for logging
   # purposes (NOTE: the AgentTestSuite also uses c_vhd).
   #
+  - name: c_env_name
+    value: ""
+    is_case_visible: true
   - name: c_marketplace_image
     value: ""
   - name: c_vm_size
@@ -81,9 +84,6 @@ variable:
     is_case_visible: true
   - name: c_test_suites
     value: []
-    is_case_visible: true
-  - name: c_name
-    value: ""
     is_case_visible: true
 
   #
