@@ -291,11 +291,13 @@ class GoalState(object):
         #
         if self._extensions_goal_state.source == GoalStateSource.FastTrack:
             certs_uri = findtext(xml_doc, "Certificates")
-            if certs_uri is not None:
-                self._download_certificates(certs_uri)
-            self._check_certificates()
+            self._check_certificates(certs_uri)
 
-    def _check_certificates(self):
+    def _check_certificates(self, certs_uri):
+        # Re-download certificates in case they have been removed from disk since last download
+        if certs_uri is not None:
+            self._download_certificates(certs_uri)
+        # Check that certificates needed by extensions are in goal state certs.summary
         for extension in self.extensions_goal_state.extensions:
             for settings in extension.settings:
                 if settings.protectedSettings is None:
