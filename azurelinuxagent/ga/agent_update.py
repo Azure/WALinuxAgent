@@ -178,7 +178,10 @@ class AgentUpdateHandler(object):
             add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg_, log_event=False)
         else:
             msg_ += "[NOTE: Will not log the same error for the next 6 hours]"
-            if msg_ != self._last_warning or self._last_warning_time == datetime.datetime.min or datetime.datetime.now() >= self._last_warning_time + datetime.timedelta(hours=6):
+            # Incarnation may change if we get new goal state that would make whole string unique every time. So comparing only first partition before Incarnation
+            prefix_msg = msg_.split("incarnation")[0]
+            prefix_last_warning_msg = self._last_warning.split("incarnation")[0]
+            if prefix_msg != prefix_last_warning_msg or self._last_warning_time == datetime.datetime.min or datetime.datetime.now() >= self._last_warning_time + datetime.timedelta(hours=6):
                 if level == LogLevel.WARNING:
                     logger.warn(msg_)
                 elif level == LogLevel.ERROR:
