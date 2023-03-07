@@ -295,7 +295,7 @@ class GoalState(object):
 
     def _check_certificates(self):
         # Re-download certificates in case they have been removed from disk since last download
-        if self._goal_state_properties & GoalStateProperties.Certificates != 0 and self._certs_uri is not None:
+        if self._goal_state_properties & GoalStateProperties.Certificates and self._certs_uri is not None:
             self._download_certificates(self._certs_uri)
         # Check that certificates needed by extensions are in goal state certs.summary
         for extension in self.extensions_goal_state.extensions:
