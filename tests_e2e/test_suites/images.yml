@@ -15,6 +15,7 @@ image-sets:
       - "debian_9"
       - "debian_10"
       - "debian_11"
+      - "flatcar"
       - "suse_12"
       - "mariner_1"
       - "mariner_2"
@@ -31,6 +32,7 @@ image-sets:
    # Endorsed distros (ARM64) that are tested on the daily runs
    endorsed-arm64:
       - "debian_11_arm64"
+      - "flatcar_arm64"
       - "mariner_2_arm64"
       - "rhel_90_arm64"
       - "ubuntu_2204_arm64"

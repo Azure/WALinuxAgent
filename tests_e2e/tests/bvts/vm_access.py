@@ -28,7 +28,7 @@ import uuid
 from assertpy import assert_that
 from pathlib import Path
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentTest, TestSkipped
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -38,6 +38,9 @@ from tests_e2e.tests.lib.vm_extension import VmExtension
 
 class VmAccessBvt(AgentTest):
     def run(self):
+        if type(self._context.node.os).__name__ == 'CoreOs' and self._context.node.os.information.full_version.startswith('Flatcar'):
+            raise TestSkipped("Currently VMAccess is not supported on Flatcar")
+
         # Try to use a unique username for each test run (note that we truncate to 32 chars to
         # comply with the rules for usernames)
         log.info("Generating a new username and SSH key")

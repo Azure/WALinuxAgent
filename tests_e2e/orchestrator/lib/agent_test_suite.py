@@ -43,6 +43,7 @@ from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
+from tests_e2e.tests.lib.agent_test import TestSkipped
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log as agent_test_logger  # Logger used by the tests
@@ -342,6 +343,7 @@ class AgentTestSuite(LisaTestSuite):
                 "Test suite parameters:  [test_suites: %s] [skip_setup: %s] [collect_logs: %s]",
                 [t.name for t in self.context.test_suites], self.context.skip_setup, self.context.collect_logs)
 
+            start_time: datetime.datetime = datetime.datetime.now()
             test_suite_success = True
 
             try:
@@ -364,8 +366,16 @@ class AgentTestSuite(LisaTestSuite):
 
             except:   # pylint: disable=bare-except
                 # Report the error and raise and exception to let LISA know that the test errored out.
-                self._log.exception("TEST FAILURE DUE TO AN UNEXPECTED ERROR")
-                raise Exception("Stopping test execution due to an unexpected error in the test suite")
+                self._log.exception("TEST FAILURE DUE TO AN UNEXPECTED ERROR.")
+                self._report_test_result(
+                    self.context.image_name,
+                    "Setup",
+                    TestStatus.FAILED,
+                    start_time,
+                    message="TEST FAILURE DUE TO AN UNEXPECTED ERROR.",
+                    add_exception_stack_trace=True)
+
+                raise Exception("STOPPING TEST EXECUTION DUE TO AN UNEXPECTED ERROR.")
 
             finally:
                 self._clean_up()
@@ -401,7 +411,7 @@ class AgentTestSuite(LisaTestSuite):
 
                             test(self.context).run()
 
-                            summary.append(f"[Passed] {test_name}")
+                            summary.append(f"[Passed]  {test_name}")
                             agent_test_logger.info("******** [Passed] %s", test_name)
                             self._log.info("******** [Passed] %s", test_full_name)
                             self._report_test_result(
@@ -409,9 +419,19 @@ class AgentTestSuite(LisaTestSuite):
                                 test_name,
                                 TestStatus.PASSED,
                                 test_start_time)
+                        except TestSkipped as e:
+                            summary.append(f"[Skipped] {test_name}")
+                            agent_test_logger.info("******** [Skipped] %s: %s", test_name, e)
+                            self._log.info("******** [Skipped] %s", test_full_name)
+                            self._report_test_result(
+                                suite_full_name,
+                                test_name,
+                                TestStatus.SKIPPED,
+                                test_start_time,
+                                message=str(e))
                         except AssertionError as e:
                             success = False
-                            summary.append(f"[Failed] {test_name}")
+                            summary.append(f"[Failed]  {test_name}")
                             agent_test_logger.error("******** [Failed] %s: %s", test_name, e)
                             self._log.error("******** [Failed] %s", test_full_name)
                             self._report_test_result(
@@ -422,7 +442,7 @@ class AgentTestSuite(LisaTestSuite):
                                 message=str(e))
                         except:  # pylint: disable=bare-except
                             success = False
-                            summary.append(f"[Error] {test_name}")
+                            summary.append(f"[Error]   {test_name}")
                             agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_name)
                             self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
                             self._report_test_result(
