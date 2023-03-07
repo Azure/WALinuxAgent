@@ -998,7 +998,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
 
             # A fabric goal state should remove the state file
             protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.Fabric)
-
+            protocol.mock_wire_data.set_etag(888)
             _ = host_ga_plugin.fetch_vm_settings()
 
             self.assertFalse(os.path.exists(state_file), "{0} was not removed by a Fabric goal state".format(state_file))
