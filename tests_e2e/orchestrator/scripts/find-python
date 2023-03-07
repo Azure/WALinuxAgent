@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# Microsoft Azure Linux Agent
+#
+# Copyright 2018 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#
+# Returns the path to the Python executable.
+#
+set -euo pipefail
+
+# python3 is available on most distros
+if which python3; then
+  exit 0
+fi
+
+# try python
+if which python; then
+  exit 0
+fi
+
+# try some well-known locations
+declare -a known_locations=(
+  "/usr/share/oem/python/bin/python"
+  "/usr/share/oem/python/bin/python3"
+)
+
+for python in "${known_locations[@]}"
+do
+    if [[ -e $python]]; then
+      echo "$python"
+      return 0
+    fi
+done
+
+echo "Can't find the python executable" >&2
+
+exit 1

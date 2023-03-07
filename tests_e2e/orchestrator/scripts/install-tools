@@ -30,8 +30,12 @@ mv ~/bin/scripts/* ~/bin
 rm -r ~/bin/scripts
 
 echo "Installing Pypy to ~/bin"
-tar xf ~/bin/pypy3.7.tar.bz2 -C ~/bin
-rm ~/bin/pypy3.7.tar.bz2
+# bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
+# use Python to uncompress the Pypy tarball.
+python=$(~/bin/find-python)
+$python ~/bin/uncompress.py ~/bin/pypy3.7.tar.bz2 ~/bin/pypy3.7.tar
+tar xf ~/bin/pypy3.7.tar -C ~/bin
+rm ~/bin/pypy3.7.tar ~/bin/pypy3.7.tar.bz2
 
 if [[ -e ~/bin/python ]]; then
   rm ~/bin/python
