@@ -24,11 +24,21 @@ sudo chown 1000 "$BUILD_ARTIFACTSTAGINGDIRECTORY"
 #
 # Pull the container image used to execute the tests
 #
-az login --service-principal --username "$AZURE_CLIENT_ID" --password "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" > /dev/null
-
-az acr login --name waagenttests
+az acr login --name waagenttests --username "$CR_USER" --password "$CR_SECRET"
 
 docker pull waagenttests.azurecr.io/waagenttests:latest
+
+# Azure Pipelines does not allow an empty string as the value for a pipeline parameter; instead we use "-" to indicate
+# an empty value. Change "-" to "" for the variables that capture the parameter values.
+if [[ $IMAGE == "-" ]]; then
+    IMAGE=""
+fi
+if [[ $LOCATION == "-" ]]; then
+    LOCATION=""
+fi
+if [[ $VM_SIZE == "-" ]]; then
+    VM_SIZE=""
+fi
 
 # A test failure will cause automation to exit with an error code and we don't want this script to stop so we force the command
 # to succeed and capture the exit code to return it at the end of the script.
@@ -47,11 +57,16 @@ docker run --rm \
           --runbook \$HOME/WALinuxAgent/tests_e2e/orchestrator/runbook.yml \
           --log_path \$HOME/logs/lisa \
           --working_path \$HOME/logs/lisa \
+          -v cloud:$CLOUD \
           -v subscription_id:$SUBSCRIPTION_ID \
           -v identity_file:\$HOME/.ssh/id_rsa \
           -v test_suites:\"$TEST_SUITES\" \
+          -v log_path:\$HOME/logs \
           -v collect_logs:\"$COLLECT_LOGS\" \
-          -v keep_environment:\"$KEEP_ENVIRONMENT\"" \
+          -v keep_environment:\"$KEEP_ENVIRONMENT\" \
+          -v image:\"$IMAGE\" \
+          -v location:\"$LOCATION\" \
+          -v vm_size:\"$VM_SIZE\"" \
 || echo "exit $?" > /tmp/exit.sh
 
 #
@@ -71,10 +86,13 @@ sudo find "$BUILD_ARTIFACTSTAGINGDIRECTORY" -exec chown "$USER" {} \;
 #    etc
 #
 # Remove the 2 levels of the tree that indicate the time of the test run to make navigation
-# in the Azure Pipelines UI easier.
+# in the Azure Pipelines UI easier. Also, move the lisa log one level up and remove some of
+# the logs that are not needed
 #
 mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa
 rm -r "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]
+mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/lisa-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+rm "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/messages.log
 
 cat /tmp/exit.sh
 bash /tmp/exit.sh
