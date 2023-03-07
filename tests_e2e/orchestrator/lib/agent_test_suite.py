@@ -281,13 +281,18 @@ class AgentTestSuite(LisaTestSuite):
         self._log.info(f"Copying {tools_path} to the test node")
         self.context.ssh_client.copy(tools_path, Path("~/bin"), remote_target=True, recursive=True)
 
-        pypy_path = Path("/tmp/pypy3.7.tar.bz2")
-        if not pypy_path.exists():
+        if self.context.ssh_client.get_architecture() == "aarch64":
+            pypy_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
+            pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-aarch64.tar.bz2"
+        else:
+            pypy_path = Path("/tmp/pypy3.7-x64.tar.bz2")
             pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2"
+
+        if not pypy_path.exists():
             self._log.info(f"Downloading {pypy_download} to {pypy_path}")
             run_command(["wget", pypy_download, "-O",  pypy_path])
         self._log.info(f"Copying {pypy_path} to the test node")
-        self.context.ssh_client.copy(pypy_path, Path("~/bin"), remote_target=True)
+        self.context.ssh_client.copy(pypy_path, Path("~/bin/pypy3.7.tar.bz2"), remote_target=True)
 
         self._log.info(f'Installing tools on the test node\n{self.context.ssh_client.run_command("~/bin/scripts/install-tools")}')
         self._log.info(f'Remote commands will use {self.context.ssh_client.run_command("which python3")}')

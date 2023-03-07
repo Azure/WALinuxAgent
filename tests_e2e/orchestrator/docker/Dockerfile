@@ -72,7 +72,8 @@ RUN \
     # Download Pypy to a known location, from which it will be installed to the test VMs.                        \
     #                                                                                                            \
     mkdir $HOME/bin                                                                                           && \
-    wget https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2 -O /tmp/pypy3.7.tar.bz2             && \
+    wget https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2 -O /tmp/pypy3.7-x64.tar.bz2         && \
+    wget https://downloads.python.org/pypy/pypy3.7-v7.3.5-aarch64.tar.bz2 -O /tmp/pypy3.7-arm64.tar.bz2       && \
                                                                                                                  \
     #                                                                                                            \
     # The setup for the tests depends on a few paths; add those to the profile                                   \
