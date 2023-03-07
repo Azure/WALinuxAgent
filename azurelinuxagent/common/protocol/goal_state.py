@@ -97,6 +97,7 @@ class GoalState(object):
             self._hosting_env = None
             self._shared_conf = None
             self._certs = EmptyCertificates()
+            self._certs_uri = None
             self._remote_access = None
 
             self.update(silent=silent)
@@ -290,13 +291,12 @@ class GoalState(object):
         # case, to ensure it fetches the new certificate.
         #
         if self._extensions_goal_state.source == GoalStateSource.FastTrack:
-            certs_uri = findtext(xml_doc, "Certificates")
-            self._check_certificates(certs_uri)
+            self._check_certificates()
 
-    def _check_certificates(self, certs_uri):
+    def _check_certificates(self):
         # Re-download certificates in case they have been removed from disk since last download
-        if certs_uri is not None:
-            self._download_certificates(certs_uri)
+        if self._goal_state_properties & GoalStateProperties.Certificates != 0 and self._certs_uri is not None:
+            self._download_certificates(self._certs_uri)
         # Check that certificates needed by extensions are in goal state certs.summary
         for extension in self.extensions_goal_state.extensions:
             for settings in extension.settings:
@@ -473,6 +473,7 @@ class GoalState(object):
             self._hosting_env = hosting_env
             self._shared_conf = shared_config
             self._certs = certs
+            self._certs_uri = certs_uri
             self._remote_access = remote_access
 
             return extensions_config
