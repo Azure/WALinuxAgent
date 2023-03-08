@@ -37,7 +37,10 @@ try:
             shutil.copyfileobj(f_in, f_out)
 
 except Exception as e:
-    print(str(e), file=sys.stderr)
+    if sys.version_info[0] == 2:
+        print >> sys.stderr, str(e)
+    else:
+        print(str(e), file=sys.stderr)
     sys.exit(1)
 
 sys.exit(0)
