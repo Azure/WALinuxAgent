@@ -23,12 +23,12 @@
 set -euo pipefail
 
 # python3 is available on most distros
-if which python3; then
+if which python3 2> /dev/null; then
   exit 0
 fi
 
 # try python
-if which python; then
+if which python 2> /dev/null; then
   exit 0
 fi
 
@@ -40,7 +40,7 @@ declare -a known_locations=(
 
 for python in "${known_locations[@]}"
 do
-    if [[ -e $python]]; then
+    if [[ -e $python ]]; then
       echo "$python"
       return 0
     fi

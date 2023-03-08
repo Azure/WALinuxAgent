@@ -37,7 +37,7 @@ try:
             shutil.copyfileobj(f_in, f_out)
 
 except Exception as e:
-    print(f"{e}", file=sys.stderr)
+    print(str(e), file=sys.stderr)
     sys.exit(1)
 
 sys.exit(0)
