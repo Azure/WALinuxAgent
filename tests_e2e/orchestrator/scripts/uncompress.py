@@ -23,24 +23,13 @@
 import argparse
 import bz2
 import shutil
-import sys
 
-try:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('source', help='File to uncompress')
-    parser.add_argument('target', help='Output file')
+parser = argparse.ArgumentParser()
+parser.add_argument('source', help='File to uncompress')
+parser.add_argument('target', help='Output file')
 
-    args = parser.parse_args()
+args = parser.parse_args()
 
-    with bz2.BZ2File(args.source, 'rb') as f_in:
-        with open(args.target, 'wb') as f_out:
-            shutil.copyfileobj(f_in, f_out)
-
-except Exception as e:
-    if sys.version_info[0] == 2:
-        print >> sys.stderr, str(e)
-    else:
-        print(str(e), file=sys.stderr)
-    sys.exit(1)
-
-sys.exit(0)
+with bz2.BZ2File(args.source, 'rb') as f_in:
+    with open(args.target, 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
