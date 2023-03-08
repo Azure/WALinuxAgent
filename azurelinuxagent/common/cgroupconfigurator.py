@@ -455,6 +455,11 @@ class CGroupConfigurator(object):
 
         def is_extension_resource_limits_setup_completed(self, extension_name, cpu_quota=None):
             unit_file_install_path = systemd.get_unit_file_install_path()
+            old_extension_slice_path = os.path.join(unit_file_install_path, SystemdCgroupsApi.get_extension_slice_name(extension_name, old_slice=True))
+            # clean up the old slice from the desk
+            if os.path.exists(old_extension_slice_path):
+                CGroupConfigurator._Impl.__cleanup_unit_file(old_extension_slice_path)
+
             extension_slice_path = os.path.join(unit_file_install_path,
                                                 SystemdCgroupsApi.get_extension_slice_name(extension_name))
             cpu_quota = str(
@@ -921,7 +926,10 @@ class CGroupConfigurator(object):
                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
                     cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
-                    _log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}", extension_name, cpu_quota)
+                    if cpu_quota == "":
+                        _log_cgroup_info("CPUQuota not set for {0}", extension_name)
+                    else:
+                        _log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}", extension_name, cpu_quota)
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name,
                                                                       cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
