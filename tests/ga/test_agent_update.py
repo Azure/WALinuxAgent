@@ -309,3 +309,29 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertIn("Missing requested version", vm_agent_update_status.message)
+
+    def test_it_should_not_log_same_error_next_hours(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_missing_family.xml"
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+
+            self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
+                             "New agent directory should not be found")
+
+        self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                 "No manifest links found for agent family" in kwarg[
+                                     'message'] and kwarg[
+                                     'op'] == WALAEventOperation.AgentUpgrade]), "Agent manifest should not be in GS")
+
+        agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+
+        self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                 "No manifest links found for agent family" in kwarg[
+                                     'message'] and kwarg[
+                                     'op'] == WALAEventOperation.AgentUpgrade]), "Agent manifest should not be in GS")
