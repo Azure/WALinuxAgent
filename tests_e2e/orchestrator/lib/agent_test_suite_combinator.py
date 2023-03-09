@@ -29,40 +29,58 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     cloud: str = field(
         default_factory=str, metadata=field_metadata(required=True)
     )
-    image: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
     location: str = field(
         default_factory=str, metadata=field_metadata(required=True)
     )
+    image: str = field(
+        default_factory=str, metadata=field_metadata(required=False)
+    )
     vm_size: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
+        default_factory=str, metadata=field_metadata(required=False)
+    )
+    vm_name: str = field(
+        default_factory=str, metadata=field_metadata(required=False)
     )
 
 
 class AgentTestSuitesCombinator(Combinator):
     """
-    The "agent_test_suites" combinator returns a list of items containing six variables that specify the environments
-    that the agent test suites must be executed on:
+    The "agent_test_suites" combinator returns a list of variables that specify the environments (i.e. test VMs) that the agent
+    test suites must be executed on:
 
+        * c_env_name: Unique name for the environment, e.g. "0001-com-ubuntu-server-focal-20_04-lts-westus2"
         * c_marketplace_image: e.g. "Canonical UbuntuServer 18.04-LTS latest",
         * c_location: e.g. "westus2",
         * c_vm_size: e.g. "Standard_D2pls_v5"
         * c_vhd: e.g "https://rhel.blob.core.windows.net/images/RHEL_8_Standard-8.3.202006170423.vhd?se=..."
         * c_test_suites: e.g. [AgentBvt, FastTrack]
-        * c_name: Unique name for the image, e.g. "0001-com-ubuntu-server-focal-20_04-lts-westus2"
 
     (c_marketplace_image, c_location, c_vm_size) and vhd are mutually exclusive and define the environment (i.e. the test VM)
     in which the test will be executed. c_test_suites defines the test suites that should be executed in that
     environment.
+
+    The 'vm_name' runbook parameter can be used to execute the test suites on an existing VM. In that case, the combinator
+    generates a single item with these variables:
+
+        * c_env_name: Name for the environment, same as vm_name
+        * c_vm_name:  Name of the test VM
+        * c_location: Location of the test VM e.g. "westus2",
+        * c_test_suites: e.g. [AgentBvt, FastTrack]
     """
     def __init__(self, runbook: AgentTestSuitesCombinatorSchema) -> None:
         super().__init__(runbook)
-        self._environments = self.create_environment_list()
-        self._index = 0
-
         if self.runbook.cloud not in self._DEFAULT_LOCATIONS:
             raise Exception(f"Invalid cloud: {self.runbook.cloud}")
+
+        if self.runbook.vm_name != '' and (self.runbook.image != '' or self.runbook.vm_size != ''):
+            raise Exception("Invalid runbook parameters: When 'vm_name' is specified, 'image' and 'vm_size' should not be specified.")
+
+        if self.runbook.vm_name != '':
+            self._environments = self.create_environment_for_existing_vm()
+        else:
+            self._environments = self.create_environment_list()
+        self._index = 0
+
 
     @classmethod
     def type_name(cls) -> str:
@@ -84,6 +102,27 @@ class AgentTestSuitesCombinator(Combinator):
         "government": "usgovarizona",
         "public": "westus2"
     }
+
+    def create_environment_for_existing_vm(self) -> List[Dict[str, Any]]:
+        loader = AgentTestLoader(self.runbook.test_suites)
+
+        environment: List[Dict[str, Any]] = [
+            {
+                "c_env_name": self.runbook.vm_name,
+                "c_vm_name": self.runbook.vm_name,
+                "c_location": self.runbook.location,
+                "c_test_suites": loader.test_suites,
+            }
+        ]
+
+        log: logging.Logger = logging.getLogger("lisa")
+        log.info("******** Environment for existing VMs *****")
+        log.info(
+            "{  c_env_name: '%s', c_vm_name: '%s', c_location: '%s', c_test_suites: '%s' }",
+            environment[0]['c_env_name'], environment[0]['c_vm_name'], environment[0]['c_location'], [s.name for s in environment[0]['c_test_suites']])
+        log.info("***************************")
+
+        return environment
 
     def create_environment_list(self) -> List[Dict[str, Any]]:
         loader = AgentTestLoader(self.runbook.test_suites)
@@ -167,7 +206,7 @@ class AgentTestSuitesCombinator(Combinator):
                         "c_vm_size": vm_size,
                         "c_vhd": vhd,
                         "c_test_suites": [suite_info],
-                        "c_name": f"{name}-{suite_info.name}"
+                        "c_env_name": f"{name}-{suite_info.name}"
                     })
                 else:
                     # add this suite to the shared environments
@@ -181,7 +220,7 @@ class AgentTestSuitesCombinator(Combinator):
                             "c_vm_size": vm_size,
                             "c_vhd": vhd,
                             "c_test_suites": [suite_info],
-                            "c_name": key
+                            "c_env_name": key
                         }
 
         environment_list.extend(shared_environments.values())
@@ -190,8 +229,8 @@ class AgentTestSuitesCombinator(Combinator):
         log.info("******** Environments *****")
         for e in environment_list:
             log.info(
-                "{ c_marketplace_image: '%s', c_location: '%s', c_vm_size: '%s', c_vhd: '%s', c_test_suites: '%s', c_name: '%s' }",
-                e['c_marketplace_image'], e['c_location'], e['c_vm_size'], e['c_vhd'], [s.name for s in e['c_test_suites']], e['c_name'])
+                "{ c_marketplace_image: '%s', c_location: '%s', c_vm_size: '%s', c_vhd: '%s', c_test_suites: '%s', c_env_name: '%s' }",
+                e['c_marketplace_image'], e['c_location'], e['c_vm_size'], e['c_vhd'], [s.name for s in e['c_test_suites']], e['c_env_name'])
         log.info("***************************")
 
         return environment_list

@@ -16,7 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
 set -euo pipefail
 
 usage() (
@@ -76,9 +75,14 @@ echo "Service name: $service_name"
 #
 # Install the package
 #
-echo "Installing $package..."
-unzip -d "/var/lib/waagent/WALinuxAgent-$version" -o "$package"
-sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
+echo "Installing $package as version $version..."
+unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
+
+# Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar, don't have a waagent.conf
+# but AutoUpdate defaults to True so there is no need to anything in that case.
+if [[ -e /etc/waagent.conf ]]; then
+  sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
+fi
 
 #
 # Restart the service
@@ -92,14 +96,22 @@ mv /var/log/waagent.log /var/log/waagent."$(date --iso-8601=seconds)".log
 service-start $service_name
 
 #
-# Verify that the new agent is running and output its status. Note that the extension handler
-# may take some time to start so give 1 minute.
+# Verify that the new agent is running and output its status.
+# Note that the extension handler may take some time to start so give 1 minute.
+# Also, note that the default Python is set to Pypy, so before executing 'waagent' we need to set the
+# Python path to the location of the azurelinuxagent module.
 #
 echo "Verifying agent installation..."
+
+PYTHONPATH=$(get-agent-pythonpath)
+export PYTHONPATH
+
 check-version() {
+  waagent=$(get-waagent-path)
+  
   for i in {0..5}
   do
-    if waagent --version | grep -E "Goal state agent:\s+$1" > /dev/null; then
+    if $waagent --version | grep -E "Goal state agent:\s+$1" > /dev/null; then
       return 0
     fi
     sleep 10
@@ -112,11 +124,12 @@ if check-version "$version"; then
   printf "\nThe agent was installed successfully\n"
   exit_code=0
 else
-  printf "\nThe agent was not installed correctly; expected version %s\n" "$version"
+  printf "\nFailed to install agent.\n"
   exit_code=1
 fi
 
-waagent --version
+waagent=$(get-waagent-path)
+$waagent --version
 printf "\n"
 service-status $service_name
 
