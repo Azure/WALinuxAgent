@@ -27,6 +27,7 @@ from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSBaseUtil, DebianOSModernUtil
 from .default import DefaultOSUtil
+from .devuan import DevuanOSUtil
 from .freebsd import FreeBSDOSUtil
 from .gaia import GaiaOSUtil
 from .iosxe import IosxeOSUtil
@@ -101,6 +102,16 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
             return DebianOSModernUtil()
 
         return DebianOSBaseUtil()
+
+    # Devuan support only works with v4+ 
+    # Reason is that Devuan v4 (Chimaera) uses python v3.9, in which the 
+    # platform.linux_distribution module has been removed. This was unable
+    # to distinguish between debian and devuan. The new distro.linux_distribution module
+    # is able to distinguish between the two.
+
+    if distro_name == "devuan" and Version(distro_version) >= Version("4"):
+        return DevuanOSUtil()
+        
 
     if distro_name in ("redhat", "rhel", "centos", "oracle", "almalinux",
                        "cloudlinux", "rocky"):

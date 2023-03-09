@@ -963,6 +963,28 @@ Match host 192.168.1.2\n\
         as_string = osutil.DefaultOSUtil().get_nic_state(as_string=True)
         self.assertNotEqual(as_string, '')
 
+    def test_get_used_and_available_system_memory(self):
+        memory_table = "\
+              total        used        free      shared  buff/cache   available \n\
+Mem:     8340144128   619352064  5236809728     1499136  2483982336  7426314240   \n\
+Swap:             0           0           0   \n"
+        with patch.object(shellutil, 'run_command', return_value=memory_table):
+            used_mem, available_mem = osutil.DefaultOSUtil().get_used_and_available_system_memory()
+
+        self.assertEqual(used_mem, 619352064/(1024**2), "The value didn't match")
+        self.assertEqual(available_mem, 7426314240/(1024**2), "The value didn't match")
+
+    def test_get_used_and_available_system_memory_error(self):
+        msg = 'message'
+        exception = shellutil.CommandError("free -d", 1, "", msg)
+
+        with patch.object(shellutil, 'run_command',
+                          side_effect=exception) as patch_run:
+            with self.assertRaises(shellutil.CommandError) as context_manager:
+                osutil.DefaultOSUtil().get_used_and_available_system_memory()
+            self.assertEqual(patch_run.call_count, 1)
+            self.assertEqual(context_manager.exception.returncode, 1)
+
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
         osutil_get_dhcp_pid_should_return_a_list_of_pids(self, osutil.DefaultOSUtil())
 

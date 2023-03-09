@@ -13,21 +13,61 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-from collections import namedtuple
 
 import errno
 import os
 import re
+from datetime import timedelta
 
-from azurelinuxagent.common import logger
+from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
-AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
+_REPORT_EVERY_HOUR = timedelta(hours=1)
+_DEFAULT_REPORT_PERIOD = timedelta(seconds=conf.get_cgroup_check_period())
 
-MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+AGENT_NAME_TELEMETRY = "walinuxagent.service"  # Name used for telemetry; it needs to be consistent even if the name of the service changes
+AGENT_LOG_COLLECTOR = "azure-walinuxagent-logcollector"
+
+
+class CounterNotFound(Exception):
+    pass
+
+
+class MetricValue(object):
+
+    """
+    Class for defining all the required metric fields to send telemetry.
+    """
+
+    def __init__(self, category, counter, instance, value, report_period=_DEFAULT_REPORT_PERIOD):
+        self._category = category
+        self._counter = counter
+        self._instance = instance
+        self._value = value
+        self._report_period = report_period
+
+    @property
+    def category(self):
+        return self._category
+
+    @property
+    def counter(self):
+        return self._counter
+
+    @property
+    def instance(self):
+        return self._instance
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def report_period(self):
+        return self._report_period
 
 
 class MetricsCategory(object):
@@ -40,6 +80,9 @@ class MetricsCounter(object):
     TOTAL_MEM_USAGE = "Total Memory Usage"
     MAX_MEM_USAGE = "Max Memory Usage"
     THROTTLED_TIME = "Throttled Time"
+    SWAP_MEM_USAGE = "Swap Memory Usage"
+    AVAILABLE_MEM = "Available MBytes"
+    USED_MEM = "Used MBytes"
 
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
@@ -166,12 +209,13 @@ class CpuCgroup(CGroup):
             #
             match = re_user_system_times.match(cpuacct_stat)
             if not match:
-                raise CGroupsException("The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpuacct_stat))
+                raise CGroupsException(
+                    "The contents of {0} are invalid: {1}".format(self._get_cgroup_file('cpuacct.stat'), cpuacct_stat))
             cpu_ticks = int(match.groups()[0]) + int(match.groups()[1])
 
         return cpu_ticks
 
-    def _get_throttled_time(self):
+    def get_throttled_time(self):
         try:
             with open(os.path.join(self.path, 'cpu.stat')) as cpu_stat:
                 #
@@ -205,7 +249,7 @@ class CpuCgroup(CGroup):
             raise CGroupsException("initialize_cpu_usage() should be invoked only once")
         self._current_cgroup_cpu = self._get_cpu_ticks(allow_no_such_file_or_directory_error=True)
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
-        self._current_throttled_time = self._get_throttled_time()
+        self._current_throttled_time = self.get_throttled_time()
 
     def get_cpu_usage(self):
         """
@@ -229,16 +273,21 @@ class CpuCgroup(CGroup):
 
         return round(100.0 * self._osutil.get_processor_cores() * float(cgroup_delta) / float(system_delta), 3)
 
-    def get_throttled_time(self):
+    def get_cpu_throttled_time(self, read_previous_throttled_time=True):
         """
         Computes the throttled time (in seconds) since the last call to this function.
         NOTE: initialize_cpu_usage() must be invoked before calling this function
+        Compute only current throttled time if read_previous_throttled_time set to False
         """
+        if not read_previous_throttled_time:
+            return float(self.get_throttled_time() / 1E9)
+
         if not self._cpu_usage_initialized():
-            raise CGroupsException("initialize_cpu_usage() must be invoked before the first call to get_throttled_time()")
+            raise CGroupsException(
+                "initialize_cpu_usage() must be invoked before the first call to get_throttled_time()")
 
         self._previous_throttled_time = self._current_throttled_time
-        self._current_throttled_time = self._get_throttled_time()
+        self._current_throttled_time = self.get_throttled_time()
 
         return float(self._current_throttled_time - self._previous_throttled_time) / 1E9
 
@@ -246,53 +295,99 @@ class CpuCgroup(CGroup):
         tracked = []
         cpu_usage = self.get_cpu_usage()
         if cpu_usage >= float(0):
-            tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
+            tracked.append(
+                MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
 
         if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
-            throttled_time = self.get_throttled_time()
+            throttled_time = self.get_cpu_throttled_time()
             if cpu_usage >= float(0) and throttled_time >= float(0):
-                tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
+                tracked.append(
+                    MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
 
         return tracked
 
 
 class MemoryCgroup(CGroup):
+    def __init__(self, name, cgroup_path):
+        super(MemoryCgroup, self).__init__(name, cgroup_path)
+
+        self._counter_not_found_error_count = 0
+
+    def _get_memory_stat_counter(self, counter_name):
+        try:
+            with open(os.path.join(self.path, 'memory.stat')) as memory_stat:
+                # cat /sys/fs/cgroup/memory/azure.slice/memory.stat
+                # cache 67178496
+                # rss 42340352
+                # rss_huge 6291456
+                # swap 0
+                for line in memory_stat:
+                    re_memory_counter = r'{0}\s+(\d+)'.format(counter_name)
+                    match = re.match(re_memory_counter, line)
+                    if match is not None:
+                        return int(match.groups()[0])
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                raise
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Failed to read memory.stat: {0}".format(ustr(e)))
+
+        raise CounterNotFound("Cannot find counter: {0}".format(counter_name))
+
     def get_memory_usage(self):
         """
-        Collect memory.usage_in_bytes from the cgroup.
+        Collect RSS+CACHE from memory.stat cgroup.
 
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = None
-        try:
-            usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
-        except Exception as e:
-            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
-                raise
-            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
 
-        return int(usage)
+        cache = self._get_memory_stat_counter("cache")
+        rss = self._get_memory_stat_counter("rss")
+        return cache + rss
+
+    def try_swap_memory_usage(self):
+        """
+        Collect SWAP from memory.stat cgroup.
+
+        :return: Memory usage in bytes
+        :rtype: int
+        Note: stat file is the only place to get the SWAP since other swap related file memory.memsw.usage_in_bytes is for total Memory+SWAP.
+        """
+        try:
+            return self._get_memory_stat_counter("swap")
+        except CounterNotFound as e:
+            if self._counter_not_found_error_count < 1:
+                logger.periodic_info(logger.EVERY_HALF_HOUR,
+                                     'Could not find swap counter from "memory.stat" file in the cgroup: {0}.'
+                                     ' Internal error: {1}'.format(self.path, ustr(e)))
+                self._counter_not_found_error_count += 1
+            return 0
 
     def get_max_memory_usage(self):
         """
-        Collect memory.usage_in_bytes from the cgroup.
+        Collect memory.max_usage_in_bytes from the cgroup.
 
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = None
+        usage = 0
         try:
-            usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+            usage = int(self._get_parameters('memory.max_usage_in_bytes', first_line_only=True))
         except Exception as e:
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:  # pylint: disable=E1101
                 raise
-            raise CGroupsException("Exception while attempting to read {0}".format("memory.usage_in_bytes"), e)
+            raise CGroupsException("Exception while attempting to read {0}".format("memory.max_usage_in_bytes"), e)
 
-        return int(usage)
+        return usage
 
     def get_tracked_metrics(self, **_):
         return [
-            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name, self.get_memory_usage()),
-            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name, self.get_max_memory_usage()),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name,
+                        self.get_memory_usage()),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
+                        self.get_max_memory_usage(), _REPORT_EVERY_HOUR),
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
+                        self.try_swap_memory_usage(), _REPORT_EVERY_HOUR)
         ]

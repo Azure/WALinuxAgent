@@ -23,7 +23,7 @@ import threading
 import uuid
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
@@ -59,9 +59,7 @@ class CGroupsApi(object):
             distro_version = FlexibleVersion(distro_info[1])
         except ValueError:
             return False
-        return ((distro_name.lower() == 'ubuntu' and distro_version.major >= 16) or
-                (distro_name.lower() in ("centos", "redhat") and
-                 ((distro_version.major == 7 and distro_version.minor >= 4) or distro_version.major >= 8)))
+        return distro_name.lower() == 'ubuntu' and distro_version.major >= 16
 
     @staticmethod
     def track_cgroups(extension_cgroups):
@@ -265,7 +263,10 @@ class SystemdCgroupsApi(CGroupsApi):
         extension_slice_name = self.get_extension_slice_name(extension_name)
         with self._systemd_run_commands_lock:
             process = subprocess.Popen(  # pylint: disable=W1509
-                "systemd-run --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
+                # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
+                # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
+                # since slice unit file configured with accounting enabled.
+                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -280,16 +281,25 @@ class SystemdCgroupsApi(CGroupsApi):
 
         logger.info("Started extension in unit '{0}'", scope_name)
 
+        cpu_cgroup = None
         try:
             cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
 
-            cpu_cgroup_mountpoint, _ = self.get_cgroup_mount_points()
+            cpu_cgroup_mountpoint, memory_cgroup_mountpoint = self.get_cgroup_mount_points()
 
             if cpu_cgroup_mountpoint is None:
                 logger.info("The CPU controller is not mounted; will not track resource usage")
             else:
                 cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
-                CGroupsTelemetry.track_cgroup(CpuCgroup(extension_name, cpu_cgroup_path))
+                cpu_cgroup = CpuCgroup(extension_name, cpu_cgroup_path)
+                CGroupsTelemetry.track_cgroup(cpu_cgroup)
+
+            if memory_cgroup_mountpoint is None:
+                logger.info("The Memory controller is not mounted; will not track resource usage")
+            else:
+                memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
+                memory_cgroup = MemoryCgroup(extension_name, memory_cgroup_path)
+                CGroupsTelemetry.track_cgroup(memory_cgroup)
 
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
@@ -301,7 +311,7 @@ class SystemdCgroupsApi(CGroupsApi):
         # Wait for process completion or timeout
         try:
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
-                                             stderr=stderr, error_code=error_code)
+                                             stderr=stderr, error_code=error_code, cpu_cgroup=cpu_cgroup)
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.

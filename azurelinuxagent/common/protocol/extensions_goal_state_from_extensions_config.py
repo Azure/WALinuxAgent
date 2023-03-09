@@ -19,13 +19,12 @@ import json
 
 from collections import defaultdict
 
-import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionsConfigError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, GoalStateSource
-from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentManifest, ExtensionState, InVMGoalStateMetaData
-from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentFamily, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, format_exception, \
     is_str_none_or_whitespace, is_str_empty
 
@@ -44,7 +43,7 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._activity_id = None
         self._correlation_id = None
         self._created_on_timestamp = None
-        self._agent_manifests = []
+        self._agent_families = []
         self._extensions = []
 
         try:
@@ -60,14 +59,14 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         ga_families = findall(ga_families_list, "GAFamily")
 
         for ga_family in ga_families:
-            family = findtext(ga_family, "Name")
+            name = findtext(ga_family, "Name")
             version = findtext(ga_family, "Version")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
-            manifest = VMAgentManifest(family, version)
+            family = VMAgentFamily(name, version)
             for uri in uris:
-                manifest.uris.append(gettext(uri))
-            self._agent_manifests.append(manifest)
+                family.uris.append(gettext(uri))
+            self._agent_families.append(family)
 
         self.__parse_plugins_and_settings_and_populate_ext_handlers(xml_doc)
 
@@ -81,51 +80,42 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         self._status_upload_blob_type = getattrib(status_upload_node, "statusBlobType")
         logger.verbose("Extension config shows status blob type as [{0}]", self._status_upload_blob_type)
 
-        self._on_hold = self._fetch_extensions_on_hold(xml_doc, wire_client)
+        self._on_hold = ExtensionsGoalStateFromExtensionsConfig._fetch_extensions_on_hold(xml_doc, wire_client)
 
         in_vm_gs_metadata = InVMGoalStateMetaData(find(xml_doc, "InVMGoalStateMetaData"))
         self._activity_id = self._string_to_id(in_vm_gs_metadata.activity_id)
         self._correlation_id = self._string_to_id(in_vm_gs_metadata.correlation_id)
         self._created_on_timestamp = self._ticks_to_utc_timestamp(in_vm_gs_metadata.created_on_ticks)
 
-    def _fetch_extensions_on_hold(self, xml_doc, wire_client):
+    @staticmethod
+    def _fetch_extensions_on_hold(xml_doc, wire_client):
+        def log_info(message):
+            logger.info(message)
+            add_event(op=WALAEventOperation.ArtifactsProfileBlob, message=message, is_success=True, log_event=False)
+
+        def log_warning(message):
+            logger.warn(message)
+            add_event(op=WALAEventOperation.ArtifactsProfileBlob, message=message, is_success=False, log_event=False)
+
         artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
         if is_str_none_or_whitespace(artifacts_profile_blob):
+            log_info("ExtensionsConfig does not include a InVMArtifactsProfileBlob; will assume the VM is not on hold")
             return False
 
-        def fetch_direct():
-            content, _ = wire_client.fetch(artifacts_profile_blob)
-            return content
-
-        def fetch_through_host():
-            host = wire_client.get_host_plugin()
-            uri, headers = host.get_artifact_request(artifacts_profile_blob)
-            content, _ = wire_client.fetch(uri, headers, use_proxy=False, retry_codes=restutil.HGAP_GET_EXTENSION_ARTIFACT_RETRY_CODES)
-            return content
-
-        logger.verbose("Retrieving the artifacts profile")
-
         try:
-            profile = wire_client.send_request_using_appropriate_channel(fetch_direct, fetch_through_host)
-            if profile is None:
-                logger.warn("Failed to fetch artifacts profile from blob {0}", artifacts_profile_blob)
-                return False
+            profile = wire_client.fetch_artifacts_profile_blob(artifacts_profile_blob)
         except Exception as error:
-            logger.warn("Exception retrieving artifacts profile from blob {0}. Error: {1}".format(artifacts_profile_blob, ustr(error)))
+            log_warning("Can't download the artifacts profile blob; will assume the VM is not on hold. {0}".format(ustr(error)))
             return False
 
         if is_str_empty(profile):
+            log_info("The artifacts profile blob is empty; will assume the VM is not on hold.")
             return False
-
-        logger.verbose("Artifacts profile downloaded")
 
         try:
             artifacts_profile = _InVMArtifactsProfile(profile)
-        except Exception:
-            logger.warn("Could not parse artifacts profile blob")
-            msg = "Content: [{0}]".format(profile)
-            logger.verbose(msg)
-            add_event(op=WALAEventOperation.ArtifactsProfileBlob, is_success=False, message=msg, log_event=False)
+        except Exception as exception:
+            log_warning("Can't parse the artifacts profile blob; will assume the VM is not on hold. Error: {0}".format(ustr(exception)))
             return False
 
         return artifacts_profile.get_on_hold()
@@ -182,8 +172,8 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         return self._on_hold
 
     @property
-    def agent_manifests(self):
-        return self._agent_manifests
+    def agent_families(self):
+        return self._agent_families
 
     @property
     def extensions(self):

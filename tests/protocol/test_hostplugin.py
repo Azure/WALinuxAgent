@@ -23,9 +23,7 @@ import os.path
 import sys
 import unittest
 
-import azurelinuxagent.common.protocol.hostplugin as hostplugin
-import azurelinuxagent.common.protocol.restapi as restapi
-import azurelinuxagent.common.protocol.wire as wire
+from azurelinuxagent.common.protocol import hostplugin, restapi, wire
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError, ProtocolError
@@ -609,7 +607,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             self.assertTrue(host_client.health_service is not None)
 
             with patch.object(wire.HostPluginProtocol, "get_api_versions", return_value=api_versions) as patch_get:  # pylint: disable=unused-variable
-                actual_url, actual_headers = host_client.get_artifact_request(sas_url)
+                actual_url, actual_headers = host_client.get_artifact_request(sas_url, use_verify_header=False)
                 self.assertTrue(host_client.is_initialized)
                 self.assertFalse(host_client.api_versions is None)
                 self.assertEqual(expected_url, actual_url)

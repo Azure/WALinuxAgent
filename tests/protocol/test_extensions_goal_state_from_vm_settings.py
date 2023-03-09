@@ -2,6 +2,7 @@
 # Licensed under the Apache License.
 import json
 
+from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from tests.protocol.mocks import mockwiredata, mock_wire_protocol
@@ -28,12 +29,12 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             # for the rest of the attributes, we check only 1 item in each container (but check the length of the container)
             #
 
-            # agent manifests
-            self.assertEqual(2, len(extensions_goal_state.agent_manifests), "Incorrect number of agent manifests. Got: {0}".format(extensions_goal_state.agent_manifests))
-            self.assertEqual("Prod", extensions_goal_state.agent_manifests[0].family, "Incorrect agent family.")
-            self.assertEqual(2, len(extensions_goal_state.agent_manifests[0].uris), "Incorrect number of uris. Got: {0}".format(extensions_goal_state.agent_manifests[0].uris))
+            # agent families
+            self.assertEqual(2, len(extensions_goal_state.agent_families), "Incorrect number of agent families. Got: {0}".format(extensions_goal_state.agent_families))
+            self.assertEqual("Prod", extensions_goal_state.agent_families[0].name, "Incorrect agent family.")
+            self.assertEqual(2, len(extensions_goal_state.agent_families[0].uris), "Incorrect number of uris. Got: {0}".format(extensions_goal_state.agent_families[0].uris))
             expected = "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
-            self.assertEqual(expected, extensions_goal_state.agent_manifests[0].uris[0], "Unexpected URI for the agent manifest.")
+            self.assertEqual(expected, extensions_goal_state.agent_families[0].uris[0], "Unexpected URI for the agent manifest.")
 
             # extensions
             self.assertEqual(5, len(extensions_goal_state.extensions), "Incorrect number of extensions. Got: {0}".format(extensions_goal_state.extensions))
@@ -49,16 +50,18 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
 
     def test_it_should_parse_requested_version_properly(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
-            manifests, _ = protocol.get_vmagent_manifests()
-            for manifest in manifests:
-                self.assertEqual(manifest.requested_version_string, "0.0.0.0", "Version should be None")
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertEqual(family.requested_version_string, "0.0.0.0", "Version should be None")
 
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
         with mock_wire_protocol(data_file) as protocol:
-            manifests, _ = protocol.get_vmagent_manifests()
-            for manifest in manifests:
-                self.assertEqual(manifest.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertEqual(family.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
 
     def test_it_should_parse_missing_status_upload_blob_as_none(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
@@ -74,8 +77,8 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         data_file["vm_settings"] = "hostgaplugin/vm_settings-no_manifests.json"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
-            self.assertEqual(1, len(extensions_goal_state.agent_manifests), "Expected exactly one agent manifest. Got: {0}".format(extensions_goal_state.agent_manifests))
-            self.assertListEqual([], extensions_goal_state.agent_manifests[0].uris, "Expected an empty list of agent manifests")
+            self.assertEqual(1, len(extensions_goal_state.agent_families), "Expected exactly one agent manifest. Got: {0}".format(extensions_goal_state.agent_families))
+            self.assertListEqual([], extensions_goal_state.agent_families[0].uris, "Expected an empty list of agent manifests")
 
     def test_it_should_parse_missing_extension_manifests_as_empty(self):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()

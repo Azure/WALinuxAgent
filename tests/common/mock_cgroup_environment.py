@@ -69,7 +69,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
     MockCommand(r"^systemctl stop ([^\s]+)"),
 
-    MockCommand(r"^systemd-run --unit=([^\s]+) --scope ([^\s]+)",
+    MockCommand(r"^systemd-run (.+) --unit=([^\s]+) --scope ([^\s]+)",
 ''' 
 Running scope as unit: TEST_UNIT.scope
 Thu 28 May 2020 07:25:55 AM PDT
@@ -97,6 +97,7 @@ class UnitFilePaths:
     slice = "/lib/systemd/system/walinuxagent.service.d/10-Slice.conf"
     cpu_accounting = "/lib/systemd/system/walinuxagent.service.d/11-CPUAccounting.conf"
     cpu_quota = "/lib/systemd/system/walinuxagent.service.d/12-CPUQuota.conf"
+    memory_accounting = "/lib/systemd/system/walinuxagent.service.d/13-MemoryAccounting.conf"
     extension_service_cpu_accounting = '/lib/systemd/system/extension.service.d/11-CPUAccounting.conf'
     extension_service_cpu_quota = '/lib/systemd/system/extension.service.d/12-CPUQuota.conf'
     extension_service_memory_accounting = '/lib/systemd/system/extension.service.d/13-MemoryAccounting.conf'

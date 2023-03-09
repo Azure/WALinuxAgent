@@ -96,8 +96,8 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
     systemd_dir_path = osutil.get_systemd_unit_file_install_path()
     agent_bin_path = osutil.get_agent_bin_path()
 
-    if name in ('redhat', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
-        if version.startswith("8"):
+    if name in ('redhat', 'rhel', 'centos', 'almalinux', 'cloudlinux', 'rocky'):
+        if version.startswith("8") or version.startswith("9"):
             # redhat8+ default to py3
             set_bin_files(data_files, dest=agent_bin_path,
                           src=["bin/py3/waagent", "bin/waagent2.0"])
@@ -106,7 +106,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
-        if version.startswith("8"):
+        if version.startswith("8") or version.startswith("9"):
             # redhat 8+ uses systemd and python3
             set_systemd_files(data_files, dest=systemd_dir_path,
                               src=["init/redhat/waagent.service",
@@ -219,6 +219,16 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
         set_udev_files(data_files, dest="/lib/udev/rules.d")
         if debian_has_systemd():
             set_systemd_files(data_files, dest=systemd_dir_path)
+    elif name == 'devuan':
+        set_bin_files(data_files, dest=agent_bin_path,
+                      src=["bin/py3/waagent", "bin/waagent2.0"])
+        set_files(data_files, dest="/etc/init.d",
+                  src=['init/devuan/walinuxagent'])
+        set_files(data_files, dest="/etc/default",
+                  src=['init/devuan/default/walinuxagent'])
+        set_conf_files(data_files, src=['config/devuan/waagent.conf'])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
     elif name == 'iosxe':
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
@@ -251,7 +261,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
 def debian_has_systemd():
     try:
         return subprocess.check_output(
-            ['cat', '/proc/1/comm']).strip() == 'systemd'
+            ['cat', '/proc/1/comm']).strip().decode() == 'systemd'
     except subprocess.CalledProcessError:
         return False
 
