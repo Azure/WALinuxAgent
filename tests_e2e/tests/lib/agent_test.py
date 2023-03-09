@@ -25,6 +25,13 @@ from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.logging import log
 
 
+class TestSkipped(Exception):
+    """
+    Tests can raise this exception to indicate they should not be executed (for example, if trying to execute them on
+    an unsupported distro
+    """
+
+
 class AgentTest(ABC):
     """
     Defines the interface for agent tests, which are simply constructed from an AgentTestContext and expose a single method,

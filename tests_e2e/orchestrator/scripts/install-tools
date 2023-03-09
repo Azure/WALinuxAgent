@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+# Microsoft Azure Linux Agent
+#
+# Copyright 2018 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#
+# Installs the tools in ~/bin/scripts/* to ~/bin, as well as Pypy.
+#
+# It also makes Pypy the default python for the current user.
+#
+
+set -euo pipefail
+
+echo "Installing scripts to ~/bin"
+mv ~/bin/scripts/* ~/bin
+rm -r ~/bin/scripts
+
+echo "Installing Pypy to ~/bin"
+# bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
+# use Python to uncompress the Pypy tarball.
+python=$(~/bin/find-python)
+$python ~/bin/uncompress.py ~/bin/pypy3.7.tar.bz2 ~/bin/pypy3.7.tar
+tar xf ~/bin/pypy3.7.tar -C ~/bin
+rm ~/bin/pypy3.7.tar ~/bin/pypy3.7.tar.bz2
+
+if [[ -e ~/bin/python ]]; then
+  rm ~/bin/python
+fi
+ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python
+
+if [[ -e ~/bin/python3 ]]; then
+  rm ~/bin/python3
+fi
+ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python3
+
+# Note that we place $HOME/bin at the front of PATH, so the tools in ~/bin (including python) will
+# take precedence over system tools with the same name.
+# In some distros, e.g. Flatcar, .bash_profile is a symbolic link to a read-only file. Make a copy in
+# that case.
+echo "Adding ~/bin to PATH in .bash_profile"
+if test -e ~/.bash_profile && ls -l .bash_profile | grep '\->'; then
+  cp ~/.bash_profile ~/.bash_profile-bk
+  rm ~/.bash_profile
+  mv ~/.bash_profile-bk ~/.bash_profile
+fi
+if ! test -e ~/.bash_profile || ! grep '# Add $HOME/bin to $PATH' ~/.bash_profile > /dev/null; then
+  echo '
+# Add $HOME/bin to $PATH
+if [[ $PATH != *"$HOME/bin"* ]]; then
+   PATH="$HOME/bin:$PATH:"
+fi
+' >> ~/.bash_profile
+fi
+
+echo "python3 has been set to $(which python3)"
+python3 --version
+
