@@ -254,6 +254,7 @@ class SystemdCgroupsApi(CGroupsApi):
 
     @staticmethod
     def get_extension_slice_name(extension_name, old_slice=False):
+        # The old slice makes it difficult for user to override the limits because they need to place drop-in files on every upgrade if extension slice is different for each version.
         # old slice includes <HandlerName>.<ExtensionName>-<HandlerVersion>
         # new slice without version <HandlerName>.<ExtensionName>
         if not old_slice:

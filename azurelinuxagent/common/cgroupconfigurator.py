@@ -456,7 +456,7 @@ class CGroupConfigurator(object):
         def is_extension_resource_limits_setup_completed(self, extension_name, cpu_quota=None):
             unit_file_install_path = systemd.get_unit_file_install_path()
             old_extension_slice_path = os.path.join(unit_file_install_path, SystemdCgroupsApi.get_extension_slice_name(extension_name, old_slice=True))
-            # clean up the old slice from the desk
+            # clean up the old slice from the disk
             if os.path.exists(old_extension_slice_path):
                 CGroupConfigurator._Impl.__cleanup_unit_file(old_extension_slice_path)
 
