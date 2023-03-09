@@ -29,6 +29,8 @@ class AgentUpdateHandler(object):
         self._gs_id = self._protocol.get_goal_state().extensions_goal_state.id
         self._last_attempted_update_time = datetime.datetime.min
         self._last_attempted_update_version = FlexibleVersion("0.0.0.0")
+        self._last_warning = ""
+        self._last_warning_time = datetime.datetime.min
 
     def __should_update_agent(self, requested_version):
         """
@@ -170,15 +172,24 @@ class AgentUpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
-    @staticmethod
-    def __log_event(level, msg_, success_=True):
-        if level == LogLevel.WARNING:
-            logger.warn(msg_)
-        elif level == LogLevel.ERROR:
-            logger.error(msg_)
-        elif level == LogLevel.INFO:
+    def __log_event(self, level, msg_, success_=True):
+        if level == LogLevel.INFO:
             logger.info(msg_)
-        add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg_, log_event=False)
+            add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg_, log_event=False)
+        else:
+            msg_ += "[NOTE: Will not log the same error for the next 6 hours]"
+            # Incarnation may change if we get new goal state that would make whole string unique every time. So comparing only the substring until Incarnation if Incarnation included in msg
+            # Example msg "Unable to update Agent: No manifest links found for agent family: Prod for incarnation: incarnation_1, skipping agent update"
+            prefix_msg = msg_.split("incarnation", 1)[0]
+            prefix_last_warning_msg = self._last_warning.split("incarnation", 1)[0]
+            if prefix_msg != prefix_last_warning_msg or self._last_warning_time == datetime.datetime.min or datetime.datetime.now() >= self._last_warning_time + datetime.timedelta(hours=6):
+                if level == LogLevel.WARNING:
+                    logger.warn(msg_)
+                elif level == LogLevel.ERROR:
+                    logger.error(msg_)
+                add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg_, log_event=False)
+                self._last_warning_time = datetime.datetime.now()
+                self._last_warning = msg_
 
     def run(self, goal_state):
         try:

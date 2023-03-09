@@ -684,7 +684,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+            manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -707,7 +707,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
 
             try:
-                manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+                manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -744,7 +744,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.client.get_host_plugin()
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
-                manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+                manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml)
@@ -778,7 +778,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+                protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))
