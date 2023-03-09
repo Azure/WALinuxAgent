@@ -23,7 +23,7 @@ RUN \
     #                                                                                                            \
     # Install basic dependencies                                                                                 \
     #                                                                                                            \
-    apt-get install -y git python3.10 python3.10-dev                                                          && \
+    apt-get install -y git python3.10 python3.10-dev wget bzip2                                               && \
     ln /usr/bin/python3.10 /usr/bin/python3                                                                   && \
                                                                                                                  \
     #                                                                                                            \
@@ -69,7 +69,14 @@ RUN \
     python3 -m pip install azure-mgmt-compute --upgrade                                                       && \
                                                                                                                  \
     #                                                                                                            \
-    # The setup for the tests depends on a couple of paths; add those to the profile                             \
+    # Download Pypy to a known location, from which it will be installed to the test VMs.                        \
+    #                                                                                                            \
+    mkdir $HOME/bin                                                                                           && \
+    wget https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2 -O /tmp/pypy3.7-x64.tar.bz2         && \
+    wget https://downloads.python.org/pypy/pypy3.7-v7.3.5-aarch64.tar.bz2 -O /tmp/pypy3.7-arm64.tar.bz2       && \
+                                                                                                                 \
+    #                                                                                                            \
+    # The setup for the tests depends on a few paths; add those to the profile                                   \
     #                                                                                                            \
     echo 'export PYTHONPATH="$HOME/WALinuxAgent"' >> $HOME/.bash_profile                                      && \
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> $HOME/.bash_profile                                        && \

@@ -31,6 +31,9 @@ class CommandError(Exception):
         self.stdout: str = stdout
         self.stderr: str = stderr
 
+    def __str__(self):
+        return f"'{self.command}' failed (exit code: {self.exit_code})\nstdout:\n{self.stdout}\nstderr:\n{self.stderr}\n"
+
 
 def run_command(command: Any, shell=False) -> str:
     """
