@@ -339,9 +339,11 @@ class AgentTestSuite(LisaTestSuite):
         self._set_context(node, variables, log_path, log)
 
         with _set_thread_name(self.context.image_name):  # The thread name is added to self._log
+            # E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+            # (OK to iterate, test_suite is a List)
             self._log.info(
                 "Test suite parameters:  [test_suites: %s] [skip_setup: %s] [collect_logs: %s]",
-                [t.name for t in self.context.test_suites], self.context.skip_setup, self.context.collect_logs)
+                [t.name for t in self.context.test_suites],  self.context.skip_setup, self.context.collect_logs)  # pylint: disable=E1133
 
             start_time: datetime.datetime = datetime.datetime.now()
             test_suite_success = True
