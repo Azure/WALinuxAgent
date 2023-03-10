@@ -36,11 +36,11 @@ from pwd import getpwall
 
 import array
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common import conf
+from azurelinuxagent.common import logger
+from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import textutil
 
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr, array_to_bytes
@@ -1137,9 +1137,12 @@ class DefaultOSUtil(object):
         return [int(n) for n in text.split()]
 
     @staticmethod
-    def _get_dhcp_pid(command):
+    def _get_dhcp_pid(command, transform_command_output=None):
         try:
-            return DefaultOSUtil._text_to_pid_list(shellutil.run_command(command))
+            output = shellutil.run_command(command)
+            if transform_command_output is not None:
+                output = transform_command_output(output)
+            return DefaultOSUtil._text_to_pid_list(output)
         except CommandError as exception:  # pylint: disable=W0612
             return []
 
