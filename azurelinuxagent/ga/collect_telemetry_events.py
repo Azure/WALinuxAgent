@@ -78,7 +78,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
     _EXTENSION_EVENT_FILE_NAME_REGEX = re.compile(r"^(\d+)\.json$", re.IGNORECASE)
 
     # Limits
-    _MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD = 300
+    _MAX_NUMBER_OF_EVENTS_PER_EXTENSION_PER_PERIOD = 360
     _EXTENSION_EVENT_FILE_MAX_SIZE = 4 * 1024 * 1024  # 4 MB = 4 * 1,048,576 Bytes
     _EXTENSION_EVENT_MAX_SIZE = 1024 * 6  # 6Kb or 6144 characters. Limit for the whole event. Prevent oversized events.
     _EXTENSION_EVENT_MAX_MSG_LEN = 1024 * 3  # 3Kb or 3072 chars.
