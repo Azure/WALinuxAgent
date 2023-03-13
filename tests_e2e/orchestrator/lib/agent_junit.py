@@ -56,6 +56,8 @@ class AgentJUnit(JUnit):
             message.suite_name = message.suite_full_name
             image = message.information.get('image')
             if image is not None:
-                message.full_name = image
+                # NOTE: message.information['environment'] is similar to "[generated_2]" and can be correlated
+                # with the main LISA log to find the specific VM for the message.
+                message.full_name = f"{image} [{message.information['environment']}]"
                 message.name = message.full_name
         super()._received_message(message)

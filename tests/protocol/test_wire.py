@@ -1101,7 +1101,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
     def test_reset_should_init_provided_goal_state_properties(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.All & ~GoalStateProperties.ExtensionsGoalState)
+            protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.All & ~GoalStateProperties.Certificates)
 
             with self.assertRaises(ProtocolError) as context:
                 _ = protocol.client.get_certs()
