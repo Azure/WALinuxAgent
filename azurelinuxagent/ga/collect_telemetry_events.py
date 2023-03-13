@@ -58,6 +58,8 @@ class ExtensionEventSchema(object):
            "EventTid":"2",
            "OperationId":"Guid (str)"
         }
+
+    From next version(2.10+) we accept integer values for EventPid and EventTid fields. But we still support string type for backward compatability
     """
     Version = "Version"
     Timestamp = "Timestamp"
@@ -323,15 +325,20 @@ class _ProcessExtensionEvents(PeriodicOperation):
         :param extension_event: The json event from file
         :return: Verified Json event that qualifies the contract.
         """
-
-        clean_string = lambda x: x.strip() if x is not None else x
+        def _clean_value(k, v):
+            if v is not None:
+                if isinstance(v, int):
+                    if k.lower() in [ExtensionEventSchema.EventPid.lower(), ExtensionEventSchema.EventTid.lower()]:
+                        return str(v)
+                return v.strip()
+            return v
 
         event_size = 0
         key_err_msg = "{0}: {1} not found"
 
         # Convert the dict to all lower keys to avoid schema confusion.
         # Only pick the params that we care about and skip the rest.
-        event = dict((k.lower(), clean_string(v)) for k, v in extension_event.items() if
+        event = dict((k.lower(), _clean_value(k, v)) for k, v in extension_event.items() if
                      k.lower() in self._EXTENSION_EVENT_REQUIRED_FIELDS)
 
         # Trim message and only pick the first 3k chars
