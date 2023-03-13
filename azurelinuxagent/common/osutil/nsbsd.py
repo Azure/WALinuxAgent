@@ -37,7 +37,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             except ImportError:
                 raise OSUtilError("Python DNS resolver not available. Cannot proceed!")
 
-            self.resolver = dns.resolver.Resolver()
+            self.resolver = dns.resolver.Resolver(configure=False)
             servers = []
             cmd = "getconf /usr/Firewall/ConfigFiles/dns Servers | tail -n +2"
             ret, output = shellutil.run_get_output(cmd)  # pylint: disable=W0612
@@ -47,6 +47,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
                 server = server[:-1]  # remove last '='
                 cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
                 ret, ip = shellutil.run_get_output(cmd)
+                ip = ip.strip() # Remove new line char
                 servers.append(ip)
             self.resolver.nameservers = servers
             dns.resolver.override_system_resolver(self.resolver)
