@@ -301,7 +301,7 @@ class AgentTestSuite(LisaTestSuite):
             self._log.info(f"Downloading {pypy_download} to {pypy_path}")
             run_command(["wget", pypy_download, "-O",  pypy_path])
         pypy_target_path = Path("~/bin/pypy3.7.tar.bz2")
-        self._log.info(f"Copying %s to %s:%s", pypy_path, self.context.node.name, pypy_target_path)
+        self._log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, pypy_target_path)
         self.context.ssh_client.copy_to_node(pypy_path, pypy_target_path)
 
         # Install the tools and libraries
@@ -494,7 +494,9 @@ class AgentTestSuite(LisaTestSuite):
 
         # Individual tests may have rules to ignore known errors; filter those out
         ignore_error_rules = []
-        for suite in self.context.test_suites:
+        # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
+        #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+        for suite in self.context.test_suites:  # pylint: disable=E1133
             for test in suite.tests:
                 ignore_error_rules.extend(test(self.context).get_ignore_error_rules())
 
