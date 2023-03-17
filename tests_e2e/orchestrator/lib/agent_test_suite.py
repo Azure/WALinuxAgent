@@ -16,6 +16,7 @@
 #
 import contextlib
 import datetime
+import json
 import logging
 import re
 import traceback
@@ -29,6 +30,7 @@ from typing import Any, Dict, List
 #     E0401: Unable to import 'lisa' (import-error)
 #     etc
 from lisa import (  # pylint: disable=E0401
+    Environment,
     Logger,
     Node,
     notifier,
@@ -43,11 +45,13 @@ from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
+from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import TestSkipped
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log as agent_test_logger  # Logger used by the tests
 from tests_e2e.tests.lib.logging import set_current_thread_log
+from tests_e2e.tests.lib.agent_log import AgentLogRecord
 from tests_e2e.tests.lib.shell import run_command
 from tests_e2e.tests.lib.ssh_client import SshClient
 
@@ -256,7 +260,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _setup_node(self) -> None:
         """
-        Prepares the remote node for executing the test suite.
+        Prepares the remote node for executing the test suite (installs tools and the test agent, etc)
         """
         self._log.info("")
         self._log.info("************************************** [Node Setup] **************************************")
@@ -265,23 +269,27 @@ class AgentTestSuite(LisaTestSuite):
         self._log.info("Resource Group: %s", self.context.vm.resource_group)
         self._log.info("")
 
-        self._install_tools_on_node()
+        self.context.ssh_client.run_command("mkdir -p ~/bin/tests_e2e/tests; touch ~/bin/agent-env")
 
-        if self.context.is_vhd:
-            self._log.info("Using a VHD; will not install the test Agent.")
-        else:
-            self._install_agent_on_node()
-
-    def _install_tools_on_node(self) -> None:
-        """
-        Installs the test tools on the test node
-        """
-        self.context.ssh_client.run_command("mkdir -p ~/bin")
-
+        # Copy the test tools
         tools_path = self.context.test_source_directory/"orchestrator"/"scripts"
-        self._log.info(f"Copying {tools_path} to the test node")
-        self.context.ssh_client.copy(tools_path, Path("~/bin"), remote_target=True, recursive=True)
+        tools_target_path = Path("~/bin")
+        self._log.info("Copying %s to %s:%s", Path("~/bin/pypy3.7.tar.bz2"), self.context.node.name, tools_target_path)
+        self.context.ssh_client.copy_to_node(tools_path, tools_target_path, recursive=True)
 
+        # Copy the test libraries
+        lib_path = self.context.test_source_directory/"tests"/"lib"
+        lib_target_path = Path("~/bin/tests_e2e/tests")
+        self._log.info("Copying %s to %s:%s", lib_path, self.context.node.name, lib_target_path)
+        self.context.ssh_client.copy_to_node(lib_path, lib_target_path, recursive=True)
+
+        # Copy the test agent
+        agent_package_path: Path = self._get_agent_package_path()
+        agent_package_target_path = Path("~/bin")/agent_package_path.name
+        self._log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, agent_package_target_path)
+        self.context.ssh_client.copy_to_node(agent_package_path, agent_package_target_path)
+
+        # Copy Pypy
         if self.context.ssh_client.get_architecture() == "aarch64":
             pypy_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
             pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-aarch64.tar.bz2"
@@ -292,26 +300,21 @@ class AgentTestSuite(LisaTestSuite):
         if not pypy_path.exists():
             self._log.info(f"Downloading {pypy_download} to {pypy_path}")
             run_command(["wget", pypy_download, "-O",  pypy_path])
-        self._log.info(f"Copying {pypy_path} to the test node")
-        self.context.ssh_client.copy(pypy_path, Path("~/bin/pypy3.7.tar.bz2"), remote_target=True)
+        pypy_target_path = Path("~/bin/pypy3.7.tar.bz2")
+        self._log.info(f"Copying %s to %s:%s", pypy_path, self.context.node.name, pypy_target_path)
+        self.context.ssh_client.copy_to_node(pypy_path, pypy_target_path)
 
-        self._log.info(f'Installing tools on the test node\n{self.context.ssh_client.run_command("~/bin/scripts/install-tools")}')
-        self._log.info(f'Remote commands will use {self.context.ssh_client.run_command("which python3")}')
+        # Install the tools and libraries
+        install_command = lambda: self.context.ssh_client.run_command(f"~/bin/scripts/install-tools --agent-package {agent_package_target_path}")
+        self._log.info('Installing tools on the test node\n%s', install_command())
+        self._log.info('Remote commands will use %s', self.context.ssh_client.run_command("which python3"))
 
-    def _install_agent_on_node(self) -> None:
-        """
-        Installs the given agent package on the test node.
-        """
-        agent_package_path: Path = self._get_agent_package_path()
-
-        self._log.info("Installing %s on %s", agent_package_path, self.context.node.name)
-        agent_package_remote_path = self.context.remote_working_directory/agent_package_path.name
-        self._log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, agent_package_remote_path)
-        self.context.ssh_client.copy(agent_package_path, agent_package_remote_path, remote_target=True)
-        stdout = self.context.ssh_client.run_command(f"install-agent --package {agent_package_remote_path} --version {AGENT_VERSION}", use_sudo=True)
-        self._log.info(stdout)
-
-        self._log.info("The agent was installed successfully.")
+        # Install the agent
+        if self.context.is_vhd:
+            self._log.info("Using a VHD; will not install the Test Agent.")
+        else:
+            install_command = lambda: self.context.ssh_client.run_command(f"install-agent --package {agent_package_target_path} --version {AGENT_VERSION}", use_sudo=True)
+            self._log.info("Installing the Test Agent on %s\n%s", self.context.node.name, install_command())
 
     def _collect_node_logs(self) -> None:
         """
@@ -327,23 +330,25 @@ class AgentTestSuite(LisaTestSuite):
             remote_path = "/tmp/waagent-logs.tgz"
             local_path = self.context.log_path/'{0}.tgz'.format(self.context.image_name)
             self._log.info("Copying %s:%s to %s", self.context.node.name, remote_path, local_path)
-            self.context.ssh_client.copy(remote_path, local_path, remote_source=True)
+            self.context.ssh_client.copy_from_node(remote_path, local_path)
+
         except:  # pylint: disable=bare-except
             self._log.exception("Failed to collect logs from the test machine")
 
     @TestCaseMetadata(description="", priority=0)
-    def agent_test_suite(self, node: Node, variables: Dict[str, Any], log_path: str, log: Logger) -> None:
+    def agent_test_suite(self, node: Node, environment: Environment, variables: Dict[str, Any], log_path: str, log: Logger) -> None:
         """
         Executes each of the AgentTests included in the "c_test_suites" variable (which is generated by the AgentTestSuitesCombinator).
         """
         self._set_context(node, variables, log_path, log)
 
-        with _set_thread_name(self.context.image_name):  # The thread name is added to self._log
-            # E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
-            # (OK to iterate, test_suite is a List)
+        # Set the thread name to the image; this name is added to self._log
+        with _set_thread_name(self.context.image_name):
+            # Log the environment's name and the variables received from the runbook (note that we need to expand the names of the test suites)
+            self._log.info("LISA Environment: %s", environment.name)
             self._log.info(
-                "Test suite parameters:  [test_suites: %s] [skip_setup: %s] [collect_logs: %s]",
-                [t.name for t in self.context.test_suites],  self.context.skip_setup, self.context.collect_logs)  # pylint: disable=E1133
+                "Runbook variables:\n%s",
+                '\n'.join([f"\t{name}: {value if name != 'c_test_suites' else [t.name for t in value] }" for name, value in variables.items()]))
 
             start_time: datetime.datetime = datetime.datetime.now()
             test_suite_success = True
@@ -360,6 +365,8 @@ class AgentTestSuite(LisaTestSuite):
                     #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
                     for suite in self.context.test_suites:  # pylint: disable=E1133
                         test_suite_success = self._execute_test_suite(suite) and test_suite_success
+
+                    test_suite_success = self._check_agent_log() and test_suite_success
 
                 finally:
                     collect = self.context.collect_logs
@@ -474,6 +481,51 @@ class AgentTestSuite(LisaTestSuite):
                         add_exception_stack_trace=True)
 
         return success
+
+    def _check_agent_log(self) -> bool:
+        """
+        Checks the agent log for errors; returns true on success (no errors int the log)
+        """
+        start_time: datetime.datetime = datetime.datetime.now()
+
+        self._log.info("Checking agent log on the test node")
+        output = self.context.ssh_client.run_command("check-agent-log.py -j")
+        errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
+
+        # Individual tests may have rules to ignore known errors; filter those out
+        ignore_error_rules = []
+        for suite in self.context.test_suites:
+            for test in suite.tests:
+                ignore_error_rules.extend(test(self.context).get_ignore_error_rules())
+
+        if len(ignore_error_rules) > 0:
+            new = []
+            for e in errors:
+                if not AgentLog.matches_ignore_rule(e, ignore_error_rules):
+                    new.append(e)
+            errors = new
+
+        if len(errors) == 0:
+            # If no errors, we are done; don't create a log or test result.
+            self._log.info("There are no errors in the agent log")
+            return True
+
+        log_path: Path = self.context.log_path/f"CheckAgentLog-{self.context.image_name}.log"
+        message = f"Detected {len(errors)} error(s) in the agent log. See {log_path} for a full report."
+        self._log.info(message)
+
+        with set_current_thread_log(log_path):
+            agent_test_logger.info("Detected %s error(s) in the agent log:\n\n%s", len(errors), '\n'.join(['\t' + e.text for e in errors]))
+
+        self._report_test_result(
+            self.context.image_name,
+            "CheckAgentLog",
+            TestStatus.FAILED,
+            start_time,
+            message=message + '\n' + '\n'.join([e.text for e in errors[0:3]]),
+            add_exception_stack_trace=True)
+
+        return False
 
     @staticmethod
     def _report_test_result(

@@ -73,6 +73,14 @@ fi
 echo "Service name: $service_name"
 
 #
+# Find the path to the Agent's executable file
+#
+waagent=$(get-agent-path)
+echo "Agent's path: $waagent"
+$waagent --version
+echo ""
+
+#
 # Install the package
 #
 echo "Installing $package as version $version..."
@@ -98,20 +106,13 @@ service-start $service_name
 #
 # Verify that the new agent is running and output its status.
 # Note that the extension handler may take some time to start so give 1 minute.
-# Also, note that the default Python is set to Pypy, so before executing 'waagent' we need to set the
-# Python path to the location of the azurelinuxagent module.
 #
 echo "Verifying agent installation..."
 
-PYTHONPATH=$(get-agent-pythonpath)
-export PYTHONPATH
-
 check-version() {
-  waagent=$(get-waagent-path)
-  
   for i in {0..5}
   do
-    if $waagent --version | grep -E "Goal state agent:\s+$1" > /dev/null; then
+    if $waagent --version | grep -E "Goal state agent:\s+$version" > /dev/null; then
       return 0
     fi
     sleep 10
@@ -128,7 +129,6 @@ else
   exit_code=1
 fi
 
-waagent=$(get-waagent-path)
 $waagent --version
 printf "\n"
 service-status $service_name

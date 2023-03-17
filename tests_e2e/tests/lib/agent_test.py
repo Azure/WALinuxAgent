@@ -20,6 +20,7 @@
 import sys
 
 from abc import ABC, abstractmethod
+from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.logging import log
@@ -43,6 +44,10 @@ class AgentTest(ABC):
     @abstractmethod
     def run(self):
         pass
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        # Tests can override this method to return a list with rules to ignore errors in the agent log (see agent_log.py for sample rules).
+        return []
 
     @classmethod
     def run_from_command_line(cls):
