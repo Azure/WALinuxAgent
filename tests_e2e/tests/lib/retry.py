@@ -50,7 +50,7 @@ def retry_ssh_run(operation: Callable[[], Any]) -> Any:
         try:
             return operation()
         except Exception as e:
-            # We raise CommandError on !=0 exit codes in the downstream
+            # We raise CommandError on !=0 exit codes in the called method
             if isinstance(e, CommandError):
                 # Instance of 'Exception' has no 'exit_code' member (no-member) - Disabled: e is actually an CommandError
                 if e.exit_code != 255 or attempts == 0:  # pylint: disable=no-member
