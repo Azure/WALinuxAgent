@@ -55,5 +55,5 @@ def retry_ssh_run(operation: Callable[[], Any]) -> Any:
                 # Instance of 'Exception' has no 'exit_code' member (no-member) - Disabled: e is actually an CommandError
                 if e.exit_code != 255 or attempts == 0:  # pylint: disable=no-member
                     raise
-            log.warning("The operation failed with SSH Connection time out, retrying in 30 secs. Error: %s", e)
+            log.warning("The operation failed with %s, retrying in 30 secs.", e)
         time.sleep(30)
