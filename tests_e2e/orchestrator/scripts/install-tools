@@ -53,28 +53,42 @@ mv ~/bin/scripts/* ~/bin
 rm -r ~/bin/scripts
 PATH="$HOME/bin:$PATH"
 
-echo "Installing Pypy to ~/bin"
-# bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
-# use Python to uncompress the Pypy tarball.
+# If the system's Python is <= 3.7, install Pypy and make it the default Python for the user executing the tests
 python=$(~/bin/find-python)
-$python ~/bin/uncompress.py ~/bin/pypy3.7.tar.bz2 ~/bin/pypy3.7.tar
-tar xf ~/bin/pypy3.7.tar -C ~/bin
-rm ~/bin/pypy3.7.tar ~/bin/pypy3.7.tar.bz2
+python_version=$($python -c 'import sys; print("{0:02}.{1:02}".format(sys.version_info[0], sys.version_info[1]))')
+echo "Python: $python ($python_version)"
+if [[ $python_version < "03.07" ]]; then
+  echo "Installing Pypy 3.7 to ~/bin and making it the default Python for user $USER"
+  # bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
+  # use Python to uncompress the Pypy tarball.
+  $python ~/bin/uncompress.py ~/bin/pypy3.7.tar.bz2 ~/bin/pypy3.7.tar
+  tar xf ~/bin/pypy3.7.tar -C ~/bin
+  rm ~/bin/pypy3.7.tar ~/bin/pypy3.7.tar.bz2
 
-if [[ -e ~/bin/python ]]; then
-  rm ~/bin/python
+  if [[ -e ~/bin/python ]]; then
+    rm ~/bin/python
+  fi
+  ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python
+
+  if [[ -e ~/bin/python3 ]]; then
+    rm ~/bin/python3
+  fi
+  ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python3
+
+  echo "Installing the 'distro' module"
+  python3 -m ensurepip
+  python3 -mpip install -U pip wheel
+  python3 -mpip install distro
+else
+  # In some distros (e.g. Flatcar), Python is not in PATH; in that case create a symlink under ~/bin
+  if ! which python3 > /dev/null 2>&1; then
+    if [[ ! $python_version < "03.00" ]]; then
+      echo "Python ($python) is not in PATH; creating symbolic links as ~/bin/python and ~/bin/python3"
+      ln -s "$python" ~/bin/python
+      ln -s "$python" ~/bin/python3
+    fi
+  fi
 fi
-ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python
-
-if [[ -e ~/bin/python3 ]]; then
-  rm ~/bin/python3
-fi
-ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python3
-
-echo "Installing Python modules"
-python3 -m ensurepip
-python3 -mpip install -U pip wheel
-python3 -mpip install distro
 
 echo "Installing Agent modules to ~/bin"
 unzip.py "$agent_package" ~/bin/WALinuxAgent
@@ -98,7 +112,7 @@ if [[ $PATH != *"$HOME/bin"* ]]; then
    PATH="$HOME/bin:$PATH:"
 fi
 
-export PYTHONPATH="$HOME/bin:$PATH"
+export PYTHONPATH="$HOME/bin"
 ' > ~/bin/agent-env
 chmod u+x ~/bin/agent-env
 
