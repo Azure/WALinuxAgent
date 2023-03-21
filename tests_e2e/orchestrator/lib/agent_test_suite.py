@@ -274,7 +274,7 @@ class AgentTestSuite(LisaTestSuite):
         # Copy the test tools
         tools_path = self.context.test_source_directory/"orchestrator"/"scripts"
         tools_target_path = Path("~/bin")
-        self._log.info("Copying %s to %s:%s", Path("~/bin/pypy3.7.tar.bz2"), self.context.node.name, tools_target_path)
+        self._log.info("Copying %s to %s:%s", tools_path, self.context.node.name, tools_target_path)
         self.context.ssh_client.copy_to_node(tools_path, tools_target_path, recursive=True)
 
         # Copy the test libraries

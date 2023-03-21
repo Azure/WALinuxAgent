@@ -57,7 +57,7 @@ class AgentLogRecord:
         record.text = dictionary["text"]
         record.when = dictionary["when"]
         record.level = dictionary["level"]
-        record.level = dictionary["level"]
+        record.thread = dictionary["thread"]
         record.prefix = dictionary["prefix"]
         record.message = dictionary["message"]
         return record
