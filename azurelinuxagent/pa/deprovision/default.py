@@ -26,7 +26,7 @@ import sys
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common import version
-from azurelinuxagent.common.cgroupconfigurator import _AGENT_DROP_IN_FILE_SLICE, _DROP_IN_FILE_CPU_ACCOUNTING, _DROP_IN_FILE_MEMORY_ACCOUNTING, LOGCOLLECTOR_SLICE
+from azurelinuxagent.common.cgroupconfigurator import _AGENT_DROP_IN_FILE_SLICE, _DROP_IN_FILE_CPU_ACCOUNTING, _DROP_IN_FILE_CPU_QUOTA, _DROP_IN_FILE_MEMORY_ACCOUNTING, LOGCOLLECTOR_SLICE
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
@@ -276,11 +276,12 @@ class DeprovisionHandler(object):
         agent_drop_in_path = systemd.get_agent_drop_in_path()
         slice_path = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
         cpu_accounting_path = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_ACCOUNTING)
+        cpu_quota_path = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
         mem_accounting_path = os.path.join(agent_drop_in_path, _DROP_IN_FILE_MEMORY_ACCOUNTING)
 
         unit_file_install_path = systemd.get_unit_file_install_path()
         log_collector_slice_path = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
 
         actions.append(DeprovisionAction(fileutil.rm_files,
-                                         [agent_service_path, slice_path, cpu_accounting_path, mem_accounting_path,
-                                          log_collector_slice_path]))
+                                         [agent_service_path, slice_path, cpu_accounting_path, cpu_quota_path,
+                                          mem_accounting_path, log_collector_slice_path]))
