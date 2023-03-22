@@ -21,12 +21,13 @@ import re
 from pathlib import Path
 
 from tests_e2e.tests.lib import shell
+from tests_e2e.tests.lib.retry import retry_ssh_run
 
 
 class SshClient(object):
     def __init__(self, ip_address: str, username: str, private_key_file: Path, port: int = 22):
         self._ip_address: str = ip_address
-        self._username:str = username
+        self._username: str = username
         self._private_key_file: Path = private_key_file
         self._port: int = port
 
@@ -43,16 +44,17 @@ class SshClient(object):
         # Note that we add ~/bin to the remote PATH, since Python (Pypy) and other test tools are installed there.
         # Note, too, that when using sudo we need to carry over the value of PATH to the sudo session
         sudo = "sudo env PATH=$PATH PYTHONPATH=$PYTHONPATH" if use_sudo else ''
-        return shell.run_command([
+        return retry_ssh_run(lambda: shell.run_command([
             "ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination,
-            f"source ~/bin/agent-env;{sudo} {command}"])
+            f"source ~/bin/agent-env;{sudo} {command}"]))
 
     @staticmethod
     def generate_ssh_key(private_key_file: Path):
         """
         Generates an SSH key on the given Path
         """
-        shell.run_command(["ssh-keygen", "-m", "PEM", "-t", "rsa", "-b", "4096", "-q", "-N", "", "-f", str(private_key_file)])
+        shell.run_command(
+            ["ssh-keygen", "-m", "PEM", "-t", "rsa", "-b", "4096", "-q", "-N", "", "-f", str(private_key_file)])
 
     def get_architecture(self):
         return self.run_command("uname -m").rstrip()
