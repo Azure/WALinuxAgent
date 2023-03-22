@@ -16,6 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import re
+
 from pathlib import Path
 
 from tests_e2e.tests.lib import shell
@@ -33,14 +35,17 @@ class SshClient(object):
         Executes the given command over SSH and returns its stdout. If the command returns a non-zero exit code,
         the function raises a RunCommandException.
         """
+        if re.match(r"^\s*sudo\s*", command):
+            raise Exception("Do not include 'sudo' in the 'command' argument, use the 'use_sudo' parameter instead")
+
         destination = f"ssh://{self._username}@{self._ip_address}:{self._port}"
 
         # Note that we add ~/bin to the remote PATH, since Python (Pypy) and other test tools are installed there.
         # Note, too, that when using sudo we need to carry over the value of PATH to the sudo session
-        sudo = "sudo env PATH=$PATH" if use_sudo else ''
+        sudo = "sudo env PATH=$PATH PYTHONPATH=$PYTHONPATH" if use_sudo else ''
         return shell.run_command([
             "ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination,
-            f"PATH=~/bin:$PATH;{sudo} {command}"])
+            f"source ~/bin/agent-env;{sudo} {command}"])
 
     @staticmethod
     def generate_ssh_key(private_key_file: Path):
@@ -52,10 +57,19 @@ class SshClient(object):
     def get_architecture(self):
         return self.run_command("uname -m").rstrip()
 
-    def copy(self, source: Path, target: Path, remote_source: bool = False, remote_target: bool = False, recursive: bool = False):
+    def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False) -> None:
         """
-        Copy file from local to remote machine
+        File copy to a remote node
         """
+        self._copy(local_path, remote_path, remote_source=False, remote_target=True, recursive=recursive)
+
+    def copy_from_node(self, remote_path: Path, local_path: Path, recursive: bool = False) -> None:
+        """
+        File copy from a remote node
+        """
+        self._copy(remote_path, local_path, remote_source=True, remote_target=False, recursive=recursive)
+
+    def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool) -> None:
         if remote_source:
             source = f"{self._username}@{self._ip_address}:{source}"
         if remote_target:

@@ -25,47 +25,112 @@
 
 set -euo pipefail
 
+usage() (
+    echo "Usage: install-tools -p|--agent-package <path>"
+    exit 1
+)
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--agent-package)
+            shift
+            if [ "$#" -lt 1 ]; then
+                usage
+            fi
+            agent_package=$1
+            shift
+            ;;
+        *)
+            usage
+    esac
+done
+if [ "$#" -ne 0 ] || [ -z ${agent_package+x} ]; then
+    usage
+fi
+
 echo "Installing scripts to ~/bin"
 mv ~/bin/scripts/* ~/bin
 rm -r ~/bin/scripts
+PATH="$HOME/bin:$PATH"
 
-echo "Installing Pypy to ~/bin"
-# bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
-# use Python to uncompress the Pypy tarball.
+# If the system's Python is <= 3.7, install Pypy and make it the default Python for the user executing the tests
 python=$(~/bin/find-python)
-$python ~/bin/uncompress.py ~/bin/pypy3.7.tar.bz2 ~/bin/pypy3.7.tar
-tar xf ~/bin/pypy3.7.tar -C ~/bin
-rm ~/bin/pypy3.7.tar ~/bin/pypy3.7.tar.bz2
+python_version=$($python -c 'import sys; print("{0:02}.{1:02}".format(sys.version_info[0], sys.version_info[1]))')
+echo "Python: $python ($python_version)"
+if [[ $python_version < "03.07" ]]; then
+  echo "Installing Pypy 3.7 to ~/bin and making it the default Python for user $USER"
+  # bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
+  # use Python to uncompress the Pypy tarball.
+  $python ~/bin/uncompress.py ~/bin/pypy3.7.tar.bz2 ~/bin/pypy3.7.tar
+  tar xf ~/bin/pypy3.7.tar -C ~/bin
+  rm ~/bin/pypy3.7.tar ~/bin/pypy3.7.tar.bz2
 
-if [[ -e ~/bin/python ]]; then
-  rm ~/bin/python
+  if [[ -e ~/bin/python ]]; then
+    rm ~/bin/python
+  fi
+  ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python
+
+  if [[ -e ~/bin/python3 ]]; then
+    rm ~/bin/python3
+  fi
+  ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python3
+
+  echo "Installing the 'distro' module"
+  python3 -m ensurepip
+  python3 -mpip install -U pip wheel
+  python3 -mpip install distro
+else
+  # In some distros (e.g. Flatcar), Python is not in PATH; in that case create a symlink under ~/bin
+  if ! which python3 > /dev/null 2>&1; then
+    if [[ ! $python_version < "03.00" ]]; then
+      echo "Python ($python) is not in PATH; creating symbolic links as ~/bin/python and ~/bin/python3"
+      ln -s "$python" ~/bin/python
+      ln -s "$python" ~/bin/python3
+    fi
+  fi
 fi
-ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python
 
-if [[ -e ~/bin/python3 ]]; then
-  rm ~/bin/python3
-fi
-ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/python3
+echo "Installing Agent modules to ~/bin"
+unzip.py "$agent_package" ~/bin/WALinuxAgent
+unzip.py ~/bin/WALinuxAgent/bin/WALinuxAgent-*.egg ~/bin/WALinuxAgent/bin/WALinuxAgent.egg
+mv ~/bin/WALinuxAgent/bin/WALinuxAgent.egg/azurelinuxagent ~/bin
+rm -rf ~/bin/WALinuxAgent
 
-# Note that we place $HOME/bin at the front of PATH, so the tools in ~/bin (including python) will
+#
+# Create ~/bin/agent-env to set PATH and PYTHONPATH.
+#
+# We add $HOME/bin to the front of PATH, so tools in ~/bin (including python) will
 # take precedence over system tools with the same name.
+#
+# We set PYTHONPATH to include the location of the agent modules installed on the VM image and also
+# the test modules we copied to ~/bin.
+#
+#
+echo "Creating ~/bin/agent-env to set PATH and PYTHONPATH"
+echo '
+if [[ $PATH != *"$HOME/bin"* ]]; then
+   PATH="$HOME/bin:$PATH:"
+fi
+
+export PYTHONPATH="$HOME/bin"
+' > ~/bin/agent-env
+chmod u+x ~/bin/agent-env
+
+echo "Adding ~/bin/agent-env to ~/.bash_profile"
 # In some distros, e.g. Flatcar, .bash_profile is a symbolic link to a read-only file. Make a copy in
 # that case.
-echo "Adding ~/bin to PATH in .bash_profile"
 if test -e ~/.bash_profile && ls -l .bash_profile | grep '\->'; then
   cp ~/.bash_profile ~/.bash_profile-bk
   rm ~/.bash_profile
   mv ~/.bash_profile-bk ~/.bash_profile
 fi
-if ! test -e ~/.bash_profile || ! grep '# Add $HOME/bin to $PATH' ~/.bash_profile > /dev/null; then
-  echo '
-# Add $HOME/bin to $PATH
-if [[ $PATH != *"$HOME/bin"* ]]; then
-   PATH="$HOME/bin:$PATH:"
-fi
+if ! test -e ~/.bash_profile || ! grep '~/bin/agent-env' ~/.bash_profile > /dev/null; then
+  echo 'source ~/bin/agent-env
 ' >> ~/.bash_profile
 fi
 
-echo "python3 has been set to $(which python3)"
+source ~/bin/agent-env
+echo "PATH=$PATH"
+echo "PYTHONPATH=$PYTHONPATH"
+echo "python3 -> $(which python3)"
 python3 --version
-
