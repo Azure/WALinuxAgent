@@ -20,14 +20,14 @@
 #
 set -euo pipefail
 
-AGENT_PYTHON_SCRIPT="agent-python"
-AGENT_SERVICE_SCRIPT="agent-service"
-PYTHON=$(source $AGENT_PYTHON_SCRIPT)
+PYTHON=$(get-agent-python)
 echo "Agent's Python: $PYTHON"
 # some distros return .pyc byte file instead source file .py. So, I retrieve parent directory first.
 version_file_dir=$($PYTHON -c 'import azurelinuxagent.common.version as v; import os; print(os.path.dirname(v.__file__))')
 version_file_full_path="$version_file_dir/version.py"
 sed -E -i "s/AGENT_VERSION\s+=\s+'[0-9.]+'/AGENT_VERSION = '1.0.0.0'/" $version_file_full_path
-sed -i 's/GAUpdates.Enabled=n/GAUpdates.Enabled=y/g' /etc/waagent.conf
-sed -i '$a AutoUpdate.GAFamily=Test' /etc/waagent.conf
-source $AGENT_SERVICE_SCRIPT restart
+waagent_conf_path=$($PYTHON -c 'from azurelinuxagent.common.osutil import get_osutil; osutil=get_osutil(); print(osutil.agent_conf_file_path)')
+sed -i 's/GAUpdates.Enabled=n/GAUpdates.Enabled=y/g' "$waagent_conf_path"
+sed -i '$a AutoUpdate.GAFamily=Test' "$waagent_conf_path"
+echo "Restarting service..."
+agent-service restart

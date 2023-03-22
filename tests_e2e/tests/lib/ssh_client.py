@@ -83,10 +83,3 @@ class SshClient(object):
         command.extend([str(source), str(target)])
 
         shell.run_command(command)
-
-    def copy(self, local_path: Path, remote_path: Path):
-        """
-        Copy file from local to remote machine
-        """
-        destination = f"{self._username}@{self._ip_address}:{remote_path}"
-        shell.run_command(["scp", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, local_path, destination])

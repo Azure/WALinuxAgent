@@ -22,7 +22,6 @@ set -euo pipefail
 #
 # The service name is walinuxagent in Ubuntu/debian and waagent elsewhere
 #
-# TODO: Update install-agent to use this script
 
 usage() (
     echo "Usage: agent-service command"
@@ -51,11 +50,16 @@ else
   service-start()  { service $1 start; }
 fi
 
-if service-status walinuxagent > /dev/null 2>&1;then
+python=$(get-agent-python)
+distro=$($python -c 'from azurelinuxagent.common.version import get_distro; print(get_distro()[0])')
+distro=$(echo $distro | tr '[:upper:]' '[:lower:]')
+
+if [[ $distro == *"ubuntu"* || $distro == *"debian"* ]]; then
     service_name="walinuxagent"
 else
     service_name="waagent"
 fi
+
 echo "Service name: $service_name"
 
 if [[ "$cmd" == "restart" ]]; then

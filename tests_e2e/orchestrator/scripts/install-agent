@@ -50,35 +50,10 @@ if [ "$#" -ne 0 ] || [ -z ${package+x} ] || [ -z ${version+x} ]; then
 fi
 
 #
-# Find the command to manage services
-#
-if command -v systemctl &> /dev/null; then
-  service-status() { systemctl --no-pager -l status $1; }
-  service-stop()   { systemctl stop $1; }
-  service-start()  { systemctl start $1; }
-else
-  service-status() { service $1 status; }
-  service-stop()   { service $1 stop; }
-  service-start()  { service $1 start; }
-fi
-
-#
-# Find the service name (walinuxagent in Ubuntu and waagent elsewhere)
-#
-if service-status walinuxagent > /dev/null 2>&1;then
-    service_name="walinuxagent"
-else
-    service_name="waagent"
-fi
-echo "Service name: $service_name"
-
-#
 # Output the initial version of the agent
+
 #
-python=$(get-agent-python)
-waagent=$(get-agent-bin-path)
-echo "Agent's path: $waagent"
-$python "$waagent" --version
+waagent-version
 printf "\n"
 
 #
@@ -87,25 +62,25 @@ printf "\n"
 echo "Installing $package as version $version..."
 unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
-# Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar, don't have a waagent.conf
-# but AutoUpdate defaults to True so there is no need to do anything in that case.
-if [[ -e /etc/waagent.conf ]]; then
-  sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
-fi
+python=$(get-agent-python)
+# Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar have a waagent.conf in different path
+waagent_conf_path=$($python -c 'from azurelinuxagent.common.osutil import get_osutil; osutil=get_osutil(); print(osutil.agent_conf_file_path)')
+echo "Agent's conf path: $waagent_conf_path"
+sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' "$waagent_conf_path"
 # By default GAUpdates flag set to True, so that agent go through update logic to look for new agents.
 # But in e2e tests this flag needs to be off in test version 9.9.9.9 to stop the agent updates, so that our scenarios run on 9.9.9.9.
-sed -i '$a GAUpdates.Enabled=n' /etc/waagent.conf
+sed -i '$a GAUpdates.Enabled=n' "$waagent_conf_path"
 
 #
 # Restart the service
 #
 echo "Restarting service..."
-service-stop $service_name
+agent-service stop
 
 # Rename the previous log to ensure the new log starts with the agent we just installed
 mv /var/log/waagent.log /var/log/waagent."$(date --iso-8601=seconds)".log
 
-service-start $service_name
+agent-service start
 
 #
 # Verify that the new agent is running and output its status.
@@ -116,7 +91,7 @@ echo "Verifying agent installation..."
 check-version() {
   for i in {0..5}
   do
-    if $python "$waagent" --version | grep -E "Goal state agent:\s+$version" > /dev/null; then
+    if waagent-version | grep -E "Goal state agent:\s+$version" > /dev/null; then
       return 0
     fi
     sleep 10
@@ -133,8 +108,8 @@ else
   exit_code=1
 fi
 
-$python "$waagent" --version
+waagent-version
 printf "\n"
-service-status $service_name
+agent-service status
 
 exit $exit_code
