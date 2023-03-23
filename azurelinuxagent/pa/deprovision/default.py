@@ -273,8 +273,6 @@ class DeprovisionHandler(object):
 
     @staticmethod
     def remove_agent_cgroup_config(actions):
-        agent_service_path = systemd.get_agent_unit_file()
-
         # Get all service drop in file paths
         agent_drop_in_path = systemd.get_agent_drop_in_path()
         slice_path = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
@@ -282,10 +280,11 @@ class DeprovisionHandler(object):
         cpu_quota_path = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
         mem_accounting_path = os.path.join(agent_drop_in_path, _DROP_IN_FILE_MEMORY_ACCOUNTING)
 
+        # Get slice files to remove
         unit_file_install_path = systemd.get_unit_file_install_path()
         log_collector_slice_path = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
         azure_slice_path = os.path.join(unit_file_install_path, AZURE_SLICE)
 
         actions.append(DeprovisionAction(fileutil.rm_files,
-                                         [agent_service_path, slice_path, cpu_accounting_path, cpu_quota_path,
-                                          mem_accounting_path, log_collector_slice_path, azure_slice_path]))
+                                         [slice_path, cpu_accounting_path, cpu_quota_path, mem_accounting_path,
+                                          log_collector_slice_path, azure_slice_path]))
