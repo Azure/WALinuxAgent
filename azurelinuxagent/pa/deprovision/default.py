@@ -283,8 +283,7 @@ class DeprovisionHandler(object):
         # Get slices to remove
         unit_file_install_path = systemd.get_unit_file_install_path()
         log_collector_slice_path = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
-        azure_slice_path = os.path.join(unit_file_install_path, AZURE_SLICE)
 
         actions.append(DeprovisionAction(fileutil.rm_files,
                                          [slice_path, cpu_accounting_path, cpu_quota_path, mem_accounting_path,
-                                          log_collector_slice_path, azure_slice_path]))
+                                          log_collector_slice_path]))
