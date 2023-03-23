@@ -280,7 +280,7 @@ class DeprovisionHandler(object):
         cpu_quota_path = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
         mem_accounting_path = os.path.join(agent_drop_in_path, _DROP_IN_FILE_MEMORY_ACCOUNTING)
 
-        # Get slice files to remove
+        # Get slices to remove
         unit_file_install_path = systemd.get_unit_file_install_path()
         log_collector_slice_path = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
         azure_slice_path = os.path.join(unit_file_install_path, AZURE_SLICE)
