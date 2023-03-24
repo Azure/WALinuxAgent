@@ -19,6 +19,7 @@ import time
 from typing import Callable, Any
 
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.shell import CommandError
 
 
 def execute_with_retry(operation: Callable[[], Any]) -> Any:
@@ -39,3 +40,20 @@ def execute_with_retry(operation: Callable[[], Any]) -> Any:
         time.sleep(30)
 
 
+def retry_ssh_run(operation: Callable[[], Any]) -> Any:
+    """
+    This method attempts to retry ssh run command a few times if operation failed with connection time out
+    """
+    attempts = 3
+    while attempts > 0:
+        attempts -= 1
+        try:
+            return operation()
+        except Exception as e:
+            # We raise CommandError on !=0 exit codes in the called method
+            if isinstance(e, CommandError):
+                # Instance of 'Exception' has no 'exit_code' member (no-member) - Disabled: e is actually an CommandError
+                if e.exit_code != 255 or attempts == 0:  # pylint: disable=no-member
+                    raise
+            log.warning("The operation failed with %s, retrying in 30 secs.", e)
+        time.sleep(30)

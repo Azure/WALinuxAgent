@@ -309,6 +309,16 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
 
             self._assert_handler_data_in_event_list(telemetry_events, extensions_with_count)
 
+    def test_it_should_parse_int_type_for_eventpid_or_eventtid_properly(self):
+        with self._create_extension_telemetry_processor() as extension_telemetry_processor:
+            extensions_with_count = self._create_random_extension_events_dir_with_events(2, os.path.join(
+                self._TEST_DATA_DIR, "int_type"))
+
+            extension_telemetry_processor.run()
+            telemetry_events = self._get_handlers_with_version(extension_telemetry_processor.event_list)
+
+            self._assert_handler_data_in_event_list(telemetry_events, extensions_with_count)
+
     def _setup_and_assert_tests_for_max_sizes(self, no_of_extensions=2, expected_count=None):
         with self._create_extension_telemetry_processor() as extension_telemetry_processor:
             extensions_with_count = self._create_random_extension_events_dir_with_events(no_of_extensions,

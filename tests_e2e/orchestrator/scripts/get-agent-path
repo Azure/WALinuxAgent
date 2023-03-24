@@ -22,8 +22,6 @@
 #
 set -euo pipefail
 
-#
-
 # On most distros, 'waagent' is in PATH
 if which waagent 2> /dev/null; then
   exit 0
@@ -42,6 +40,7 @@ fi
 
 # try some well-known locations
 declare -a known_locations=(
+  "/usr/sbin/waagent"
   "/usr/share/oem/bin/waagent"
 )
 
