@@ -126,7 +126,7 @@ combinator:
   location: $(location)
   vm_size: $(vm_size)
 
-concurrency: 32
+concurrency: 16
 
 notifier:
   - type: agent.junit
