@@ -87,7 +87,7 @@ echo "Installing $package as version $version..."
 unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
 # Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar, don't have a waagent.conf
-# but AutoUpdate defaults to True so there is no need to anything in that case.
+# but AutoUpdate defaults to True so there is no need to do anything in that case.
 if [[ -e /etc/waagent.conf ]]; then
   sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
 fi

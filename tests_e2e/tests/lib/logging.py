@@ -56,6 +56,12 @@ class _AgentLoggingHandler(Handler):
         handler.setFormatter(self.formatter)
         self.per_thread_handlers[thread_ident] = handler
 
+    def get_thread_log(self, thread_ident: int) -> Path:
+        handler = self.per_thread_handlers.get(thread_ident)
+        if handler is None:
+            return None
+        return Path(handler.baseFilename)
+
     def close_thread_log(self, thread_ident: int) -> None:
         handler = self.per_thread_handlers.pop(thread_ident, None)
         if handler is not None:
@@ -63,6 +69,9 @@ class _AgentLoggingHandler(Handler):
 
     def set_current_thread_log(self, log_file: Path) -> None:
         self.set_thread_log(current_thread().ident, log_file)
+
+    def get_current_thread_log(self) -> Path:
+        return self.get_thread_log(current_thread().ident)
 
     def close_current_thread_log(self) -> None:
         self.close_thread_log(current_thread().ident)
@@ -109,11 +118,20 @@ class AgentLogger(Logger):
     def set_thread_log(self, thread_ident: int, log_file: Path) -> None:
         self._handler.set_thread_log(thread_ident, log_file)
 
+    def get_thread_log_file(self, thread_ident: int) -> Path:
+        """
+        Returns the Path of the log file for the current thread, or None if a log has not been set
+        """
+        return self._handler.get_thread_log(thread_ident)
+
     def close_thread_log(self, thread_ident: int) -> None:
         self._handler.close_thread_log(thread_ident)
 
     def set_current_thread_log(self, log_file: Path) -> None:
         self._handler.set_current_thread_log(log_file)
+
+    def get_current_thread_log(self) -> Path:
+        return self._handler.get_current_thread_log()
 
     def close_current_thread_log(self) -> None:
         self._handler.close_current_thread_log()
@@ -127,8 +145,11 @@ def set_current_thread_log(log_file: Path):
     """
     Context Manager to set the log file for the current thread temporarily
     """
+    initial_value = log.get_current_thread_log()
     log.set_current_thread_log(log_file)
     try:
         yield
     finally:
         log.close_current_thread_log()
+        if initial_value is not None:
+            log.set_current_thread_log(initial_value)
