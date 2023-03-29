@@ -3,23 +3,32 @@
 set -euxo pipefail
 
 #
-# Set the correct mode for the private SSH key and generate the public key.
+# UID of 'waagent' in the Docker container
+#
+WAAGENT_UID=1000
+
+#
+# Set the correct mode and owner for the private SSH key and generate the public key.
 #
 cd "$HOME"
 mkdir ssh
 cp "$DOWNLOADSSHKEY_SECUREFILEPATH" ssh
 chmod 700 ssh/id_rsa
 ssh-keygen -y -f ssh/id_rsa > ssh/id_rsa.pub
+sudo find ssh -exec chown "$WAAGENT_UID" {} \;
 
 #
-# Change the ownership of the "ssh" directory we just created, as well as the sources and staging directories.
-# Make waagent (UID 1000 in the container) the owner of both locations, so that it can write to them.
-# This is needed because building the agent package writes the egg info to the source code directory, and
-# tests write their logs to the staging directory.
+# Allow write access to the sources directory. This is needed because building the agent package (within the Docker
+# container) writes the egg info to that directory.
 #
-sudo find ssh -exec chown 1000 {} \;
-sudo chown 1000 "$BUILD_SOURCESDIRECTORY"
-sudo chown 1000 "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+chmod a+w "$BUILD_SOURCESDIRECTORY"
+
+#
+# Create the directory where the Docker container will create the test logs and give ownership to 'waagent'
+#
+LOGS_DIRECTORY="$HOME/logs"
+mkdir "$LOGS_DIRECTORY"
+sudo chown "$WAAGENT_UID" "$LOGS_DIRECTORY"
 
 #
 # Pull the container image used to execute the tests
@@ -47,7 +56,7 @@ echo "exit 0" > /tmp/exit.sh
 docker run --rm \
     --volume "$BUILD_SOURCESDIRECTORY:/home/waagent/WALinuxAgent" \
     --volume "$HOME"/ssh:/home/waagent/.ssh \
-    --volume "$BUILD_ARTIFACTSTAGINGDIRECTORY":/home/waagent/logs \
+    --volume "$LOGS_DIRECTORY":/home/waagent/logs \
     --env AZURE_CLIENT_ID \
     --env AZURE_CLIENT_SECRET \
     --env AZURE_TENANT_ID \
@@ -56,7 +65,7 @@ docker run --rm \
       "lisa \
           --runbook \$HOME/WALinuxAgent/tests_e2e/orchestrator/runbook.yml \
           --log_path \$HOME/logs/lisa \
-          --working_path \$HOME/logs/lisa \
+          --working_path \$HOME/tmp \
           -v cloud:$CLOUD \
           -v subscription_id:$SUBSCRIPTION_ID \
           -v identity_file:\$HOME/.ssh/id_rsa \
@@ -70,29 +79,33 @@ docker run --rm \
 || echo "exit $?" > /tmp/exit.sh
 
 #
-# Retake ownership of the source and staging directories (note that the former does not need to be done recursively; also, we don't need to
-# retake ownership of the ssh directory)
+# Re-take ownership of the logs directory
 #
-sudo chown "$USER" "$BUILD_SOURCESDIRECTORY"
-sudo find "$BUILD_ARTIFACTSTAGINGDIRECTORY" -exec chown "$USER" {} \;
+sudo find "$LOGS_DIRECTORY" -exec chown "$USER" {} \;
 
-# The LISA run will produce a tree similar to
 #
-#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130
-#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749
-#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749/environments
-#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749/lisa-20221130-160013-749.log
-#    $BUILD_ARTIFACTSTAGINGDIRECTORY/lisa/20221130/20221130-160013-749/lisa.junit.xml
-#    etc
+# Move the relevant logs to the staging directory
 #
-# Remove the 2 levels of the tree that indicate the time of the test run to make navigation
-# in the Azure Pipelines UI easier. Also, move the lisa log one level up and remove some of
-# the logs that are not needed
-#
-mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*/* "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa
-rm -r "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]
-mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/lisa-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
-rm "$BUILD_ARTIFACTSTAGINGDIRECTORY"/lisa/messages.log
+if ls "$LOGS_DIRECTORY"/env-*.log > /dev/null 2>&1; then
+  mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/environment_logs
+  mv "$LOGS_DIRECTORY"/env-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/environment_logs
+fi
+if ls "$LOGS_DIRECTORY"/*.log > /dev/null 2>&1; then
+  mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs
+  mv "$LOGS_DIRECTORY"/*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs
+fi
+# Move the logs for failed tests to the main directory
+if ls "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs/_*.log > /dev/null 2>&1; then
+  mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs/_*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+fi
+if ls "$LOGS_DIRECTORY"/*.tgz > /dev/null 2>&1; then
+  mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/vm_logs
+  mv "$LOGS_DIRECTORY"/*.tgz "$BUILD_ARTIFACTSTAGINGDIRECTORY"/vm_logs
+fi
+# Files created by LISA are under .../lisa/<date>/<unique_name>"
+mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
+mv "$LOGS_DIRECTORY"/lisa/*/*/lisa-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
+mv "$LOGS_DIRECTORY"/lisa/*/*/agent.junit.xml "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
 
 cat /tmp/exit.sh
 bash /tmp/exit.sh

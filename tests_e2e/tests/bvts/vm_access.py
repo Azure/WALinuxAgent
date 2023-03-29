@@ -38,7 +38,8 @@ from tests_e2e.tests.lib.vm_extension import VmExtension
 
 class VmAccessBvt(AgentTest):
     def run(self):
-        if type(self._context.node.os).__name__ == 'CoreOs' and self._context.node.os.information.full_version.startswith('Flatcar'):
+        ssh: SshClient = SshClient(ip_address=self._context.vm_ip_address, username=self._context.username, private_key_file=self._context.private_key_file)
+        if "-flatcar" in ssh.run_command("uname -a"):
             raise TestSkipped("Currently VMAccess is not supported on Flatcar")
 
         # Try to use a unique username for each test run (note that we truncate to 32 chars to
@@ -51,7 +52,7 @@ class VmAccessBvt(AgentTest):
         private_key_file: Path = self._context.working_directory/f"{username}_rsa"
         public_key_file: Path = self._context.working_directory/f"{username}_rsa.pub"
         log.info("Generating SSH key as %s", private_key_file)
-        ssh: SshClient = SshClient(ip_address=self._context.vm_ip_address, username=username, private_key_file=private_key_file)
+        ssh = SshClient(ip_address=self._context.vm_ip_address, username=username, private_key_file=private_key_file)
         ssh.generate_ssh_key(private_key_file)
         with public_key_file.open() as f:
             public_key = f.read()
