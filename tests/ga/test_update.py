@@ -1428,16 +1428,18 @@ class UpdateHandlerRunTestCase(AgentTestCase):
 class TestAgentUpgrade(UpdateTestCase):
 
     @contextlib.contextmanager
-    def create_conf_mocks(self, autoupdate_frequency):
+    def create_conf_mocks(self, autoupdate_frequency, hotfix_frequency, normal_frequency):
         # Disabling extension processing to speed up tests as this class deals with testing agent upgrades
         with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
             with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
-                with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                    yield
+                with patch("azurelinuxagent.common.conf.get_hotfix_upgrade_frequency", return_value=hotfix_frequency):
+                    with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency", return_value=normal_frequency):
+                        with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
+                            yield
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None,
-                             reload_conf=None, autoupdate_frequency=0.001):
+                             reload_conf=None, autoupdate_frequency=0.001, hotfix_frequency=1.0, normal_frequency=2.0):
 
         test_data = DATA_FILE if test_data is None else test_data
 
@@ -1463,7 +1465,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 return MockHttpResponse(status=201)
 
             protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
-            with self.create_conf_mocks(autoupdate_frequency):
+            with self.create_conf_mocks(autoupdate_frequency, hotfix_frequency, normal_frequency):
                 with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
                     update_handler._protocol = protocol
                     yield update_handler, mock_telemetry
@@ -1672,6 +1674,85 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+            update_handler._protocol.mock_wire_data.set_incarnation(2)
+            update_handler.run(debug=True)
+
+            self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
+            self.__assert_exit_code_successful(update_handler)
+            self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="99999.0.0.0")
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
+
+    def test_it_should_not_update_largest_version_if_time_window_not_elapsed(self):
+        no_of_iterations = 20
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
+
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
+             "goalstate"] >= 5:
+                reload_conf.call_count += 1
+
+                self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
+
+                # Update the ga_manifest and incarnation to send largest version manifest
+                mock_wire_data.data_files["ga_manifest"] = "wire/ga_manifest.xml"
+                mock_wire_data.reload()
+                self._add_write_permission_to_goal_state_files()
+                reload_conf.incarnation += 1
+                mock_wire_data.set_incarnation(reload_conf.incarnation)
+
+        reload_conf.call_count = 0
+        reload_conf.incarnation = 2
+
+        data_file = mockwiredata.DATA_FILE.copy()
+        # This is to fail the agent update at first attempt so that agent doesn't go through update
+        data_file["ga_manifest"] = "wire/ga_manifest_no_uris.xml"
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
+                                       hotfix_frequency=10, normal_frequency=10) as (update_handler, _):
+            update_handler._protocol.mock_wire_data.set_incarnation(2)
+            update_handler.run(debug=True)
+
+            self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
+            self.__assert_exit_code_successful(update_handler)
+            self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
+                             "New agent directory should not be found")
+
+    def test_it_should_update_largest_version_if_time_window_elapsed(self):
+        no_of_iterations = 20
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
+
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts[
+             "goalstate"] >= 5:
+                reload_conf.call_count += 1
+
+                self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
+
+                # Update the ga_manifest and incarnation to send largest version manifest
+                mock_wire_data.data_files["ga_manifest"] = "wire/ga_manifest.xml"
+                mock_wire_data.reload()
+                self._add_write_permission_to_goal_state_files()
+                reload_conf.incarnation += 1
+                mock_wire_data.set_incarnation(reload_conf.incarnation)
+
+        reload_conf.call_count = 0
+        reload_conf.incarnation = 2
+
+        data_file = mockwiredata.DATA_FILE.copy()
+        data_file["ga_manifest"] = "wire/ga_manifest_no_uris.xml"
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
+                                       hotfix_frequency=0.001, normal_frequency=0.001) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
