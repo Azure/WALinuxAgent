@@ -86,18 +86,27 @@ sudo find "$LOGS_DIRECTORY" -exec chown "$USER" {} \;
 #
 # Move the relevant logs to the staging directory
 #
+# Move the logs for failed tests to a temporary location
+mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp
+for log in $(grep -l MARKER-LOG-WITH-ERRORS "$LOGS_DIRECTORY"/*.log); do
+  mv "$log" "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp
+done
+# Move the environment logs to "environment_logs"
 if ls "$LOGS_DIRECTORY"/env-*.log > /dev/null 2>&1; then
   mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/environment_logs
   mv "$LOGS_DIRECTORY"/env-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/environment_logs
 fi
+# Move the rest of the logs to "test_logs"
 if ls "$LOGS_DIRECTORY"/*.log > /dev/null 2>&1; then
   mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs
   mv "$LOGS_DIRECTORY"/*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs
 fi
 # Move the logs for failed tests to the main directory
-if ls "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs/_*.log > /dev/null 2>&1; then
-  mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs/_*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
+if ls "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp/*.log > /dev/null 2>&1; then
+  mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp/*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
 fi
+rmdir tmp
+# Move the logs collected from the test VMs to vm_logs
 if ls "$LOGS_DIRECTORY"/*.tgz > /dev/null 2>&1; then
   mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/vm_logs
   mv "$LOGS_DIRECTORY"/*.tgz "$BUILD_ARTIFACTSTAGINGDIRECTORY"/vm_logs
