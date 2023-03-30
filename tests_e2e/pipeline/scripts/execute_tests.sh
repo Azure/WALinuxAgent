@@ -105,7 +105,7 @@ fi
 if ls "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp/*.log > /dev/null 2>&1; then
   mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp/*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
 fi
-rmdir tmp
+rmdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp
 # Move the logs collected from the test VMs to vm_logs
 if ls "$LOGS_DIRECTORY"/*.tgz > /dev/null 2>&1; then
   mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/vm_logs
