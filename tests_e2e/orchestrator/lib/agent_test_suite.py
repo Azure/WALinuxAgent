@@ -294,9 +294,8 @@ class AgentTestSuite(LisaTestSuite):
             run_command(["wget", pypy_download, "-O",  pypy_path])
 
         #
-        # Create a tarball with the files we need to copy to the test node. The tarball is structured as:
+        # Create a tarball with the files we need to copy to the test node. The tarball includes two directories:
         #
-        #     * .   - Test agent and Pypy
         #     * bin - Executables file (Bash and Python scripts)
         #     * lib - Library files (Python modules)
         #
@@ -312,11 +311,6 @@ class AgentTestSuite(LisaTestSuite):
         # run_command(['tar', 'rvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"tests"/"scripts"), '.'])
         log.info("Adding tests/lib")
         run_command(['tar', 'rvf', str(tarball_path), '--transform=s,^,lib/,', '-C', str(self.context.test_source_directory.parent), '--exclude=__pycache__', 'tests_e2e/tests/lib'])
-        agent_package_path: Path = self._get_agent_package_path()
-        log.info("Adding %s", agent_package_path)
-        run_command(['tar', 'rvf', str(tarball_path), '--transform=s,^,tmp/,', '-C', str(agent_package_path.parent), agent_package_path.name])
-        log.info("Adding %s", pypy_path)
-        run_command(['tar', 'rvf', str(tarball_path), '--transform=s,^,tmp/,', '-C', str(pypy_path.parent), pypy_path.name])
         log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
 
         #
@@ -324,18 +318,27 @@ class AgentTestSuite(LisaTestSuite):
         #
         log.info('Preparing the test node for setup')
         # Note that removing lib requires sudo, since a Python cache may have been created by tests using sudo
-        self.context.ssh_client.run_command("rm -rvf {bin,lib,tmp}", use_sudo=True)
-        self.context.ssh_client.run_command("mkdir tmp")
+        self.context.ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
 
         #
-        # Copy the tarball to the test node, extract it and execute the install scripts
+        # Copy the tarball, Pypy and the test Agent to the test node
         #
-        tarball_target_path = Path("~")/"tmp"/tarball_path.name
-        log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, tarball_target_path)
-        self.context.ssh_client.copy_to_node(tarball_path, tarball_target_path)
+        target_path = Path("~")/"tmp"
+        self.context.ssh_client.run_command(f"mkdir {target_path}")
+        log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(tarball_path, target_path)
+        log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(pypy_path, target_path)
+        agent_package_path: Path = self._get_agent_package_path()
+        log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(agent_package_path, target_path)
 
+        #
+        # Extract the tarball and execute the install scripts
+        #
         log.info('Installing tools on the test node')
-        self.context.ssh_client.run_command(f"tar xvf {tarball_target_path} && ~/bin/install-tools")
+        command = f"tar xf {target_path/tarball_path.name} && ~/bin/install-tools"
+        log.info("%s\n%s", command, self.context.ssh_client.run_command(command))
 
         if self.context.is_vhd:
             log.info("Using a VHD; will not install the Test Agent.")
@@ -550,7 +553,7 @@ class AgentTestSuite(LisaTestSuite):
             self.context.lisa_log.info("Checking agent log on the test node")
             log.info("Checking agent log on the test node")
 
-            output = self.context.ssh_client.run_command("$(get-agent-python) ~/bin/check-agent-log.py -j")
+            output = self.context.ssh_client.run_command("~/bin/check-agent-log.py -j")
             errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
 
             # Individual tests may have rules to ignore known errors; filter those out

@@ -55,7 +55,7 @@ for python in "${known_locations[@]}"
 do
     if $python -c 'import azurelinuxagent' 2> /dev/null; then
       echo "$python"
-      return 0
+      exit 0
     fi
 done
 

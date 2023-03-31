@@ -27,42 +27,12 @@ set -euo pipefail
 
 PATH="$HOME/bin:$PATH"
 
-#
-# We need Python to boostrap the install process, but depending on the distro, it may not be in PATH,
-# or it may be named 'python3' or 'python'.
-#
-find-python() {
-    # python3 is available on most distros
-    if which python3 2> /dev/null; then
-      return 0
-    fi
-
-    # else try python
-    if which python 2> /dev/null; then
-      return 0
-    fi
-
-    # lastly, try some well-known locations
-    declare -a known_locations=(
-      "/usr/share/oem/python/bin/python"
-    )
-    for python in "${known_locations[@]}"
-    do
-        if [[ -e $python ]]; then
-          echo "$python"
-          return 0
-        fi
-    done
-
-    echo "Can't find the python executable" >&2
-    return 1
-}
-
-python=$(find-python)
+python=$(get-agent-python)
 echo "Python executable: $python"
+echo "Python version: $($python --version)"
 
 #
-# Install Pypy and Python modules used by the tests
+# Install Pypy as ~/bin/pypy3
 #
 # Note that bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
 # use Python to uncompress the Pypy tarball.
@@ -72,15 +42,61 @@ $python ~/bin/uncompress.py ~/tmp/pypy3.7-*.tar.bz2 ~/tmp/pypy3.7.tar
 tar xf ~/tmp/pypy3.7.tar -C ~/bin
 ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/pypy3
 
-echo "Installing the 'distro' module to Pypy"
-pypy3 -m ensurepip
-pypy3 -mpip install -U pip wheel
-pypy3 -mpip install distro
+#
+# The 'distro' and 'platform' modules in Pypy have small differences with the ones in the system's Python.
+# This can create problems in tests that use the get_distro() method in the Agent's 'version.py' module.
+# To work around this, we copy the system's 'distro' module to Pypy.
+#
+# In the case of 'platform', the 'linux_distribution' method was removed on Python 3.7 so we check the
+# system's module and, if the method does not exist, we also remove it from Pypy. Ubuntu 16 and 18 are
+# special cases in that the 'platform' module in Pypy identifies the distro as 'debian'; in this case we
+# copy the system's 'platform' module to Pypy.
+#
+distro_path=$($python -c '
+try:
+    import distro
+except:
+    exit(0)
+print(distro.__file__.replace("__init__.py", "distro.py"))
+exit(0)
+')
+if [[ "$distro_path" != "" ]]; then
+  echo "Copying the system's distro module to Pypy"
+  cp -v "$distro_path" /home/nam/bin/pypy*/site-packages
+else
+  echo "The distro module is not is not installing on the system; skipping."
+fi
 
+has_linux_distribution=$($python -c 'import platform; print(hasattr(platform, "linux_distribution"))')
+if [[ "$has_linux_distribution" == "False" ]]; then
+  echo "Python does not have platform.linux_distribution; removing it from Pypy"
+  sed -i 's/def linux_distribution(/def __linux_distribution__(/' ~/bin/pypy*/lib-python/3/platform.py
+else
+  echo "Python has platform.linux_distribution"
+  uname=$(uname -v)
+  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* ]]; then
+    echo "Copying the system's platform module to Pypy"
+    pypy_platform=$(pypy3 -c 'import platform; print(platform.__file__)')
+    python_platform=$($python -c 'import platform; print(platform.__file__)')
+    cp -v "$python_platform" "$pypy_platform"
+  fi
+fi
+
+#
+# Now install the test Agent as a module package in Pypy.
+#
 echo "Installing Agent modules to Pypy"
 unzip.py ~/tmp/WALinuxAgent-*.zip ~/tmp/WALinuxAgent
 unzip.py ~/tmp/WALinuxAgent/bin/WALinuxAgent-*.egg ~/tmp/WALinuxAgent/bin/WALinuxAgent.egg
 mv ~/tmp/WALinuxAgent/bin/WALinuxAgent.egg/azurelinuxagent ~/bin/pypy*/site-packages
+
+#
+# Log the results of get_distro() in Pypy and Python.
+#
+pypy_get_distro=$(pypy3 -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
+python_get_distro=$($python -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
+echo "Pypy   get_distro(): $pypy_get_distro"
+echo "Python get_distro(): $python_get_distro"
 
 #
 # Create ~/bin/set-agent-env to set PATH and PYTHONPATH.
@@ -92,7 +108,7 @@ echo "Creating ~/bin/set-agent-env to set PATH and PYTHONPATH"
 
 echo "
 if [[ \$PATH != *\"$HOME/bin\"* ]]; then
-   PATH=\"$HOME/bin:\$PATH:\"
+  PATH=\"$HOME/bin:\$PATH:\"
 fi
 
 export PYTHONPATH=\"$HOME/lib\"
@@ -115,18 +131,3 @@ if ! test -e ~/.bash_profile || ! grep '~/bin/set-agent-env' ~/.bash_profile > /
   echo 'source ~/bin/set-agent-env
 ' >> ~/.bash_profile
 fi
-
-
-#else
-#  # In some distros (e.g. Flatcar), Python is not in PATH; in that case create a symlink under ~/bin
-#  if ! which python3 > /dev/null 2>&1; then
-#    if [[ ! $python_version < "03.00" ]]; then
-#      echo "Python ($python) is not in PATH; creating symbolic links as ~/bin/python and ~/bin/python3"
-#      ln -s "$python" ~/bin/python
-#      ln -s "$python" ~/bin/python3
-#    fi
-#  fi
-#fi
-
-
-
