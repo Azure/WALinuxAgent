@@ -554,7 +554,7 @@ class AgentTestSuite(LisaTestSuite):
             self.context.lisa_log.info("Checking agent log on the test node")
             log.info("Checking agent log on the test node")
 
-            output = self.context.ssh_client.run_command("~/bin/check-agent-log.py -j")
+            output = self.context.ssh_client.run_command("check-agent-log.py -j")
             errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
 
             # Individual tests may have rules to ignore known errors; filter those out
