@@ -18,10 +18,7 @@
 #
 
 #
-# Returns the PYTHONPATH on which the azurelinuxagent and associated modules are located.
-#
-# To do this, the script tries to find the python command used to start the agent and then
-# returns the value of site.getsitepackages().
+# Returns the path of the Python executable used to start the Agent.
 #
 set -euo pipefail
 
