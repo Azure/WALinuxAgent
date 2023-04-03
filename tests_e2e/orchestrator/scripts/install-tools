@@ -40,7 +40,9 @@ echo "Python version: $($python --version)"
 echo "Installing Pypy 3.7"
 $python ~/bin/uncompress.py ~/tmp/pypy3.7-*.tar.bz2 ~/tmp/pypy3.7.tar
 tar xf ~/tmp/pypy3.7.tar -C ~/bin
+echo "Pypy was installed in $(ls -d ~/bin/pypy*)"
 ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/pypy3
+echo "Creating symbolic link to Pypy: ~/bin/pypy3"
 
 #
 # The 'distro' and 'platform' modules in Pypy have small differences with the ones in the system's Python.
