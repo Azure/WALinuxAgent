@@ -64,7 +64,7 @@ exit(0)
 ')
 if [[ "$distro_path" != "" ]]; then
   echo "Copying the system's distro module to Pypy"
-  cp -v "$distro_path" /home/nam/bin/pypy*/site-packages
+  cp -v "$distro_path" ~/bin/pypy*/site-packages
 else
   echo "The distro module is not is not installing on the system; skipping."
 fi

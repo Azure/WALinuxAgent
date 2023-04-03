@@ -274,6 +274,7 @@ class AgentTestSuite(LisaTestSuite):
         log.info("************************************** [Node Setup] **************************************")
         log.info("")
         log.info("Test Node: %s", self.context.vm.name)
+        log.info("IP Address: %s", self.context.vm_ip_address)
         log.info("Resource Group: %s", self.context.vm.resource_group)
         log.info("")
 
