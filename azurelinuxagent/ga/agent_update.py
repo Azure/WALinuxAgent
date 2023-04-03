@@ -94,9 +94,9 @@ class AgentUpdateHandler(object):
 
     @staticmethod
     def __get_agent_upgrade_type(requested_version):
-        # We follow semantic versioning for the agent, if <Major>.<Minor> is same, then <Patch>.<Build> has changed.
+        # We follow semantic versioning for the agent, if <Major>.<Minor>.<Patch> is same, then <Build> has changed.
         # In this case, we consider it as a Hotfix upgrade. Else we consider it a Normal upgrade.
-        if requested_version.major == CURRENT_VERSION.major and requested_version.minor == CURRENT_VERSION.minor:
+        if requested_version.major == CURRENT_VERSION.major and requested_version.minor == CURRENT_VERSION.minor and requested_version.patch == CURRENT_VERSION.patch:
             return AgentUpgradeType.Hotfix
         return AgentUpgradeType.Normal
 
