@@ -18,34 +18,42 @@
 #
 
 #
-# Returns the path to the Python executable.
+# Returns the path of the Python executable used to start the Agent.
 #
 set -euo pipefail
 
-# python3 is available on most distros
-if which python3 2> /dev/null; then
-  exit 0
+# if the agent is running, get the python command from 'exe' in the /proc file system
+if test -e /run/waagent.pid; then
+  exe="/proc/$(cat /run/waagent.pid)/exe"
+  if test -e "$exe"; then
+    # exe is a symbolic link; return its target
+    readlink -f "$exe"
+    exit 0
+  fi
 fi
 
-# try python
-if which python 2> /dev/null; then
-  exit 0
-fi
+# try all the instances of 'python' and 'python3' in $PATH
+for path in $(echo "$PATH" | tr ':' '\n'); do
+  if [[ -e $path ]]; then
+    for python in $(find "$path" -maxdepth 1 -name python3 -or -name python); do
+      if $python -c 'import azurelinuxagent' 2> /dev/null; then
+        echo "$python"
+        exit 0
+      fi
+    done
+  fi
+done
 
 # try some well-known locations
 declare -a known_locations=(
   "/usr/share/oem/python/bin/python"
-  "/usr/share/oem/python/bin/python3"
 )
-
 for python in "${known_locations[@]}"
 do
-    if [[ -e $python ]]; then
+    if $python -c 'import azurelinuxagent' 2> /dev/null; then
       echo "$python"
       exit 0
     fi
 done
-
-echo "Can't find the python executable" >&2
 
 exit 1
