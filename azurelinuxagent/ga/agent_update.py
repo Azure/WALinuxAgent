@@ -20,6 +20,27 @@ def get_agent_update_handler(protocol):
     return AgentUpdateHandler(protocol)
 
 
+class AgentUpgradeType(object):
+    """
+    Enum for different modes of Agent Upgrade
+    """
+    Hotfix = "Hotfix"
+    Normal = "Normal"
+
+
+class AgentUpdateHandlerUpdateState(object):
+    """
+    This class is primarily used to maintain the in-memory persistent state for the agent updates.
+    This state will be persisted throughout the current service run.
+    """
+    def __init__(self):
+        self.last_attempted_requested_version_update_time = datetime.datetime.min
+        self.last_attempted_hotfix_update_time = datetime.datetime.min
+        self.last_attempted_normal_update_time = datetime.datetime.min
+        self.last_warning = ""
+        self.last_warning_time = datetime.datetime.min
+
+
 class AgentUpdateHandler(object):
 
     def __init__(self, protocol):
@@ -27,27 +48,73 @@ class AgentUpdateHandler(object):
         self._ga_family = conf.get_autoupdate_gafamily()
         self._autoupdate_enabled = conf.get_autoupdate_enabled()
         self._gs_id = self._protocol.get_goal_state().extensions_goal_state.id
-        self._last_attempted_update_time = datetime.datetime.min
-        self._last_attempted_update_version = FlexibleVersion("0.0.0.0")
-        self._last_warning = ""
-        self._last_warning_time = datetime.datetime.min
+        self._is_requested_version_update = True  # This is to track the current update type(requested version or self update)
+        self.persistent_data = AgentUpdateHandlerUpdateState()
 
     def __should_update_agent(self, requested_version):
         """
-        check to see if update is allowed once per (as specified in the conf.get_autoupdate_frequency())
-        return false when we don't allow updates.
+        requested version update:
+            update is allowed once per (as specified in the conf.get_autoupdate_frequency())
+            return false when we don't allow updates.
+        largest version update(self-update):
+            update is allowed once per (as specified in the conf.get_hotfix_upgrade_frequency() or conf.get_normal_upgrade_frequency())
+            return false when we don't allow updates.
         """
         now = datetime.datetime.now()
 
-        if self._last_attempted_update_time != datetime.datetime.min and self._last_attempted_update_version == requested_version:
-            next_attempt_time = self._last_attempted_update_time + datetime.timedelta(seconds=conf.get_autoupdate_frequency())
-        else:
-            next_attempt_time = now
+        if self._is_requested_version_update:
+            if self.persistent_data.last_attempted_requested_version_update_time != datetime.datetime.min:
+                next_attempt_time = self.persistent_data.last_attempted_requested_version_update_time + datetime.timedelta(seconds=conf.get_autoupdate_frequency())
+            else:
+                next_attempt_time = now
 
-        if next_attempt_time > now:
+            if next_attempt_time > now:
+                return False
+            # The time limit elapsed for us to allow updates.
+            return True
+        else:
+            next_hotfix_time, next_normal_time = self.__get_next_upgrade_times(now)
+            upgrade_type = self.__get_agent_upgrade_type(requested_version)
+
+            if next_hotfix_time > now and next_normal_time > now:
+                return False
+
+            if (upgrade_type == AgentUpgradeType.Hotfix and next_hotfix_time <= now) or (
+                    upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
+                return True
             return False
-        # The time limit elapsed for us to allow updates.
-        return True
+
+    def __update_last_attempt_update_times(self):
+        now = datetime.datetime.now()
+        if self._is_requested_version_update:
+            self.persistent_data.last_attempted_requested_version_update_time = now
+        else:
+            self.persistent_data.last_attempted_normal_update_time = now
+            self.persistent_data.last_attempted_hotfix_update_time = now
+
+    @staticmethod
+    def __get_agent_upgrade_type(requested_version):
+        # We follow semantic versioning for the agent, if <Major>.<Minor>.<Patch> is same, then <Build> has changed.
+        # In this case, we consider it as a Hotfix upgrade. Else we consider it a Normal upgrade.
+        if requested_version.major == CURRENT_VERSION.major and requested_version.minor == CURRENT_VERSION.minor and requested_version.patch == CURRENT_VERSION.patch:
+            return AgentUpgradeType.Hotfix
+        return AgentUpgradeType.Normal
+
+    def __get_next_upgrade_times(self, now):
+        """
+        Get the next upgrade times
+        return: Next Hotfix Upgrade Time, Next Normal Upgrade Time
+        """
+
+        def get_next_process_time(last_val, frequency):
+            return now if last_val == datetime.datetime.min else last_val + datetime.timedelta(seconds=frequency)
+
+        next_hotfix_time = get_next_process_time(self.persistent_data.last_attempted_hotfix_update_time,
+                                                 conf.get_hotfix_upgrade_frequency())
+        next_normal_time = get_next_process_time(self.persistent_data.last_attempted_normal_update_time,
+                                                 conf.get_normal_upgrade_frequency())
+
+        return next_hotfix_time, next_normal_time
 
     def __get_agent_family_from_last_gs(self, goal_state):
         """
@@ -180,16 +247,17 @@ class AgentUpdateHandler(object):
             msg_ += "[NOTE: Will not log the same error for the next 6 hours]"
             # Incarnation may change if we get new goal state that would make whole string unique every time. So comparing only the substring until Incarnation if Incarnation included in msg
             # Example msg "Unable to update Agent: No manifest links found for agent family: Prod for incarnation: incarnation_1, skipping agent update"
+            now = datetime.datetime.now()
             prefix_msg = msg_.split("incarnation", 1)[0]
-            prefix_last_warning_msg = self._last_warning.split("incarnation", 1)[0]
-            if prefix_msg != prefix_last_warning_msg or self._last_warning_time == datetime.datetime.min or datetime.datetime.now() >= self._last_warning_time + datetime.timedelta(hours=6):
+            prefix_last_warning_msg = self.persistent_data.last_warning.split("incarnation", 1)[0]
+            if prefix_msg != prefix_last_warning_msg or self.persistent_data.last_warning_time == datetime.datetime.min or now >= self.persistent_data.last_warning_time + datetime.timedelta(hours=6):
                 if level == LogLevel.WARNING:
                     logger.warn(msg_)
                 elif level == LogLevel.ERROR:
                     logger.error(msg_)
                 add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg_, log_event=False)
-                self._last_warning_time = datetime.datetime.now()
-                self._last_warning = msg_
+                self.persistent_data.last_warning_time = now
+                self.persistent_data.last_warning = msg_
 
     def run(self, goal_state):
         try:
@@ -209,7 +277,9 @@ class AgentUpdateHandler(object):
                     GAUpdateReportState.report_error_msg = warn_msg
                 agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
                 requested_version = self.__get_largest_version(agent_manifest)
+                self._is_requested_version_update = False
             else:
+                self._is_requested_version_update = True
                 # Save the requested version to report back
                 GAUpdateReportState.report_expected_version = requested_version
                 # Remove the missing requested version warning once requested version becomes available
@@ -241,8 +311,7 @@ class AgentUpdateHandler(object):
                 self.__proceed_with_update(requested_version)
 
             finally:
-                self._last_attempted_update_time = datetime.datetime.now()
-                self._last_attempted_update_version = requested_version
+                self.__update_last_attempt_update_times()
 
         except Exception as err:
             if isinstance(err, AgentUpgradeExitException):
