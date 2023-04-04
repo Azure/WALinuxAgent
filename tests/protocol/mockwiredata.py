@@ -460,6 +460,9 @@ class WireProtocolData(object):
     def set_extension_config(self, ext_conf_file):
         self.ext_conf = load_data(ext_conf_file)
 
+    def set_ga_manifest(self, ga_manifest):
+        self.ga_manifest = load_data(ga_manifest)
+
     def set_extension_config_requested_version(self, version):
         self.ext_conf = WireProtocolData.replace_xml_element_value(self.ext_conf, "Version", version)
 
