@@ -48,7 +48,7 @@ class VmImageInfo(object):
     # The URN of the image (publisher, offer, version separated by spaces)
     urn: str
     # Indicates that the image is available only on those locations. If empty, the image should be available in all locations
-    locations: List[str]
+    locations: Dict[str, List[str]]
     # Indicates that the image is available only for those VM sizes. If empty, the image should be available for all VM sizes
     vm_sizes: List[str]
 
@@ -109,8 +109,9 @@ class AgentTestLoader(object):
             if suite.location != '':
                 for suite_image in suite.images:
                     for image in self.images[suite_image]:
-                        if len(image.locations) > 0:
-                            if suite.location not in image.locations:
+                        # If the image has a location restriction, validate that it is available on the location the suite must run on
+                        if image.locations:
+                            if not any(suite.location in l for l in image.locations.values()):
                                 raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
 
     @staticmethod
@@ -223,14 +224,18 @@ class AgentTestLoader(object):
             i = VmImageInfo()
             if isinstance(description, str):
                 i.urn = description
-                i.locations = []
+                i.locations = {}
                 i.vm_sizes = []
             else:
                 if "urn" not in description:
                     raise Exception(f"Image {name} is missing the 'urn' property: {description}")
                 i.urn = description["urn"]
-                i.locations = description["locations"] if "locations" in description else []
+                i.locations = description["locations"] if "locations" in description else {}
                 i.vm_sizes = description["vm_sizes"] if "vm_sizes" in description else []
+                for cloud in i.locations.keys():
+                    if cloud not in ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]:
+                        raise Exception(f"Invalid cloud {cloud} for image {name} in images.yml")
+
             images[name] = [i]
 
         # now load the image-sets, mapping them to the images that we just computed

@@ -127,6 +127,7 @@ class AgentTestContext:
         Creates an AgentTestContext from the command line arguments.
         """
         parser = argparse.ArgumentParser()
+        parser.add_argument('-c', '--cloud', dest="cloud", required=False, choices=['AzureCloud', 'AzureChinaCloud', 'AzureUSGovernment'], default="AzureCloud")
         parser.add_argument('-g', '--group', required=True)
         parser.add_argument('-l', '--location', required=True)
         parser.add_argument('-s', '--subscription', required=True)
@@ -138,7 +139,7 @@ class AgentTestContext:
 
         parser.add_argument('-a', '--ip-address', dest="ip_address", required=False)  # Use the vm name as default
         parser.add_argument('-u', '--username', required=False, default=os.getenv("USER"))
-        parser.add_argument('-k', '--private-key-file', dest="private_key_file", required=False, default=Path.home()/".ssh"/"id_rsa")
+        parser.add_argument('-k', '--private-key-file', dest="private_key_file", required=False, default=str(Path.home()/".ssh"/"id_rsa"))
         parser.add_argument('-p', '--ssh-port', dest="ssh_port", required=False, default=AgentTestContext.Connection.DEFAULT_SSH_PORT)
 
         args = parser.parse_args()
@@ -149,12 +150,13 @@ class AgentTestContext:
 
         return AgentTestContext(
             vm=VmIdentifier(
+                cloud=args.cloud,
                 location=args.location,
                 subscription=args.subscription,
                 resource_group=args.group,
                 name=args.vm),
             paths=AgentTestContext.Paths(
-                working_directory=working_directory,
+                working_directory=Path(working_directory),
                 remote_working_directory=Path(args.remote_working_directory),
                 test_source_directory=Path(args.test_source_directory)),
             connection=AgentTestContext.Connection(

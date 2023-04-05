@@ -17,10 +17,11 @@
 
 
 class VmIdentifier(object):
-    def __init__(self, location, subscription, resource_group, name):
+    def __init__(self, cloud: str, location: str, subscription: str, resource_group: str, name: str):
         """
         Represents the information that identifies a VM to the ARM APIs
         """
+        self.cloud: str = cloud
         self.location = location
         self.subscription: str = subscription
         self.resource_group: str = resource_group
@@ -31,7 +32,7 @@ class VmIdentifier(object):
 
 
 class VmExtensionIdentifier(object):
-    def __init__(self, publisher, ext_type, version):
+    def __init__(self, publisher: str, ext_type: str, version: str):
         """
         Represents the information that identifies an extension to the ARM APIs
 

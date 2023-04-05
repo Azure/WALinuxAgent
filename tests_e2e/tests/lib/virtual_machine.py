@@ -28,7 +28,9 @@ from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineScaleSetExtension, VirtualMachineInstanceView, VirtualMachineScaleSetInstanceView
 from azure.mgmt.resource import ResourceManagementClient
+from msrestazure.azure_cloud import Cloud
 
+from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import execute_with_retry
@@ -43,8 +45,18 @@ class VirtualMachineBaseClass(ABC):
     def __init__(self, vm: VmIdentifier):
         super().__init__()
         self._identifier: VmIdentifier = vm
-        self._compute_client = ComputeManagementClient(credential=DefaultAzureCredential(), subscription_id=vm.subscription)
-        self._resource_client = ResourceManagementClient(credential=DefaultAzureCredential(), subscription_id=vm.subscription)
+        cloud: Cloud = AZURE_CLOUDS[vm.cloud]
+        credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
+        self._compute_client = ComputeManagementClient(
+            credential=credential,
+            subscription_id=vm.subscription,
+            base_url=cloud.endpoints.resource_manager,
+            credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
+        self._resource_client = ResourceManagementClient(
+            credential=credential,
+            subscription_id=vm.subscription,
+            base_url=cloud.endpoints.resource_manager,
+            credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
 
     @abstractmethod
     def get_instance_view(self) -> Any:  # Returns VirtualMachineInstanceView or VirtualMachineScaleSetInstanceView
