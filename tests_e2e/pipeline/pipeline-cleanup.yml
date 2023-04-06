@@ -42,7 +42,7 @@ steps:
           # We use the REST API to list the resource groups because we need the createdTime and that
           # property is not available via the az-cli commands.
           #
-          subscription_id=$(az account show --query id -o tsv)
+          subscription_id=$(az account list --all --query "[?isDefault].id" -o tsv)
           
           date=$(date --utc +%Y-%m-%d'T'%H:%M:%S.%N'Z' -d "${{ parameters.older_than }}")
 
