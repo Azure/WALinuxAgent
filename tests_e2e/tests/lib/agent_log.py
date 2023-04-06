@@ -409,7 +409,7 @@ class AgentLog(object):
 
         """
         if not self._path.exists():
-            raise IOError('{0} is not found'.format(self._path))
+            raise IOError('{0} does not exist'.format(self._path))
 
         def match_record():
             for regex in [self._NEWER_AGENT_RECORD, self._2_2_46_AGENT_RECORD, self._OLDER_AGENT_RECORD]:

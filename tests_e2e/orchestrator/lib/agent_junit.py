@@ -49,10 +49,13 @@ class AgentJUnit(JUnit):
 
     def _received_message(self, message: MessageBase) -> None:
         # The Agent sends its own TestResultMessage and marks them as "AgentTestResultMessage"; for the
-        # test results sent by LISA itself, we change the suite name to "_Setup_" in order to separate them
+        # test results sent by LISA itself, we change the suite name to "_Runbook_" in order to separate them
         # from actual test results.
         if isinstance(message, TestResultMessage) and message.type != "AgentTestResultMessage":
-            message.suite_full_name = "_Setup_"
+            if "Unexpected error in AgentTestSuite" in message.message:
+                # Ignore these errors, they are already reported as AgentTestResultMessages
+                return
+            message.suite_full_name = "_Runbook_"
             message.suite_name = message.suite_full_name
             image = message.information.get('image')
             if image is not None:

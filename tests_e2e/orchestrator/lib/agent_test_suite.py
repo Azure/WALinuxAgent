@@ -18,7 +18,6 @@ import contextlib
 import datetime
 import json
 import logging
-import re
 import traceback
 import uuid
 
@@ -34,10 +33,12 @@ from lisa import (  # pylint: disable=E0401
     Logger,
     Node,
     notifier,
+    simple_requirement,
     TestCaseMetadata,
     TestSuite as LisaTestSuite,
     TestSuiteMetadata,
 )
+from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.sut_orchestrator import AZURE  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema  # pylint: disable=E0401
@@ -49,7 +50,7 @@ from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import TestSkipped
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmIdentifier
-from tests_e2e.tests.lib.logging import log as agent_test_logger  # Logger used by the tests
+from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.logging import set_current_thread_log
 from tests_e2e.tests.lib.agent_log import AgentLogRecord
 from tests_e2e.tests.lib.shell import run_command
@@ -114,10 +115,10 @@ class AgentTestSuite(LisaTestSuite):
             super().__init__(vm=vm, paths=paths, connection=connection)
             # These are initialized by AgentTestSuite._set_context().
             self.log_path: Path = None
-            self.log: Logger = None
+            self.lisa_log: Logger = None
             self.node: Node = None
             self.runbook_name: str = None
-            self.image_name: str = None
+            self.environment_name: str = None
             self.is_vhd: bool = None
             self.test_suites: List[AgentTestSuite] = None
             self.collect_logs: str = None
@@ -129,12 +130,10 @@ class AgentTestSuite(LisaTestSuite):
         # The context is initialized by _set_context() via the call to execute()
         self.__context: AgentTestSuite._Context = None
 
-    def _set_context(self, node: Node, variables: Dict[str, Any], lisa_log_path: str, log: Logger):
+    def _initialize(self, node: Node, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
         connection_info = node.connection_info
         node_context = get_node_context(node)
         runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
-        # Remove the resource group and node suffix, e.g. "e1-n0" in "lisa-20230110-162242-963-e1-n0"
-        runbook_name = re.sub(r"-\w+-\w+$", "", runbook.name)
 
         self.__context = self._Context(
             vm=VmIdentifier(
@@ -143,8 +142,7 @@ class AgentTestSuite(LisaTestSuite):
                 resource_group=node_context.resource_group_name,
                 name=node_context.vm_name),
             paths=AgentTestContext.Paths(
-                # The runbook name is unique on each run, so we will use different working directory every time
-                working_directory=Path().home()/"tmp"/runbook_name,
+                working_directory=self._get_working_directory(lisa_working_path),
                 remote_working_directory=Path('/home')/connection_info['username']),
             connection=AgentTestContext.Connection(
                 ip_address=connection_info['address'],
@@ -153,10 +151,10 @@ class AgentTestSuite(LisaTestSuite):
                 ssh_port=connection_info['port']))
 
         self.__context.log_path = self._get_log_path(variables, lisa_log_path)
-        self.__context.log = log
+        self.__context.lisa_log = lisa_log
         self.__context.node = node
         self.__context.is_vhd = self._get_optional_parameter(variables, "c_vhd") != ""
-        self.__context.image_name = f"{node.os.name}-vhd" if self.__context.is_vhd else self._get_required_parameter(variables, "c_env_name")
+        self.__context.environment_name = f"{node.os.name}-vhd" if self.__context.is_vhd else self._get_required_parameter(variables, "c_env_name")
         self.__context.test_suites = self._get_required_parameter(variables, "c_test_suites")
         self.__context.collect_logs = self._get_required_parameter(variables, "collect_logs")
         self.__context.skip_setup = self._get_required_parameter(variables, "skip_setup")
@@ -177,25 +175,32 @@ class AgentTestSuite(LisaTestSuite):
         return value
 
     @staticmethod
-    def _get_log_path(variables: Dict[str, Any], lisa_log_path: str):
+    def _get_log_path(variables: Dict[str, Any], lisa_log_path: str) -> Path:
         # NOTE: If "log_path" is not given as argument to the runbook, use a path derived from LISA's log for the test suite.
         # That path is derived from LISA's "--log_path" command line argument and has a value similar to
         # "<--log_path>/20230217/20230217-040022-342/tests/20230217-040119-288-agent_test_suite"; use the directory
         # 2 levels up.
-        return Path(variables["log_path"]) if "log_path" in variables else Path(lisa_log_path).parent.parent
+        log_path = variables.get("log_path")
+        if log_path is not None and len(log_path) > 0:
+            return Path(log_path)
+        return Path(lisa_log_path).parent.parent
+
+    @staticmethod
+    def _get_working_directory(lisa_working_path: str) -> Path:
+        # LISA's "working_path" has a value similar to
+        #     "<--working_path>/20230322/20230322-194430-287/tests/20230322-194451-333-agent_test_suite
+        # where "<--working_path>" is the value given to the --working_path command line argument. Create the working for
+        # the AgentTestSuite as
+        #     "<--working_path>/20230322/20230322-194430-287/waagent
+        # This directory will be unique for each execution of the runbook ("20230322-194430" is the timestamp and "287" is a
+        # unique ID per execution)
+        return Path(lisa_working_path).parent.parent / "waagent"
 
     @property
     def context(self):
         if self.__context is None:
             raise Exception("The context for the AgentTestSuite has not been initialized")
         return self.__context
-
-    @property
-    def _log(self) -> Logger:
-        """
-        Returns a reference to the LISA Logger.
-        """
-        return self.context.log
 
     #
     # Test suites within the same runbook may be executed concurrently, and setup needs to be done only once.
@@ -214,20 +219,22 @@ class AgentTestSuite(LisaTestSuite):
         self._setup_lock.acquire()
 
         try:
-            self._log.info("")
-            self._log.info("**************************************** [Build] ****************************************")
-            self._log.info("")
+            log.info("")
+            log.info("**************************************** [Build] ****************************************")
+            log.info("")
             completed: Path = self.context.working_directory/"completed"
 
             if completed.exists():
-                self._log.info("Found %s. Build has already been done, skipping.", completed)
+                log.info("Found %s. Build has already been done, skipping.", completed)
                 return
 
-            self._log.info("Creating working directory: %s", self.context.working_directory)
+            self.context.lisa_log.info("Building test agent")
+            log.info("Creating working directory: %s", self.context.working_directory)
             self.context.working_directory.mkdir(parents=True)
+
             self._build_agent_package()
 
-            self._log.info("Completed setup, creating %s", completed)
+            log.info("Completed setup, creating %s", completed)
             completed.touch()
 
         finally:
@@ -237,15 +244,15 @@ class AgentTestSuite(LisaTestSuite):
         """
         Builds the agent package and returns the path to the package.
         """
-        self._log.info("Building agent package to %s", self.context.working_directory)
+        log.info("Building agent package to %s", self.context.working_directory)
 
-        makepkg.run(agent_family="Test", output_directory=str(self.context.working_directory), log=self._log)
+        makepkg.run(agent_family="Test", output_directory=str(self.context.working_directory), log=log)
 
         package_path: Path = self._get_agent_package_path()
         if not package_path.exists():
             raise Exception(f"Can't find the agent package at {package_path}")
 
-        self._log.info("Built agent package as %s", package_path)
+        log.info("Built agent package as %s", package_path)
 
     def _get_agent_package_path(self) -> Path:
         """
@@ -262,59 +269,86 @@ class AgentTestSuite(LisaTestSuite):
         """
         Prepares the remote node for executing the test suite (installs tools and the test agent, etc)
         """
-        self._log.info("")
-        self._log.info("************************************** [Node Setup] **************************************")
-        self._log.info("")
-        self._log.info("Test Node: %s", self.context.vm.name)
-        self._log.info("Resource Group: %s", self.context.vm.resource_group)
-        self._log.info("")
+        self.context.lisa_log.info("Setting up test node")
+        log.info("")
+        log.info("************************************** [Node Setup] **************************************")
+        log.info("")
+        log.info("Test Node: %s", self.context.vm.name)
+        log.info("IP Address: %s", self.context.vm_ip_address)
+        log.info("Resource Group: %s", self.context.vm.resource_group)
+        log.info("")
 
-        self.context.ssh_client.run_command("mkdir -p ~/bin/tests_e2e/tests; touch ~/bin/agent-env")
-
-        # Copy the test tools
-        tools_path = self.context.test_source_directory/"orchestrator"/"scripts"
-        tools_target_path = Path("~/bin")
-        self._log.info("Copying %s to %s:%s", tools_path, self.context.node.name, tools_target_path)
-        self.context.ssh_client.copy_to_node(tools_path, tools_target_path, recursive=True)
-
-        # Copy the test libraries
-        lib_path = self.context.test_source_directory/"tests"/"lib"
-        lib_target_path = Path("~/bin/tests_e2e/tests")
-        self._log.info("Copying %s to %s:%s", lib_path, self.context.node.name, lib_target_path)
-        self.context.ssh_client.copy_to_node(lib_path, lib_target_path, recursive=True)
-
-        # Copy the test agent
-        agent_package_path: Path = self._get_agent_package_path()
-        agent_package_target_path = Path("~/bin")/agent_package_path.name
-        self._log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, agent_package_target_path)
-        self.context.ssh_client.copy_to_node(agent_package_path, agent_package_target_path)
-
-        # Copy Pypy
+        #
+        # Ensure that the correct version (x84 vs ARM64) Pypy has been downloaded; it is pre-downloaded to /tmp on the container image
+        # used for Azure Pipelines runs, but for developer runs it may need to be downloaded.
+        #
         if self.context.ssh_client.get_architecture() == "aarch64":
             pypy_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
             pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-aarch64.tar.bz2"
         else:
             pypy_path = Path("/tmp/pypy3.7-x64.tar.bz2")
             pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2"
-
-        if not pypy_path.exists():
-            self._log.info(f"Downloading {pypy_download} to {pypy_path}")
-            run_command(["wget", pypy_download, "-O",  pypy_path])
-        pypy_target_path = Path("~/bin/pypy3.7.tar.bz2")
-        self._log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, pypy_target_path)
-        self.context.ssh_client.copy_to_node(pypy_path, pypy_target_path)
-
-        # Install the tools and libraries
-        install_command = lambda: self.context.ssh_client.run_command(f"~/bin/scripts/install-tools --agent-package {agent_package_target_path}")
-        self._log.info('Installing tools on the test node\n%s', install_command())
-        self._log.info('Remote commands will use %s', self.context.ssh_client.run_command("which python3"))
-
-        # Install the agent
-        if self.context.is_vhd:
-            self._log.info("Using a VHD; will not install the Test Agent.")
+        if pypy_path.exists():
+            log.info("Found Pypy at %s", pypy_path)
         else:
-            install_command = lambda: self.context.ssh_client.run_command(f"install-agent --package {agent_package_target_path} --version {AGENT_VERSION}", use_sudo=True)
-            self._log.info("Installing the Test Agent on %s\n%s", self.context.node.name, install_command())
+            log.info("Downloading %s to %s", pypy_download, pypy_path)
+            run_command(["wget", pypy_download, "-O",  pypy_path])
+
+        #
+        # Create a tarball with the files we need to copy to the test node. The tarball includes two directories:
+        #
+        #     * bin - Executables file (Bash and Python scripts)
+        #     * lib - Library files (Python modules)
+        #
+        # After extracting the tarball on the test node, 'bin' will be added to PATH and PYTHONPATH will be set to 'lib'.
+        #
+        # Note that executables are placed directly under 'bin', while the path for Python modules is preserved under 'lib.
+        #
+        tarball_path: Path = Path("/tmp/waagent.tar")
+        log.info("Creating %s with the files need on the test node", tarball_path)
+        log.info("Adding orchestrator/scripts")
+        run_command(['tar', 'cvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"orchestrator"/"scripts"), '.'])
+        # log.info("Adding tests/scripts")
+        # run_command(['tar', 'rvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"tests"/"scripts"), '.'])
+        log.info("Adding tests/lib")
+        run_command(['tar', 'rvf', str(tarball_path), '--transform=s,^,lib/,', '-C', str(self.context.test_source_directory.parent), '--exclude=__pycache__', 'tests_e2e/tests/lib'])
+        log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
+
+        #
+        # Cleanup the test node (useful for developer runs)
+        #
+        log.info('Preparing the test node for setup')
+        # Note that removing lib requires sudo, since a Python cache may have been created by tests using sudo
+        self.context.ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
+
+        #
+        # Copy the tarball, Pypy and the test Agent to the test node
+        #
+        target_path = Path("~")/"tmp"
+        self.context.ssh_client.run_command(f"mkdir {target_path}")
+        log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(tarball_path, target_path)
+        log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(pypy_path, target_path)
+        agent_package_path: Path = self._get_agent_package_path()
+        log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(agent_package_path, target_path)
+
+        #
+        # Extract the tarball and execute the install scripts
+        #
+        log.info('Installing tools on the test node')
+        command = f"tar xf {target_path/tarball_path.name} && ~/bin/install-tools"
+        log.info("%s\n%s", command, self.context.ssh_client.run_command(command))
+
+        if self.context.is_vhd:
+            log.info("Using a VHD; will not install the Test Agent.")
+        else:
+            log.info("Installing the Test Agent on the test node")
+            command = f"install-agent --package ~/tmp/{agent_package_path.name} --version {AGENT_VERSION}"
+            log.info("%s\n%s", command, self.context.ssh_client.run_command(command, use_sudo=True))
+
+        log.info("Completed test node setup")
 
     def _collect_node_logs(self) -> None:
         """
@@ -322,89 +356,114 @@ class AgentTestSuite(LisaTestSuite):
         """
         try:
             # Collect the logs on the test machine into a compressed tarball
-            self._log.info("Collecting logs on test machine [%s]...", self.context.node.name)
+            self.context.lisa_log.info("Collecting logs on test node")
+            log.info("Collecting logs on test node")
             stdout = self.context.ssh_client.run_command("collect-logs", use_sudo=True)
-            self._log.info(stdout)
+            log.info(stdout)
 
             # Copy the tarball to the local logs directory
             remote_path = "/tmp/waagent-logs.tgz"
-            local_path = self.context.log_path/'{0}.tgz'.format(self.context.image_name)
-            self._log.info("Copying %s:%s to %s", self.context.node.name, remote_path, local_path)
+            local_path = self.context.log_path/'{0}.tgz'.format(self.context.environment_name)
+            log.info("Copying %s:%s to %s", self.context.node.name, remote_path, local_path)
             self.context.ssh_client.copy_from_node(remote_path, local_path)
 
         except:  # pylint: disable=bare-except
-            self._log.exception("Failed to collect logs from the test machine")
+            log.exception("Failed to collect logs from the test machine")
 
-    @TestCaseMetadata(description="", priority=0)
-    def agent_test_suite(self, node: Node, environment: Environment, variables: Dict[str, Any], log_path: str, log: Logger) -> None:
+    # NOTES:
+    #
+    #    * environment_status=EnvironmentStatus.Deployed skips most of LISA's initialization of the test node, which is not needed
+    #      for agent tests.
+    #
+    #    * We need to take the LISA Logger using a parameter named 'log'; this parameter hides tests_e2e.tests.lib.logging.log.
+    #      Be aware then, that within this method 'log' refers to the LISA log, and elsewhere it refers to tests_e2e.tests.lib.logging.log.
+    #
+    # W0621: Redefining name 'log' from outer scope (line 53) (redefined-outer-name)
+    @TestCaseMetadata(description="", priority=0, requirement=simple_requirement(environment_status=EnvironmentStatus.Deployed))
+    def main(self, node: Node, environment: Environment, variables: Dict[str, Any], working_path: str, log_path: str, log: Logger):  # pylint: disable=redefined-outer-name
+        """
+        Entry point from LISA
+        """
+        self._initialize(node, variables, working_path, log_path, log)
+        self._execute(environment, variables)
+
+    def _execute(self, environment: Environment, variables: Dict[str, Any]):
         """
         Executes each of the AgentTests included in the "c_test_suites" variable (which is generated by the AgentTestSuitesCombinator).
         """
-        self._set_context(node, variables, log_path, log)
-
-        # Set the thread name to the image; this name is added to self._log
-        with _set_thread_name(self.context.image_name):
-            # Log the environment's name and the variables received from the runbook (note that we need to expand the names of the test suites)
-            self._log.info("LISA Environment: %s", environment.name)
-            self._log.info(
-                "Runbook variables:\n%s",
-                '\n'.join([f"\t{name}: {value if name != 'c_test_suites' else [t.name for t in value] }" for name, value in variables.items()]))
-
-            start_time: datetime.datetime = datetime.datetime.now()
-            test_suite_success = True
-
-            try:
-                if not self.context.skip_setup:
-                    self._setup()
+        # Set the thread name to the name of the environment. The thread name is added to each item in LISA's log.
+        with _set_thread_name(self.context.environment_name):
+            log_path: Path = self.context.log_path/f"env-{self.context.environment_name}.log"
+            with set_current_thread_log(log_path):
+                start_time: datetime.datetime = datetime.datetime.now()
+                success = True
 
                 try:
-                    if not self.context.skip_setup:
-                        self._setup_node()
+                    # Log the environment's name and the variables received from the runbook (note that we need to expand the names of the test suites)
+                    log.info("LISA Environment (for correlation with the LISA log): %s", environment.name)
+                    log.info("Runbook variables:")
+                    for name, value in variables.items():
+                        log.info("    %s: %s", name, value if name != 'c_test_suites' else [t.name for t in value])
 
-                    # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
-                    #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
-                    for suite in self.context.test_suites:  # pylint: disable=E1133
-                        test_suite_success = self._execute_test_suite(suite) and test_suite_success
+                    test_suite_success = True
 
-                    test_suite_success = self._check_agent_log() and test_suite_success
+                    try:
+                        if not self.context.skip_setup:
+                            self._setup()
+
+                        if not self.context.skip_setup:
+                            self._setup_node()
+
+                        # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
+                        #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+                        for suite in self.context.test_suites:  # pylint: disable=E1133
+                            log.info("Executing test suite %s", suite.name)
+                            self.context.lisa_log.info("Executing Test Suite %s", suite.name)
+                            test_suite_success = self._execute_test_suite(suite) and test_suite_success
+
+                        test_suite_success = self._check_agent_log() and test_suite_success
+
+                    finally:
+                        collect = self.context.collect_logs
+                        if collect == CollectLogs.Always or collect == CollectLogs.Failed and not test_suite_success:
+                            self._collect_node_logs()
+
+                except Exception as e:   # pylint: disable=bare-except
+                    # Report the error and raise an exception to let LISA know that the test errored out.
+                    success = False
+                    log.exception("UNEXPECTED ERROR.")
+                    self._report_test_result(
+                        self.context.environment_name,
+                        "Unexpected Error",
+                        TestStatus.FAILED,
+                        start_time,
+                        message="UNEXPECTED ERROR.",
+                        add_exception_stack_trace=True)
+
+                    raise Exception(f"[{self.context.environment_name}] Unexpected error in AgentTestSuite: {e}")
 
                 finally:
-                    collect = self.context.collect_logs
-                    if collect == CollectLogs.Always or collect == CollectLogs.Failed and not test_suite_success:
-                        self._collect_node_logs()
-
-            except:   # pylint: disable=bare-except
-                # Report the error and raise and exception to let LISA know that the test errored out.
-                self._log.exception("TEST FAILURE DUE TO AN UNEXPECTED ERROR.")
-                self._report_test_result(
-                    self.context.image_name,
-                    "Setup",
-                    TestStatus.FAILED,
-                    start_time,
-                    message="TEST FAILURE DUE TO AN UNEXPECTED ERROR.",
-                    add_exception_stack_trace=True)
-
-                raise Exception("STOPPING TEST EXECUTION DUE TO AN UNEXPECTED ERROR.")
-
-            finally:
-                self._clean_up()
+                    self._clean_up()
+                    if not success:
+                        self._mark_log_as_failed()
 
     def _execute_test_suite(self, suite: TestSuiteInfo) -> bool:
         """
         Executes the given test suite and returns True if all the tests in the suite succeeded.
         """
         suite_name = suite.name
-        suite_full_name = f"{suite_name}-{self.context.image_name}"
+        suite_full_name = f"{suite_name}-{self.context.environment_name}"
         suite_start_time: datetime.datetime = datetime.datetime.now()
 
         success: bool = True  # True if all the tests succeed
 
-        with _set_thread_name(suite_full_name):  # The thread name is added to self._log
-            with set_current_thread_log(self.context.log_path/f"{suite_full_name}.log"):
+        with _set_thread_name(suite_full_name):  # The thread name is added to the LISA log
+            log_path: Path = self.context.log_path/f"{suite_full_name}.log"
+            with set_current_thread_log(log_path):
                 try:
-                    agent_test_logger.info("")
-                    agent_test_logger.info("**************************************** %s ****************************************", suite_name)
-                    agent_test_logger.info("")
+                    log.info("")
+                    log.info("**************************************** %s ****************************************", suite_name)
+                    log.info("")
 
                     summary: List[str] = []
 
@@ -413,16 +472,16 @@ class AgentTestSuite(LisaTestSuite):
                         test_full_name = f"{suite_name}-{test_name}"
                         test_start_time: datetime.datetime = datetime.datetime.now()
 
-                        agent_test_logger.info("******** Executing %s", test_name)
-                        self._log.info("******** Executing %s", test_full_name)
+                        log.info("******** Executing %s", test_name)
+                        self.context.lisa_log.info("Executing test %s", test_full_name)
 
                         try:
 
                             test(self.context).run()
 
                             summary.append(f"[Passed]  {test_name}")
-                            agent_test_logger.info("******** [Passed] %s", test_name)
-                            self._log.info("******** [Passed] %s", test_full_name)
+                            log.info("******** [Passed] %s", test_name)
+                            self.context.lisa_log.info("[Passed] %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
                                 test_name,
@@ -430,8 +489,8 @@ class AgentTestSuite(LisaTestSuite):
                                 test_start_time)
                         except TestSkipped as e:
                             summary.append(f"[Skipped] {test_name}")
-                            agent_test_logger.info("******** [Skipped] %s: %s", test_name, e)
-                            self._log.info("******** [Skipped] %s", test_full_name)
+                            log.info("******** [Skipped] %s: %s", test_name, e)
+                            self.context.lisa_log.info("******** [Skipped] %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
                                 test_name,
@@ -441,8 +500,8 @@ class AgentTestSuite(LisaTestSuite):
                         except AssertionError as e:
                             success = False
                             summary.append(f"[Failed]  {test_name}")
-                            agent_test_logger.error("******** [Failed] %s: %s", test_name, e)
-                            self._log.error("******** [Failed] %s", test_full_name)
+                            log.error("******** [Failed] %s: %s", test_name, e)
+                            self.context.lisa_log.error("******** [Failed] %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
                                 test_name,
@@ -452,8 +511,8 @@ class AgentTestSuite(LisaTestSuite):
                         except:  # pylint: disable=bare-except
                             success = False
                             summary.append(f"[Error]   {test_name}")
-                            agent_test_logger.exception("UNHANDLED EXCEPTION IN %s", test_name)
-                            self._log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
+                            log.exception("UNHANDLED EXCEPTION IN %s", test_name)
+                            self.context.lisa_log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
                                 test_name,
@@ -462,13 +521,13 @@ class AgentTestSuite(LisaTestSuite):
                                 message="Unhandled exception.",
                                 add_exception_stack_trace=True)
 
-                        agent_test_logger.info("")
+                        log.info("")
 
-                    agent_test_logger.info("********* [Test Results]")
-                    agent_test_logger.info("")
+                    log.info("********* [Test Results]")
+                    log.info("")
                     for r in summary:
-                        agent_test_logger.info("\t%s", r)
-                    agent_test_logger.info("")
+                        log.info("\t%s", r)
+                    log.info("")
 
                 except:  # pylint: disable=bare-except
                     success = False
@@ -479,6 +538,9 @@ class AgentTestSuite(LisaTestSuite):
                         suite_start_time,
                         message=f"Unhandled exception while executing test suite {suite_name}.",
                         add_exception_stack_trace=True)
+                finally:
+                    if not success:
+                        self._mark_log_as_failed()
 
         return success
 
@@ -488,46 +550,62 @@ class AgentTestSuite(LisaTestSuite):
         """
         start_time: datetime.datetime = datetime.datetime.now()
 
-        self._log.info("Checking agent log on the test node")
-        output = self.context.ssh_client.run_command("check-agent-log.py -j")
-        errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
+        try:
+            self.context.lisa_log.info("Checking agent log on the test node")
+            log.info("Checking agent log on the test node")
 
-        # Individual tests may have rules to ignore known errors; filter those out
-        ignore_error_rules = []
-        # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
-        #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
-        for suite in self.context.test_suites:  # pylint: disable=E1133
-            for test in suite.tests:
-                ignore_error_rules.extend(test(self.context).get_ignore_error_rules())
+            output = self.context.ssh_client.run_command("check-agent-log.py -j")
+            errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
 
-        if len(ignore_error_rules) > 0:
-            new = []
-            for e in errors:
-                if not AgentLog.matches_ignore_rule(e, ignore_error_rules):
-                    new.append(e)
-            errors = new
+            # Individual tests may have rules to ignore known errors; filter those out
+            ignore_error_rules = []
+            # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
+            #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+            for suite in self.context.test_suites:  # pylint: disable=E1133
+                for test in suite.tests:
+                    ignore_error_rules.extend(test(self.context).get_ignore_error_rules())
 
-        if len(errors) == 0:
-            # If no errors, we are done; don't create a log or test result.
-            self._log.info("There are no errors in the agent log")
-            return True
+            if len(ignore_error_rules) > 0:
+                new = []
+                for e in errors:
+                    if not AgentLog.matches_ignore_rule(e, ignore_error_rules):
+                        new.append(e)
+                errors = new
 
-        log_path: Path = self.context.log_path/f"CheckAgentLog-{self.context.image_name}.log"
-        message = f"Detected {len(errors)} error(s) in the agent log. See {log_path} for a full report."
-        self._log.info(message)
+            if len(errors) == 0:
+                # If no errors, we are done; don't create a log or test result.
+                log.info("There are no errors in the agent log")
+                return True
 
-        with set_current_thread_log(log_path):
-            agent_test_logger.info("Detected %s error(s) in the agent log:\n\n%s", len(errors), '\n'.join(['\t' + e.text for e in errors]))
+            message = f"Detected {len(errors)} error(s) in the agent log"
+            self.context.lisa_log.error(message)
+            log.error("%s:\n\n%s\n", message, '\n'.join(['\t\t' + e.text.replace('\n', '\n\t\t') for e in errors]))
+            self._mark_log_as_failed()
 
-        self._report_test_result(
-            self.context.image_name,
-            "CheckAgentLog",
-            TestStatus.FAILED,
-            start_time,
-            message=message + '\n' + '\n'.join([e.text for e in errors[0:3]]),
-            add_exception_stack_trace=True)
+            self._report_test_result(
+                self.context.environment_name,
+                "CheckAgentLog",
+                TestStatus.FAILED,
+                start_time,
+                message=message + ' - First few errors:\n' + '\n'.join([e.text for e in errors[0:3]]))
+        except:    # pylint: disable=bare-except
+            log.exception("Error checking agent log")
+            self._report_test_result(
+                self.context.environment_name,
+                "CheckAgentLog",
+                TestStatus.FAILED,
+                start_time,
+                "Error checking agent log",
+                add_exception_stack_trace=True)
 
         return False
+
+    @staticmethod
+    def _mark_log_as_failed():
+        """
+        Adds a message to indicate the log contains errors.
+        """
+        log.info("MARKER-LOG-WITH-ERRORS")
 
     @staticmethod
     def _report_test_result(

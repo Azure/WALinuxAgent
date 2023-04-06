@@ -113,7 +113,7 @@ jobs:
         displayName: 'Publish test results'
         inputs:
           testResultsFormat: 'JUnit'
-          testResultsFiles: 'lisa/agent.junit.xml'
+          testResultsFiles: 'runbook_logs/agent.junit.xml'
           searchFolder: $(Build.ArtifactStagingDirectory)
           failTaskOnFailedTests: true
 

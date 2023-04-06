@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -16,18 +18,20 @@
 #
 
 #
-# Un-compresses a bz2 file
+# Returns the PYTHONPATH on which the azurelinuxagent and associated modules are located.
 #
-import argparse
-import bz2
-import shutil
+# To do this, the script walks the site packages for the Python used to execute the agent,
+# looking for the directory that contains "azurelinuxagent".
+#
+set -euo pipefail
 
-parser = argparse.ArgumentParser()
-parser.add_argument('source', help='File to uncompress')
-parser.add_argument('target', help='Output file')
+$(get-agent-python) -c '
+import site
+import os
 
-args = parser.parse_args()
-
-with bz2.BZ2File(args.source, 'rb') as f_in:
-    with open(args.target, 'wb') as f_out:
-        shutil.copyfileobj(f_in, f_out)
+for dir in site.getsitepackages():
+  if os.path.isdir(dir + "/azurelinuxagent"):
+    print(dir)
+    exit(0)
+exit(1)
+'

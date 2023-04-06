@@ -46,7 +46,7 @@ class SshClient(object):
         sudo = "sudo env PATH=$PATH PYTHONPATH=$PYTHONPATH" if use_sudo else ''
         return retry_ssh_run(lambda: shell.run_command([
             "ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination,
-            f"source ~/bin/agent-env;{sudo} {command}"]))
+            f"if [[ -e ~/bin/set-agent-env ]]; then source ~/bin/set-agent-env; fi; {sudo} {command}"]))
 
     @staticmethod
     def generate_ssh_key(private_key_file: Path):

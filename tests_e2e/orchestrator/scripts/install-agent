@@ -73,12 +73,13 @@ fi
 echo "Service name: $service_name"
 
 #
-# Find the path to the Agent's executable file
+# Output the initial version of the agent
 #
-waagent=$(get-agent-path)
+python=$(get-agent-python)
+waagent=$(get-agent-bin-path)
 echo "Agent's path: $waagent"
-$waagent --version
-echo ""
+$python "$waagent" --version
+printf "\n"
 
 #
 # Install the package
@@ -87,7 +88,7 @@ echo "Installing $package as version $version..."
 unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
 # Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar, don't have a waagent.conf
-# but AutoUpdate defaults to True so there is no need to anything in that case.
+# but AutoUpdate defaults to True so there is no need to do anything in that case.
 if [[ -e /etc/waagent.conf ]]; then
   sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
 fi
@@ -112,7 +113,7 @@ echo "Verifying agent installation..."
 check-version() {
   for i in {0..5}
   do
-    if $waagent --version | grep -E "Goal state agent:\s+$version" > /dev/null; then
+    if $python "$waagent" --version | grep -E "Goal state agent:\s+$version" > /dev/null; then
       return 0
     fi
     sleep 10
@@ -129,7 +130,7 @@ else
   exit_code=1
 fi
 
-$waagent --version
+$python "$waagent" --version
 printf "\n"
 service-status $service_name
 
