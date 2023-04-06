@@ -64,9 +64,8 @@ jobs:
           addToPath: true
           architecture: 'x64'
 
-      # Extract the Azure cloud from the "connection_info" variable and store it in the "cloud" variable.
-      # The cloud name is used as a suffix of the value for "connection_info" and comes after the last '-'.
-      - bash:
+      # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
+      # 'public', 'china', or 'government' as a suffix (the suffix comes after the last '-').
       - bash: |
           case $(echo $CONNECTION_INFO | sed 's/^.*-//') in
               public)
