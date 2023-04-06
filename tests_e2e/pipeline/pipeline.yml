@@ -50,11 +50,6 @@ parameters:
     - failed
     - no
 
-trigger:
-  - develop
-
-pr: none
-
 pool:
   vmImage: ubuntu-latest
 
