@@ -80,7 +80,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
         return UbuntuOSUtil()
 
-    if distro_name == "alpine":
+    if distro_name in ("alpine", "alpaquita"):
         return AlpineOSUtil()
 
     if distro_name == "chainguard":
