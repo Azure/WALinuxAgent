@@ -47,7 +47,7 @@ image-sets:
 #   mariner_2_arm64:
 #      urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
 #      locations:
-#         - "eastus"
+#         - AzureCloud: ["eastus"]
 #      vm_sizes:
 #         - "Standard_D2pls_v5"
 #
