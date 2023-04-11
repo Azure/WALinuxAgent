@@ -24,6 +24,7 @@
 # For each scenario, we intiaite the rsm request with target version and then verify agent updated to that target version.
 #
 import json
+from typing import List, Dict, Any
 
 import requests
 from azure.identity import DefaultAzureCredential
@@ -46,12 +47,27 @@ class RsmUpdateBvt(AgentTest):
             username=self._context.username,
             private_key_file=self._context.private_key_file)
 
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            #
+            # This is expected as we validate the downgrade scenario
+            #
+            # WARNING ExtHandler ExtHandler Agent WALinuxAgent-9.9.9.9 is permanently blacklisted
+            #
+            {
+                'message': r"Agent WALinuxAgent-9.9.9.9 is permanently blacklisted"
+            }
+
+        ]
+        return ignore_rules
+
     def run(self) -> None:
         # Allow agent to send supported feature flag
         self._verify_agent_reported_supported_feature_flag()
 
         log.info("*******Verifying the Agent Downgrade scenario*******")
         self._mock_rsm_update("1.3.0.0")
+        self._check_rsm_gs("1.3.0.0")
         self._prepare_agent()
 
         # Verify downgrade scenario
@@ -60,6 +76,7 @@ class RsmUpdateBvt(AgentTest):
         # Verify upgrade scenario
         log.info("*******Verifying the Agent Upgrade scenario*******")
         self._mock_rsm_update("1.3.1.0")
+        self._check_rsm_gs("1.3.1.0")
         self._verify_guest_agent_update("1.3.1.0")
 
         # verify no version update. There is bug in CRP and will enable once it's fixed
@@ -67,22 +84,19 @@ class RsmUpdateBvt(AgentTest):
         # self._prepare_rsm_update("1.3.1.0")
         # self._verify_guest_agent_update("1.3.1.0")
 
+    def _check_rsm_gs(self, requested_version: str) -> None:
+        # This checks if RSM GS available to the agent after we mock the rsm update request
+        output = self._ssh_client.run_command(f"rsm_goal_state.py --version {requested_version}", use_sudo=True)
+        log.info('Verifying requested version GS available to the agent \n%s', output)
+
     def _prepare_agent(self) -> None:
         """
         This method is to ensure agent is ready for accepting rsm updates. As part of that we update following flags
         1) Changing daemon version since daemon has a hard check on agent version in order to update agent. It doesn't allow versions which are less than daemon version.
         2) Updating GAFamily type "Test" and GAUpdates flag to process agent updates on test versions.
         """
-        local_path = self._context.test_source_directory/"tests"/"scripts"/"agent-python"
-        remote_path = self._context.remote_working_directory/"agent-python"
-        self._ssh_client.copy(local_path, remote_path)
-        local_path = self._context.test_source_directory/"tests"/"scripts"/"agent-service"
-        remote_path = self._context.remote_working_directory/"agent-service"
-        self._ssh_client.copy(local_path, remote_path)
-        local_path = self._context.test_source_directory/"tests"/"scripts"/"agent-update-config"
-        remote_path = self._context.remote_working_directory/"agent-update-config"
-        self._ssh_client.copy(local_path, remote_path)
-        self._ssh_client.run_command(f"sudo {remote_path}")
+        output = self._ssh_client.run_command("agent-update-config", use_sudo=True)
+        log.info('Updating agent update required config \n%s', output)
 
     @staticmethod
     def _verify_agent_update_flag_enabled(vm: VmMachine) -> bool:
@@ -141,7 +155,7 @@ class RsmUpdateBvt(AgentTest):
         Verify current agent version running on rsm requested version
         """
         def _check_agent_version(requested_version: str) -> bool:
-            stdout: str = self._ssh_client.run_command("sudo waagent --version")
+            stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
             expected_version = f"Goal state agent: {requested_version}"
             if expected_version in stdout:
                 return True
@@ -151,7 +165,7 @@ class RsmUpdateBvt(AgentTest):
 
         log.info("Verifying agent updated to requested version")
         retry_if_not_found(lambda: _check_agent_version(requested_version))
-        stdout: str = self._ssh_client.run_command("sudo waagent --version")
+        stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info(f"Verified agent updated to requested version. Current agent version running:\n {stdout}")
 
     def _verify_agent_reported_supported_feature_flag(self):
