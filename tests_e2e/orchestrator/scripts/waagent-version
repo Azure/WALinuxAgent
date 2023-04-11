@@ -22,5 +22,4 @@ set -euo pipefail
 
 python=$(get-agent-python)
 waagent=$(get-agent-bin-path)
-echo "Agent's path: $waagent"
 $python "$waagent" --version

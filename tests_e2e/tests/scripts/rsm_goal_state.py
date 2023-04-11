@@ -16,6 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Verify the latest goal state included rsm requested version and if not, retry
+#
 import argparse
 import sys
 import time
