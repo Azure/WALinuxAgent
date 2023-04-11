@@ -1,0 +1,11 @@
+#!/usr/sbin/openrc-run
+
+name="Microsoft Azure Linux Agent"
+command="/usr/sbin/waagent"
+command_args="-verbose -start"
+pidfile="/var/run/waagent.pid"
+
+depend() {
+    after sshd
+    provide waagent
+}
