@@ -98,9 +98,21 @@ class AgentTestSuitesCombinator(Combinator):
         return result
 
     _DEFAULT_LOCATIONS = {
-        "china": "china north 2",
-        "government": "usgovarizona",
-        "public": "westus2"
+        "AzureCloud": "westus2",
+        "AzureChinaCloud": "chinanorth2",
+        "AzureUSGovernment": "usgovarizona",
+    }
+
+    _MARKETPLACE_IMAGE_INFORMATION_LOCATIONS = {
+        "AzureCloud": "",  # empty indicates the default location used by LISA
+        "AzureChinaCloud": "chinanorth2",
+        "AzureUSGovernment": "usgovarizona",
+    }
+
+    _SHARED_RESOURCE_GROUP_LOCATIONS = {
+        "AzureCloud": "",   # empty indicates the default location used by LISA
+        "AzureChinaCloud": "chinanorth2",
+        "AzureUSGovernment": "usgovarizona",
     }
 
     def create_environment_for_existing_vm(self) -> List[Dict[str, Any]]:
@@ -178,15 +190,23 @@ class AgentTestSuitesCombinator(Combinator):
                         raise Exception(f"Invalid URN: {image.urn}")
                     name = f"{match.group('offer')}-{match.group('sku')}"
 
-                # If the runbook specified a location, use it. Then try the suite location, if any. Otherwise, check if the image specifies
-                # a list of locations and use any of them. If no location is specified so far, use the default.
+                location: str = None
+                # If the runbook specified a location, use it.
                 if self.runbook.location != "":
                     location = self.runbook.location
+                #  Then try the suite location, if any.
                 elif suite_info.location != '':
                     location = suite_info.location
-                elif len(image.locations) > 0:
-                    location = image.locations[0]
-                else:
+                # If the image has a location restriction, use any location where it is available.
+                # However, if it is not available on any location, skip the image.
+                elif image.locations:
+                    image_locations = image.locations.get(self.runbook.cloud)
+                    if image_locations is not None:
+                        if len(image_locations) == 0:
+                            continue
+                        location = image_locations[0]
+                # If no location has been selected, use the default.
+                if location is None:
                     location = AgentTestSuitesCombinator._DEFAULT_LOCATIONS[self.runbook.cloud]
 
                 # If the runbook specified a VM size, use it. Else if the image specifies a list of VM sizes, use any of them. Otherwise,
@@ -202,11 +222,14 @@ class AgentTestSuitesCombinator(Combinator):
                     # create an environment for exclusive use by this suite
                     environment_list.append({
                         "c_marketplace_image": marketplace_image,
+                        "c_cloud": self.runbook.cloud,
                         "c_location": location,
                         "c_vm_size": vm_size,
                         "c_vhd": vhd,
                         "c_test_suites": [suite_info],
-                        "c_env_name": f"{name}-{suite_info.name}"
+                        "c_env_name": f"{name}-{suite_info.name}",
+                        "c_marketplace_image_information_location": self._MARKETPLACE_IMAGE_INFORMATION_LOCATIONS[self.runbook.cloud],
+                        "c_shared_resource_group_location": self._SHARED_RESOURCE_GROUP_LOCATIONS[self.runbook.cloud]
                     })
                 else:
                     # add this suite to the shared environments
@@ -216,26 +239,34 @@ class AgentTestSuitesCombinator(Combinator):
                     else:
                         shared_environments[key] = {
                             "c_marketplace_image": marketplace_image,
+                            "c_cloud": self.runbook.cloud,
                             "c_location": location,
                             "c_vm_size": vm_size,
                             "c_vhd": vhd,
                             "c_test_suites": [suite_info],
-                            "c_env_name": key
+                            "c_env_name": key,
+                            "c_marketplace_image_information_location": self._MARKETPLACE_IMAGE_INFORMATION_LOCATIONS[self.runbook.cloud],
+                            "c_shared_resource_group_location": self._SHARED_RESOURCE_GROUP_LOCATIONS[self.runbook.cloud]
                         }
 
         environment_list.extend(shared_environments.values())
 
+        if len(environment_list) == 0:
+            raise Exception("No VM images were found to execute the test suites.")
+
         log: logging.Logger = logging.getLogger("lisa")
-        log.info("******** Environments *****")
-        for e in environment_list:
-            log.info(
-                "{ c_marketplace_image: '%s', c_location: '%s', c_vm_size: '%s', c_vhd: '%s', c_test_suites: '%s', c_env_name: '%s' }",
-                e['c_marketplace_image'], e['c_location'], e['c_vm_size'], e['c_vhd'], [s.name for s in e['c_test_suites']], e['c_env_name'])
+        log.info("")
+        log.info("******** Agent Test Environments *****")
+        for environment in environment_list:
+            test_suites = [s.name for s in environment['c_test_suites']]
+            log.info("Settings for %s:\n%s\n", environment['c_env_name'], '\n'.join([f"\t{name}: {value if name != 'c_test_suites' else test_suites}" for name, value in environment.items()]))
         log.info("***************************")
+        log.info("")
 
         return environment_list
 
     _URN = re.compile(r"(?P<publisher>[^\s:]+)[\s:](?P<offer>[^\s:]+)[\s:](?P<sku>[^\s:]+)[\s:](?P<version>[^\s:]+)")
+
 
     @staticmethod
     def _is_urn(urn: str) -> bool:

@@ -40,8 +40,7 @@ from lisa import (  # pylint: disable=E0401
 )
 from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
-from lisa.sut_orchestrator import AZURE  # pylint: disable=E0401
-from lisa.sut_orchestrator.azure.common import get_node_context, AzureNodeSchema  # pylint: disable=E0401
+from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
@@ -133,11 +132,11 @@ class AgentTestSuite(LisaTestSuite):
     def _initialize(self, node: Node, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
         connection_info = node.connection_info
         node_context = get_node_context(node)
-        runbook = node.capability.get_extended_runbook(AzureNodeSchema, AZURE)
 
         self.__context = self._Context(
             vm=VmIdentifier(
-                location=runbook.location,
+                cloud=self._get_required_parameter(variables, "c_cloud"),
+                location=self._get_required_parameter(variables, "c_location"),
                 subscription=node.features._platform.subscription_id,
                 resource_group=node_context.resource_group_name,
                 name=node_context.vm_name),

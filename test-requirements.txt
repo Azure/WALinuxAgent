@@ -19,3 +19,4 @@ azure-core
 azure-identity
 azure-mgmt-compute>=22.1.0
 azure-mgmt-resource>=15.0.0
+msrestazure
