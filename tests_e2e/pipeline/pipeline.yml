@@ -50,11 +50,6 @@ parameters:
     - failed
     - no
 
-trigger:
-  - develop
-
-pr: none
-
 pool:
   vmImage: ubuntu-latest
 
@@ -69,9 +64,24 @@ jobs:
           addToPath: true
           architecture: 'x64'
 
-      # Extract the Azure cloud from the "connection_info" variable and store it in the "cloud" variable.
-      # The cloud name is used as a suffix of the value for "connection_info" and comes after the last '-'.
-      - bash: echo "##vso[task.setvariable variable=cloud]$(echo $CONNECTION_INFO | sed 's/^.*-//')"
+      # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
+      # 'public', 'china', or 'government' as a suffix (the suffix comes after the last '-').
+      - bash: |
+          case $(echo $CONNECTION_INFO | sed 's/^.*-//') in
+              public)
+                  echo "##vso[task.setvariable variable=cloud]AzureCloud"
+                  ;;
+              china)
+                  echo "##vso[task.setvariable variable=cloud]AzureChinaCloud"
+                  ;;
+              government)
+                  echo "##vso[task.setvariable variable=cloud]AzureUSGovernment"
+                  ;;
+              *)
+                  echo "Invalid CONNECTION_INFO: $CONNECTION_INFO" >&2
+                  exit 1
+                  ;;
+          esac
         displayName: "Set Cloud type"
 
       - task: DownloadSecureFile@1

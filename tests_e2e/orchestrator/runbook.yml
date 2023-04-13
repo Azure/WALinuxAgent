@@ -51,7 +51,7 @@ variable:
   - name: test_suites
     value: "agent_bvt"
   - name: cloud
-    value: "public"
+    value: "AzureCloud"
   - name: image
     value: ""
   - name: location
@@ -64,21 +64,26 @@ variable:
   # prefixed with "c_" to distinguish them from the rest of the variables, whose value can be set from
   # the command line.
   #
-  # c_marketplace_image, c_vm_size, c_location, and c_vhd are handled by LISA and define
-  # the set of test VMs that need to be created, while c_test_suites and c_env_name are parameters
-  # for the AgentTestSuite; the former defines the test suites that must be executed on each
-  # of those test VMs and the latter is the name of the environment, which is used for logging
-  # purposes (NOTE: the AgentTestSuite also uses c_vhd).
+  # Most of these variables are handled by LISA and are used to define the set of test VMs that need to be
+  # created. The variables marked with 'is_case_visible' are also referenced by the AgentTestSuite.
   #
   - name: c_env_name
     value: ""
     is_case_visible: true
   - name: c_marketplace_image
     value: ""
+  - name: c_marketplace_image_information_location
+    value: ""
+  - name: c_shared_resource_group_location
+    value: ""
   - name: c_vm_size
     value: ""
+  - name: c_cloud
+    value: ""
+    is_case_visible: true
   - name: c_location
     value: ""
+    is_case_visible: true
   - name: c_vhd
     value: ""
     is_case_visible: true
@@ -107,6 +112,12 @@ platform:
     keep_environment: $(keep_environment)
     azure:
       deploy: True
+#
+# TODO: Enable these parameters once LISA supports all Azure clouds
+#
+#      cloud: $(cloud)
+#      marketplace_image_information_location: $(c_marketplace_image_information_location)
+#      shared_resource_group_location: $(c_shared_resource_group_location)
       subscription_id: $(subscription_id)
       wait_delete: false
     requirement:
