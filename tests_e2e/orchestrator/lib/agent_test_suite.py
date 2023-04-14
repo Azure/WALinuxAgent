@@ -459,6 +459,8 @@ class AgentTestSuite(LisaTestSuite):
         with _set_thread_name(suite_full_name):  # The thread name is added to the LISA log
             log_path: Path = self.context.log_path/f"{suite_full_name}.log"
             with set_current_thread_log(log_path):
+                suite_success: bool = True
+
                 try:
                     log.info("")
                     log.info("**************************************** %s ****************************************", suite_name)
@@ -467,54 +469,54 @@ class AgentTestSuite(LisaTestSuite):
                     summary: List[str] = []
 
                     for test in suite.tests:
-                        test_name = test.__name__
-                        test_full_name = f"{suite_name}-{test_name}"
+                        test_full_name = f"{suite_name}-{test.name}"
                         test_start_time: datetime.datetime = datetime.datetime.now()
 
-                        log.info("******** Executing %s", test_name)
+                        log.info("******** Executing %s", test.name)
                         self.context.lisa_log.info("Executing test %s", test_full_name)
 
+                        test_success: bool = True
+
                         try:
+                            test.test_class(self.context).run()
 
-                            test(self.context).run()
-
-                            summary.append(f"[Passed]  {test_name}")
-                            log.info("******** [Passed] %s", test_name)
+                            summary.append(f"[Passed]  {test.name}")
+                            log.info("******** [Passed] %s", test.name)
                             self.context.lisa_log.info("[Passed] %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
-                                test_name,
+                                test.name,
                                 TestStatus.PASSED,
                                 test_start_time)
                         except TestSkipped as e:
-                            summary.append(f"[Skipped] {test_name}")
-                            log.info("******** [Skipped] %s: %s", test_name, e)
+                            summary.append(f"[Skipped] {test.name}")
+                            log.info("******** [Skipped] %s: %s", test.name, e)
                             self.context.lisa_log.info("******** [Skipped] %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
-                                test_name,
+                                test.name,
                                 TestStatus.SKIPPED,
                                 test_start_time,
                                 message=str(e))
                         except AssertionError as e:
-                            success = False
-                            summary.append(f"[Failed]  {test_name}")
-                            log.error("******** [Failed] %s: %s", test_name, e)
+                            test_success = False
+                            summary.append(f"[Failed]  {test.name}")
+                            log.error("******** [Failed] %s: %s", test.name, e)
                             self.context.lisa_log.error("******** [Failed] %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
-                                test_name,
+                                test.name,
                                 TestStatus.FAILED,
                                 test_start_time,
                                 message=str(e))
                         except:  # pylint: disable=bare-except
-                            success = False
-                            summary.append(f"[Error]   {test_name}")
-                            log.exception("UNHANDLED EXCEPTION IN %s", test_name)
+                            test_success = False
+                            summary.append(f"[Error]   {test.name}")
+                            log.exception("UNHANDLED EXCEPTION IN %s", test.name)
                             self.context.lisa_log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
-                                test_name,
+                                test.name,
                                 TestStatus.FAILED,
                                 test_start_time,
                                 message="Unhandled exception.",
@@ -522,14 +524,21 @@ class AgentTestSuite(LisaTestSuite):
 
                         log.info("")
 
-                    log.info("********* [Test Results]")
+                        suite_success = suite_success and test_success
+
+                        if not test_success and test.blocks_suite:
+                            log.warning("%s failed and blocks the suite. Stopping suite execution.", test.name)
+                            break
+
+                    log.info("")
+                    log.info("******** [Test Results]")
                     log.info("")
                     for r in summary:
                         log.info("\t%s", r)
                     log.info("")
 
                 except:  # pylint: disable=bare-except
-                    success = False
+                    suite_success = False
                     self._report_test_result(
                         suite_full_name,
                         suite_name,
@@ -538,7 +547,7 @@ class AgentTestSuite(LisaTestSuite):
                         message=f"Unhandled exception while executing test suite {suite_name}.",
                         add_exception_stack_trace=True)
                 finally:
-                    if not success:
+                    if not suite_success:
                         self._mark_log_as_failed()
 
         return success
@@ -562,7 +571,7 @@ class AgentTestSuite(LisaTestSuite):
             #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
             for suite in self.context.test_suites:  # pylint: disable=E1133
                 for test in suite.tests:
-                    ignore_error_rules.extend(test(self.context).get_ignore_error_rules())
+                    ignore_error_rules.extend(test.test_class(self.context).get_ignore_error_rules())
 
             if len(ignore_error_rules) > 0:
                 new = []

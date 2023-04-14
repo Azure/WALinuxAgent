@@ -90,6 +90,8 @@ variable:
   - name: c_test_suites
     value: []
     is_case_visible: true
+  - name: c_vm_tags
+    value: {}
 
   #
   # Set these variables to use an SSH proxy when executing the runbook
@@ -120,6 +122,7 @@ platform:
 #      shared_resource_group_location: $(c_shared_resource_group_location)
       subscription_id: $(subscription_id)
       wait_delete: false
+      vm_tags: $(c_vm_tags)
     requirement:
       core_count:
         min: 2

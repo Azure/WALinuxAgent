@@ -1,0 +1,12 @@
+name: "NoOutboundConnections"
+tests:
+  - source: "no_outbound_connections/check_no_outbound_connections.py"
+    blocks_suite: true
+  - "bvts/extension_operations.py"
+  - "bvts/run_command.py"
+  - "bvts/vm_access.py"
+  - "no_outbound_connections/check_fallback_to_hgap.py"
+images:
+  - "ubuntu_2004"
+template: "no_outbound_connections/nsg_template.py"
+owns_vm: true

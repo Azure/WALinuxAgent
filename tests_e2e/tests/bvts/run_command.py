@@ -45,10 +45,7 @@ class RunCommandBvt(AgentTest):
             self.get_settings = get_settings
 
     def run(self):
-        ssh_client = SshClient(
-            ip_address=self._context.vm_ip_address,
-            username=self._context.username,
-            private_key_file=self._context.private_key_file)
+        ssh_client: SshClient = self._context.create_ssh_client()
 
         test_cases = [
             RunCommandBvt.TestCase(

@@ -101,6 +101,8 @@ variable:
   - name: c_test_suites
     value: []
     is_case_visible: true
+  - name: c_vm_tags
+    value: {}
 
   #
   # Set these variables to use an SSH proxy when executing the runbook
@@ -129,6 +131,7 @@ platform:
       resource_group_name: $(resource_group_name)
       deploy: false
       subscription_id: $(subscription_id)
+      vm_tags: $(c_vm_tags)
     requirement:
       azure:
         name: $(c_vm_name)

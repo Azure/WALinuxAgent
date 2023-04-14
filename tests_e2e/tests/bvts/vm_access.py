@@ -38,7 +38,7 @@ from tests_e2e.tests.lib.vm_extension import VmExtension
 
 class VmAccessBvt(AgentTest):
     def run(self):
-        ssh: SshClient = SshClient(ip_address=self._context.vm_ip_address, username=self._context.username, private_key_file=self._context.private_key_file)
+        ssh: SshClient = self._context.create_ssh_client()
         if "-flatcar" in ssh.run_command("uname -a"):
             raise TestSkipped("Currently VMAccess is not supported on Flatcar")
 
