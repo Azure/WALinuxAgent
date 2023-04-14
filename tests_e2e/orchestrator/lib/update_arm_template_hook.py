@@ -20,9 +20,13 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
+# Disable those warnings, since 'lisa' is an external, non-standard, dependency
+# E0401: Unable to import 'lisa.*' (import-error)
+# pylint: disable=E0401
 from lisa.environment import Environment
 from lisa.util import hookimpl, plugin_manager
 from lisa.sut_orchestrator.azure.platform_ import AzurePlatformSchema
+# pylint: enable=E0401
 
 import tests_e2e
 

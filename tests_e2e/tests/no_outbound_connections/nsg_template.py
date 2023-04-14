@@ -90,7 +90,6 @@ def _get_resource(resources: Any, type_name: str) -> Any:
     for item in resources:
         if item["type"] == type_name:
             return item
-    else:
-        raise Exception(f"Cannot find a resource of type {type_name} in the ARM template")
+    raise Exception(f"Cannot find a resource of type {type_name} in the ARM template")
 
 
