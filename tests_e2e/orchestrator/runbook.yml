@@ -67,6 +67,10 @@ variable:
   # Most of these variables are handled by LISA and are used to define the set of test VMs that need to be
   # created. The variables marked with 'is_case_visible' are also referenced by the AgentTestSuite.
   #
+  # 'c_vm_tags' is a special case: it is used by the azure_update_arm_template hook. This hook does not
+  # have access to the runbook variables, so instead we use a dummy VM tag named "template" to pass the
+  # name of the custom ARM template that the hook needs to use (see wiki for more details).
+  #
   - name: c_env_name
     value: ""
     is_case_visible: true

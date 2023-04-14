@@ -170,8 +170,12 @@ class AgentTestLoader(object):
             owns_vm: true
 
         * name     - A string used to identify the test suite
-        * tests    - A list of the tests in the suite. Each test is specified by the path for its source code relative to
-                     WALinuxAgent/tests_e2e/tests.
+        * tests    - A list of the tests in the suite. Each test can be specified by a string (the path for its source code relative to
+                     WALinuxAgent/tests_e2e/tests), or a dictionary with two items:
+                        * source: the path for its source code relative to WALinuxAgent/tests_e2e/tests
+                        * blocks_suite: [Optional; boolean] If True, a failure on the test will stop execution of the test suite (i.e. the
+                          rest of the tests in the suite will not be executed). By default, a failure on a test does not stop execution of
+                          the test suite.
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
                      can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The
                      names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.

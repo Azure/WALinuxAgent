@@ -123,6 +123,9 @@ class AgentTestContext:
         return self._connection._ssh_port
 
     def create_ssh_client(self) -> SshClient:
+        """
+        Convenience method to create an SSH client using the connection info from the context.
+        """
         return SshClient(
             ip_address=self.vm_ip_address,
             username=self.username,

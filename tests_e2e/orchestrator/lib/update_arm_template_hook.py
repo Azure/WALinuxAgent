@@ -28,6 +28,9 @@ import tests_e2e
 
 
 class UpdateArmTemplateHook:
+    """
+    This hook allows to customize the ARM template used to create the test VMs (see wiki for details).
+    """
     @hookimpl
     def azure_update_arm_template(self, template: Any, environment: Environment) -> None:
         azure_runbook: AzurePlatformSchema = environment.platform.runbook.get_extended_runbook(AzurePlatformSchema)

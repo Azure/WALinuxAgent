@@ -25,6 +25,7 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 
 class NoOutboundConnections(AgentTest):
     """
+    Check the agent log to verify that the default channel was changed to HostGAPlugin before executing any extensions.
     """
     def run(self):
         # 2023-04-14T14:49:43.005530Z INFO ExtHandler ExtHandler Default channel changed to HostGAPlugin channel.

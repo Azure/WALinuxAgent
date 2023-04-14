@@ -26,8 +26,10 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 
 class CheckNoOutboundConnections(AgentTest):
     """
+    Verifies that there is no outbound connectivity on the test VM.
     """
     def run(self):
+        # This script is executed on the test VM. It tries to connect to a well-known DNS server (DNS is on port 53).
         script: str = """
 import socket, sys
 
