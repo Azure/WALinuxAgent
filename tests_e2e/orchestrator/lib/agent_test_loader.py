@@ -116,7 +116,7 @@ class AgentTestLoader(object):
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
                         if image.locations:
                             locations = image.locations.get(self.__cloud)
-                            if locations is not None and not any(suite.location in l for l in image.locations[self.__cloud]):
+                            if locations is not None and not any(suite.location in l for l in locations):
                                 raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
 
     @staticmethod
