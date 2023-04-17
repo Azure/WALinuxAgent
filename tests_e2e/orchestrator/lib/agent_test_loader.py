@@ -136,7 +136,7 @@ class AgentTestLoader(object):
         #
         # If test_suites is not YML, then it should be a comma-separated list of description files
         #
-        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT / "test_suites" / f"{t.strip()}.yml" for t in test_suites.split(',')]
+        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/f"{t.strip()}.yml" for t in test_suites.split(',')]
         return [AgentTestLoader._load_test_suite(f) for f in description_files]
 
     @staticmethod
