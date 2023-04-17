@@ -228,7 +228,7 @@ class AgentTestLoader(object):
     @staticmethod
     def _load_test_class(relative_path: str) -> Type[AgentTest]:
         """
-        Takes a 'source_file', which must be a Python module, and returns a list of all the classes derived from AgentTest.
+        Loads an AgentTest from its source code file, which is given as a path relative to WALinuxAgent/tests_e2e/tests.
         """
         full_path: Path = AgentTestLoader._SOURCE_CODE_ROOT/"tests"/relative_path
         spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.{relative_path.replace('/', '.').replace('.py', '')}", str(full_path))
