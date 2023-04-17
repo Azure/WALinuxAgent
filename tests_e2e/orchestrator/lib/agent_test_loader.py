@@ -218,7 +218,7 @@ class AgentTestLoader(object):
 
         See the comments in image.yml for a description of the structure of each item.
         """
-        image_descriptions = AgentTestLoader._load_file(AgentTestLoader._SOURCE_CODE_ROOT / "test_suites" / "images.yml")
+        image_descriptions = AgentTestLoader._load_file(AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/"images.yml")
         if "images" not in image_descriptions:
             raise Exception("images.yml is missing the 'images' item")
 
