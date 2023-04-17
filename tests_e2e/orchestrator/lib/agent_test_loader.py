@@ -60,10 +60,13 @@ class AgentTestLoader(object):
     """
     Loads a given set of test suites from the YAML configuration files.
     """
-    def __init__(self, test_suites: str):
+    def __init__(self, test_suites: str, cloud: str):
         """
         Loads the specified 'test_suites', which are given as a string of comma-separated suite names or a YAML description
         of a single test_suite.
+
+        The 'cloud' parameter indicates the cloud on which the tests will run. It is used to validate any restrictions on the test suite and/or
+        images location.
 
         When given as a comma-separated list, each item must correspond to the name of the YAML files describing s suite (those
         files are located under the .../WALinuxAgent/tests_e2e/test_suites directory). For example, if test_suites == "agent_bvt, fast_track"
@@ -78,6 +81,7 @@ class AgentTestLoader(object):
               - "bvts/vm_access.py"
         """
         self.__test_suites: List[TestSuiteInfo] = self._load_test_suites(test_suites)
+        self.__cloud: str = cloud
         self.__images: Dict[str, List[VmImageInfo]] = self._load_images()
         self._validate()
 
@@ -111,7 +115,8 @@ class AgentTestLoader(object):
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
                         if image.locations:
-                            if not any(suite.location in l for l in image.locations.values()):
+                            locations = image.locations.get(self.__cloud)
+                            if locations is not None and not any(suite.location in l for l in image.locations[self.__cloud]):
                                 raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
 
     @staticmethod
@@ -131,7 +136,7 @@ class AgentTestLoader(object):
         #
         # If test_suites is not YML, then it should be a comma-separated list of description files
         #
-        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/f"{t.strip()}.yml" for t in test_suites.split(',')]
+        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT / "test_suites" / f"{t.strip()}.yml" for t in test_suites.split(',')]
         return [AgentTestLoader._load_test_suite(f) for f in description_files]
 
     @staticmethod
@@ -213,7 +218,7 @@ class AgentTestLoader(object):
 
         See the comments in image.yml for a description of the structure of each item.
         """
-        image_descriptions = AgentTestLoader._load_file(AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/"images.yml")
+        image_descriptions = AgentTestLoader._load_file(AgentTestLoader._SOURCE_CODE_ROOT / "test_suites" / "images.yml")
         if "images" not in image_descriptions:
             raise Exception("images.yml is missing the 'images' item")
 
