@@ -21,6 +21,7 @@ from pathlib import Path
 
 import tests_e2e
 from tests_e2e.tests.lib.identifiers import VmIdentifier
+from tests_e2e.tests.lib.ssh_client import SshClient
 
 
 class AgentTestContext:
@@ -120,6 +121,16 @@ class AgentTestContext:
         Port for SSH connections
         """
         return self._connection._ssh_port
+
+    def create_ssh_client(self) -> SshClient:
+        """
+        Convenience method to create an SSH client using the connection info from the context.
+        """
+        return SshClient(
+            ip_address=self.vm_ip_address,
+            username=self.username,
+            private_key_file=self.private_key_file,
+            port=self.ssh_port)
 
     @staticmethod
     def from_args():

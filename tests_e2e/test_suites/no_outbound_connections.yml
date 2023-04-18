@@ -1,0 +1,21 @@
+#
+# This suite is used to test the scenario where outbound connections are blocked on the VM. In this case,
+# the agent should fallback to the HostGAPlugin to request any downloads.
+#
+# The suite uses a custom ARM template to create a VM with a Network Security Group that blocks all outbound
+# connections. The first test in the suite verifies that the setup of the NSG was successful, then the rest
+# of the tests exercise different extension operations. The last test in the suite checks the agent log
+# to verify it did fallback to the HostGAPlugin to execute the extensions.
+#
+name: "NoOutboundConnections"
+tests:
+  - source: "no_outbound_connections/check_no_outbound_connections.py"
+    blocks_suite: true  # If the NSG is not setup correctly, there is no point in executing the rest of the tests.
+  - "bvts/extension_operations.py"
+  - "bvts/run_command.py"
+  - "bvts/vm_access.py"
+  - "no_outbound_connections/check_fallback_to_hgap.py"
+images:
+  - "ubuntu_2004"
+template: "no_outbound_connections/nsg_template.py"
+owns_vm: true
