@@ -38,7 +38,7 @@ class CommandError(Exception):
 def run_command(command: Any, shell=False) -> str:
     """
     This function is a thin wrapper around Popen/communicate in the subprocess module. It executes the given command
-    and returns its stdout. If the command returns a non-zero exit code, the function raises a RunCommandException.
+    and returns its stdout. If the command returns a non-zero exit code, the function raises a CommandError.
 
     Similarly to Popen, the 'command' can be a string or a list of strings, and 'shell' indicates whether to execute
     the command through the shell.

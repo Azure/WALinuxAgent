@@ -25,6 +25,23 @@ import tests_e2e
 from tests_e2e.tests.lib.agent_test import AgentTest
 
 
+class TestInfo(object):
+    """
+    Description of a test
+    """
+    # The class that implements the test
+    test_class: Type[AgentTest]
+    # If True, an error in the test blocks the execution of the test suite (defaults to False)
+    blocks_suite: bool
+
+    @property
+    def name(self) -> str:
+        return self.test_class.__name__
+
+    def __str__(self):
+        return self.name
+
+
 class TestSuiteInfo(object):
     """
     Description of a test suite
@@ -32,13 +49,15 @@ class TestSuiteInfo(object):
     # The name of the test suite
     name: str
     # The tests that comprise the suite
-    tests: List[Type[AgentTest]]
+    tests: List[TestInfo]
     # Images or image sets (as defined in images.yml) on which the suite must run.
     images: List[str]
     # The location (region) on which the suite must run; if empty, the suite can run on any location
     location: str
     # Whether this suite must run on its own test VM
     owns_vm: bool
+    # Customization for the ARM template used when creating the test VM
+    template: str
 
     def __str__(self):
         return self.name
@@ -139,7 +158,7 @@ class AgentTestLoader(object):
         """
         Loads the description of a TestSuite from its YAML file.
 
-        A test suite has 5 properties: name, tests, images, location, and owns-vm. For example:
+        A test suite has 5 properties: name, tests, images, location, and owns_vm. For example:
 
             name: "AgentBvt"
             tests:
@@ -148,18 +167,22 @@ class AgentTestLoader(object):
               - "bvts/vm_access.py"
             images: "endorsed"
             location: "eastuseaup"
-            owns-vm: true
+            owns_vm: true
 
         * name     - A string used to identify the test suite
-        * tests    - A list of the tests in the suite. Each test is specified by the path for its source code relative to
-                     WALinuxAgent/tests_e2e/tests.
+        * tests    - A list of the tests in the suite. Each test can be specified by a string (the path for its source code relative to
+                     WALinuxAgent/tests_e2e/tests), or a dictionary with two items:
+                        * source: the path for its source code relative to WALinuxAgent/tests_e2e/tests
+                        * blocks_suite: [Optional; boolean] If True, a failure on the test will stop execution of the test suite (i.e. the
+                          rest of the tests in the suite will not be executed). By default, a failure on a test does not stop execution of
+                          the test suite.
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
                      can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The
                      names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
         * location - [Optional; string] If given, the test suite must be executed on that location. If not specified,
                      or set to an empty string, the test suite will be executed in the default location. This is useful
                      for test suites that exercise a feature that is enabled only in certain regions.
-        * owns-vm - [Optional; boolean] By default all suites in a test run are executed on the same test VMs; if this
+        * owns_vm - [Optional; boolean] By default all suites in a test run are executed on the same test VMs; if this
                     value is set to True, new test VMs will be created and will be used exclusively for this test suite.
                     This is useful for suites that modify the test VMs in such a way that the setup may cause problems
                     in other test suites (for example, some tests targeted to the HGAP block internet access in order to
@@ -176,9 +199,15 @@ class AgentTestLoader(object):
         test_suite_info.name = test_suite["name"]
 
         test_suite_info.tests = []
-        source_files = [AgentTestLoader._SOURCE_CODE_ROOT/"tests"/t for t in test_suite["tests"]]
-        for f in source_files:
-            test_suite_info.tests.extend(AgentTestLoader._load_test_classes(f))
+        for test in test_suite["tests"]:
+            test_info = TestInfo()
+            if isinstance(test, str):
+                test_info.test_class = AgentTestLoader._load_test_class(test)
+                test_info.blocks_suite = False
+            else:
+                test_info.test_class = AgentTestLoader._load_test_class(test["source"])
+                test_info.blocks_suite = test.get("blocks_suite", False)
+            test_suite_info.tests.append(test_info)
 
         images = test_suite["images"]
         if isinstance(images, str):
@@ -190,20 +219,26 @@ class AgentTestLoader(object):
         if test_suite_info.location is None:
             test_suite_info.location = ""
 
-        test_suite_info.owns_vm = "owns-vm" in test_suite and test_suite["owns-vm"]
+        test_suite_info.owns_vm = "owns_vm" in test_suite and test_suite["owns_vm"]
+
+        test_suite_info.template = test_suite.get("template", "")
 
         return test_suite_info
 
     @staticmethod
-    def _load_test_classes(source_file: Path) -> List[Type[AgentTest]]:
+    def _load_test_class(relative_path: str) -> Type[AgentTest]:
         """
-        Takes a 'source_file', which must be a Python module, and returns a list of all the classes derived from AgentTest.
+        Loads an AgentTest from its source code file, which is given as a path relative to WALinuxAgent/tests_e2e/tests.
         """
-        spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.{source_file.name}", str(source_file))
+        full_path: Path = AgentTestLoader._SOURCE_CODE_ROOT/"tests"/relative_path
+        spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.{relative_path.replace('/', '.').replace('.py', '')}", str(full_path))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         # return all the classes in the module that are subclasses of AgentTest but are not AgentTest itself.
-        return [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentTest]
+        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentTest]
+        if len(matches) != 1:
+            raise Exception(f"Error in {full_path} (each test file must contain exactly one class derived from AgentTest)")
+        return matches[0]
 
     @staticmethod
     def _load_images() -> Dict[str, List[VmImageInfo]]:

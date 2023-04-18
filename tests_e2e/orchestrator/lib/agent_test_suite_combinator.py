@@ -218,36 +218,44 @@ class AgentTestSuitesCombinator(Combinator):
                 else:
                     vm_size = ""
 
-                if suite_info.owns_vm:
-                    # create an environment for exclusive use by this suite
-                    environment_list.append({
+                # Note: Disabling "W0640: Cell variable 'foo' defined in loop (cell-var-from-loop)". This is a false positive, the closure is OK
+                # to use, since create_environment() is called within the same iteration of the loop.
+                # pylint: disable=W0640
+                def create_environment(env_name: str) -> Dict[str, Any]:
+                    tags = {}
+                    if suite_info.template != '':
+                        tags["templates"] = suite_info.template
+                    return {
                         "c_marketplace_image": marketplace_image,
                         "c_cloud": self.runbook.cloud,
                         "c_location": location,
                         "c_vm_size": vm_size,
                         "c_vhd": vhd,
                         "c_test_suites": [suite_info],
-                        "c_env_name": f"{name}-{suite_info.name}",
+                        "c_env_name": env_name,
                         "c_marketplace_image_information_location": self._MARKETPLACE_IMAGE_INFORMATION_LOCATIONS[self.runbook.cloud],
-                        "c_shared_resource_group_location": self._SHARED_RESOURCE_GROUP_LOCATIONS[self.runbook.cloud]
-                    })
+                        "c_shared_resource_group_location": self._SHARED_RESOURCE_GROUP_LOCATIONS[self.runbook.cloud],
+                        "c_vm_tags": tags
+                    }
+                # pylint: enable=W0640
+
+                if suite_info.owns_vm:
+                    # create an environment for exclusive use by this suite
+                    environment_list.append(create_environment(f"{name}-{suite_info.name}"))
                 else:
                     # add this suite to the shared environments
                     key: str = f"{name}-{location}"
-                    if key in shared_environments:
-                        shared_environments[key]["c_test_suites"].append(suite_info)
+                    environment = shared_environments.get(key)
+                    if environment is not None:
+                        environment["c_test_suites"].append(suite_info)
+                        if suite_info.template != '':
+                            vm_tags = environment["c_vm_tags"]
+                            if "templates" in vm_tags:
+                                vm_tags["templates"] += ", " + suite_info.template
+                            else:
+                                vm_tags["templates"] = suite_info.template
                     else:
-                        shared_environments[key] = {
-                            "c_marketplace_image": marketplace_image,
-                            "c_cloud": self.runbook.cloud,
-                            "c_location": location,
-                            "c_vm_size": vm_size,
-                            "c_vhd": vhd,
-                            "c_test_suites": [suite_info],
-                            "c_env_name": key,
-                            "c_marketplace_image_information_location": self._MARKETPLACE_IMAGE_INFORMATION_LOCATIONS[self.runbook.cloud],
-                            "c_shared_resource_group_location": self._SHARED_RESOURCE_GROUP_LOCATIONS[self.runbook.cloud]
-                        }
+                        shared_environments[key] = create_environment(key)
 
         environment_list.extend(shared_environments.values())
 
@@ -256,17 +264,16 @@ class AgentTestSuitesCombinator(Combinator):
 
         log: logging.Logger = logging.getLogger("lisa")
         log.info("")
-        log.info("******** Agent Test Environments *****")
+        log.info("******** Waagent: Test Environments *****")
+        log.info("")
         for environment in environment_list:
             test_suites = [s.name for s in environment['c_test_suites']]
             log.info("Settings for %s:\n%s\n", environment['c_env_name'], '\n'.join([f"\t{name}: {value if name != 'c_test_suites' else test_suites}" for name, value in environment.items()]))
-        log.info("***************************")
         log.info("")
 
         return environment_list
 
     _URN = re.compile(r"(?P<publisher>[^\s:]+)[\s:](?P<offer>[^\s:]+)[\s:](?P<sku>[^\s:]+)[\s:](?P<version>[^\s:]+)")
-
 
     @staticmethod
     def _is_urn(urn: str) -> bool:
