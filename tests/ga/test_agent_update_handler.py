@@ -106,7 +106,7 @@ class TestAgentUpdate(UpdateTestCase):
                     agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
                     self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
                     self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
-                    self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
+                    self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
 
     def test_it_should_update_to_largest_version_if_time_window_not_elapsed(self):
         self.prepare_agents(count=1)
@@ -142,7 +142,7 @@ class TestAgentUpdate(UpdateTestCase):
                         agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
                         self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
                         self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
-                        self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
+                        self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
 
     def test_it_should_not_agent_update_if_last_attempted_update_time_not_elapsed(self):
         self.prepare_agents(count=1)
@@ -172,7 +172,7 @@ class TestAgentUpdate(UpdateTestCase):
                 agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
                 self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
                 self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
-                self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
+                self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
 
     def test_it_should_not_agent_update_if_requested_version_is_same_as_current_version(self):
         data_file = DATA_FILE.copy()
@@ -207,7 +207,7 @@ class TestAgentUpdate(UpdateTestCase):
                 agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             self.__assert_agent_requested_version_in_goal_state(mock_telemetry, version="9.9.9.10")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
-            self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
+            self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
 
     def test_it_should_downgrade_agent_if_requested_version_is_available_less_than_current_version(self):
         data_file = DATA_FILE.copy()
@@ -228,7 +228,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version=downgraded_version)
             self.__assert_agent_directories_exist_and_others_dont_exist(
                 versions=[downgraded_version, str(CURRENT_VERSION)])
-            self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
+            self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
 
     def test_it_should_not_downgrade_below_daemon_version(self):
         data_file = DATA_FILE.copy()

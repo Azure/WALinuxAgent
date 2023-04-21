@@ -231,7 +231,7 @@ class AgentUpdateHandler(object):
             # In case of an upgrade, we don't need to exclude anything as the daemon will automatically
             # start the next available highest version which would be the target version
             prefix = "upgrade"
-        raise AgentUpgradeExitException("Agent update found, Exiting current process to {0} to the new Agent version {1}".format(prefix, requested_version))
+        raise AgentUpgradeExitException("Agent update found, exiting current process to {0} to the new Agent version {1}".format(prefix, requested_version))
 
     @staticmethod
     def __get_available_agents_on_disk():

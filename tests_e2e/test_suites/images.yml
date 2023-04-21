@@ -101,7 +101,6 @@ images:
    mariner_2_arm64:
       urn: "microsoftcblmariner cbl-mariner cbl-mariner-2-arm64 latest"
       locations:
-         AzureCloud: ["eastus"]
          AzureChinaCloud: []
          AzureUSGovernment: []
       vm_sizes:
