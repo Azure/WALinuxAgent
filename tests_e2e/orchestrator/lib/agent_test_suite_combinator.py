@@ -116,7 +116,7 @@ class AgentTestSuitesCombinator(Combinator):
     }
 
     def create_environment_for_existing_vm(self) -> List[Dict[str, Any]]:
-        loader = AgentTestLoader(self.runbook.test_suites)
+        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
 
         environment: List[Dict[str, Any]] = [
             {
@@ -137,7 +137,7 @@ class AgentTestSuitesCombinator(Combinator):
         return environment
 
     def create_environment_list(self) -> List[Dict[str, Any]]:
-        loader = AgentTestLoader(self.runbook.test_suites)
+        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
 
         #
         # If the runbook provides any of 'image', 'location', or 'vm_size', those values
