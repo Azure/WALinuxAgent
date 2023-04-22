@@ -45,7 +45,7 @@ try:
 
     protocol = get_protocol_util().get_protocol(init_goal_state=False)
     protocol.client.reset_goal_state(
-        goal_state_properties=GoalStateProperties.ExtensionsGoalState | GoalStateProperties.Certificates)
+        goal_state_properties=GoalStateProperties.ExtensionsGoalState)
 
     attempts = 5
     while attempts > 0:

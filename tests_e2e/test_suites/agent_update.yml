@@ -3,3 +3,4 @@ tests:
   - "agent_update/rsm_update.py"
 images: "endorsed"
 location: "eastus2euap"
+owns_vm: true
