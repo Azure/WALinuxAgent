@@ -290,12 +290,12 @@ class GoalState(object):
         # Track goal state comes after that, the extensions will need the new certificate. The Agent needs to refresh the goal state in that
         # case, to ensure it fetches the new certificate.
         #
-        if self._extensions_goal_state.source == GoalStateSource.FastTrack:
+        if self._extensions_goal_state.source == GoalStateSource.FastTrack and self._goal_state_properties & GoalStateProperties.Certificates:
             self._check_certificates()
 
     def _check_certificates(self):
         # Re-download certificates in case they have been removed from disk since last download
-        if self._goal_state_properties & GoalStateProperties.Certificates and self._certs_uri is not None:
+        if self._certs_uri is not None:
             self._download_certificates(self._certs_uri)
         # Check that certificates needed by extensions are in goal state certs.summary
         for extension in self.extensions_goal_state.extensions:

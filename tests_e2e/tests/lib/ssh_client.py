@@ -34,7 +34,7 @@ class SshClient(object):
     def run_command(self, command: str, use_sudo: bool = False) -> str:
         """
         Executes the given command over SSH and returns its stdout. If the command returns a non-zero exit code,
-        the function raises a RunCommandException.
+        the function raises a CommandError.
         """
         if re.match(r"^\s*sudo\s*", command):
             raise Exception("Do not include 'sudo' in the 'command' argument, use the 'use_sudo' parameter instead")
