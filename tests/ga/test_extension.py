@@ -3418,6 +3418,33 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                     self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
                     self.assertEqual("1", protocol.report_vm_status.call_args[0][0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "SVD sequence number mismatch")
 
+    def test_it_should_(self):
+        original = r'''ONE https://foo.blob.core.windows.net/bar?sv=2000&ss=bfqt&srt=sco&sp=rw&se=2025&st=2022&spr=https&sig=SI%3D
+            TWO:HTTPS://bar.blob.core.com/foo/bar/foo.txt?sv=2018&sr=b&sig=Yx%3D&st=2023%3A52Z&se=9999%3A59%3A59Z&sp=r TWO
+            https://bar.com/foo?uid=2018&sr=b THREE'''
+        expected = r'''ONE https://foo.blob.core.windows.net/bar?<redacted>
+            TWO:HTTPS://bar.blob.core.com/foo/bar/foo.txt?<redacted> TWO
+            https://bar.com/foo?uid=2018&sr=b THREE'''
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            exthandlers_handler = get_exthandlers_handler(protocol)
+
+            original_popen = subprocess.Popen
+
+            def mock_popen(cmd, *args, **kwargs):
+                if cmd.endswith("sample.py -enable"):
+                    cmd = "echo '{0}'; >&2 echo '{0}'; exit 1".format(original)
+                return original_popen(cmd, *args, **kwargs)
+
+            with patch.object(subprocess, 'Popen', side_effect=mock_popen):
+                exthandlers_handler.run()
+
+            status = exthandlers_handler.report_ext_handlers_status()
+            self.assertEqual(1, len(status.vmAgent.extensionHandlers), 'Expected exactly 1 extension status')
+            message = status.vmAgent.extensionHandlers[0].message
+            self.assertIn('[stdout]\n{0}'.format(expected), message, "The extension's stdout was not redacted correctly")
+            self.assertIn('[stderr]\n{0}'.format(expected), message, "The extension's stderr was not redacted correctly")
+
 
 if __name__ == '__main__':
     unittest.main()

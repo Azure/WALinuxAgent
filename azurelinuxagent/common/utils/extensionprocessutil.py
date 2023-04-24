@@ -18,6 +18,7 @@
 #
 
 import os
+import re
 import signal
 import time
 
@@ -103,7 +104,11 @@ def read_output(stdout, stderr):
         stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8',
                       errors='backslashreplace')
 
-        return format_stdout_stderr(stdout, stderr)
+        def redact(s):
+            # redact query strings that look like SAS tokens
+            return re.sub(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', r'\1<redacted>', s, flags=re.IGNORECASE)
+
+        return format_stdout_stderr(redact(stdout), redact(stderr))
     except Exception as e:
         return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
 
