@@ -3418,7 +3418,7 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                     self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
                     self.assertEqual("1", protocol.report_vm_status.call_args[0][0].vmAgent.vm_artifacts_aggregate_status.goal_state_aggregate_status.in_svd_seq_no, "SVD sequence number mismatch")
 
-    def test_it_should_(self):
+    def test_it_should_redact_access_tokens_in_extension_output(self):
         original = r'''ONE https://foo.blob.core.windows.net/bar?sv=2000&ss=bfqt&srt=sco&sp=rw&se=2025&st=2022&spr=https&sig=SI%3D
             TWO:HTTPS://bar.blob.core.com/foo/bar/foo.txt?sv=2018&sr=b&sig=Yx%3D&st=2023%3A52Z&se=9999%3A59%3A59Z&sp=r TWO
             https://bar.com/foo?uid=2018&sr=b THREE'''
