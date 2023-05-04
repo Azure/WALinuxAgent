@@ -28,6 +28,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
     def __init__(self):
         super(NSBSDOSUtil, self).__init__()
+        self.agent_conf_file_path = '/etc/waagent.conf'
 
         if self.resolver is None:
             # NSBSD doesn't have a system resolver, configure a python one
