@@ -374,6 +374,9 @@ class DefaultOSUtil(object):
         except KeyError:
             return None
 
+    def get_root_username(self):
+        return "root"
+
     def is_sys_user(self, username):
         """
         Check whether use is a system user. 
