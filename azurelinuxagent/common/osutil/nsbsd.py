@@ -75,6 +75,9 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         logger.info("{0} SSH password-based authentication methods."
                     .format("Disabled" if disable_password else "Enabled"))
 
+    def get_root_username(self):
+        return "admin"
+
     def useradd(self, username, expiration=None, comment=None):
         """
         Create user account with 'username'
