@@ -419,28 +419,33 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def update_iboip_interface(ipv4_addr, timeout_sec, check_interval_sec):
-        logger.info("Wait for ib0 become available")
+        logger.info("Wait for ib become available")
         total_retries = timeout_sec / check_interval_sec
         n = 0
-        found_ib0 = None
-        while not found_ib0 and n < total_retries:
+        found_ib = None
+        while not found_ib and n < total_retries:
             ret, output = shellutil.run_get_output("ifconfig -a")
             if ret != 0:
                 raise Exception("Failed to list network interfaces")
-            found_ib0 = re.search("ib0", output, re.IGNORECASE)
-            if found_ib0:
+            found_ib = re.search(r"(ib\S+):", output, re.IGNORECASE)
+            if found_ib:
                 break
             time.sleep(check_interval_sec)
             n += 1
 
-        if not found_ib0:
-            raise Exception("ib0 is not available")
+        if not found_ib:
+            raise Exception("ib is not available")
+
+        ibname = found_ib.groups()[0]
+        if shellutil.run("ifconfig {0} up".format(ibname)) != 0:
+            raise Exception("Could not run ifconfig {0} up".format(ibname))
 
         netmask = 16
         logger.info("RDMA: configuring IPv4 addr and netmask on ipoib interface")
         addr = '{0}/{1}'.format(ipv4_addr, netmask)
-        if shellutil.run("ifconfig ib0 {0}".format(addr)) != 0:
-            raise Exception("Could set addr to {0} on ib0".format(addr))
+        if shellutil.run("ifconfig {0} {1}".format(ibname, addr)) != 0:
+            raise Exception("Could not set addr to {0} on {1}".format(addr, ibname))
+
         logger.info("RDMA: ipoib address and netmask configured on interface")
 
     @staticmethod
