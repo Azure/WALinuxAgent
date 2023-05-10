@@ -49,7 +49,7 @@ variable:
   #
   # The test suites to execute
   - name: test_suites
-    value: "agent_bvt"
+    value: "agent_bvt, no_outbound_connections"
   - name: cloud
     value: "AzureCloud"
   - name: image

@@ -15,7 +15,6 @@ tests:
   - "bvts/run_command.py"
   - "bvts/vm_access.py"
   - "no_outbound_connections/check_fallback_to_hgap.py"
-images:
-  - "ubuntu_2004"
+images: "random(endorsed)"
 template: "no_outbound_connections/nsg_template.py"
 owns_vm: true
