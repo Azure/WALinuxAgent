@@ -119,7 +119,8 @@ class AgentTestLoader(object):
         """
         return self.__images
 
-    RANDOM_IMAGES_RE = re.compile(r"random\((?P<image>[^,]+)(\s*,\s*(?P<count>\d+))?\)")
+    # Matches a reference to a random subset of images within a set with an optional count: random(<image_set>, [<count>]), e.g. random(endorsed, 3), random(endorsed)
+    RANDOM_IMAGES_RE = re.compile(r"random\((?P<image_set>[^,]+)(\s*,\s*(?P<count>\d+))?\)")
 
     def _validate(self):
         """
@@ -130,7 +131,7 @@ class AgentTestLoader(object):
             for image in suite.images:
                 match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
                 if match is not None:
-                    image = match.group('image')
+                    image = match.group('image_set')
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
 

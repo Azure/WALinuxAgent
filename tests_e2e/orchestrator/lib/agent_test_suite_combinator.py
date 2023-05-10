@@ -264,7 +264,7 @@ class AgentTestSuitesCombinator(Combinator):
                 count = match.group('count')
                 if count is None:
                     count = 1
-                matching_images = loader.images[match.group('image')].copy()
+                matching_images = loader.images[match.group('image_set')].copy()
                 random.shuffle(matching_images)
                 image_list = matching_images[0:count]
             for i in image_list:
