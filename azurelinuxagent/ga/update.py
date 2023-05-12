@@ -462,6 +462,14 @@ class UpdateHandler(object):
 
         return self._vm_size
 
+    def _get_vm_arch(self):
+        status,output = shellutil.run_get_output('python3 -c \'import platform; print(platform.machine())\'')
+
+        if status != 0:
+            return "unknown arch"
+
+        return output
+
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
         if not debug and self._is_orphaned:
@@ -1265,13 +1273,13 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
-            # Include VMSize in the heartbeat message because the kusto table does not have 
-            # a separate column for it (or architecture).
-            vmsize = self._get_vm_size(protocol)
+            # Include vm architecture in the heartbeat message because the kusto table does not have
+            # a separate column for it.
+            vmarch = self._get_vm_arch()
 
             telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled, vmsize)
+                                                         auto_update_enabled, vmarch)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
