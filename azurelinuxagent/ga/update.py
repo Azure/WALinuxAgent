@@ -19,6 +19,7 @@
 import glob
 import json
 import os
+import platform
 import re
 import shutil
 import signal
@@ -463,12 +464,7 @@ class UpdateHandler(object):
         return self._vm_size
 
     def _get_vm_arch(self):
-        status,output = shellutil.run_get_output('python3 -c \'import platform; print(platform.machine())\'')
-
-        if status != 0:
-            return "unknown arch"
-
-        return output
+        return platform.machine()
 
     def _check_daemon_running(self, debug):
         # Check that the parent process (the agent's daemon) is still running
