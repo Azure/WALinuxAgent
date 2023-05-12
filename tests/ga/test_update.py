@@ -20,7 +20,6 @@ import zipfile
 
 from datetime import datetime, timedelta
 from threading import current_thread
-from azurelinuxagent.common.protocol.imds import ComputeInfo
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
 
