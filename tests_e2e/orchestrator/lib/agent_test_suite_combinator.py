@@ -181,7 +181,6 @@ class AgentTestSuitesCombinator(Combinator):
                         c_vm_tags["templates"] = suite_info.template
                     return {
                         "c_marketplace_image": c_marketplace_image,
-                        "c_cloud": self.runbook.cloud,
                         "c_location": c_location,
                         "c_vm_size": c_vm_size,
                         "c_vhd": c_vhd,

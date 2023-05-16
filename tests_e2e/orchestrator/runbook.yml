@@ -52,6 +52,7 @@ variable:
     value: "agent_bvt, no_outbound_connections"
   - name: cloud
     value: "AzureCloud"
+    is_case_visible: true
   - name: image
     value: ""
   - name: location
@@ -82,9 +83,6 @@ variable:
     value: ""
   - name: c_vm_size
     value: ""
-  - name: c_cloud
-    value: ""
-    is_case_visible: true
   - name: c_location
     value: ""
     is_case_visible: true

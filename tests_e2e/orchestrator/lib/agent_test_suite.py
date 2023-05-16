@@ -135,7 +135,7 @@ class AgentTestSuite(LisaTestSuite):
 
         self.__context = self._Context(
             vm=VmIdentifier(
-                cloud=self._get_required_parameter(variables, "c_cloud"),
+                cloud=self._get_required_parameter(variables, "cloud"),
                 location=self._get_required_parameter(variables, "c_location"),
                 subscription=node.features._platform.subscription_id,
                 resource_group=node_context.resource_group_name,
@@ -454,8 +454,6 @@ class AgentTestSuite(LisaTestSuite):
         suite_full_name = f"{suite_name}-{self.context.environment_name}"
         suite_start_time: datetime.datetime = datetime.datetime.now()
 
-        success: bool = True  # True if all the tests succeed
-
         with _set_thread_name(suite_full_name):  # The thread name is added to the LISA log
             log_path: Path = self.context.log_path/f"{suite_full_name}.log"
             with set_current_thread_log(log_path):
@@ -550,7 +548,7 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
-        return success
+                return suite_success
 
     def _check_agent_log(self) -> bool:
         """

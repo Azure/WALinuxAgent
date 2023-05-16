@@ -33,6 +33,7 @@ variable:
   #
   - name: cloud
     value: "AzureCloud"
+    is_case_visible: true
   - name: subscription_id
     value: ""
   - name: resource_group_name
@@ -88,9 +89,6 @@ variable:
     value: ""
   - name: c_shared_resource_group_location
     value: ""
-  - name: c_cloud
-    value: ""
-    is_case_visible: true
   - name: c_location
     value: ""
     is_case_visible: true
