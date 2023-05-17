@@ -219,6 +219,7 @@ class AgentTestSuitesCombinator(Combinator):
         log.info("")
         log.info("******** Waagent: Test Environments *****")
         log.info("")
+        log.info("Will execute tests on %d environments:\n\n\t%s\n", len(environments), '\n\t'.join([env['c_env_name'] for env in environments]))
         for env in environments:
             log.info("Settings for %s:\n%s\n", env['c_env_name'], self._get_env_settings(env))
         log.info("")
