@@ -116,12 +116,9 @@ platform:
     keep_environment: $(keep_environment)
     azure:
       deploy: True
-#
-# TODO: Enable these parameters once LISA supports all Azure clouds
-#
-#      cloud: $(cloud)
-#      marketplace_image_information_location: $(c_marketplace_image_information_location)
-#      shared_resource_group_location: $(c_shared_resource_group_location)
+      cloud: $(cloud)
+      marketplace_image_information_location: $(c_marketplace_image_information_location)
+      shared_resource_group_location: $(c_shared_resource_group_location)
       subscription_id: $(subscription_id)
       wait_delete: false
       vm_tags: $(c_vm_tags)
