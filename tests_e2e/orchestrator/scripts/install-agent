@@ -70,16 +70,21 @@ if service-status walinuxagent > /dev/null 2>&1;then
 else
     service_name="waagent"
 fi
-echo "Service name: $service_name"
 
 #
 # Output the initial version of the agent
 #
 python=$(get-agent-python)
 waagent=$(get-agent-bin-path)
-echo "Agent's path: $waagent"
+
+echo "============================================================"
+echo "Service Name: $service_name"
+echo "Agent Path: $waagent"
+echo "Agent Version:"
 $python "$waagent" --version
-printf "\n"
+echo "Service Status:"
+service-status $service_name
+echo "============================================================"
 
 #
 # Install the package
