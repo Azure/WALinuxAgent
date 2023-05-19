@@ -33,7 +33,7 @@ from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 
-from tests_e2e.tests.lib.vm_extension import VmExtension
+from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
 class VmAccessBvt(AgentTest):
@@ -58,7 +58,7 @@ class VmAccessBvt(AgentTest):
             public_key = f.read()
 
         # Invoke the extension
-        vm_access = VmExtension(self._context.vm, VmExtensionIds.VmAccess, resource_name="VmAccess")
+        vm_access = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.VmAccess, resource_name="VmAccess")
         vm_access.enable(
             protected_settings={
                 'username': username,

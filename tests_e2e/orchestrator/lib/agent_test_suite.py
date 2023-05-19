@@ -203,11 +203,25 @@ class AgentTestSuite(LisaTestSuite):
 
     #
     # Test suites within the same runbook may be executed concurrently, and setup needs to be done only once.
-    # We use this lock to allow only 1 thread to do the setup. Setup completion is marked using the 'completed'
+    # We use these locks to allow only 1 thread to do the setup. Setup completion is marked using the 'completed'
     # file: the thread doing the setup creates the file and threads that find that the file already exists
     # simply skip setup.
     #
+    _working_directory_lock = RLock()
     _setup_lock = RLock()
+
+    def _create_working_directory(self) -> None:
+        """
+        Creates the working directory for the test suite.
+        """
+        self._working_directory_lock.acquire()
+
+        try:
+            if not self.context.working_directory.exists():
+                log.info("Creating working directory: %s", self.context.working_directory)
+                self.context.working_directory.mkdir(parents=True)
+        finally:
+            self._working_directory_lock.release()
 
     def _setup(self) -> None:
         """
@@ -228,9 +242,6 @@ class AgentTestSuite(LisaTestSuite):
                 return
 
             self.context.lisa_log.info("Building test agent")
-            log.info("Creating working directory: %s", self.context.working_directory)
-            self.context.working_directory.mkdir(parents=True)
-
             self._build_agent_package()
 
             log.info("Completed setup, creating %s", completed)
@@ -407,6 +418,8 @@ class AgentTestSuite(LisaTestSuite):
                     test_suite_success = True
 
                     try:
+                        self._create_working_directory()
+
                         if not self.context.skip_setup:
                             self._setup()
 
