@@ -17,10 +17,14 @@
 # limitations under the License.
 #
 
+#
+# Updates waagent.conf with the specified setting and value and restarts the Agent.
+#
+
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-    echo "Usage: update-waagent_conf <setting> <value>"
+    echo "Usage: update-waagent-conf <setting> <value>"
     exit 1
 fi
 
