@@ -3,4 +3,5 @@ tests:
   - "agent_ext_workflow/tbd.py"
 images:
   - "endorsed"
-  - "endorsed-arm64"
+location:
+  - "southcentralus"
