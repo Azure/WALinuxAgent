@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 import importlib.util
+import re
 # E0401: Unable to import 'yaml' (import-error)
 import yaml  # pylint: disable=E0401
 
@@ -118,6 +119,9 @@ class AgentTestLoader(object):
         """
         return self.__images
 
+    # Matches a reference to a random subset of images within a set with an optional count: random(<image_set>, [<count>]), e.g. random(endorsed, 3), random(endorsed)
+    RANDOM_IMAGES_RE = re.compile(r"random\((?P<image_set>[^,]+)(\s*,\s*(?P<count>\d+))?\)")
+
     def _validate(self):
         """
         Performs some basic validations on the data loaded from the YAML description files
@@ -125,6 +129,9 @@ class AgentTestLoader(object):
         for suite in self.test_suites:
             # Validate that the images the suite must run on are in images.yml
             for image in suite.images:
+                match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
+                if match is not None:
+                    image = match.group('image_set')
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
 

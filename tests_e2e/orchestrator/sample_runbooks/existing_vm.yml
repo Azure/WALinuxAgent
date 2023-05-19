@@ -33,6 +33,7 @@ variable:
   #
   - name: cloud
     value: "AzureCloud"
+    is_case_visible: true
   - name: subscription_id
     value: ""
   - name: resource_group_name
@@ -88,9 +89,6 @@ variable:
     value: ""
   - name: c_shared_resource_group_location
     value: ""
-  - name: c_cloud
-    value: ""
-    is_case_visible: true
   - name: c_location
     value: ""
     is_case_visible: true
@@ -118,12 +116,9 @@ platform:
     admin_username: $(user)
     admin_private_key_file: $(identity_file)
     azure:
-#
-# TODO: Enable these parameters once LISA supports all Azure clouds
-#
-#      cloud: $(cloud)
-#      marketplace_image_information_location: $(c_marketplace_image_information_location)
-#      shared_resource_group_location: $(c_shared_resource_group_location)
+      cloud: $(cloud)
+      marketplace_image_information_location: $(c_marketplace_image_information_location)
+      shared_resource_group_location: $(c_shared_resource_group_location)
       resource_group_name: $(resource_group_name)
       deploy: false
       subscription_id: $(subscription_id)

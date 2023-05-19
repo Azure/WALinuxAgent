@@ -49,9 +49,10 @@ variable:
   #
   # The test suites to execute
   - name: test_suites
-    value: "agent_bvt"
+    value: "agent_bvt, no_outbound_connections"
   - name: cloud
     value: "AzureCloud"
+    is_case_visible: true
   - name: image
     value: ""
   - name: location
@@ -82,9 +83,6 @@ variable:
     value: ""
   - name: c_vm_size
     value: ""
-  - name: c_cloud
-    value: ""
-    is_case_visible: true
   - name: c_location
     value: ""
     is_case_visible: true
@@ -118,12 +116,9 @@ platform:
     keep_environment: $(keep_environment)
     azure:
       deploy: True
-#
-# TODO: Enable these parameters once LISA supports all Azure clouds
-#
-#      cloud: $(cloud)
-#      marketplace_image_information_location: $(c_marketplace_image_information_location)
-#      shared_resource_group_location: $(c_shared_resource_group_location)
+      cloud: $(cloud)
+      marketplace_image_information_location: $(c_marketplace_image_information_location)
+      shared_resource_group_location: $(c_shared_resource_group_location)
       subscription_id: $(subscription_id)
       wait_delete: false
       vm_tags: $(c_vm_tags)

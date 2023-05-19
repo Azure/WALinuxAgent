@@ -19,11 +19,8 @@ parameters:
     type: object
     default:
       - azuremanagement
-#
-# TODO: Enable these services connections once we create test pipelines for all Azure clouds
-#
-#      - azuremanagement.china
-#      - azuremanagement.government
+      - azuremanagement.china
+      - azuremanagement.government
 
 pool:
   vmImage: ubuntu-latest
