@@ -62,7 +62,7 @@ class ExtensionInstall(AgentTest):
         is_arm64: bool = ssh_client.get_architecture() == "aarch64"
 
         # create extension abstraction
-        dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher, VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1.5")
+        dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher, VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
         dcr_test_ext = VmExtension(
             self._context.vm,
             dcr_test_ext_id,
