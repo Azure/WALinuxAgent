@@ -28,7 +28,7 @@ from assertpy import assert_that, soft_assertions
 from typing import Callable, Dict
 
 from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.identifiers import VmExtensionIds
+from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.vm_extension import VmExtension
@@ -38,45 +38,51 @@ class ExtensionInstall(AgentTest):
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
-        test_cases = [
-            RunCommandBvt.TestCase(
-                VmExtension(self._context.vm, VmExtensionIds.RunCommand, resource_name="RunCommand"),
-                lambda s: {
-                    "script": base64.standard_b64encode(bytearray(s, 'utf-8')).decode('utf-8')
-                })
-        ]
+        is_arm64: bool = ssh_client.get_architecture() == "aarch64"
 
-        if ssh_client.get_architecture() == "aarch64":
-            log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.RunCommandHandler)
+        dcr_test_ext = VmExtension(
+            self._context.vm,
+            VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher, VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1.5"),
+            resource_name="GuestAgentDcrTest")
+
+        if is_arm64:
+            log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
-            test_cases.append(
-                RunCommandBvt.TestCase(
-                    VmExtension(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
-                    lambda s: {
-                        "source": {
-                            "script": s
-                        }
-                    }))
-
-        with soft_assertions():
-            for t in test_cases:
-                log.info("Test case: %s", t.extension)
-
-                unique = str(uuid.uuid4())
-                test_file = f"/tmp/waagent-test.{unique}"
-                script = f"echo '{unique}' > {test_file}"
-                log.info("Script to execute: %s", script)
-
-                t.extension.enable(settings=t.get_settings(script))
-                t.extension.assert_instance_view()
-
-                log.info("Verifying contents of the file created by the extension")
-                contents = ssh_client.run_command(f"cat {test_file}").rstrip()  # remove the \n
-                assert_that(contents).\
-                    described_as("Contents of the file created by the extension").\
-                    is_equal_to(unique)
-                log.info("The contents match")
+            log.info("Installing %s", dcr_test_ext)
+            #
+            # setting_name = "%s-%s, %s: %s" % (dcr_test_ext., version, self.COUNT_KEY_NAME, self.enable_count)
+            # dcr_test_ext.enable(
+            #     settings={
+            #         'name': ''
+            #     },
+            #     auto_upgrade_minor_version=False
+            # )
+            # custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
+            #
+            # custom_script_2_1 = VmExtension(
+            #     self._context.vm,
+            #     VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
+            #     resource_name="CustomScript")
+            #
+            # if is_arm64:
+            #     log.info("Installing %s", custom_script_2_1)
+            # else:
+            #     log.info("Updating %s to %s", custom_script_2_0, custom_script_2_1)
+            #
+            # message = f"Hello {uuid.uuid4()}!"
+            # custom_script_2_1.enable(
+            #     settings={
+            #         'commandToExecute': f"echo \'{message}\'"
+            #     }
+            # )
+            # custom_script_2_1.assert_instance_view(expected_version="2.1", expected_message=message)
+            #
+            # custom_script_2_1.delete()
+            #
+            # assert_that(custom_script_2_1.get_instance_view). \
+            #     described_as("Fetching the instance view should fail after removing the extension"). \
+            #     raises(ResourceNotFoundError)
 
 
 if __name__ == "__main__":
-    RunCommandBvt.run_from_command_line()
+    ExtensionInstall.run_from_command_line()
