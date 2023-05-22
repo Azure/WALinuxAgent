@@ -91,7 +91,7 @@ class VirtualMachineClient(AzureClient):
         """
         # location is a required by begin_create_or_update, always add it
         properties_copy = properties.copy()
-        properties_copy["location"] = self._identifier.vm.location
+        properties_copy["location"] = self._identifier.location
 
         log.info("Updating %s with properties: %s", self._identifier, properties_copy)
 
