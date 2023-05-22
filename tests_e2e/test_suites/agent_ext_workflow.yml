@@ -1,6 +1,6 @@
 name: "AgentExtWorkflow"
 tests:
-  - "agent_ext_workflow/tbd.py"
+  - "agent_ext_workflow/extension_install.py"
 images:
   - "endorsed"
 location:
