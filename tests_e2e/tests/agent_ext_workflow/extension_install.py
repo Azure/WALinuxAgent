@@ -40,17 +40,18 @@ class ExtensionInstall(AgentTest):
 
         is_arm64: bool = ssh_client.get_architecture() == "aarch64"
 
+        dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher, VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1.5")
         dcr_test_ext = VmExtension(
             self._context.vm,
-            VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher, VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1.5"),
+            dcr_test_ext_id,
             resource_name="GuestAgentDcrTest")
 
         if is_arm64:
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
             log.info("Installing %s", dcr_test_ext)
-            #
-            # setting_name = "%s-%s, %s: %s" % (dcr_test_ext., version, self.COUNT_KEY_NAME, self.enable_count)
+
+            # setting_name = "%s-%s, %s: %s" % (dcr_test_ext_id.type, version, self.COUNT_KEY_NAME, self.enable_count)
             # dcr_test_ext.enable(
             #     settings={
             #         'name': ''

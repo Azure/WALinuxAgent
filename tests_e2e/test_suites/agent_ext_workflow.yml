@@ -3,5 +3,3 @@ tests:
   - "agent_ext_workflow/extension_install.py"
 images:
   - "endorsed"
-location:
-  - "southcentralus"
