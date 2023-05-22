@@ -51,7 +51,7 @@ class ExtensionInstall(AgentTest):
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
-            self.message = settings
+            self.message = settings.get(self.NAME_KEY_NAME)
 
         def assert_instance_view(self):
             self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
