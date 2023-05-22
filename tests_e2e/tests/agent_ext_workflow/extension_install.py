@@ -51,7 +51,7 @@ class ExtensionInstall(AgentTest):
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
-            self.message = settings.get(self.NAME_KEY_NAME)
+            self.message = setting_name
 
         def assert_instance_view(self):
             self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
@@ -77,38 +77,7 @@ class ExtensionInstall(AgentTest):
             dcr_ext.modify_ext_settings_and_enable()
             dcr_ext.assert_instance_view()
 
-            # setting_name = "%s-%s, %s: %s" % (dcr_test_ext_id.type, version, self.COUNT_KEY_NAME, self.enable_count)
-            # dcr_test_ext.enable(
-            #     settings={
-            #         'name': ''
-            #     },
-            #     auto_upgrade_minor_version=False
-            # )
-            # custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
-            #
-            # custom_script_2_1 = VmExtension(
-            #     self._context.vm,
-            #     VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
-            #     resource_name="CustomScript")
-            #
-            # if is_arm64:
-            #     log.info("Installing %s", custom_script_2_1)
-            # else:
-            #     log.info("Updating %s to %s", custom_script_2_0, custom_script_2_1)
-            #
-            # message = f"Hello {uuid.uuid4()}!"
-            # custom_script_2_1.enable(
-            #     settings={
-            #         'commandToExecute': f"echo \'{message}\'"
-            #     }
-            # )
-            # custom_script_2_1.assert_instance_view(expected_version="2.1", expected_message=message)
-            #
-            # custom_script_2_1.delete()
-            #
-            # assert_that(custom_script_2_1.get_instance_view). \
-            #     described_as("Fetching the instance view should fail after removing the extension"). \
-            #     raises(ResourceNotFoundError)
+
 
 
 if __name__ == "__main__":
