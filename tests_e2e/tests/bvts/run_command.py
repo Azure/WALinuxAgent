@@ -35,12 +35,12 @@ from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.vm_extension import VmExtension
+from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
 class RunCommandBvt(AgentTest):
     class TestCase:
-        def __init__(self, extension: VmExtension, get_settings: Callable[[str], Dict[str, str]]):
+        def __init__(self, extension: VirtualMachineExtensionClient, get_settings: Callable[[str], Dict[str, str]]):
             self.extension = extension
             self.get_settings = get_settings
 
@@ -49,7 +49,7 @@ class RunCommandBvt(AgentTest):
 
         test_cases = [
             RunCommandBvt.TestCase(
-                VmExtension(self._context.vm, VmExtensionIds.RunCommand, resource_name="RunCommand"),
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommand, resource_name="RunCommand"),
                 lambda s: {
                     "script": base64.standard_b64encode(bytearray(s, 'utf-8')).decode('utf-8')
                 })
@@ -60,7 +60,7 @@ class RunCommandBvt(AgentTest):
         else:
             test_cases.append(
                 RunCommandBvt.TestCase(
-                    VmExtension(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
+                    VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler, resource_name="RunCommandHandler"),
                     lambda s: {
                         "source": {
                             "script": s

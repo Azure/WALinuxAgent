@@ -80,7 +80,7 @@ RUN \
     #                                                                                                            \
     # Install additional test dependencies                                                                       \
     #                                                                                                            \
-    python3 -m pip install distro msrestazure                                                                 && \
+    python3 -m pip install distro msrestazure pytz                                                            && \
     python3 -m pip install azure-mgmt-compute --upgrade                                                       && \
                                                                                                                  \
     #                                                                                                            \
