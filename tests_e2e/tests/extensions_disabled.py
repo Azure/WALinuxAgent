@@ -26,6 +26,7 @@ import datetime
 import pytz
 
 from assertpy import assert_that, fail
+from typing import Any, Dict, List
 
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
@@ -80,6 +81,11 @@ class ExtensionsDisabled(AgentTest):
             .described_as("The VM Agent should be have reported status even after extensions were disabled")\
             .is_greater_than(pytz.utc.localize(disabled_timestamp))
         log.info("The VM Agent reported status after extensions were disabled, as expected.")
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        return [
+            {'message': 'No handler status found for Microsoft.Azure.Extensions.CustomScript'},
+        ]
 
 
 if __name__ == "__main__":

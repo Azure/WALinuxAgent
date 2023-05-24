@@ -128,13 +128,14 @@ check-version() {
 }
 
 if check-version "$version"; then
-  printf "\nThe agent was installed successfully\n"
+  printf "The agent was installed successfully\n"
   exit_code=0
 else
-  printf "\nFailed to install agent.\n"
+  printf "ERROR: Failed to install agent.\n"
   exit_code=1
 fi
 
+printf "\n"
 $python "$waagent" --version
 printf "\n"
 service-status $service_name

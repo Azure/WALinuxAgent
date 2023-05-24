@@ -275,7 +275,7 @@ class AgentTestSuite(LisaTestSuite):
         Cleans up any leftovers from the test suite run. Currently just an empty placeholder for future use.
         """
 
-    def _setup_node(self) -> None:
+    def _setup_node(self, install_test_agent: bool) -> None:
         """
         Prepares the remote node for executing the test suite (installs tools and the test agent, etc)
         """
@@ -353,6 +353,8 @@ class AgentTestSuite(LisaTestSuite):
 
         if self.context.is_vhd:
             log.info("Using a VHD; will not install the Test Agent.")
+        elif not install_test_agent:
+            log.info("Will not install the Test Agent per the test suite configuration.")
         else:
             log.info("Installing the Test Agent on the test node")
             command = f"install-agent --package ~/tmp/{agent_package_path.name} --version {AGENT_VERSION}"
@@ -424,7 +426,8 @@ class AgentTestSuite(LisaTestSuite):
                             self._setup()
 
                         if not self.context.skip_setup:
-                            self._setup_node()
+                            install_test_agent = all([suite.install_test_agent for suite in self.context.test_suites])
+                            self._setup_node(install_test_agent)
 
                         # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
                         #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
