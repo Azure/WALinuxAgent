@@ -402,7 +402,7 @@ class AgentLog(object):
     #     Extension: 2021/03/30 19:45:31 Azure Monitoring Agent for Linux started to handle.
     #                2021/03/30 19:45:31 [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0] cwd is /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0
     #
-    _NEWER_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>\S+)\s(?P<prefix>(Daemon)|(ExtHandler)|(\[\S+\]))\s(?P<message>.*)')
+    _NEWER_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>\S+)\s(?P<prefix>(Daemon)|(ExtHandler)|(LogCollector)|(\[\S+\]))\s(?P<message>.*)')
     _2_2_46_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>Daemon|ExtHandler|\[\S+\])\s(?P<message>.*)')
     _OLDER_AGENT_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>\S*)\s(?P<message>.*)')
     _EXTENSION_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>)(?P<thread>)((?P<prefix>\[[^\]]+\])\s)?(?P<message>.*)')

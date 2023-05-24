@@ -77,18 +77,18 @@ fi
 python=$(get-agent-python)
 waagent=$(get-agent-bin-path)
 
-echo "============================================================"
+echo "========== Initial Status =========="
 echo "Service Name: $service_name"
 echo "Agent Path: $waagent"
 echo "Agent Version:"
 $python "$waagent" --version
 echo "Service Status:"
 service-status $service_name
-echo "============================================================"
 
 #
 # Install the package
 #
+echo "========== Installing Agent =========="
 echo "Installing $package as version $version..."
 unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
@@ -116,7 +116,8 @@ service-start $service_name
 echo "Verifying agent installation..."
 
 check-version() {
-  for i in {0..5}
+  # We need to wait for the extension handler to start, give it a couple of minutes
+  for i in {1..12}
   do
     if $python "$waagent" --version | grep -E "Goal state agent:\s+$version" > /dev/null; then
       return 0
@@ -131,11 +132,14 @@ if check-version "$version"; then
   printf "The agent was installed successfully\n"
   exit_code=0
 else
-  printf "ERROR: Failed to install agent.\n"
+  printf "************************************\n"
+  printf " * ERROR: Failed to install agent. *\n"
+  printf "************************************\n"
   exit_code=1
 fi
 
 printf "\n"
+echo "========== Final Status =========="
 $python "$waagent" --version
 printf "\n"
 service-status $service_name
