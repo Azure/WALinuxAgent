@@ -1,5 +1,5 @@
 #
-# Disables Agent provisioning using osProfile.provisionVMAgent and verifies that the agent is disabled
+# Disables Agent provisioning using osProfile.linuxConfiguration.provisionVMAgent and verifies that the agent is disabled
 # and extension operations are not allowed.
 #
 name: "AgentNotProvisioned"

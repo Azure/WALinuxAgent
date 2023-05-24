@@ -32,8 +32,8 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 class AgentNotProvisioned(AgentTest):
     """
-    When osProfile.provisionVMAgent is set to 'false', this test verifies that the agent is disabled
-    and that extension operations are not allowed.
+    When osProfile.linuxConfiguration.provisionVMAgent is set to 'false', this test verifies that
+    the agent is disabled and that extension operations are not allowed.
     """
     def run(self):
         #
