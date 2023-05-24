@@ -349,7 +349,7 @@ class AgentTestSuite(LisaTestSuite):
         #
         log.info('Installing tools on the test node')
         command = f"tar xf {target_path/tarball_path.name} && ~/bin/install-tools"
-        log.info("%s\n%s", command, self.context.ssh_client.run_command(command))
+        log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
 
         if self.context.is_vhd:
             log.info("Using a VHD; will not install the Test Agent.")
