@@ -54,12 +54,14 @@ class AgentNotProvisioned(AgentTest):
         #
         # Validate that the agent is not reporting status.
         #
+        log.info("Verifying that the Agent status is 'Not Ready' (i.e. it is not reporting status).")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
         assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
         assert_that(instance_view.vm_agent.statuses[0].code).described_as("The VM Agent should not be available").is_equal_to('ProvisioningState/Unavailable')
         assert_that(instance_view.vm_agent.statuses[0].display_status).described_as("The VM Agent should not ready").is_equal_to('Not Ready')
+        log.info("The Agent status is 'Not Ready'")
 
         #
         # Validate that extensions cannot be executed.

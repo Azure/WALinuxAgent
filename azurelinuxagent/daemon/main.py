@@ -105,9 +105,8 @@ class DaemonHandler(object):
         agent_disabled_file_path = conf.get_disable_agent_file_path()
         if os.path.exists(agent_disabled_file_path):
             import threading
-            logger.warn("Disabling the guest agent by sleeping forever; "
-                        "to re-enable, remove {0} and restart"
-                        .format(agent_disabled_file_path))
+            logger.warn("Disabling the guest agent by sleeping forever; to re-enable, remove {0} and restart".format(agent_disabled_file_path))
+            logger.warn("To enable VM extensions, also ensure that the VM's osProfile.allowExtensionOperations property is set to true.")
             self.running = False
             disable_event = threading.Event()
             disable_event.wait()
