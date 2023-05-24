@@ -22,6 +22,7 @@ from typing import Any
 
 def update_arm_template(template: Any) -> None:
     """
+    Customizes the ARM template to set osProfile.linuxConfiguration.provisionVMAgent to false.
     """
     #
     # NOTE: LISA's template uses this function to generate the value for osProfile.linuxConfiguration. The function is

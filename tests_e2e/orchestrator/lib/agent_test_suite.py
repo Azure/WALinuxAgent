@@ -426,11 +426,12 @@ class AgentTestSuite(LisaTestSuite):
                             self._setup()
 
                         if not self.context.skip_setup:
-                            install_test_agent = all([suite.install_test_agent for suite in self.context.test_suites])
+                            # pylint seems to think self.context.test_suites is not iterable. Suppressing this warning here and a few lines below, since
+                            # its type is List[AgentTestSuite].
+                            # E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+                            install_test_agent = all([suite.install_test_agent for suite in self.context.test_suites])   # pylint: disable=E1133
                             self._setup_node(install_test_agent)
 
-                        # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
-                        #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
                         for suite in self.context.test_suites:  # pylint: disable=E1133
                             log.info("Executing test suite %s", suite.name)
                             self.context.lisa_log.info("Executing Test Suite %s", suite.name)
