@@ -317,11 +317,14 @@ class AgentTestSuite(LisaTestSuite):
         tarball_path: Path = Path("/tmp/waagent.tar")
         log.info("Creating %s with the files need on the test node", tarball_path)
         log.info("Adding orchestrator/scripts")
-        run_command(['tar', 'cvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"orchestrator"/"scripts"), '.'])
-        # log.info("Adding tests/scripts")
-        # run_command(['tar', 'rvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"tests"/"scripts"), '.'])
+        command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"orchestrator"/"scripts", str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
+        log.info("Adding tests/scripts")
+        # command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"tests"/"scripts", str(tarball_path))
+        # log.info("%s\n%s", command, run_command(command, shell=True))
         log.info("Adding tests/lib")
-        run_command(['tar', 'rvf', str(tarball_path), '--transform=s,^,lib/,', '-C', str(self.context.test_source_directory.parent), '--exclude=__pycache__', 'tests_e2e/tests/lib'])
+        command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
         log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
 
         #

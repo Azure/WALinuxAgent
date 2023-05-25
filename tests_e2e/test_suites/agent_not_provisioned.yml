@@ -5,7 +5,7 @@
 name: "AgentNotProvisioned"
 tests:
   - "agent_not_provisioned/agent_not_provisioned.py"
-images: "ubuntu_2004"
+images: "random(endorsed)"
 template: "agent_not_provisioned/template.py"
 owns_vm: true
 install_test_agent: false
