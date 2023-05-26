@@ -209,6 +209,15 @@ class AgentLog(object):
                 'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00'
             },
             #
+            # Old daemons can produce this message
+            #
+            #    2023-05-24T18:04:27.467009Z WARNING Daemon Daemon Could not mount cgroups: [Errno 1] Operation not permitted: '/sys/fs/cgroup/cpu,cpuacct' -> '/sys/fs/cgroup/cpu'
+            #
+            {
+                'message': r"Could not mount cgroups: \[Errno 1\] Operation not permitted",
+                'if': lambda r: r.prefix == 'Daemon'
+            },
+            #
             # 2022-02-09T04:50:37.384810Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 2bed9b62-188e-4668-b1a8-87c35cfa4927 eTag: 7031887032544600793]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] b'{  "errorCode": "VMArtifactsProfileBlobContentNotFound",  "message": "VM artifacts profile blob has no content in it.",  "details": ""}'
             #
             # Fetching the goal state may catch the HostGAPlugin in the process of computing the vmSettings. This can be ignored, if the issue persist the log would include other errors as well.

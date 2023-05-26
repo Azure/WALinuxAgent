@@ -129,7 +129,7 @@ check-version() {
 }
 
 if check-version "$version"; then
-  printf "\nThe agent was installed successfully\n"
+  printf "The agent was installed successfully\n"
   exit_code=0
 else
   printf "************************************\n"
