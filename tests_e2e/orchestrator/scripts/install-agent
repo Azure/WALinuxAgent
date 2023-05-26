@@ -83,7 +83,22 @@ echo "Agent Path: $waagent"
 echo "Agent Version:"
 $python "$waagent" --version
 echo "Service Status:"
-service-status $service_name
+
+# Sometimes the service can take a while to start; give it a few minutes,
+started=false
+for i in {1..6}
+do
+  if service-status $service_name; then
+    started=true
+    break
+  fi
+  echo "Waiting for service to start..."
+  sleep 30
+done
+if [ $started == false ]; then
+  echo "Service failed to start."
+  exit 1
+fi
 
 #
 # Install the package

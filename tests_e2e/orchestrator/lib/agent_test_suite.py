@@ -433,7 +433,11 @@ class AgentTestSuite(LisaTestSuite):
                             # its type is List[AgentTestSuite].
                             # E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
                             install_test_agent = all([suite.install_test_agent for suite in self.context.test_suites])   # pylint: disable=E1133
-                            self._setup_node(install_test_agent)
+                            try:
+                                self._setup_node(install_test_agent)
+                            except:
+                                test_suite_success = False
+                                raise
 
                         for suite in self.context.test_suites:  # pylint: disable=E1133
                             log.info("Executing test suite %s", suite.name)
