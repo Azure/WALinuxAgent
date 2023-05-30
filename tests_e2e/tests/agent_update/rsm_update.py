@@ -35,7 +35,7 @@ from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_not_found
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.virtual_machine import VmMachine
+from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
 class RsmUpdateBvt(AgentTest):
@@ -99,14 +99,14 @@ class RsmUpdateBvt(AgentTest):
         log.info('Updating agent update required config \n%s', output)
 
     @staticmethod
-    def _verify_agent_update_flag_enabled(vm: VmMachine) -> bool:
-        result: VirtualMachine = vm.get()
+    def _verify_agent_update_flag_enabled(vm: VirtualMachineClient) -> bool:
+        result: VirtualMachine = vm.get_description()
         flag: bool = result.os_profile.linux_configuration.enable_vm_agent_platform_updates
         if flag is None:
             return False
         return flag
 
-    def _enable_agent_update_flag(self, vm: VmMachine) -> None:
+    def _enable_agent_update_flag(self, vm: VirtualMachineClient) -> None:
         osprofile = {
             "location": self._context.vm.location,  # location is required field
             "properties": {
@@ -117,14 +117,14 @@ class RsmUpdateBvt(AgentTest):
                 }
             }
         }
-        vm.create_or_update(osprofile)
+        vm.update(osprofile)
 
     def _mock_rsm_update(self, requested_version: str) -> None:
         """
         This method is to simulate the rsm request.
         First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
         """
-        vm: VmMachine = VmMachine(self._context.vm)
+        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         if not self._verify_agent_update_flag_enabled(vm):
             # enable the flag
             self._enable_agent_update_flag(vm)
