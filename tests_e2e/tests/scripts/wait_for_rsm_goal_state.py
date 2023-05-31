@@ -20,10 +20,11 @@
 #
 import argparse
 import sys
-import time
 
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
+from azurelinuxagent.common.protocol.wire import WireProtocol
+from tests_e2e.tests.lib.retry import retry_if_false
 
 
 def get_requested_version(gs: GoalState) -> str:
@@ -38,6 +39,16 @@ def get_requested_version(gs: GoalState) -> str:
     return ""
 
 
+def verify_rsm_requested_version(protocol: WireProtocol, expected_version: str) -> bool:
+    protocol.client.update_goal_state()
+    goal_state = protocol.client.get_goal_state()
+    requested_version = get_requested_version(goal_state)
+    if requested_version == expected_version:
+        return True
+    else:
+        return False
+
+
 try:
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', required=True)
@@ -47,17 +58,13 @@ try:
     protocol.client.reset_goal_state(
         goal_state_properties=GoalStateProperties.ExtensionsGoalState)
 
-    attempts = 5
-    while attempts > 0:
-        protocol.client.update_goal_state()
-        goal_state = protocol.client.get_goal_state()
-        requested_version = get_requested_version(goal_state)
-        if requested_version == args.version:
-            print("Latest GS includes rsm requested version : {0}.".format(requested_version))
-            break
-        print("RSM requested version GS not available yet to the agent, checking again in 30 secs.")
-        attempts -= 1
-        time.sleep(30)
+    found: bool = retry_if_false(lambda: verify_rsm_requested_version(protocol, args.version))
+
+    if not found:
+        raise Exception("Latest GS does not include rsm requested version : {0}.".format(args.version))
+    else:
+        print("Latest GS includes rsm requested version : {0}.".format(args.version))
+
 
 except Exception as e:
     print(f"{e}", file=sys.stderr)

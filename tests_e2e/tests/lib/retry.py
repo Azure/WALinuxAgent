@@ -59,7 +59,7 @@ def retry_ssh_run(operation: Callable[[], Any]) -> Any:
         time.sleep(30)
 
 
-def retry_if_not_found(operation: Callable[[], bool], attempts: int = 5) -> bool:
+def retry_if_false(operation: Callable[[], bool], attempts: int = 5, duration: int = 30) -> bool:
     """
     This method attempts the given operation retrying a few times
     (after a short delay)
@@ -74,6 +74,6 @@ def retry_if_not_found(operation: Callable[[], bool], attempts: int = 5) -> bool
             if attempts == 0:
                 raise
         if not found:
-            log.info("Current execution didn't find it, retrying in 30 secs.")
-        time.sleep(30)
+            log.info(f"Current execution didn't find it, retrying in {duration} secs.")
+        time.sleep(duration)
     return found

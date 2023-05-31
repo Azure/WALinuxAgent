@@ -21,19 +21,22 @@
 # BVT for the agent update scenario
 #
 # The test verifies agent update for rsm workflow. This test covers three scenarios downgrade, upgrade and no update.
-# For each scenario, we intiaite the rsm request with target version and then verify agent updated to that target version.
+    # For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
 #
 import json
 from typing import List, Dict, Any
 
 import requests
+from assertpy import assert_that
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute.models import VirtualMachine
+from msrestazure.azure_cloud import Cloud
 
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.retry import retry_if_not_found
+from tests_e2e.tests.lib.retry import retry_if_false
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
@@ -66,27 +69,39 @@ class RsmUpdateBvt(AgentTest):
         self._verify_agent_reported_supported_feature_flag()
 
         log.info("*******Verifying the Agent Downgrade scenario*******")
-        self._mock_rsm_update("1.3.0.0")
-        self._check_rsm_gs("1.3.0.0")
+        stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+        log.info("Current agent version running on the vm is \n%s", stdout)
+        downgrade_version: str = "1.3.0.0"
+        log.info("Attempting downgrade version %s", downgrade_version)
+        self._request_rsm_update(downgrade_version)
+        self._check_rsm_gs(downgrade_version)
         self._prepare_agent()
 
         # Verify downgrade scenario
-        self._verify_guest_agent_update("1.3.0.0")
+        self._verify_guest_agent_update(downgrade_version)
 
         # Verify upgrade scenario
         log.info("*******Verifying the Agent Upgrade scenario*******")
-        self._mock_rsm_update("1.3.1.0")
-        self._check_rsm_gs("1.3.1.0")
-        self._verify_guest_agent_update("1.3.1.0")
+        stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+        log.info("Current agent version running on the vm is \n%s", stdout)
+        upgrade_version: str = "1.3.1.0"
+        log.info("Attempting upgrade version %s", upgrade_version)
+        self._request_rsm_update(upgrade_version)
+        self._check_rsm_gs(upgrade_version)
+        self._verify_guest_agent_update(upgrade_version)
 
         # verify no version update. There is bug in CRP and will enable once it's fixed
-        # log.info("*******Verifying the no version update scenario*******")
-        # self._prepare_rsm_update("1.3.1.0")
-        # self._verify_guest_agent_update("1.3.1.0")
+        log.info("*******Verifying the no version update scenario*******")
+        stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+        log.info("Current agent version running on the vm is \n%s", stdout)
+        version: str = "1.3.1.0"
+        log.info("Attempting update version same as current version %s", upgrade_version)
+        self._request_rsm_update(version)
+        self._verify_guest_agent_update(version)
 
     def _check_rsm_gs(self, requested_version: str) -> None:
         # This checks if RSM GS available to the agent after we mock the rsm update request
-        output = self._ssh_client.run_command(f"rsm_goal_state.py --version {requested_version}", use_sudo=True)
+        output = self._ssh_client.run_command(f"wait_for_rsm_goal_state.py --version {requested_version}", use_sudo=True)
         log.info('Verifying requested version GS available to the agent \n%s', output)
 
     def _prepare_agent(self) -> None:
@@ -95,7 +110,7 @@ class RsmUpdateBvt(AgentTest):
         1) Changing daemon version since daemon has a hard check on agent version in order to update agent. It doesn't allow versions which are less than daemon version.
         2) Updating GAFamily type "Test" and GAUpdates flag to process agent updates on test versions.
         """
-        output = self._ssh_client.run_command("agent-update-config", use_sudo=True)
+        output = self._ssh_client.run_command("modify-agent-version-config", use_sudo=True)
         log.info('Updating agent update required config \n%s', output)
 
     @staticmethod
@@ -119,7 +134,7 @@ class RsmUpdateBvt(AgentTest):
         }
         vm.update(osprofile)
 
-    def _mock_rsm_update(self, requested_version: str) -> None:
+    def _request_rsm_update(self, requested_version: str) -> None:
         """
         This method is to simulate the rsm request.
         First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
@@ -127,17 +142,19 @@ class RsmUpdateBvt(AgentTest):
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         if not self._verify_agent_update_flag_enabled(vm):
             # enable the flag
+            log.info("Attempting vm update to set the enableVMAgentPlatformUpdates flag")
             self._enable_agent_update_flag(vm)
             log.info("Set the enableVMAgentPlatformUpdates flag to True")
         else:
             log.info("Already enableVMAgentPlatformUpdates flag set to True")
 
-        credential = DefaultAzureCredential()
-        token = credential.get_token("https://management.azure.com/.default")
+        cloud: Cloud = AZURE_CLOUDS[self._context.vm.cloud]
+        credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
+        token = credential.get_token(cloud.endpoints.resource_manager + "/.default")
         headers = {'Authorization': 'Bearer ' + token.token, 'Content-Type': 'application/json'}
         # Later this api call will be replaced by azure-python-sdk wrapper
-        # Todo: management endpoints are different for national clouds. we need to change this.
-        url = "https://management.azure.com/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Compute/virtualMachines/{2}/" \
+        base_url = cloud.endpoints.resource_manager
+        url = base_url + "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Compute/virtualMachines/{2}/" \
               "UpgradeVMAgent?api-version=2022-08-01".format(self._context.vm.subscription, self._context.vm.resource_group, self._context.vm.name)
         data = {
             "target": "Microsoft.OSTCLinuxAgent.Test",
@@ -164,7 +181,7 @@ class RsmUpdateBvt(AgentTest):
                                              "To debug verify if CRP has upgrade operation around that time and also check if agent log has any errors ".format(requested_version, stdout))
 
         log.info("Verifying agent updated to requested version")
-        retry_if_not_found(lambda: _check_agent_version(requested_version))
+        retry_if_false(lambda: _check_agent_version(requested_version))
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info(f"Verified agent updated to requested version. Current agent version running:\n {stdout}")
 
@@ -177,12 +194,10 @@ class RsmUpdateBvt(AgentTest):
             return True if found == "true" else False
 
         log.info("Verifying agent reported supported feature flag")
-        found: bool = retry_if_not_found(_check_agent_supports_versioning)
+        found: bool = retry_if_false(_check_agent_supports_versioning)
 
-        if not found:
-            raise Exception("Agent failed to report supported feature flag, so skipping agent update validations")
-        else:
-            log.info("Successfully verified agent reported supported feature flag")
+        assert_that(found).is_true().described_as("Agent failed to report supported feature flag, so skipping agent update validations")
+        log.info("Successfully verified agent reported supported feature flag")
 
 
 if __name__ == "__main__":
