@@ -24,9 +24,6 @@
 import base64
 import uuid
 
-from assertpy import assert_that, soft_assertions
-from typing import Callable, Dict
-
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
@@ -56,26 +53,30 @@ class ExtensionWorkflow(AgentTest):
         def assert_instance_view(self):
             self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
 
+    def extension_install(self):
+        # Create DcrTestExtension
+        dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
+                                                VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
+        dcr_test_ext_client = VirtualMachineExtensionClient(
+            self._context.vm,
+            dcr_test_ext_id,
+            resource_name="GuestAgentDcr-TestInstall")
+        dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client)
+
+        log.info("Installing %s", dcr_test_ext_client)
+
+        dcr_ext.modify_ext_settings_and_enable()
+        dcr_ext.assert_instance_view()
+
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
         is_arm64: bool = ssh_client.get_architecture() == "aarch64"
 
-        # create extension abstraction
-        dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher, VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
-        dcr_test_ext = VirtualMachineExtensionClient(
-            self._context.vm,
-            dcr_test_ext_id,
-            resource_name="GuestAgentDcr-TestInstall")
-        dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext)
-
         if is_arm64:
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
-            log.info("Installing %s", dcr_test_ext)
-
-            dcr_ext.modify_ext_settings_and_enable()
-            dcr_ext.assert_instance_view()
+            self.extension_install()
 
 
 
