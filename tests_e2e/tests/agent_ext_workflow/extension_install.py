@@ -34,7 +34,7 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class ExtensionInstall(AgentTest):
+class ExtensionWorkflow(AgentTest):
     class GuestAgentDcrTestExtension:
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
@@ -67,7 +67,7 @@ class ExtensionInstall(AgentTest):
             self._context.vm,
             dcr_test_ext_id,
             resource_name="GuestAgentDcr-TestInstall")
-        dcr_ext = ExtensionInstall.GuestAgentDcrTestExtension(extension=dcr_test_ext)
+        dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext)
 
         if is_arm64:
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
@@ -81,4 +81,4 @@ class ExtensionInstall(AgentTest):
 
 
 if __name__ == "__main__":
-    ExtensionInstall.run_from_command_line()
+    ExtensionWorkflow.run_from_command_line()
