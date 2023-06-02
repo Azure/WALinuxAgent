@@ -31,7 +31,7 @@ from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.vm_extension import VmExtension
+from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
 class ExtensionInstall(AgentTest):
@@ -39,7 +39,7 @@ class ExtensionInstall(AgentTest):
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
 
-        def __init__(self, extension: VmExtension):
+        def __init__(self, extension: VirtualMachineExtensionClient):
             self.extension = extension
             self.name = "GuestAgentDcr-TestInstall"
             self.version = "1.1.5"
@@ -63,7 +63,7 @@ class ExtensionInstall(AgentTest):
 
         # create extension abstraction
         dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher, VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
-        dcr_test_ext = VmExtension(
+        dcr_test_ext = VirtualMachineExtensionClient(
             self._context.vm,
             dcr_test_ext_id,
             resource_name="GuestAgentDcr-TestInstall")
