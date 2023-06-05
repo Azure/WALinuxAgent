@@ -244,7 +244,7 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update install enable --final-ops disable update uninstall install enable"
 
             dcr_ext_1_1.assert_scenario('assert-operation-sequence.py', test_args, command_args)
-            dcr_ext.extension.delete()
+            dcr_ext_1_1.extension.delete()
 
             log.info("*******Verifying the extension update without install scenario*******")
 
@@ -288,7 +288,6 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update enable --final-ops disable update uninstall enable"
 
             dcr_ext_1_1.assert_scenario('assert-operation-sequence.py', test_args, command_args)
-
 
 
 if __name__ == "__main__":
