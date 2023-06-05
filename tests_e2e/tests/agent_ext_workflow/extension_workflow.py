@@ -84,7 +84,9 @@ class ExtensionWorkflow(AgentTest):
 
         def restart_agent_and_test_status(self, test_args, ssh_client):
             # Restarting agent should just run enable again and rerun the same settings
-            self.execute_assert('restart_agent.py', [], ssh_client)
+            # self.execute_assert('restart_agent.py', [], ssh_client)
+            output = ssh_client.run_command("agent-service restart")
+            log.info("Restart completed:\n%s", output)
 
             for restart_args in test_args['restart_agent_test_args']:
                 self.execute_assert('assert-operation-sequence.py', restart_args, ssh_client)
