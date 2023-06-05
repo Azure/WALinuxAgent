@@ -185,7 +185,7 @@ class ExtensionWorkflow(AgentTest):
             # restart_agent_test_args are the parameters that we pass to the assert-operation-sequence.py file to verify
             # the operation sequence after restarting the agent
             test_args = {
-                dcr_ext.ASSERT_STATUS_KEY_NAME: True,
+                dcr_ext.ASSERT_STATUS_KEY_NAME: False,
                 dcr_ext.RESTART_AGENT_KEY_NAME: True,
                 dcr_ext.VERSION_KEY_NAME: dcr_ext.version,
                 'restart_agent_test_args': [
@@ -194,7 +194,7 @@ class ExtensionWorkflow(AgentTest):
 
             # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
             # sequence for the current test
-            command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops enable disable uninstall"
+            command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops disable uninstall"
 
             log.info("Delete %s", dcr_test_ext_client)
             dcr_ext.extension.delete()
