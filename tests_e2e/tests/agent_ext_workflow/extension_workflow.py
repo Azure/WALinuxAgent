@@ -84,7 +84,6 @@ class ExtensionWorkflow(AgentTest):
 
         def restart_agent_and_test_status(self, test_args):
             # Restarting agent should just run enable again and rerun the same settings
-            # self.execute_assert('restart_agent.py', [], ssh_client)
             output = self.ssh_client.run_command("agent-service restart", use_sudo=True)
             log.info("Restart completed:\n%s", output)
 
@@ -123,11 +122,11 @@ class ExtensionWorkflow(AgentTest):
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
             # Create DcrTestExtension
-            dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
+            dcr_test_ext_id_1_1 = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
                                                     VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
             dcr_test_ext_client = VirtualMachineExtensionClient(
                 self._context.vm,
-                dcr_test_ext_id,
+                dcr_test_ext_id_1_1,
                 resource_name="GuestAgentDcr-TestInstall")
             dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client)
 
@@ -197,8 +196,42 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops disable uninstall"
 
             log.info("Delete %s", dcr_test_ext_client)
+            # TODO: Add polling for this async operation?
             dcr_ext.extension.delete()
             dcr_ext.assert_scenario('assert-operation-sequence.py', test_args, command_args)
+
+            log.info("*******Verifying the extension update with install scenario*******")
+
+            # Record the time we start the test
+            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            # Create DcrTestExtension with version 1.2
+            dcr_test_ext_id_1_2 = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
+                                                    VmExtensionIds.GuestAgentDcrTestExtension.type, "1.2")
+            dcr_test_ext_client_1_1 = VirtualMachineExtensionClient(
+                self._context.vm,
+                dcr_test_ext_id_1_1,
+                resource_name="GuestAgentDcr-TestInstall")
+            dcr_test_ext_client_1_2 = VirtualMachineExtensionClient(
+                self._context.vm,
+                dcr_test_ext_id_1_2,
+                resource_name="GuestAgentDcr-TestInstall")
+
+            # These two should be same object
+            # After asserting 1.1, update extension object + version in GuestAgentDcrTestExtension before asserting 1.2
+            dcr_ext_1_1 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client)
+
+            dcr_ext_1_2 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client_1_2, ssh_client=self._ssh_client)
+
+            log.info("Installing %s, version %s", dcr_test_ext_client, "1.1.5")
+            dcr_ext_1_1.modify_ext_settings_and_enable()
+            dcr_ext_1_1.assert_instance_view()
+
+            dcr_ext_1_1.extension = dcr_test_ext_client_1_2
+            dcr_ext_1_1.version = "1.2.0"
+            log.info("Installing %s, version %s", dcr_test_ext_client, "1.2.0")
+            dcr_ext_1_1.modify_ext_settings_and_enable()
+            dcr_ext_1_1.assert_instance_view()
 
 
 if __name__ == "__main__":
