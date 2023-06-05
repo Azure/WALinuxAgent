@@ -25,7 +25,10 @@ import base64
 import uuid
 from datetime import datetime
 
+from assertpy import soft_assertions, assert_that
+
 from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -33,6 +36,13 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 
 class ExtensionWorkflow(AgentTest):
+    def __init__(self, context: AgentTestContext):
+        super().__init__(context)
+        self._ssh_client = SshClient(
+            ip_address=self._context.vm_ip_address,
+            username=self._context.username,
+            private_key_file=self._context.private_key_file)
+
     class GuestAgentDcrTestExtension:
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
@@ -65,13 +75,23 @@ class ExtensionWorkflow(AgentTest):
             #                         % (status_message, data))
             # return True
 
+        def execute_assert(self, file_name, args):
+            log.info("Asserting %s %s ...", file_name, ' '.join(args))
+
+            result = self._ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
+
+            self.logger.info("%s == %s", file_name, result)
+
+            with soft_assertions():
+                assert_that(result).described_as(f"Assertion for file '%s' with args: %s" % (file_name, args)).is_true()
+
         def assert_scenario(self, file_name, test_args, command_args):
             # First test the status blob (that we get by using the Azure SDK)
             if self.ASSERT_STATUS_KEY_NAME in test_args and test_args[self.ASSERT_STATUS_KEY_NAME]:
                 self.assert_instance_view()
 
             # Then test the operation sequence (by checking the operations.log file in the VM)
-            # self.execute_assert(file_name, command_args)
+            self.execute_assert(file_name, command_args)
 
             # Then restart the agent and test the status again if enabled (by checking the operations.log file in the VM)
             #if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
