@@ -23,6 +23,7 @@
 
 import base64
 import uuid
+from datetime import datetime
 
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
@@ -35,6 +36,9 @@ class ExtensionWorkflow(AgentTest):
     class GuestAgentDcrTestExtension:
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
+        VERSION_KEY_NAME = "version"
+        ASSERT_STATUS_KEY_NAME = "assert_status"
+        RESTART_AGENT_KEY_NAME = "restart_agent"
 
         def __init__(self, extension: VirtualMachineExtensionClient):
             self.extension = extension
@@ -50,10 +54,42 @@ class ExtensionWorkflow(AgentTest):
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
             self.message = setting_name
 
-        def assert_instance_view(self):
-            self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
+        def assert_instance_view(self, assert_function=None):
+            self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message, assert_function=assert_function)
+
+        def assert_extension_status(self):
+            return
+            # if data is not None:
+            #     if "{0}: {1}".format(self.DATA_KEY_NAME, data) not in status_message:
+            #         raise Exception("Data did not match in status message: %s!\nExpected Data: %s"
+            #                         % (status_message, data))
+            # return True
+
+        def assert_scenario(self, file_name, test_args, command_args):
+            # First test the status blob (that we get by using the Azure SDK)
+            if self.ASSERT_STATUS_KEY_NAME in test_args and test_args[self.ASSERT_STATUS_KEY_NAME]:
+                self.assert_instance_view()
+
+            # Then test the operation sequence (by checking the operations.log file in the VM)
+            # self.execute_assert(file_name, command_args)
+
+            # Then restart the agent and test the status again if enabled (by checking the operations.log file in the VM)
+            #if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
+                #self.restart_agent_and_test_status(test_args)
+
+            return True
+
+        def assert_extension_status(self, test_args):
+            # Get status from the SDK
+            ext = self.compute_manager.get_vm_extension(vm_name=self.vm_name, ext_name=self.ext_name,
+                                                        with_instance_view=True)
+            return self.assert_stdout(logger=self.logger, ext=ext, version=test_args[self.VERSION_KEY_NAME],
+                                      data=test_args[self.DATA_KEY_NAME] if self.DATA_KEY_NAME in test_args else None)
 
     def extension_install(self):
+        # Record the time we start the test
+        start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
         # Create DcrTestExtension
         dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
                                                 VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
@@ -67,6 +103,28 @@ class ExtensionWorkflow(AgentTest):
 
         dcr_ext.modify_ext_settings_and_enable()
         dcr_ext.assert_instance_view()
+
+        # Test arguments specify the specific arguments for this test
+        # restart_agent_test_args are the parameters that we pass to the assert-operation-sequence.py file to verify
+        # the operation sequence after restarting the agent
+        test_args = {
+            dcr_ext.ASSERT_STATUS_KEY_NAME: True,
+            dcr_ext.RESTART_AGENT_KEY_NAME: True,
+            dcr_ext.VERSION_KEY_NAME: dcr_ext.version,
+            'restart_agent_test_args': [['--start-time', start_time,
+                                         'normal_ops_sequence',
+                                         '--version', dcr_ext.version,
+                                         '--ops', 'install', 'enable', 'enable']]
+        }
+
+        # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
+        # sequence for the current test
+        command_args = ['--start-time', start_time,
+                        'normal_ops_sequence', '--version', dcr_ext.version,
+                        '--ops', 'install', 'enable']
+
+        dcr_ext.assert_scenario('assert-operation-sequence.py', test_args, command_args)
+
 
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
