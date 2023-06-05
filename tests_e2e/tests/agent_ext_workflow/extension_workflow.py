@@ -76,7 +76,7 @@ class ExtensionWorkflow(AgentTest):
         def execute_assert(self, file_name, args, ssh_client):
             log.info("Asserting %s %s ...", file_name, ' '.join(args))
 
-            result = ssh_client.run_command(f"chmod +700 {file_name} {args}", use_sudo=True)
+            result = ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
 
             with soft_assertions():
                 assert_that(result).described_as(f"Assertion for file '%s' with args: %s" % (file_name, args)).is_true()
