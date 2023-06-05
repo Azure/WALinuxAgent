@@ -36,6 +36,13 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 
 class ExtensionWorkflow(AgentTest):
+    def __init__(self, context: AgentTestContext):
+        super().__init__(context)
+        self._ssh_client = SshClient(
+            ip_address=self._context.vm_ip_address,
+            username=self._context.username,
+            private_key_file=self._context.private_key_file)
+
     class GuestAgentDcrTestExtension:
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
@@ -76,17 +83,17 @@ class ExtensionWorkflow(AgentTest):
             with soft_assertions():
                 assert_that(result).described_as(f"Assertion for file '%s' with args: %s" % (file_name, args)).is_true()
 
-        # def restart_agent_and_test_status(self, test_args):
-        #     # Restarting agent should just run enable again and rerun the same settings
-        #     self.execute_assert('restart_agent.py', [])
-        #
-        #     for restart_args in test_args['restart_agent_test_args']:
-        #         self.execute_assert('assert-operation-sequence.py', restart_args)
-        #
-        #     if test_args['assert_status']:
-        #         self.assert_extension_status(test_args)
-        #
-        #     return True
+        def restart_agent_and_test_status(self, test_args, ssh_client):
+            # Restarting agent should just run enable again and rerun the same settings
+            self.execute_assert('restart_agent.py', [])
+
+            for restart_args in test_args['restart_agent_test_args']:
+                self.execute_assert('assert-operation-sequence.py', restart_args, ssh_client)
+
+            if test_args['assert_status']:
+                self.assert_instance_view()
+
+            return True
 
         def assert_scenario(self, file_name, test_args, command_args, ssh_client):
             # First test the status blob (that we get by using the Azure SDK)
@@ -98,7 +105,7 @@ class ExtensionWorkflow(AgentTest):
 
             # Then restart the agent and test the status again if enabled (by checking the operations.log file in the VM)
             # if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
-            #     self.restart_agent_and_test_status(test_args)
+            #     self.restart_agent_and_test_status(test_args, ssh_client)
 
             return True
 
@@ -150,14 +157,12 @@ class ExtensionWorkflow(AgentTest):
 
 
     def run(self):
-        ssh_client: SshClient = self._context.create_ssh_client()
-
-        is_arm64: bool = ssh_client.get_architecture() == "aarch64"
+        is_arm64: bool = self._ssh_client.get_architecture() == "aarch64"
 
         if is_arm64:
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
-            self.extension_install(ssh_client)
+            self.extension_install(self._ssh_client)
 
 
 
