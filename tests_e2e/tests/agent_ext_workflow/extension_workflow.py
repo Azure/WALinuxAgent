@@ -21,11 +21,8 @@
 # BVT for extension install.
 #
 
-import base64
-import uuid
-from datetime import datetime
-
 from assertpy import soft_assertions, assert_that
+from datetime import datetime
 
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
@@ -65,6 +62,7 @@ class ExtensionWorkflow(AgentTest):
             self.message = setting_name
 
         def assert_instance_view(self, assert_function=None):
+            log.info("Assert instance view has expected message for test extension")
             self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message, assert_function=assert_function)
 
         def assert_extension_status(self):
@@ -78,7 +76,7 @@ class ExtensionWorkflow(AgentTest):
         def execute_assert(self, file_name, args, ssh_client):
             log.info("Asserting %s %s ...", file_name, ' '.join(args))
 
-            result = ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
+            result = ssh_client.run_command(f"chmod +700 {file_name} {args}", use_sudo=True)
 
             with soft_assertions():
                 assert_that(result).described_as(f"Assertion for file '%s' with args: %s" % (file_name, args)).is_true()
@@ -98,25 +96,21 @@ class ExtensionWorkflow(AgentTest):
         def assert_scenario(self, file_name, test_args, command_args, ssh_client):
             # First test the status blob (that we get by using the Azure SDK)
             if self.ASSERT_STATUS_KEY_NAME in test_args and test_args[self.ASSERT_STATUS_KEY_NAME]:
+                log.info("Assert instance view has expected message for test extension")
                 self.assert_instance_view()
 
             # Then test the operation sequence (by checking the operations.log file in the VM)
+            log.info("Assert operations.log has the expected operation sequence for test extension")
             self.execute_assert(file_name, command_args, ssh_client)
 
             # Then restart the agent and test the status again if enabled (by checking the operations.log file in the VM)
-            # if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
-            #     self.restart_agent_and_test_status(test_args, ssh_client)
-
-            return True
-
-        def assert_extension_status(self, test_args):
-            # Get status from the SDK
-            ext = self.compute_manager.get_vm_extension(vm_name=self.vm_name, ext_name=self.ext_name,
-                                                        with_instance_view=True)
-            return self.assert_stdout(logger=self.logger, ext=ext, version=test_args[self.VERSION_KEY_NAME],
-                                      data=test_args[self.DATA_KEY_NAME] if self.DATA_KEY_NAME in test_args else None)
+            if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
+                log.info("Restart the agent and assert operations.log has the expected operation sequence for test extension")
+                self.restart_agent_and_test_status(test_args, ssh_client)
 
     def extension_install(self, ssh_client: SshClient):
+        log.info("*******Verifying the extension install scenario*******")
+
         # Record the time we start the test
         start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -132,7 +126,46 @@ class ExtensionWorkflow(AgentTest):
         log.info("Installing %s", dcr_test_ext_client)
 
         dcr_ext.modify_ext_settings_and_enable()
-        dcr_ext.assert_instance_view()
+
+        # Test arguments specify the specific arguments for this test
+        # restart_agent_test_args are the parameters that we pass to the assert-operation-sequence.py file to verify
+        # the operation sequence after restarting the agent
+        test_args = {
+            dcr_ext.ASSERT_STATUS_KEY_NAME: True,
+            dcr_ext.RESTART_AGENT_KEY_NAME: True,
+            dcr_ext.VERSION_KEY_NAME: dcr_ext.version,
+            'restart_agent_test_args': [['--start-time', start_time,
+                                         'normal_ops_sequence',
+                                         '--version', dcr_ext.version,
+                                         '--ops', 'install', 'enable', 'enable']]
+        }
+
+        # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
+        # sequence for the current test
+        command_args = ['--start-time', start_time,
+                        'normal_ops_sequence', '--version', dcr_ext.version,
+                        '--ops', 'install', 'enable']
+
+        dcr_ext.assert_scenario('assert-operation-sequence.py', test_args, command_args, ssh_client)
+
+    def extension_enable(self, ssh_client: SshClient):
+        log.info("*******Verifying the extension enable scenario*******")
+
+        # Record the time we start the test
+        start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Create DcrTestExtension
+        dcr_test_ext_id = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
+                                                VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
+        dcr_test_ext_client = VirtualMachineExtensionClient(
+            self._context.vm,
+            dcr_test_ext_id,
+            resource_name="GuestAgentDcr-TestInstall")
+        dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client)
+
+        log.info("Installing %s", dcr_test_ext_client)
+
+        dcr_ext.modify_ext_settings_and_enable()
 
         # Test arguments specify the specific arguments for this test
         # restart_agent_test_args are the parameters that we pass to the assert-operation-sequence.py file to verify
@@ -163,6 +196,7 @@ class ExtensionWorkflow(AgentTest):
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
             self.extension_install(self._ssh_client)
+            # self.extension_enable(self._ssh_client)
 
 
 
