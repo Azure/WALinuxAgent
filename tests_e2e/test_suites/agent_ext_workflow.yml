@@ -1,6 +1,6 @@
 name: "AgentExtWorkflow"
 tests:
-  - "agent_ext_workflow/extension_install.py"
+  - "agent_ext_workflow/extension_workflow.py"
 images:
   - "centos_79"
   - "suse_12"
