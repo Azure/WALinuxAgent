@@ -80,10 +80,20 @@ class ExtensionWorkflow(AgentTest):
 
             result = self._ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
 
-            self.logger.info("%s == %s", file_name, result)
-
             with soft_assertions():
                 assert_that(result).described_as(f"Assertion for file '%s' with args: %s" % (file_name, args)).is_true()
+
+        # def restart_agent_and_test_status(self, test_args):
+        #     # Restarting agent should just run enable again and rerun the same settings
+        #     self.execute_assert('restart_agent.py', [])
+        #
+        #     for restart_args in test_args['restart_agent_test_args']:
+        #         self.execute_assert('assert-operation-sequence.py', restart_args)
+        #
+        #     if test_args['assert_status']:
+        #         self.assert_extension_status(test_args)
+        #
+        #     return True
 
         def assert_scenario(self, file_name, test_args, command_args):
             # First test the status blob (that we get by using the Azure SDK)
@@ -94,8 +104,8 @@ class ExtensionWorkflow(AgentTest):
             self.execute_assert(file_name, command_args)
 
             # Then restart the agent and test the status again if enabled (by checking the operations.log file in the VM)
-            #if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
-                #self.restart_agent_and_test_status(test_args)
+            # if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
+            #     self.restart_agent_and_test_status(test_args)
 
             return True
 
