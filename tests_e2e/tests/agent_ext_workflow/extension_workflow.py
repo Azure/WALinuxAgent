@@ -220,11 +220,8 @@ class ExtensionWorkflow(AgentTest):
                 dcr_test_ext_id_1_2,
                 resource_name="GuestAgentDcr-TestInstall")
 
-            # These two should be same object
             # After asserting 1.1, update extension object + version in GuestAgentDcrTestExtension before asserting 1.2
             dcr_ext_1_1 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client)
-
-            dcr_ext_1_2 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client_1_2, ssh_client=self._ssh_client)
 
             log.info("Installing %s, version %s", dcr_test_ext_client, "1.1.5")
             dcr_ext_1_1.modify_ext_settings_and_enable()
@@ -236,7 +233,7 @@ class ExtensionWorkflow(AgentTest):
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
 
-            # Here I changed update to install in second set of restart agent test args -> check that this is allowed
+            # Here I removed update in second set of restart agent test args -> check that this is allowed
             test_args = {
                 dcr_ext_1_1.ASSERT_STATUS_KEY_NAME: True,
                 dcr_ext_1_1.RESTART_AGENT_KEY_NAME: True,
@@ -247,6 +244,51 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update install enable --final-ops disable update uninstall install enable"
 
             dcr_ext_1_1.assert_scenario('assert-operation-sequence.py', test_args, command_args)
+            dcr_ext.extension.delete()
+
+            log.info("*******Verifying the extension update without install scenario*******")
+
+            # Record the time we start the test
+            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            new_version_update_mode_with_install = "1.3.0"
+            old_version = "1.1.5"
+
+            # Create DcrTestExtension with version 1.2
+            dcr_test_ext_id_1_3 = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
+                                                        VmExtensionIds.GuestAgentDcrTestExtension.type, "1.3")
+            dcr_test_ext_client_1_3 = VirtualMachineExtensionClient(
+                self._context.vm,
+                dcr_test_ext_id_1_3,
+                resource_name="GuestAgentDcr-TestInstall")
+
+            # After asserting 1.1, update extension object + version in GuestAgentDcrTestExtension before asserting 1.2
+            dcr_ext_1_1 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client,
+                                                                       ssh_client=self._ssh_client)
+
+            log.info("Installing %s, version %s", dcr_test_ext_client, "1.1.5")
+            dcr_ext_1_1.modify_ext_settings_and_enable()
+            dcr_ext_1_1.assert_instance_view()
+
+            dcr_ext_1_1.extension = dcr_test_ext_client_1_3
+            dcr_ext_1_1.version = "1.3.0"
+            log.info("Installing %s, version %s", dcr_test_ext_client, "1.3.0")
+            dcr_ext_1_1.modify_ext_settings_and_enable()
+            dcr_ext_1_1.assert_instance_view()
+
+            # Here I removed update in second set of restart agent test args -> check that this is allowed
+            test_args = {
+                dcr_ext_1_1.ASSERT_STATUS_KEY_NAME: True,
+                dcr_ext_1_1.RESTART_AGENT_KEY_NAME: True,
+                dcr_ext_1_1.VERSION_KEY_NAME: new_version_update_mode_with_install,
+                'restart_agent_test_args': [
+                    f"--start-time {start_time} normal_ops_sequence --version {old_version} --ops disable uninstall",
+                    f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_with_install} --ops enable enable"]
+            }
+            command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update enable --final-ops disable update uninstall enable"
+
+            dcr_ext_1_1.assert_scenario('assert-operation-sequence.py', test_args, command_args)
+
 
 
 if __name__ == "__main__":
