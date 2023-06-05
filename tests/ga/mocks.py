@@ -19,7 +19,7 @@ import contextlib
 
 from mock import PropertyMock
 
-from azurelinuxagent.ga.agent_update import AgentUpdateHandler
+from azurelinuxagent.ga.agent_update_handler import AgentUpdateHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from azurelinuxagent.ga.update import UpdateHandler, get_update_handler

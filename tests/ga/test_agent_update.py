@@ -10,7 +10,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses
 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.version import CURRENT_VERSION
-from azurelinuxagent.ga.agent_update import get_agent_update_handler
+from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.guestagent import GAUpdateReportState
 from tests.ga.test_update import UpdateTestCase
 from tests.protocol.HttpRequestPredicates import HttpRequestPredicates

@@ -3,7 +3,7 @@
 
 import json
 
-from azurelinuxagent.ga.agent_update import get_agent_update_handler
+from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
 from azurelinuxagent.ga.update import get_update_handler
 from tests.ga.mocks import mock_update_handler

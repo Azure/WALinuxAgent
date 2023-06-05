@@ -12,7 +12,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
+from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT
 from azurelinuxagent.ga.guestagent import GuestAgent, GAUpdateReportState
 
 
@@ -47,9 +47,9 @@ class AgentUpdateHandler(object):
         self._protocol = protocol
         self._ga_family = conf.get_autoupdate_gafamily()
         self._autoupdate_enabled = conf.get_autoupdate_enabled()
-        self._gs_id = self._protocol.get_goal_state().extensions_goal_state.id
+        self._gs_id = "unknown"
         self._is_requested_version_update = True  # This is to track the current update type(requested version or self update)
-        self.persistent_data = AgentUpdateHandlerUpdateState()
+        self.update_state = AgentUpdateHandlerUpdateState()
 
     def __should_update_agent(self, requested_version):
         """
@@ -63,8 +63,8 @@ class AgentUpdateHandler(object):
         now = datetime.datetime.now()
 
         if self._is_requested_version_update:
-            if self.persistent_data.last_attempted_requested_version_update_time != datetime.datetime.min:
-                next_attempt_time = self.persistent_data.last_attempted_requested_version_update_time + datetime.timedelta(seconds=conf.get_autoupdate_frequency())
+            if self.update_state.last_attempted_requested_version_update_time != datetime.datetime.min:
+                next_attempt_time = self.update_state.last_attempted_requested_version_update_time + datetime.timedelta(seconds=conf.get_autoupdate_frequency())
             else:
                 next_attempt_time = now
 
@@ -76,9 +76,6 @@ class AgentUpdateHandler(object):
             next_hotfix_time, next_normal_time = self.__get_next_upgrade_times(now)
             upgrade_type = self.__get_agent_upgrade_type(requested_version)
 
-            if next_hotfix_time > now and next_normal_time > now:
-                return False
-
             if (upgrade_type == AgentUpgradeType.Hotfix and next_hotfix_time <= now) or (
                     upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
                 return True
@@ -87,10 +84,10 @@ class AgentUpdateHandler(object):
     def __update_last_attempt_update_times(self):
         now = datetime.datetime.now()
         if self._is_requested_version_update:
-            self.persistent_data.last_attempted_requested_version_update_time = now
+            self.update_state.last_attempted_requested_version_update_time = now
         else:
-            self.persistent_data.last_attempted_normal_update_time = now
-            self.persistent_data.last_attempted_hotfix_update_time = now
+            self.update_state.last_attempted_normal_update_time = now
+            self.update_state.last_attempted_hotfix_update_time = now
 
     @staticmethod
     def __get_agent_upgrade_type(requested_version):
@@ -109,14 +106,14 @@ class AgentUpdateHandler(object):
         def get_next_process_time(last_val, frequency):
             return now if last_val == datetime.datetime.min else last_val + datetime.timedelta(seconds=frequency)
 
-        next_hotfix_time = get_next_process_time(self.persistent_data.last_attempted_hotfix_update_time,
+        next_hotfix_time = get_next_process_time(self.update_state.last_attempted_hotfix_update_time,
                                                  conf.get_hotfix_upgrade_frequency())
-        next_normal_time = get_next_process_time(self.persistent_data.last_attempted_normal_update_time,
+        next_normal_time = get_next_process_time(self.update_state.last_attempted_normal_update_time,
                                                  conf.get_normal_upgrade_frequency())
 
         return next_hotfix_time, next_normal_time
 
-    def __get_agent_family_from_last_gs(self, goal_state):
+    def __get_agent_family_manifests(self, goal_state):
         """
         Get the agent_family from last GS for the given family
         Returns: first entry of Manifest
@@ -124,7 +121,17 @@ class AgentUpdateHandler(object):
         """
         family = self._ga_family
         agent_families = goal_state.extensions_goal_state.agent_families
-        agent_family_manifests = [m for m in agent_families if m.name == family and len(m.uris) > 0]
+        family_found = False
+        agent_family_manifests = []
+        for m in agent_families:
+            if m.name == family:
+                family_found = True
+                if len(m.uris) > 0:
+                    agent_family_manifests.append(m)
+
+        if not family_found:
+            raise Exception(u"Agent family: {0} not found in the goal state, skipping agent update".format(family))
+
         if len(agent_family_manifests) == 0:
             raise Exception(
                 u"No manifest links found for agent family: {0} for incarnation: {1}, skipping agent update".format(
@@ -135,7 +142,7 @@ class AgentUpdateHandler(object):
     def __get_requested_version(agent_family):
         """
         Get the requested version from agent family
-        Returns: Requested version if supported and available
+        Returns: Requested version if supported and available in the GS
                  None if requested version missing or GA versioning not enabled
         """
         if conf.get_enable_ga_versioning() and agent_family.is_requested_version_specified:
@@ -184,7 +191,6 @@ class AgentUpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
 
         known_versions = [agent.version for agent in known_agents]
-        known_versions.append(CURRENT_VERSION)
 
         for agent_path in glob.iglob(path):
             try:
@@ -200,8 +206,7 @@ class AgentUpdateHandler(object):
             except Exception as e:
                 logger.warn(u"Purging {0} raised exception: {1}", agent_path, ustr(e))
 
-    @staticmethod
-    def __proceed_with_update(requested_version):
+    def __proceed_with_update(self, requested_version):
         """
         If requested version is specified, upgrade/downgrade to the specified version.
         Raises: AgentUpgradeExitException
@@ -217,7 +222,7 @@ class AgentUpdateHandler(object):
                 current_agent = next(agent for agent in agents_on_disk if agent.version == CURRENT_VERSION)
                 msg = "Marking the agent {0} as bad version since a downgrade was requested in the GoalState, " \
                       "suggesting that we really don't want to execute any extensions using this version".format(CURRENT_VERSION)
-                logger.info(msg)
+                self.__log_event(LogLevel.INFO, msg)
                 current_agent.mark_failure(is_fatal=True, reason=msg)
             except StopIteration:
                 logger.warn(
@@ -239,25 +244,25 @@ class AgentUpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
-    def __log_event(self, level, msg_, success_=True):
+    def __log_event(self, level, msg, success_=True):
         if level == LogLevel.INFO:
-            logger.info(msg_)
-            add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg_, log_event=False)
+            logger.info(msg)
+            add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg, log_event=False)
         else:
-            msg_ += "[NOTE: Will not log the same error for the next 6 hours]"
+            msg += "[NOTE: Will not log the same error for the next 6 hours]"
             # Incarnation may change if we get new goal state that would make whole string unique every time. So comparing only the substring until Incarnation if Incarnation included in msg
             # Example msg "Unable to update Agent: No manifest links found for agent family: Prod for incarnation: incarnation_1, skipping agent update"
             now = datetime.datetime.now()
-            prefix_msg = msg_.split("incarnation", 1)[0]
-            prefix_last_warning_msg = self.persistent_data.last_warning.split("incarnation", 1)[0]
-            if prefix_msg != prefix_last_warning_msg or self.persistent_data.last_warning_time == datetime.datetime.min or now >= self.persistent_data.last_warning_time + datetime.timedelta(hours=6):
+            prefix_msg = msg.split("incarnation", 1)[0]
+            prefix_last_warning_msg = self.update_state.last_warning.split("incarnation", 1)[0]
+            if prefix_msg != prefix_last_warning_msg or self.update_state.last_warning_time == datetime.datetime.min or now >= self.update_state.last_warning_time + datetime.timedelta(hours=6):
                 if level == LogLevel.WARNING:
-                    logger.warn(msg_)
+                    logger.warn(msg)
                 elif level == LogLevel.ERROR:
-                    logger.error(msg_)
-                add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg_, log_event=False)
-                self.persistent_data.last_warning_time = now
-                self.persistent_data.last_warning = msg_
+                    logger.error(msg)
+                add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg, log_event=False)
+                self.update_state.last_warning_time = now
+                self.update_state.last_warning = msg
 
     def run(self, goal_state):
         try:
@@ -266,7 +271,7 @@ class AgentUpdateHandler(object):
                 return
 
             self._gs_id = goal_state.extensions_goal_state.id
-            agent_family = self.__get_agent_family_from_last_gs(goal_state)
+            agent_family = self.__get_agent_family_manifests(goal_state)
             requested_version = self.__get_requested_version(agent_family)
             agent_manifest = None  # This is to make sure fetch agent manifest once per update
 
@@ -293,9 +298,9 @@ class AgentUpdateHandler(object):
             if not self.__should_update_agent(requested_version):
                 return
 
-            msg_ = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
+            msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
                 self._gs_id, str(requested_version))
-            self.__log_event(LogLevel.INFO, msg_)
+            self.__log_event(LogLevel.INFO, msg)
 
             try:
                 agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
@@ -307,7 +312,7 @@ class AgentUpdateHandler(object):
                     return
 
                 # We delete the directory and the zip package from the filesystem except current version and target version
-                self.__purge_extra_agents_from_disk(known_agents=[agent])
+                self.__purge_extra_agents_from_disk(known_agents=[agent, CURRENT_AGENT])
                 self.__proceed_with_update(requested_version)
 
             finally:

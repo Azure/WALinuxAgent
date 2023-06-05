@@ -127,7 +127,6 @@ class WALAEventOperation:
     Update = "Update"
     VmSettings = "VmSettings"
     VmSettingsSummary = "VmSettingsSummary"
-    FeatureFlag = "FeatureFlag"
 
 
 SHOULD_ENCODE_MESSAGE_LEN = 80

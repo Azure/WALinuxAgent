@@ -53,7 +53,7 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT, AGENT_VERSION, \
     CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, get_lis_version, \
     has_logrotate, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, get_daemon_version
-from azurelinuxagent.ga.agent_update import get_agent_update_handler
+from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.collect_logs import get_collect_logs_handler, is_log_collection_allowed
 from azurelinuxagent.ga.collect_telemetry_events import get_collect_telemetry_events_handler
 from azurelinuxagent.ga.env import get_env_handler
@@ -150,9 +150,6 @@ class UpdateHandler(object):
 
         # VM Size is reported via the heartbeat, default it here.
         self._vm_size = None
-
-        # Flag is Used to log if GA supports versioning on agent start
-        self._agent_supports_versioning_logged = False
 
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
@@ -528,10 +525,9 @@ class UpdateHandler(object):
 
         # update self._goal_state
         if not self._try_update_goal_state(protocol):
+            agent_update_handler.run(self._goal_state)
             # status reporting should be done even when the goal state is not updated
-            agent_update_status = agent_update_handler.get_vmagent_update_status()
-            self._report_status(exthandlers_handler, agent_update_status)
-            self._log_agent_supports_versioning_or_not()
+            self._report_status(exthandlers_handler, agent_update_handler)
             return
 
         # check for agent updates
@@ -553,11 +549,7 @@ class UpdateHandler(object):
                 CGroupConfigurator.get_instance().check_cgroups(cgroup_metrics=[])
 
             # report status before processing the remote access, since that operation can take a long time
-            agent_update_status = agent_update_handler.get_vmagent_update_status()
-            self._report_status(exthandlers_handler, agent_update_status)
-
-            # Logging after agent reports supported feature flag so this msg in sync with report status
-            self._log_agent_supports_versioning_or_not()
+            self._report_status(exthandlers_handler, agent_update_handler)
 
             if self._processing_new_incarnation():
                 remote_access_handler.run()
@@ -586,11 +578,11 @@ class UpdateHandler(object):
         except Exception as exception:
             logger.warn("Error removing legacy history files: {0}", ustr(exception))
 
-    def _report_status(self, exthandlers_handler, vm_agent_update_status):
+    def _report_status(self, exthandlers_handler, agent_update_handler):
         # report_ext_handlers_status does its own error handling and returns None if an error occurred
         vm_status = exthandlers_handler.report_ext_handlers_status(
             goal_state_changed=self._processing_new_extensions_goal_state(),
-            vm_agent_update_status=vm_agent_update_status, vm_agent_supports_fast_track=self._supports_fast_track)
+            vm_agent_update_status=agent_update_handler.get_vmagent_update_status(), vm_agent_supports_fast_track=self._supports_fast_track)
 
         if vm_status is not None:
             self._report_extensions_summary(vm_status)
@@ -621,24 +613,6 @@ class UpdateHandler(object):
                 msg = u"Error logging the goal state summary: {0}".format(textutil.format_exception(error))
                 logger.warn(msg)
                 add_event(op=WALAEventOperation.GoalState, is_success=False, message=msg)
-
-    def _log_agent_supports_versioning_or_not(self):
-        def _log_event(msg):
-            logger.info(msg)
-            add_event(AGENT_NAME, op=WALAEventOperation.FeatureFlag, message=msg)
-        if not self._agent_supports_versioning_logged:
-            supports_ga_versioning = False
-            for _, feature in get_agent_supported_features_list_for_crp().items():
-                if feature.name == SupportedFeatureNames.GAVersioningGovernance:
-                    supports_ga_versioning = True
-                    break
-            if supports_ga_versioning:
-                msg = "Agent : {0} supports GA Versioning".format(CURRENT_VERSION)
-                _log_event(msg)
-            else:
-                msg = "Agent : {0} doesn't support GA Versioning".format(CURRENT_VERSION)
-                _log_event(msg)
-            self._agent_supports_versioning_logged = True
 
     def _on_initial_goal_state_completed(self, extensions_summary):
         fileutil.write_file(self._initial_goal_state_file_path(), ustr(extensions_summary))
@@ -730,6 +704,16 @@ class UpdateHandler(object):
                 if not value:
                     log_event("{0} is set to False, not processing the operation".format(name))
 
+            def log_if_agent_versioning_feature_disabled():
+                supports_ga_versioning = False
+                for _, feature in get_agent_supported_features_list_for_crp().items():
+                    if feature.name == SupportedFeatureNames.GAVersioningGovernance:
+                        supports_ga_versioning = True
+                        break
+                if not supports_ga_versioning:
+                    msg = "Agent : {0} doesn't support GA Versioning".format(CURRENT_VERSION)
+                    log_event(msg)
+
             log_if_int_changed_from_default("Extensions.GoalStatePeriod", conf.get_goal_state_period(),
                 "Changing this value affects how often extensions are processed and status for the VM is reported. Too small a value may report the VM as unresponsive")
             log_if_int_changed_from_default("Extensions.InitialGoalStatePeriod", conf.get_initial_goal_state_period(),
@@ -749,6 +733,8 @@ class UpdateHandler(object):
 
             if conf.get_lib_dir() != "/var/lib/waagent":
                 log_event("lib dir is in an unexpected location: {0}".format(conf.get_lib_dir()))
+
+            log_if_agent_versioning_feature_disabled()
 
         except Exception as e:
             logger.warn("Failed to log changes in configuration: {0}", ustr(e))
