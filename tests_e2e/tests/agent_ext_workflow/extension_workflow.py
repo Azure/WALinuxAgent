@@ -135,17 +135,12 @@ class ExtensionWorkflow(AgentTest):
             dcr_ext.ASSERT_STATUS_KEY_NAME: True,
             dcr_ext.RESTART_AGENT_KEY_NAME: True,
             dcr_ext.VERSION_KEY_NAME: dcr_ext.version,
-            'restart_agent_test_args': [['--start-time', start_time,
-                                         'normal_ops_sequence',
-                                         '--version', dcr_ext.version,
-                                         '--ops', 'install', 'enable', 'enable']]
+            'restart_agent_test_args': [f"--start-time' {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable enable"]
         }
 
         # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
         # sequence for the current test
-        command_args = ['--start-time', start_time,
-                        'normal_ops_sequence', '--version', dcr_ext.version,
-                        '--ops', 'install', 'enable']
+        command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable"
 
         dcr_ext.assert_scenario('assert-operation-sequence.py', test_args, command_args, ssh_client)
 
