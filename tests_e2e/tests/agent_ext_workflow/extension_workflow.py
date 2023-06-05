@@ -63,7 +63,6 @@ class ExtensionWorkflow(AgentTest):
             self.message = setting_name
 
         def assert_instance_view(self, assert_function=None):
-            log.info("Assert instance view has expected message for test extension")
             self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message, assert_function=assert_function)
 
         def assert_extension_status(self):
@@ -154,9 +153,6 @@ class ExtensionWorkflow(AgentTest):
 
             log.info("*******Verifying the extension enable scenario*******")
 
-            # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-
             log.info("Call enable on %s", dcr_test_ext_client)
             dcr_ext.modify_ext_settings_and_enable()
 
@@ -177,7 +173,27 @@ class ExtensionWorkflow(AgentTest):
 
             dcr_ext.assert_scenario('assert-operation-sequence.py', test_args, command_args)
 
-
+            # log.info("*******Verifying the extension uninstall scenario*******")
+            #
+            # # Record the time we start the test
+            # start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            #
+            # # Test arguments specify the specific arguments for this test
+            # # restart_agent_test_args are the parameters that we pass to the assert-operation-sequence.py file to verify
+            # # the operation sequence after restarting the agent
+            # test_args = {
+            #     dcr_ext.ASSERT_STATUS_KEY_NAME: True,
+            #     dcr_ext.RESTART_AGENT_KEY_NAME: True,
+            #     dcr_ext.VERSION_KEY_NAME: dcr_ext.version,
+            #     'restart_agent_test_args': [
+            #         f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable enable enable disable uninstall"]
+            # }
+            #
+            # # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
+            # # sequence for the current test
+            # command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable enable disable uninstall"
+            #
+            # dcr_ext.
 
 
 if __name__ == "__main__":
