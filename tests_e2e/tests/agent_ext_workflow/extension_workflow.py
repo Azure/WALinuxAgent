@@ -236,12 +236,13 @@ class ExtensionWorkflow(AgentTest):
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
 
+            # Here I changed update to install in second set of restart agent test args -> check that this is allowed
             test_args = {
                 dcr_ext_1_1.ASSERT_STATUS_KEY_NAME: True,
                 dcr_ext_1_1.RESTART_AGENT_KEY_NAME: True,
                 dcr_ext_1_1.VERSION_KEY_NAME: new_version_update_mode_with_install,
                 'restart_agent_test_args': [f"--start-time {start_time} normal_ops_sequence --version {old_version} --ops disable uninstall",
-                                            f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_with_install} --ops update enable enable"]
+                                            f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_with_install} --ops install enable enable"]
             }
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update install enable --final-ops disable update uninstall install enable"
 
