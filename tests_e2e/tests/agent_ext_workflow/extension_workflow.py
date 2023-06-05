@@ -205,6 +205,9 @@ class ExtensionWorkflow(AgentTest):
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
+            new_version_update_mode_with_install = "1.2.0"
+            old_version = "1.1.5"
+
             # Create DcrTestExtension with version 1.2
             dcr_test_ext_id_1_2 = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
                                                     VmExtensionIds.GuestAgentDcrTestExtension.type, "1.2")
@@ -232,6 +235,27 @@ class ExtensionWorkflow(AgentTest):
             log.info("Installing %s, version %s", dcr_test_ext_client, "1.2.0")
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
+
+            test_args = {
+                self.test_extension.ASSERT_STATUS_KEY_NAME: True,
+                self.test_extension.RESTART_AGENT_KEY_NAME: True,
+                self.test_extension.VERSION_KEY_NAME: new_version_update_mode_with_install,
+                'restart_agent_test_args': [['--start-time', start_time,
+                                             'normal_ops_sequence', '--version', old_version,
+                                             '--ops', 'disable', 'uninstall'],
+                                            ['--start-time', start_time,
+                                             'normal_ops_sequence', '--version',
+                                             new_version_update_mode_with_install,
+                                             '--ops', 'update', 'install', 'enable', 'enable']]
+            }
+            command_args = ['--start-time', start_time,
+                            'update_sequence', '--old-version', old_version,
+                            '--old-ver-ops', 'disable', 'uninstall',
+                            '--new-version', new_version_update_mode_with_install,
+                            '--new-ver-ops', 'update', 'install', 'enable',
+                            '--final-ops', 'disable', 'update', 'uninstall', 'install', 'enable']
+
+            dcr_ext_1_1.assert_scenario('assert-operation-sequence.py', test_args, command_args)
 
 
 if __name__ == "__main__":
