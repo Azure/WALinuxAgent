@@ -240,20 +240,10 @@ class ExtensionWorkflow(AgentTest):
                 dcr_ext_1_1.ASSERT_STATUS_KEY_NAME: True,
                 dcr_ext_1_1.RESTART_AGENT_KEY_NAME: True,
                 dcr_ext_1_1.VERSION_KEY_NAME: new_version_update_mode_with_install,
-                'restart_agent_test_args': [['--start-time', start_time,
-                                             'normal_ops_sequence', '--version', old_version,
-                                             '--ops', 'disable', 'uninstall'],
-                                            ['--start-time', start_time,
-                                             'normal_ops_sequence', '--version',
-                                             new_version_update_mode_with_install,
-                                             '--ops', 'update', 'install', 'enable', 'enable']]
+                'restart_agent_test_args': [f"--start-time {start_time} normal_ops_sequence --version {old_version} --ops disable uninstall",
+                                            f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_with_install} --ops update enable enable"]
             }
-            command_args = ['--start-time', start_time,
-                            'update_sequence', '--old-version', old_version,
-                            '--old-ver-ops', 'disable', 'uninstall',
-                            '--new-version', new_version_update_mode_with_install,
-                            '--new-ver-ops', 'update', 'install', 'enable',
-                            '--final-ops', 'disable', 'update', 'uninstall', 'install', 'enable']
+            command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update install enable --final-ops disable update uninstall install enable"
 
             dcr_ext_1_1.assert_scenario('assert-operation-sequence.py', test_args, command_args)
 
