@@ -237,9 +237,9 @@ class ExtensionWorkflow(AgentTest):
             dcr_ext_1_1.assert_instance_view()
 
             test_args = {
-                self.test_extension.ASSERT_STATUS_KEY_NAME: True,
-                self.test_extension.RESTART_AGENT_KEY_NAME: True,
-                self.test_extension.VERSION_KEY_NAME: new_version_update_mode_with_install,
+                dcr_ext_1_1.ASSERT_STATUS_KEY_NAME: True,
+                dcr_ext_1_1.RESTART_AGENT_KEY_NAME: True,
+                dcr_ext_1_1.VERSION_KEY_NAME: new_version_update_mode_with_install,
                 'restart_agent_test_args': [['--start-time', start_time,
                                              'normal_ops_sequence', '--version', old_version,
                                              '--ops', 'disable', 'uninstall'],
