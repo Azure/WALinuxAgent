@@ -23,6 +23,9 @@
 
 from assertpy import soft_assertions, assert_that
 from datetime import datetime
+from random import choice
+import sys
+import uuid
 
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
@@ -110,6 +113,30 @@ class ExtensionWorkflow(AgentTest):
                 log.info("Restart the agent and assert operations.log has the expected operation sequence added by the test extension")
                 self.restart_agent_and_test_status(test_args)
 
+    def get_py_major_version(self):
+        return sys.version_info[0]
+
+    if get_py_major_version() == 3:
+        ustr = str
+    elif get_py_major_version() == 2:
+        ustr = unicode
+
+    def str_to_encoded_ustr(self, s, encoding='utf-8'):
+        if self.get_py_major_version() > 2:
+            try:
+                # For py3+, str() is unicode by default
+                if isinstance(s, bytes):
+                    # str.encode() returns bytes which should be decoded to get the str.
+                    return s.decode(encoding)
+                else:
+                    # If its not encoded, just return the string
+                    return ustr(s)
+            except Exception:
+                # If some issues in decoding, just return the string
+                return ustr(s)
+        # For Py2, explicitly convert the string to unicode with the specified encoding
+        return ustr(s, encoding=encoding)
+
     def run(self):
         is_arm64: bool = self._ssh_client.get_architecture() == "aarch64"
 
@@ -174,6 +201,27 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops enable"
 
             dcr_ext.assert_scenario('assert-operation-sequence.py', test_args, command_args)
+
+            log.info("*******Verifying the extension enable with special characters scenario*******")
+
+            # Record the time we start the test
+            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            test_guid = str(uuid.uuid4())
+
+            random_special_char_sentences = [
+                "Quizdeltagerne spiste jordbær med fløde, mens cirkusklovnen Wolther spillede på xylofon.",
+                "Falsches Üben von Xylophonmusik quält jeden größeren Zwerg",
+                "Zwölf Boxkämpfer jagten Eva quer über den Sylter Deich",
+                "Heizölrückstoßabdämpfung",
+                "Γαζέες καὶ μυρτιὲς δὲν θὰ βρῶ πιὰ στὸ χρυσαφὶ ξέφωτο",
+                "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
+                "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
+                "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches"
+            ]
+
+            test_str = "{0}; Special chars: {1}".format(self.test_guid,
+                                                        str_to_encoded_ustr(choice(random_special_char_sentences)))
+
 
             log.info("*******Verifying the extension uninstall scenario*******")
 
