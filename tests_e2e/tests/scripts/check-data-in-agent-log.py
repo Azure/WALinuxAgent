@@ -33,13 +33,13 @@ def main():
     found = False
 
     try:
-        found = AgentLog(Path(args.path)).is_data_in_waagent_log(args.data)
+        found = AgentLog(Path('/var/log/waagent.log')).is_data_in_waagent_log(args.data)
         if found:
             print("Found data: {0} in agent log".format(args.data))
         else:
             print("Did not find data: {0} in agent log".format(args.data))
     except Exception as e:
-        print("Error thrown when searching for test data in agent log: {0}".format(ustr(e)))
+        print("Error thrown when searching for test data in agent log: {0}".format(str(e)))
 
     sys.exit(0 if found else 1)
 

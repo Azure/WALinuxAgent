@@ -24,11 +24,12 @@
 from assertpy import soft_assertions, assert_that
 from datetime import datetime
 from random import choice
-import sys
+import re
 import uuid
+from datetime import timedelta
 
-from assertpy.string import unicode
-
+from pathlib import Path
+from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
@@ -131,6 +132,71 @@ class ExtensionWorkflow(AgentTest):
             if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
                 log.info("Restart the agent and assert operations.log has the expected operation sequence added by the test extension")
                 self.restart_agent_and_test_status(test_args)
+
+    def validate_no_time_lag_between_agent_start_and_gs_processing(self):
+        success = True
+
+        agent_started_time = []
+        agent_msg = []
+        time_diff_max_secs = 15
+
+        # Example: Agent WALinuxAgent-2.2.47.2 is running as the goal state agent
+        agent_started_regex = r"Azure Linux Agent \(Goal State Agent version [0-9.]+\)"
+        gs_completed_regex = r"ProcessExtensionsGoalState completed\s\[(?P<id>[a-z_\d]+)\s(?P<duration>\d+)\sms\]"
+
+        verified_atleast_one_log_line = False
+        verified_atleast_one_agent_started_log_line = False
+        verified_atleast_one_gs_complete_log_line = False
+
+        agent_log = AgentLog(Path('/var/log/waagent.log'))
+
+        try:
+            for agent_record in agent_log.read():
+                verified_atleast_one_log_line = True
+
+                agent_started = re.match(agent_started_regex, agent_record.text)
+                verified_atleast_one_agent_started_log_line = verified_atleast_one_agent_started_log_line or agent_started
+                if agent_started:
+                    agent_started_time.append(agent_record.timestamp)
+                    agent_msg.append(agent_record.text)
+
+                gs_complete = re.match(gs_completed_regex, agent_record.text)
+                verified_atleast_one_gs_complete_log_line = verified_atleast_one_gs_complete_log_line or gs_complete
+                if agent_started_time and gs_complete:
+                    duration = gs_complete.group('duration')
+                    diff = agent_record.timestamp - agent_started_time.pop()
+                    # Reduce the duration it took to complete the Goalstate, essentially we should only care about how long
+                    # the agent took after start/restart to start processing GS
+                    diff -= timedelta(milliseconds=int(duration))
+                    agent_msg_line = agent_msg.pop()
+                    if diff.seconds > time_diff_max_secs:
+                        success = False
+                        log.info("Found delay between agent start and GoalState Processing > {0}secs: "
+                              "Messages: \n {1} {2}".format(time_diff_max_secs, agent_msg_line, agent_record.text))
+
+        except IOError as e:
+            log.info("Unable to validate no lag time: {1}".format(str(e)))
+
+        if not verified_atleast_one_log_line:
+            success = False
+            log.info("Didn't parse a single log line, ensure the log_parser is working fine and verify log regex")
+
+        if not verified_atleast_one_agent_started_log_line:
+            success = False
+            print("Didn't parse a single agent started log line, ensure the Regex is working fine: {0}"
+                  .format(agent_started_regex))
+
+        if not verified_atleast_one_gs_complete_log_line:
+            success = False
+            print("Didn't parse a single GS completed log line, ensure the Regex is working fine: {0}"
+                  .format(gs_completed_regex))
+
+        if agent_started_time or agent_msg:
+            success = False
+            print("Mismatch between number of agent start messages and number of GoalState Processing messages\n "
+                  "Agent Start Messages: \n {0}".format('\n'.join(agent_msg)))
+
+        return success
 
     def run(self):
         is_arm64: bool = self._ssh_client.get_architecture() == "aarch64"
@@ -345,6 +411,15 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update enable --final-ops disable update uninstall enable"
 
             dcr_ext_1_1.assert_scenario('assert-operation-sequence.py', test_args, command_args)
+
+            log.info("*******Verifying no lag between agent start and gs processing*******")
+
+            # Record the time we start the test
+            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            assert_that(self.validate_no_time_lag_between_agent_start_and_gs_processing()).described_as("Validate no lag time between agent start and goal state processing").is_true()
+
+
 
 
 if __name__ == "__main__":
