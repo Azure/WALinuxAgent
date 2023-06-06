@@ -215,14 +215,14 @@ class ExtensionWorkflow(AgentTest):
             ]
 
             test_str = "{0}; Special chars: {1}".format(test_guid, str_to_encoded_ustr(choice(random_special_char_sentences)))
-            log.info("Speical char test string for {0}: {1}".format(dcr_test_ext_client, test_str))
+            log.info("Special char test string for {0}: {1}".format(dcr_test_ext_client, test_str))
             dcr_ext.modify_ext_settings_and_enable(data=test_str)
 
             # Test arguments specify the specific arguments for this test
             test_args = {
-                dcr_ext.test_extension.ASSERT_STATUS_KEY_NAME: True,
-                dcr_ext.test_extension.VERSION_KEY_NAME: dcr_ext.version,
-                dcr_ext.test_extension.DATA_KEY_NAME: test_guid
+                dcr_ext.ASSERT_STATUS_KEY_NAME: True,
+                dcr_ext.VERSION_KEY_NAME: dcr_ext.version,
+                dcr_ext.DATA_KEY_NAME: test_guid
             }
             # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
             # sequence for the current test
