@@ -27,12 +27,28 @@ from random import choice
 import sys
 import uuid
 
+from assertpy.string import unicode
+
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
+
+
+def str_to_encoded_ustr(s, encoding='utf-8'):
+    try:
+        # For py3+, str() is unicode by default
+        if isinstance(s, bytes):
+            # str.encode() returns bytes which should be decoded to get the str.
+            return s.decode(encoding)
+        else:
+            # If its not encoded, just return the string
+            return str(s)
+    except Exception:
+        # If some issues in decoding, just return the string
+        return str(s)
 
 
 class ExtensionWorkflow(AgentTest):
@@ -46,6 +62,7 @@ class ExtensionWorkflow(AgentTest):
     class GuestAgentDcrTestExtension:
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
+        DATA_KEY_NAME = "data"
         VERSION_KEY_NAME = "version"
         ASSERT_STATUS_KEY_NAME = "assert_status"
         RESTART_AGENT_KEY_NAME = "restart_agent"
@@ -58,9 +75,11 @@ class ExtensionWorkflow(AgentTest):
             self.enable_count = 0
             self.ssh_client = ssh_client
 
-        def modify_ext_settings_and_enable(self):
+        def modify_ext_settings_and_enable(self, data=None):
             self.enable_count += 1
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
+            if data is not None:
+                setting_name = "{0}, {1}: {2}".format(setting_name, self.DATA_KEY_NAME, data)
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
             self.message = setting_name
@@ -112,30 +131,6 @@ class ExtensionWorkflow(AgentTest):
             if self.RESTART_AGENT_KEY_NAME in test_args and test_args[self.RESTART_AGENT_KEY_NAME]:
                 log.info("Restart the agent and assert operations.log has the expected operation sequence added by the test extension")
                 self.restart_agent_and_test_status(test_args)
-
-    def get_py_major_version(self):
-        return sys.version_info[0]
-
-    if get_py_major_version() == 3:
-        ustr = str
-    elif get_py_major_version() == 2:
-        ustr = unicode
-
-    def str_to_encoded_ustr(self, s, encoding='utf-8'):
-        if self.get_py_major_version() > 2:
-            try:
-                # For py3+, str() is unicode by default
-                if isinstance(s, bytes):
-                    # str.encode() returns bytes which should be decoded to get the str.
-                    return s.decode(encoding)
-                else:
-                    # If its not encoded, just return the string
-                    return ustr(s)
-            except Exception:
-                # If some issues in decoding, just return the string
-                return ustr(s)
-        # For Py2, explicitly convert the string to unicode with the specified encoding
-        return ustr(s, encoding=encoding)
 
     def run(self):
         is_arm64: bool = self._ssh_client.get_architecture() == "aarch64"
@@ -219,9 +214,23 @@ class ExtensionWorkflow(AgentTest):
                 "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches"
             ]
 
-            test_str = "{0}; Special chars: {1}".format(self.test_guid,
-                                                        str_to_encoded_ustr(choice(random_special_char_sentences)))
+            test_str = "{0}; Special chars: {1}".format(test_guid, str_to_encoded_ustr(choice(random_special_char_sentences)))
+            log.info("Speical char test string for {0}: {1}".format(dcr_test_ext_client, test_str))
+            dcr_ext.modify_ext_settings_and_enable(data=test_str)
 
+            # # Test arguments specify the specific arguments for this test
+            # test_args = {
+            #     self.test_extension.ASSERT_STATUS_KEY_NAME: True,
+            #     self.test_extension.VERSION_KEY_NAME: self.version,
+            #     self.test_extension.DATA_KEY_NAME: self.test_guid
+            # }
+            # # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
+            # # sequence for the current test
+            # command_args = ['--data', self.test_guid]
+            #
+            # # We first ensure that the stdout contains the special characters and then we check if the test_guid is logged
+            # # atleast once in the agent log to ensure that there were no errors when handling special characters in the agent
+            # dcr_ext.assert_scenario('check_data_in_agent_log.py', test_args, command_args)
 
             log.info("*******Verifying the extension uninstall scenario*******")
 
