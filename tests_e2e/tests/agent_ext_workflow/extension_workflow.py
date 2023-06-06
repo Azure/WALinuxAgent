@@ -218,19 +218,19 @@ class ExtensionWorkflow(AgentTest):
             log.info("Speical char test string for {0}: {1}".format(dcr_test_ext_client, test_str))
             dcr_ext.modify_ext_settings_and_enable(data=test_str)
 
-            # # Test arguments specify the specific arguments for this test
-            # test_args = {
-            #     self.test_extension.ASSERT_STATUS_KEY_NAME: True,
-            #     self.test_extension.VERSION_KEY_NAME: self.version,
-            #     self.test_extension.DATA_KEY_NAME: self.test_guid
-            # }
-            # # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
-            # # sequence for the current test
-            # command_args = ['--data', self.test_guid]
-            #
-            # # We first ensure that the stdout contains the special characters and then we check if the test_guid is logged
-            # # atleast once in the agent log to ensure that there were no errors when handling special characters in the agent
-            # dcr_ext.assert_scenario('check_data_in_agent_log.py', test_args, command_args)
+            # Test arguments specify the specific arguments for this test
+            test_args = {
+                dcr_ext.test_extension.ASSERT_STATUS_KEY_NAME: True,
+                dcr_ext.test_extension.VERSION_KEY_NAME: dcr_ext.version,
+                dcr_ext.test_extension.DATA_KEY_NAME: test_guid
+            }
+            # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
+            # sequence for the current test
+            command_args = ['--data', self.test_guid]
+
+            # We first ensure that the stdout contains the special characters and then we check if the test_guid is logged
+            # atleast once in the agent log to ensure that there were no errors when handling special characters in the agent
+            dcr_ext.assert_scenario('check-data-in-agent-log.py', test_args, command_args)
 
             log.info("*******Verifying the extension uninstall scenario*******")
 
