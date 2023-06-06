@@ -57,6 +57,8 @@ class TestSuiteInfo(object):
     location: str
     # Whether this suite must run on its own test VM
     owns_vm: bool
+    # Whether to install the test Agent on the test VM
+    install_test_agent: bool
     # Customization for the ARM template used when creating the test VM
     template: str
 
@@ -170,7 +172,7 @@ class AgentTestLoader(object):
         """
         Loads the description of a TestSuite from its YAML file.
 
-        A test suite has 5 properties: name, tests, images, location, and owns_vm. For example:
+        A test suite is described by the properties listed below. Sample test suite:
 
             name: "AgentBvt"
             tests:
@@ -180,6 +182,8 @@ class AgentTestLoader(object):
             images: "endorsed"
             location: "eastuseaup"
             owns_vm: true
+            install_test_agent: true
+            template: "bvts/template.py"
 
         * name     - A string used to identify the test suite
         * tests    - A list of the tests in the suite. Each test can be specified by a string (the path for its source code relative to
@@ -199,6 +203,9 @@ class AgentTestLoader(object):
                     This is useful for suites that modify the test VMs in such a way that the setup may cause problems
                     in other test suites (for example, some tests targeted to the HGAP block internet access in order to
                     force the agent to use the HGAP).
+        * install_test_agent - [Optional; boolean] By default the setup process installs the test Agent on the test VMs; set this property
+                    to False to skip the installation.
+        * template - [Optional; string] If given, the ARM template for the test VM is customized using the given Python module.
 
         """
         test_suite: Dict[str, Any] = AgentTestLoader._load_file(description_file)
@@ -232,7 +239,7 @@ class AgentTestLoader(object):
             test_suite_info.location = ""
 
         test_suite_info.owns_vm = "owns_vm" in test_suite and test_suite["owns_vm"]
-
+        test_suite_info.install_test_agent = "install_test_agent" not in test_suite or test_suite["install_test_agent"]
         test_suite_info.template = test_suite.get("template", "")
 
         return test_suite_info

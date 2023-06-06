@@ -1,0 +1,9 @@
+#
+# The test suite disables extension processing and verifies that extensions
+# are not processed, but the agent continues reporting status.
+#
+name: "ExtensionsDisabled"
+tests:
+  - "extensions_disabled.py"
+images: "random(endorsed)"
+owns_vm: true

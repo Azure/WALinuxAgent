@@ -9,7 +9,7 @@ parameters:
   - name: test_suites
     displayName: Test Suites
     type: string
-    default: agent_bvt, no_outbound_connections
+    default: agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned
 
     # NOTES:
     #         * 'image', 'location' and 'vm_size' override any values in the test suites/images definition
