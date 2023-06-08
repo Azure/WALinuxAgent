@@ -20,6 +20,7 @@
 #
 import argparse
 import sys
+import logging
 
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
@@ -39,9 +40,9 @@ def get_requested_version(gs: GoalState) -> str:
     return ""
 
 
-def verify_rsm_requested_version(protocol: WireProtocol, expected_version: str) -> bool:
-    protocol.client.update_goal_state()
-    goal_state = protocol.client.get_goal_state()
+def verify_rsm_requested_version(wire_protocol: WireProtocol, expected_version: str) -> bool:
+    wire_protocol.client.update_goal_state()
+    goal_state = wire_protocol.client.get_goal_state()
     requested_version = get_requested_version(goal_state)
     if requested_version == expected_version:
         return True
@@ -63,7 +64,7 @@ try:
     if not found:
         raise Exception("Latest GS does not include rsm requested version : {0}.".format(args.version))
     else:
-        print("Latest GS includes rsm requested version : {0}.".format(args.version))
+        logging.info("Latest GS includes rsm requested version : {0}.".format(args.version))
 
 
 except Exception as e:

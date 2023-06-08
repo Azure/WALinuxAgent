@@ -12,7 +12,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_AGENT
+from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
 from azurelinuxagent.ga.guestagent import GuestAgent, GAUpdateReportState
 
 
@@ -183,7 +183,7 @@ class AgentUpdateHandler(object):
                         "skipping agent update".format(str(version), self._gs_id))
 
     @staticmethod
-    def __purge_extra_agents_from_disk(known_agents):
+    def __purge_extra_agents_from_disk(current_version, known_agents):
         """
         Remove from disk all directories and .zip files of unknown agents
         (without removing the current, running agent).
@@ -191,6 +191,7 @@ class AgentUpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
 
         known_versions = [agent.version for agent in known_agents]
+        known_versions.append(current_version)
 
         for agent_path in glob.iglob(path):
             try:
@@ -244,25 +245,15 @@ class AgentUpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
-    def __log_event(self, level, msg, success_=True):
+    @staticmethod
+    def __log_event(level, msg, success=True):
         if level == LogLevel.INFO:
             logger.info(msg)
-            add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg, log_event=False)
-        else:
-            msg += "[NOTE: Will not log the same error for the next 6 hours]"
-            # Incarnation may change if we get new goal state that would make whole string unique every time. So comparing only the substring until Incarnation if Incarnation included in msg
-            # Example msg "Unable to update Agent: No manifest links found for agent family: Prod for incarnation: incarnation_1, skipping agent update"
-            now = datetime.datetime.now()
-            prefix_msg = msg.split("incarnation", 1)[0]
-            prefix_last_warning_msg = self.update_state.last_warning.split("incarnation", 1)[0]
-            if prefix_msg != prefix_last_warning_msg or self.update_state.last_warning_time == datetime.datetime.min or now >= self.update_state.last_warning_time + datetime.timedelta(hours=6):
-                if level == LogLevel.WARNING:
-                    logger.warn(msg)
-                elif level == LogLevel.ERROR:
-                    logger.error(msg)
-                add_event(op=WALAEventOperation.AgentUpgrade, is_success=success_, message=msg, log_event=False)
-                self.update_state.last_warning_time = now
-                self.update_state.last_warning = msg
+        elif level == LogLevel.WARNING:
+            logger.warn(msg)
+        elif level == LogLevel.ERROR:
+            logger.error(msg)
+        add_event(op=WALAEventOperation.AgentUpgrade, is_success=success, message=msg, log_event=False)
 
     def run(self, goal_state):
         try:
@@ -274,11 +265,10 @@ class AgentUpdateHandler(object):
             agent_family = self.__get_agent_family_manifests(goal_state)
             requested_version = self.__get_requested_version(agent_family)
             agent_manifest = None  # This is to make sure fetch agent manifest once per update
-
+            warn_msg = ""
             if requested_version is None:
                 if conf.get_enable_ga_versioning():  # log the warning only when ga versioning is enabled
                     warn_msg = "Missing requested version in agent family: {0} for incarnation: {1}, fallback to largest version update".format(self._ga_family, self._gs_id)
-                    self.__log_event(LogLevel.WARNING, warn_msg)
                     GAUpdateReportState.report_error_msg = warn_msg
                 agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
                 requested_version = self.__get_largest_version(agent_manifest)
@@ -298,6 +288,9 @@ class AgentUpdateHandler(object):
             if not self.__should_update_agent(requested_version):
                 return
 
+            if warn_msg != "":
+                self.__log_event(LogLevel.WARNING, warn_msg)
+
             msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
                 self._gs_id, str(requested_version))
             self.__log_event(LogLevel.INFO, msg)
@@ -305,14 +298,14 @@ class AgentUpdateHandler(object):
             try:
                 agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
 
-                if not agent.is_available:
+                if agent.is_blacklisted or not agent.is_downloaded:
                     msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
                         str(agent.version))
                     self.__log_event(LogLevel.WARNING, msg)
                     return
 
                 # We delete the directory and the zip package from the filesystem except current version and target version
-                self.__purge_extra_agents_from_disk(known_agents=[agent, CURRENT_AGENT])
+                self.__purge_extra_agents_from_disk(CURRENT_VERSION, known_agents=[agent])
                 self.__proceed_with_update(requested_version)
 
             finally:
@@ -323,7 +316,7 @@ class AgentUpdateHandler(object):
                 raise err
             if "Missing requested version" not in GAUpdateReportState.report_error_msg:
                 GAUpdateReportState.report_error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
-            self.__log_event(LogLevel.WARNING, GAUpdateReportState.report_error_msg, success_=False)
+            self.__log_event(LogLevel.WARNING, GAUpdateReportState.report_error_msg, success=False)
 
     def get_vmagent_update_status(self):
         """
@@ -341,5 +334,5 @@ class AgentUpdateHandler(object):
                 return VMAgentUpdateStatus(expected_version=str(GAUpdateReportState.report_expected_version), status=status, code=code, message=GAUpdateReportState.report_error_msg)
         except Exception as err:
             self.__log_event(LogLevel.WARNING, "Unable to report agent update status: {0}".format(
-                                                       textutil.format_exception(err)), success_=False)
+                                                       textutil.format_exception(err)), success=False)
         return None

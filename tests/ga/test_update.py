@@ -917,7 +917,7 @@ class TestUpdate(UpdateTestCase):
         behavior never changes.
         """
         with patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False):
-            with patch('azurelinuxagent.ga.agent_update.AgentUpdateHandler.run') as download_agent:
+            with patch('azurelinuxagent.ga.agent_update_handler.AgentUpdateHandler.run') as download_agent:
                 with mock_wire_protocol(DATA_FILE) as protocol:
                     with mock_update_handler(protocol, autoupdate_enabled=True) as update_handler:
                         update_handler.run()
@@ -1415,7 +1415,7 @@ class UpdateHandlerRunTestCase(AgentTestCase):
         self.assertFalse(os.path.isfile(update_handler._sentinel_file_path()))
 
     def test_run_leaves_sentinel_on_unsuccessful_exit(self):
-        with patch('azurelinuxagent.ga.agent_update.AgentUpdateHandler.run', side_effect=Exception):
+        with patch('azurelinuxagent.ga.agent_update_handler.AgentUpdateHandler.run', side_effect=Exception):
             update_handler = self._test_run(autoupdate_enabled=True,expected_exit_code=1)
             self.assertTrue(os.path.isfile(update_handler._sentinel_file_path()))
 
@@ -1869,7 +1869,7 @@ class MonitorThreadTest(AgentTestCaseWithGetVmSizeMock):
                     mock_is_running.__get__ = Mock(side_effect=iterator)
                     with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
                         with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
-                            with patch('azurelinuxagent.ga.agent_update.get_agent_update_handler'):
+                            with patch('azurelinuxagent.ga.agent_update_handler.get_agent_update_handler'):
                                 with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
                                     with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):

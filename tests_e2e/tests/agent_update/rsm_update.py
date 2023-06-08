@@ -23,6 +23,7 @@
 # The test verifies agent update for rsm workflow. This test covers three scenarios downgrade, upgrade and no update.
     # For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
 #
+import glob
 import json
 from typing import List, Dict, Any
 
@@ -189,15 +190,10 @@ class RsmUpdateBvt(AgentTest):
         """
         RSM update rely on supported flag that agent sends to CRP.So, checking if GA reports feature flag from the agent log
         """
-        def _check_agent_supports_versioning() -> bool:
-            found: str = self._ssh_client.run_command("grep -q 'Agent.*supports GA Versioning' /var/log/waagent.log && echo true || echo false").rstrip()
-            return True if found == "true" else False
 
         log.info("Verifying agent reported supported feature flag")
-        found: bool = retry_if_false(_check_agent_supports_versioning)
-
-        assert_that(found).is_true().described_as("Agent failed to report supported feature flag, so skipping agent update validations")
-        log.info("Successfully verified agent reported supported feature flag")
+        self._ssh_client.run_command(f"verify_agent_supported_feature.py", use_sudo=True)
+        log.info("Agent reported VersioningGovernance supported feature flag")
 
 
 if __name__ == "__main__":

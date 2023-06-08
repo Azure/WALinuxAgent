@@ -4,6 +4,8 @@
         xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
         <GAFamilies>
             <GAFamily>
+                <Name>Prod</Name>
+                <Uris />
             </GAFamily>
         </GAFamilies>
         <Location>eastus</Location>
