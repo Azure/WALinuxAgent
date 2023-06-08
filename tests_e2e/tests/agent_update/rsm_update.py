@@ -23,12 +23,10 @@
 # The test verifies agent update for rsm workflow. This test covers three scenarios downgrade, upgrade and no update.
     # For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
 #
-import glob
 import json
 from typing import List, Dict, Any
 
 import requests
-from assertpy import assert_that
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute.models import VirtualMachine
 from msrestazure.azure_cloud import Cloud
@@ -192,7 +190,7 @@ class RsmUpdateBvt(AgentTest):
         """
 
         log.info("Verifying agent reported supported feature flag")
-        self._ssh_client.run_command(f"verify_agent_supported_feature.py", use_sudo=True)
+        self._ssh_client.run_command("verify_agent_supported_feature.py", use_sudo=True)
         log.info("Agent reported VersioningGovernance supported feature flag")
 
 

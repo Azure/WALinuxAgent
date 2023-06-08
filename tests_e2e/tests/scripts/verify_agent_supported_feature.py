@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Verify if the agent reported supportedfeature VersioningGovernance flag to CRP through status file
+# Verify if the agent reported supportedfeature VersioningGovernance flag to CRP via status file
 #
 import glob
 import json
@@ -30,9 +30,9 @@ def check_agent_supports_versioning() -> bool:
     agent_status_file = "/var/lib/waagent/history/*/waagent_status.json"
     file_paths = glob.glob(agent_status_file, recursive=True)
     for file in file_paths:
-        logging.info("Agent status file found %s", file)
         with open(file, 'r') as f:
             data = json.load(f)
+            logging.info("Agent status file is %s and it's content %s", file, data)
             status = data["__status__"]
             supported_features = status["supportedFeatures"]
             for supported_feature in supported_features:

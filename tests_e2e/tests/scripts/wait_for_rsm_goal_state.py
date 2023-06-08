@@ -64,7 +64,7 @@ try:
     if not found:
         raise Exception("Latest GS does not include rsm requested version : {0}.".format(args.version))
     else:
-        logging.info("Latest GS includes rsm requested version : {0}.".format(args.version))
+        logging.info("Latest GS includes rsm requested version : %s", args.version)
 
 
 except Exception as e:
