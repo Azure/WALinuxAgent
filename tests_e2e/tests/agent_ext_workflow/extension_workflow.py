@@ -81,9 +81,10 @@ class ExtensionWorkflow(AgentTest):
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
             if data is not None:
                 setting_name = "{0}, {1}: {2}".format(setting_name, self.DATA_KEY_NAME, data)
-            self.message = setting_name
             log.info("The settings_name before encode is {0}".format(setting_name))
-            settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
+            encoded_setting_name = setting_name.encode('utf-8')
+            self.message = encoded_setting_name
+            settings = {self.NAME_KEY_NAME: encoded_setting_name}
             log.info("The settings after encode is {0}".format(settings.get(self.NAME_KEY_NAME)))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
 
