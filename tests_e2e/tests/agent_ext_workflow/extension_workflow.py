@@ -81,7 +81,9 @@ class ExtensionWorkflow(AgentTest):
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
             if data is not None:
                 setting_name = "{0}, {1}: {2}".format(setting_name, self.DATA_KEY_NAME, data)
+            log.info("The settings_name before encode is {0}".format(setting_name))
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
+            log.info("The settings after encode is {0}".format(settings.get(self.NAME_KEY_NAME)))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
             self.message = setting_name
 
@@ -280,7 +282,9 @@ class ExtensionWorkflow(AgentTest):
                 "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches"
             ]
 
-            test_str = "{0}; Special chars: {1}".format(test_guid, str_to_encoded_ustr(choice(random_special_char_sentences)))
+            sentence = str_to_encoded_ustr(choice(random_special_char_sentences))
+            log.info("The sentence is: {0}".format(sentence))
+            test_str = "{0}; Special chars: {1}".format(test_guid, sentence)
             log.info("Special char test string for {0}: {1}".format(dcr_test_ext_client, test_str))
             dcr_ext.modify_ext_settings_and_enable(data=test_str)
 
