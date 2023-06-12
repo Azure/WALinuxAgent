@@ -442,7 +442,10 @@ class ExtensionWorkflow(AgentTest):
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            assert_that(self.validate_no_time_lag_between_agent_start_and_gs_processing()).described_as("Validate no lag time between agent start and goal state processing").is_true()
+            log.info("Running validate-no-lag-between-agent-start-and-gs-processing.py remotely...")
+            result = self.ssh_client.run_command("validate-no-lag-between-agent-start-and-gs-processing.py", use_sudo=True)
+            with soft_assertions():
+                assert_that(result).described_as(f"Validation for no lag time result").is_true()
 
 
 
