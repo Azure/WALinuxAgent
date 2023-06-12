@@ -27,6 +27,7 @@ from random import choice
 import re
 import uuid
 from datetime import timedelta
+from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
 
 from pathlib import Path
 from tests_e2e.tests.lib.agent_log import AgentLog
@@ -75,6 +76,7 @@ class ExtensionWorkflow(AgentTest):
             self.message = ""
             self.enable_count = 0
             self.ssh_client = ssh_client
+            self.data = None
 
         def modify_ext_settings_and_enable(self, data=None):
             self.enable_count += 1
@@ -83,21 +85,36 @@ class ExtensionWorkflow(AgentTest):
                 setting_name = "{0}, {1}: {2}".format(setting_name, self.DATA_KEY_NAME, data)
             log.info("The settings_name before encode is {0}".format(setting_name))
             encoded_setting_name = setting_name.encode('utf-8')
-            self.message = encoded_setting_name
+            self.message = setting_name
             settings = {self.NAME_KEY_NAME: encoded_setting_name}
             log.info("The settings after encode is {0}".format(settings.get(self.NAME_KEY_NAME)))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
 
-        def assert_instance_view(self, assert_function=None):
-            self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message, assert_function=assert_function)
+        def assert_instance_view(self, data=None):
+            if data is None:
+                self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
+            else:
+                self.data = data
+                self.extension.assert_instance_view(expected_version=self.version, assert_function=self.assert_data)
 
-        def assert_extension_status(self):
-            return
-            # if data is not None:
-            #     if "{0}: {1}".format(self.DATA_KEY_NAME, data) not in status_message:
-            #         raise Exception("Data did not match in status message: %s!\nExpected Data: %s"
-            #                         % (status_message, data))
-            # return True
+        def assert_data(self, instance_view: VirtualMachineExtensionInstanceView):
+            log.info("Asserting extension status ...")
+            status_message = instance_view.statuses[0].message
+
+            log.info("Status message: %s" % status_message)
+
+            expected_ext_version = "%s-%s" % (self.name, self.version)
+            assert_that(expected_ext_version in status_message).described_as(
+                f"Specific extension version name should be in the InstanceView message ({expected_ext_version})").is_true()
+
+            expected_count = "%s: %s" % (self.COUNT_KEY_NAME, self.enable_count)
+            assert_that(expected_count in status_message).described_as(
+                f"Expected count should be in the InstanceView message ({expected_count})").is_true()
+
+            if self.data is not None:
+                expected_data = "{0}: {1}".format(self.DATA_KEY_NAME, self.data)
+                assert_that(expected_data in status_message).described_as(
+                    f"Expected data should be in the InstanceView message ({expected_data})").is_true()
 
         def execute_assert(self, file_name, args):
             log.info("Asserting %s %s ...", file_name, ' '.join(args))
@@ -125,7 +142,10 @@ class ExtensionWorkflow(AgentTest):
             # First test the status blob (that we get by using the Azure SDK)
             if self.ASSERT_STATUS_KEY_NAME in test_args and test_args[self.ASSERT_STATUS_KEY_NAME]:
                 log.info("Assert instance view has expected message for test extension")
-                self.assert_instance_view()
+                if self.DATA_KEY_NAME in test_args and test_args[self.DATA_KEY_NAME]:
+                    self.assert_instance_view(test_args[self.DATA_KEY_NAME])
+                else:
+                    self.assert_instance_view()
 
             # Then test the operation sequence (by checking the operations.log file in the VM)
             log.info("Assert operations.log has the expected operation sequence added by the test extension")
