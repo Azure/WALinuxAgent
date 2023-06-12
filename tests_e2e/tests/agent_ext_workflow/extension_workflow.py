@@ -71,7 +71,7 @@ class ExtensionWorkflow(AgentTest):
 
         def __init__(self, extension: VirtualMachineExtensionClient, ssh_client: SshClient):
             self.extension = extension
-            self.name = "GuestAgentDcr-TestInstall"
+            self.name = "GuestAgentDcrTestExt"
             self.version = "1.1.5"
             self.message = ""
             self.enable_count = 0
@@ -381,9 +381,6 @@ class ExtensionWorkflow(AgentTest):
             result = self._ssh_client.run_command("validate-no-lag-between-agent-start-and-gs-processing.py", use_sudo=True)
             with soft_assertions():
                 assert_that(result).described_as(f"Validation for no lag time result").is_true()
-
-
-
 
 if __name__ == "__main__":
     ExtensionWorkflow.run_from_command_line()
