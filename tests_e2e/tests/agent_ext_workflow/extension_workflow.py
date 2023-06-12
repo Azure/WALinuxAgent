@@ -21,16 +21,12 @@
 # BVT for extension install.
 #
 
+from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
 from assertpy import soft_assertions, assert_that
 from datetime import datetime
 from random import choice
-import re
 import uuid
-from datetime import timedelta
-from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
 
-from pathlib import Path
-from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
