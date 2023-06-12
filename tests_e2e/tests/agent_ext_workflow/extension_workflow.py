@@ -18,7 +18,7 @@
 #
 
 #
-# BVT for extension install.
+# BVT for extension workflow.
 #
 
 from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
@@ -57,9 +57,7 @@ class ExtensionWorkflow(AgentTest):
             username=self._context.username,
             private_key_file=self._context.private_key_file)
 
-    """
-    This class represents the GuestAgentDcrTestExtension running on the test VM
-    """
+    # This class represents the GuestAgentDcrTestExtension running on the test VM
     class GuestAgentDcrTestExtension:
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
@@ -122,7 +120,7 @@ class ExtensionWorkflow(AgentTest):
             result = self.ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
 
             with soft_assertions():
-                assert_that(result).described_as("Assertion for file '%s' with args: %s".format(file_name, args)).is_true()
+                assert_that(result).described_as("Assertion for file '{0}' with args: {1}".format(file_name, args)).is_true()
 
         def restart_agent_and_test_status(self, test_args):
             # Restarting agent should just run enable again and rerun the same settings
