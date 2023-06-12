@@ -119,7 +119,7 @@ class ExtensionWorkflow(AgentTest):
         def execute_assert(self, file_name, args):
             log.info("Asserting %s %s ...", file_name, ' '.join(args))
 
-            # ssh_client.run_command(f"chmod +700 {file_name}")
+            log.info("Running {0} remotely with arguments {1}".format(file_name, args))
             result = self.ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
 
             with soft_assertions():
@@ -317,7 +317,7 @@ class ExtensionWorkflow(AgentTest):
             }
             # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
             # sequence for the current test
-            command_args = ['--data', test_guid]
+            command_args = f"--data {test_guid}"
 
             # We first ensure that the stdout contains the special characters and then we check if the test_guid is logged
             # atleast once in the agent log to ensure that there were no errors when handling special characters in the agent
