@@ -47,13 +47,13 @@ def main():
         for agent_record in agent_log.read():
             verified_atleast_one_log_line = True
 
-            agent_started = re.match(agent_started_regex, agent_record.text)
+            agent_started = re.match(agent_started_regex, agent_record.message)
             verified_atleast_one_agent_started_log_line = verified_atleast_one_agent_started_log_line or agent_started
             if agent_started:
                 agent_started_time.append(agent_record.timestamp)
-                agent_msg.append(agent_record.text)
+                agent_msg.append(agent_record.message)
 
-            gs_complete = re.match(gs_completed_regex, agent_record.text)
+            gs_complete = re.match(gs_completed_regex, agent_record.message)
             verified_atleast_one_gs_complete_log_line = verified_atleast_one_gs_complete_log_line or gs_complete
             if agent_started_time and gs_complete:
                 duration = gs_complete.group('duration')
@@ -65,7 +65,7 @@ def main():
                 if diff.seconds > time_diff_max_secs:
                     success = False
                     print("Found delay between agent start and GoalState Processing > {0}secs: "
-                             "Messages: \n {1} {2}".format(time_diff_max_secs, agent_msg_line, agent_record.text))
+                             "Messages: \n {1} {2}".format(time_diff_max_secs, agent_msg_line, agent_record.message))
 
     except IOError as e:
         print("Unable to validate no lag time: {1}".format(str(e)))
