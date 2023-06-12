@@ -57,6 +57,9 @@ class ExtensionWorkflow(AgentTest):
             username=self._context.username,
             private_key_file=self._context.private_key_file)
 
+    """
+    This class represents the GuestAgentDcrTestExtension running on the test VM
+    """
     class GuestAgentDcrTestExtension:
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
@@ -119,7 +122,7 @@ class ExtensionWorkflow(AgentTest):
             result = self.ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
 
             with soft_assertions():
-                assert_that(result).described_as(f"Assertion for file '%s' with args: %s" % (file_name, args)).is_true()
+                assert_that(result).described_as("Assertion for file '%s' with args: %s".format(file_name, args)).is_true()
 
         def restart_agent_and_test_status(self, test_args):
             # Restarting agent should just run enable again and rerun the same settings
@@ -290,10 +293,6 @@ class ExtensionWorkflow(AgentTest):
             # Create DcrTestExtension with version 1.2
             dcr_test_ext_id_1_2 = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
                                                     VmExtensionIds.GuestAgentDcrTestExtension.type, "1.2")
-            dcr_test_ext_client_1_1 = VirtualMachineExtensionClient(
-                self._context.vm,
-                dcr_test_ext_id_1_1,
-                resource_name="GuestAgentDcr-TestInstall")
             dcr_test_ext_client_1_2 = VirtualMachineExtensionClient(
                 self._context.vm,
                 dcr_test_ext_id_1_2,
@@ -376,7 +375,7 @@ class ExtensionWorkflow(AgentTest):
             log.info("Running validate-no-lag-between-agent-start-and-gs-processing.py remotely...")
             result = self._ssh_client.run_command("validate-no-lag-between-agent-start-and-gs-processing.py", use_sudo=True)
             with soft_assertions():
-                assert_that(result).described_as(f"Validation for no lag time result").is_true()
+                assert_that(result).described_as("Validation for no lag time result").is_true()
 
 if __name__ == "__main__":
     ExtensionWorkflow.run_from_command_line()
