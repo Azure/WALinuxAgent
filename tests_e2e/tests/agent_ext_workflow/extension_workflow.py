@@ -66,10 +66,10 @@ class ExtensionWorkflow(AgentTest):
         ASSERT_STATUS_KEY_NAME = "assert_status"
         RESTART_AGENT_KEY_NAME = "restart_agent"
 
-        def __init__(self, extension: VirtualMachineExtensionClient, ssh_client: SshClient):
+        def __init__(self, extension: VirtualMachineExtensionClient, ssh_client: SshClient, version: str):
             self.extension = extension
             self.name = "GuestAgentDcrTestExt"
-            self.version = "1.1.5"
+            self.version = version
             self.message = ""
             self.enable_count = 0
             self.ssh_client = ssh_client
@@ -153,6 +153,10 @@ class ExtensionWorkflow(AgentTest):
                 log.info("Restart the agent and assert operations.log has the expected operation sequence added by the test extension")
                 self.restart_agent_and_test_status(test_args)
 
+        def update_ext_version(self, extension: VirtualMachineExtensionClient, version: str):
+            self.extension = extension
+            self.version = version
+
     def run(self):
         is_arm64: bool = self._ssh_client.get_architecture() == "aarch64"
 
@@ -171,7 +175,7 @@ class ExtensionWorkflow(AgentTest):
                 self._context.vm,
                 dcr_test_ext_id_1_1,
                 resource_name="GuestAgentDcr-TestInstall")
-            dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client)
+            dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client, version="1.1.5")
 
             log.info("Installing %s", dcr_test_ext_client)
             dcr_ext.modify_ext_settings_and_enable()
@@ -297,14 +301,14 @@ class ExtensionWorkflow(AgentTest):
                 resource_name="GuestAgentDcr-TestInstall")
 
             # After asserting 1.1, update extension object + version in GuestAgentDcrTestExtension before asserting 1.2
-            dcr_ext_1_1 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client)
+            dcr_ext_1_1 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client, version="1.1.5")
 
             log.info("Installing %s, version %s", dcr_test_ext_client, "1.1.5")
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
 
-            dcr_ext_1_1.extension = dcr_test_ext_client_1_2
-            dcr_ext_1_1.version = "1.2.0"
+            dcr_ext_1_1.update_ext_version(dcr_test_ext_client_1_2, "1.2.0")
+
             log.info("Installing %s, version %s", dcr_test_ext_client, "1.2.0")
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
@@ -340,14 +344,14 @@ class ExtensionWorkflow(AgentTest):
 
             # After asserting 1.1, update extension object + version in GuestAgentDcrTestExtension before asserting 1.2
             dcr_ext_1_1 = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client,
-                                                                       ssh_client=self._ssh_client)
+                                                                       ssh_client=self._ssh_client, version="1.1.5")
 
             log.info("Installing %s, version %s", dcr_test_ext_client, "1.1.5")
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
 
-            dcr_ext_1_1.extension = dcr_test_ext_client_1_3
-            dcr_ext_1_1.version = "1.3.0"
+            dcr_ext_1_1.update_ext_version(dcr_test_ext_client_1_3, "1.3.0")
+            
             log.info("Installing %s, version %s", dcr_test_ext_client, "1.3.0")
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
