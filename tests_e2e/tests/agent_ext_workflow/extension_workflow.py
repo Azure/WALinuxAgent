@@ -378,6 +378,6 @@ class ExtensionWorkflow(AgentTest):
             result = self._ssh_client.run_command("validate-no-lag-between-agent-start-and-gs-processing.py", use_sudo=True)
             with soft_assertions():
                 assert_that(result).described_as("Validation for no lag time result").is_empty()
-assert_that
+
 if __name__ == "__main__":
     ExtensionWorkflow.run_from_command_line()
