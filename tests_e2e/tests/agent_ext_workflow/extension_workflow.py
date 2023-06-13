@@ -351,7 +351,7 @@ class ExtensionWorkflow(AgentTest):
             dcr_ext_1_1.assert_instance_view()
 
             dcr_ext_1_1.update_ext_version(dcr_test_ext_client_1_3, "1.3.0")
-            
+
             log.info("Installing %s, version %s", dcr_test_ext_client, "1.3.0")
             dcr_ext_1_1.modify_ext_settings_and_enable()
             dcr_ext_1_1.assert_instance_view()
@@ -377,7 +377,7 @@ class ExtensionWorkflow(AgentTest):
             log.info("Running validate-no-lag-between-agent-start-and-gs-processing.py remotely...")
             result = self._ssh_client.run_command("validate-no-lag-between-agent-start-and-gs-processing.py", use_sudo=True)
             with soft_assertions():
-                assert_that(result).described_as("Validation for no lag time result").is_true()
+                assert_that(result).described_as("Validation for no lag time result").is_equal_to(0)
 
 if __name__ == "__main__":
     ExtensionWorkflow.run_from_command_line()

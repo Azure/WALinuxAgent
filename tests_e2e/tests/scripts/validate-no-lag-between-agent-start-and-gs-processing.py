@@ -52,6 +52,7 @@ def main():
             if agent_started:
                 agent_started_time.append(agent_record.timestamp)
                 agent_msg.append(agent_record.message)
+                print("Agent started at {0}: {1}".format(agent_record.timestamp, agent_record.message))
 
             gs_complete = re.match(gs_completed_regex, agent_record.message)
             verified_atleast_one_gs_complete_log_line = verified_atleast_one_gs_complete_log_line or gs_complete
@@ -61,6 +62,7 @@ def main():
                 # Reduce the duration it took to complete the Goalstate, essentially we should only care about how long
                 # the agent took after start/restart to start processing GS
                 diff -= timedelta(milliseconds=int(duration))
+                print("GS completed at {0}. Duration: {1}. Message: {2}".format(agent_record.timestamp, diff, agent_record.message))
                 agent_msg_line = agent_msg.pop()
                 if diff.seconds > time_diff_max_secs:
                     success = False
