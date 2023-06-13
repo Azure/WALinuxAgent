@@ -55,8 +55,8 @@ class Fips(AgentTest):
         # Trying to connect via SSH to the VM immediately after restart can fail with "connection refused"; the
         # retry logic in SshClient.run_command() takes care of the error, but a short sleep reduces the amount
         # of warnings in the test log.
-        log.info("Sleeping for 30 seconds to allow the system to initialize before connecting via SSH")
-        time.sleep(30)
+        log.info("Sleeping for 2 minutes to allow the system to initialize before connecting via SSH")
+        time.sleep(2 * 60)
 
         try:
             command = "fips-mode-setup --check"
