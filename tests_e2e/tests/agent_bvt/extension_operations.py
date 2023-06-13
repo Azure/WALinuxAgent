@@ -58,7 +58,7 @@ class ExtensionOperationsBvt(AgentTest):
             log.info("Installing %s", custom_script_2_0)
             message = f"Hello {uuid.uuid4()}!"
             custom_script_2_0.enable(
-                settings={
+                protected_settings={
                     'commandToExecute': f"echo \'{message}\'"
                 },
                 auto_upgrade_minor_version=False
@@ -77,7 +77,7 @@ class ExtensionOperationsBvt(AgentTest):
 
         message = f"Hello {uuid.uuid4()}!"
         custom_script_2_1.enable(
-            settings={
+            protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
             }
         )

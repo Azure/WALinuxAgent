@@ -19,6 +19,9 @@
 # This module includes facilities to execute operations on virtual machines (list extensions, restart, etc).
 #
 
+import datetime
+import json
+import time
 from typing import Any, Dict, List
 
 from azure.identity import DefaultAzureCredential
@@ -54,9 +57,9 @@ class VirtualMachineClient(AzureClient):
             base_url=cloud.endpoints.resource_manager,
             credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
 
-    def get_description(self) -> VirtualMachine:
+    def get_model(self) -> VirtualMachine:
         """
-        Retrieves the description of the virtual machine.
+        Retrieves the model of the virtual machine.
         """
         log.info("Retrieving description for %s", self._identifier)
         return execute_with_retry(
@@ -103,7 +106,7 @@ class VirtualMachineClient(AzureClient):
             operation_name=f"Update {self._identifier}",
             timeout=timeout)
 
-    def restart(self, timeout: int = AzureClient._DEFAULT_TIMEOUT) -> None:
+    def restart(self, timeout: int = AzureClient._DEFAULT_TIMEOUT, wait_for_boot: bool = True, boot_timeout: datetime.timedelta = datetime.timedelta(minutes=5)) -> None:
         """
         Restarts the virtual machine or scale set
         """
@@ -113,6 +116,23 @@ class VirtualMachineClient(AzureClient):
                 vm_name=self._identifier.name),
             operation_name=f"Restart {self._identifier}",
             timeout=timeout)
+
+        if not wait_for_boot:
+            return
+
+        start = datetime.datetime.now()
+        while datetime.datetime.now() < start + boot_timeout:
+            log.info("Waiting for VM %s to boot", self._identifier)
+            time.sleep(15)  # Note that we always sleep at least 1 time, to give the reboot time to start
+            instance_view = self.get_instance_view()
+            power_state = [s.code for s in instance_view.statuses if "PowerState" in s.code]
+            if len(power_state) != 1:
+                raise Exception(f"Could not find PowerState in the instance view statuses:\n{json.dumps(instance_view.statuses)}")
+            log.info("VM's Power State: %s", power_state[0])
+            if power_state[0] == "PowerState/running":
+                log.info("VM %s completed boot and is running", self._identifier)
+                return
+        raise Exception(f"VM {self._identifier} did not boot after {boot_timeout}")
 
     def __str__(self):
         return f"{self._identifier}"
