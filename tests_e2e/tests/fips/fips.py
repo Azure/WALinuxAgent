@@ -81,6 +81,9 @@ class Fips(AgentTest):
         custom_script.assert_instance_view(expected_version="2.0", expected_message=message)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        """
+        Some extensions added by policy on the test subscription use protected settings, which produce this error.
+        """
         return [
             {'message': r'Failed to decrypt /var/lib/waagent/Certificates.p7m'}
         ]
