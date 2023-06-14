@@ -582,8 +582,8 @@ class WireClient(object):
     def fetch_artifacts_profile_blob(self, uri):
         return self._fetch_content("artifacts profile blob", [uri], use_verify_header=False)[1]  # _fetch_content returns a (uri, content) tuple
 
-    def fetch_manifest(self, uris, use_verify_header):
-        uri, content = self._fetch_content("manifest", uris, use_verify_header=use_verify_header)
+    def fetch_manifest(self, manifest_type, uris, use_verify_header):
+        uri, content = self._fetch_content("{0} manifest".format(manifest_type), uris, use_verify_header=use_verify_header)
         self.get_host_plugin().update_manifest_uri(uri)
         return content
 
