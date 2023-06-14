@@ -9,8 +9,7 @@ parameters:
   - name: test_suites
     displayName: Test Suites
     type: string
-    default: agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, agent_ext_workflow
-
+    default: agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, agent_update, agent_ext_workflow
     # NOTES:
     #         * 'image', 'location' and 'vm_size' override any values in the test suites/images definition
     #            files. Those parameters are useful for 1-off tests, like testing a VHD or checking if

@@ -8,8 +8,9 @@ import shutil
 import subprocess
 import sys
 
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION
-from azurelinuxagent.ga.update import AGENT_MANIFEST_FILE
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
+    AGENT_LONG_VERSION
+from azurelinuxagent.ga.guestagent import AGENT_MANIFEST_FILE
 
 MANIFEST = '''[{{
     "name": "{0}",
