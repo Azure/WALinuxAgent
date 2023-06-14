@@ -31,23 +31,6 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-def str_to_encoded_ustr(s, encoding='utf-8'):
-    try:
-        # For py3+, str() is unicode by default
-        if isinstance(s, bytes):
-            # str.encode() returns bytes which should be decoded to get the str.
-            log.info("in if statement")
-            return s.decode(encoding)
-        else:
-            # If its not encoded, just return the string
-            log.info("in else statement")
-            return str(s)
-    except Exception:
-        # If some issues in decoding, just return the string
-        log.info("caught exception")
-        return str(s)
-
-
 class ExtensionWorkflow(AgentTest):
     """
     This scenario tests if the correct extension workflow sequence is being executed from the agent. See README for
@@ -123,7 +106,7 @@ class ExtensionWorkflow(AgentTest):
             log.info(result)
             log.info("Assertion completed successfully")
 
-        def assert_scenario(self, file_name: str, command_args: str, assert_status: bool = False, restart_agent: list[str] = None, data: str = None):
+        def assert_scenario(self, file_name: str, command_args: str, assert_status: bool = False, restart_agent: list = None, data: str = None):
             # Assert the status in the instance view
             if assert_status:
                 self.assert_instance_view(data=data)
@@ -226,7 +209,7 @@ class ExtensionWorkflow(AgentTest):
                 "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
                 "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches"
             ]
-            sentence = str_to_encoded_ustr(choice(random_special_char_sentences))
+            sentence = choice(random_special_char_sentences)
             test_str = "{0}; Special chars: {1}".format(test_guid, sentence)
 
             log.info("Special char test string for {0}: {1}".format(dcr_test_ext_client, test_str))
