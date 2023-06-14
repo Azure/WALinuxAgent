@@ -18,7 +18,7 @@
 #
 
 from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
-from assertpy import soft_assertions, assert_that
+from assertpy import assert_that, soft_assertions
 from datetime import datetime
 from random import choice
 import uuid
@@ -102,18 +102,19 @@ class ExtensionWorkflow(AgentTest):
             status_message = instance_view.statuses[0].message
             log.info("Status message: %s" % status_message)
 
-            expected_ext_version = "%s-%s" % (self.name, self.version)
-            assert_that(expected_ext_version in status_message).described_as(
-                f"Specific extension version name should be in the InstanceView message ({expected_ext_version})").is_true()
+            with soft_assertions():
+                expected_ext_version = "%s-%s" % (self.name, self.version)
+                assert_that(expected_ext_version in status_message).described_as(
+                    f"Specific extension version name should be in the InstanceView message ({expected_ext_version})").is_true()
 
-            expected_count = "%s: %s" % (self.COUNT_KEY_NAME, self.enable_count)
-            assert_that(expected_count in status_message).described_as(
-                f"Expected count should be in the InstanceView message ({expected_count})").is_true()
+                expected_count = "%s: %s" % (self.COUNT_KEY_NAME, self.enable_count)
+                assert_that(expected_count in status_message).described_as(
+                    f"Expected count should be in the InstanceView message ({expected_count})").is_true()
 
-            if self.data is not None:
-                expected_data = "{0}: {1}".format(self.DATA_KEY_NAME, self.data)
-                assert_that(expected_data in status_message).described_as(
-                    f"Expected data should be in the InstanceView message ({expected_data})").is_true()
+                if self.data is not None:
+                    expected_data = "{0}: {1}".format(self.DATA_KEY_NAME, self.data)
+                    assert_that(expected_data in status_message).described_as(
+                        f"Expected data should be in the InstanceView message ({expected_data})").is_true()
 
         def execute_assertion_script(self, file_name, args):
             log.info("")
