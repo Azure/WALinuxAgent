@@ -67,7 +67,7 @@ class ExtensionWorkflow(AgentTest):
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
 
             log.info("")
-            log.info("Add or update extension {0} with settings {1}".format(self.extension, settings))
+            log.info("Add or update extension {0} , version {1}, settings {2}".format(self.extension, self.version, settings))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
 
         def assert_instance_view(self, data=None):
