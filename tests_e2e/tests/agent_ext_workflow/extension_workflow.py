@@ -80,20 +80,22 @@ class ExtensionWorkflow(AgentTest):
             self.message = setting_name
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
 
+            log.info()
             log.info("Add or update extension {0} with settings {1}".format(self.extension, settings))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
 
         def assert_instance_view(self, data=None):
+            log.info()
             if data is None:
+                log.info("Assert instance view has expected message for test extension. Expected version: {0}, Expected message: {1}".format(self.version, self.message))
                 self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
             else:
-                self.data = data
-                self.extension.assert_instance_view(expected_version=self.version, assert_function=self.assert_data)
+                log.info("Assert instance view has expected data for test extension. Expected version: {0}, Expected data: {1}".format(self.version, data))
+                self.extension.assert_instance_view(expected_version=self.version, assert_function=self.assert_data_in_instance_view)
 
-        def assert_data(self, instance_view: VirtualMachineExtensionInstanceView):
+        def assert_data_in_instance_view(self, data: str, instance_view: VirtualMachineExtensionInstanceView):
             log.info("Asserting extension status ...")
             status_message = instance_view.statuses[0].message
-
             log.info("Status message: %s" % status_message)
 
             expected_ext_version = "%s-%s" % (self.name, self.version)
@@ -134,7 +136,6 @@ class ExtensionWorkflow(AgentTest):
         def assert_scenario(self, file_name: str, command_args: str, assert_status: bool = False, restart_agent: list[str] = None, data: str = None):
             # First assert the instance view
             if assert_status:
-                log.info("Assert instance view has expected message for test extension")
                 if data is not None:
                     self.assert_instance_view(data)
                 else:
@@ -159,7 +160,8 @@ class ExtensionWorkflow(AgentTest):
         if is_arm64:
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
-            log.info("\n*******Verifying the extension install scenario*******")
+            log.info()
+            log.info("*******Verifying the extension install scenario*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -196,7 +198,8 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info("\n*******Verifying the extension enable scenario*******")
+            log.info()
+            log.info("*******Verifying the extension enable scenario*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -214,7 +217,8 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info("\n*******Verifying the extension enable with special characters scenario*******")
+            log.info()
+            log.info("*******Verifying the extension enable with special characters scenario*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -247,7 +251,8 @@ class ExtensionWorkflow(AgentTest):
                 data=test_guid
             )
 
-            log.info("\n*******Verifying the extension uninstall scenario*******")
+            log.info()
+            log.info("*******Verifying the extension uninstall scenario*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -265,7 +270,8 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info("\n*******Verifying the extension update with install scenario*******")
+            log.info()
+            log.info("*******Verifying the extension update with install scenario*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -317,7 +323,8 @@ class ExtensionWorkflow(AgentTest):
             # TODO: add polling for delete operation?
             dcr_ext.extension.delete()
 
-            log.info("\n*******Verifying the extension update without install scenario*******")
+            log.info()
+            log.info("*******Verifying the extension update without install scenario*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -365,7 +372,8 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info("\n*******Verifying no lag between agent start and gs processing*******")
+            log.info()
+            log.info("*******Verifying no lag between agent start and gs processing*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")

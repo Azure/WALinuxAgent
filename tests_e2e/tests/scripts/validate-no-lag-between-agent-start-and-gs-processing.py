@@ -17,7 +17,6 @@
 # limitations under the License.
 #
 
-import argparse
 from datetime import timedelta
 import re
 import sys
@@ -68,7 +67,7 @@ def main():
                              "Messages: \n {1} {2}".format(time_diff_max_secs, agent_msg_line, agent_record.text))
 
     except IOError as e:
-        print("Unable to validate no lag time: {1}".format(str(e)))
+        print("Unable to validate no lag time: {0}".format(str(e)))
 
     if not verified_atleast_one_log_line:
         success = False
