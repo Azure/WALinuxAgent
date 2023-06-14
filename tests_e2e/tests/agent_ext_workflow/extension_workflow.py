@@ -131,7 +131,7 @@ class ExtensionWorkflow(AgentTest):
 
             return True
 
-        def assert_scenario(self, file_name: str, command_args: str, assert_status: bool = False, restart_agent: list[str] = None, version: str = None, data: str = None):
+        def assert_scenario(self, file_name: str, command_args: str, assert_status: bool = False, restart_agent: list[str] = None, data: str = None):
             # First assert the instance view
             if assert_status:
                 log.info("Assert instance view has expected message for test extension")
@@ -193,8 +193,7 @@ class ExtensionWorkflow(AgentTest):
                 file_name='assert-operation-sequence.py',
                 command_args=command_args,
                 assert_status=True,
-                restart_agent=restart_agent_command_args,
-                version=dcr_ext.version
+                restart_agent=restart_agent_command_args
             )
 
             log.info("\n*******Verifying the extension enable scenario*******")
@@ -212,8 +211,7 @@ class ExtensionWorkflow(AgentTest):
                 file_name='assert-operation-sequence.py',
                 command_args=command_args,
                 assert_status=True,
-                restart_agent=restart_agent_command_args,
-                version=dcr_ext.version
+                restart_agent=restart_agent_command_args
             )
 
             log.info("\n*******Verifying the extension enable with special characters scenario*******")
@@ -246,7 +244,6 @@ class ExtensionWorkflow(AgentTest):
                 file_name='check-data-in-agent-log.py',
                 command_args=command_args,
                 assert_status=True,
-                version=dcr_ext.version,
                 data=test_guid
             )
 
@@ -265,8 +262,7 @@ class ExtensionWorkflow(AgentTest):
             dcr_ext.assert_scenario(
                 file_name='assert-operation-sequence.py',
                 command_args=command_args,
-                restart_agent=restart_agent_command_args,
-                version=dcr_ext.version,
+                restart_agent=restart_agent_command_args
             )
 
             log.info("\n*******Verifying the extension update with install scenario*******")
@@ -316,8 +312,7 @@ class ExtensionWorkflow(AgentTest):
                 file_name='assert-operation-sequence.py',
                 command_args=command_args,
                 assert_status=True,
-                restart_agent=restart_agent_command_args,
-                version=new_version_update_mode_with_install
+                restart_agent=restart_agent_command_args
             )
             # TODO: add polling for delete operation?
             dcr_ext.extension.delete()
@@ -367,8 +362,7 @@ class ExtensionWorkflow(AgentTest):
                 file_name='assert-operation-sequence.py',
                 command_args=command_args,
                 assert_status=True,
-                restart_agent=restart_agent_command_args,
-                version=new_version_update_mode_without_install
+                restart_agent=restart_agent_command_args
             )
 
             log.info("\n*******Verifying no lag between agent start and gs processing*******")
