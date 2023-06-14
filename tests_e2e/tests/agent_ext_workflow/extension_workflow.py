@@ -284,7 +284,7 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update install enable --final-ops disable update uninstall install enable"
             restart_agent_command_args = [
                 f"--start-time {start_time} normal_ops_sequence --version {old_version} --ops disable uninstall",
-                f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_with_install} --ops install enable enable"
+                f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_with_install} --ops update install enable enable"
             ]
 
             dcr_ext.assert_scenario(
