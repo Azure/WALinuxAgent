@@ -16,5 +16,5 @@ tests:
   - "bvts/vm_access.py"
   - "no_outbound_connections/check_fallback_to_hgap.py"
 images: "random(endorsed)"
-template: "no_outbound_connections/nsg_template.py"
+template: "no_outbound_connections/template.py"
 owns_vm: true

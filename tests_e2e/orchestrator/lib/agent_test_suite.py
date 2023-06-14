@@ -275,7 +275,7 @@ class AgentTestSuite(LisaTestSuite):
         Cleans up any leftovers from the test suite run. Currently just an empty placeholder for future use.
         """
 
-    def _setup_node(self) -> None:
+    def _setup_node(self, install_test_agent: bool) -> None:
         """
         Prepares the remote node for executing the test suite (installs tools and the test agent, etc)
         """
@@ -317,11 +317,14 @@ class AgentTestSuite(LisaTestSuite):
         tarball_path: Path = Path("/tmp/waagent.tar")
         log.info("Creating %s with the files need on the test node", tarball_path)
         log.info("Adding orchestrator/scripts")
-        run_command(['tar', 'cvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"orchestrator"/"scripts"), '.'])
+        command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"orchestrator"/"scripts", str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
         log.info("Adding tests/scripts")
-        run_command(['tar', 'rvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"tests"/"scripts"), '.'])
+        command = "cd {0} ; tar rvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"tests"/"scripts", str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
         log.info("Adding tests/lib")
-        run_command(['tar', 'rvf', str(tarball_path), '--transform=s,^,lib/,', '-C', str(self.context.test_source_directory.parent), '--exclude=__pycache__', 'tests_e2e/tests/lib'])
+        command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
         log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
 
         #
@@ -349,10 +352,12 @@ class AgentTestSuite(LisaTestSuite):
         #
         log.info('Installing tools on the test node')
         command = f"tar xf {target_path/tarball_path.name} && ~/bin/install-tools"
-        log.info("%s\n%s", command, self.context.ssh_client.run_command(command))
+        log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
 
         if self.context.is_vhd:
             log.info("Using a VHD; will not install the Test Agent.")
+        elif not install_test_agent:
+            log.info("Will not install the Test Agent per the test suite configuration.")
         else:
             log.info("Installing the Test Agent on the test node")
             command = f"install-agent --package ~/tmp/{agent_package_path.name} --version {AGENT_VERSION}"
@@ -424,10 +429,16 @@ class AgentTestSuite(LisaTestSuite):
                             self._setup()
 
                         if not self.context.skip_setup:
-                            self._setup_node()
+                            # pylint seems to think self.context.test_suites is not iterable. Suppressing this warning here and a few lines below, since
+                            # its type is List[AgentTestSuite].
+                            # E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+                            install_test_agent = all([suite.install_test_agent for suite in self.context.test_suites])   # pylint: disable=E1133
+                            try:
+                                self._setup_node(install_test_agent)
+                            except:
+                                test_suite_success = False
+                                raise
 
-                        # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
-                        #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
                         for suite in self.context.test_suites:  # pylint: disable=E1133
                             log.info("Executing test suite %s", suite.name)
                             self.context.lisa_log.info("Executing Test Suite %s", suite.name)

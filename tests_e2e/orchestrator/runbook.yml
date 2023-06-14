@@ -49,7 +49,7 @@ variable:
   #
   # The test suites to execute
   - name: test_suites
-    value: "agent_bvt, no_outbound_connections, extensions_disabled, agent_ext_workflow"
+    value: "agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, agent_ext_workflow"
   - name: cloud
     value: "AzureCloud"
     is_case_visible: true
