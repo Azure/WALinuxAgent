@@ -294,6 +294,7 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
+            log.info("")
             log.info("Delete %s from VM", dcr_test_ext_client_1_2)
             dcr_ext.extension.delete()
 
