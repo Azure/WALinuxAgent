@@ -80,11 +80,10 @@ class ExtensionWorkflow(AgentTest):
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
             if data is not None:
                 setting_name = "{0}, {1}: {2}".format(setting_name, self.DATA_KEY_NAME, data)
-            log.info("The settings_name before encode is {0}".format(setting_name))
-            encoded_setting_name = setting_name.encode('utf-8')
             self.message = setting_name
-            settings = {self.NAME_KEY_NAME: encoded_setting_name}
-            log.info("The settings after encode is {0}".format(settings.get(self.NAME_KEY_NAME)))
+            settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
+
+            log.info("Add or update extension {0} with settings {1}".format(self.extension, settings))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
 
         def assert_instance_view(self, data=None):
@@ -163,21 +162,21 @@ class ExtensionWorkflow(AgentTest):
         if is_arm64:
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
-            log.info("*******Verifying the extension install scenario*******")
+            log.info("\n*******Verifying the extension install scenario*******")
 
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            # Create DcrTestExtension
+            # Create DcrTestExtension with version 1.1.5
             dcr_test_ext_id_1_1 = VmExtensionIdentifier(VmExtensionIds.GuestAgentDcrTestExtension.publisher,
                                                     VmExtensionIds.GuestAgentDcrTestExtension.type, "1.1")
             dcr_test_ext_client = VirtualMachineExtensionClient(
                 self._context.vm,
                 dcr_test_ext_id_1_1,
-                resource_name="GuestAgentDcr-TestInstall")
+                resource_name="GuestAgentDcrTestExt")
             dcr_ext = ExtensionWorkflow.GuestAgentDcrTestExtension(extension=dcr_test_ext_client, ssh_client=self._ssh_client, version="1.1.5")
 
-            log.info("Installing %s", dcr_test_ext_client)
+            # Install test extension on the VM
             dcr_ext.modify_ext_settings_and_enable()
 
             # Test arguments specify the specific arguments for this test
