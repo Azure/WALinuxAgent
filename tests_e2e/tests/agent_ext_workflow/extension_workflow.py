@@ -47,9 +47,8 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
 
 class ExtensionWorkflow(AgentTest):
     """
-    This scenario tests if the correct extension workflow sequence is being executed from the agent.
-
-
+    This scenario tests if the correct extension workflow sequence is being executed from the agent. See README for
+    details on GuestAgentDcrTestExtension.
     """
     def __init__(self, context: AgentTestContext):
         super().__init__(context)
