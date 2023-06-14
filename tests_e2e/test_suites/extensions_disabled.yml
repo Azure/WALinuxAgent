@@ -4,6 +4,6 @@
 #
 name: "ExtensionsDisabled"
 tests:
-  - "extensions_disabled.py"
+  - "extensions_disabled/extensions_disabled.py"
 images: "random(endorsed)"
 owns_vm: true

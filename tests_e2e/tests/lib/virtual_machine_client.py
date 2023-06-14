@@ -19,6 +19,9 @@
 # This module includes facilities to execute operations on virtual machines (list extensions, restart, etc).
 #
 
+import datetime
+import json
+import time
 from typing import Any, Dict, List
 
 from azure.identity import DefaultAzureCredential
@@ -32,6 +35,8 @@ from tests_e2e.tests.lib.azure_client import AzureClient
 from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import execute_with_retry
+from tests_e2e.tests.lib.shell import CommandError
+from tests_e2e.tests.lib.ssh_client import SshClient
 
 
 class VirtualMachineClient(AzureClient):
@@ -54,11 +59,11 @@ class VirtualMachineClient(AzureClient):
             base_url=cloud.endpoints.resource_manager,
             credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
 
-    def get_description(self) -> VirtualMachine:
+    def get_model(self) -> VirtualMachine:
         """
-        Retrieves the description of the virtual machine.
+        Retrieves the model of the virtual machine.
         """
-        log.info("Retrieving description for %s", self._identifier)
+        log.info("Retrieving VM model for %s", self._identifier)
         return execute_with_retry(
             lambda: self._compute_client.virtual_machines.get(
                 resource_group_name=self._identifier.resource_group,
@@ -103,16 +108,62 @@ class VirtualMachineClient(AzureClient):
             operation_name=f"Update {self._identifier}",
             timeout=timeout)
 
-    def restart(self, timeout: int = AzureClient._DEFAULT_TIMEOUT) -> None:
+    def restart(
+        self,
+        wait_for_boot,
+        ssh_client: SshClient = None,
+        boot_timeout: datetime.timedelta = datetime.timedelta(minutes=5),
+        timeout: int = AzureClient._DEFAULT_TIMEOUT) -> None:
         """
-        Restarts the virtual machine or scale set
+        Restarts (reboots) the virtual machine.
+
+        NOTES:
+            * If wait_for_boot is True, an SshClient must be provided in order to verify that the restart was successful.
+            * 'timeout' is the timeout for the restart operation itself, while 'boot_timeout' is the timeout for waiting
+               the boot to complete.
         """
+        if wait_for_boot and ssh_client is None:
+            raise ValueError("An SshClient must be provided if wait_for_boot is True")
+
+        before_restart = datetime.datetime.utcnow()
+
         self._execute_async_operation(
             lambda: self._compute_client.virtual_machines.begin_restart(
                 resource_group_name=self._identifier.resource_group,
                 vm_name=self._identifier.name),
             operation_name=f"Restart {self._identifier}",
             timeout=timeout)
+
+        if not wait_for_boot:
+            return
+
+        start = datetime.datetime.utcnow()
+        while datetime.datetime.utcnow() < start + boot_timeout:
+            log.info("Waiting for VM %s to boot", self._identifier)
+            time.sleep(15)  # Note that we always sleep at least 1 time, to give the reboot time to start
+            instance_view = self.get_instance_view()
+            power_state = [s.code for s in instance_view.statuses if "PowerState" in s.code]
+            if len(power_state) != 1:
+                raise Exception(f"Could not find PowerState in the instance view statuses:\n{json.dumps(instance_view.statuses)}")
+            log.info("VM's Power State: %s", power_state[0])
+            if power_state[0] == "PowerState/running":
+                # We may get an instance view captured before the reboot actually happened; verify
+                # that the reboot actually happened by checking the system's uptime.
+                log.info("Verifying VM's uptime to ensure the reboot has completed...")
+                try:
+                    uptime = ssh_client.run_command("cat /proc/uptime | sed 's/ .*//'", attempts=1).rstrip()  # The uptime is the first field in the file
+                    log.info("Uptime: %s", uptime)
+                    boot_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=float(uptime))
+                    if boot_time > before_restart:
+                        log.info("VM %s completed boot and is running. Boot time: %s", self._identifier, boot_time)
+                        return
+                    log.info("The VM has not rebooted yet. Restart time: %s. Boot time: %s", before_restart, boot_time)
+                except CommandError as e:
+                    if e.exit_code == 255 and "Connection refused" in str(e):
+                        log.info("VM %s is not yet accepting SSH connections", self._identifier)
+                    else:
+                        raise
+        raise Exception(f"VM {self._identifier} did not boot after {boot_timeout}")
 
     def __str__(self):
         return f"{self._identifier}"
