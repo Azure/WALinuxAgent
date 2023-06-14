@@ -212,7 +212,7 @@ class ExtensionWorkflow(AgentTest):
             sentence = choice(random_special_char_sentences)
             test_str = "{0}; Special chars: {1}".format(test_guid, sentence)
 
-            log.info("Special char test string for {0}: '{1}'".format(dcr_test_ext_client, test_str))
+            # Enable test extension on the VM
             dcr_ext.modify_ext_settings_and_enable(data=test_str)
 
             command_args = f"--data {test_guid}"
