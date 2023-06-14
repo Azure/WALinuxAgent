@@ -254,7 +254,6 @@ class ExtensionWorkflow(AgentTest):
             restart_agent_command_args=[f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops disable uninstall"]
 
             log.info("Delete %s from VM", dcr_test_ext_client)
-            # TODO: Add polling for this async operation?
             dcr_ext.extension.delete()
 
             dcr_ext.assert_scenario(
@@ -315,7 +314,6 @@ class ExtensionWorkflow(AgentTest):
             )
 
             log.info("Delete %s from VM", dcr_test_ext_client_1_2)
-            # TODO: Add polling for this async operation?
             dcr_ext.extension.delete()
 
             log.info("")
