@@ -18,7 +18,6 @@
 #
 
 import uuid
-import time
 from assertpy import fail
 from typing import Any, Dict, List
 
@@ -51,18 +50,13 @@ class Fips(AgentTest):
 
         log.info("Restarting test VM")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-        vm.restart()
-        # Trying to connect via SSH to the VM immediately after restart can fail with "connection refused"; the
-        # retry logic in SshClient.run_command() takes care of the error, but a short sleep reduces the amount
-        # of warnings in the test log.
-        log.info("Sleeping for 2 minutes to allow the system to initialize before connecting via SSH")
-        time.sleep(2 * 60)
+        vm.restart(wait_for_boot=True, ssh_client=ssh_client)
 
         try:
             command = "fips-mode-setup --check"
             log.info("Verifying that FIPS is enabled [%s]", command)
-            output = ssh_client.run_command(command)
-            if output != "FIPS mode is enabled.\n":
+            output = ssh_client.run_command(command).rstrip()
+            if output != "FIPS mode is enabled.":
                 fail(f"FIPS i not enabled - '{command}' returned '{output}'")
             log.info(output)
         except CommandError as e:
