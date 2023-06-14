@@ -17,10 +17,6 @@
 # limitations under the License.
 #
 
-#
-# BVT for extension workflow.
-#
-
 from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
 from assertpy import soft_assertions, assert_that
 from datetime import datetime
@@ -50,6 +46,11 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
 
 
 class ExtensionWorkflow(AgentTest):
+    """
+    This scenario tests if the correct extension workflow sequence is being executed from the agent.
+
+
+    """
     def __init__(self, context: AgentTestContext):
         super().__init__(context)
         self._ssh_client = SshClient(
