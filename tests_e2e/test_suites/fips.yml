@@ -1,0 +1,10 @@
+#
+# FIPS should not affect extension processing. The test enables FIPS and then executes an extension.
+#
+# NOTE: Enabling FIPS is very specific to the distro. This test is only executed on RHEL 9.0.
+#
+name: "FIPS"
+tests:
+  - source: "fips/fips.py"
+images: "rhel_90"
+owns_vm: true

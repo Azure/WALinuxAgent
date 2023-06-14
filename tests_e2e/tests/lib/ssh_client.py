@@ -23,6 +23,9 @@ from pathlib import Path
 from tests_e2e.tests.lib import shell
 from tests_e2e.tests.lib.retry import retry_ssh_run
 
+ATTEMPTS: int = 3
+ATTEMPT_DELAY: int = 30
+
 
 class SshClient(object):
     def __init__(self, ip_address: str, username: str, private_key_file: Path, port: int = 22):
@@ -31,7 +34,7 @@ class SshClient(object):
         self._private_key_file: Path = private_key_file
         self._port: int = port
 
-    def run_command(self, command: str, use_sudo: bool = False) -> str:
+    def run_command(self, command: str, use_sudo: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> str:
         """
         Executes the given command over SSH and returns its stdout. If the command returns a non-zero exit code,
         the function raises a CommandError.
@@ -44,9 +47,12 @@ class SshClient(object):
         # Note that we add ~/bin to the remote PATH, since Python (Pypy) and other test tools are installed there.
         # Note, too, that when using sudo we need to carry over the value of PATH to the sudo session
         sudo = "sudo env PATH=$PATH PYTHONPATH=$PYTHONPATH" if use_sudo else ''
-        return retry_ssh_run(lambda: shell.run_command([
-            "ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file, destination,
-            f"if [[ -e ~/bin/set-agent-env ]]; then source ~/bin/set-agent-env; fi; {sudo} {command}"]))
+        command = [
+            "ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file,
+            destination,
+            f"if [[ -e ~/bin/set-agent-env ]]; then source ~/bin/set-agent-env; fi; {sudo} {command}"
+        ]
+        return retry_ssh_run(lambda: shell.run_command(command), attempts, attempt_delay)
 
     @staticmethod
     def generate_ssh_key(private_key_file: Path):
@@ -59,19 +65,19 @@ class SshClient(object):
     def get_architecture(self):
         return self.run_command("uname -m").rstrip()
 
-    def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False) -> None:
+    def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
         File copy to a remote node
         """
-        self._copy(local_path, remote_path, remote_source=False, remote_target=True, recursive=recursive)
+        self._copy(local_path, remote_path, remote_source=False, remote_target=True, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
 
-    def copy_from_node(self, remote_path: Path, local_path: Path, recursive: bool = False) -> None:
+    def copy_from_node(self, remote_path: Path, local_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
         File copy from a remote node
         """
-        self._copy(remote_path, local_path, remote_source=True, remote_target=False, recursive=recursive)
+        self._copy(remote_path, local_path, remote_source=True, remote_target=False, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
 
-    def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool) -> None:
+    def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool, attempts: int, attempt_delay: int) -> None:
         if remote_source:
             source = f"{self._username}@{self._ip_address}:{source}"
         if remote_target:
@@ -82,4 +88,4 @@ class SshClient(object):
             command.append("-r")
         command.extend([str(source), str(target)])
 
-        shell.run_command(command)
+        return retry_ssh_run(lambda: shell.run_command(command), attempts, attempt_delay)
