@@ -90,10 +90,11 @@ class ExtensionWorkflow(AgentTest):
                 log.info("Assert instance view has expected message for test extension. Expected version: {0}, Expected message: {1}".format(self.version, self.message))
                 self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
             else:
+                self.data = data
                 log.info("Assert instance view has expected data for test extension. Expected version: {0}, Expected data: {1}".format(self.version, data))
                 self.extension.assert_instance_view(expected_version=self.version, assert_function=self.assert_data_in_instance_view)
 
-        def assert_data_in_instance_view(self, data: str, instance_view: VirtualMachineExtensionInstanceView):
+        def assert_data_in_instance_view(self, instance_view: VirtualMachineExtensionInstanceView):
             log.info("Asserting extension status ...")
             status_message = instance_view.statuses[0].message
             log.info("Status message: %s" % status_message)
