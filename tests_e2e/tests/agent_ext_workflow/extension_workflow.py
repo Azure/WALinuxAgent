@@ -139,7 +139,6 @@ class ExtensionWorkflow(AgentTest):
                 output = self.ssh_client.run_command("agent-service restart", use_sudo=True)
                 log.info("Restart completed:\n%s", output)
 
-                log.info("")
                 for args in restart_agent:
                     self.execute_assertion_script('assert-operation-sequence.py', args)
 
