@@ -39,6 +39,11 @@ docker pull waagenttests.azurecr.io/waagenttests:latest
 
 # Azure Pipelines does not allow an empty string as the value for a pipeline parameter; instead we use "-" to indicate
 # an empty value. Change "-" to "" for the variables that capture the parameter values.
+if [[ $TEST_SUITES == "-" ]]; then
+    TEST_SUITES=""  # Don't set the test_suites variable
+else
+    TEST_SUITES="-v test_suites:\"$TEST_SUITES\""
+fi
 if [[ $IMAGE == "-" ]]; then
     IMAGE=""
 fi
@@ -69,13 +74,13 @@ docker run --rm \
           -v cloud:$CLOUD \
           -v subscription_id:$SUBSCRIPTION_ID \
           -v identity_file:\$HOME/.ssh/id_rsa \
-          -v test_suites:\"$TEST_SUITES\" \
           -v log_path:\$HOME/logs \
           -v collect_logs:\"$COLLECT_LOGS\" \
           -v keep_environment:\"$KEEP_ENVIRONMENT\" \
           -v image:\"$IMAGE\" \
           -v location:\"$LOCATION\" \
-          -v vm_size:\"$VM_SIZE\"" \
+          -v vm_size:\"$VM_SIZE\" \
+          $TEST_SUITES" \
 || echo "exit $?" > /tmp/exit.sh
 
 #
