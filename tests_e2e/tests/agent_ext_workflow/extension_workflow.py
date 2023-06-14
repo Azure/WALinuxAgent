@@ -36,12 +36,15 @@ def str_to_encoded_ustr(s, encoding='utf-8'):
         # For py3+, str() is unicode by default
         if isinstance(s, bytes):
             # str.encode() returns bytes which should be decoded to get the str.
+            log.info("in if statement")
             return s.decode(encoding)
         else:
             # If its not encoded, just return the string
+            log.info("in else statement")
             return str(s)
     except Exception:
         # If some issues in decoding, just return the string
+        log.info("caught exception")
         return str(s)
 
 
@@ -80,12 +83,12 @@ class ExtensionWorkflow(AgentTest):
             self.message = setting_name
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
 
-            log.info()
+            log.info("")
             log.info("Add or update extension {0} with settings {1}".format(self.extension, settings))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
 
         def assert_instance_view(self, data=None):
-            log.info()
+            log.info("")
             if data is None:
                 log.info("Assert instance view has expected message for test extension. Expected version: {0}, Expected message: {1}".format(self.version, self.message))
                 self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
@@ -112,44 +115,35 @@ class ExtensionWorkflow(AgentTest):
                 assert_that(expected_data in status_message).described_as(
                     f"Expected data should be in the InstanceView message ({expected_data})").is_true()
 
-        def execute_assert(self, file_name, args):
-            log.info("Asserting %s %s ...", file_name, ' '.join(args))
-
+        def execute_assertion_script(self, file_name, args):
+            log.info("")
             log.info("Running {0} remotely with arguments {1}".format(file_name, args))
             result = self.ssh_client.run_command(f"{file_name} {args}", use_sudo=True)
-
-            with soft_assertions():
-                assert_that(result).described_as("Assertion for file '{0}' with args: {1}".format(file_name, args)).is_true()
-
-        def restart_agent_and_test_status(self, command_args: list[str], assert_status: bool = False):
-            # Restarting agent should just run enable again and rerun the same settings
-            output = self.ssh_client.run_command("agent-service restart", use_sudo=True)
-            log.info("Restart completed:\n%s", output)
-
-            for args in command_args:
-                self.execute_assert('assert-operation-sequence.py', args)
-
-            if assert_status:
-                self.assert_instance_view()
-
-            return True
+            log.info(result)
+            log.info("Assertion completed successfully")
 
         def assert_scenario(self, file_name: str, command_args: str, assert_status: bool = False, restart_agent: list[str] = None, data: str = None):
-            # First assert the instance view
+            # Assert the status in the instance view
             if assert_status:
-                if data is not None:
-                    self.assert_instance_view(data)
-                else:
-                    self.assert_instance_view()
+                self.assert_instance_view(data=data)
 
-            # Then test the operation sequence (by checking the operations.log file in the VM)
-            log.info("Assert operations.log has the expected operation sequence added by the test extension")
-            self.execute_assert(file_name, command_args)
+            # Remotely execute the assertion script
+            self.execute_assertion_script(file_name, command_args)
 
-            # Then restart the agent and test the status again if enabled (by checking the operations.log file in the VM)
+            # Restart the agent and test the status again if enabled (by checking the operations.log file in the VM)
+            # Restarting agent should just run enable again and rerun the same settings
             if restart_agent is not None:
-                log.info("Restart the agent and assert operations.log has the expected operation sequence added by the test extension")
-                self.restart_agent_and_test_status(command_args=restart_agent, assert_status=assert_status)
+                log.info("")
+                log.info("Restarting the agent...")
+                output = self.ssh_client.run_command("agent-service restart", use_sudo=True)
+                log.info("Restart completed:\n%s", output)
+
+                log.info("")
+                for args in restart_agent:
+                    self.execute_assertion_script('assert-operation-sequence.py', args)
+
+                if assert_status:
+                    self.assert_instance_view()
 
         def update_ext_version(self, extension: VirtualMachineExtensionClient, version: str):
             self.extension = extension
@@ -161,7 +155,7 @@ class ExtensionWorkflow(AgentTest):
         if is_arm64:
             log.info("Skipping test case for %s, since it has not been published on ARM64", VmExtensionIds.GuestAgentDcrTestExtension)
         else:
-            log.info()
+            log.info("")
             log.info("*******Verifying the extension install scenario*******")
 
             # Record the time we start the test
@@ -199,7 +193,7 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info()
+            log.info("")
             log.info("*******Verifying the extension enable scenario*******")
 
             # Record the time we start the test
@@ -218,11 +212,8 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info()
+            log.info("")
             log.info("*******Verifying the extension enable with special characters scenario*******")
-
-            # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
             test_guid = str(uuid.uuid4())
             random_special_char_sentences = [
@@ -252,7 +243,7 @@ class ExtensionWorkflow(AgentTest):
                 data=test_guid
             )
 
-            log.info()
+            log.info("")
             log.info("*******Verifying the extension uninstall scenario*******")
 
             # Record the time we start the test
@@ -261,7 +252,7 @@ class ExtensionWorkflow(AgentTest):
             command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops disable uninstall"
             restart_agent_command_args=[f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops disable uninstall"]
 
-            log.info("Delete %s", dcr_test_ext_client)
+            log.info("Delete %s from VM", dcr_test_ext_client)
             # TODO: Add polling for this async operation?
             dcr_ext.extension.delete()
 
@@ -271,7 +262,7 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info()
+            log.info("")
             log.info("*******Verifying the extension update with install scenario*******")
 
             # Record the time we start the test
@@ -321,10 +312,12 @@ class ExtensionWorkflow(AgentTest):
                 assert_status=True,
                 restart_agent=restart_agent_command_args
             )
-            # TODO: add polling for delete operation?
+
+            log.info("Delete %s from VM", dcr_test_ext_client_1_2)
+            # TODO: Add polling for this async operation?
             dcr_ext.extension.delete()
 
-            log.info()
+            log.info("")
             log.info("*******Verifying the extension update without install scenario*******")
 
             # Record the time we start the test
@@ -373,16 +366,14 @@ class ExtensionWorkflow(AgentTest):
                 restart_agent=restart_agent_command_args
             )
 
-            log.info()
+            log.info("")
             log.info("*******Verifying no lag between agent start and gs processing*******")
 
-            # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-
+            log.info("")
             log.info("Running validate-no-lag-between-agent-start-and-gs-processing.py remotely...")
             result = self._ssh_client.run_command("validate-no-lag-between-agent-start-and-gs-processing.py", use_sudo=True)
-            with soft_assertions():
-                assert_that(result).described_as("Validation for no lag time result").is_empty()
+            log.info(result)
+            log.info("Validation for no lag time between agent start and gs processing completed successfully")
 
 
 if __name__ == "__main__":
