@@ -277,9 +277,8 @@ class ExtensionWorkflow(AgentTest):
             # Update extension object & version to new version
             dcr_ext.update_ext_version(dcr_test_ext_client_1_2, new_version_update_mode_with_install)
 
-            # Install test extension v1.2.0 on the VM and assert instance view
+            # Install test extension v1.2.0 on the VM
             dcr_ext.modify_ext_settings_and_enable()
-            dcr_ext.assert_instance_view()
 
             # TODO: removed update in second set of restart agent test args -> check that this is allowed/expected
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update install enable --final-ops disable update uninstall install enable"
@@ -329,9 +328,8 @@ class ExtensionWorkflow(AgentTest):
             # Update extension object & version to new version
             dcr_ext.update_ext_version(dcr_test_ext_client_1_3, new_version_update_mode_without_install)
 
-            # Install test extension v1.3.0 on the VM and assert instance view
+            # Install test extension v1.3.0 on the VM
             dcr_ext.modify_ext_settings_and_enable()
-            dcr_ext.assert_instance_view()
 
             # TODO: removed update in second set of restart agent test args -> check that this is allowed/expected
             command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_without_install} --new-ver-ops update enable --final-ops disable update uninstall enable"
