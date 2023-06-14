@@ -185,7 +185,7 @@ class GoalState(object):
     def _fetch_manifest(self, manifest_type, name, uris):
         try:
             is_fast_track = self.extensions_goal_state.source == GoalStateSource.FastTrack
-            xml_text = self._wire_client.fetch_manifest(uris, use_verify_header=is_fast_track)
+            xml_text = self._wire_client.fetch_manifest(manifest_type, uris, use_verify_header=is_fast_track)
             self._history.save_manifest(name, xml_text)
             return ExtensionManifest(xml_text)
         except Exception as e:

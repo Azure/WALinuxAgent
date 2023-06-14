@@ -3185,7 +3185,7 @@ class TestAdditionalLocationsExtensions(AgentTestCase):
             wire._DOWNLOAD_TIMEOUT = datetime.timedelta(minutes=0)
             try:
                 with self.assertRaises(ExtensionDownloadError):
-                    protocol.client.fetch_manifest(ext_handlers[0].manifest_uris, use_verify_header=False)
+                    protocol.client.fetch_manifest("extension", ext_handlers[0].manifest_uris, use_verify_header=False)
             finally:
                 wire._DOWNLOAD_TIMEOUT = download_timeout
 
