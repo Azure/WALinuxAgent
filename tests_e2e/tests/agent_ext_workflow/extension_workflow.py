@@ -62,9 +62,6 @@ class ExtensionWorkflow(AgentTest):
         COUNT_KEY_NAME = "Count"
         NAME_KEY_NAME = "name"
         DATA_KEY_NAME = "data"
-        VERSION_KEY_NAME = "version"
-        ASSERT_STATUS_KEY_NAME = "assert_status"
-        RESTART_AGENT_KEY_NAME = "restart_agent"
 
         def __init__(self, extension: VirtualMachineExtensionClient, ssh_client: SshClient, version: str):
             self.extension = extension
