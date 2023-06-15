@@ -114,7 +114,7 @@ class RsmUpdateBvt(AgentTest):
 
     @staticmethod
     def _verify_agent_update_flag_enabled(vm: VirtualMachineClient) -> bool:
-        result: VirtualMachine = vm.get_description()
+        result: VirtualMachine = vm.get_model()
         flag: bool = result.os_profile.linux_configuration.enable_vm_agent_platform_updates
         if flag is None:
             return False
