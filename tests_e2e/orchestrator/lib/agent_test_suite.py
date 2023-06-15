@@ -135,7 +135,7 @@ class AgentTestSuite(LisaTestSuite):
 
         self.__context = self._Context(
             vm=VmIdentifier(
-                cloud=self._get_required_parameter(variables, "c_cloud"),
+                cloud=self._get_required_parameter(variables, "cloud"),
                 location=self._get_required_parameter(variables, "c_location"),
                 subscription=node.features._platform.subscription_id,
                 resource_group=node_context.resource_group_name,
@@ -203,11 +203,25 @@ class AgentTestSuite(LisaTestSuite):
 
     #
     # Test suites within the same runbook may be executed concurrently, and setup needs to be done only once.
-    # We use this lock to allow only 1 thread to do the setup. Setup completion is marked using the 'completed'
+    # We use these locks to allow only 1 thread to do the setup. Setup completion is marked using the 'completed'
     # file: the thread doing the setup creates the file and threads that find that the file already exists
     # simply skip setup.
     #
+    _working_directory_lock = RLock()
     _setup_lock = RLock()
+
+    def _create_working_directory(self) -> None:
+        """
+        Creates the working directory for the test suite.
+        """
+        self._working_directory_lock.acquire()
+
+        try:
+            if not self.context.working_directory.exists():
+                log.info("Creating working directory: %s", self.context.working_directory)
+                self.context.working_directory.mkdir(parents=True)
+        finally:
+            self._working_directory_lock.release()
 
     def _setup(self) -> None:
         """
@@ -228,9 +242,6 @@ class AgentTestSuite(LisaTestSuite):
                 return
 
             self.context.lisa_log.info("Building test agent")
-            log.info("Creating working directory: %s", self.context.working_directory)
-            self.context.working_directory.mkdir(parents=True)
-
             self._build_agent_package()
 
             log.info("Completed setup, creating %s", completed)
@@ -264,7 +275,7 @@ class AgentTestSuite(LisaTestSuite):
         Cleans up any leftovers from the test suite run. Currently just an empty placeholder for future use.
         """
 
-    def _setup_node(self) -> None:
+    def _setup_node(self, install_test_agent: bool) -> None:
         """
         Prepares the remote node for executing the test suite (installs tools and the test agent, etc)
         """
@@ -306,11 +317,14 @@ class AgentTestSuite(LisaTestSuite):
         tarball_path: Path = Path("/tmp/waagent.tar")
         log.info("Creating %s with the files need on the test node", tarball_path)
         log.info("Adding orchestrator/scripts")
-        run_command(['tar', 'cvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"orchestrator"/"scripts"), '.'])
-        # log.info("Adding tests/scripts")
-        # run_command(['tar', 'rvf', str(tarball_path), '--transform=s,.*/,bin/,', '-C', str(self.context.test_source_directory/"tests"/"scripts"), '.'])
+        command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"orchestrator"/"scripts", str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
+        log.info("Adding tests/scripts")
+        command = "cd {0} ; tar rvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"tests"/"scripts", str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
         log.info("Adding tests/lib")
-        run_command(['tar', 'rvf', str(tarball_path), '--transform=s,^,lib/,', '-C', str(self.context.test_source_directory.parent), '--exclude=__pycache__', 'tests_e2e/tests/lib'])
+        command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
+        log.info("%s\n%s", command, run_command(command, shell=True))
         log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
 
         #
@@ -338,10 +352,12 @@ class AgentTestSuite(LisaTestSuite):
         #
         log.info('Installing tools on the test node')
         command = f"tar xf {target_path/tarball_path.name} && ~/bin/install-tools"
-        log.info("%s\n%s", command, self.context.ssh_client.run_command(command))
+        log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
 
         if self.context.is_vhd:
             log.info("Using a VHD; will not install the Test Agent.")
+        elif not install_test_agent:
+            log.info("Will not install the Test Agent per the test suite configuration.")
         else:
             log.info("Installing the Test Agent on the test node")
             command = f"install-agent --package ~/tmp/{agent_package_path.name} --version {AGENT_VERSION}"
@@ -407,14 +423,22 @@ class AgentTestSuite(LisaTestSuite):
                     test_suite_success = True
 
                     try:
+                        self._create_working_directory()
+
                         if not self.context.skip_setup:
                             self._setup()
 
                         if not self.context.skip_setup:
-                            self._setup_node()
+                            # pylint seems to think self.context.test_suites is not iterable. Suppressing this warning here and a few lines below, since
+                            # its type is List[AgentTestSuite].
+                            # E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
+                            install_test_agent = all([suite.install_test_agent for suite in self.context.test_suites])   # pylint: disable=E1133
+                            try:
+                                self._setup_node(install_test_agent)
+                            except:
+                                test_suite_success = False
+                                raise
 
-                        # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
-                        #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
                         for suite in self.context.test_suites:  # pylint: disable=E1133
                             log.info("Executing test suite %s", suite.name)
                             self.context.lisa_log.info("Executing Test Suite %s", suite.name)
@@ -453,8 +477,6 @@ class AgentTestSuite(LisaTestSuite):
         suite_name = suite.name
         suite_full_name = f"{suite_name}-{self.context.environment_name}"
         suite_start_time: datetime.datetime = datetime.datetime.now()
-
-        success: bool = True  # True if all the tests succeed
 
         with _set_thread_name(suite_full_name):  # The thread name is added to the LISA log
             log_path: Path = self.context.log_path/f"{suite_full_name}.log"
@@ -550,7 +572,7 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
-        return success
+                return suite_success
 
     def _check_agent_log(self) -> bool:
         """

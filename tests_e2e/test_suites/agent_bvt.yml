@@ -1,8 +1,8 @@
 name: "AgentBvt"
 tests:
-  - "bvts/extension_operations.py"
-  - "bvts/run_command.py"
-  - "bvts/vm_access.py"
+  - "agent_bvt/extension_operations.py"
+  - "agent_bvt/run_command.py"
+  - "agent_bvt/vm_access.py"
 images:
   - "endorsed"
   - "endorsed-arm64"

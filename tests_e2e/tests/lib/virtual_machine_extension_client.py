@@ -16,37 +16,29 @@
 #
 
 #
-# This module includes facilities to execute VM extension operations (enable, remove, etc) on single virtual machines (using
-# class VmExtension) or virtual machine scale sets (using class VmssExtension).
+# This module includes facilities to execute VM extension operations (enable, remove, etc).
 #
 
 import uuid
 
-from abc import ABC, abstractmethod
 from assertpy import assert_that, soft_assertions
-from typing import Any, Callable, Dict, Type
+from typing import Any, Callable, Dict
 
-from azure.core.polling import LROPoller
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineScaleSetExtension, VirtualMachineExtensionInstanceView
+from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineExtensionInstanceView
 from azure.identity import DefaultAzureCredential
 from msrestazure.azure_cloud import Cloud
 
 from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
+from tests_e2e.tests.lib.azure_client import AzureClient
 from tests_e2e.tests.lib.identifiers import VmIdentifier, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import execute_with_retry
 
 
-_TIMEOUT = 5 * 60  # Timeout for extension operations (in seconds)
-
-
-class _VmExtensionBaseClass(ABC):
+class VirtualMachineExtensionClient(AzureClient):
     """
-    Abstract base class for VmExtension and VmssExtension.
-
-    Implements the operations that are common to virtual machines and scale sets. Derived classes must provide the specific types and methods for the
-    virtual machine or scale set.
+    Client for operations virtual machine extensions.
     """
     def __init__(self, vm: VmIdentifier, extension: VmExtensionIdentifier, resource_name: str):
         super().__init__()
@@ -61,18 +53,32 @@ class _VmExtensionBaseClass(ABC):
             base_url=cloud.endpoints.resource_manager,
             credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
 
+    def get_instance_view(self) -> VirtualMachineExtensionInstanceView:
+        """
+        Retrieves the instance view of the extension
+        """
+        log.info("Retrieving instance view for %s...", self._identifier)
+
+        return execute_with_retry(lambda: self._compute_client.virtual_machine_extensions.get(
+            resource_group_name=self._vm.resource_group,
+            vm_name=self._vm.name,
+            vm_extension_name=self._resource_name,
+            expand="instanceView"
+        ).instance_view)
+
     def enable(
         self,
         settings: Dict[str, Any] = None,
         protected_settings: Dict[str, Any] = None,
         auto_upgrade_minor_version: bool = True,
         force_update: bool = False,
-        force_update_tag: str = None
+        force_update_tag: str = None,
+        timeout: int = AzureClient._DEFAULT_TIMEOUT
     ) -> None:
         """
         Performs an enable operation on the extension.
 
-        NOTE: 'force_update' is not a parameter of the actual ARM API. It is provided for convenience: If set to True,
+        NOTE: 'force_update' is not a parameter of the actual ARM API. It is provided here for convenience: If set to True,
               the 'force_update_tag' can be left unspecified and this method will generate a random tag.
         """
         if force_update_tag is not None and not force_update:
@@ -81,7 +87,7 @@ class _VmExtensionBaseClass(ABC):
         if force_update and force_update_tag is None:
             force_update_tag = str(uuid.uuid4())
 
-        extension_parameters = self._ExtensionType(
+        extension_parameters = VirtualMachineExtension(
             publisher=self._identifier.publisher,
             location=self._vm.location,
             type_properties_type=self._identifier.type,
@@ -99,30 +105,28 @@ class _VmExtensionBaseClass(ABC):
         # Now set the actual protected settings before invoking the extension
         extension_parameters.protected_settings = protected_settings
 
-        result: VirtualMachineExtension = execute_with_retry(
-            lambda: self._begin_create_or_update(
+        result: VirtualMachineExtension = self._execute_async_operation(
+            lambda: self._compute_client.virtual_machine_extensions.begin_create_or_update(
                 self._vm.resource_group,
                 self._vm.name,
                 self._resource_name,
-                extension_parameters
-            ).result(timeout=_TIMEOUT))
+                extension_parameters),
+            operation_name=f"Enable {self._identifier}",
+            timeout=timeout)
 
-        if result.provisioning_state not in ('Succeeded', 'Updating'):
-            raise Exception(f"Enable {self._identifier} failed. Provisioning state: {result.provisioning_state}")
-        log.info("Enable completed (provisioning state: %s).", result.provisioning_state)
+        log.info("Provisioning state: %s", result.provisioning_state)
 
-    def get_instance_view(self) -> VirtualMachineExtensionInstanceView:  # TODO: Check type for scale sets
+    def delete(self, timeout: int = AzureClient._DEFAULT_TIMEOUT) -> None:
         """
-        Retrieves the instance view of the extension
+        Performs a delete operation on the extension
         """
-        log.info("Retrieving instance view for %s...", self._identifier)
-
-        return execute_with_retry(lambda: self._get(
-            resource_group_name=self._vm.resource_group,
-            vm_name=self._vm.name,
-            vm_extension_name=self._resource_name,
-            expand="instanceView"
-        ).instance_view)
+        self._execute_async_operation(
+            lambda: self._compute_client.virtual_machine_extensions.begin_delete(
+                self._vm.resource_group,
+                self._vm.name,
+                self._resource_name),
+            operation_name=f"Delete {self._identifier}",
+            timeout=timeout)
 
     def assert_instance_view(
             self,
@@ -159,89 +163,9 @@ class _VmExtensionBaseClass(ABC):
 
         log.info("The instance view matches the expected values")
 
-    @abstractmethod
-    def delete(self) -> None:
-        """
-        Performs a delete operation on the extension
-        """
-
-    @property
-    @abstractmethod
-    def _ExtensionType(self) -> Type:
-        """
-        Type of the extension object for the virtual machine or scale set (i.e. VirtualMachineExtension or VirtualMachineScaleSetExtension)
-        """
-
-    @property
-    @abstractmethod
-    def _begin_create_or_update(self) -> Callable[[str, str, str, Any], LROPoller[Any]]:  # "Any" can be VirtualMachineExtension or VirtualMachineScaleSetExtension
-        """
-        The begin_create_or_update method for the virtual machine or scale set extension
-        """
-
-    @property
-    @abstractmethod
-    def _get(self) -> Any:  # VirtualMachineExtension or VirtualMachineScaleSetExtension
-        """
-        The get method for the virtual machine or scale set extension
-        """
-
     def __str__(self):
         return f"{self._identifier}"
 
 
-class VmExtension(_VmExtensionBaseClass):
-    """
-    Extension operations on a single virtual machine.
-    """
-    @property
-    def _ExtensionType(self) -> Type:
-        return VirtualMachineExtension
 
-    @property
-    def _begin_create_or_update(self) -> Callable[[str, str, str, VirtualMachineExtension], LROPoller[VirtualMachineExtension]]:
-        return self._compute_client.virtual_machine_extensions.begin_create_or_update
-
-    @property
-    def _get(self) -> VirtualMachineExtension:
-        return self._compute_client.virtual_machine_extensions.get
-
-    def delete(self) -> None:
-        log.info("Deleting %s", self._identifier)
-
-        execute_with_retry(lambda: self._compute_client.virtual_machine_extensions.begin_delete(
-            self._vm.resource_group,
-            self._vm.name,
-            self._resource_name
-        ).wait(timeout=_TIMEOUT))
-
-
-class VmssExtension(_VmExtensionBaseClass):
-    """
-    Extension operations on virtual machine scale sets.
-    """
-    @property
-    def _ExtensionType(self) -> Type:
-        return VirtualMachineScaleSetExtension
-
-    @property
-    def _begin_create_or_update(self) -> Callable[[str, str, str, VirtualMachineScaleSetExtension], LROPoller[VirtualMachineScaleSetExtension]]:
-        return self._compute_client.virtual_machine_scale_set_extensions.begin_create_or_update
-
-    @property
-    def _get(self) -> VirtualMachineScaleSetExtension:
-        return self._compute_client.virtual_machine_scale_set_extensions.get
-
-    def delete(self) -> None:  # TODO: Implement this method
-        raise NotImplementedError()
-
-    def delete_from_instance(self, instance_id: str) -> None:
-        log.info("Deleting %s from scale set instance %s", self._identifier, instance_id)
-
-        execute_with_retry(lambda: self._compute_client.virtual_machine_scale_set_vm_extensions.begin_delete(
-            resource_group_name=self._vm.resource_group,
-            vm_scale_set_name=self._vm.name,
-            vm_extension_name=self._resource_name,
-            instance_id=instance_id
-        ).wait(timeout=_TIMEOUT))
 

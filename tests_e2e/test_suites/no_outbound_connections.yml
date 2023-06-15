@@ -11,11 +11,10 @@ name: "NoOutboundConnections"
 tests:
   - source: "no_outbound_connections/check_no_outbound_connections.py"
     blocks_suite: true  # If the NSG is not setup correctly, there is no point in executing the rest of the tests.
-  - "bvts/extension_operations.py"
-  - "bvts/run_command.py"
-  - "bvts/vm_access.py"
+  - "agent_bvt/extension_operations.py"
+  - "agent_bvt/run_command.py"
+  - "agent_bvt/vm_access.py"
   - "no_outbound_connections/check_fallback_to_hgap.py"
-images:
-  - "ubuntu_2004"
-template: "no_outbound_connections/nsg_template.py"
+images: "random(endorsed)"
+template: "no_outbound_connections/template.py"
 owns_vm: true

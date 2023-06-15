@@ -35,7 +35,7 @@ from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.vm_extension import VmExtension
+from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
 class ExtensionOperationsBvt(AgentTest):
@@ -47,7 +47,7 @@ class ExtensionOperationsBvt(AgentTest):
 
         is_arm64: bool = ssh_client.get_architecture() == "aarch64"
 
-        custom_script_2_0 = VmExtension(
+        custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
             VmExtensionIds.CustomScript,
             resource_name="CustomScript")
@@ -58,14 +58,14 @@ class ExtensionOperationsBvt(AgentTest):
             log.info("Installing %s", custom_script_2_0)
             message = f"Hello {uuid.uuid4()}!"
             custom_script_2_0.enable(
-                settings={
+                protected_settings={
                     'commandToExecute': f"echo \'{message}\'"
                 },
                 auto_upgrade_minor_version=False
             )
             custom_script_2_0.assert_instance_view(expected_version="2.0", expected_message=message)
 
-        custom_script_2_1 = VmExtension(
+        custom_script_2_1 = VirtualMachineExtensionClient(
             self._context.vm,
             VmExtensionIdentifier(VmExtensionIds.CustomScript.publisher, VmExtensionIds.CustomScript.type, "2.1"),
             resource_name="CustomScript")
@@ -73,11 +73,11 @@ class ExtensionOperationsBvt(AgentTest):
         if is_arm64:
             log.info("Installing %s", custom_script_2_1)
         else:
-            log.info("Updating %s to %s", custom_script_2_0, custom_script_2_1)
+            log.info("Updating %s", custom_script_2_0)
 
         message = f"Hello {uuid.uuid4()}!"
         custom_script_2_1.enable(
-            settings={
+            protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
             }
         )

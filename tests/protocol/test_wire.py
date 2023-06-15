@@ -360,41 +360,60 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             exthandlers_handler = get_exthandlers_handler(protocol)
 
             with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", True):
-                exthandlers_handler.run()
-                exthandlers_handler.report_ext_handlers_status()
+                with patch("azurelinuxagent.common.agent_supported_feature._GAVersioningGovernanceFeature.is_supported", True):
+                    exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
 
-                self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
-                self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
-                multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
-                found = False
-                for feature in protocol.aggregate_status['supportedFeatures']:
-                    if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
-                        found = True
-                        break
-                self.assertTrue(found, "Multi-config name should be present in supportedFeatures")
+                    self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
+                    self.assertIn("supportedFeatures", protocol.aggregate_status, "supported features not reported")
+                    multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
+                    found = False
+                    for feature in protocol.aggregate_status['supportedFeatures']:
+                        if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
+                            found = True
+                            break
+                    self.assertTrue(found, "Multi-config name should be present in supportedFeatures")
+
+                    ga_versioning_feature = get_supported_feature_by_name(SupportedFeatureNames.GAVersioningGovernance)
+                    found = False
+                    for feature in protocol.aggregate_status['supportedFeatures']:
+                        if feature['Key'] == ga_versioning_feature.name and feature['Value'] == ga_versioning_feature.version:
+                            found = True
+                            break
+                    self.assertTrue(found, "ga versioning name should be present in supportedFeatures")
 
             # Feature should not be reported if not present
             with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", False):
-                exthandlers_handler.run()
-                exthandlers_handler.report_ext_handlers_status()
+                with patch("azurelinuxagent.common.agent_supported_feature._GAVersioningGovernanceFeature.is_supported", False):
 
-                self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
-                if "supportedFeatures" not in protocol.aggregate_status:
-                    # In the case Multi-config was the only feature available, 'supportedFeatures' should not be
-                    # reported in the status blob as its not supported as of now.
-                    # Asserting no other feature was available to report back to crp
-                    self.assertEqual(0, len(get_agent_supported_features_list_for_crp()),
-                                     "supportedFeatures should be available if there are more features")
-                    return
+                    exthandlers_handler.run()
+                    exthandlers_handler.report_ext_handlers_status()
 
-                # If there are other features available, confirm MultiConfig was not reported
-                multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
-                found = False
-                for feature in protocol.aggregate_status['supportedFeatures']:
-                    if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
-                        found = True
-                        break
-                self.assertFalse(found, "Multi-config name should be present in supportedFeatures")
+                    self.assertIsNotNone(protocol.aggregate_status, "Aggregate status should not be None")
+                    if "supportedFeatures" not in protocol.aggregate_status:
+                        # In the case Multi-config and GA Versioning only features available, 'supportedFeatures' should not be
+                        # reported in the status blob as its not supported as of now.
+                        # Asserting no other feature was available to report back to crp
+                        self.assertEqual(0, len(get_agent_supported_features_list_for_crp()),
+                                         "supportedFeatures should be available if there are more features")
+                        return
+
+                    # If there are other features available, confirm MultiConfig and GA versioning was not reported
+                    multi_config_feature = get_supported_feature_by_name(SupportedFeatureNames.MultiConfig)
+                    found = False
+                    for feature in protocol.aggregate_status['supportedFeatures']:
+                        if feature['Key'] == multi_config_feature.name and feature['Value'] == multi_config_feature.version:
+                            found = True
+                            break
+                    self.assertFalse(found, "Multi-config name should not be present in supportedFeatures")
+
+                    ga_versioning_feature = get_supported_feature_by_name(SupportedFeatureNames.GAVersioningGovernance)
+                    found = False
+                    for feature in protocol.aggregate_status['supportedFeatures']:
+                        if feature['Key'] == ga_versioning_feature.name and feature['Value'] == ga_versioning_feature.version:
+                            found = True
+                            break
+                    self.assertFalse(found, "ga versioning name should not be present in supportedFeatures")
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
     def test_send_encoded_event(self, mock_http_request, *args):
@@ -665,7 +684,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
-            manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+            manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -688,7 +707,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             HostPluginProtocol.is_default_channel = False
 
             try:
-                manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+                manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml, 'The expected manifest was not downloaded')
@@ -725,7 +744,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.client.get_host_plugin()
 
                 protocol.set_http_handlers(http_get_handler=http_get_handler)
-                manifest = protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+                manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
                 urls = protocol.get_tracked_urls()
                 self.assertEqual(manifest, manifest_xml)
@@ -759,7 +778,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
-                protocol.client.fetch_manifest([manifest_url], use_verify_header=False)
+                protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
 
             urls = protocol.get_tracked_urls()
             self.assertEqual(len(urls), 4, "Unexpected number of HTTP requests: [{0}]".format(urls))

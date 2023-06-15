@@ -40,20 +40,38 @@ def execute_with_retry(operation: Callable[[], Any]) -> Any:
         time.sleep(30)
 
 
-def retry_ssh_run(operation: Callable[[], Any]) -> Any:
+def retry_ssh_run(operation: Callable[[], Any], attempts: int, attempt_delay: int) -> Any:
     """
     This method attempts to retry ssh run command a few times if operation failed with connection time out
     """
-    attempts = 3
-    while attempts > 0:
-        attempts -= 1
+    i = 1
+    while i <= attempts:
         try:
             return operation()
         except Exception as e:
             # We raise CommandError on !=0 exit codes in the called method
             if isinstance(e, CommandError):
                 # Instance of 'Exception' has no 'exit_code' member (no-member) - Disabled: e is actually an CommandError
-                if e.exit_code != 255 or attempts == 0:  # pylint: disable=no-member
+                if e.exit_code != 255 or i == attempts:  # pylint: disable=no-member
                     raise
-            log.warning("The operation failed, retrying in 30 secs.\n%s", e)
-        time.sleep(30)
+            log.warning("The SSH operation failed, retrying in %s secs [Attempt %s/%s].\n%s", e, attempt_delay, i, attempts)
+        time.sleep(attempt_delay)
+
+def retry_if_false(operation: Callable[[], bool], attempts: int = 5, duration: int = 30) -> bool:
+    """
+    This method attempts the given operation retrying a few times
+    (after a short delay)
+    Note: Method used for operations which are return True or False
+    """
+    found: bool = False
+    while attempts > 0 and not found:
+        attempts -= 1
+        try:
+            found = operation()
+        except Exception:
+            if attempts == 0:
+                raise
+        if not found:
+            log.info(f"Current execution didn't find it, retrying in {duration} secs.")
+        time.sleep(duration)
+    return found
