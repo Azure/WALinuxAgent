@@ -104,7 +104,7 @@ class Agent(object):
             if os.path.isfile(ext_log_dir):
                 raise Exception("{0} is a file".format(ext_log_dir))
             if not os.path.isdir(ext_log_dir):
-                fileutil.mkdir(ext_log_dir, mode=0o755, owner="root")
+                fileutil.mkdir(ext_log_dir, mode=0o755, owner=self.osutil.get_root_username())
         except Exception as e:
             logger.error(
                 "Exception occurred while creating extension "
