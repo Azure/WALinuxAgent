@@ -1,4 +1,4 @@
-name: WALinuxAgent
+name: $(name)
 
 testcase:
   - criteria:
@@ -8,6 +8,8 @@ extension:
   - "./lib"
 
 variable:
+  - name: name
+    value: "WALinuxAgent"
   #
   # These variables define parameters handled by LISA.
   #
