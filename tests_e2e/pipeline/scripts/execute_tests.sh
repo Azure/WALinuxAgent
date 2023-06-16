@@ -26,8 +26,8 @@ chmod a+w "$BUILD_SOURCESDIRECTORY"
 #
 # Create the directory where the Docker container will create the test logs and give ownership to 'waagent'
 #
-echo "##vso[task.setvariable variable=logs_directory]$HOME/logs"
-#LOGS_DIRECTORY="$HOME/logs"
+LOGS_DIRECTORY="$HOME/logs"
+echo "##vso[task.setvariable variable=logs_directory]$LOGS_DIRECTORY"
 mkdir "$LOGS_DIRECTORY"
 sudo chown "$WAAGENT_UID" "$LOGS_DIRECTORY"
 
