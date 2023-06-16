@@ -91,8 +91,6 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-      vm_sizes:
-         - "Standard_D2pls_v5"
    mariner_1:
       urn: "microsoftcblmariner cbl-mariner cbl-mariner-1 latest"
       locations:
@@ -103,8 +101,6 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-      vm_sizes:
-         - "Standard_D2pls_v5"
    rocky_9:
       urn: "erockyenterprisesoftwarefoundationinc1653071250513 rockylinux-9 rockylinux-9 latest"
       locations:
