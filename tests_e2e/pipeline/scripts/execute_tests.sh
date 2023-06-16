@@ -26,7 +26,8 @@ chmod a+w "$BUILD_SOURCESDIRECTORY"
 #
 # Create the directory where the Docker container will create the test logs and give ownership to 'waagent'
 #
-LOGS_DIRECTORY="$HOME/logs"
+echo "##vso[task.setvariable variable=logs_directory]$HOME/logs"
+#LOGS_DIRECTORY="$HOME/logs"
 mkdir "$LOGS_DIRECTORY"
 sudo chown "$WAAGENT_UID" "$LOGS_DIRECTORY"
 
@@ -54,10 +55,6 @@ if [[ $VM_SIZE == "-" ]]; then
     VM_SIZE=""
 fi
 
-# A test failure will cause automation to exit with an error code and we don't want this script to stop so we force the command
-# to succeed and capture the exit code to return it at the end of the script.
-echo "exit 0" > /tmp/exit.sh
-
 docker run --rm \
     --volume "$BUILD_SOURCESDIRECTORY:/home/waagent/WALinuxAgent" \
     --volume "$HOME"/ssh:/home/waagent/.ssh \
@@ -80,46 +77,4 @@ docker run --rm \
           -v image:\"$IMAGE\" \
           -v location:\"$LOCATION\" \
           -v vm_size:\"$VM_SIZE\" \
-          $TEST_SUITES" \
-|| echo "exit $?" > /tmp/exit.sh
-
-#
-# Re-take ownership of the logs directory
-#
-sudo find "$LOGS_DIRECTORY" -exec chown "$USER" {} \;
-
-#
-# Move the relevant logs to the staging directory
-#
-# Move the logs for failed tests to a temporary location
-mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp
-for log in $(grep -l MARKER-LOG-WITH-ERRORS "$LOGS_DIRECTORY"/*.log); do
-  mv "$log" "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp
-done
-# Move the environment logs to "environment_logs"
-if ls "$LOGS_DIRECTORY"/env-*.log > /dev/null 2>&1; then
-  mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/environment_logs
-  mv "$LOGS_DIRECTORY"/env-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/environment_logs
-fi
-# Move the rest of the logs to "test_logs"
-if ls "$LOGS_DIRECTORY"/*.log > /dev/null 2>&1; then
-  mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs
-  mv "$LOGS_DIRECTORY"/*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/test_logs
-fi
-# Move the logs for failed tests to the main directory
-if ls "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp/*.log > /dev/null 2>&1; then
-  mv "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp/*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"
-fi
-rmdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/tmp
-# Move the logs collected from the test VMs to vm_logs
-if ls "$LOGS_DIRECTORY"/*.tgz > /dev/null 2>&1; then
-  mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/vm_logs
-  mv "$LOGS_DIRECTORY"/*.tgz "$BUILD_ARTIFACTSTAGINGDIRECTORY"/vm_logs
-fi
-# Files created by LISA are under .../lisa/<date>/<unique_name>"
-mkdir "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
-mv "$LOGS_DIRECTORY"/lisa/*/*/lisa-*.log "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
-mv "$LOGS_DIRECTORY"/lisa/*/*/agent.junit.xml "$BUILD_ARTIFACTSTAGINGDIRECTORY"/runbook_logs
-
-cat /tmp/exit.sh
-bash /tmp/exit.sh
+          $TEST_SUITES"
