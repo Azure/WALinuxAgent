@@ -9,10 +9,10 @@ from azurelinuxagent.common.exception import AgentUpgradeExitException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
-from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus
+from azurelinuxagent.common.protocol.restapi import VERSION_0, VMAgentUpdateStatuses, VMAgentUpdateStatus
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
+from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
 from azurelinuxagent.ga.guestagent import GuestAgent, GAUpdateReportState
 
 
@@ -246,6 +246,15 @@ class AgentUpdateHandler(object):
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
     @staticmethod
+    def __get_daemon_version_for_update():
+        daemon_version = get_daemon_version()
+        if daemon_version != FlexibleVersion(VERSION_0):
+            return daemon_version
+        # We return 0.0.0.0 if daemon version is not specified. In that case,
+        # use the min version as 2.2.53 as we started setting the daemon version starting 2.2.53.
+        return FlexibleVersion("2.2.53")
+
+    @staticmethod
     def __log_event(level, msg, success=True):
         if level == LogLevel.INFO:
             logger.info(msg)
@@ -290,6 +299,13 @@ class AgentUpdateHandler(object):
 
             if warn_msg != "":
                 self.__log_event(LogLevel.WARNING, warn_msg)
+
+            daemon_version = self.__get_daemon_version_for_update()
+            if requested_version < daemon_version:
+                # Don't process the update if the requested version is less than daemon version,
+                # as we don't support downgrades below daemon versions.
+                raise Exception("Can't process the upgrade as the requested version: {0} is < current daemon version: {1}".format(
+                    requested_version, daemon_version))
 
             msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
                 self._gs_id, str(requested_version))
