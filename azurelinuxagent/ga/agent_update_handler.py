@@ -304,7 +304,7 @@ class AgentUpdateHandler(object):
             if requested_version < daemon_version:
                 # Don't process the update if the requested version is less than daemon version,
                 # as we don't support downgrades below daemon versions.
-                raise Exception("Can't process the upgrade as the requested version: {0} is < current daemon version: {1}".format(
+                raise Exception("Can't process the update as the requested version: {0} is < current daemon version: {1}".format(
                     requested_version, daemon_version))
 
             msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(

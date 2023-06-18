@@ -217,7 +217,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
-        downgraded_version = "1.2.0"
+        downgraded_version = "2.5.0"
 
         with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(downgraded_version)
@@ -229,6 +229,28 @@ class TestAgentUpdate(UpdateTestCase):
             self.__assert_agent_directories_exist_and_others_dont_exist(
                 versions=[downgraded_version, str(CURRENT_VERSION)])
             self.assertIn("Agent update found, Exiting current process", ustr(context.exception.reason))
+
+    def test_it_should_not_downgrade_below_daemon_version(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+
+        downgraded_version = "1.2.0"
+
+        with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            agent_update_handler._protocol.mock_wire_data.set_extension_config_requested_version(downgraded_version)
+            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
+            agent_update_handler._protocol.client.update_goal_state()
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            self.assertFalse(os.path.exists(self.agent_dir(downgraded_version)),
+                             "New agent directory should not be found")
+            self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                     "Can't process the update as the requested version" in kwarg[
+                                         'message'] and kwarg[
+                                         'op'] == WALAEventOperation.AgentUpgrade]), "We should allow downgrade above daemon version")
 
     def test_handles_if_requested_version_not_found_in_pkgs_to_download(self):
         data_file = DATA_FILE.copy()
