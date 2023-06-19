@@ -97,6 +97,7 @@ class RsmUpdateBvt(AgentTest):
         version: str = "1.3.1.0"
         log.info("Attempting update version same as current version %s", upgrade_version)
         self._request_rsm_update(version)
+        self._check_rsm_gs(version)
         self._verify_guest_agent_update(version)
 
         # verify requested version below daemon version
@@ -106,6 +107,7 @@ class RsmUpdateBvt(AgentTest):
         version: str = "0.5.0"
         log.info("Attempting requested version %s", version)
         self._request_rsm_update(version)
+        self._check_rsm_gs(version)
         self._verify_no_guest_agent_update(stdout)
 
     def _check_rsm_gs(self, requested_version: str) -> None:
