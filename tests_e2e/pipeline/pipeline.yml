@@ -43,6 +43,11 @@ parameters:
     - failed
     - no
 
+  - name: collect_lisa_logs
+    displayName: Collect LISA logs
+    type: boolean
+    default: true
+
   - name: keep_environment
     displayName: Keep the test VMs (do not delete them)
     type: string
@@ -116,6 +121,11 @@ jobs:
           LOCATION: ${{ parameters.location }}
           TEST_SUITES: ${{ parameters.test_suites }}
           VM_SIZE: ${{ parameters.vm_size }}
+
+      - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/collect_artifacts.sh
+        displayName: "Collect test artifacts"
+        env:
+          COLLECT_LISA_LOGS: ${{ parameters.collect_lisa_logs }}
 
       - publish: $(Build.ArtifactStagingDirectory)
         artifact: 'artifacts'
