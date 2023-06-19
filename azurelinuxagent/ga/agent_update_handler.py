@@ -37,8 +37,6 @@ class AgentUpdateHandlerUpdateState(object):
         self.last_attempted_requested_version_update_time = datetime.datetime.min
         self.last_attempted_hotfix_update_time = datetime.datetime.min
         self.last_attempted_normal_update_time = datetime.datetime.min
-        self.last_warning = ""
-        self.last_warning_time = datetime.datetime.min
 
 
 class AgentUpdateHandler(object):
@@ -300,18 +298,20 @@ class AgentUpdateHandler(object):
             if warn_msg != "":
                 self.__log_event(LogLevel.WARNING, warn_msg)
 
-            daemon_version = self.__get_daemon_version_for_update()
-            if requested_version < daemon_version:
-                # Don't process the update if the requested version is less than daemon version,
-                # as we don't support downgrades below daemon versions.
-                raise Exception("Can't process the update as the requested version: {0} is < current daemon version: {1}".format(
-                    requested_version, daemon_version))
-
-            msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
-                self._gs_id, str(requested_version))
-            self.__log_event(LogLevel.INFO, msg)
-
             try:
+                daemon_version = self.__get_daemon_version_for_update()
+                if requested_version < daemon_version:
+                    # Don't process the update if the requested version is less than daemon version,
+                    # as we don't support downgrades below daemon versions.
+                    msg = "Can't process the update as the requested version: {0} is < current daemon version: {1}".format(
+                        requested_version, daemon_version)
+                    GAUpdateReportState.report_error_msg = msg
+                    raise Exception(msg)
+
+                msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
+                    self._gs_id, str(requested_version))
+                self.__log_event(LogLevel.INFO, msg)
+
                 agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
 
                 if agent.is_blacklisted or not agent.is_downloaded:
