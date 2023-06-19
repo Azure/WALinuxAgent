@@ -2,5 +2,8 @@ name: "AgentUpdate"
 tests:
   - "agent_update/rsm_update.py"
 images: "endorsed"
-location: "eastus2euap"
+locations: "AzureCloud:eastus2euap"
 owns_vm: true
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"
