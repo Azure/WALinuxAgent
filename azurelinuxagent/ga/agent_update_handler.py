@@ -305,7 +305,7 @@ class AgentUpdateHandler(object):
                     # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
                     # installed latest version again. When that happens agent go into loop of downloading the requested version, exiting and start again with same version.
                     #
-                    raise Exception("Can't process the update as the requested version: {0} is < current daemon version: {1}".format(
+                    raise Exception("as the requested version: {0} is < current daemon version: {1}".format(
                         requested_version, daemon_version))
 
                 msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(

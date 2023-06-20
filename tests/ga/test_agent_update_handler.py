@@ -248,7 +248,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertFalse(os.path.exists(self.agent_dir(downgraded_version)),
                              "New agent directory should not be found")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "Can't process the update as the requested version" in kwarg[
+                                     "Unable to update Agent: as the requested version" in kwarg[
                                          'message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "We should allow downgrade above daemon version")
 
