@@ -1818,7 +1818,7 @@ class TestAgentUpgrade(UpdateTestCase):
         self.assertTrue(os.path.exists(self.agent_dir(CURRENT_VERSION)))
         self.assertFalse(next(agent for agent in self.agents() if agent.version == CURRENT_VERSION).is_blacklisted,
                          "The current agent should not be blacklisted")
-        downgraded_version = "1.2.0"
+        downgraded_version = "2.5.0"
 
         data_file = mockwiredata.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"

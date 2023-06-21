@@ -5,14 +5,14 @@ import shutil
 
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import AgentUpgradeExitException
+from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
-from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus
+from azurelinuxagent.common.protocol.restapi import VERSION_0, VMAgentUpdateStatuses, VMAgentUpdateStatus
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
+from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
 from azurelinuxagent.ga.guestagent import GuestAgent, GAUpdateReportState
 
 
@@ -37,8 +37,6 @@ class AgentUpdateHandlerUpdateState(object):
         self.last_attempted_requested_version_update_time = datetime.datetime.min
         self.last_attempted_hotfix_update_time = datetime.datetime.min
         self.last_attempted_normal_update_time = datetime.datetime.min
-        self.last_warning = ""
-        self.last_warning_time = datetime.datetime.min
 
 
 class AgentUpdateHandler(object):
@@ -130,10 +128,10 @@ class AgentUpdateHandler(object):
                     agent_family_manifests.append(m)
 
         if not family_found:
-            raise Exception(u"Agent family: {0} not found in the goal state, skipping agent update".format(family))
+            raise AgentUpdateError(u"Agent family: {0} not found in the goal state, skipping agent update".format(family))
 
         if len(agent_family_manifests) == 0:
-            raise Exception(
+            raise AgentUpdateError(
                 u"No manifest links found for agent family: {0} for incarnation: {1}, skipping agent update".format(
                     self._ga_family, self._gs_id))
         return agent_family_manifests[0]
@@ -179,7 +177,7 @@ class AgentUpdateHandler(object):
                 # Found a matching package, only download that one
                 return pkg
 
-        raise Exception("No matching package found in the agent manifest for requested version: {0} in goal state incarnation: {1}, "
+        raise AgentUpdateError("No matching package found in the agent manifest for requested version: {0} in goal state incarnation: {1}, "
                         "skipping agent update".format(str(version), self._gs_id))
 
     @staticmethod
@@ -246,6 +244,15 @@ class AgentUpdateHandler(object):
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
     @staticmethod
+    def __get_daemon_version_for_update():
+        daemon_version = get_daemon_version()
+        if daemon_version != FlexibleVersion(VERSION_0):
+            return daemon_version
+        # We return 0.0.0.0 if daemon version is not specified. In that case,
+        # use the min version as 2.2.53 as we started setting the daemon version starting 2.2.53.
+        return FlexibleVersion("2.2.53")
+
+    @staticmethod
     def __log_event(level, msg, success=True):
         if level == LogLevel.INFO:
             logger.info(msg)
@@ -291,11 +298,20 @@ class AgentUpdateHandler(object):
             if warn_msg != "":
                 self.__log_event(LogLevel.WARNING, warn_msg)
 
-            msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
-                self._gs_id, str(requested_version))
-            self.__log_event(LogLevel.INFO, msg)
-
             try:
+                daemon_version = self.__get_daemon_version_for_update()
+                if requested_version < daemon_version:
+                    # Don't process the update if the requested version is less than daemon version,
+                    # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
+                    # installed latest version again. When that happens agent go into loop of downloading the requested version, exiting and start again with same version.
+                    #
+                    raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
+                                           "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
+
+                msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
+                    self._gs_id, str(requested_version))
+                self.__log_event(LogLevel.INFO, msg)
+
                 agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
 
                 if agent.is_blacklisted or not agent.is_downloaded:
@@ -314,9 +330,13 @@ class AgentUpdateHandler(object):
         except Exception as err:
             if isinstance(err, AgentUpgradeExitException):
                 raise err
+            elif isinstance(err, AgentUpdateError):
+                error_msg = ustr(err)
+            else:
+                error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
+            self.__log_event(LogLevel.WARNING, error_msg, success=False)
             if "Missing requested version" not in GAUpdateReportState.report_error_msg:
-                GAUpdateReportState.report_error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
-            self.__log_event(LogLevel.WARNING, GAUpdateReportState.report_error_msg, success=False)
+                GAUpdateReportState.report_error_msg = error_msg
 
     def get_vmagent_update_status(self):
         """
