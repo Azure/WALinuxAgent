@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-legacy-python-versions:
+  test-python-2_6-and-3_4-versions:
     
     strategy:
       fail-fast: false
@@ -50,16 +50,42 @@ jobs:
         ./ci/nosetests.sh
         exit $?
 
+  test-python-2_7:
+
+    strategy:
+      fail-fast: false
+
+    name: "Python 2.7 Unit Tests"
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    env:
+      NOSEOPTS: "--verbose"
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Python 2.7
+      run: |
+        apt-get update
+        apt-get install -y curl bzip2 sudo
+        curl https://dcrdata.blob.core.windows.net/python/python-2.7.tar.bz2 -o python-2.7.tar.bz2
+        sudo tar xjvf python-2.7.tar.bz2 --directory /
+
+    - name: Test with nosetests
+      run: |
+        source /home/waagent/virtualenv/python2.7.16/bin/activate
+        ./ci/nosetests.sh
+        exit $?
+
   test-current-python-versions:
 
     strategy:
       fail-fast: false
       matrix:
         include:
-#          py27 version no longer supported by github build runners. So disabling it until fix is found.
-#          - python-version: 2.7
-#            PYLINTOPTS: "--rcfile=ci/2.7.pylintrc --ignore=tests_e2e,makepkg.py"
-
           - python-version: 3.5
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e,makepkg.py"
 
