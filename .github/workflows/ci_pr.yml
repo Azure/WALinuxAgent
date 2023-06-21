@@ -20,7 +20,7 @@ jobs:
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-20.04
     container:
-      image: ubuntu:20.04
+      image: ubuntu:16.04
       volumes:
         - /home/waagent:/home/waagent
     defaults:
