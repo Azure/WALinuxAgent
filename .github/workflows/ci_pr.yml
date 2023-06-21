@@ -45,6 +45,8 @@ jobs:
       run: |
         if [[ ${{ matrix.python-version }} == 2.6 ]]; then
           source /home/waagent/virtualenv/python2.6.9/bin/activate
+        elif [[ ${{ matrix.python-version }} == 2.7 ]]; then
+          source /home/waagent/virtualenv/python2.7.16/bin/activate
         else
           source /home/waagent/virtualenv/python3.4.8/bin/activate
         fi
