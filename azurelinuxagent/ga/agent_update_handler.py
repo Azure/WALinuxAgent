@@ -5,7 +5,7 @@ import shutil
 
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import AgentUpgradeExitException
+from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
@@ -128,10 +128,10 @@ class AgentUpdateHandler(object):
                     agent_family_manifests.append(m)
 
         if not family_found:
-            raise Exception(u"Agent family: {0} not found in the goal state, skipping agent update".format(family))
+            raise AgentUpdateError(u"Agent family: {0} not found in the goal state, skipping agent update".format(family))
 
         if len(agent_family_manifests) == 0:
-            raise Exception(
+            raise AgentUpdateError(
                 u"No manifest links found for agent family: {0} for incarnation: {1}, skipping agent update".format(
                     self._ga_family, self._gs_id))
         return agent_family_manifests[0]
@@ -177,7 +177,7 @@ class AgentUpdateHandler(object):
                 # Found a matching package, only download that one
                 return pkg
 
-        raise Exception("No matching package found in the agent manifest for requested version: {0} in goal state incarnation: {1}, "
+        raise AgentUpdateError("No matching package found in the agent manifest for requested version: {0} in goal state incarnation: {1}, "
                         "skipping agent update".format(str(version), self._gs_id))
 
     @staticmethod
@@ -305,8 +305,8 @@ class AgentUpdateHandler(object):
                     # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
                     # installed latest version again. When that happens agent go into loop of downloading the requested version, exiting and start again with same version.
                     #
-                    raise Exception("as the requested version: {0} is < current daemon version: {1}".format(
-                        requested_version, daemon_version))
+                    raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
+                                           "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
 
                 msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
                     self._gs_id, str(requested_version))
@@ -330,7 +330,10 @@ class AgentUpdateHandler(object):
         except Exception as err:
             if isinstance(err, AgentUpgradeExitException):
                 raise err
-            error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
+            elif isinstance(err, AgentUpdateError):
+                error_msg = ustr(err)
+            else:
+                error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
             self.__log_event(LogLevel.WARNING, error_msg, success=False)
             if "Missing requested version" not in GAUpdateReportState.report_error_msg:
                 GAUpdateReportState.report_error_msg = error_msg

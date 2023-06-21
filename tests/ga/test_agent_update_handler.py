@@ -80,7 +80,7 @@ class TestAgentUpdate(UpdateTestCase):
 
     def __assert_no_agent_package_telemetry_emitted(self, mock_telemetry, version="9.9.9.10"):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                              'Unable to update Agent: No matching package found in the agent manifest for requested version: {0}'.format(version) in kwarg['message'] and kwarg[
+                              'No matching package found in the agent manifest for requested version: {0}'.format(version) in kwarg['message'] and kwarg[
                                   'op'] == WALAEventOperation.AgentUpgrade]
         self.assertEqual(1, len(upgrade_event_msgs),
                          "Did not find the event indicating that the agent package not found. Got: {0}".format(
@@ -248,7 +248,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertFalse(os.path.exists(self.agent_dir(downgraded_version)),
                              "New agent directory should not be found")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "Unable to update Agent: as the requested version" in kwarg[
+                                     "The Agent received a request to downgrade to version" in kwarg[
                                          'message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "We should allow downgrade above daemon version")
 
