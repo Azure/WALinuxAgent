@@ -20,10 +20,10 @@ jobs:
 
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-20.04
-    container:
-      image: ubuntu:20.04
-      volumes:
-        - /home/waagent:/home/waagent
+#    container:
+#      image: ubuntu:20.04
+#      volumes:
+#        - /home/waagent:/home/waagent
     defaults:
       run:
         shell: bash -l {0}
