@@ -44,18 +44,18 @@ def retry_ssh_run(operation: Callable[[], Any], attempts: int, attempt_delay: in
     """
     This method attempts to retry ssh run command a few times if operation failed with connection time out
     """
-    i = 1
-    while i <= attempts:
+    i = 0
+    while True:
+        i += 1
         try:
             return operation()
-        except Exception as e:
-            # We raise CommandError on !=0 exit codes in the called method
-            if isinstance(e, CommandError):
-                # Instance of 'Exception' has no 'exit_code' member (no-member) - Disabled: e is actually an CommandError
-                if e.exit_code != 255 or i == attempts:  # pylint: disable=no-member
-                    raise
-            log.warning("The SSH operation failed, retrying in %s secs [Attempt %s/%s].\n%s", e, attempt_delay, i, attempts)
+        except CommandError as e:
+            retryable = e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr)
+            if not retryable or i >= attempts:
+                raise
+            log.warning("The SSH operation failed, retrying in %s secs [Attempt %s/%s].\n%s", attempt_delay, i, attempts, e)
         time.sleep(attempt_delay)
+
 
 def retry_if_false(operation: Callable[[], bool], attempts: int = 5, duration: int = 30) -> bool:
     """
