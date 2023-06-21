@@ -53,7 +53,7 @@ def retry_ssh_run(operation: Callable[[], Any], attempts: int, attempt_delay: in
             retryable = e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr)
             if not retryable or i >= attempts:
                 raise
-            log.warning("The SSH operation failed, retrying in %s secs [Attempt %s/%s].\n%s", e, attempt_delay, i, attempts)
+            log.warning("The SSH operation failed, retrying in %s secs [Attempt %s/%s].\n%s", attempt_delay, i, attempts, e)
         time.sleep(attempt_delay)
 
 
