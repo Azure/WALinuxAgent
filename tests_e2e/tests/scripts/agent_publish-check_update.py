@@ -76,11 +76,14 @@ def verify_agent_update_from_log():
             if update_match:
                 detected_update = True
                 update_version = update_match.groups()[2]
+                logging.info('found the agent update log: %s', record.text)
+                break
 
         if detected_update:
             running_match = re.match(_RUNNING_PATTERN_00, record.text)
             if running_match and update_version == running_match.groups()[0]:
                 update_successful = True
+                logging.info('found the agent started new version log: %s', record.text)
 
     if detected_update:
         logging.info('update was detected: %s', update_version)

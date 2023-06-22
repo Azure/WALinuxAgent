@@ -21,7 +21,7 @@
 # BVT for the agent update scenario
 #
 # The test verifies agent update for rsm workflow. This test covers three scenarios downgrade, upgrade and no update.
-    # For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
+# For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
 #
 import json
 from typing import List, Dict, Any
@@ -70,20 +70,19 @@ class RsmUpdateBvt(AgentTest):
 
         log.info("*******Verifying the Agent Downgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info("Current agent version running on the vm is \n%s", stdout)
+        log.info("Current agent version running on the vm before update \n%s", stdout)
         downgrade_version: str = "1.3.0.0"
         log.info("Attempting downgrade version %s", downgrade_version)
         self._request_rsm_update(downgrade_version)
         self._check_rsm_gs(downgrade_version)
         self._prepare_agent()
-
         # Verify downgrade scenario
         self._verify_guest_agent_update(downgrade_version)
 
         # Verify upgrade scenario
         log.info("*******Verifying the Agent Upgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info("Current agent version running on the vm is \n%s", stdout)
+        log.info("Current agent version running on the vm before update \n%s", stdout)
         upgrade_version: str = "1.3.1.0"
         log.info("Attempting upgrade version %s", upgrade_version)
         self._request_rsm_update(upgrade_version)
@@ -93,7 +92,7 @@ class RsmUpdateBvt(AgentTest):
         # verify no version update. There is bug in CRP and will enable once it's fixed
         log.info("*******Verifying the no version update scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info("Current agent version running on the vm is \n%s", stdout)
+        log.info("Current agent version running on the vm before update \n%s", stdout)
         version: str = "1.3.1.0"
         log.info("Attempting update version same as current version %s", upgrade_version)
         self._request_rsm_update(version)
@@ -102,9 +101,11 @@ class RsmUpdateBvt(AgentTest):
 
         # verify requested version below daemon version
         log.info("*******Verifying requested version below daemon version scenario*******")
+        # changing back to 9.9.9.9 from 1.0.0.0 as there is no pkg below than 1.0.0.0 available in PIR, Otherwise we will get pkg not found error
+        self._prepare_agent("9.9.9.9", update_config=False)
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update \n%s", stdout)
-        version: str = "0.5.0"
+        version: str = "1.3.1.0"
         log.info("Attempting requested version %s", version)
         self._request_rsm_update(version)
         self._check_rsm_gs(version)
@@ -112,17 +113,22 @@ class RsmUpdateBvt(AgentTest):
 
     def _check_rsm_gs(self, requested_version: str) -> None:
         # This checks if RSM GS available to the agent after we mock the rsm update request
-        output = self._ssh_client.run_command(f"wait_for_rsm_goal_state.py --version {requested_version}", use_sudo=True)
+        output = self._ssh_client.run_command(f"agent_update-wait_for_rsm_gs.py --version {requested_version}", use_sudo=True)
         log.info('Verifying requested version GS available to the agent \n%s', output)
 
-    def _prepare_agent(self) -> None:
+    def _prepare_agent(self, version="1.0.0.0", update_config=True) -> None:
         """
         This method is to ensure agent is ready for accepting rsm updates. As part of that we update following flags
         1) Changing daemon version since daemon has a hard check on agent version in order to update agent. It doesn't allow versions which are less than daemon version.
         2) Updating GAFamily type "Test" and GAUpdates flag to process agent updates on test versions.
         """
-        output = self._ssh_client.run_command("modify-agent-version-config", use_sudo=True)
-        log.info('Updating agent update required config \n%s', output)
+        log.info('Modifying agent installed version')
+        output = self._ssh_client.run_command(f"agent_update-modify_agent_version {version}", use_sudo=True)
+        log.info('Updated agent installed version \n%s', output)
+        if update_config:
+            log.info('Modifying agent update config flags')
+            output = self._ssh_client.run_command("update-waagent-conf GAUpdates.Enabled=y AutoUpdate.GAFamily=Test", use_sudo=True)
+            log.info('updated agent update required config \n%s', output)
 
     @staticmethod
     def _verify_agent_update_flag_enabled(vm: VirtualMachineClient) -> bool:
@@ -209,7 +215,7 @@ class RsmUpdateBvt(AgentTest):
         """
 
         log.info("Verifying agent reported supported feature flag")
-        self._ssh_client.run_command("verify_agent_supported_feature.py", use_sudo=True)
+        self._ssh_client.run_command("agent_update-verify_versioning_supported_feature.py", use_sudo=True)
         log.info("Agent reported VersioningGovernance supported feature flag")
 
 

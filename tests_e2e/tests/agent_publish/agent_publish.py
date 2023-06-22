@@ -56,12 +56,14 @@ class AgentPublishTest(AgentTest):
         log.info('Agent info \n%s', stdout)
 
     def _prepare_agent(self) -> None:
-        output = self._ssh_client.run_command("modify-agent-publish-config", use_sudo=True)
-        log.info('Modifying agent update related config flags \n%s', output)
+        log.info("Modifying agent update related config flags")
+        output = self._ssh_client.run_command("update-waagent-conf GAUpdates.Enabled=y AutoUpdate.GAFamily=Test", use_sudo=True)
+        log.info('Updated agent-update related config flags \n%s', output)
 
     def _check_update(self) -> None:
-        output = self._ssh_client.run_command("check_agent_update_from_log.py")
-        log.info('Check for agent update \n%s', output)
+        log.info("Verifying for agent update status")
+        output = self._ssh_client.run_command("agent_publish-check_update.py")
+        log.info('Checked the agent update \n%s', output)
 
     def _check_cse(self) -> None:
         custom_script_2_1 = VirtualMachineExtensionClient(

@@ -16,16 +16,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# This script to modify necessary flags to make agent ready for updates
+# This script to update necessary flags to make agent ready for rsm updates
 #
 set -euo pipefail
 
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: agent_update-modify_agent_version <version>"
+    exit 1
+fi
+
+version=$1
 PYTHON=$(get-agent-python)
-waagent_conf_path=$($PYTHON -c 'from azurelinuxagent.common.osutil import get_osutil; osutil=get_osutil(); print(osutil.agent_conf_file_path)')
-echo "agent config file $waagent_conf_path"
-echo "Modifying config... GAUpdates.Enabled and AutoUpdate.GAFamily"
-sed -i 's/GAUpdates.Enabled=n/GAUpdates.Enabled=y/g' "$waagent_conf_path"
-sed -i '$a AutoUpdate.GAFamily=Test' "$waagent_conf_path"
+echo "Agent's Python: $PYTHON"
+# some distros return .pyc byte file instead source file .py. So, I retrieve parent directory first.
+version_file_dir=$($PYTHON -c 'import azurelinuxagent.common.version as v; import os; print(os.path.dirname(v.__file__))')
+version_file_full_path="$version_file_dir/version.py"
+sed -E -i "s/AGENT_VERSION\s+=\s+'[0-9.]+'/AGENT_VERSION = '$version'/" $version_file_full_path
+export _AZURE_GUEST_AGENT_DAEMON_VERSION_=$version
 echo "Restarting service..."
 agent-service restart
-
