@@ -151,7 +151,7 @@ class AgentTestLoader(object):
                         if image.locations:
                             locations = image.locations.get(self.__cloud)
                             if locations is not None and not any(suite_location in l for l in locations):
-                                raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
+                                raise Exception(f"Test suite {suite.name} must be executed in {suite_location}, but <{image.urn}> is not available in that location")
 
             # if the suite specifies skip clouds, validate that cloud used in our tests
             for suite_skip_cloud in suite.skip_on_clouds:
