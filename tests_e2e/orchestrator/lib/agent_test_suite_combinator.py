@@ -290,7 +290,7 @@ class AgentTestSuitesCombinator(Combinator):
 
         #  Then try the suite location, if any.
         for location in suite_info.locations:
-            if self.runbook.cloud in location:
+            if location.startswith(self.runbook.cloud + ":"):
                 return location.split(":")[1]
 
         # If the image has a location restriction, use any location where it is available.

@@ -53,7 +53,7 @@ class TestSuiteInfo(object):
     tests: List[TestInfo]
     # Images or image sets (as defined in images.yml) on which the suite must run.
     images: List[str]
-    # The location (region) on which the suite must run; if empty, the suite can run on any location
+    # The locations (regions) on which the suite must run; if empty, the suite can run on any location
     locations: List[str]
     # Whether this suite must run on its own test VM
     owns_vm: bool
@@ -61,7 +61,7 @@ class TestSuiteInfo(object):
     install_test_agent: bool
     # Customization for the ARM template used when creating the test VM
     template: str
-    # skip test suite if the test not suppose to run on specific clouds
+    # skip test suite if the test not supposed to run on specific clouds
     skip_on_clouds: List[str]
 
     def __str__(self):
@@ -139,20 +139,19 @@ class AgentTestLoader(object):
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
 
-            # If the suite specifies a cloud specific location, validate that the images it uses are available in that location
+            # If the suite specifies a cloud and it's location<cloud:location>, validate that location string is start with <cloud:> and then validate that the images it uses are available in that location
             for suite_location in suite.locations:
-                if self.__cloud in suite_location:
+                if suite_location.startswith(self.__cloud + ":"):
                     suite_location = suite_location.split(":")[1]
                 else:
-                    suite_location = ""
-                if suite_location != "":
-                    for suite_image in suite.images:
-                        for image in self.images[suite_image]:
-                            # If the image has a location restriction, validate that it is available on the location the suite must run on
-                            if image.locations:
-                                locations = image.locations.get(self.__cloud)
-                                if locations is not None and not any(suite_location in l for l in locations):
-                                    raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
+                    continue
+                for suite_image in suite.images:
+                    for image in self.images[suite_image]:
+                        # If the image has a location restriction, validate that it is available on the location the suite must run on
+                        if image.locations:
+                            locations = image.locations.get(self.__cloud)
+                            if locations is not None and not any(suite_location in l for l in locations):
+                                raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
 
             # if the suite specifies skip clouds, validate that cloud used in our tests
             for suite_skip_cloud in suite.skip_on_clouds:
