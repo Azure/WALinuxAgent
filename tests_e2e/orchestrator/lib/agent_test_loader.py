@@ -206,7 +206,7 @@ class AgentTestLoader(object):
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
                      can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The
                      names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
-        * location - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
+        * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
                      If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful
                      for test suites that exercise a feature that is enabled only in certain regions.
         * owns_vm - [Optional; boolean] By default all suites in a test run are executed on the same test VMs; if this
