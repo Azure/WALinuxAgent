@@ -328,6 +328,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._goal_state = Mock()
         self.update_handler._goal_state.extensions_goal_state = Mock()
         self.update_handler._goal_state.extensions_goal_state.source = "Fabric"
+        self.deamon_version_patch = patch("azurelinuxagent.common.version.get_daemon_version")
 
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not reuse
         # a previous state
@@ -1434,7 +1435,8 @@ class TestAgentUpgrade(UpdateTestCase):
                 with patch("azurelinuxagent.common.conf.get_hotfix_upgrade_frequency", return_value=hotfix_frequency):
                     with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency", return_value=normal_frequency):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                            yield
+                            with patch("azurelinuxagent.ga.agent_update_handler.get_daemon_version", return_value=FlexibleVersion("2.2.53")):
+                                yield
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None,
