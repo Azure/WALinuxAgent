@@ -5,17 +5,25 @@
   #
 
 parameters:
+    #
     # See the test wiki for a description of the parameters
   - name: test_suites
     displayName: Test Suites
     type: string
     default: agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, agent_update, fips, agent_ext_workflow
+
+    #
     # NOTES:
     #         * 'image', 'location' and 'vm_size' override any values in the test suites/images definition
     #            files. Those parameters are useful for 1-off tests, like testing a VHD or checking if
     #            an image is supported in a particular location.
     #         * Azure Pipelines do not allow empty string for the parameter value, using "-" instead.
     #
+  - name: test_suites
+    displayName: Test Suites (comma-separated list of test suites to run)
+    type: string
+    default: "-"
+
   - name: image
     displayName: Image (image/image set name, URN, or VHD)
     type: string
@@ -39,6 +47,11 @@ parameters:
     - always
     - failed
     - no
+
+  - name: collect_lisa_logs
+    displayName: Collect LISA logs
+    type: boolean
+    default: true
 
   - name: keep_environment
     displayName: Keep the test VMs (do not delete them)
@@ -113,6 +126,11 @@ jobs:
           LOCATION: ${{ parameters.location }}
           TEST_SUITES: ${{ parameters.test_suites }}
           VM_SIZE: ${{ parameters.vm_size }}
+
+      - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/collect_artifacts.sh
+        displayName: "Collect test artifacts"
+        env:
+          COLLECT_LISA_LOGS: ${{ parameters.collect_lisa_logs }}
 
       - publish: $(Build.ArtifactStagingDirectory)
         artifact: 'artifacts'

@@ -28,6 +28,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
     def __init__(self):
         super(NSBSDOSUtil, self).__init__()
+        self.agent_conf_file_path = '/etc/waagent.conf'
 
         if self.resolver is None:
             # NSBSD doesn't have a system resolver, configure a python one
@@ -37,7 +38,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             except ImportError:
                 raise OSUtilError("Python DNS resolver not available. Cannot proceed!")
 
-            self.resolver = dns.resolver.Resolver()
+            self.resolver = dns.resolver.Resolver(configure=False)
             servers = []
             cmd = "getconf /usr/Firewall/ConfigFiles/dns Servers | tail -n +2"
             ret, output = shellutil.run_get_output(cmd)  # pylint: disable=W0612
@@ -47,6 +48,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
                 server = server[:-1]  # remove last '='
                 cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
                 ret, ip = shellutil.run_get_output(cmd)
+                ip = ip.strip() # Remove new line char
                 servers.append(ip)
             self.resolver.nameservers = servers
             dns.resolver.override_system_resolver(self.resolver)
@@ -73,6 +75,9 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
         logger.info("{0} SSH password-based authentication methods."
                     .format("Disabled" if disable_password else "Enabled"))
+
+    def get_root_username(self):
+        return "admin"
 
     def useradd(self, username, expiration=None, comment=None):
         """

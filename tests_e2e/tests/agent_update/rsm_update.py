@@ -27,6 +27,7 @@ import json
 from typing import List, Dict, Any
 
 import requests
+from assertpy import assert_that
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute.models import VirtualMachine
 from msrestazure.azure_cloud import Cloud
@@ -96,7 +97,18 @@ class RsmUpdateBvt(AgentTest):
         version: str = "1.3.1.0"
         log.info("Attempting update version same as current version %s", upgrade_version)
         self._request_rsm_update(version)
+        self._check_rsm_gs(version)
         self._verify_guest_agent_update(version)
+
+        # verify requested version below daemon version
+        log.info("*******Verifying requested version below daemon version scenario*******")
+        stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+        log.info("Current agent version running on the vm before update \n%s", stdout)
+        version: str = "0.5.0"
+        log.info("Attempting requested version %s", version)
+        self._request_rsm_update(version)
+        self._check_rsm_gs(version)
+        self._verify_no_guest_agent_update(stdout)
 
     def _check_rsm_gs(self, requested_version: str) -> None:
         # This checks if RSM GS available to the agent after we mock the rsm update request
@@ -114,7 +126,7 @@ class RsmUpdateBvt(AgentTest):
 
     @staticmethod
     def _verify_agent_update_flag_enabled(vm: VirtualMachineClient) -> bool:
-        result: VirtualMachine = vm.get_description()
+        result: VirtualMachine = vm.get_model()
         flag: bool = result.os_profile.linux_configuration.enable_vm_agent_platform_updates
         if flag is None:
             return False
@@ -183,6 +195,13 @@ class RsmUpdateBvt(AgentTest):
         retry_if_false(lambda: _check_agent_version(requested_version))
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info(f"Verified agent updated to requested version. Current agent version running:\n {stdout}")
+
+    def _verify_no_guest_agent_update(self, previous_agent: str) -> None:
+        """
+        verify current agent version is same as previous after update attempt
+        """
+        current_agent: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+        assert_that(current_agent).is_equal_to(previous_agent).described_as(f"Agent version changed.\n Previous Agent {previous_agent} \n Current agent {current_agent}")
 
     def _verify_agent_reported_supported_feature_flag(self):
         """
