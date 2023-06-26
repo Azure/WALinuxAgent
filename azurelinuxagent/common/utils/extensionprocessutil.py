@@ -22,7 +22,9 @@ import re
 import signal
 import time
 
+from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import ExtensionErrorCodes, ExtensionOperationError, ExtensionError
 from azurelinuxagent.common.future import ustr
 
@@ -74,7 +76,7 @@ def handle_process_completion(process, command, timeout, stdout, stderr, error_c
     process_output = read_output(stdout, stderr)
 
     if timed_out:
-        if cpu_cgroup is not None:# Report CPUThrottledTime when timeout happens
+        if cpu_cgroup is not None: # Report CPUThrottledTime when timeout happens
             raise ExtensionError("Timeout({0});CPUThrottledTime({1}secs): {2}\n{3}".format(timeout, throttled_time, command, process_output),
                                  code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
 
@@ -82,10 +84,56 @@ def handle_process_completion(process, command, timeout, stdout, stderr, error_c
                              code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
 
     if return_code != 0:
-        raise ExtensionOperationError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, command, process_output),
-                                      code=error_code, exit_code=return_code)
+        noexec_warning = ""
+        if return_code == 126:  # Permission denied
+            noexec_path = _check_noexec()
+            if noexec_path is not None:
+                noexec_warning = "\nWARNING: {0} is mounted with the noexec flag, which can prevent execution of VM Extensions.".format(noexec_path)
+        raise ExtensionOperationError(
+            "Non-zero exit code: {0}, {1}{2}\n{3}".format(return_code, command, noexec_warning, process_output),
+            code=error_code,
+            exit_code=return_code)
 
     return process_output
+
+
+#
+# Collect a sample of errors while checking for the noexec flag. Consider removing this telemetry after a few releases.
+#
+_COLLECT_NOEXEC_ERRORS = True
+
+
+def _check_noexec():
+    """
+    Check if /var is mounted with the noexec flag.
+    """
+    try:
+        agent_dir: str = conf.get_lib_dir()
+        with open('/proc/mounts', 'r') as f:
+            while True:
+                line = f.readline()
+                if line == "":  # EOF
+                    break
+                # The mount point is on the second column, and the flags are on the fourth. e.g.
+                #
+                #     # grep /var /proc/mounts
+                #     /dev/mapper/rootvg-varlv /var xfs rw,seclabel,noexec,relatime,attr2,inode64,logbufs=8,logbsize=32k,noquota 0 0
+                #
+                columns = line.split()
+                mount_point = columns[1]
+                flags = columns[3]
+                if agent_dir.startswith(mount_point) and "noexec" in flags:
+                    message = "The noexec flag is set on {0}. This can prevent extensions from executing.".format(mount_point)
+                    logger.warn(message)
+                    add_event(op=WALAEventOperation.NoExec, is_success=False, message=message)
+                    return mount_point
+    except Exception as e:
+        message = "Error while checking the noexec flag: {0}".format(e)
+        logger.warn(message)
+        if _COLLECT_NOEXEC_ERRORS:
+            _COLLECT_NOEXEC_ERRORS = False
+            add_event(op=WALAEventOperation.NoExec, is_success=False, log_event=False, message="Error while checking the noexec flag: {0}".format(e))
+    return None
 
 
 SAS_TOKEN_RE = re.compile(r'(https://\S+\?)((sv|st|se|sr|sp|sip|spr|sig)=\S+)+', flags=re.IGNORECASE)
