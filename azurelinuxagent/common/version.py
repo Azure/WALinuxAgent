@@ -48,13 +48,13 @@ def get_daemon_version():
     The value indicates the version of the daemon that started the current agent process or, if the current
     process is the daemon, the version of the current process.
     If the variable is not set (because the agent is < 2.2.53, or the process was not started by the daemon and
-    the process is not the daemon itself) the function returns version of agent which installed with image
+    the process is not the daemon itself) the function returns version of agent which started by the python
     """
     if __DAEMON_VERSION_ENV_VARIABLE in os.environ:
         return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
     else:
         # sys.executable provides the python running the agent so the version would be agent which comes with image
-        cmd = "{0} -c 'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)".format(sys.executable)
+        cmd = ["{0}".format(sys.executable), "-c", "\'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)\'"]
         version = shellutil.run_command(cmd)
         return FlexibleVersion(version)
 

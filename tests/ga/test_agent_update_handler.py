@@ -56,10 +56,9 @@ class TestAgentUpdate(UpdateTestCase):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
                     with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
                         with patch("azurelinuxagent.ga.agent_update_handler.add_event") as mock_telemetry:
-                            with patch("azurelinuxagent.ga.agent_update_handler.get_daemon_version", return_value=FlexibleVersion("2.2.53")):
-                                agent_update_handler = get_agent_update_handler(protocol)
-                                agent_update_handler._protocol = protocol
-                                yield agent_update_handler, mock_telemetry
+                            agent_update_handler = get_agent_update_handler(protocol)
+                            agent_update_handler._protocol = protocol
+                            yield agent_update_handler, mock_telemetry
 
     def __assert_agent_directories_available(self, versions):
         for version in versions:
@@ -329,9 +328,8 @@ class TestAgentUpdate(UpdateTestCase):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
                     with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=0.001):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                            with patch("azurelinuxagent.ga.agent_update_handler.get_daemon_version", return_value=FlexibleVersion("2.2.53")):
-                                agent_update_handler_local = get_agent_update_handler(protocol)
-                                yield agent_update_handler_local
+                            agent_update_handler_local = get_agent_update_handler(protocol)
+                            yield agent_update_handler_local
 
         with mock_agent_update_handler(test_data=data_file) as (agent_update_handler):
             GAUpdateReportState.report_error_msg = ""
@@ -359,9 +357,8 @@ class TestAgentUpdate(UpdateTestCase):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
                     with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=0.001):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                            with patch("azurelinuxagent.ga.agent_update_handler.get_daemon_version", return_value=FlexibleVersion("2.2.53")):
-                                agent_update_handler_local = get_agent_update_handler(protocol)
-                                yield agent_update_handler_local
+                            agent_update_handler_local = get_agent_update_handler(protocol)
+                            yield agent_update_handler_local
 
         with mock_agent_update_handler(test_data=data_file) as (agent_update_handler):
             GAUpdateReportState.report_error_msg = ""

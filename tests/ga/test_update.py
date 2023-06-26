@@ -43,7 +43,7 @@ from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_S
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
-    AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION
+    AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION, set_daemon_version, __DAEMON_VERSION_ENV_VARIABLE as DAEMON_VERSION_ENV_VARIABLE
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
 from azurelinuxagent.ga.update import  \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, ORPHAN_WAIT_INTERVAL, \
@@ -135,11 +135,16 @@ class UpdateTestCase(AgentTestCaseWithGetVmSizeMock):
         source = os.path.join(data_dir, "ga", sample_agent_zip)
         target = os.path.join(UpdateTestCase._agent_zip_dir, test_agent_zip)
         shutil.copyfile(source, target)
+        # The update_handler inherently calls agent update handler, which in turn calls daemon version. So now daemon version logic has fallback if env variable is not set.
+        # The fallback calls popen which is not mocked. So we set the env variable to avoid the fallback.
+        # This will not change any of the test validations. At the ene of all update test validations, we reset the env variable.
+        set_daemon_version("1.2.3.4")
 
     @classmethod
     def tearDownClass(cls):
         super(UpdateTestCase, cls).tearDownClass()
         shutil.rmtree(UpdateTestCase._test_suite_tmp_dir)
+        os.environ.pop(DAEMON_VERSION_ENV_VARIABLE)
 
     @staticmethod
     def _get_agent_pkgs(in_dir=None):
@@ -328,8 +333,6 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._goal_state = Mock()
         self.update_handler._goal_state.extensions_goal_state = Mock()
         self.update_handler._goal_state.extensions_goal_state.source = "Fabric"
-        self.deamon_version_patch = patch("azurelinuxagent.common.version.get_daemon_version")
-
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not reuse
         # a previous state
         clear_singleton_instances(ProtocolUtil)
@@ -1435,8 +1438,7 @@ class TestAgentUpgrade(UpdateTestCase):
                 with patch("azurelinuxagent.common.conf.get_hotfix_upgrade_frequency", return_value=hotfix_frequency):
                     with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency", return_value=normal_frequency):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                            with patch("azurelinuxagent.ga.agent_update_handler.get_daemon_version", return_value=FlexibleVersion("2.2.53")):
-                                yield
+                            yield
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None,
@@ -2295,9 +2297,11 @@ class ProcessGoalStateTestCase(AgentTestCase):
             raise Exception("The test setup did not save the Fast Track state")
 
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
-            with mock_wire_protocol(data_file) as protocol:
-                with mock_update_handler(protocol) as update_handler:
-                    update_handler.run()
+            with patch("azurelinuxagent.common.version.get_daemon_version",
+                       return_value=FlexibleVersion("2.2.53")):
+                with mock_wire_protocol(data_file) as protocol:
+                    with mock_update_handler(protocol) as update_handler:
+                        update_handler.run()
 
         self.assertEqual(HostPluginProtocol.get_fast_track_timestamp(), timeutil.create_timestamp(datetime.min),
             "The Fast Track state was not cleared")
