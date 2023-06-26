@@ -9,7 +9,6 @@ from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses
 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.guestagent import GAUpdateReportState
