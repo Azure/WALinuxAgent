@@ -5,7 +5,7 @@ name: "AgentPublish"
 tests:
   - "agent_publish/agent_publish.py"
 images:
-  - "random(endorsed, 1)"
-  - "random(endorsed-arm64, 1)"
+  - "random(endorsed, 10)"
+  - "random(endorsed-arm64, 2)"
 location: "centraluseuap"
 owns_vm: true

@@ -41,15 +41,15 @@ _UPDATE_PATTERN_01 = re.compile(r'(.*Agent)?\s(\S*) discovered update WALinuxAge
 
 """
 > Normal Agent upgrade discovered, updating to WALinuxAgent-2.9.1.0 -- exiting
-('Normal Agent', None, 'WALinuxAgent-2.9.1.0 ')
+('Normal Agent', WALinuxAgent, '2.9.1.0 ')
 """
-_UPDATE_PATTERN_02 = re.compile(r'(.*Agent)?\s(\S*) upgrade discovered, updating to WALinuxAgent-(\S*) -- exiting')
+_UPDATE_PATTERN_02 = re.compile(r'(.*Agent) upgrade discovered, updating to (WALinuxAgent)-(\S*) -- exiting')
 
 """
 > Agent update found, exiting current process to downgrade to the new Agent version 1.3.0.0
-(None, 'downgrade', '1.3.0.0')
+(Agent, 'downgrade', '1.3.0.0')
 """
-_UPDATE_PATTERN_03 = re.compile(r'.*Agent(\S*) update found, exiting current process to (\S*) to the new Agent version (\S*)')
+_UPDATE_PATTERN_03 = re.compile(r'(.*Agent) update found, exiting current process to (\S*) to the new Agent version (\S*)')
 
 """
 > Agent WALinuxAgent-2.2.47 is running as the goal state agent

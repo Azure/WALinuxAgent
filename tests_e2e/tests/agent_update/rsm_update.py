@@ -70,7 +70,7 @@ class RsmUpdateBvt(AgentTest):
 
         log.info("*******Verifying the Agent Downgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info("Current agent version running on the vm before update \n%s", stdout)
+        log.info("Current agent version running on the vm before update is \n%s", stdout)
         downgrade_version: str = "1.3.0.0"
         log.info("Attempting downgrade version %s", downgrade_version)
         self._request_rsm_update(downgrade_version)
@@ -84,7 +84,7 @@ class RsmUpdateBvt(AgentTest):
         # Verify upgrade scenario
         log.info("*******Verifying the Agent Upgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info("Current agent version running on the vm before update \n%s", stdout)
+        log.info("Current agent version running on the vm before update is \n%s", stdout)
         upgrade_version: str = "1.3.1.0"
         log.info("Attempting upgrade version %s", upgrade_version)
         self._request_rsm_update(upgrade_version)
@@ -95,7 +95,7 @@ class RsmUpdateBvt(AgentTest):
         # verify no version update. There is bug in CRP and will enable once it's fixed
         log.info("*******Verifying the no version update scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info("Current agent version running on the vm before update \n%s", stdout)
+        log.info("Current agent version running on the vm before update is \n%s", stdout)
         version: str = "1.3.1.0"
         log.info("Attempting update version same as current version %s", upgrade_version)
         self._request_rsm_update(version)
