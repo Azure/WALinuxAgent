@@ -108,7 +108,7 @@ def _check_noexec():
     Check if /var is mounted with the noexec flag.
     """
     try:
-        agent_dir: str = conf.get_lib_dir()
+        agent_dir = conf.get_lib_dir()
         with open('/proc/mounts', 'r') as f:
             while True:
                 line = f.readline()
