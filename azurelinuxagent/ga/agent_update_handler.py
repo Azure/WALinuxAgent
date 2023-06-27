@@ -37,6 +37,7 @@ class AgentUpdateHandlerUpdateState(object):
         self.last_attempted_requested_version_update_time = datetime.datetime.min
         self.last_attempted_hotfix_update_time = datetime.datetime.min
         self.last_attempted_normal_update_time = datetime.datetime.min
+        self.last_attempted_manifest_download_time = datetime.datetime.min
 
 
 class AgentUpdateHandler(object):
@@ -86,6 +87,23 @@ class AgentUpdateHandler(object):
         else:
             self.update_state.last_attempted_normal_update_time = now
             self.update_state.last_attempted_hotfix_update_time = now
+            self.update_state.last_attempted_manifest_download_time = now
+
+    def __should_agent_attempt_manifest_download(self):
+        """
+        The agent should attempt to download the manifest if
+        the agent has not attempted to download the manifest in the last 1 hour
+        """
+        now = datetime.datetime.now()
+
+        if self.update_state.last_attempted_manifest_download_time != datetime.datetime.min:
+            next_attempt_time = self.update_state.last_attempted_manifest_download_time + datetime.timedelta(seconds=conf.get_autoupdate_frequency())
+        else:
+            next_attempt_time = now
+
+        if next_attempt_time > now:
+            return False
+        return True
 
     @staticmethod
     def __get_agent_upgrade_type(requested_version):
@@ -274,6 +292,9 @@ class AgentUpdateHandler(object):
             agent_manifest = None  # This is to make sure fetch agent manifest once per update
             warn_msg = ""
             if requested_version is None:
+                # Do not proceed with update if self-update needs to download the manifest again with in an hour
+                if not self.__should_agent_attempt_manifest_download():
+                    return
                 if conf.get_enable_ga_versioning():  # log the warning only when ga versioning is enabled
                     warn_msg = "Missing requested version in agent family: {0} for incarnation: {1}, fallback to largest version update".format(self._ga_family, self._gs_id)
                     GAUpdateReportState.report_error_msg = warn_msg

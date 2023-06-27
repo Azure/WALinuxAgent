@@ -129,7 +129,6 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
-    "GAUpdates.Enabled": True,
     #
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
@@ -139,7 +138,8 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
-    "Debug.EnableGAVersioning": False
+    "Debug.EnableGAUpdates": True,
+    "Debug.EnableGAVersioning": True
 }
 
 
@@ -508,7 +508,7 @@ def get_ga_updates_enabled(conf=__conf__):
     If True, the agent go through update logic to look for new agents otherwise it will stop agent updates.
     NOTE: This option is needed in e2e tests to control agent updates.
     """
-    return conf.get_switch("GAUpdates.Enabled", True)
+    return conf.get_switch("Debug.EnableGAUpdates", True)
 
 
 def get_cgroup_check_period(conf=__conf__):
