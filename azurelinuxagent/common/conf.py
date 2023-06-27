@@ -506,7 +506,8 @@ def get_monitor_network_configuration_changes(conf=__conf__):
 def get_ga_updates_enabled(conf=__conf__):
     """
     If True, the agent go through update logic to look for new agents otherwise it will stop agent updates.
-    NOTE: This option is needed in e2e tests to control agent updates.
+    NOTE: This option is same like Autoupdates flag but one difference is that this will not influence the daemon to start the ext_handler of daemon(installed with image) version.
+    and it is used especially when you don't want to change the agent from a particular version
     """
     return conf.get_switch("Debug.EnableGAUpdates", True)
 
@@ -637,7 +638,7 @@ def get_normal_upgrade_frequency(conf=__conf__):
 
 def get_enable_ga_versioning(conf=__conf__):
     """
-    If True, the agent uses GA Versioning for auto-updating the agent vs automatically auto-updating to the highest version.
+    If True, the agent look for rsm updates(checking requested version in GS) otherwise it will fall back to self-update and finds the highest version from PIR.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableGAVersioning", True)
