@@ -1,0 +1,4 @@
+name: "AgentCgroups"
+tests:
+  - "agent_cgroups/agent_cgroups.py"
+images: "cgroups-endorsed"

@@ -1,0 +1,7 @@
+name: "ExtCgroups"
+tests:
+  - "ext_cgroups/install_extensions.py"
+  - "ext_cgroups/ext_cgroups.py"
+images: "cgroups-endorsed"
+locations: "AzureCloud:southcentralus"
+owns_vm: true
