@@ -44,8 +44,19 @@ class AgentNotProvisioned(AgentTest):
         log.info("Checking the Agent's log to verify that it is disabled.")
         try:
             output = ssh_client.run_command("""
-                grep -E 'WARNING.*Daemon.*Disabling guest agent in accordance with ovf-env.xml' /var/log/waagent.log || \
-                grep -E 'WARNING.*Daemon.*Disabling the guest agent by sleeping forever; to re-enable, remove /var/lib/waagent/disable_agent and restart' /var/log/waagent.log
+                # We need to wait for the agent to start and hit the disable code, give it a few minutes
+                n=18
+                for i in $(seq $n); do
+                    grep -E 'WARNING.*Daemon.*Disabling guest agent in accordance with ovf-env.xml' /var/log/waagent.log || \
+                    grep -E 'WARNING.*Daemon.*Disabling the guest agent by sleeping forever; to re-enable, remove /var/lib/waagent/disable_agent and restart' /var/log/waagent.log
+                    if [[ $? == 0 ]]; then
+                        exit 0
+                    fi
+                    echo "Did not find the expected message in the agent's log, retrying after sleeping for a few seconds (attempt $i/18)..."
+                    sleep 10
+                done
+                echo "Did not find the expected message in the agent's log, giving up."
+                exit 1
             """)
             log.info("The Agent is disabled, log message: [%s]", output.rstrip())
         except CommandError as e:
