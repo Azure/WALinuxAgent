@@ -53,7 +53,8 @@ def get_daemon_version():
     if __DAEMON_VERSION_ENV_VARIABLE in os.environ:
         return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
     else:
-        # sys.executable provides the python running the agent so the version would be agent which comes with image
+        # The agent process which execute the extensions can have different version(after upgrades) and importing version from that process may provide wrong version for daemon.
+        # so launching new process with sys.executable python provides the correct version for daemon which preinstalled in the image.
         cmd = ["{0}".format(sys.executable), "-c", "\'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)\'"]
         version = shellutil.run_command(cmd)
         return FlexibleVersion(version)
