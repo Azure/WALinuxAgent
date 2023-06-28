@@ -52,7 +52,7 @@ class AgentNotProvisioned(AgentTest):
                     if [[ $? == 0 ]]; then
                         exit 0
                     fi
-                    echo "Did not find the expected message in the agent's log, retrying after sleeping for a few seconds (attempt $i/18)..."
+                    echo "Did not find the expected message in the agent's log, retrying after sleeping for a few seconds (attempt $i/$n)..."
                     sleep 10
                 done
                 echo "Did not find the expected message in the agent's log, giving up."
