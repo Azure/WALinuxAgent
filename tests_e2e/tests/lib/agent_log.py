@@ -92,10 +92,11 @@ class AgentLog(object):
             #
             # NOTE: This list was taken from the older agent tests and needs to be cleaned up. Feel free to un-comment rules as new tests are added.
             #
-            # 2023-06-28T09:31:38.903835Z WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules
-            {
-                'message': r"WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules"
-            },
+            # # This warning is expected on SUSE 12
+            # {
+            #     'message': r"WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules",
+            #     'if': lambda _: re.match(r"((sles15\.2)|suse12)\D*", DISTRO_NAME, flags=re.IGNORECASE) is not None
+            # },
             # # The following message is expected to log an error if systemd is not enabled on it
             # {
             #     'message': r"Did not detect Systemd, unable to set wa(|linux)agent-network-setup.service",
@@ -141,7 +142,7 @@ class AgentLog(object):
             #  The environment thread performs this operation periodically
             #
             {
-                'message': r"Move rules file 70-persistent-net.rules to /var/lib/waagent/70-persistent-net.rules",
+                'message': r"Move rules file (70|75)-persistent.*.rules to /var/lib/waagent/(70|75)-persistent.*.rules",
                 'if': lambda r: r.level == "WARNING"
             },
             #
