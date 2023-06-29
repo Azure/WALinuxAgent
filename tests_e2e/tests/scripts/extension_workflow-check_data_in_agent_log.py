@@ -33,7 +33,7 @@ def main():
     found = False
 
     try:
-        found = AgentLog(Path('/var/log/waagent.log')).is_data_in_waagent_log(args.data)
+        found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data)
         if found:
             print("Found data: {0} in agent log".format(args.data))
         else:
