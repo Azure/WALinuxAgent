@@ -362,7 +362,7 @@ class AgentLog(object):
 
         return errors
 
-    def is_data_in_waagent_log(self, data):
+    def agent_log_contains(self, data: str):
         """
         This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
         :param data: The string to look for in the agent logs
