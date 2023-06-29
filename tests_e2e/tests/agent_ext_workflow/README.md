@@ -27,7 +27,7 @@ The setting for this extension is of the format -
 ##### Repo link 
 https://github.com/larohra/GuestAgentDcrTestExtension 
 
-##### Availabe Versions:
+##### Available Versions:
 - 1.1.5 - Version with Basic functionalities as mentioned above
 - 1.2.0 - Same functionalities as above with `"updateMode": "UpdateWithInstall"` in HandlerManifest.json to test update case
 - 1.3.0 - Same functionalities as above with `"updateMode": "UpdateWithoutInstall"` in HandlerManifest.json to test update case
