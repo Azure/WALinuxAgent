@@ -7,4 +7,4 @@ images:
   - "rhel_79"
   - "ubuntu_1604"
   - "ubuntu_1804"
-location: "southcentralus"
+locations: "AzureCloud:southcentralus"
