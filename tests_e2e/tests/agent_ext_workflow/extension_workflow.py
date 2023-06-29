@@ -123,7 +123,7 @@ class ExtensionWorkflow(AgentTest):
                 log.info("Restart completed:\n%s", output)
 
                 for args in restart_agent:
-                    self.execute_assertion_script('assert-operation-sequence.py', args)
+                    self.execute_assertion_script('extension_workflow-assert_operation_sequence.py', args)
 
                 if assert_status:
                     self.assert_instance_view()
@@ -164,13 +164,13 @@ class ExtensionWorkflow(AgentTest):
             # Install test extension on the VM
             dcr_ext.modify_ext_settings_and_enable()
 
-            # command_args are the args we pass to the assert-operation-sequence.py file to verify the operation
+            # command_args are the args we pass to the extension_workflow-assert_operation_sequence.py file to verify the operation
             # sequence for the current test
             command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable"
             restart_agent_command_args = [f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable enable"]
 
             dcr_ext.assert_scenario(
-                file_name='assert-operation-sequence.py',
+                file_name='extension_workflow-assert_operation_sequence.py',
                 command_args=command_args,
                 assert_status=True,
                 restart_agent=restart_agent_command_args
@@ -189,7 +189,7 @@ class ExtensionWorkflow(AgentTest):
             restart_agent_command_args = [f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops enable enable"]
 
             dcr_ext.assert_scenario(
-                file_name='assert-operation-sequence.py',
+                file_name='extension_workflow-assert_operation_sequence.py',
                 command_args=command_args,
                 assert_status=True,
                 restart_agent=restart_agent_command_args
@@ -220,7 +220,7 @@ class ExtensionWorkflow(AgentTest):
             # We first ensure that the stdout contains the special characters and then we check if the test_guid is logged
             # atleast once in the agent log to ensure that there were no errors when handling special characters in the agent
             dcr_ext.assert_scenario(
-                file_name='check-data-in-agent-log.py',
+                file_name='extension_workflow-check_data_in_agent_log.py',
                 command_args=command_args,
                 assert_status=True,
                 data=test_guid
@@ -239,7 +239,7 @@ class ExtensionWorkflow(AgentTest):
             dcr_ext.extension.delete()
 
             dcr_ext.assert_scenario(
-                file_name='assert-operation-sequence.py',
+                file_name='extension_workflow-assert_operation_sequence.py',
                 command_args=command_args,
                 restart_agent=restart_agent_command_args
             )
@@ -287,7 +287,7 @@ class ExtensionWorkflow(AgentTest):
             ]
 
             dcr_ext.assert_scenario(
-                file_name='assert-operation-sequence.py',
+                file_name='extension_workflow-assert_operation_sequence.py',
                 command_args=command_args,
                 assert_status=True,
                 restart_agent=restart_agent_command_args
@@ -338,7 +338,7 @@ class ExtensionWorkflow(AgentTest):
             ]
 
             dcr_ext.assert_scenario(
-                file_name='assert-operation-sequence.py',
+                file_name='extension_workflow-assert_operation_sequence.py',
                 command_args=command_args,
                 assert_status=True,
                 restart_agent=restart_agent_command_args
@@ -348,8 +348,8 @@ class ExtensionWorkflow(AgentTest):
             log.info("*******Verifying no lag between agent start and gs processing*******")
 
             log.info("")
-            log.info("Running validate-no-lag-between-agent-start-and-gs-processing.py remotely...")
-            result = self._ssh_client.run_command("validate-no-lag-between-agent-start-and-gs-processing.py", use_sudo=True)
+            log.info("Running extension_workflow-validate_no_lag_between_agent_start_and_gs_processing.py remotely...")
+            result = self._ssh_client.run_command("extension_workflow-validate_no_lag_between_agent_start_and_gs_processing.py", use_sudo=True)
             log.info(result)
             log.info("Validation for no lag time between agent start and gs processing completed successfully")
 
