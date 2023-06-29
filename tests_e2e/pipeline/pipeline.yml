@@ -107,6 +107,7 @@ jobs:
       - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/execute_tests.sh
         displayName: "Execute tests"
         continueOnError: true
+        timeoutInMinutes: 5
         env:
           SUBSCRIPTION_ID: $(SUBSCRIPTION-ID)
           AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
@@ -124,6 +125,7 @@ jobs:
 
       - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/collect_artifacts.sh
         displayName: "Collect test artifacts"
+        condition: always()
         env:
           COLLECT_LISA_LOGS: ${{ parameters.collect_lisa_logs }}
 
