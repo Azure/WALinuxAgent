@@ -28,7 +28,7 @@ class TestAgentUpdate(UpdateTestCase):
         clear_singleton_instances(ProtocolUtil)
 
     @contextlib.contextmanager
-    def __get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True):
+    def __get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, protocol_get_error=False):
         # Default to DATA_FILE of test_data parameter raises the pylint warning
         # W0102: Dangerous default value DATA_FILE (builtins.dict) as argument (dangerous-default-value)
         test_data = DATA_FILE if test_data is None else test_data
@@ -37,9 +37,12 @@ class TestAgentUpdate(UpdateTestCase):
 
             def get_handler(url, **kwargs):
                 if HttpRequestPredicates.is_agent_package_request(url):
-                    agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
-                    protocol.mock_wire_data.call_counts['agentArtifact'] += 1
-                    return MockHttpResponse(status=httpclient.OK, body=agent_pkg)
+                    if not protocol_get_error:
+                        agent_pkg = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
+                        return MockHttpResponse(status=httpclient.OK, body=agent_pkg)
+                    else:
+                        return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
+
                 return protocol.mock_wire_data.mock_http_get(url, **kwargs)
 
             def put_handler(url, *args, **_):
@@ -58,6 +61,7 @@ class TestAgentUpdate(UpdateTestCase):
                             agent_update_handler = get_agent_update_handler(protocol)
                             agent_update_handler._protocol = protocol
                             yield agent_update_handler, mock_telemetry
+
 
     def __assert_agent_directories_available(self, versions):
         for version in versions:
@@ -173,6 +177,33 @@ class TestAgentUpdate(UpdateTestCase):
                 self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
                 self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
                 self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
+
+    def test_it_should_not_download_manifest_again_if_last_attempted_download_time_not_elapsed(self):
+        self.prepare_agents(count=1)
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf.xml"
+        with self.__get_agent_update_handler(test_data=data_file, autoupdate_frequency=10, protocol_get_error=True) as (agent_update_handler, _):
+            # making multiple agent update attempts
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+
+            mock_wire_data = agent_update_handler._protocol.mock_wire_data
+            self.assertEqual(1, mock_wire_data.call_counts['manifest_of_ga.xml'], "Agent manifest should not be downloaded again")
+
+    def test_it_should_download_manifest_if_last_attempted_download_time_is_elapsed(self):
+        self.prepare_agents(count=1)
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf.xml"
+
+        with self.__get_agent_update_handler(test_data=data_file, autoupdate_frequency=0.00001, protocol_get_error=True) as (agent_update_handler, _):
+            # making multiple agent update attempts
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+
+        mock_wire_data = agent_update_handler._protocol.mock_wire_data
+        self.assertEqual(3, mock_wire_data.call_counts['manifest_of_ga.xml'], "Agent manifest should be downloaded in all attempts")
 
     def test_it_should_not_agent_update_if_requested_version_is_same_as_current_version(self):
         data_file = DATA_FILE.copy()
@@ -313,24 +344,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
 
-        @contextlib.contextmanager
-        def mock_agent_update_handler(test_data):
-            with mock_wire_protocol(test_data) as protocol:
-
-                def get_handler(url, **kwargs):
-                    if HttpRequestPredicates.is_agent_package_request(url):
-                        return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
-                    return protocol.mock_wire_data.mock_http_get(url, **kwargs)
-
-                protocol.set_http_handlers(http_get_handler=get_handler)
-
-                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
-                    with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=0.001):
-                        with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                            agent_update_handler_local = get_agent_update_handler(protocol)
-                            yield agent_update_handler_local
-
-        with mock_agent_update_handler(test_data=data_file) as (agent_update_handler):
+        with self.__get_agent_update_handler(test_data=data_file, protocol_get_error=True) as (agent_update_handler, _):
             GAUpdateReportState.report_error_msg = ""
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
@@ -343,23 +357,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf.xml"
 
-        @contextlib.contextmanager
-        def mock_agent_update_handler(test_data):
-            with mock_wire_protocol(test_data) as protocol:
-                def get_handler(url, **kwargs):
-                    if HttpRequestPredicates.is_agent_package_request(url):
-                        return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
-                    return protocol.mock_wire_data.mock_http_get(url, **kwargs)
-
-                protocol.set_http_handlers(http_get_handler=get_handler)
-
-                with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
-                    with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=0.001):
-                        with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                            agent_update_handler_local = get_agent_update_handler(protocol)
-                            yield agent_update_handler_local
-
-        with mock_agent_update_handler(test_data=data_file) as (agent_update_handler):
+        with self.__get_agent_update_handler(test_data=data_file, protocol_get_error=True) as (agent_update_handler, _):
             GAUpdateReportState.report_error_msg = ""
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
