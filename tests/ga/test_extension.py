@@ -3209,7 +3209,8 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
         AgentTestCase.tearDown(self)
 
     @patch('time.gmtime', MagicMock(return_value=time.gmtime(0)))
-    def test_ext_handler_reporting_status_file(self):
+    @patch("azurelinuxagent.common.version.get_daemon_version", return_value=FlexibleVersion("0.0.0.0"))
+    def test_ext_handler_reporting_status_file(self, _):
         with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
 
             def mock_http_put(url, *args, **_):

@@ -130,12 +130,19 @@ class AgentTestLoader(object):
         """
         Performs some basic validations on the data loaded from the YAML description files
         """
+        def _parse_image(image: str) -> str:
+            """
+            Parses a reference to an image or image set and returns the name of the image or image set
+            """
+            match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
+            if match is not None:
+                return match.group('image_set')
+            return image
+
         for suite in self.test_suites:
             # Validate that the images the suite must run on are in images.yml
             for image in suite.images:
-                match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
-                if match is not None:
-                    image = match.group('image_set')
+                image = _parse_image(image)
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
 
@@ -146,6 +153,7 @@ class AgentTestLoader(object):
                 else:
                     continue
                 for suite_image in suite.images:
+                    suite_image = _parse_image(suite_image)
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
                         if image.locations:

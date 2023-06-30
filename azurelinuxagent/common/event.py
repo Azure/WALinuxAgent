@@ -104,6 +104,7 @@ class WALAEventOperation:
     InitializeHostPlugin = "InitializeHostPlugin"
     Log = "Log"
     LogCollection = "LogCollection"
+    NoExec = "NoExec"
     OSInfo = "OSInfo"
     Partition = "Partition"
     PersistFirewallRules = "PersistFirewallRules"
