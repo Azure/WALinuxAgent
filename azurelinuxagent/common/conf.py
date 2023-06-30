@@ -129,7 +129,6 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
-    "GAUpdates.Enabled": True,
     #
     # "Debug" options are experimental and may be removed in later
     # versions of the Agent.
@@ -137,9 +136,10 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
+    "Debug.DownloadNewAgents": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
-    "Debug.EnableGAVersioning": False
+    "Debug.EnableGAVersioning": True
 }
 
 
@@ -503,12 +503,15 @@ def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
 
 
-def get_ga_updates_enabled(conf=__conf__):
+def get_download_new_agents(conf=__conf__):
     """
-    If True, the agent go through update logic to look for new agents otherwise it will stop agent updates.
-    NOTE: This option is needed in e2e tests to control agent updates.
+    If True, the agent go through update logic to look for new agents to download otherwise it will stop agent updates.
+    NOTE: AutoUpdate.Enabled controls whether the Agent downloads new update and also whether any downloaded updates are started or not, while DownloadNewAgents controls only the former.
+    AutoUpdate.Enabled == false -> Agent preinstalled on the image will process extensions and will not update (regardless of DownloadNewAgents flag)
+    AutoUpdate.Enabled == true and DownloadNewAgents == true, any update already downloaded will be started, and agent look for future updates
+    AutoUpdate.Enabled == true and DownloadNewAgents == false, any update already downloaded will be started, but the agent will not look for future updates
     """
-    return conf.get_switch("GAUpdates.Enabled", True)
+    return conf.get_switch("Debug.DownloadNewAgents", True)
 
 
 def get_cgroup_check_period(conf=__conf__):
@@ -637,7 +640,7 @@ def get_normal_upgrade_frequency(conf=__conf__):
 
 def get_enable_ga_versioning(conf=__conf__):
     """
-    If True, the agent uses GA Versioning for auto-updating the agent vs automatically auto-updating to the highest version.
+    If True, the agent looks for rsm updates(checking requested version in GS) otherwise it will fall back to self-update and finds the highest version from PIR.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableGAVersioning", True)

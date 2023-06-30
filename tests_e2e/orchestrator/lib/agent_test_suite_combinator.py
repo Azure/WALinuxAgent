@@ -273,7 +273,7 @@ class AgentTestSuitesCombinator(Combinator):
                     count = 1
                 matching_images = loader.images[match.group('image_set')].copy()
                 random.shuffle(matching_images)
-                image_list = matching_images[0:count]
+                image_list = matching_images[0:int(count)]
             for i in image_list:
                 unique[i.urn] = i
         return [v for k, v in unique.items()]
