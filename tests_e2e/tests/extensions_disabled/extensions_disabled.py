@@ -44,7 +44,7 @@ class ExtensionsDisabled(AgentTest):
 
         # Disable extension processing on the test VM
         log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
-        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled n", use_sudo=True)
+        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
 
         # From now on, extensions will time out; set the timeout to the minimum allowed(15 minutes)

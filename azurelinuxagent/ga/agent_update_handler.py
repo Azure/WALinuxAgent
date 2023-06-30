@@ -9,7 +9,7 @@ from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpd
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
-from azurelinuxagent.common.protocol.restapi import VERSION_0, VMAgentUpdateStatuses, VMAgentUpdateStatus
+from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
@@ -231,7 +231,7 @@ class AgentUpdateHandler(object):
             # In case of an upgrade, we don't need to exclude anything as the daemon will automatically
             # start the next available highest version which would be the target version
             prefix = "upgrade"
-        raise AgentUpgradeExitException("Agent update found, Exiting current process to {0} to the new Agent version {1}".format(prefix, requested_version))
+        raise AgentUpgradeExitException("Agent update found, exiting current process to {0} to the new Agent version {1}".format(prefix, requested_version))
 
     @staticmethod
     def __get_available_agents_on_disk():
@@ -242,15 +242,6 @@ class AgentUpdateHandler(object):
     def __get_all_agents_on_disk():
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
-
-    @staticmethod
-    def __get_daemon_version_for_update():
-        daemon_version = get_daemon_version()
-        if daemon_version != FlexibleVersion(VERSION_0):
-            return daemon_version
-        # We return 0.0.0.0 if daemon version is not specified. In that case,
-        # use the min version as 2.2.53 as we started setting the daemon version starting 2.2.53.
-        return FlexibleVersion("2.2.53")
 
     @staticmethod
     def __log_event(level, msg, success=True):
@@ -299,7 +290,7 @@ class AgentUpdateHandler(object):
                 self.__log_event(LogLevel.WARNING, warn_msg)
 
             try:
-                daemon_version = self.__get_daemon_version_for_update()
+                daemon_version = get_daemon_version()
                 if requested_version < daemon_version:
                     # Don't process the update if the requested version is less than daemon version,
                     # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
