@@ -16,7 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+# Asserts that goal state processing completed no more than 15 seconds after agent start
+#
 from datetime import timedelta
 import re
 import sys

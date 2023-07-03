@@ -16,7 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+# Checks that the input data is found in the agent log
+#
 import argparse
 import sys
 
