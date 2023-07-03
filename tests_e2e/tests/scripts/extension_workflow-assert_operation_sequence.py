@@ -32,7 +32,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 
 DELIMITER = ";"
 OPS_FILE_DIR = "/var/log/azure/Microsoft.Azure.TestExtensions.Edp.GuestAgentDcrTest/"
@@ -43,7 +43,7 @@ MAX_RETRY = 5
 SLEEP_TIMER = 30
 
 
-def parse_ops_log(ops_version: str, input_ops: list[str], start_time: str):
+def parse_ops_log(ops_version: str, input_ops: List[str], start_time: str):
     # input_ops are the expected operations that we expect to see in the operations log file
     ver = (ops_version,)
     ops_file_name = None
@@ -77,7 +77,7 @@ def parse_ops_log(ops_version: str, input_ops: list[str], start_time: str):
     return ops
 
 
-def assert_ops_in_sequence(actual_ops: list[Dict[datetime, str, str]], expected_ops: list[str]):
+def assert_ops_in_sequence(actual_ops: List[Dict[datetime, str, str]], expected_ops: list[str]):
     exit_code = 0
     if len(actual_ops) != len(expected_ops):
         print("Operation sequence length doesn't match, exit code 2")
