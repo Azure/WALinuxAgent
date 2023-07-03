@@ -77,7 +77,7 @@ def parse_ops_log(ops_version: str, input_ops: List[str], start_time: str):
     return ops
 
 
-def assert_ops_in_sequence(actual_ops: List[Dict[str, Any]], expected_ops: list[str]):
+def assert_ops_in_sequence(actual_ops: List[Dict[str, Any]], expected_ops: List[str]):
     exit_code = 0
     if len(actual_ops) != len(expected_ops):
         print("Operation sequence length doesn't match, exit code 2")
