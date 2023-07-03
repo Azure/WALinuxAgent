@@ -16,8 +16,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-
+# The DcrTestExtension maintains an `operations-<VERSION_NO>.log` for every operation that the agent executes on that
+# extension. This script asserts that the operations sequence in the log file matches the expected operations given as
+# input to this script. We do this to confirm that the agent executed the correct sequence of operations.
+#
+# Sample operations-<version>.log file snippet -
+# Date:2019-07-30T21:54:03Z; Operation:install; SeqNo:0
+# Date:2019-07-30T21:54:05Z; Operation:enable; SeqNo:0
+# Date:2019-07-30T21:54:37Z; Operation:enable; SeqNo:1
+# Date:2019-07-30T21:55:20Z; Operation:disable; SeqNo:1
+# Date:2019-07-30T21:55:22Z; Operation:uninstall; SeqNo:1
+#
 import argparse
 import os
 import sys
@@ -33,8 +42,11 @@ MAX_RETRY = 5
 SLEEP_TIMER = 30
 
 
-def parse_ops_log(ops_version, input_ops, start_time):
+def parse_ops_log(ops_version: str, input_ops, start_time: str):
     # input_ops are the expected operations that we expect to see in the operations log file
+    print(type(ops_version))
+    print(type(input_ops))
+    print(type(start_time))
     ver = (ops_version,)
     ops_file_name = None
     for file_pat in OPS_FILE_PATTERN:
@@ -69,7 +81,8 @@ def parse_ops_log(ops_version, input_ops, start_time):
 
 def assert_ops_in_sequence(actual_ops, expected_ops):
     exit_code = 0
-
+    print(type(actual_ops))
+    print(type(expected_ops))
     if len(actual_ops) != len(expected_ops):
         print("Operation sequence length doesn't match, exit code 2")
         exit_code = 2
