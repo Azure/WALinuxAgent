@@ -82,14 +82,15 @@ class ExtensionWorkflow(AgentTest):
             self.data = None
 
         def modify_ext_settings_and_enable(self, data=None):
+            self.enable_count += 1
+
             # Settings follows the following format: [ExtensionName]-[Version], Count: [Enable-count]
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
-            # We include data in the settings to test the special characters case. The settings format with data
-            # follows the following format: [ExtensionName]-[Version], Count: [Enable-count], data: [data]
+            # We include data in the settings to test the special characters case. The settings with data follows the
+            # following format: [ExtensionName]-[Version], Count: [Enable-count], data: [data]
             if data is not None:
                 setting_name = "{0}, {1}: {2}".format(setting_name, self.DATA_KEY_NAME, data)
 
-            self.enable_count += 1
             self.expected_message = setting_name
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
 
