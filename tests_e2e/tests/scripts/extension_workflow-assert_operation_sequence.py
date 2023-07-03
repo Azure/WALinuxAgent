@@ -36,8 +36,6 @@ from typing import Any, Dict, List
 
 DELIMITER = ";"
 OPS_FILE_DIR = "/var/log/azure/Microsoft.Azure.TestExtensions.Edp.GuestAgentDcrTest/"
-# In general most of the distros use the above directory for extension log logging except RHEL-69,
-# they use the 2nd File pattern (i.e. /var/log/azure/{ext-publisher-type}/{version}/extensions.log)
 OPS_FILE_PATTERN = ["operations-%s.log", "%s/operations-%s.log"]
 MAX_RETRY = 5
 SLEEP_TIMER = 30
