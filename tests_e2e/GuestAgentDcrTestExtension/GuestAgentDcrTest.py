@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pylint: disable=all
 from __future__ import print_function
 
 from Utils.WAAgentUtil import waagent
