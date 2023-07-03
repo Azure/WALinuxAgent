@@ -21,6 +21,7 @@ import platform
 import sys
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common import logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, get_linux_distribution
@@ -48,12 +49,21 @@ def get_daemon_version():
     The value indicates the version of the daemon that started the current agent process or, if the current
     process is the daemon, the version of the current process.
     If the variable is not set (because the agent is < 2.2.53, or the process was not started by the daemon and
-    the process is not the daemon itself) the function returns "0.0.0.0"
+    the process is not the daemon itself) the function returns version of agent which started by the python
     """
     if __DAEMON_VERSION_ENV_VARIABLE in os.environ:
         return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
-    return FlexibleVersion("0.0.0.0")
-
+    else:
+        # The agent process which execute the extensions can have different version(after upgrades) and importing version from that process may provide wrong version for daemon.
+        # so launching new process with sys.executable python provides the correct version for daemon which preinstalled in the image.
+        try:
+            cmd = ["{0}".format(sys.executable), "-c", "\'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)\'"]
+            version = shellutil.run_command(cmd)
+            return FlexibleVersion(version)
+        except Exception as e:  # Make the best effort to get the daemon version, but don't fail the update if we can't. So default to 2.2.53 as env variable is not set < 2.2.53
+            logger.warn("Failed to get the daemon version: {0}", ustr(e))
+            return FlexibleVersion("2.2.53")
+        
 
 def get_f5_platform():
     """
