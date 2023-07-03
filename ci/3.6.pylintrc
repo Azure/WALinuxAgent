@@ -37,4 +37,5 @@ disable=C, # (C) convention, for programming standard violation
     use-a-generator, # (R1729): *Use a generator instead '%s(%s)'*
     useless-object-inheritance, # (R0205): *Class %r inherits from object, can be safely removed from bases in python3*
     useless-return, # (R1711): *Useless return at end of function or method*
+ignore=tests_e2e/GuestAgentDcrTestExtension
 
