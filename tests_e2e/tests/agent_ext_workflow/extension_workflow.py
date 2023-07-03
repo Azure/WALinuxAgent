@@ -33,8 +33,31 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 class ExtensionWorkflow(AgentTest):
     """
-    This scenario tests if the correct extension workflow sequence is being executed from the agent. See README for
-    details on GuestAgentDcrTestExtension.
+    This scenario tests if the correct extension workflow sequence is being executed from the agent. It installs the
+    GuestAgentDcrTestExtension on the test VM and makes requests to install, enable, update, and delete the extension
+    from the VM. The GuestAgentDcrTestExtension maintains a local `operations-<VERSION_NO>.log` for every operation that
+    the agent executes on that extension. We use this to confirm that the agent executed the correct sequence of
+    operations.
+
+    Sample operations-<version>.log file snippet -
+        Date:2019-07-30T21:54:03Z; Operation:install; SeqNo:0
+        Date:2019-07-30T21:54:05Z; Operation:enable; SeqNo:0
+        Date:2019-07-30T21:54:37Z; Operation:enable; SeqNo:1
+        Date:2019-07-30T21:55:20Z; Operation:disable; SeqNo:1
+        Date:2019-07-30T21:55:22Z; Operation:uninstall; SeqNo:1
+
+    The setting for the GuestAgentDcrTestExtension is of the format -
+        {
+          "name": String
+        }
+
+    Test sequence -
+        - Install the test extension on the VM
+        - Assert the extension status by checking if our Enable string matches the status message
+            - The Enable string of our test is of the following format (this is set in the `Settings` object when we c
+            all enable from the tests): [ExtensionName]-[Version], Count: [Enable-count]
+        - Match the operation sequence as per the test and make sure they are in the correct chronological order
+        - Restart the agent and verify if the correct operation sequence is followed
     """
     def __init__(self, context: AgentTestContext):
         super().__init__(context)
@@ -53,32 +76,43 @@ class ExtensionWorkflow(AgentTest):
             self.extension = extension
             self.name = "GuestAgentDcrTestExt"
             self.version = version
-            self.message = ""
+            self.expected_message = ""
             self.enable_count = 0
             self.ssh_client = ssh_client
             self.data = None
 
         def modify_ext_settings_and_enable(self, data=None):
-            self.enable_count += 1
+            # Settings follows the following format: [ExtensionName]-[Version], Count: [Enable-count]
             setting_name = "%s-%s, %s: %s" % (self.name, self.version, self.COUNT_KEY_NAME, self.enable_count)
+            # We include data in the settings to test the special characters case. The settings format with data
+            # follows the following format: [ExtensionName]-[Version], Count: [Enable-count], data: [data]
             if data is not None:
                 setting_name = "{0}, {1}: {2}".format(setting_name, self.DATA_KEY_NAME, data)
-            self.message = setting_name
+
+            self.enable_count += 1
+            self.expected_message = setting_name
             settings = {self.NAME_KEY_NAME: setting_name.encode('utf-8')}
 
             log.info("")
-            log.info("Add or update extension {0} , version {1}, settings {2}".format(self.extension, self.version, settings))
+            log.info("Add or update extension {0} , version {1}, settings {2}".format(self.extension, self.version,
+                                                                                      settings))
             self.extension.enable(settings=settings, auto_upgrade_minor_version=False)
 
         def assert_instance_view(self, data=None):
             log.info("")
+
+            # If data is not None, we want to assert the instance view has the expected data
             if data is None:
-                log.info("Assert instance view has expected message for test extension. Expected version: {0}, Expected message: {1}".format(self.version, self.message))
-                self.extension.assert_instance_view(expected_version=self.version, expected_message=self.message)
+                log.info("Assert instance view has expected message for test extension. Expected version: {0}, "
+                         "Expected message: {1}".format(self.version, self.expected_message))
+                self.extension.assert_instance_view(expected_version=self.version,
+                                                    expected_message=self.expected_message)
             else:
                 self.data = data
-                log.info("Assert instance view has expected data for test extension. Expected version: {0}, Expected data: {1}".format(self.version, data))
-                self.extension.assert_instance_view(expected_version=self.version, assert_function=self.assert_data_in_instance_view)
+                log.info("Assert instance view has expected data for test extension. Expected version: {0}, "
+                         "Expected data: {1}".format(self.version, data))
+                self.extension.assert_instance_view(expected_version=self.version,
+                                                    assert_function=self.assert_data_in_instance_view)
 
         def assert_data_in_instance_view(self, instance_view: VirtualMachineExtensionInstanceView):
             log.info("Asserting extension status ...")
@@ -107,7 +141,8 @@ class ExtensionWorkflow(AgentTest):
             log.info("Assertion completed successfully")
 
         def assert_scenario(self, file_name: str, command_args: str, assert_status: bool = False, restart_agent: list = None, data: str = None):
-            # Assert the status in the instance view
+            # Assert the extension status by checking if our Enable string matches the status message in the instance
+            # view
             if assert_status:
                 self.assert_instance_view(data=data)
 
@@ -164,11 +199,22 @@ class ExtensionWorkflow(AgentTest):
             # Install test extension on the VM
             dcr_ext.modify_ext_settings_and_enable()
 
-            # command_args are the args we pass to the extension_workflow-assert_operation_sequence.py file to verify the operation
-            # sequence for the current test
-            command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable"
-            restart_agent_command_args = [f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops install enable enable"]
+            # command_args are the args we pass to the extension_workflow-assert_operation_sequence.py file to verify
+            # the operation sequence for the current test
+            command_args = f"--start-time {start_time} " \
+                           f"normal_ops_sequence " \
+                           f"--version {dcr_ext.version} " \
+                           f"--ops install enable"
+            # restart_agentcommand_args are the args we pass to the extension_workflow-assert_operation_sequence.py file
+            # to verify the operation sequence after restarting the agent. Restarting agent should just run enable again
+            # and rerun the same settings
+            restart_agent_command_args = [f"--start-time {start_time} "
+                                          f"normal_ops_sequence "
+                                          f"--version {dcr_ext.version} "
+                                          f"--ops install enable enable"]
 
+            # Assert the operation sequence to confirm the agent executed the operations in the correct chronological
+            # order
             dcr_ext.assert_scenario(
                 file_name='extension_workflow-assert_operation_sequence.py',
                 command_args=command_args,
@@ -185,8 +231,14 @@ class ExtensionWorkflow(AgentTest):
             # Enable test extension on the VM
             dcr_ext.modify_ext_settings_and_enable()
 
-            command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops enable"
-            restart_agent_command_args = [f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops enable enable"]
+            command_args = f"--start-time {start_time} " \
+                           f"normal_ops_sequence " \
+                           f"--version {dcr_ext.version} " \
+                           f"--ops enable"
+            restart_agent_command_args = [f"--start-time {start_time} "
+                                          f"normal_ops_sequence "
+                                          f"--version {dcr_ext.version} "
+                                          f"--ops enable enable"]
 
             dcr_ext.assert_scenario(
                 file_name='extension_workflow-assert_operation_sequence.py',
@@ -217,8 +269,9 @@ class ExtensionWorkflow(AgentTest):
 
             command_args = f"--data {test_guid}"
 
-            # We first ensure that the stdout contains the special characters and then we check if the test_guid is logged
-            # atleast once in the agent log to ensure that there were no errors when handling special characters in the agent
+            # We first ensure that the stdout contains the special characters and then we check if the test_guid is
+            # logged atleast once in the agent log to ensure that there were no errors when handling special characters
+            # in the agent
             dcr_ext.assert_scenario(
                 file_name='extension_workflow-check_data_in_agent_log.py',
                 command_args=command_args,
@@ -232,11 +285,18 @@ class ExtensionWorkflow(AgentTest):
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            command_args = f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops disable uninstall"
-            restart_agent_command_args=[f"--start-time {start_time} normal_ops_sequence --version {dcr_ext.version} --ops disable uninstall"]
-
+            # Remove the test extension on the VM
             log.info("Delete %s from VM", dcr_test_ext_client)
             dcr_ext.extension.delete()
+
+            command_args = f"--start-time {start_time} " \
+                           f"normal_ops_sequence " \
+                           f"--version {dcr_ext.version} " \
+                           f"--ops disable uninstall"
+            restart_agent_command_args = [f"--start-time {start_time} "
+                                          f"normal_ops_sequence "
+                                          f"--version {dcr_ext.version} "
+                                          f"--ops disable uninstall"]
 
             dcr_ext.assert_scenario(
                 file_name='extension_workflow-assert_operation_sequence.py',
@@ -250,6 +310,8 @@ class ExtensionWorkflow(AgentTest):
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
+            # Version 1.2.0 of the test extension has the same functionalities as 1.1.5 with
+            # "updateMode": "UpdateWithInstall" in HandlerManifest.json to test update case
             new_version_update_mode_with_install = "1.2.0"
             old_version = "1.1.5"
 
@@ -280,10 +342,22 @@ class ExtensionWorkflow(AgentTest):
             # Install test extension v1.2.0 on the VM
             dcr_ext.modify_ext_settings_and_enable()
 
-            command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_with_install} --new-ver-ops update install enable --final-ops disable update uninstall install enable"
+            command_args = f"--start-time {start_time} " \
+                           f"update_sequence " \
+                           f"--old-version {old_version} " \
+                           f"--old-ver-ops disable uninstall " \
+                           f"--new-version {new_version_update_mode_with_install} " \
+                           f"--new-ver-ops update install enable " \
+                           f"--final-ops disable update uninstall install enable"
             restart_agent_command_args = [
-                f"--start-time {start_time} normal_ops_sequence --version {old_version} --ops disable uninstall",
-                f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_with_install} --ops update install enable enable"
+                f"--start-time {start_time} "
+                f"normal_ops_sequence "
+                f"--version {old_version} "
+                f"--ops disable uninstall",
+                f"--start-time {start_time} "
+                f"normal_ops_sequence "
+                f"--version {new_version_update_mode_with_install} "
+                f"--ops update install enable enable"
             ]
 
             dcr_ext.assert_scenario(
@@ -303,6 +377,8 @@ class ExtensionWorkflow(AgentTest):
             # Record the time we start the test
             start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
+            # Version 1.3.0 of the test extension has the same functionalities as 1.1.5 with
+            # "updateMode": "UpdateWithoutInstall" in HandlerManifest.json to test update case
             new_version_update_mode_without_install = "1.3.0"
 
             # Create DcrTestExtension with version 1.1 and 1.3
@@ -331,10 +407,22 @@ class ExtensionWorkflow(AgentTest):
             # Install test extension v1.3.0 on the VM
             dcr_ext.modify_ext_settings_and_enable()
 
-            command_args = f"--start-time {start_time} update_sequence --old-version {old_version} --old-ver-ops disable uninstall --new-version {new_version_update_mode_without_install} --new-ver-ops update enable --final-ops disable update uninstall enable"
+            command_args = f"--start-time {start_time} " \
+                           f"update_sequence " \
+                           f"--old-version {old_version} " \
+                           f"--old-ver-ops disable uninstall " \
+                           f"--new-version {new_version_update_mode_without_install} " \
+                           f"--new-ver-ops update enable " \
+                           f"--final-ops disable update uninstall enable"
             restart_agent_command_args = [
-                f"--start-time {start_time} normal_ops_sequence --version {old_version} --ops disable uninstall",
-                f"--start-time {start_time} normal_ops_sequence --version {new_version_update_mode_without_install} --ops update enable enable"
+                f"--start-time {start_time} "
+                f"normal_ops_sequence "
+                f"--version {old_version} "
+                f"--ops disable uninstall",
+                f"--start-time {start_time} "
+                f"normal_ops_sequence "
+                f"--version {new_version_update_mode_without_install} "
+                f"--ops update enable enable"
             ]
 
             dcr_ext.assert_scenario(
