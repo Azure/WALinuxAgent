@@ -17,6 +17,8 @@
 # limitations under the License.
 # pylint: disable=all
 
+# TODO: These tests were copied as reference - they are not currently running
+
 import unittest
 import Utils.HandlerUtil as Util
 

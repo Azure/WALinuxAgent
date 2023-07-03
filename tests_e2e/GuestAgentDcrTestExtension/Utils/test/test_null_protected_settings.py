@@ -16,6 +16,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # pylint: disable=all
+
+# TODO: These tests were copied as reference - they are not currently running
+
 import unittest
 import HandlerUtil as Util
 

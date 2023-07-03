@@ -17,6 +17,8 @@
 # limitations under the License.
 # pylint: disable=all
 
+# TODO: These tests were copied as reference - they are not currently running
+
 class MockUtil():
     def __init__(self, test):
         self.test = test
