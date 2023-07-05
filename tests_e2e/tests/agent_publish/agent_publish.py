@@ -57,7 +57,7 @@ class AgentPublishTest(AgentTest):
 
     def _prepare_agent(self) -> None:
         log.info("Modifying agent update related config flags")
-        output = self._ssh_client.run_command("update-waagent-conf GAUpdates.Enabled=y AutoUpdate.GAFamily=Test", use_sudo=True)
+        output = self._ssh_client.run_command("update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test", use_sudo=True)
         log.info('Updated agent-update related config flags \n%s', output)
 
     def _check_update(self) -> None:
