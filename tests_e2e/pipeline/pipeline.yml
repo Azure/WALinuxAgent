@@ -132,9 +132,11 @@ jobs:
       - publish: $(Build.ArtifactStagingDirectory)
         artifact: 'artifacts'
         displayName: 'Publish test artifacts'
+        condition: always()
 
       - task: PublishTestResults@2
         displayName: 'Publish test results'
+        condition: always()
         inputs:
           testResultsFormat: 'JUnit'
           testResultsFiles: 'runbook_logs/agent.junit.xml'
