@@ -358,6 +358,17 @@ class AgentLog(object):
 
         return errors
 
+    def agent_log_contains(self, data: str):
+        """
+        This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
+        :param data: The string to look for in the agent logs
+        :return: True if test data string found in the agent log and False if not.
+       """
+        for record in self.read():
+            if data in record.text:
+                return True
+        return False
+
     @staticmethod
     def _is_systemd():
         # Taken from azurelinuxagent/common/osutil/systemd.py; repeated here because it is available only on agents >= 2.3
