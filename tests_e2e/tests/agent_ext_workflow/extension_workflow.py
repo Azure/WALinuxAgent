@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import time
 
 # Microsoft Azure Linux Agent
 #
@@ -435,6 +436,10 @@ class ExtensionWorkflow(AgentTest):
 
             log.info("")
             log.info("*******Verifying no lag between agent start and gs processing*******")
+
+            log.info("")
+            log.info("Sleeping for 15 seconds to allow goal state processing to complete...")
+            time.sleep(15)
 
             log.info("")
             log.info("Running agent_ext_workflow-validate_no_lag_between_agent_start_and_gs_processing.py remotely...")
