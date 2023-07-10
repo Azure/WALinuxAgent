@@ -438,10 +438,6 @@ class ExtensionWorkflow(AgentTest):
             log.info("*******Verifying no lag between agent start and gs processing*******")
 
             log.info("")
-            log.info("Sleeping for 15 seconds to allow goal state processing to complete...")
-            time.sleep(15)
-
-            log.info("")
             log.info("Running agent_ext_workflow-validate_no_lag_between_agent_start_and_gs_processing.py remotely...")
             result = self._ssh_client.run_command("agent_ext_workflow-validate_no_lag_between_agent_start_and_gs_processing.py", use_sudo=True)
             log.info(result)
