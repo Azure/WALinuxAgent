@@ -64,6 +64,11 @@ class AgentLogRecord:
 
     @property
     def timestamp(self) -> datetime:
+        # Logs from the DcrTestExtension follows this format: 2023/07/10 20:50:13
+        dcr_test_ext_timestamp_regex = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]*"
+        if re.match(dcr_test_ext_timestamp_regex, self.when):
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S')
+        # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ')
 
 
