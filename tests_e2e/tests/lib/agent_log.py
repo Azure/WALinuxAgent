@@ -92,11 +92,6 @@ class AgentLog(object):
             #
             # NOTE: This list was taken from the older agent tests and needs to be cleaned up. Feel free to un-comment rules as new tests are added.
             #
-            # # This warning is expected on SUSE 12
-            # {
-            #     'message': r"WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules",
-            #     'if': lambda _: re.match(r"((sles15\.2)|suse12)\D*", DISTRO_NAME, flags=re.IGNORECASE) is not None
-            # },
             # # The following message is expected to log an error if systemd is not enabled on it
             # {
             #     'message': r"Did not detect Systemd, unable to set wa(|linux)agent-network-setup.service",
@@ -139,10 +134,11 @@ class AgentLog(object):
             #     and r.prefix == "Daemon"
             # },
             #
+            # 2023-06-28T09:31:38.903835Z WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules
             #  The environment thread performs this operation periodically
             #
             {
-                'message': r"Move rules file 70-persistent-net.rules to /var/lib/waagent/70-persistent-net.rules",
+                'message': r"Move rules file (70|75)-persistent.*.rules to /var/lib/waagent/(70|75)-persistent.*.rules",
                 'if': lambda r: r.level == "WARNING"
             },
             #
@@ -361,6 +357,17 @@ class AgentLog(object):
             errors.append(primary_interface_error)
 
         return errors
+
+    def agent_log_contains(self, data: str):
+        """
+        This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
+        :param data: The string to look for in the agent logs
+        :return: True if test data string found in the agent log and False if not.
+       """
+        for record in self.read():
+            if data in record.text:
+                return True
+        return False
 
     @staticmethod
     def _is_systemd():

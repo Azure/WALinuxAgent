@@ -53,14 +53,16 @@ class TestSuiteInfo(object):
     tests: List[TestInfo]
     # Images or image sets (as defined in images.yml) on which the suite must run.
     images: List[str]
-    # The location (region) on which the suite must run; if empty, the suite can run on any location
-    location: str
+    # The locations (regions) on which the suite must run; if empty, the suite can run on any location
+    locations: List[str]
     # Whether this suite must run on its own test VM
     owns_vm: bool
     # Whether to install the test Agent on the test VM
     install_test_agent: bool
     # Customization for the ARM template used when creating the test VM
     template: str
+    # skip test suite if the test not supposed to run on specific clouds
+    skip_on_clouds: List[str]
 
     def __str__(self):
         return self.name
@@ -128,24 +130,41 @@ class AgentTestLoader(object):
         """
         Performs some basic validations on the data loaded from the YAML description files
         """
+        def _parse_image(image: str) -> str:
+            """
+            Parses a reference to an image or image set and returns the name of the image or image set
+            """
+            match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
+            if match is not None:
+                return match.group('image_set')
+            return image
+
         for suite in self.test_suites:
             # Validate that the images the suite must run on are in images.yml
             for image in suite.images:
-                match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
-                if match is not None:
-                    image = match.group('image_set')
+                image = _parse_image(image)
                 if image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
 
-            # If the suite specifies a location, validate that the images it uses are available in that location
-            if suite.location != '':
+            # If the suite specifies a cloud and it's location<cloud:location>, validate that location string is start with <cloud:> and then validate that the images it uses are available in that location
+            for suite_location in suite.locations:
+                if suite_location.startswith(self.__cloud + ":"):
+                    suite_location = suite_location.split(":")[1]
+                else:
+                    continue
                 for suite_image in suite.images:
+                    suite_image = _parse_image(suite_image)
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
                         if image.locations:
                             locations = image.locations.get(self.__cloud)
-                            if locations is not None and not any(suite.location in l for l in locations):
-                                raise Exception(f"Test suite {suite.name} must be executed in {suite.location}, but <{image.urn}> is not available in that location")
+                            if locations is not None and not any(suite_location in l for l in locations):
+                                raise Exception(f"Test suite {suite.name} must be executed in {suite_location}, but <{image.urn}> is not available in that location")
+
+            # if the suite specifies skip clouds, validate that cloud used in our tests
+            for suite_skip_cloud in suite.skip_on_clouds:
+                if suite_skip_cloud not in ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]:
+                    raise Exception(f"Invalid cloud {suite_skip_cloud} for in {suite.name}")
 
     @staticmethod
     def _load_test_suites(test_suites: str) -> List[TestSuiteInfo]:
@@ -180,7 +199,7 @@ class AgentTestLoader(object):
               - "bvts/run_command.py"
               - "bvts/vm_access.py"
             images: "endorsed"
-            location: "eastuseaup"
+            locations: "AzureCloud:eastuseaup"
             owns_vm: true
             install_test_agent: true
             template: "bvts/template.py"
@@ -195,8 +214,8 @@ class AgentTestLoader(object):
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
                      can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The
                      names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
-        * location - [Optional; string] If given, the test suite must be executed on that location. If not specified,
-                     or set to an empty string, the test suite will be executed in the default location. This is useful
+        * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
+                     If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful
                      for test suites that exercise a feature that is enabled only in certain regions.
         * owns_vm - [Optional; boolean] By default all suites in a test run are executed on the same test VMs; if this
                     value is set to True, new test VMs will be created and will be used exclusively for this test suite.
@@ -206,6 +225,9 @@ class AgentTestLoader(object):
         * install_test_agent - [Optional; boolean] By default the setup process installs the test Agent on the test VMs; set this property
                     to False to skip the installation.
         * template - [Optional; string] If given, the ARM template for the test VM is customized using the given Python module.
+        * skip_on_clouds - [Optional; string or list of strings] If given, the test suite will be skipped in the specified cloud(e.g. "AzureCloud").
+                    If not specified, the test suite will be executed in all the clouds that we use. This is useful
+                    if you want to skip a test suite validation in a particular cloud when certain feature is not available in that cloud.
 
         """
         test_suite: Dict[str, Any] = AgentTestLoader._load_file(description_file)
@@ -234,13 +256,27 @@ class AgentTestLoader(object):
         else:
             test_suite_info.images = images
 
-        test_suite_info.location = test_suite.get("location")
-        if test_suite_info.location is None:
-            test_suite_info.location = ""
+        locations = test_suite.get("locations")
+        if locations is None:
+            test_suite_info.locations = []
+        else:
+            if isinstance(locations, str):
+                test_suite_info.locations = [locations]
+            else:
+                test_suite_info.locations = locations
 
         test_suite_info.owns_vm = "owns_vm" in test_suite and test_suite["owns_vm"]
         test_suite_info.install_test_agent = "install_test_agent" not in test_suite or test_suite["install_test_agent"]
         test_suite_info.template = test_suite.get("template", "")
+
+        skip_on_clouds = test_suite.get("skip_on_clouds")
+        if skip_on_clouds is not None:
+            if isinstance(skip_on_clouds, str):
+                test_suite_info.skip_on_clouds = [skip_on_clouds]
+            else:
+                test_suite_info.skip_on_clouds = skip_on_clouds
+        else:
+            test_suite_info.skip_on_clouds = []
 
         return test_suite_info
 

@@ -124,15 +124,19 @@ jobs:
 
       - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/collect_artifacts.sh
         displayName: "Collect test artifacts"
+        # Collect artifacts even if the previous step is cancelled (e.g. timeout)
+        condition: always()
         env:
           COLLECT_LISA_LOGS: ${{ parameters.collect_lisa_logs }}
 
       - publish: $(Build.ArtifactStagingDirectory)
         artifact: 'artifacts'
         displayName: 'Publish test artifacts'
+        condition: always()
 
       - task: PublishTestResults@2
         displayName: 'Publish test results'
+        condition: always()
         inputs:
           testResultsFormat: 'JUnit'
           testResultsFiles: 'runbook_logs/agent.junit.xml'

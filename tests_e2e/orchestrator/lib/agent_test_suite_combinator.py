@@ -149,7 +149,11 @@ class AgentTestSuitesCombinator(Combinator):
 
         runbook_images = self._get_runbook_images(loader)
 
+        skip_test_suites: List[str] = []
         for suite_info in loader.test_suites:
+            if self.runbook.cloud in suite_info.skip_on_clouds:
+                skip_test_suites.append(suite_info.name)
+                continue
             if len(runbook_images) > 0:
                 images_info: List[VmImageInfo] = runbook_images
             else:
@@ -216,6 +220,9 @@ class AgentTestSuitesCombinator(Combinator):
             raise Exception("No VM images were found to execute the test suites.")
 
         log: logging.Logger = logging.getLogger("lisa")
+        if len(skip_test_suites) > 0:
+            log.info("")
+            log.info("Test suites skipped on %s:\n\n\t%s\n", self.runbook.cloud, '\n\t'.join(skip_test_suites))
         log.info("")
         log.info("******** Waagent: Test Environments *****")
         log.info("")
@@ -266,7 +273,7 @@ class AgentTestSuitesCombinator(Combinator):
                     count = 1
                 matching_images = loader.images[match.group('image_set')].copy()
                 random.shuffle(matching_images)
-                image_list = matching_images[0:count]
+                image_list = matching_images[0:int(count)]
             for i in image_list:
                 unique[i.urn] = i
         return [v for k, v in unique.items()]
@@ -282,8 +289,9 @@ class AgentTestSuitesCombinator(Combinator):
             return self.runbook.location
 
         #  Then try the suite location, if any.
-        if suite_info.location != '':
-            return suite_info.location
+        for location in suite_info.locations:
+            if location.startswith(self.runbook.cloud + ":"):
+                return location.split(":")[1]
 
         # If the image has a location restriction, use any location where it is available.
         # However, if it is not available on any location, skip the image (return None)
