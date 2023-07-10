@@ -1,5 +1,4 @@
 #!/usr/bin/env pypy3
-import time
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -21,6 +20,7 @@ import time
 from datetime import timedelta
 import re
 import sys
+import time
 
 from pathlib import Path
 from tests_e2e.tests.lib.agent_log import AgentLog
@@ -28,10 +28,12 @@ from tests_e2e.tests.lib.agent_log import AgentLog
 
 def main():
     success = True
+    needs_retry = True
     retry = 3
 
-    while retry > 0:
+    while retry > 0 and needs_retry:
         success = True
+        needs_retry = False
 
         agent_started_time = []
         agent_msg = []
@@ -97,15 +99,13 @@ def main():
             # mismatched agent start log, we should retry after sleeping for 5s to give the agent time to finish
             # GoalState processing
             if success and last_agent_log_timestamp < (agent_started_time[-1] + timedelta(seconds=15)):
+                needs_retry = True
                 print("Sleeping for 5 seconds to allow goal state processing to complete...")
                 time.sleep(5)
             else:
                 success = False
                 print("Mismatch between number of agent start messages and number of GoalState Processing messages\n "
                       "Agent Start Messages: \n {0}".format('\n'.join(agent_msg)))
-                retry == 0
-        else:
-            retry == 0
 
         retry -= 1
 
