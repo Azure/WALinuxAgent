@@ -65,15 +65,15 @@ class AgentLogRecord:
     @property
     def timestamp(self) -> datetime:
         # Extension logs may follow different timestamp formats
-        # 2023/07/10 20:50:13
-        ext_timestamp_regex_1 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}"
         # 2023/07/10 20:50:13.459260
-        ext_timestamp_regex_2 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]*"
+        ext_timestamp_regex_1 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]+"
+        # 2023/07/10 20:50:13
+        ext_timestamp_regex_2 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}"
 
         if re.match(ext_timestamp_regex_1, self.when):
-            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S')
-        elif re.match(ext_timestamp_regex_2, self.when):
             return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f')
+        elif re.match(ext_timestamp_regex_2, self.when):
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S')
         # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ')
 
