@@ -57,7 +57,7 @@ def get_daemon_version():
         # The agent process which execute the extensions can have different version(after upgrades) and importing version from that process may provide wrong version for daemon.
         # so launching new process with sys.executable python provides the correct version for daemon which preinstalled in the image.
         try:
-            cmd = ["{0}".format(sys.executable), "-c", "\'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)\'"]
+            cmd = ["{0}".format(sys.executable), "-c", "from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)"]
             version = shellutil.run_command(cmd)
             return FlexibleVersion(version)
         except Exception as e:  # Make the best effort to get the daemon version, but don't fail the update if we can't. So default to 2.2.53 as env variable is not set < 2.2.53
