@@ -29,7 +29,7 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 class InstallExtensions(AgentTest):
     """
-    This test installs the multiple extensions on verify they are running in correct cgroups.
+    This test installs the multiple extensions in order to verify extensions cgroups in the next test.
     """
 
     def __init__(self, context: AgentTestContext):
@@ -54,8 +54,10 @@ class InstallExtensions(AgentTest):
         log.info("=====Updating monitoring deadline for tracking azuremonitoragent service=====")
         future_date = datetime.utcnow() + timedelta(days=2)
         expiry_time = future_date.date().strftime("%Y-%m-%d")
-        # We hardcoded the service name to monitor for sometime in production without need of manifest update.
-        # we no longer monitoring by default in prod but using it in our test validation.
+        # Agent needs extension info and it's services info in the handlermanifest.xml to monitor and limit the resource usage.
+        # As part of pilot testing , agent hardcoded azuremonitoragent service name to monitor it for sometime in production without need of manifest update from extesnion side.
+        # So that they can get sense of resource usage for their extensions. This we did for few months and now we no logner monitoring it in production.
+        # But I'm mocking the same behaviour here in test by changing the expiry time to future date. So that test agent will start track the cgroups that is used by the service.
         result = self._ssh_client.run_command(f"update-waagent-conf Debug.CgroupMonitorExpiryTime={expiry_time}", use_sudo=True)
         log.info(result)
         log.info("=====Updated agent cgroups config(CgroupMonitorExpiryTime)=====")
@@ -102,8 +104,8 @@ class InstallExtensions(AgentTest):
 function check_ama {
     while true;
     do
-        lad_dir=$(find /var/lib/waagent -maxdepth 1 -type d -name "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-*" -print -quit)
-        grep -i "Enable succeeded" $lad_dir/status/0.status &> /dev/null
+        ama_dir=$(find /var/lib/waagent -maxdepth 1 -type d -name "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-*" -print -quit)
+        grep -i "Enable succeeded" $ama_dir/status/0.status &> /dev/null
         if [ $? -eq 0 ];
         then
             ps aux --forest > /var/lib/waagent/tmp/ps_check_after_ama

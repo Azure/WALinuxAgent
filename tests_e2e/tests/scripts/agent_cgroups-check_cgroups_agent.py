@@ -23,53 +23,55 @@ import sys
 
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import BASE_CGROUP, AGENT_CONTROLLERS, get_agent_cgroup_mount_path, \
-    AGENT_SERVICE_NAME, exit_if_cgroups_not_supported, print_processes, print_cgroups, \
+    AGENT_SERVICE_NAME, exit_if_cgroups_not_supported, print_cgroups, \
     verify_agent_cgroup_assigned_correctly
 
 
-def verify_cgroup_controllers_on_disk():
-    logging.info("===== Verifying cgroup controllers exist on disk =====")
+def verify_mounted_cgroup_controllers():
+    # Checks if Agent controllers CPU, Memory are mounted in the system
+    logging.info("===== Verifying cgroup controllers are mounted in the system =====")
 
     all_controllers_present = os.path.exists(BASE_CGROUP)
 
     for controller in AGENT_CONTROLLERS:
         controller_path = os.path.join(BASE_CGROUP, controller)
         if not os.path.exists(controller_path):
-            logging.info('\tcould not verify controller %s', controller_path)
+            logging.warning('\tcould not verify controller %s', controller_path)
             all_controllers_present = False
         else:
             logging.info('\tverified controller %s', controller_path)
 
     if not all_controllers_present:
-        raise Exception('Unexpected cgroup controller status!')
+        raise Exception('Not all of the controllers {0} mounted in expected cgroups. System mounted cgroups are:\n{1}'.format(AGENT_CONTROLLERS, print_cgroups()))
 
     logging.info('\tVerified cgroup controller are present.\n')
 
 
 def verify_agent_cgroup_created_on_disk():
+    # Checks agent service is running in azure.slice/{agent_service) cgroup and mounted in same system cgroup controllers mounted path
     logging.info("===== Verifying the agent cgroup paths exist on disk =====")
     agent_cgroup_mount_path = get_agent_cgroup_mount_path()
+    all_agent_cgroup_controllers_present = True
 
     logging.info("\texpected agent cgroup mount path: %s", agent_cgroup_mount_path)
-
-    exit_code = 0
 
     for controller in AGENT_CONTROLLERS:
         agent_controller_path = os.path.join(BASE_CGROUP, controller, agent_cgroup_mount_path[1:])
 
         if not os.path.exists(agent_controller_path):
-            logging.info('\tagent cgroup does not exist on disk in %s', agent_controller_path)
-            exit_code += 1
+            logging.warning('\tagent cgroup does not exist on disk in %s', agent_controller_path)
+            all_agent_cgroup_controllers_present = False
         else:
             logging.info('\tverified agent cgroup %s exists on disk', agent_controller_path)
 
-    if exit_code > 0:
+    if not all_agent_cgroup_controllers_present:
         raise Exception("Agent's cgroup paths couldn't be found on disk.")
 
     logging.info('\tVerified agent cgroups are present.\n')
 
 
-def verify_agent_tracking_cgroups():
+def verify_agent_cgroups_tracked():
+    # Checks if agent is tracking agent cgroups path for polling resource usage. This is verified by checking the agent log for the message "Started tracking cgroup"
     logging.info("===== Verifying agent started tracking cgroups from the log =====")
 
     tracking_agent_cgroup_message_re = r'Started tracking cgroup [^\s]+\s+\[(?P<path>[^\s]+)\]'
@@ -91,14 +93,11 @@ try:
     logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG, stream=sys.stdout)
     exit_if_cgroups_not_supported()
 
-    print_processes()
-    print_cgroups()
-
-    verify_cgroup_controllers_on_disk()
+    verify_mounted_cgroup_controllers()
     verify_agent_cgroup_created_on_disk()
 
     verify_agent_cgroup_assigned_correctly()
-    verify_agent_tracking_cgroups()
+    verify_agent_cgroups_tracked()
 
     sys.exit(0)
 

@@ -22,14 +22,20 @@ import os
 import sys
 
 from tests_e2e.tests.lib.agent_log import AgentLog
-from tests_e2e.tests.lib.cgroup_helpers import exit_if_cgroups_not_supported, print_processes, \
+from tests_e2e.tests.lib.cgroup_helpers import exit_if_cgroups_not_supported, \
     verify_agent_cgroup_assigned_correctly, BASE_CGROUP, EXT_CONTROLLERS, get_unit_cgroup_mount_path, \
     GATESTEXT_SERVICE, AZUREMONITORAGENT_SERVICE, MDSD_SERVICE, check_quota_disabled, \
-    check_cgroup_disabled_with_unknown_process, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME
+    check_cgroup_disabled_with_unknown_process, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME, \
+    print_cgroups
 
 
-def verify_custom_script_cgroup_mount():
+def verify_custom_script_cgroup_assigned_correctly():
+    # This method verifies that the CSE script is created expected folder after install and also checks if CSE ran under the expected cgroups
     logging.info("===== Verifying custom script was assigned to the correct cgroups =====")
+
+    # CSE creates this folder to save the output of cgroup information where the CSE script was executed. This inoformation saved at run time since when the extension executed(process exits),
+    # the cgroup paths gets cleaned up by the system.
+    check_temporary_folder_exists()
 
     cpu_mounted = False
 
@@ -56,7 +62,8 @@ def verify_custom_script_cgroup_mount():
     logging.info("")
 
 
-def verify_agent_cgroup_assigned_correctly_after_ama():
+def verify_agent_cgroup_assigned_correctly_after_ama_install():
+    # This method adds the debug info of system processes that were captured while installing AMA and also make sure that the agent is running under the expected cgroups afrer AMA install
     logging.info("===== Verifying the agent cgroup consists only of agent processes after installing AMA =====")
     with open('/var/lib/waagent/tmp/ps_check_after_ama') as fh:
         lines = fh.readlines()
@@ -67,13 +74,14 @@ def verify_agent_cgroup_assigned_correctly_after_ama():
     verify_agent_cgroup_assigned_correctly()
 
 
-def check_temporary_folder():
+def check_temporary_folder_exists():
     tmp_folder = "/var/lib/waagent/tmp"
     if not os.path.exists(tmp_folder):
         raise Exception("Temporary folder {0} was not created which means CSE script did not run!".format(tmp_folder))
 
 
-def verify_ext_cgroup_controllers_on_disk():
+def verify_ext_cgroup_controllers_created_on_disk():
+    # This method ensure that extension cgroup controllers are created on disk after extension install
     logging.info("===== Verifying ext cgroup controllers exist on disk =====")
 
     all_controllers_present = os.path.exists(BASE_CGROUP)
@@ -81,18 +89,19 @@ def verify_ext_cgroup_controllers_on_disk():
     for controller in EXT_CONTROLLERS:
         controller_path = os.path.join(BASE_CGROUP, controller)
         if not os.path.exists(controller_path):
-            logging.info('\tcould not verify controller %s', controller_path)
+            logging.warning('\tcould not verify controller %s', controller_path)
             all_controllers_present = False
         else:
             logging.info('\tverified controller %s', controller_path)
 
     if not all_controllers_present:
-        raise Exception('Unexpected cgroup controller status!')
+        raise Exception('Not all of the ext controllers {0} present on disk. System mounted cgroups are \n{1}'.format(EXT_CONTROLLERS, print_cgroups()))
 
     logging.info('\tVerified extension cgroup controller are present.\n')
 
 
 def verify_extension_service_cgroup_created_on_disk():
+    # This method ensure that extension service cgroup paths are created on disk after running extension
     logging.info("===== Verifying the extension service cgroup paths exist on disk =====")
 
     # GA Test Extension Service
@@ -105,13 +114,13 @@ def verify_extension_service_cgroup_created_on_disk():
         azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(MDSD_SERVICE)
     verify_extension_service_cgroup_created(azuremonitoragent_cgroup_mount_path)
 
-    logging.info("")
+    logging.info('\tFound the extension service cgroup paths in disk .\n')
 
 
 def verify_extension_service_cgroup_created(cgroup_mount_path):
     logging.info("\texpected extension service cgroup mount path: %s", cgroup_mount_path)
 
-    exit_code = 0
+    all_controllers_present = True
 
     for controller in EXT_CONTROLLERS:
         # cgroup_mount_path is similar to /azure.slice/walinuxagent.service
@@ -120,17 +129,18 @@ def verify_extension_service_cgroup_created(cgroup_mount_path):
         extension_service_controller_path = os.path.join(BASE_CGROUP, controller, cgroup_mount_path[1:])
 
         if not os.path.exists(extension_service_controller_path):
-            logging.info('\textension service cgroup does not exist on disk in %s', extension_service_controller_path)
-            exit_code += 1
+            logging.warning('\textension service cgroup does not exist on disk in %s', extension_service_controller_path)
+            all_controllers_present = False
         else:
             logging.info('\tverified extension service cgroup %s exists on disk', extension_service_controller_path)
 
-    if exit_code > 0:
-        raise Exception("Extension service's cgroup paths couldn't be found on disk.")
+    if not all_controllers_present:
+        raise Exception("Extension service's cgroup paths couldn't be found on disk. System mounted cgroups are \n{0}".format(print_cgroups()))
 
 
 def verify_ext_cgroups_tracked():
-    logging.info("===== Verifying cgroups tracked =====")
+    # Checks if ext cgroups are tracked by the agent. This is verified by checking the agent log for the message "Started tracking cgroup {extension_name}"
+    logging.info("===== Verifying ext cgroups tracked =====")
 
     cgroups_added_for_telemetry = []
     gatestext_cgroups_tracked = False
@@ -176,20 +186,17 @@ def verify_ext_cgroups_tracked():
     if not azuremonitoragent_service_cgroups_tracked:
         raise Exception('Expected azuremonitoragent service cgroups were not tracked, according to the agent log. '
                         'Pattern searched for: {0}\n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
+
     logging.info("\tExtension cgroups tracked as expected\n%s", cgroups_added_for_telemetry)
 
 
 try:
     logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG, stream=sys.stdout)
     exit_if_cgroups_not_supported()
-    print_processes()
 
-    verify_agent_cgroup_assigned_correctly()
-    check_temporary_folder()
-    verify_custom_script_cgroup_mount()
-    verify_agent_cgroup_assigned_correctly_after_ama()
-
-    verify_ext_cgroup_controllers_on_disk()
+    verify_ext_cgroup_controllers_created_on_disk()
+    verify_custom_script_cgroup_assigned_correctly()
+    verify_agent_cgroup_assigned_correctly_after_ama_install()
     verify_extension_service_cgroup_created_on_disk()
     verify_ext_cgroups_tracked()
 
