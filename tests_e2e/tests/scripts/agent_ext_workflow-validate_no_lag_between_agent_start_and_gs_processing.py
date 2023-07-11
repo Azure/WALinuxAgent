@@ -32,7 +32,7 @@ def main():
     needs_retry = True
     retry = 3
 
-    while retry > 0 and needs_retry:
+    while retry >= 0 and needs_retry:
         success = True
         needs_retry = False
 
