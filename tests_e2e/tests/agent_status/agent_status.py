@@ -135,8 +135,7 @@ class AgentStatus(AgentTest):
                 sleep(10)
 
         log.info("")
-        assert_that(instance_view_is_valid).described_as(
-            f"Timeout has expired, instance view is not valid.").is_true()
+        assert_that(instance_view_is_valid).described_as("Timeout has expired, instance view is not valid.").is_true()
 
 
 if __name__ == "__main__":
