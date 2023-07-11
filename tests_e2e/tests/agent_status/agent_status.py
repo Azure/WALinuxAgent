@@ -122,6 +122,7 @@ class AgentStatus(AgentTest):
         timeout = datetime.datetime.now() + datetime.timedelta(minutes=5)
         instance_view_is_valid = False
 
+        # Retry validating instance view with timeout of 5 minutes
         while datetime.datetime.now() < timeout and not instance_view_is_valid:
             instance_view = vm.get_instance_view()
             log.info("")
