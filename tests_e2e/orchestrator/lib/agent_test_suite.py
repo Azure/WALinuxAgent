@@ -351,7 +351,7 @@ class AgentTestSuite(LisaTestSuite):
         # Extract the tarball and execute the install scripts
         #
         log.info('Installing tools on the test node')
-        command = f"tar xf {target_path/tarball_path.name} && ~/bin/install-tools"
+        command = f"tar xvf {target_path/tarball_path.name} && ~/bin/install-tools"
         log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
 
         if self.context.is_vhd:
