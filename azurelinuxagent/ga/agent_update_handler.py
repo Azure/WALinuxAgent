@@ -261,6 +261,19 @@ class AgentUpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
 
+    def __check_if_downgrade_is_requested_and_allowed(self, requested_version):
+        """
+        Don't allow downgrades for self-update version
+        Note: The intention of this check is to keep the original behavior of self-update as it is.
+        """
+        if not self._is_requested_version_update:
+            if requested_version < CURRENT_VERSION:
+                msg = "Downgrade requested in the GoalState, but the self-update is not configured to allow downgrades, " \
+                      "skipping agent update"
+                logger.verbose(msg)
+                return False
+        return True
+
     @staticmethod
     def __log_event(level, msg, success=True):
         if level == LogLevel.INFO:
@@ -301,6 +314,9 @@ class AgentUpdateHandler(object):
                     GAUpdateReportState.report_error_msg = ""
 
             if requested_version == CURRENT_VERSION:
+                return
+
+            if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
                 return
 
             # Check if an update is allowed
