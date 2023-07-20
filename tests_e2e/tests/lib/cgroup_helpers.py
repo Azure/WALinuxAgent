@@ -31,7 +31,7 @@ def exit_if_cgroups_not_supported():
     base_cgroup_fs_exists = os.path.exists(BASE_CGROUP)
 
     if not base_cgroup_fs_exists:
-        raise Exception("\tDistro %s-%s does not support cgroups -- exiting".format(DISTRO_NAME, DISTRO_VERSION))
+        raise Exception("\tDistro {0}-{1} does not support cgroups -- exiting".format(DISTRO_NAME, DISTRO_VERSION))
     else:
         log.info('\tDistro %s-%s supports cgroups\n', DISTRO_NAME, DISTRO_VERSION)
 
