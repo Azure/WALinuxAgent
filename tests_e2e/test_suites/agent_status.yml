@@ -1,5 +1,5 @@
 #
-# This scenario validates the agent status is updated without any other goal state changes
+# This scenario validates the agent status is updated without any goal state changes
 #
 name: "AgentStatus"
 tests:
