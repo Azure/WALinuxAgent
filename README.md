@@ -166,7 +166,7 @@ For CoreOS, use:
 
 `-start`: Run waagent as a background process
 
-`-collect-logs [-full]`: Runs the log collector utility that collects relevant agent logs for debugging and stores them in the agent folder on disk. Exact location will be shown when run. Use flag `-full` for more exhaustive log collection. 
+`-collect-logs [-full] [-uncapped]`: Runs the log collector utility that collects relevant agent logs for debugging and stores them in the agent folder on disk. Exact location will be shown when run. Use flag `-full` for more exhaustive log collection. Use flag `-uncapped` to allow the log collector utility to run without CPU/Memory constraints.
 
 ## Configuration
 
@@ -196,6 +196,7 @@ ResourceDisk.SwapSizeMB=0
 Logs.Verbose=n
 Logs.Collect=y
 Logs.CollectPeriod=3600
+Logs.Uncapped=n
 OS.AllowHTTP=n
 OS.RootDeviceScsiTimeout=300
 OS.EnableFIPS=n
@@ -465,6 +466,13 @@ _Default: 3600_
 This configures how frequently to collect and upload logs. Default is each hour.
 
 NOTE: This only takes effect if the Logs.Collect option is enabled.
+
+#### __Logs.Uncapped__
+
+_Type: Boolean_
+_Default: n_
+
+If set, the log collector utility will run without defined cgroup limits.
 
 #### __OS.AllowHTTP__
 
