@@ -204,9 +204,12 @@ class Agent(object):
         else:
             logger.info("Running log collector mode normal")
 
+        # Calls on get_inuse_cgroup_version to determine cgroup version
+        is_cgroupv2 = DefaultOSUtil._is_cgroupv2(self)
+        
         # Check the cgroups unit
         cpu_cgroup_path, memory_cgroup_path, log_collector_monitor = None, None, None
-        if CollectLogsHandler.should_validate_cgroups():
+        if not is_cgroupv2 and CollectLogsHandler.should_validate_cgroups():
             cgroups_api = SystemdCgroupsApi()
             cpu_cgroup_path, memory_cgroup_path = cgroups_api.get_process_cgroup_paths("self")
 
@@ -222,8 +225,7 @@ class Agent(object):
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-        # Calls on get_inuse_cgroup_version to determine cgroup version
-        is_cgroupv2 = DefaultOSUtil._is_cgroupv2(self)
+
 
         try:
             log_collector = LogCollector(is_full_mode, cpu_cgroup_path, memory_cgroup_path)
