@@ -37,8 +37,9 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 
-_INITIAL_LOG_COLLECTION_DELAY = 5 * 60  # Five minutes of delay
+_INITIAL_LOG_COLLECTION_DELAY = 5 * 1  # Five minutes of delay
 
+_UNCAPPED_FLAG = "-uncapped"
 
 def get_collect_logs_handler():
     return CollectLogsHandler()
@@ -50,9 +51,10 @@ def is_log_collection_allowed():
     # 2) The system must be using cgroups to manage services. Needed for resource limiting of the log collection.
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
+    is_uncapped = conf.get_collect_logs_uncapped()
     cgroups_enabled = CGroupConfigurator.get_instance().enabled()
     supported_python = PY_VERSION_MINOR >= 6 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
-    is_allowed = conf_enabled and cgroups_enabled and supported_python
+    is_allowed = conf_enabled and (cgroups_enabled or is_uncapped) and supported_python
 
     msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
           "configuration enabled [{1}], cgroups enabled [{2}], python supported: [{3}]".format(is_allowed,
@@ -172,18 +174,28 @@ class CollectLogsHandler(ThreadHandlerInterface):
     def _collect_logs(self):
         logger.info("Starting log collection...")
 
-        # Invoke the command line tool in the agent to collect logs, with resource limits on CPU.
-        # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the logcollector slice
-        # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in logcollector Cgroup
+        # If true, runs uncapped
+        is_uncapped = conf.get_collect_logs_uncapped()
 
-        systemd_cmd = [
-            "systemd-run", "--property=CPUAccounting=no", "--property=MemoryAccounting=no",
-            "--unit={0}".format(logcollector.CGROUPS_UNIT),
-            "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
-        ]
+        if not is_uncapped:
+            # Invoke the command line tool in the agent to collect logs, with resource limits on CPU.
+            # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the logcollector slice
+            # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in logcollector Cgroup
+
+            systemd_cmd = [
+                "systemd-run", "--property=CPUAccounting=no", "--property=MemoryAccounting=no",
+                "--unit={0}".format(logcollector.CGROUPS_UNIT),
+                "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
+            ]
+            collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
+        else:
+            # Invoke the command line tool in the agent to collect logs, with no resource limits
+            systemd_cmd = [
+                "systemd-run", "--scope"
+            ]
+            collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs", _UNCAPPED_FLAG]
 
         # The log tool is invoked from the current agent's egg with the command line option
-        collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
         final_command = systemd_cmd + collect_logs_cmd
 
         def exec_command():
