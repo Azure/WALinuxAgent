@@ -266,6 +266,8 @@ def get_logs_console(conf=__conf__):
 def get_collect_logs(conf=__conf__):
     return conf.get_switch("Logs.Collect", True)
 
+def get_collect_logs_uncapped(conf=__conf__):
+    return conf.get_switch("Logs.Uncapped", False)
 
 def get_collect_logs_period(conf=__conf__):
     return conf.get_int("Logs.CollectPeriod", 3600)
