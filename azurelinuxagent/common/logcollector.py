@@ -327,14 +327,14 @@ class LogCollector(object):
                     _LOGGER.warning("Archive too big, done with adding files.")
                     break
 
-                    if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
-                        final_files_to_collect.append(file_path)
-                        _LOGGER.info("Adding file %s, size %s b", file_path, file_size)
-                    else:
-                        truncated_file_path = self._truncate_large_file(file_path)
-                        if truncated_file_path:
-                            _LOGGER.info("Adding truncated file %s, size %s b", truncated_file_path, file_size)
-                            final_files_to_collect.append(truncated_file_path)
+                if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
+                    final_files_to_collect.append(file_path)
+                    _LOGGER.info("Adding file %s, size %s b", file_path, file_size)
+                else:
+                    truncated_file_path = self._truncate_large_file(file_path)
+                    if truncated_file_path:
+                        _LOGGER.info("Adding truncated file %s, size %s b", truncated_file_path, file_size)
+                        final_files_to_collect.append(truncated_file_path)
             else:
                 if os.path.exists(os.readlink(file_path)):
                     _LOGGER.info("Skipping file %s", file_path)
