@@ -196,7 +196,7 @@ class Agent(object):
         for k in sorted(configuration.keys()):
             print("{0} = {1}".format(k, configuration[k]))
 
-    def collect_logs(self, is_full_mode):
+    def collect_logs(self, is_full_mode, is_uncapped_mode):
         logger.set_prefix("LogCollector")
 
         if is_full_mode:
@@ -227,8 +227,9 @@ class Agent(object):
 
         try:
             log_collector = LogCollector(is_full_mode, cpu_cgroup_path, memory_cgroup_path)
-                # if cgroupv2 is in play, LogCollectorMonitor can't be used
-            if is_cgroupv2 is not True:
+                # if cgroupv2 is active or collect-logs param is invoked uncapped flag,
+                # LogCollectorMonitor won't be used
+            if (is_cgroupv2 or is_uncapped_mode) is not True:
                 log_collector_monitor = get_log_collector_monitor_handler(log_collector.cgroups)
                 log_collector_monitor.run()
             archive = log_collector.collect_logs_and_get_archive()
@@ -264,7 +265,7 @@ def main(args=None):
         args = []
     if len(args) <= 0:
         args = sys.argv[1:]
-    command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata = parse_args(args)
+    command, force, verbose, debug, conf_file_path, log_collector_full_mode, log_collector_uncapped_mode, firewall_metadata = parse_args(args)
     if command == AgentCommands.Version:
         version()
     elif command == AgentCommands.Help:
@@ -289,7 +290,7 @@ def main(args=None):
             elif command == AgentCommands.ShowConfig:
                 agent.show_configuration()
             elif command == AgentCommands.CollectLogs:
-                agent.collect_logs(log_collector_full_mode)
+                agent.collect_logs(log_collector_full_mode, log_collector_uncapped_mode)
             elif command == AgentCommands.SetupFirewall:
                 agent.setup_firewall(firewall_metadata)
         except Exception as e:
@@ -308,6 +309,7 @@ def parse_args(sys_args):
     debug = False
     conf_file_path = None
     log_collector_full_mode = False
+    log_collector_uncapped_mode = False
     firewall_metadata = {
         "dst_ip": None,
         "uid": None,
@@ -356,6 +358,8 @@ def parse_args(sys_args):
             cmd = AgentCommands.CollectLogs
         elif re.match(regex_cmd_format.format("full"), arg):
             log_collector_full_mode = True
+        elif re.match(regex_cmd_format.format("uncapped"), arg):
+            log_collector_uncapped_mode = True
         elif re.match(regex_cmd_format.format(AgentCommands.SetupFirewall), arg):
             cmd = AgentCommands.SetupFirewall
         elif re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\\d.]{7,})"), arg):
@@ -369,7 +373,7 @@ def parse_args(sys_args):
             cmd = AgentCommands.Help
             break
 
-    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata
+    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode, log_collector_uncapped_mode, firewall_metadata
 
 
 def version():

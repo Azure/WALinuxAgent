@@ -609,12 +609,12 @@ class UpdateHandler(object):
         # update self._goal_state
         if not self._try_update_goal_state(protocol):
             # agent updates and status reporting should be done even when the goal state is not updated
-            #self.__update_guest_agent(protocol)
+            self.__update_guest_agent(protocol)
             self._report_status(exthandlers_handler)
             return
 
         # check for agent updates
-        #self.__update_guest_agent(protocol)
+        self.__update_guest_agent(protocol)
 
         try:
             if self._processing_new_extensions_goal_state():
