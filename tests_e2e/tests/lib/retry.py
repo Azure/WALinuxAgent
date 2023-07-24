@@ -57,21 +57,37 @@ def retry_ssh_run(operation: Callable[[], Any], attempts: int, attempt_delay: in
         time.sleep(attempt_delay)
 
 
-def retry_if_false(operation: Callable[[], bool], attempts: int = 5, duration: int = 30) -> bool:
+def retry_if_false(operation: Callable[[], bool], attempts: int = 5, delay: int = 30) -> bool:
     """
     This method attempts the given operation retrying a few times
     (after a short delay)
     Note: Method used for operations which are return True or False
     """
-    found: bool = False
-    while attempts > 0 and not found:
+    success: bool = False
+    while attempts > 0 and not success:
         attempts -= 1
         try:
-            found = operation()
-        except Exception:
+            success = operation()
+        except Exception as e:
+            log.warning("Error in operation: %s", e)
             if attempts == 0:
                 raise
-        if not found:
-            log.info(f"Current execution didn't find it, retrying in {duration} secs.")
-        time.sleep(duration)
-    return found
+        if not success:
+            log.info("Current operation failed, retrying in %s secs.", delay)
+        time.sleep(delay)
+    return success
+
+
+def retry(operation: Callable[[], Any], attempts: int = 5, delay: int = 30) -> Any:
+    """
+    This method attempts the given operation retrying a few times on exceptions. Returns the value returned by the operation.
+    """
+    while attempts > 0:
+        attempts -= 1
+        try:
+            return operation()
+        except Exception as e:
+            if attempts == 0:
+                raise
+            log.warning("Error in operation, retrying in %s secs: %s", delay, e)
+            time.sleep(delay)

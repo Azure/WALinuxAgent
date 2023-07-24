@@ -18,8 +18,10 @@
 import json
 import http.client
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.retry import retry
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
 # Name of the security group added by this class
@@ -31,33 +33,39 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
     Updates the ARM template to add a network security group allowing SSH access from the current machine.
     """
     def update(self, template: Dict[str, Any]) -> None:
-        resources = template["resources"]
+        resources: List[Dict[str, Any]] = template["resources"]
 
         # Append the NSG to the list of resources
-        resources.append(json.loads(f"""{{
+        network_security_group = json.loads(f"""{{
             "type": "Microsoft.Network/networkSecurityGroups",
             "name": "{NETWORK_SECURITY_GROUP}",
             "location": "[parameters('location')]",
             "apiVersion": "2020-05-01",
             "properties": {{
-                "securityRules": [
-                    {{
-                        "name": "waagent-ssh",
-                        "properties": {{
-                            "description": "Allows inbound SSH connections from the orchestrator machine.",
-                            "protocol": "Tcp",
-                            "sourcePortRange": "*",
-                            "destinationPortRange": "22",
-                            "sourceAddressPrefix": "{self._my_ip_address}",
-                            "destinationAddressPrefix": "*",
-                            "access": "Allow",
-                            "priority": 100,
-                            "direction": "Inbound"
-                        }}
-                    }}
-                ]
+                "securityRules": []
             }}
-        }}"""))
+        }}""")
+        resources.append(network_security_group)
+
+        # Add the SSH rule, but if anything fails just go ahead without it
+        try:
+            network_security_group["properties"]["securityRules"].append(json.loads(f"""{{
+                "name": "waagent-ssh",
+                "properties": {{
+                    "description": "Allows inbound SSH connections from the orchestrator machine.",
+                    "protocol": "Tcp",
+                    "sourcePortRange": "*",
+                    "destinationPortRange": "22",
+                    "sourceAddressPrefix": "{self._my_ip_address}",
+                    "destinationAddressPrefix": "*",
+                    "access": "Allow",
+                    "priority": 100,
+                    "direction": "Inbound"
+                }}
+            }}"""))
+        except Exception as e:
+            log.warning("******** Waagent: Failed to create Allow security rule for SSH, skipping rule: %s", e)
+
 
         #
         # Add reference to the NSG to the properties of the subnets.
@@ -105,7 +113,7 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
         if subnets_copy is None:
             raise Exception("Cannot find the copy property of the virtual network in the ARM template")
 
-        subnets = [i for i in subnets_copy if i["name"] == 'subnets']
+        subnets = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
         if len(subnets) == 0:
             raise Exception("Cannot find the subnets of the virtual network in the ARM template")
 
@@ -131,10 +139,12 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
         Gets the IP address of the current machine.
         """
         if self.__my_ip_address is None:
-            connection = http.client.HTTPSConnection("ifconfig.io")
-            connection.request("GET", "/ip")
-            response = connection.getresponse()
-            self.__my_ip_address = response.read().decode().strip()
+            def get_my_address():
+                connection = http.client.HTTPSConnection("ifconfig.io")
+                connection.request("GET", "/ip")
+                response = connection.getresponse()
+                return response.read().decode().strip()
+            self.__my_ip_address = retry(get_my_address, attempts=3, delay=10)
         return self.__my_ip_address
 
     __my_ip_address: str = None
