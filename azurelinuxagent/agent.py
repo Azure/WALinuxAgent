@@ -227,9 +227,9 @@ class Agent(object):
 
         try:
             log_collector = LogCollector(is_full_mode, cpu_cgroup_path, memory_cgroup_path)
-                # if cgroupv2 is active or collect-logs param is invoked uncapped flag,
+                # if cgroupv2 is active and collect-logs param is invoked uncapped flag,
                 # LogCollectorMonitor won't be used
-            if (is_cgroupv2 or is_uncapped_mode) is not True:
+            if (is_cgroupv2 and is_uncapped_mode) is not True:
                 log_collector_monitor = get_log_collector_monitor_handler(log_collector.cgroups)
                 log_collector_monitor.run()
             archive = log_collector.collect_logs_and_get_archive()
