@@ -37,7 +37,7 @@ from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 
-_INITIAL_LOG_COLLECTION_DELAY = 5 * 1  # Five minutes of delay
+_INITIAL_LOG_COLLECTION_DELAY = 5 * 60  # Five minutes of delay
 
 _UNCAPPED_FLAG = "-uncapped"
 
