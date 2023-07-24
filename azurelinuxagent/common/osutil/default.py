@@ -1471,6 +1471,16 @@ class DefaultOSUtil(object):
             return state
 
     @staticmethod
+    def _is_cgroupv2(self):
+        try:
+            output = shellutil.run_get_output("stat -fc %T /sys/fs/cgroup/")
+        except shellutil.CommandError as cmd_err:
+            logger.warn("failed to determine in-use CGroup version, falling back to v1")
+
+         # Index 0 is the exit code, 1 the stdout
+        return True if output[1].strip() == 'cgroup2fs' else False
+
+    @staticmethod
     def _update_nic_state_all(state, command_output):
         for entry in command_output.splitlines():
             # Sample output:

@@ -30,6 +30,7 @@ from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_LOG_COLLECTOR, Memory
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
 from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
 # Please note: be careful when adding agent dependencies in this module.
@@ -77,7 +78,8 @@ class LogCollector(object):
         self._create_base_dirs()
         self._set_logger()
         self._initialize_telemetry()
-        self.cgroups = self._set_resource_usage_cgroups(cpu_cgroup_path, memory_cgroup_path)
+        # if CGroupv2 is in play, ignore resource usage limitation 
+        self.cgroups = self._set_resource_usage_cgroups(cpu_cgroup_path, memory_cgroup_path) if DefaultOSUtil._is_cgroupv2 == False else None
 
     @staticmethod
     def _mkdir(dirname):

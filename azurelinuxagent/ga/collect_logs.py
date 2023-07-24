@@ -34,6 +34,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, LOGCOL
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
 
 _INITIAL_LOG_COLLECTION_DELAY = 5 * 60  # Five minutes of delay
@@ -311,9 +312,12 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
         try:
             while not self.stopped():
                 try:
-                    metrics = self._poll_resource_usage()
-                    self._send_telemetry(metrics)
-                    self._verify_memory_limit(metrics)
+                    # If CGroupv2 is in play, LogCollectorMonitorHandler won't work
+                    # Ignoring resource usage to avoid noise
+                    if DefaultOSUtil._is_cgroupv2 is not True:
+                        metrics = self._poll_resource_usage()
+                        self._send_telemetry(metrics)
+                        self._verify_memory_limit(metrics)
                 except Exception as e:
                     logger.error("An error occurred in the log collection monitor thread loop; "
                                  "will skip the current iteration.\n{0}", ustr(e))

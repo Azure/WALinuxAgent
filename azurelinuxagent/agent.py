@@ -37,6 +37,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
@@ -221,10 +222,15 @@ class Agent(object):
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
+        # Calls on get_inuse_cgroup_version to determine cgroup version
+        is_cgroupv2 = DefaultOSUtil._is_cgroupv2(self)
+
         try:
             log_collector = LogCollector(is_full_mode, cpu_cgroup_path, memory_cgroup_path)
-            log_collector_monitor = get_log_collector_monitor_handler(log_collector.cgroups)
-            log_collector_monitor.run()
+                # if cgroupv2 is in play, LogCollectorMonitor can't be used
+            if is_cgroupv2 is not True:
+                log_collector_monitor = get_log_collector_monitor_handler(log_collector.cgroups)
+                log_collector_monitor.run()
             archive = log_collector.collect_logs_and_get_archive()
             logger.info("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
