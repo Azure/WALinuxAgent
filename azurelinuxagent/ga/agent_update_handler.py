@@ -273,8 +273,8 @@ class AgentUpdateHandler(object):
         """
         if not self._is_requested_version_update:
             if requested_version < CURRENT_VERSION:
-                msg = "Downgrade requested in the GoalState, but downgrades not supported for self-update version, " \
-                      "skipping agent update"
+                msg = "Downgrade requested in the GoalState, but downgrades are not supported for self-update version:{0}, " \
+                      "skipping agent update".format(requested_version)
                 logger.verbose(msg)
                 return False
         return True
