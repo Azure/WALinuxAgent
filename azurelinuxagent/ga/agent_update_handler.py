@@ -58,7 +58,12 @@ class AgentUpdateHandler(object):
         largest version update(self-update):
             update is allowed once per (as specified in the conf.get_hotfix_upgrade_frequency() or conf.get_normal_upgrade_frequency())
             return false when we don't allow updates.
+        Note: Downgrades are not allowed for self-update.
         """
+
+        if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
+            return False
+
         now = datetime.datetime.now()
 
         if self._is_requested_version_update:
@@ -268,7 +273,7 @@ class AgentUpdateHandler(object):
         """
         if not self._is_requested_version_update:
             if requested_version < CURRENT_VERSION:
-                msg = "Downgrade requested in the GoalState, but the self-update is not configured to allow downgrades, " \
+                msg = "Downgrade requested in the GoalState, but downgrades not supported for self-update version, " \
                       "skipping agent update"
                 logger.verbose(msg)
                 return False
@@ -314,9 +319,6 @@ class AgentUpdateHandler(object):
                     GAUpdateReportState.report_error_msg = ""
 
             if requested_version == CURRENT_VERSION:
-                return
-
-            if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
                 return
 
             # Check if an update is allowed
