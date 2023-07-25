@@ -45,42 +45,61 @@ class AgentStatus(AgentTest):
         # Validate message field
         message = status.message
         if message is None:
-            raise Exception("Instance view is missing an agent status message, waiting to retry...")
+            raise Exception("Instance view is missing an agent status message")
         elif 'unresponsive' in message:
-            raise Exception("Instance view shows unresponsive agent, waiting to retry...")
+            raise Exception("Instance view shows unresponsive agent")
 
         # Validate display status field
         display_status = status.display_status
         if display_status is None:
-            raise Exception("Instance view is missing an agent display status, waiting to retry...")
+            raise Exception("Instance view is missing an agent display status")
         elif 'Not Ready' in display_status:
-            raise Exception("Instance view shows agent status is not ready, waiting to retry...")
+            raise Exception("Instance view shows agent status is not ready")
 
     def validate_instance_view_vmagent(self, instance_view: VirtualMachineInstanceView):
         # Validate vm_agent_version field
         vm_agent_version = instance_view.vm_agent.vm_agent_version
         if vm_agent_version is None:
-            raise Exception("Instance view is missing agent version, waiting to retry...")
+            raise Exception("Instance view is missing agent version")
         elif 'Unknown' in vm_agent_version:
-            raise Exception("Instance view shows agent version is unknown, waiting to retry...")
+            raise Exception("Instance view shows agent version is unknown")
 
         # Validate statuses field
         statuses = instance_view.vm_agent.statuses
         if statuses is None:
-            raise Exception("Instance view is missing agent statuses, waiting to retry...")
+            raise Exception("Instance view is missing agent statuses")
         elif len(statuses) < 1:
-            raise Exception("Instance view is missing an agent status entry, waiting to retry...")
+            raise Exception("Instance view is missing an agent status entry")
         else:
             self.validate_instance_view_vmagent_status(instance_view=instance_view)
 
     def validate_instance_view(self, instance_view: VirtualMachineInstanceView):
+        """
+        Checks that instance has vm_agent.statuses property which reports the Guest Agent as running and Ready:
+
+        "vm_agent": {
+            "extension_handlers": [],
+            "vm_agent_version": "9.9.9.9",
+            "additional_properties": {},
+            "statuses": [
+                {
+                    "level": "Info",
+                    "time": "<class 'datetime.datetime'>",
+                    "message": "Guest Agent is running",
+                    "code": "ProvisioningState/succeeded",
+                    "additional_properties": {},
+                    "display_status": "Ready"
+                }
+            ]
+        }
+        """
         if instance_view.vm_agent is None:
-            raise Exception("Instance view is missing vm agent, waiting to retry...")
+            raise Exception("Instance view is missing vm agent")
         else:
             self.validate_instance_view_vmagent(instance_view=instance_view)
 
         if instance_view.statuses is None:
-            raise Exception("Instance view is missing statuses, waiting to retry...")
+            raise Exception("Instance view is missing statuses")
 
         log.info("Instance view is valid, agent version: {0}, status: {1}"
                  .format(instance_view.vm_agent.vm_agent_version, instance_view.vm_agent.statuses[0].display_status))
@@ -99,7 +118,8 @@ class AgentStatus(AgentTest):
         while datetime.datetime.now() <= timeout and not instance_view_is_valid:
             instance_view = vm.get_instance_view()
             log.info("")
-            log.info("Validating VM Instance View...")
+            log.info(
+                "Check instance view to validate that the Guest Agent reports status without any new goal states...")
             log.info("Instance view of VM is:\n%s", json.dumps(instance_view.serialize(), indent=2))
 
             try:
@@ -108,12 +128,14 @@ class AgentStatus(AgentTest):
             except Exception as e:
                 instance_view_exception = str(e)
                 log.info("")
-                log.info("Instance view is not valid, waiting 60s before retry...")
+                log.info("Instance view does not have valid agent status: {0}".format(instance_view_exception))
+                log.info("Waiting 60s before retry...")
                 sleep(60)
 
         log.info("")
         assert_that(instance_view_is_valid).described_as(
-            "Timeout has expired, instance view is not valid: {0}".format(instance_view_exception)).is_true()
+            "Timeout has expired, instance view does not have valid agent status: {0}".format(
+                instance_view_exception)).is_true()
 
 
 if __name__ == "__main__":
