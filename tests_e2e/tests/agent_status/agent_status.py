@@ -75,7 +75,8 @@ class AgentStatus(AgentTest):
 
     def validate_instance_view(self, instance_view: VirtualMachineInstanceView):
         """
-        Checks that instance view has vm_agent.statuses property which reports the Guest Agent as running and Ready:
+        Checks that instance view has vm_agent.statuses and vm_agent.vm_agent_version properties which report the Guest
+        Agent as running and Ready:
 
         "vm_agent": {
             "extension_handlers": [],
@@ -101,7 +102,7 @@ class AgentStatus(AgentTest):
         if instance_view.statuses is None:
             raise Exception("Instance view is missing statuses")
 
-        log.info("Instance view is valid, agent version: {0}, status: {1}"
+        log.info("Instance view has valid agent status, agent version: {0}, status: {1}"
                  .format(instance_view.vm_agent.vm_agent_version, instance_view.vm_agent.statuses[0].display_status))
 
     def run(self):
