@@ -75,7 +75,7 @@ class AgentStatus(AgentTest):
 
     def validate_instance_view(self, instance_view: VirtualMachineInstanceView):
         """
-        Checks that instance has vm_agent.statuses property which reports the Guest Agent as running and Ready:
+        Checks that instance view has vm_agent.statuses property which reports the Guest Agent as running and Ready:
 
         "vm_agent": {
             "extension_handlers": [],
@@ -128,13 +128,13 @@ class AgentStatus(AgentTest):
             except Exception as e:
                 instance_view_exception = str(e)
                 log.info("")
-                log.info("Instance view does not have valid agent status: {0}".format(instance_view_exception))
+                log.info("Instance view has invalid agent status: {0}".format(instance_view_exception))
                 log.info("Waiting 60s before retry...")
                 sleep(60)
 
         log.info("")
         assert_that(instance_view_is_valid).described_as(
-            "Timeout has expired, instance view does not have valid agent status: {0}".format(
+            "Timeout has expired, instance view has invalid agent status: {0}".format(
                 instance_view_exception)).is_true()
 
 
