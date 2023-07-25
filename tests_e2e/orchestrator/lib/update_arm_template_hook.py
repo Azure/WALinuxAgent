@@ -15,10 +15,11 @@
 # limitations under the License.
 #
 
-import importlib
+import importlib.util
 import logging
+
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 # E0401: Unable to import 'lisa.*' (import-error)
@@ -29,6 +30,8 @@ from lisa.sut_orchestrator.azure.platform_ import AzurePlatformSchema
 # pylint: enable=E0401
 
 import tests_e2e
+from tests_e2e.tests.lib.add_network_security_group import AddNetworkSecurityGroup
+from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
 
 class UpdateArmTemplateHook:
@@ -37,30 +40,45 @@ class UpdateArmTemplateHook:
     """
     @hookimpl
     def azure_update_arm_template(self, template: Any, environment: Environment) -> None:
+        log: logging.Logger = logging.getLogger("lisa")
+
+        #
+        # Add the network security group for the test VM. This group includes a rule allowing SSH access from the current machine.
+        #
+        log.info("******** Waagent: Adding network security rule to the ARM template")
+        AddNetworkSecurityGroup().update(template)
+
+        #
+        # Apply any template customizations provided by the tests.
+        #
         azure_runbook: AzurePlatformSchema = environment.platform.runbook.get_extended_runbook(AzurePlatformSchema)
         vm_tags = azure_runbook.vm_tags
-        templates = vm_tags.get("templates")
-        if templates is not None:
-            log: logging.Logger = logging.getLogger("lisa")
-            log.info("******** Waagent: Applying custom templates '%s' to environment '%s'", templates, environment.name)
+        # The "templates" tag is a comma-separated list of the template customizations provided by the tests
+        test_templates = vm_tags.get("templates")
+        if test_templates is not None:
+            log.info("******** Waagent: Applying custom templates '%s' to environment '%s'", test_templates, environment.name)
 
-            for t in templates.split(","):
+            for t in test_templates.split(","):
                 update_arm_template = self._get_update_arm_template(t)
-                update_arm_template(template)
+                update_arm_template().update(template)
 
     _SOURCE_CODE_ROOT: Path = Path(tests_e2e.__path__[0])
 
     @staticmethod
-    def _get_update_arm_template(template_path: str) -> Callable:
-        source_file: Path = UpdateArmTemplateHook._SOURCE_CODE_ROOT/"tests"/template_path
+    def _get_update_arm_template(test_template: str) -> UpdateArmTemplate:
+        """
+        Returns the UpdateArmTemplate class that implements the template customization for the test.
+        """
+        source_file: Path = UpdateArmTemplateHook._SOURCE_CODE_ROOT/"tests"/test_template
 
         spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.templates.{source_file.name}", str(source_file))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
-        matches = [v for v in module.__dict__.values() if callable(v) and v.__name__ == "update_arm_template"]
+        # find all the classes in the module that are subclasses of UpdateArmTemplate but are not UpdateArmTemplate itself.
+        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, UpdateArmTemplate) and v != UpdateArmTemplate]
         if len(matches) != 1:
-            raise Exception(f"Could not find update_arm_template in {source_file}")
+            raise Exception(f"Error in {source_file}: template files must contain exactly one class derived from UpdateArmTemplate)")
         return matches[0]
 
 
