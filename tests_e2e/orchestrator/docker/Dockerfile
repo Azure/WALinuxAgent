@@ -68,12 +68,16 @@ RUN \
     export PATH="$HOME/.local/bin:$PATH"                                                                      && \
                                                                                                                  \
     #                                                                                                            \
-    # Install LISA                                                                                               \
+    # Install LISA.                                                                                              \
+    #                                                                                                            \
+    # (note that we use a specific commit, which is the version of LISA that has been verified to work with our  \
+    # tests; when taking a new LISA version, make sure to verify that the tests work OK before pushing the       \
+    # Docker image to our registry)                                                                              \
     #                                                                                                            \
     cd $HOME                                                                                                  && \
     git clone https://github.com/microsoft/lisa.git                                                           && \
     cd lisa                                                                                                   && \
-    git checkout 05aaf490df0ce24018c6ab4e714bcc9ca8765c76                                                     && \
+    git checkout a030c5e6a0695db77dbf5bd52a45d07cbbf00087                                                     && \
                                                                                                                  \
     python3 -m pip install --upgrade pip                                                                      && \
     python3 -m pip install --editable .[azure,libvirt] --config-settings editable_mode=compat                 && \
@@ -81,14 +85,23 @@ RUN \
     #                                                                                                            \
     # Install additional test dependencies                                                                       \
     #                                                                                                            \
+    # (note that we update azure-mgmt-compute to 29.1.0 - LISA installs 26.1; this is needed in order to access  \
+    # osProfile.linuxConfiguration.enableVMAgentPlatformUpdates in the VM model - that property is used by some  \
+    # tests, such as Agent versioning)                                                                           \
+    #                                                                                                            \
     python3 -m pip install distro msrestazure pytz                                                            && \
-    python3 -m pip install azure-mgmt-compute --upgrade                                                       && \
+    python3 -m pip install azure-mgmt-compute==29.1.0 --upgrade                                               && \
                                                                                                                  \
     #                                                                                                            \
     # Download Pypy to a known location, from which it will be installed to the test VMs.                        \
     #                                                                                                            \
     wget https://dcrdata.blob.core.windows.net/python/pypy3.7-x64.tar.bz2 -O /tmp/pypy3.7-x64.tar.bz2         && \
     wget https://dcrdata.blob.core.windows.net/python/pypy3.7-arm64.tar.bz2 -O /tmp/pypy3.7-arm64.tar.bz2     && \
+                                                                                                                 \
+    #                                                                                                            \
+    # Install pudb, which can be useful to debug issues in the image                                             \
+    #                                                                                                            \
+    python3 -m pip install pudb                                                                               && \
                                                                                                                  \
     #                                                                                                            \
     # The setup for the tests depends on a few paths; add those to the profile                                   \
