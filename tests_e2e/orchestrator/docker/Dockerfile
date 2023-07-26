@@ -73,6 +73,7 @@ RUN \
     cd $HOME                                                                                                  && \
     git clone https://github.com/microsoft/lisa.git                                                           && \
     cd lisa                                                                                                   && \
+    git checkout 05aaf490df0ce24018c6ab4e714bcc9ca8765c76                                                     && \
                                                                                                                  \
     python3 -m pip install --upgrade pip                                                                      && \
     python3 -m pip install --editable .[azure,libvirt] --config-settings editable_mode=compat                 && \
@@ -86,9 +87,8 @@ RUN \
     #                                                                                                            \
     # Download Pypy to a known location, from which it will be installed to the test VMs.                        \
     #                                                                                                            \
-    mkdir $HOME/bin                                                                                           && \
-    wget https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2 -O /tmp/pypy3.7-x64.tar.bz2         && \
-    wget https://downloads.python.org/pypy/pypy3.7-v7.3.5-aarch64.tar.bz2 -O /tmp/pypy3.7-arm64.tar.bz2       && \
+    wget https://dcrdata.blob.core.windows.net/python/pypy3.7-x64.tar.bz2 -O /tmp/pypy3.7-x64.tar.bz2         && \
+    wget https://dcrdata.blob.core.windows.net/python/pypy3.7-arm64.tar.bz2 -O /tmp/pypy3.7-arm64.tar.bz2     && \
                                                                                                                  \
     #                                                                                                            \
     # The setup for the tests depends on a few paths; add those to the profile                                   \
