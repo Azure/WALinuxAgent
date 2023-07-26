@@ -22,7 +22,7 @@ AZUREMONITORAGENT_SERVICE = "azuremonitoragent.service"
 MDSD_SERVICE = "mdsd.service"
 
 
-def exit_if_cgroups_not_supported():
+def verify_if_distro_supports_cgroup():
     """
     checks if agent is running in a distro that supports cgroups
     """
@@ -111,7 +111,7 @@ def verify_agent_cgroup_assigned_correctly():
     log.info("\tVerified the agent cgroup assigned correctly by systemd\n")
 
 
-def get_cpu_quota():
+def get_agent_cpu_quota():
     """
     Returns the cpu quota for the agent service
     """
@@ -125,11 +125,11 @@ def get_cpu_quota():
     return None
 
 
-def check_quota_disabled():
+def check_agent_quota_disabled():
     """
     Returns True if the cpu quota is infinity
     """
-    cpu_quota = get_cpu_quota()
+    cpu_quota = get_agent_cpu_quota()
     return cpu_quota == 'infinity'
 
 

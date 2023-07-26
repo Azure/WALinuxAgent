@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+from tests_e2e.tests.ext_cgroups.install_extensions import InstallExtensions
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.logging import log
@@ -32,6 +32,8 @@ class ExtCgroups(AgentTest):
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
+        log.info("=====Installing extensions=====")
+        InstallExtensions(self._context).run()
         log.info("=====Validating extension cgroups=====")
         result = self._ssh_client.run_command("ext_cgroups-check_cgroups_extensions.py", use_sudo=True)
         log.info(result)

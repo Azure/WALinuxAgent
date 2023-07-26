@@ -22,9 +22,9 @@ import sys
 import traceback
 
 from tests_e2e.tests.lib.agent_log import AgentLog
-from tests_e2e.tests.lib.cgroup_helpers import exit_if_cgroups_not_supported, \
+from tests_e2e.tests.lib.cgroup_helpers import verify_if_distro_supports_cgroup, \
     verify_agent_cgroup_assigned_correctly, BASE_CGROUP, EXT_CONTROLLERS, get_unit_cgroup_mount_path, \
-    GATESTEXT_SERVICE, AZUREMONITORAGENT_SERVICE, MDSD_SERVICE, check_quota_disabled, \
+    GATESTEXT_SERVICE, AZUREMONITORAGENT_SERVICE, MDSD_SERVICE, check_agent_quota_disabled, \
     check_cgroup_disabled_with_unknown_process, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME, \
     print_cgroups
 from tests_e2e.tests.lib.logging import log
@@ -63,26 +63,13 @@ def verify_custom_script_cgroup_assigned_correctly():
             raise Exception('Custom script not mounted correctly! Expected {0} or {1}'.format(correct_cpu_mount_v1, correct_cpu_mount_v2))
 
 
-def verify_agent_cgroup_assigned_correctly_after_ama_install():
-    """
-    This method adds the debug info of system processes that were captured while installing AMA and also make sure that the agent is running under the expected cgroups afrer AMA install
-    """
-    log.info("===== Verifying the agent cgroup consists only of agent processes after installing AMA =====")
-    with open('/var/lib/waagent/tmp/ps_check_after_ama') as fh:
-        lines = fh.readlines()
-        for process in lines:
-            log.info(process)
-
-    verify_agent_cgroup_assigned_correctly()
-
-
 def check_temporary_folder_exists():
     tmp_folder = "/var/lib/waagent/tmp"
     if not os.path.exists(tmp_folder):
         raise Exception("Temporary folder {0} was not created which means CSE script did not run!".format(tmp_folder))
 
 
-def verify_ext_cgroup_controllers_created_on_disk():
+def verify_ext_cgroup_controllers_created_on_file_system():
     """
     This method ensure that extension cgroup controllers are created on disk after extension install
     """
@@ -104,7 +91,7 @@ def verify_ext_cgroup_controllers_created_on_disk():
     log.info('\tVerified extension cgroup controller are present.\n')
 
 
-def verify_extension_service_cgroup_created_on_disk():
+def verify_extension_service_cgroup_created_on_file_system():
     """
     This method ensure that extension service cgroup paths are created on disk after running extension
     """
@@ -199,19 +186,18 @@ def verify_ext_cgroups_tracked():
 
 
 try:
-    exit_if_cgroups_not_supported()
-
-    verify_ext_cgroup_controllers_created_on_disk()
+    verify_if_distro_supports_cgroup()
+    verify_ext_cgroup_controllers_created_on_file_system()
     verify_custom_script_cgroup_assigned_correctly()
-    verify_agent_cgroup_assigned_correctly_after_ama_install()
-    verify_extension_service_cgroup_created_on_disk()
+    verify_agent_cgroup_assigned_correctly()
+    verify_extension_service_cgroup_created_on_file_system()
     verify_ext_cgroups_tracked()
 
     sys.exit(0)
 
 except Exception as e:
     # It is possible that  agent cgroup can be disabled due to UNKNOWN process or throttled before we run this check, in that case, we should ignore the validation
-    if check_quota_disabled() and check_cgroup_disabled_with_unknown_process():
+    if check_agent_quota_disabled() and check_cgroup_disabled_with_unknown_process():
         log.info("Cgroup is disabled due to UNKNOWN process, ignoring ext cgroups validations")
     else:
         log.error("%s:\n%s", e, traceback.format_exc())

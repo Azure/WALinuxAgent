@@ -27,13 +27,13 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class InstallExtensions(AgentTest):
+class InstallExtensions:
     """
     This test installs the multiple extensions in order to verify extensions cgroups in the next test.
     """
 
     def __init__(self, context: AgentTestContext):
-        super().__init__(context)
+        self._context = context
         self._ssh_client = SshClient(
             ip_address=self._context.vm_ip_address,
             username=self._context.username,
@@ -57,7 +57,7 @@ class InstallExtensions(AgentTest):
         # Agent needs extension info and it's services info in the handlermanifest.xml to monitor and limit the resource usage.
         # As part of pilot testing , agent hardcoded azuremonitoragent service name to monitor it for sometime in production without need of manifest update from extesnion side.
         # So that they can get sense of resource usage for their extensions. This we did for few months and now we no logner monitoring it in production.
-        # But I'm mocking the same behaviour here in test by changing the expiry time to future date. So that test agent will start track the cgroups that is used by the service.
+        # So we are changing the config flag expiry time to future date. So that test agent will start track the cgroups that is used by the service.
         result = self._ssh_client.run_command(f"update-waagent-conf Debug.CgroupMonitorExpiryTime={expiry_time}", use_sudo=True)
         log.info(result)
         log.info("=====Updated agent cgroups config(CgroupMonitorExpiryTime)=====")
@@ -98,25 +98,9 @@ class InstallExtensions(AgentTest):
 
     def _install_cse(self):
         # Use custom script to output the cgroups assigned to it at runtime and save to /var/lib/waagent/tmp/custom_script_check.
-        # Output the status of the agent when both CSE and AMA are running to make sure none of them were assigned
-        # to the agent by mistake; save to /var/lib/waagent/tmp/walinuxagent_check_after_ama.
         script_contents = """#!/usr/bin/env bash
-function check_ama {
-    while true;
-    do
-        ama_dir=$(find /var/lib/waagent -maxdepth 1 -type d -name "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-*" -print -quit)
-        grep -i "Enable succeeded" $ama_dir/status/0.status &> /dev/null
-        if [ $? -eq 0 ];
-        then
-            ps aux --forest > /var/lib/waagent/tmp/ps_check_after_ama
-            break
-        fi
-    done
-}
-
 mkdir /var/lib/waagent/tmp
 cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check
-check_ama &
 """
 
         base64script: str = self._ssh_client.run_command("echo '{0}' | base64 -w0".format(script_contents))
@@ -132,8 +116,4 @@ check_ama &
             settings=settings
         )
         custom_script_2_0.assert_instance_view()
-
-
-if __name__ == "__main__":
-    InstallExtensions.run_from_command_line()
 

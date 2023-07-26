@@ -23,7 +23,7 @@ import traceback
 
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import BASE_CGROUP, AGENT_CONTROLLERS, get_agent_cgroup_mount_path, \
-    AGENT_SERVICE_NAME, exit_if_cgroups_not_supported, print_cgroups, \
+    AGENT_SERVICE_NAME, verify_if_distro_supports_cgroup, print_cgroups, \
     verify_agent_cgroup_assigned_correctly
 from tests_e2e.tests.lib.logging import log
 
@@ -50,7 +50,7 @@ def verify_mounted_cgroup_controllers():
     log.info('\tVerified cgroup controller are present.\n')
 
 
-def verify_agent_cgroup_created_on_disk():
+def verify_agent_cgroup_created_on_file_system():
     """
     Checks agent service is running in azure.slice/{agent_service) cgroup and mounted in same system cgroup controllers mounted path
     """
@@ -97,10 +97,10 @@ def verify_agent_cgroups_tracked():
 
 
 try:
-    exit_if_cgroups_not_supported()
+    verify_if_distro_supports_cgroup()
 
     verify_mounted_cgroup_controllers()
-    verify_agent_cgroup_created_on_disk()
+    verify_agent_cgroup_created_on_file_system()
 
     verify_agent_cgroup_assigned_correctly()
     verify_agent_cgroups_tracked()
