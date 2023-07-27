@@ -77,6 +77,9 @@ class AgentLogRecord:
         # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ')
 
+    def __str__(self):
+        return self.text
+
 
 class AgentLog(object):
     """
@@ -304,12 +307,21 @@ class AgentLog(object):
                 'message': r"SendHostPluginHeartbeat:.*ResourceGoneError.*410",
                 'if': lambda r: r.level == "WARNING" and self._increment_counter("SendHostPluginHeartbeat-ResourceGoneError-410") < 2  # ignore unless there are 2 or more instances
             },
+            #
             # 2023-01-18T02:58:25.589492Z ERROR SendTelemetryHandler ExtHandler Event: name=WALinuxAgent, op=ReportEventErrors, message=DroppedEventsCount: 1
             # Reasons (first 5 errors): [ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] URI http://168.63.129.16/machine?comp=telemetrydata  [HTTP Failed] Status Code 400: Traceback (most recent call last):
             #
             {
-                'message': r"(?s)SendTelemetryHandler.*http://168.63.129.16/machine\?comp=telemetrydata.*Status Code 400",
-                'if': lambda _: self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 400") < 2  # ignore unless there are 2 or more instances
+                'message': r"(?s)\[ProtocolError\].*http://168.63.129.16/machine\?comp=telemetrydata.*Status Code 400",
+                'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 400") < 2  # ignore unless there are 2 or more instances
+            },
+            #
+            # 2023-07-26T22:05:42.841692Z ERROR SendTelemetryHandler ExtHandler Event: name=WALinuxAgent, op=ReportEventErrors, message=DroppedEventsCount: 1
+            # Reasons (first 5 errors): [ProtocolError] Failed to send events:[ResourceGoneError] [HTTP Failed] [410: Gone] b'<?xml version="1.0" encoding="utf-8"?>\n<Error xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\n    <Code>ResourceNotAvailable</Code>\n    <Message>The resource requested is no longer available. Please refresh your cache.</Message>\n    <Details></Details>\n</Error>': Traceback (most recent call last):
+            #
+            {
+                'message': r"(?s)\[ProtocolError\].*Failed to send events.*\[410: Gone\]",
+                'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 410") < 2  # ignore unless there are 2 or more instances
             },
             #
             # Ignore these errors in flatcar:
