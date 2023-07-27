@@ -20,13 +20,13 @@
 from tests_e2e.tests.lib.agent_test import AgentTest
 
 
-class ErrorTest(AgentTest):
+class ErrorRemoteTest(AgentTest):
     """
-    A trivial test that errors out
+    A trivial remote test that fails
     """
     def run(self):
-        raise Exception("* ERROR *")
+        self._run_remote_test("samples-error_remote_test.py")
 
 
 if __name__ == "__main__":
-    ErrorTest.run_from_command_line()
+    ErrorRemoteTest.run_from_command_line()

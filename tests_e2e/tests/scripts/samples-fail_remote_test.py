@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env pypy3
 
 # Microsoft Azure Linux Agent
 #
@@ -17,17 +17,21 @@
 # limitations under the License.
 #
 
+#
+# A sample remote test that fails
+#
+
 from assertpy import fail
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
 
 
-class FailTest(AgentTest):
-    """
-    A trivial test that fails
-    """
-    def run(self):
-        fail("* FAILED *")
+def main():
+    log.info("Setting up test")
+    log.info("Doing some operation")
+    log.warning("Something went wrong, but the test can continue")
+    log.info("Doing some other operation")
+    fail("Verification of the operation failed")
 
 
-if __name__ == "__main__":
-    FailTest.run_from_command_line()
+run_remote_test(main)

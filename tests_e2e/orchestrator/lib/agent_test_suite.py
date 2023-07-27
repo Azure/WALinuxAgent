@@ -46,7 +46,7 @@ import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
 from tests_e2e.tests.lib.agent_log import AgentLog
-from tests_e2e.tests.lib.agent_test import TestSkipped
+from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log
@@ -531,17 +531,29 @@ class AgentTestSuite(LisaTestSuite):
                                 TestStatus.FAILED,
                                 test_start_time,
                                 message=str(e))
-                        except:  # pylint: disable=bare-except
+                        except RemoteTestError as e:
                             test_success = False
-                            summary.append(f"[Error]   {test.name}")
-                            log.exception("UNHANDLED EXCEPTION IN %s", test.name)
-                            self.context.lisa_log.exception("UNHANDLED EXCEPTION IN %s", test_full_name)
+                            summary.append(f"[Failed]  {test.name}")
+                            message = f"UNEXPECTED ERROR IN [{e.command}] {e.stderr}\n{e.stdout}"
+                            log.error("******** [Failed] %s: %s", test.name, message)
+                            self.context.lisa_log.error("******** [Failed] %s", test_full_name)
                             self._report_test_result(
                                 suite_full_name,
                                 test.name,
                                 TestStatus.FAILED,
                                 test_start_time,
-                                message="Unhandled exception.",
+                                message=str(message))
+                        except:  # pylint: disable=bare-except
+                            test_success = False
+                            summary.append(f"[Error]   {test.name}")
+                            log.exception("UNEXPECTED ERROR IN %s", test.name)
+                            self.context.lisa_log.exception("UNEXPECTED ERROR IN %s", test_full_name)
+                            self._report_test_result(
+                                suite_full_name,
+                                test.name,
+                                TestStatus.FAILED,
+                                test_start_time,
+                                message="Unexpected error.",
                                 add_exception_stack_trace=True)
 
                         log.info("")

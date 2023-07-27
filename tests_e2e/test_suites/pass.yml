@@ -1,4 +1,4 @@
 name: "Pass"
 tests:
-  - "pass_test.py"
+  - "samples/pass_test.py"
 images: "ubuntu_2004"
