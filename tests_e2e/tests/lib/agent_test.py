@@ -85,7 +85,7 @@ class AgentTest(ABC):
         try:
             ssh_client: SshClient = self._context.create_ssh_client()
             output = ssh_client.run_command(command=command, use_sudo=use_sudo, attempts=attempts, attempt_delay=attempt_delay)
-            log.info(f"*** PASSED: [%s]\n%s", command, self._indent(output))
+            log.info("*** PASSED: [%s]\n%s", command, self._indent(output))
         except CommandError as error:
             if error.exit_code == FAIL_EXIT_CODE:
                 fail(f"[{command}] {error.stderr}{self._indent(error.stdout)}")

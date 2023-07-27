@@ -4,4 +4,4 @@ tests:
   - "samples/fail_remote_test.py"
   - "samples/error_test.py"
   - "samples/error_remote_test.py"
-images: "ubuntu_1804"
+images: "ubuntu_2004"
