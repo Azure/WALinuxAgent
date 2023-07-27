@@ -26,7 +26,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
 from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException
+from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.version import get_distro
@@ -143,6 +143,7 @@ class CGroupConfigurator(object):
             self._cgroups_api = None
             self._agent_cpu_cgroup_path = None
             self._agent_memory_cgroup_path = None
+            self._agent_memory_cgroup = None
             self._check_cgroups_lock = threading.RLock()  # Protect the check_cgroups which is called from Monitor thread and main loop.
 
         def initialize(self):
@@ -213,7 +214,8 @@ class CGroupConfigurator(object):
 
                 if self._agent_memory_cgroup_path is not None:
                     _log_cgroup_info("Agent Memory cgroup: {0}", self._agent_memory_cgroup_path)
-                    CGroupsTelemetry.track_cgroup(MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path))
+                    self._agent_memory_cgroup = MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path)
+                    CGroupsTelemetry.track_cgroup(self._agent_memory_cgroup)
 
                 _log_cgroup_info('Agent cgroups enabled: {0}', self._agent_cgroups_enabled)
 
@@ -366,10 +368,9 @@ class CGroupConfigurator(object):
             if not os.path.exists(vmextensions_slice):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
-            if not os.path.exists(logcollector_slice):
-                slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA)
-
-                files_to_create.append((logcollector_slice, slice_contents))
+            # Update log collector slice contents
+            slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA)
+            files_to_create.append((logcollector_slice, slice_contents))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
                 CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_slice)
@@ -454,6 +455,11 @@ class CGroupConfigurator(object):
 
         def is_extension_resource_limits_setup_completed(self, extension_name, cpu_quota=None):
             unit_file_install_path = systemd.get_unit_file_install_path()
+            old_extension_slice_path = os.path.join(unit_file_install_path, SystemdCgroupsApi.get_extension_slice_name(extension_name, old_slice=True))
+            # clean up the old slice from the disk
+            if os.path.exists(old_extension_slice_path):
+                CGroupConfigurator._Impl.__cleanup_unit_file(old_extension_slice_path)
+
             extension_slice_path = os.path.join(unit_file_install_path,
                                                 SystemdCgroupsApi.get_extension_slice_name(extension_name))
             cpu_quota = str(
@@ -644,7 +650,7 @@ class CGroupConfigurator(object):
             Raises a CGroupsException if the check fails
             """
             unexpected = []
-
+            agent_cgroup_proc_names = []
             try:
                 daemon = os.getppid()
                 extension_handler = os.getpid()
@@ -658,8 +664,12 @@ class CGroupConfigurator(object):
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
 
                 for process in agent_cgroup:
+                    agent_cgroup_proc_names.append(self.__format_process(process))
                     # Note that the agent uses systemd-run to start extensions; systemd-run belongs to the agent cgroup, though the extensions don't.
                     if process in (daemon, extension_handler) or process in systemd_run_commands:
+                        continue
+                    # check shell systemd_run process if above process check didn't catch it
+                    if self._check_systemd_run_process(process):
                         continue
                     # systemd_run_commands contains the shell that started systemd-run, so we also need to check for the parent
                     if self._get_parent(process) in systemd_run_commands and self._get_command(
@@ -679,6 +689,7 @@ class CGroupConfigurator(object):
                 _log_cgroup_warning("Error checking the processes in the agent's cgroup: {0}".format(ustr(exception)))
 
             if len(unexpected) > 0:
+                self._report_agent_cgroups_procs(agent_cgroup_proc_names, unexpected)
                 raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(unexpected))
 
         @staticmethod
@@ -742,11 +753,51 @@ class CGroupConfigurator(object):
             return False
 
         @staticmethod
+        def _check_systemd_run_process(process):
+            """
+            Returns True if process is shell systemd-run process started by agent otherwise False.
+
+            Ex: sh,7345 -c systemd-run --unit=enable_7c5cab19-eb79-4661-95d9-9e5091bd5ae0 --scope --slice=azure-vmextensions-Microsoft.OSTCExtensions.VMAccessForLinux_1.5.11.slice /var/lib/waagent/Microsoft.OSTCExtensions.VMAccessForLinux-1.5.11/processes.sh
+            """
+            try:
+                process_name = "UNKNOWN"
+                cmdline = '/proc/{0}/cmdline'.format(process)
+                if os.path.exists(cmdline):
+                    with open(cmdline, "r") as cmdline_file:
+                        process_name = "{0}".format(cmdline_file.read())
+                match = re.search(r'systemd-run.*--unit=.*--scope.*--slice=azure-vmextensions.*', process_name)
+                if match is not None:
+                    return True
+            except Exception:
+                pass
+            return False
+
+        @staticmethod
+        def _report_agent_cgroups_procs(agent_cgroup_proc_names, unexpected):
+            for proc_name in unexpected:
+                if 'UNKNOWN' in proc_name:
+                    msg = "Agent includes following processes when UNKNOWN process found: {0}".format("\n".join([ustr(proc) for proc in agent_cgroup_proc_names]))
+                    add_event(op=WALAEventOperation.CGroupsInfo, message=msg)
+
+        @staticmethod
         def _check_agent_throttled_time(cgroup_metrics):
             for metric in cgroup_metrics:
                 if metric.instance == AGENT_NAME_TELEMETRY and metric.counter == MetricsCounter.THROTTLED_TIME:
                     if metric.value > conf.get_agent_cpu_throttled_time_threshold():
                         raise CGroupsException("The agent has been throttled for {0} seconds".format(metric.value))
+
+        def check_agent_memory_usage(self):
+            if self.enabled() and self._agent_memory_cgroup:
+                metrics = self._agent_memory_cgroup.get_tracked_metrics()
+                current_usage = 0
+                for metric in metrics:
+                    if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
+                        current_usage += metric.value
+                    elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
+                        current_usage += metric.value
+
+                if current_usage > conf.get_agent_memory_quota():
+                    raise AgentMemoryExceededException("The agent memory limit {0} bytes exceeded. The current reported usage is {1} bytes.".format(conf.get_agent_memory_quota(), current_usage))
 
         @staticmethod
         def _get_parent(pid):
@@ -875,7 +926,10 @@ class CGroupConfigurator(object):
                                                     SystemdCgroupsApi.get_extension_slice_name(extension_name))
                 try:
                     cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
-                    _log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}", extension_name, cpu_quota)
+                    if cpu_quota == "":
+                        _log_cgroup_info("CPUQuota not set for {0}", extension_name)
+                    else:
+                        _log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}", extension_name, cpu_quota)
                     slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name,
                                                                       cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)

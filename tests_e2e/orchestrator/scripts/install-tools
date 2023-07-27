@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+# Microsoft Azure Linux Agent
+#
+# Copyright 2018 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#
+# Installs the tools in ~/bin/scripts/* to ~/bin, as well as Pypy.
+#
+# It also makes Pypy the default python for the current user.
+#
+
+set -euo pipefail
+
+PATH="$HOME/bin:$PATH"
+
+python=$(get-agent-python)
+echo "Python executable: $python"
+echo "Python version: $($python --version)"
+
+#
+# Install Pypy as ~/bin/pypy3
+#
+# Note that bzip2/lbzip2 (used by tar to uncompress *.bz2 files) are not available by default in some distros;
+# use Python to uncompress the Pypy tarball.
+#
+echo "Installing Pypy 3.7"
+$python ~/bin/uncompress.py ~/tmp/pypy3.7-*.tar.bz2 ~/tmp/pypy3.7.tar
+tar xf ~/tmp/pypy3.7.tar -C ~/bin
+echo "Pypy was installed in $(ls -d ~/bin/pypy*)"
+ln -s ~/bin/pypy*/bin/pypy3.7 ~/bin/pypy3
+echo "Creating symbolic link to Pypy: ~/bin/pypy3"
+
+#
+# The 'distro' and 'platform' modules in Pypy have small differences with the ones in the system's Python.
+# This can create problems in tests that use the get_distro() method in the Agent's 'version.py' module.
+# To work around this, we copy the system's 'distro' module to Pypy.
+#
+# In the case of 'platform', the 'linux_distribution' method was removed on Python 3.7 so we check the
+# system's module and, if the method does not exist, we also remove it from Pypy. Ubuntu 16 and 18 are
+# special cases in that the 'platform' module in Pypy identifies the distro as 'debian'; in this case we
+# copy the system's 'platform' module to Pypy.
+#
+distro_path=$($python -c '
+try:
+    import distro
+except:
+    exit(0)
+print(distro.__file__.replace("__init__.py", "distro.py"))
+exit(0)
+')
+if [[ "$distro_path" != "" ]]; then
+  echo "Copying the system's distro module to Pypy"
+  cp -v "$distro_path" ~/bin/pypy*/site-packages
+else
+  echo "The distro module is not is not installing on the system; skipping."
+fi
+
+has_linux_distribution=$($python -c 'import platform; print(hasattr(platform, "linux_distribution"))')
+if [[ "$has_linux_distribution" == "False" ]]; then
+  echo "Python does not have platform.linux_distribution; removing it from Pypy"
+  sed -i 's/def linux_distribution(/def __linux_distribution__(/' ~/bin/pypy*/lib-python/3/platform.py
+else
+  echo "Python has platform.linux_distribution"
+  uname=$(uname -v)
+  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* ]]; then
+    echo "Copying the system's platform module to Pypy"
+    pypy_platform=$(pypy3 -c 'import platform; print(platform.__file__)')
+    python_platform=$($python -c 'import platform; print(platform.__file__)')
+    cp -v "$python_platform" "$pypy_platform"
+  fi
+fi
+
+#
+# Now install the test Agent as a module package in Pypy.
+#
+echo "Installing Agent modules to Pypy"
+unzip.py ~/tmp/WALinuxAgent-*.zip ~/tmp/WALinuxAgent
+unzip.py ~/tmp/WALinuxAgent/bin/WALinuxAgent-*.egg ~/tmp/WALinuxAgent/bin/WALinuxAgent.egg
+mv ~/tmp/WALinuxAgent/bin/WALinuxAgent.egg/azurelinuxagent ~/bin/pypy*/site-packages
+
+#
+# Log the results of get_distro() in Pypy and Python.
+#
+pypy_get_distro=$(pypy3 -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
+python_get_distro=$($python -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
+echo "Pypy   get_distro(): $pypy_get_distro"
+echo "Python get_distro(): $python_get_distro"
+
+#
+# Create ~/bin/set-agent-env to set PATH and PYTHONPATH.
+#
+# We append $HOME/bin to PATH and set PYTHONPATH to $HOME/lib (bin contains the scripts used by tests, while
+# lib contains the Python libraries used by tests).
+#
+echo "Creating ~/bin/set-agent-env to set PATH and PYTHONPATH"
+
+echo "
+if [[ \$PATH != *\"$HOME/bin\"* ]]; then
+  PATH=\"$HOME/bin:\$PATH:\"
+fi
+
+export PYTHONPATH=\"$HOME/lib\"
+" > ~/bin/set-agent-env
+
+chmod u+x ~/bin/set-agent-env
+
+#
+# Add ~/bin/set-agent-env to .bash_profile to simplify interactive debugging sessions
+#
+# Note that in some distros .bash_profile is a symbolic link to a read-only file. Make a copy in that case.
+#
+echo "Adding ~/bin/set-agent-env to ~/.bash_profile"
+if test -e ~/.bash_profile && ls -l .bash_profile | grep '\->'; then
+  cp ~/.bash_profile ~/.bash_profile-bk
+  rm ~/.bash_profile
+  mv ~/.bash_profile-bk ~/.bash_profile
+fi
+if ! test -e ~/.bash_profile || ! grep '~/bin/set-agent-env' ~/.bash_profile > /dev/null; then
+  echo 'source ~/bin/set-agent-env
+' >> ~/.bash_profile
+fi

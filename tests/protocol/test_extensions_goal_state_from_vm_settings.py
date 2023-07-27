@@ -58,6 +58,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
         data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
         with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
             goal_state = GoalState(protocol.client)
             families = goal_state.extensions_goal_state.agent_families
             for family in families:

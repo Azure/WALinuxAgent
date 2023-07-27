@@ -91,6 +91,7 @@ _MOCKED_PATHS = [
 
 class UnitFilePaths:
     walinuxagent = "/lib/systemd/system/walinuxagent.service"
+    logcollector = "/lib/systemd/system/azure-walinuxagent-logcollector.slice"
     azure = "/lib/systemd/system/azure.slice"
     vmextensions = "/lib/systemd/system/azure-vmextensions.slice"
     extensionslice = "/lib/systemd/system/azure-vmextensions-Microsoft.CPlat.Extension.slice"

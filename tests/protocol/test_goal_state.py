@@ -14,7 +14,8 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateInconsistentError, _GET_GOAL_STATE_MAX_ATTEMPTS
+from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateInconsistentError, \
+    _GET_GOAL_STATE_MAX_ATTEMPTS, GoalStateProperties
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
@@ -27,6 +28,7 @@ from tests.tools import AgentTestCase, patch, load_data
 class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
     def test_it_should_use_vm_settings_by_default(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            protocol.mock_wire_data.set_etag(888)
             extensions_goal_state = GoalState(protocol.client).extensions_goal_state
             self.assertTrue(
                 isinstance(extensions_goal_state, ExtensionsGoalStateFromVmSettings),
@@ -155,11 +157,12 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             protocol.set_http_handlers(http_get_handler=None)
             goal_state.update()
             self._assert_directory_contents(
-                self._find_history_subdirectory("234-987"), ["VmSettings.json"])
+                self._find_history_subdirectory("234-987"), ["VmSettings.json", "Certificates.json"])
 
     def test_it_should_redact_the_protected_settings_when_saving_to_the_history_directory(self):
         with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(888)
+            protocol.mock_wire_data.set_etag(888)
 
             goal_state = GoalState(protocol.client)
 
@@ -172,7 +175,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             if len(protected_settings) == 0:
                 raise Exception("The test goal state does not include any protected settings")
 
-            history_directory = self._find_history_subdirectory("888-1")
+            history_directory = self._find_history_subdirectory("888-888")
             extensions_config_file = os.path.join(history_directory, "ExtensionsConfig.xml")
             vm_settings_file = os.path.join(history_directory, "VmSettings.json")
             for file_name in extensions_config_file, vm_settings_file:
@@ -197,7 +200,6 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
             data_file["vm_settings"] = invalid_vm_settings_file
             protocol.mock_wire_data = mockwiredata.WireProtocolData(data_file)
-            protocol.mock_wire_data.set_etag(888)
 
             with self.assertRaises(ProtocolError):  # the parsing error will cause an exception
                 _ = GoalState(protocol.client)
@@ -205,6 +207,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             # Do an extra call to update the goal state; this should save the vmsettings to the history directory
             # only once (self._find_history_subdirectory asserts 1 single match)
             time.sleep(0.1)  # add a short delay to ensure that a new timestamp would be saved in the history folder
+            protocol.mock_wire_data.set_etag(888)
             with self.assertRaises(ProtocolError):
                 _ = GoalState(protocol.client)
 
@@ -374,12 +377,62 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
         with mock_wire_protocol(data_file) as protocol:
             data_file["vm_settings"] = "hostgaplugin/vm_settings-missing_cert.json"
             protocol.mock_wire_data.reload()
+            protocol.mock_wire_data.set_etag(888)
 
             with self.assertRaises(GoalStateInconsistentError) as context:
                 _ = GoalState(protocol.client)
 
             expected_message = "Certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C needed by Microsoft.OSTCExtensions.VMAccessForLinux is missing from the goal state"
             self.assertIn(expected_message, str(context.exception))
+
+    def test_it_should_download_certs_on_a_new_fast_track_goal_state(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+
+        with mock_wire_protocol(data_file) as protocol:
+            goal_state = GoalState(protocol.client)
+
+            cert = "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F"
+            crt_path = os.path.join(self.tmp_dir, cert + ".crt")
+            prv_path = os.path.join(self.tmp_dir, cert + ".prv")
+
+            # Check that crt and prv files are downloaded after processing goal state
+            self.assertTrue(os.path.isfile(crt_path))
+            self.assertTrue(os.path.isfile(prv_path))
+
+            # Remove .crt file
+            os.remove(crt_path)
+            if os.path.isfile(crt_path):
+                raise Exception("{0}.crt was not removed.".format(cert))
+
+            # Update goal state and check that .crt was downloaded
+            protocol.mock_wire_data.set_etag(888)
+            goal_state.update()
+            self.assertTrue(os.path.isfile(crt_path))
+
+    def test_it_should_download_certs_on_a_new_fabric_goal_state(self):
+        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.Fabric)
+            goal_state = GoalState(protocol.client)
+
+            cert = "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F"
+            crt_path = os.path.join(self.tmp_dir, cert + ".crt")
+            prv_path = os.path.join(self.tmp_dir, cert + ".prv")
+
+            # Check that crt and prv files are downloaded after processing goal state
+            self.assertTrue(os.path.isfile(crt_path))
+            self.assertTrue(os.path.isfile(prv_path))
+
+            # Remove .crt file
+            os.remove(crt_path)
+            if os.path.isfile(crt_path):
+                raise Exception("{0}.crt was not removed.".format(cert))
+
+            # Update goal state and check that .crt was downloaded
+            protocol.mock_wire_data.set_incarnation(999)
+            goal_state.update()
+            self.assertTrue(os.path.isfile(crt_path))
 
     def test_it_should_refresh_the_goal_state_when_it_is_inconsistent(self):
         #
@@ -411,7 +464,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state = GoalState(protocol.client)
 
             self.assertEqual(2, protocol.mock_wire_data.call_counts['goalstate'], "There should have been exactly 2 requests for the goal state (original + refresh)")
-            self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
+            self.assertEqual(4, http_get_handler.certificate_requests, "There should have been exactly 4 requests for the goal state certificates (2x original + 2x refresh)")
 
             thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
 
@@ -419,3 +472,74 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 for settings in extension.settings:
                     if settings.protectedSettings is not None:
                         self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
+
+    def test_it_should_raise_when_goal_state_properties_not_initialized(self):
+        with GoalStateTestCase._create_protocol_ws_and_hgap_in_sync() as protocol:
+            goal_state = GoalState(
+                protocol.client,
+                goal_state_properties=~GoalStateProperties.All)
+
+            goal_state.update()
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.container_id
+
+            expected_message = "ContainerId is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.role_config_name
+
+            expected_message = "RoleConfig is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.role_instance_id
+
+            expected_message = "RoleInstanceId is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.extensions_goal_state
+
+            expected_message = "ExtensionsGoalState is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.hosting_env
+
+            expected_message = "HostingEnvironment is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.certs
+
+            expected_message = "Certificates is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.shared_conf
+
+            expected_message = "SharedConfig is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.remote_access
+
+            expected_message = "RemoteAccessInfo is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))
+
+            goal_state = GoalState(
+                protocol.client,
+                goal_state_properties=GoalStateProperties.All & ~GoalStateProperties.HostingEnv)
+
+            goal_state.update()
+
+            _ = goal_state.container_id, goal_state.role_instance_id, goal_state.role_config_name, \
+                goal_state.extensions_goal_state, goal_state.certs, goal_state.shared_conf, goal_state.remote_access
+
+            with self.assertRaises(ProtocolError) as context:
+                _ = goal_state.hosting_env
+
+            expected_message = "HostingEnvironment is not in goal state properties"
+            self.assertIn(expected_message, str(context.exception))

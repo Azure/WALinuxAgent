@@ -19,7 +19,9 @@
 import json
 import os
 import random
+import shutil
 import time
+import zipfile
 
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -35,7 +37,8 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
-from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME
+from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
+    GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
@@ -70,7 +73,7 @@ class WireProtocol(DataContract):
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
 
-    def detect(self):
+    def detect(self, init_goal_state=True):
         self.client.check_wire_protocol_version()
 
         trans_prv_file = os.path.join(conf.get_lib_dir(),
@@ -81,11 +84,9 @@ class WireProtocol(DataContract):
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         # Initialize the goal state, including all the inner properties
-        logger.info('Initializing goal state during protocol detection')
-        self.client.update_goal_state(force_update=True)
-
-    def update_goal_state(self, silent=False):
-        self.client.update_goal_state(silent=silent)
+        if init_goal_state:
+            logger.info('Initializing goal state during protocol detection')
+            self.client.reset_goal_state()
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -604,25 +605,29 @@ class WireClient(object):
 
         return self._download_with_fallback_channel(download_type, uris, direct_download=direct_download, hgap_download=hgap_download)
 
-    def download_extension(self, uris, destination, use_verify_header, on_downloaded=lambda: True):
+    def download_zip_package(self, package_type, uris, target_file, target_directory, use_verify_header):
         """
-        Walks the given list of 'uris' issuing HTTP GET requests and saves the content of the first successful request to 'destination'.
+        Downloads the ZIP package specified in 'uris' (which is a list of alternate locations for the ZIP), saving it to 'target_file' and then expanding
+        its contents to 'target_directory'. Deletes the target file after it has been expanded.
 
-        When the download is successful, this method invokes the 'on_downloaded' callback function, which can be used to process the results of the download.
-        on_downloaded() should return True on success and False on failure (it should not raise any exceptions); ff the return value is False, the download
-        is considered a failure and the next URI is tried.
+        The 'package_type' is only used in log messages and has no other semantics. It should specify the contents of the ZIP, e.g. "extension package"
+        or "agent package"
+
+        The 'use_verify_header' parameter indicates whether the verify header should be added when using the extensionArtifact API of the HostGAPlugin.
         """
         host_ga_plugin = self.get_host_plugin()
 
-        direct_download = lambda uri: self.stream(uri, destination, headers=None, use_proxy=True)
+        direct_download = lambda uri: self.stream(uri, target_file, headers=None, use_proxy=True)
 
         def hgap_download(uri):
             request_uri, request_headers = host_ga_plugin.get_artifact_request(uri, use_verify_header=use_verify_header, artifact_manifest_url=host_ga_plugin.manifest_uri)
-            return self.stream(request_uri, destination, headers=request_headers, use_proxy=False)
+            return self.stream(request_uri, target_file, headers=request_headers, use_proxy=False)
 
-        self._download_with_fallback_channel("extension package", uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
+        on_downloaded = lambda: WireClient._try_expand_zip_package(package_type, target_file, target_directory)
 
-    def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=lambda: True):
+        self._download_with_fallback_channel(package_type, uris, direct_download=direct_download, hgap_download=hgap_download, on_downloaded=on_downloaded)
+
+    def _download_with_fallback_channel(self, download_type, uris, direct_download, hgap_download, on_downloaded=None):
         """
         Walks the given list of 'uris' issuing HTTP GET requests, attempting to download the content of each URI. The download is done using both the default and
         the fallback channels, until one of them succeeds. The 'direct_download' and 'hgap_download' functions define the logic to do direct calls to the URI or
@@ -630,9 +635,9 @@ class WireClient(object):
         but the default can be depending on the success/failure of each channel (see _download_using_appropriate_channel() for the logic to do this).
 
         The 'download_type' is added to any log messages produced by this method; it should describe the type of content of the given URIs
-        (e.g. "manifest", "extension package", etc).
+        (e.g. "manifest", "extension package, "agent package", etc).
 
-        When the download is successful download_extension() invokes the 'on_downloaded' function, which can be used to process the results of the download. This
+        When the download is successful, _download_with_fallback_channel invokes the 'on_downloaded' function, which can be used to process the results of the download. This
         function should return True on success, and False on failure (it should not raise any exceptions). If the return value is False, the download is considered
         a failure and the next URI is tried.
 
@@ -641,7 +646,7 @@ class WireClient(object):
 
         This method enforces a timeout (_DOWNLOAD_TIMEOUT) on the download and raises an exception if the limit is exceeded.
         """
-        logger.verbose("Downloading {0}", download_type)
+        logger.info("Downloading {0}", download_type)
         start_time = datetime.now()
 
         uris_shuffled = uris
@@ -658,13 +663,33 @@ class WireClient(object):
                 # Disable W0640: OK to use uri in a lambda within the loop's body
                 response = self._download_using_appropriate_channel(lambda: direct_download(uri), lambda: hgap_download(uri))  # pylint: disable=W0640
 
-                if on_downloaded():
-                    return uri, response
+                if on_downloaded is not None:
+                    on_downloaded()
 
+                return uri, response
             except Exception as exception:
                 most_recent_error = exception
 
         raise ExtensionDownloadError("Failed to download {0} from all URIs. Last error: {1}".format(download_type, ustr(most_recent_error)), code=ExtensionErrorCodes.PluginManifestDownloadError)
+
+    @staticmethod
+    def _try_expand_zip_package(package_type, target_file, target_directory):
+        logger.info("Unzipping {0}: {1}", package_type, target_file)
+        try:
+            zipfile.ZipFile(target_file).extractall(target_directory)
+        except Exception as exception:
+            logger.error("Error while unzipping {0}: {1}", package_type, ustr(exception))
+            if os.path.exists(target_directory):
+                try:
+                    shutil.rmtree(target_directory)
+                except Exception as exception:
+                    logger.warn("Cannot delete {0}: {1}", target_directory, ustr(exception))
+            raise
+        finally:
+            try:
+                os.remove(target_file)
+            except Exception as exception:
+                logger.warn("Cannot delete {0}: {1}", target_file, ustr(exception))
 
     def stream(self, uri, destination, headers=None, use_proxy=None):
         """
@@ -752,18 +777,30 @@ class WireClient(object):
             self._host_plugin.update_container_id(container_id)
             self._host_plugin.update_role_config_name(role_config_name)
 
-    def update_goal_state(self, force_update=False, silent=False):
+    def update_goal_state(self, silent=False):
         """
-        Updates the goal state if the incarnation or etag changed or if 'force_update' is True
+        Updates the goal state if the incarnation or etag changed
         """
         try:
-            if force_update and not silent:
-                logger.info("Forcing an update of the goal state.")
-
-            if self._goal_state is None or force_update:
+            if self._goal_state is None:
                 self._goal_state = GoalState(self, silent=silent)
             else:
                 self._goal_state.update(silent=silent)
+
+        except ProtocolError:
+            raise
+        except Exception as exception:
+            raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
+
+    def reset_goal_state(self, goal_state_properties=GoalStateProperties.All, silent=False):
+        """
+        Resets the goal state
+        """
+        try:
+            if not silent:
+                logger.info("Forcing an update of the goal state.")
+
+            self._goal_state = GoalState(self, goal_state_properties=goal_state_properties, silent=silent)
 
         except ProtocolError:
             raise
@@ -899,7 +936,7 @@ class WireClient(object):
 
         if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
-            self.update_goal_state(force_update=True, silent=True)
+            self.reset_goal_state(silent=True)
             extensions_goal_state = self.get_goal_state().extensions_goal_state
 
             if extensions_goal_state.status_upload_blob is None:

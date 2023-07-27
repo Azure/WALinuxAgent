@@ -31,9 +31,8 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
-    ExtensionStatusError, _DEFAULT_SEQ_NO
-from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol
+    ExtensionStatusError, _DEFAULT_SEQ_NO, get_exthandlers_handler, ExtHandlerState
+from tests.protocol.mocks import mock_wire_protocol, mockwiredata
 from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
@@ -287,6 +286,29 @@ class TestExtHandlers(AgentTestCase):
 
         with open(log_file_path) as truncated_log_file:
             self.assertEqual(truncated_log_file.read(), "{second_line}\n".format(second_line=second_line))
+
+    def test_it_should_report_the_message_in_the_hearbeat(self):
+        def heartbeat_with_message():
+            return {'code': 0, 'formattedMessage': {'lang': 'en-US', 'message': 'This is a heartbeat message'},
+                    'status': 'ready'}
+
+        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+            with patch("azurelinuxagent.common.protocol.wire.WireProtocol.report_vm_status", return_value=None):
+                with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat",
+                           side_effect=heartbeat_with_message):
+                    with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_state",
+                               return_value=ExtHandlerState.Enabled):
+                        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_ext_status",
+                                   return_value=None):
+                            exthandlers_handler = get_exthandlers_handler(protocol)
+                            exthandlers_handler.run()
+                            vm_status = exthandlers_handler.report_ext_handlers_status()
+                            ext_handler = vm_status.vmAgent.extensionHandlers[0]
+                            self.assertEqual(ext_handler.message,
+                                             heartbeat_with_message().get('formattedMessage').get('message'),
+                                             "Extension handler messages don't match")
+                            self.assertEqual(ext_handler.status, heartbeat_with_message().get('status'),
+                                             "Extension handler statuses don't match")
 
 class LaunchCommandTestCase(AgentTestCase):
     """

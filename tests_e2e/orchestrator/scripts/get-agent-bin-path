@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+# Microsoft Azure Linux Agent
+#
+# Copyright 2018 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#
+# Returns the path for the 'waagent' command.
+#
+set -euo pipefail
+
+# On most distros, 'waagent' is in PATH
+if which waagent 2> /dev/null; then
+  exit 0
+fi
+
+# if the agent is running, get the path from 'cmdline' in the /proc file system
+if test -e /run/waagent.pid; then
+  cmdline="/proc/$(cat /run/waagent.pid)/cmdline"
+  if test -e "$cmdline"; then
+    # cmdline is a sequence of null-terminated strings; break into lines and look for waagent
+    if tr '\0' '\n' < "$cmdline" | grep waagent; then
+      exit 0
+    fi
+  fi
+fi
+
+# try some well-known locations
+declare -a known_locations=(
+  "/usr/sbin/waagent"
+  "/usr/share/oem/bin/waagent"
+)
+
+for path in "${known_locations[@]}"
+do
+    if [[ -e $path ]]; then
+      echo "$path"
+      exit 0
+    fi
+done
+
+echo "Can't find the path for the 'waagent' command" >&2
+exit 1

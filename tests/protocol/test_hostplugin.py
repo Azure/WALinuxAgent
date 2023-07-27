@@ -163,7 +163,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
             yield protocol
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
-    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    @patch("azurelinuxagent.common.protocol.hostplugin.restutil.http_get")
     @patch("azurelinuxagent.common.protocol.hostplugin.add_event")
     def assert_ensure_initialized(self, patch_event, patch_http_get, patch_report_health,
                                   response_body,
@@ -244,7 +244,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             wire_protocol.client.upload_status_blob()
@@ -277,7 +277,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             wire_protocol.client.upload_status_blob()
@@ -311,7 +311,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             wire_protocol.client.upload_status_blob()
@@ -345,7 +345,7 @@ class TestHostPlugin(HttpRequestPredicates, AgentTestCase):
         with self.create_mock_protocol() as wire_protocol:
             wire.HostPluginProtocol.is_default_channel = False
 
-            wire_protocol.update_goal_state()
+            wire_protocol.client.update_goal_state()
 
             # act
             self.assertRaises(wire.ProtocolError, wire_protocol.client.upload_status_blob)
@@ -998,7 +998,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
 
             # A fabric goal state should remove the state file
             protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.Fabric)
-
+            protocol.mock_wire_data.set_etag(888)
             _ = host_ga_plugin.fetch_vm_settings()
 
             self.assertFalse(os.path.exists(state_file), "{0} was not removed by a Fabric goal state".format(state_file))
