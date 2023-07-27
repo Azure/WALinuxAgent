@@ -294,10 +294,10 @@ class AgentTestSuite(LisaTestSuite):
         #
         if self.context.ssh_client.get_architecture() == "aarch64":
             pypy_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
-            pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-aarch64.tar.bz2"
+            pypy_download = "https://dcrdata.blob.core.windows.net/python/pypy3.7-arm64.tar.bz2"
         else:
             pypy_path = Path("/tmp/pypy3.7-x64.tar.bz2")
-            pypy_download = "https://downloads.python.org/pypy/pypy3.7-v7.3.5-linux64.tar.bz2"
+            pypy_download = "https://dcrdata.blob.core.windows.net/python/pypy3.7-x64.tar.bz2"
         if pypy_path.exists():
             log.info("Found Pypy at %s", pypy_path)
         else:
