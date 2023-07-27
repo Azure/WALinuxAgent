@@ -58,7 +58,12 @@ class AgentUpdateHandler(object):
         largest version update(self-update):
             update is allowed once per (as specified in the conf.get_hotfix_upgrade_frequency() or conf.get_normal_upgrade_frequency())
             return false when we don't allow updates.
+        Note: Downgrades are not allowed for self-update.
         """
+
+        if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
+            return False
+
         now = datetime.datetime.now()
 
         if self._is_requested_version_update:
@@ -260,6 +265,19 @@ class AgentUpdateHandler(object):
     def __get_all_agents_on_disk():
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         return [GuestAgent.from_installed_agent(path=agent_dir) for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)]
+
+    def __check_if_downgrade_is_requested_and_allowed(self, requested_version):
+        """
+        Don't allow downgrades for self-update version
+        Note: The intention of this check is to keep the original behavior of self-update as it is.
+        """
+        if not self._is_requested_version_update:
+            if requested_version < CURRENT_VERSION:
+                msg = "Downgrade requested in the GoalState, but downgrades are not supported for self-update version:{0}, " \
+                      "skipping agent update".format(requested_version)
+                self.__log_event(LogLevel.INFO, msg)
+                return False
+        return True
 
     @staticmethod
     def __log_event(level, msg, success=True):

@@ -148,6 +148,14 @@ class TestAgentUpdate(UpdateTestCase):
                         self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
                         self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
 
+    def test_it_should_not_allow_update_if_largest_version_below_current_version(self):
+        self.prepare_agents(count=1)
+        data_file = DATA_FILE.copy()
+        data_file["ga_manifest"] = "wire/ga_manifest_no_upgrade.xml"
+        with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
+
     def test_it_should_not_agent_update_if_last_attempted_update_time_not_elapsed(self):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
