@@ -18,7 +18,7 @@
 #
 
 #
-# A sample remote test that simulates an unexpected error
+# A sample remote test that passes
 #
 
 from tests_e2e.tests.lib.logging import log
