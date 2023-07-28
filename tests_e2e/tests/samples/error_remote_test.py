@@ -17,17 +17,16 @@
 # limitations under the License.
 #
 
-from assertpy import fail
 from tests_e2e.tests.lib.agent_test import AgentTest
 
 
-class FailTest(AgentTest):
+class ErrorRemoteTest(AgentTest):
     """
-    A trivial test that fails
+    A trivial remote test that fails
     """
     def run(self):
-        fail("* FAILED *")
+        self._run_remote_test("samples-error_remote_test.py")
 
 
 if __name__ == "__main__":
-    FailTest.run_from_command_line()
+    ErrorRemoteTest.run_from_command_line()

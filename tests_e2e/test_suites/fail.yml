@@ -1,5 +1,7 @@
 name: "Fail"
 tests:
-  - "fail_test.py"
-  - "error_test.py"
-images: "ubuntu_1804"
+  - "samples/fail_test.py"
+  - "samples/fail_remote_test.py"
+  - "samples/error_test.py"
+  - "samples/error_remote_test.py"
+images: "ubuntu_2004"
