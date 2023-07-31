@@ -22,10 +22,11 @@ import argparse
 import sys
 import logging
 
+from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.retry import retry_if_false, retry
 
 
 def get_requested_version(gs: GoalState) -> str:
@@ -41,7 +42,7 @@ def get_requested_version(gs: GoalState) -> str:
 
 
 def verify_rsm_requested_version(wire_protocol: WireProtocol, expected_version: str) -> bool:
-    wire_protocol.client.update_goal_state()
+    retry(wire_protocol.client.update_goal_state())
     goal_state = wire_protocol.client.get_goal_state()
     requested_version = get_requested_version(goal_state)
     if requested_version == expected_version:
@@ -56,8 +57,8 @@ try:
     args = parser.parse_args()
 
     protocol = get_protocol_util().get_protocol(init_goal_state=False)
-    protocol.client.reset_goal_state(
-        goal_state_properties=GoalStateProperties.ExtensionsGoalState)
+    retry(protocol.client.reset_goal_state(
+        goal_state_properties=GoalStateProperties.ExtensionsGoalState))
 
     found: bool = retry_if_false(lambda: verify_rsm_requested_version(protocol, args.version))
 
@@ -68,7 +69,11 @@ try:
 
 
 except Exception as e:
-    print(f"{e}", file=sys.stderr)
+    msg = ""
+    if isinstance(e, ProtocolError):
+        msg = "The check agent log will report protocol errors if those can't be ignored and/or permanent failure, so no need to follow up test error in this case:\n"
+    msg += "{0}".format(e)
+    print(f"{msg}", file=sys.stderr)
     sys.exit(1)
 
 sys.exit(0)
