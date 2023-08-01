@@ -20,9 +20,9 @@
 #
 import glob
 import json
-import logging
-import sys
 
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
 
 
@@ -32,7 +32,7 @@ def check_agent_supports_versioning() -> bool:
     for file in file_paths:
         with open(file, 'r') as f:
             data = json.load(f)
-            logging.info("Agent status file is %s and it's content %s", file, data)
+            log.info("Agent status file is %s and it's content %s", file, data)
             status = data["__status__"]
             supported_features = status["supportedFeatures"]
             for supported_feature in supported_features:
@@ -41,13 +41,15 @@ def check_agent_supports_versioning() -> bool:
     return False
 
 
-try:
+def main():
+    log.info("checking agent status file for VersioningGovernance supported feature flag")
     found: bool = retry_if_false(check_agent_supports_versioning)
     if not found:
-        raise Exception("Agent failed to report supported feature flag, so skipping agent update validations")
+        raise Exception("Agent failed to report supported feature flag. So, skipping agent update validations "
+                        "since CRP will not send RSM requested version in GS if feature flag not found in status")
 
-except Exception as e:
-    print(f"{e}", file=sys.stderr)
-    sys.exit(1)
 
-sys.exit(0)
+run_remote_test(main)
+
+
+
