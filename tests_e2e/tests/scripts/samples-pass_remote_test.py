@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env pypy3
 
 # Microsoft Azure Linux Agent
 #
@@ -17,16 +17,20 @@
 # limitations under the License.
 #
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+#
+# A sample remote test that passes
+#
+
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
 
 
-class ErrorTest(AgentTest):
-    """
-    A trivial test that errors out
-    """
-    def run(self):
-        raise Exception("* ERROR *")
+def main():
+    log.info("Setting up test")
+    log.info("Doing some operation")
+    log.warning("Something went wrong, but the test can continue")
+    log.info("Doing some other operation")
+    log.info("All verifications succeeded")
 
 
-if __name__ == "__main__":
-    ErrorTest.run_from_command_line()
+run_remote_test(main)
