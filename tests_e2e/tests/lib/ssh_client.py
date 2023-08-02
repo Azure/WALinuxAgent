@@ -67,9 +67,9 @@ class SshClient(object):
 
     def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
-        File copy to a remote node
+        File copy to a remote node and returns its stdout.
         """
-        self._copy(local_path, remote_path, remote_source=False, remote_target=True, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
+        return self._copy(local_path, remote_path, remote_source=False, remote_target=True, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
 
     def copy_from_node(self, remote_path: Path, local_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
