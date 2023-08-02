@@ -83,7 +83,7 @@ class SshClient(object):
         if remote_target:
             target = f"{self._username}@{self._ip_address}:{target}"
 
-        command = ["scp", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file]
+        command = ["scp", "-v", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file]
         if recursive:
             command.append("-r")
         command.extend([str(source), str(target)])

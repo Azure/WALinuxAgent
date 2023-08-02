@@ -340,10 +340,10 @@ class AgentTestSuite(LisaTestSuite):
         log.info("Copy the tarball, Pypy, and the test Agent to the test node")
         target_path = Path("~")/"tmp"
         self.context.ssh_client.run_command(f"mkdir {target_path}")
-        log.info("Copy %s to %s:%s completed: \n%s", tarball_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(tarball_path, target_path))
-        log.info("Copy %s to %s:%s completed: \n%s", pypy_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(pypy_path, target_path))
+        log.info("Copy %s to %s:%s command completed: \n%s", tarball_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(tarball_path, target_path))
+        log.info("Copy %s to %s:%s command completed: \n%s", pypy_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(pypy_path, target_path))
         agent_package_path: Path = self._get_agent_package_path()
-        log.info("Copy %s to %s:%s completed: \n%s", agent_package_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(agent_package_path, target_path))
+        log.info("Copy %s to %s:%s command completed: \n%s", agent_package_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(agent_package_path, target_path))
 
         #
         # Extract the tarball and execute the install scripts
