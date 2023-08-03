@@ -34,7 +34,7 @@ def verify_if_distro_supports_cgroup():
 
     assert_that(base_cgroup_fs_exists).is_true().describe_as("Cgroup file system:{0} not found in Distro {1}-{2}".format(BASE_CGROUP, DISTRO_NAME, DISTRO_VERSION))
 
-    log.info('\tDistro %s-%s supports cgroups\n', DISTRO_NAME, DISTRO_VERSION)
+    log.info('Distro %s-%s supports cgroups\n', DISTRO_NAME, DISTRO_VERSION)
 
 
 def print_cgroups():
