@@ -345,8 +345,7 @@ class AgentTestSuite(LisaTestSuite):
         agent_package_path: Path = self._get_agent_package_path()
         log.info("Copy %s to %s:%s command completed: \n%s", agent_package_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(agent_package_path, target_path))
 
-
-        log.info("Contents of copied tarball:\n\n%s", run_command(['tar', 'tvf', str(target_path/tarball_path.name)]))
+        log.info("Contents of copied tarball:\n\n%s", self.context.ssh_client.run_command(['tar', 'tvf', str(target_path/tarball_path.name)]))
 
         #
         # Extract the tarball and execute the install scripts
