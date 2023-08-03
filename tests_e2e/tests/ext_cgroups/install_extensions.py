@@ -51,16 +51,15 @@ class InstallExtensions:
         self._install_cse()
 
     def _prepare_agent(self):
-        log.info("=====Updating monitoring deadline for tracking azuremonitoragent service=====")
+        log.info("=====Executing update-waagent-conf remote script to update monitoring deadline flag for tracking azuremonitoragent service")
         future_date = datetime.utcnow() + timedelta(days=2)
         expiry_time = future_date.date().strftime("%Y-%m-%d")
         # Agent needs extension info and it's services info in the handlermanifest.xml to monitor and limit the resource usage.
         # As part of pilot testing , agent hardcoded azuremonitoragent service name to monitor it for sometime in production without need of manifest update from extesnion side.
         # So that they can get sense of resource usage for their extensions. This we did for few months and now we no logner monitoring it in production.
-        # So we are changing the config flag expiry time to future date. So that test agent will start track the cgroups that is used by the service.
+        # But we are changing the config flag expiry time to future date in this test. So that test agent will start track the cgroups that is used by the service.
         result = self._ssh_client.run_command(f"update-waagent-conf Debug.CgroupMonitorExpiryTime={expiry_time}", use_sudo=True)
-        log.info(result)
-        log.info("=====Updated agent cgroups config(CgroupMonitorExpiryTime)=====")
+        log.info("Updated agent cgroups config(CgroupMonitorExpiryTime)")
 
     def _install_ama(self):
         ama_extension = VirtualMachineExtensionClient(

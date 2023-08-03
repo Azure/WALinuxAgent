@@ -18,8 +18,8 @@
 #
 
 import os
-import sys
-import traceback
+
+from assertpy import fail
 
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import verify_if_distro_supports_cgroup, \
@@ -28,21 +28,23 @@ from tests_e2e.tests.lib.cgroup_helpers import verify_if_distro_supports_cgroup,
     check_cgroup_disabled_with_unknown_process, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME, \
     print_cgroups
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
 
 
 def verify_custom_script_cgroup_assigned_correctly():
     """
     This method verifies that the CSE script is created expected folder after install and also checks if CSE ran under the expected cgroups
     """
-    log.info("===== Verifying custom script was assigned to the correct cgroups =====")
+    log.info("===== Verifying custom script was assigned to the correct cgroups")
 
-    # CSE creates this folder to save the output of cgroup information where the CSE script was executed. If CSE process exits after execution,
-    # then cgroup paths gets cleaned up by the system. So this information saved at run time when the extension executed.
+    # CSE creates this folder to save the output of cgroup information where the CSE script was executed. Since CSE process exits after execution,
+    # and cgroup paths gets cleaned up by the system, so this information saved at run time when the extension executed.
     check_temporary_folder_exists()
 
     cpu_mounted = False
+    memory_mounted = False
 
-    log.info("\tcustom script cgroup mounts:")
+    log.info("custom script cgroup mounts:")
 
     with open('/var/lib/waagent/tmp/custom_script_check') as fh:
         controllers = fh.read()
@@ -53,67 +55,84 @@ def verify_custom_script_cgroup_assigned_correctly():
         correct_cpu_mount_v1 = "cpu,cpuacct:{0}".format(extension_path)
         correct_cpu_mount_v2 = "cpuacct,cpu:{0}".format(extension_path)
 
+        correct_memory_mount = "memory:{0}".format(extension_path)
+
         for mounted_controller in controllers.split("\n"):
             if correct_cpu_mount_v1 in mounted_controller or correct_cpu_mount_v2 in mounted_controller:
-                log.info('\tCustom script extension mounted under correct cgroup '
+                log.info('Custom script extension mounted under correct cgroup '
                       'for CPU: %s', mounted_controller)
                 cpu_mounted = True
+            elif correct_memory_mount in mounted_controller:
+                log.info('Custom script extension mounted under correct cgroup '
+                      'for Memory: %s', mounted_controller)
+                memory_mounted = True
 
         if not cpu_mounted:
-            raise Exception('Custom script not mounted correctly! Expected {0} or {1}'.format(correct_cpu_mount_v1, correct_cpu_mount_v2))
+            fail('Custom script not mounted correctly for CPU! Expected {0} or {1}'.format(correct_cpu_mount_v1, correct_cpu_mount_v2))
+
+        if not memory_mounted:
+            fail('Custom script not mounted correctly for Memory! Expected {0}'.format(correct_memory_mount))
 
 
 def check_temporary_folder_exists():
     tmp_folder = "/var/lib/waagent/tmp"
     if not os.path.exists(tmp_folder):
-        raise Exception("Temporary folder {0} was not created which means CSE script did not run!".format(tmp_folder))
+        fail("Temporary folder {0} was not created which means CSE script did not run!".format(tmp_folder))
 
 
 def verify_ext_cgroup_controllers_created_on_file_system():
     """
-    This method ensure that extension cgroup controllers are created on disk after extension install
+    This method ensure that extension cgroup controllers are created on file system after extension install
     """
-    log.info("===== Verifying ext cgroup controllers exist on disk =====")
+    log.info("===== Verifying ext cgroup controllers exist on file system")
 
     all_controllers_present = os.path.exists(BASE_CGROUP)
+    missing_controllers_path = []
+    verified_controllers_path = []
 
     for controller in EXT_CONTROLLERS:
         controller_path = os.path.join(BASE_CGROUP, controller)
         if not os.path.exists(controller_path):
-            log.warning('\tcould not verify controller %s', controller_path)
             all_controllers_present = False
+            missing_controllers_path.append(controller_path)
         else:
-            log.info('\tverified controller %s', controller_path)
+            verified_controllers_path.append(controller_path)
 
     if not all_controllers_present:
-        raise Exception('Not all of the ext controllers {0} present on disk. System mounted cgroups are \n{1}'.format(EXT_CONTROLLERS, print_cgroups()))
+        fail('Expected all of the extension controller: {0} paths present in the file system after extension install. But missing cgroups paths are :{1}\n'
+             'and verified cgroup paths are: {2} \nSystem mounted cgroups are \n{3}'.format(EXT_CONTROLLERS, missing_controllers_path, verified_controllers_path, print_cgroups()))
 
-    log.info('\tVerified extension cgroup controller are present.\n')
+    log.info('Verified all extension cgroup controller paths are present and they are: \n {0}'.format(verified_controllers_path))
 
 
 def verify_extension_service_cgroup_created_on_file_system():
     """
-    This method ensure that extension service cgroup paths are created on disk after running extension
+    This method ensure that extension service cgroup paths are created on file system after running extension
     """
-    log.info("===== Verifying the extension service cgroup paths exist on disk =====")
+    log.info("===== Verifying the extension service cgroup paths exist on file system")
 
     # GA Test Extension Service
     gatestext_cgroup_mount_path = get_unit_cgroup_mount_path(GATESTEXT_SERVICE)
-    verify_extension_service_cgroup_created(gatestext_cgroup_mount_path)
+    verify_extension_service_cgroup_created(GATESTEXT_SERVICE, gatestext_cgroup_mount_path)
 
     # Azure Monitor Extension Service
     azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(AZUREMONITORAGENT_SERVICE)
+    azuremonitoragent_service_name = AZUREMONITORAGENT_SERVICE
+    # Old versions of AMA extension has different service name
     if azuremonitoragent_cgroup_mount_path is None:
         azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(MDSD_SERVICE)
-    verify_extension_service_cgroup_created(azuremonitoragent_cgroup_mount_path)
+        azuremonitoragent_service_name = MDSD_SERVICE
+    verify_extension_service_cgroup_created(azuremonitoragent_service_name, azuremonitoragent_cgroup_mount_path)
 
-    log.info('\tFound the extension service cgroup paths in disk .\n')
+    log.info('Verified all extension service cgroup paths created in file system .\n')
 
 
-def verify_extension_service_cgroup_created(cgroup_mount_path):
-    log.info("\texpected extension service cgroup mount path: %s", cgroup_mount_path)
+def verify_extension_service_cgroup_created(service_name, cgroup_mount_path):
+    log.info("expected extension service cgroup mount path: %s", cgroup_mount_path)
 
     all_controllers_present = True
+    missing_cgroups_path = []
+    verified_cgroups_path = []
 
     for controller in EXT_CONTROLLERS:
         # cgroup_mount_path is similar to /azure.slice/walinuxagent.service
@@ -122,20 +141,21 @@ def verify_extension_service_cgroup_created(cgroup_mount_path):
         extension_service_controller_path = os.path.join(BASE_CGROUP, controller, cgroup_mount_path[1:])
 
         if not os.path.exists(extension_service_controller_path):
-            log.warning('\textension service cgroup does not exist on disk in %s', extension_service_controller_path)
             all_controllers_present = False
+            missing_cgroups_path.append(extension_service_controller_path)
         else:
-            log.info('\tverified extension service cgroup %s exists on disk', extension_service_controller_path)
+            verified_cgroups_path.append(extension_service_controller_path)
 
     if not all_controllers_present:
-        raise Exception("Extension service's cgroup paths couldn't be found on disk. System mounted cgroups are \n{0}".format(print_cgroups()))
+        fail("Extension service: [{0}] cgroup paths couldn't be found on file system. Missing cgroup paths are: {1} \n Verified cgroup paths are: {2} \n "
+             "System mounted cgroups are \n{3}".format(service_name, missing_cgroups_path, verified_cgroups_path, print_cgroups()))
 
 
 def verify_ext_cgroups_tracked():
     """
     Checks if ext cgroups are tracked by the agent. This is verified by checking the agent log for the message "Started tracking cgroup {extension_name}"
     """
-    log.info("===== Verifying ext cgroups tracked =====")
+    log.info("===== Verifying ext cgroups tracked")
 
     cgroups_added_for_telemetry = []
     gatestext_cgroups_tracked = False
@@ -163,29 +183,29 @@ def verify_ext_cgroups_tracked():
 
     # agent, gatest extension, azuremonitor extension and extension service cgroups
     if len(cgroups_added_for_telemetry) < 1:
-        raise Exception('Expected cgroups were not tracked, according to the agent log. '
-                        'Pattern searched for: {0}\n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
+        fail('Expected cgroups were not tracked, according to the agent log. '
+                        'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
     if not gatestext_cgroups_tracked:
-        raise Exception('Expected gatestext cgroups were not tracked, according to the agent log. '
-                        'Pattern searched for: {0}\n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
+        fail('Expected gatestext cgroups were not tracked, according to the agent log. '
+                        'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
     if not azuremonitoragent_cgroups_tracked:
-        raise Exception('Expected azuremonitoragent cgroups were not tracked, according to the agent log. '
-                        'Pattern searched for: {0}\n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
+        fail('Expected azuremonitoragent cgroups were not tracked, according to the agent log. '
+                        'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
     if not gatestext_service_cgroups_tracked:
-        raise Exception('Expected gatestext service cgroups were not tracked, according to the agent log. '
-                        'Pattern searched for: {0}\n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
+        fail('Expected gatestext service cgroups were not tracked, according to the agent log. '
+                        'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
     if not azuremonitoragent_service_cgroups_tracked:
-        raise Exception('Expected azuremonitoragent service cgroups were not tracked, according to the agent log. '
-                        'Pattern searched for: {0}\n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
+        fail('Expected azuremonitoragent service cgroups were not tracked, according to the agent log. '
+                        'Pattern searched for: {0} and found \n{1}'.format(CGROUP_TRACKED_PATTERN.pattern, cgroups_added_for_telemetry))
 
-    log.info("\tExtension cgroups tracked as expected\n%s", cgroups_added_for_telemetry)
+    log.info("Extension cgroups tracked as expected\n%s", cgroups_added_for_telemetry)
 
 
-try:
+def main():
     verify_if_distro_supports_cgroup()
     verify_ext_cgroup_controllers_created_on_file_system()
     verify_custom_script_cgroup_assigned_correctly()
@@ -193,12 +213,12 @@ try:
     verify_extension_service_cgroup_created_on_file_system()
     verify_ext_cgroups_tracked()
 
-    sys.exit(0)
 
+try:
+    run_remote_test(main)
 except Exception as e:
     # It is possible that  agent cgroup can be disabled due to UNKNOWN process or throttled before we run this check, in that case, we should ignore the validation
     if check_agent_quota_disabled() and check_cgroup_disabled_with_unknown_process():
         log.info("Cgroup is disabled due to UNKNOWN process, ignoring ext cgroups validations")
     else:
-        log.error("%s:\n%s", e, traceback.format_exc())
-        sys.exit(1)
+        raise

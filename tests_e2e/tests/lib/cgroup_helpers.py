@@ -1,7 +1,7 @@
 import os
 import re
 
-from assertpy import assert_that
+from assertpy import assert_that, fail
 
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
@@ -92,9 +92,9 @@ def verify_agent_cgroup_assigned_correctly():
     """
     This method checks agent is running and assigned to the correct cgroup using service status output
     """
-    log.info("===== Verifying the daemon and the agent are assigned to the same correct cgroup using systemd =====")
+    log.info("===== Verifying the daemon and the agent are assigned to the same correct cgroup using systemd")
     service_status = shellutil.run_command(["systemctl", "status", systemd.get_agent_unit_name()])
-    log.info("\tAgent service status output:\n%s", service_status)
+    log.info("Agent service status output:\n%s", service_status)
     is_active = False
     is_cgroup_assigned = False
     cgroup_mount_path = get_agent_cgroup_mount_path()
@@ -106,10 +106,12 @@ def verify_agent_cgroup_assigned_correctly():
         elif cgroup_mount_path in line:
             is_cgroup_assigned = True
 
-    if not is_active or not is_cgroup_assigned:
-        raise Exception('walinuxagent service was not active/running or not assigned to the expected cgroup:{0}'.format(cgroup_mount_path))
+    if not is_active:
+        fail('walinuxagent service was not active/running. Service status:{0}'.format(service_status))
+    if not is_cgroup_assigned:
+        fail('walinuxagent service was not assigned to the expected cgroup:{0}'.format(cgroup_mount_path))
 
-    log.info("\tVerified the agent cgroup assigned correctly by systemd\n")
+    log.info("Successfully verified the agent cgroup assigned correctly by systemd\n")
 
 
 def get_agent_cpu_quota():

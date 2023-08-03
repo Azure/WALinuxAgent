@@ -32,12 +32,11 @@ class ExtCgroups(AgentTest):
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
-        log.info("=====Installing extensions=====")
+        log.info("=====Installing extensions to validate ext cgroups scenario")
         InstallExtensions(self._context).run()
-        log.info("=====Validating extension cgroups=====")
-        result = self._ssh_client.run_command("ext_cgroups-check_cgroups_extensions.py", use_sudo=True)
-        log.info(result)
-        log.info("=====Verified that extensions present in correct cgroup=====")
+        log.info("=====Executing remote script check_cgroups_extensions.py to validate extension cgroups")
+        self._run_remote_test("ext_cgroups-check_cgroups_extensions.py", use_sudo=True)
+        log.info("Successfully verified that extensions present in correct cgroup")
 
 
 if __name__ == "__main__":
