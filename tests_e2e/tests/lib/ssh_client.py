@@ -88,4 +88,4 @@ class SshClient(object):
             command.append("-r")
         command.extend([str(source), str(target)])
 
-        retry_ssh_run(lambda: shell.run_command(command), attempts, attempt_delay)
+        return retry_ssh_run(lambda: shell.run_command(command), attempts, attempt_delay)
