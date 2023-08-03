@@ -32,9 +32,8 @@ class AgentCgroups(AgentTest):
 
     def run(self):
         log.info("=====Validating agent cgroups=====")
-        result = self._ssh_client.run_command("agent_cgroups-check_cgroups_agent.py")
-        log.info(result)
-        log.info("Verified that agent present in correct cgroups")
+        self._run_remote_test("agent_cgroups-check_cgroups_agent.py")
+        log.info("Successfully Verified that agent present in correct cgroups")
 
 
 if __name__ == "__main__":

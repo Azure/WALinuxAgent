@@ -1,6 +1,8 @@
 import os
 import re
 
+from assertpy import assert_that
+
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
@@ -26,14 +28,13 @@ def verify_if_distro_supports_cgroup():
     """
     checks if agent is running in a distro that supports cgroups
     """
-    log.info("===== Checking if distro supports cgroups =====")
+    log.info("===== Checking if distro supports cgroups")
 
     base_cgroup_fs_exists = os.path.exists(BASE_CGROUP)
 
-    if not base_cgroup_fs_exists:
-        raise Exception("\tDistro {0}-{1} does not support cgroups -- exiting".format(DISTRO_NAME, DISTRO_VERSION))
-    else:
-        log.info('\tDistro %s-%s supports cgroups\n', DISTRO_NAME, DISTRO_VERSION)
+    assert_that(base_cgroup_fs_exists).is_true().describe_as("Cgroup file system:{0} not found in Distro {1}-{2}".format(BASE_CGROUP, DISTRO_NAME, DISTRO_VERSION))
+
+    log.info('\tDistro %s-%s supports cgroups\n', DISTRO_NAME, DISTRO_VERSION)
 
 
 def print_cgroups():
