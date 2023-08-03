@@ -325,7 +325,8 @@ class AgentTestSuite(LisaTestSuite):
         log.info("Adding tests/lib")
         command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
         log.info("%s\n%s", command, run_command(command, shell=True))
-        log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
+        local_tarball_contents = run_command(['tar', 'tvf', str(tarball_path)])
+        log.info("Contents of %s:\n\n%s", tarball_path, local_tarball_contents)
 
         #
         # Cleanup the test node (useful for developer runs)
@@ -337,16 +338,32 @@ class AgentTestSuite(LisaTestSuite):
         #
         # Copy the tarball, Pypy and the test Agent to the test node
         #
-        log.info("Copy the tarball, Pypy, and the test Agent to the test node")
-        target_path = Path("~")/"tmp"
+        target_path = Path("~") / "tmp"
         self.context.ssh_client.run_command(f"mkdir {target_path}")
-        log.info("Copy %s to %s:%s command completed: \n%s", tarball_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(tarball_path, target_path))
-        log.info("Copy %s to %s:%s command completed: \n%s", pypy_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(pypy_path, target_path))
+        log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(tarball_path, target_path)
+        log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(pypy_path, target_path)
         agent_package_path: Path = self._get_agent_package_path()
-        log.info("Copy %s to %s:%s command completed: \n%s", agent_package_path, self.context.node.name, target_path, self.context.ssh_client.copy_to_node(agent_package_path, target_path))
+        log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(agent_package_path, target_path)
 
-        command = f"tar tvf {target_path / tarball_path.name}"
-        log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
+        #
+        # List the contents of the copied tarball and compare to the contents of the local tarball. If they do not
+        # match, retry the copy command.
+        #
+        retry_tarball_copy = 3
+        contents_match = False
+        while retry_tarball_copy > 0 and not contents_match:
+            test_node_tarball_contents = self.context.ssh_client.run_command(f"tar tvf {target_path / tarball_path.name}")
+            log.info("Contents of %s on the test node:\n\n%s", f"{target_path / tarball_path.name}",
+                     test_node_tarball_contents)
+            if local_tarball_contents == test_node_tarball_contents:
+                contents_match = True
+            else:
+                log.info("Tarball contents on test node do not match local tarball contents - retrying tarball copy...")
+                log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
+                self.context.ssh_client.copy_to_node(tarball_path, target_path)
 
         #
         # Extract the tarball and execute the install scripts
