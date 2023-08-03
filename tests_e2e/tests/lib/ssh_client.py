@@ -65,7 +65,7 @@ class SshClient(object):
     def get_architecture(self):
         return self.run_command("uname -m").rstrip()
 
-    def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
+    def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> str:
         """
         File copy to a remote node and returns its stdout.
         """
@@ -77,7 +77,7 @@ class SshClient(object):
         """
         self._copy(remote_path, local_path, remote_source=True, remote_target=False, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
 
-    def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool, attempts: int, attempt_delay: int) -> None:
+    def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool, attempts: int, attempt_delay: int) -> str:
         if remote_source:
             source = f"{self._username}@{self._ip_address}:{source}"
         if remote_target:
