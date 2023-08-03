@@ -338,7 +338,7 @@ class AgentTestSuite(LisaTestSuite):
         #
         # Copy the tarball, Pypy and the test Agent to the test node
         #
-        target_path = Path("~") / "tmp"
+        target_path = Path("~")/"tmp"
         self.context.ssh_client.run_command(f"mkdir {target_path}")
         log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
         self.context.ssh_client.copy_to_node(tarball_path, target_path)

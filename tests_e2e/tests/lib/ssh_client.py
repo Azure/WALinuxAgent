@@ -65,11 +65,11 @@ class SshClient(object):
     def get_architecture(self):
         return self.run_command("uname -m").rstrip()
 
-    def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> str:
+    def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
-        File copy to a remote node and returns its stdout.
+        File copy to a remote node
         """
-        return self._copy(local_path, remote_path, remote_source=False, remote_target=True, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
+        self._copy(local_path, remote_path, remote_source=False, remote_target=True, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
 
     def copy_from_node(self, remote_path: Path, local_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
@@ -77,15 +77,15 @@ class SshClient(object):
         """
         self._copy(remote_path, local_path, remote_source=True, remote_target=False, recursive=recursive, attempts=attempts, attempt_delay=attempt_delay)
 
-    def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool, attempts: int, attempt_delay: int) -> str:
+    def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool, attempts: int, attempt_delay: int) -> None:
         if remote_source:
             source = f"{self._username}@{self._ip_address}:{source}"
         if remote_target:
             target = f"{self._username}@{self._ip_address}:{target}"
 
-        command = ["scp", "-v", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file]
+        command = ["scp", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file]
         if recursive:
             command.append("-r")
         command.extend([str(source), str(target)])
 
-        return retry_ssh_run(lambda: shell.run_command(command), attempts, attempt_delay)
+        retry_ssh_run(lambda: shell.run_command(command), attempts, attempt_delay)
