@@ -29,6 +29,7 @@ from typing import List, Tuple
 
 from assertpy import fail
 
+from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 
@@ -84,6 +85,9 @@ def get_non_root_drop_rule(command: str) -> List[str]:
 
 
 def execute_cmd(cmd: List[str]):
+    """
+    Note: The shellutil.run_command don't return the exit code of the command. So using subprocess.Popen
+    """
     proc = subprocess.Popen(cmd,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,
@@ -279,7 +283,7 @@ def verify_non_root_accept_rule():
     log.info("Stop Guest Agent service")
     # agent-service is script name and stop is argument
     stop_agent = ["agent-service", "stop"]
-    execute_cmd(stop_agent)
+    shellutil.run_command(stop_agent)
 
     # deleting non root accept rule
     non_root_accept_delete_cmd = get_non_root_accept_rule("-D")
@@ -299,7 +303,7 @@ def verify_non_root_accept_rule():
     log.info("Restart Guest Agent service to re-add the deleted rules")
     # agent-service is script name and start is argument
     start_agent = ["agent-service", "start"]
-    execute_cmd(start_agent)
+    shellutil.run_command(start_agent)
 
     verify_all_rules_exist()
     log.info("** Current IP table rules \n")
@@ -327,7 +331,7 @@ def verify_root_accept_rule():
     log.info("Stop Guest Agent service")
     # agent-service is script name and stop is argument
     stop_agent = ["agent-service", "stop"]
-    execute_cmd(stop_agent)
+    shellutil.run_command(stop_agent)
 
     # deleting root accept rule
     root_accept_delete_cmd = get_root_accept_rule("-D")
@@ -346,7 +350,7 @@ def verify_root_accept_rule():
     log.info("Restart Guest Agent service to re-add the deleted rules")
     # agent-service is script name and start is argument
     start_agent = ["agent-service", "start"]
-    execute_cmd(start_agent)
+    shellutil.run_command(start_agent)
 
     verify_all_rules_exist()
     log.info("** Current IP table rules \n")
@@ -371,7 +375,7 @@ def verify_non_root_dcp_rule():
     log.info("Stop Guest Agent service")
     # agent-service is script name and stop is argument
     stop_agent = ["agent-service", "stop"]
-    execute_cmd(stop_agent)
+    shellutil.run_command(stop_agent)
 
     # deleting non root delete rule
     non_root_drop_delete_cmd = get_non_root_drop_rule("-D")
@@ -390,7 +394,7 @@ def verify_non_root_dcp_rule():
     log.info("Restart Guest Agent service to re-add the deleted rules")
     # agent-service is script name and start is argument
     start_agent = ["agent-service", "start"]
-    execute_cmd(start_agent)
+    shellutil.run_command(start_agent)
 
     verify_all_rules_exist()
     log.info("** Current IP table rules\n")
