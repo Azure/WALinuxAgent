@@ -233,7 +233,7 @@ def verify_http_to_wireserver_blocked(user: str) -> None:
     try:
         client = httpclient.HTTPConnection(get_wireserver_ip(), timeout=1)
     except Exception as e:
-        raise Exception("Error -- failed to create HTTP connection with user:{0} \n {1}".format(user, e))
+        raise Exception("Error -- failed to create HTTP connection with user: {0} \n {1}".format(user, e))
 
     try:
         blocked = False
