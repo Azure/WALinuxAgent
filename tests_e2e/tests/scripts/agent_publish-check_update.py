@@ -17,10 +17,12 @@
 # limitations under the License.
 #
 import re
-import sys
-import logging
+
+from assertpy import fail
 
 from tests_e2e.tests.lib.agent_log import AgentLog
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
 
 
@@ -65,9 +67,9 @@ def verify_agent_update_from_log():
     update_successful = False
     update_version = ''
 
-    log = AgentLog()
+    agentlog = AgentLog()
 
-    for record in log.read():
+    for record in agentlog.read():
         if 'TelemetryData' in record.text:
             continue
 
@@ -76,37 +78,34 @@ def verify_agent_update_from_log():
             if update_match:
                 detected_update = True
                 update_version = update_match.groups()[2]
-                logging.info('found the agent update log: %s', record.text)
+                log.info('found the agent update log: %s', record.text)
                 break
 
         if detected_update:
             running_match = re.match(_RUNNING_PATTERN_00, record.text)
             if running_match and update_version == running_match.groups()[0]:
                 update_successful = True
-                logging.info('found the agent started new version log: %s', record.text)
+                log.info('found the agent started new version log: %s', record.text)
 
     if detected_update:
-        logging.info('update was detected: %s', update_version)
+        log.info('update was detected: %s', update_version)
         if update_successful:
-            logging.info('update was successful')
+            log.info('update was successful')
         else:
-            logging.warning('update was not successful')
+            log.warning('update was not successful')
             exit_code = 1
     else:
-        logging.warning('update was not detected')
+        log.warning('update was not detected')
         exit_code = 1
 
     return exit_code == 0
 
 
 # This method will trace agent update messages in the agent log and determine if the update was successful or not.
-try:
-    logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.DEBUG, stream=sys.stdout)
+def main():
     found: bool = retry_if_false(verify_agent_update_from_log)
     if not found:
-        raise Exception('update was not found in the logs')
-except Exception as e:
-    logging.error(e)
-    sys.exit(1)
+        fail('update was not found in the logs')
 
-sys.exit(0)
+
+run_remote_test(main)
