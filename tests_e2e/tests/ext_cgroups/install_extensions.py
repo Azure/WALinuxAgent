@@ -19,7 +19,6 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
@@ -59,6 +58,7 @@ class InstallExtensions:
         # So that they can get sense of resource usage for their extensions. This we did for few months and now we no logner monitoring it in production.
         # But we are changing the config flag expiry time to future date in this test. So that test agent will start track the cgroups that is used by the service.
         result = self._ssh_client.run_command(f"update-waagent-conf Debug.CgroupMonitorExpiryTime={expiry_time}", use_sudo=True)
+        log.info(result)
         log.info("Updated agent cgroups config(CgroupMonitorExpiryTime)")
 
     def _install_ama(self):
