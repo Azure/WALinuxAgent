@@ -25,10 +25,12 @@ import socket
 import subprocess
 import sys
 import time
-import traceback
 from typing import List, Tuple
 
+from assertpy import fail
+
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
 
 if sys.version_info[0] == 3:
     import http.client as httpclient
@@ -140,7 +142,7 @@ def verify_all_rules_exist(max_retry: int = 5) -> None:
         retry += 1
 
     if not found:
-        raise Exception("IP table rules missing in rule set.\n Current iptable rules:\n {0}".format(
+        fail("IP table rules missing in rule set.\n Current iptable rules:\n {0}".format(
             print_current_iptable_rules()))
 
     log.info("verified All ip table rules are present in rule set")
@@ -295,7 +297,7 @@ def verify_non_root_accept_rule():
 
     switch_user(ROOT_USER)
     # restart the agent to re-add the deleted rules
-    log.info("Restart Guest Agent service")
+    log.info("Restart Guest Agent service to re-add the deleted rules")
     # agent-service is script name and start is argument
     start_agent = ["agent-service", "start"]
     execute_cmd(start_agent)
@@ -342,7 +344,7 @@ def verify_root_accept_rule():
     print_current_iptable_rules()
 
     # restart the agent to re-add the deleted rules
-    log.info("Restart Guest Agent service")
+    log.info("Restart Guest Agent service to re-add the deleted rules")
     # agent-service is script name and start is argument
     start_agent = ["agent-service", "start"]
     execute_cmd(start_agent)
@@ -386,7 +388,7 @@ def verify_non_root_dcp_rule():
     verify_http_to_wireserver_allowed(NON_ROOT_USER)
 
     # restart the agent to re-add the deleted rules
-    log.info("Restart Guest Agent service")
+    log.info("Restart Guest Agent service to re-add the deleted rules")
     # agent-service is script name and start is argument
     start_agent = ["agent-service", "start"]
     execute_cmd(start_agent)
@@ -403,7 +405,7 @@ def verify_non_root_dcp_rule():
     log.info("non root drop rule verified successfully\n")
 
 
-try:
+def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--user', required=True, help="Non root user")
@@ -420,8 +422,6 @@ try:
     verify_root_accept_rule()
     verify_non_root_dcp_rule()
 
-    sys.exit(0)
 
-except Exception as e:
-    log.error("%s:\n%s", e, traceback.format_exc())
-    sys.exit(1)
+run_remote_test(main)
+

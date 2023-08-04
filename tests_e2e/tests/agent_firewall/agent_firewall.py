@@ -33,14 +33,12 @@ class AgentFirewall(AgentTest):
     def run(self):
         self._prepare_agent()
         log.info("Checking iptable rules added by the agent")
-        output = self._ssh_client.run_command(f"agent_firewall-verify_all_firewall_rules.py --user {self._context.username}", use_sudo=True)
-        log.info(output)
+        self._run_remote_test(f"agent_firewall-verify_all_firewall_rules.py --user {self._context.username}", use_sudo=True)
         log.info("Successfully verified all rules present and working as expected.")
 
     def _prepare_agent(self) -> None:
-        log.info("Enabling agent firewall config flag")
-        output = self._ssh_client.run_command("update-waagent-conf OS.EnableFirewall=y", use_sudo=True)
-        log.info(output)
+        log.info("Executing remote script update-waagent-conf to enable agent firewall config flag")
+        self._run_remote_test("update-waagent-conf OS.EnableFirewall=y", use_sudo=True)
         log.info("Successfully enabled agent firewall config flag")
 
 
