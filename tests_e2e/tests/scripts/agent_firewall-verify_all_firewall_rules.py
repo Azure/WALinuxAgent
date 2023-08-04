@@ -37,7 +37,6 @@ if sys.version_info[0] == 3:
 elif sys.version_info[0] == 2:
     import httplib as httpclient  # pylint: disable=E0401
 
-NON_ROOT_USER = 'unknown_user'
 ROOT_USER = 'root'
 WIRESERVER_ENDPOINT_FILE = '/var/lib/waagent/WireServerEndpoint'
 WIRESERVER_URL = '168.63.129.16'
@@ -406,13 +405,6 @@ def verify_non_root_dcp_rule():
 
 
 def main():
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-u', '--user', required=True, help="Non root user")
-    args = parser.parse_args()
-
-    NON_ROOT_USER = args.user
-
     log.info("** Current IP table rules\n")
     print_current_iptable_rules()
 
@@ -423,5 +415,9 @@ def main():
     verify_non_root_dcp_rule()
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-u', '--user', required=True, help="Non root user")
+args = parser.parse_args()
+NON_ROOT_USER = args.user
 run_remote_test(main)
 
