@@ -116,7 +116,8 @@ sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' "$waagent_conf_path"
 # By default GAUpdates flag set to True, so that agent go through update logic to look for new agents.
 # But in e2e tests this flag needs to be off in test version 9.9.9.9 to stop the agent updates, so that our scenarios run on 9.9.9.9.
 sed -i '$a Debug.DownloadNewAgents=n' "$waagent_conf_path"
-
+# Some distros like debian disable extensions by default, so we need to enable them to verify agent extension scenarios
+sed -i 's/Extensions.Enabled=n/Extensions.Enabled=y/g' "$waagent_conf_path"
 #
 # Restart the service
 #
