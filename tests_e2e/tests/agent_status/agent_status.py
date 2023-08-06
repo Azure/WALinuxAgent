@@ -38,9 +38,6 @@ from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 class InstanceViewAgentStatusException:
     pass
 
-class AgentStatusUpdateException:
-    pass
-
 
 class AgentStatus(AgentTest):
     def __init__(self, context: AgentTestContext):
