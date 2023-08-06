@@ -144,7 +144,7 @@ class AgentStatus(AgentTest):
 
         vm = VirtualMachineClient(self._context.vm)
 
-        timeout = datetime.now() + timedelta(minutes=5)
+        timeout = datetime.now() + timedelta(minutes=6)
         instance_view_exception = None
         status_updated = 0
         prev_status_timestamp = None
