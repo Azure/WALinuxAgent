@@ -162,7 +162,7 @@ class AgentStatus(AgentTest):
                 # Validate the guest agent reports valid status
                 self.validate_instance_view(instance_view)
 
-                status_timestamp = datetime.strptime(instance_view.vm_agent.statuses[0].time, u'%Y-%m-%dT%H:%M:%S.%fZ')
+                status_timestamp = instance_view.vm_agent.statuses[0].time
                 gs_processed_log = self._ssh_client.run_command(
                     "agent_status-get_last_gs_processed.py", use_sudo=True)
 
