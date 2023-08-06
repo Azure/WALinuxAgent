@@ -34,7 +34,7 @@ from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
-class InstanceViewAgentStatusException(BaseException):
+class RetryableAgentStatusException(BaseException):
     pass
 
 
@@ -49,36 +49,36 @@ class AgentStatus(AgentTest):
         # Validate message field
         message = status.message
         if message is None:
-            raise InstanceViewAgentStatusException("Instance view is missing an agent status message")
+            raise RetryableAgentStatusException("Instance view is missing an agent status message")
         elif 'unresponsive' in message:
-            raise InstanceViewAgentStatusException("Instance view shows unresponsive agent")
+            raise RetryableAgentStatusException("Instance view shows unresponsive agent")
 
         # Validate display status field
         display_status = status.display_status
         if display_status is None:
-            raise InstanceViewAgentStatusException("Instance view is missing an agent display status")
+            raise RetryableAgentStatusException("Instance view is missing an agent display status")
         elif 'Not Ready' in display_status:
-            raise InstanceViewAgentStatusException("Instance view shows agent status is not ready")
+            raise RetryableAgentStatusException("Instance view shows agent status is not ready")
 
         # Validate time field
         time = status.time
         if time is None:
-            raise InstanceViewAgentStatusException("Instance view is missing an agent status timestamp")
+            raise RetryableAgentStatusException("Instance view is missing an agent status timestamp")
 
     def validate_instance_view_vmagent(self, instance_view: VirtualMachineInstanceView):
         # Validate vm_agent_version field
         vm_agent_version = instance_view.vm_agent.vm_agent_version
         if vm_agent_version is None:
-            raise InstanceViewAgentStatusException("Instance view is missing agent version")
+            raise RetryableAgentStatusException("Instance view is missing agent version")
         elif 'Unknown' in vm_agent_version:
-            raise InstanceViewAgentStatusException("Instance view shows agent version is unknown")
+            raise RetryableAgentStatusException("Instance view shows agent version is unknown")
 
         # Validate statuses field
         statuses = instance_view.vm_agent.statuses
         if statuses is None:
-            raise InstanceViewAgentStatusException("Instance view is missing agent statuses")
+            raise RetryableAgentStatusException("Instance view is missing agent statuses")
         elif len(statuses) < 1:
-            raise InstanceViewAgentStatusException("Instance view is missing an agent status entry")
+            raise RetryableAgentStatusException("Instance view is missing an agent status entry")
         else:
             self.validate_instance_view_vmagent_status(instance_view=instance_view)
 
@@ -102,17 +102,20 @@ class AgentStatus(AgentTest):
         }
         """
         if instance_view.vm_agent is None:
-            raise InstanceViewAgentStatusException("Instance view is missing vm agent")
+            raise RetryableAgentStatusException("Instance view is missing vm agent")
         else:
             self.validate_instance_view_vmagent(instance_view=instance_view)
 
         if instance_view.statuses is None:
-            raise InstanceViewAgentStatusException("Instance view is missing statuses")
+            raise RetryableAgentStatusException("Instance view is missing statuses")
 
         log.info("Instance view has valid agent status, agent version: {0}, status: {1}"
                  .format(instance_view.vm_agent.vm_agent_version, instance_view.vm_agent.statuses[0].display_status))
 
     def check_status_updated(self, status_timestamp: datetime, prev_status_timestamp: datetime, gs_processed_log: str, prev_gs_processed_log: str):
+        log.info("")
+        log.info("Check that the agent status updated without processing any additional goal states...")
+
         # If prev_ variables are not updated, then this is the first reported agent status
         if prev_status_timestamp is not None and prev_gs_processed_log is not None:
             # The agent status timestamp should be greater than the prev timestamp
@@ -121,8 +124,9 @@ class AgentStatus(AgentTest):
                     "Current agent status timestamp {0} is greater than previous status timestamp {1}"
                     .format(status_timestamp, prev_status_timestamp))
             else:
-                raise Exception("Agent status failed to update: Current agent status timestamp {0} is not greater than "
-                                "previous status timestamp {1}".format(status_timestamp, prev_status_timestamp))
+                raise RetryableAgentStatusException("Agent status failed to update: Current agent status timestamp {0} "
+                                                    "is not greater than previous status timestamp {1}"
+                                                    .format(status_timestamp, prev_status_timestamp))
 
             # The last goal state processed in the agent log should be the same as before
             if prev_gs_processed_log == gs_processed_log:
@@ -166,8 +170,6 @@ class AgentStatus(AgentTest):
                 gs_processed_log = self._ssh_client.run_command(
                     "agent_status-get_last_gs_processed.py", use_sudo=True)
 
-                log.info("")
-                log.info("Check that the agent status updated without processing any additional goal states...")
                 self.check_status_updated(status_timestamp, prev_status_timestamp, gs_processed_log, prev_gs_processed_log)
 
                 # Update variables with timestamps for this update
@@ -178,10 +180,10 @@ class AgentStatus(AgentTest):
                 # Sleep 30s to allow agent status to update before we check again
                 sleep(30)
 
-            except InstanceViewAgentStatusException as e:
+            except RetryableAgentStatusException as e:
                 instance_view_exception = str(e)
                 log.info("")
-                log.info("Instance view has invalid agent status: {0}".format(instance_view_exception))
+                log.info("Agent status is invalid: {0}".format(instance_view_exception))
                 log.info("Waiting 30s before retry...")
                 sleep(30)
 
