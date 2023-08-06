@@ -151,7 +151,7 @@ class AgentStatus(AgentTest):
         prev_status_timestamp = None
         prev_gs_processed_log = None
 
-        # Retry validating instance view with timeout of 5 minutes
+        # Retry validating agent status updates 3 times with timeout of 5 minutes
         while datetime.datetime.now() <= timeout and status_updated < 3:
             instance_view = vm.get_instance_view()
             log.info("")
