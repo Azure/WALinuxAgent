@@ -22,12 +22,11 @@
 # from fabric)
 #
 
-import datetime
-import json
-
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 from assertpy import assert_that
+from datetime import datetime
 from time import sleep
+import json
 
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
