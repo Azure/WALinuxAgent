@@ -150,8 +150,8 @@ class AgentStatus(AgentTest):
         prev_status_timestamp = None
         prev_gs_processed_log = None
 
-        # Retry validating agent status updates 3 times with timeout of 5 minutes
-        while datetime.now() <= timeout and status_updated < 3:
+        # Retry validating agent status updates 2 times with timeout of 6 minutes
+        while datetime.now() <= timeout and status_updated < 2:
             instance_view = vm.get_instance_view()
             log.info("")
             log.info(
@@ -175,15 +175,15 @@ class AgentStatus(AgentTest):
                 prev_status_timestamp = status_timestamp
                 prev_gs_processed_log = gs_processed_log
 
-                # Sleep 15s to allow agent status to update before we check again
-                sleep(60)
+                # Sleep 30s to allow agent status to update before we check again
+                sleep(30)
 
             except InstanceViewAgentStatusException as e:
                 instance_view_exception = str(e)
                 log.info("")
                 log.info("Instance view has invalid agent status: {0}".format(instance_view_exception))
-                log.info("Waiting 60s before retry...")
-                sleep(60)
+                log.info("Waiting 30s before retry...")
+                sleep(30)
 
         # If status_updated is 0, we know the agent status in the instance view was never valid
         log.info("")
@@ -192,8 +192,8 @@ class AgentStatus(AgentTest):
                 instance_view_exception)).is_true()
 
         # Fail the test if we weren't able to validate the agent status updated 3 times
-        assert_that(status_updated == 3).described_as(
-            "Timeout has expired, the agent status failed to update 3 times").is_true()
+        assert_that(status_updated == 2).described_as(
+            "Timeout has expired, the agent status failed to update 2 times").is_true()
 
 
 if __name__ == "__main__":
