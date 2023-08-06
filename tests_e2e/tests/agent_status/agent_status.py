@@ -24,7 +24,7 @@
 
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 from assertpy import assert_that
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import sleep
 import json
 
@@ -144,7 +144,7 @@ class AgentStatus(AgentTest):
 
         vm = VirtualMachineClient(self._context.vm)
 
-        timeout = datetime.now() + datetime.timedelta(minutes=5)
+        timeout = datetime.now() + timedelta(minutes=5)
         instance_view_exception = None
         status_updated = 0
         prev_status_timestamp = None
