@@ -176,7 +176,7 @@ class AgentStatus(AgentTest):
                 prev_gs_processed_log = gs_processed_log
 
                 # Sleep 15s to allow agent status to update before we check again
-                sleep(15)
+                sleep(60)
 
             except InstanceViewAgentStatusException as e:
                 instance_view_exception = str(e)
