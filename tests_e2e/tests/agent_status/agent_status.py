@@ -35,7 +35,7 @@ from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
-class InstanceViewAgentStatusException:
+class InstanceViewAgentStatusException(BaseException):
     pass
 
 
