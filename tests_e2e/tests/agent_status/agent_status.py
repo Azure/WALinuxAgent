@@ -144,14 +144,14 @@ class AgentStatus(AgentTest):
 
         vm = VirtualMachineClient(self._context.vm)
 
-        timeout = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        timeout = datetime.now() + datetime.timedelta(minutes=5)
         instance_view_exception = None
         status_updated = 0
         prev_status_timestamp = None
         prev_gs_processed_log = None
 
         # Retry validating agent status updates 3 times with timeout of 5 minutes
-        while datetime.datetime.now() <= timeout and status_updated < 3:
+        while datetime.now() <= timeout and status_updated < 3:
             instance_view = vm.get_instance_view()
             log.info("")
             log.info(
