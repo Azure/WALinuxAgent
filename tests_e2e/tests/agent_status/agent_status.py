@@ -114,7 +114,7 @@ class AgentStatus(AgentTest):
                  .format(instance_view.vm_agent.vm_agent_version, instance_view.vm_agent.statuses[0].display_status))
 
     def check_status_updated(self, status_timestamp: datetime, prev_status_timestamp: datetime, gs_processed_log: str, prev_gs_processed_log: str):
-        # If prev_ variables are not updated, then this is the first agent_status
+        # If prev_ variables are not updated, then this is the first reported agent status
         if prev_status_timestamp is not None and prev_gs_processed_log is not None:
             # The agent status timestamp should be greater than the prev timestamp
             if status_timestamp > prev_status_timestamp:

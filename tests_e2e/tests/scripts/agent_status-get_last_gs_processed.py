@@ -21,9 +21,7 @@
 from datetime import timedelta
 import re
 import sys
-import time
 
-from pathlib import Path
 from tests_e2e.tests.lib.agent_log import AgentLog
 
 
@@ -40,7 +38,7 @@ def main():
                 last_gs_processed = agent_record.text
 
     except IOError as e:
-        print("Unable to validate no lag time: {0}".format(str(e)))
+        print("Unable to get last goal state processed: {0}".format(str(e)))
 
     print(last_gs_processed)
     sys.exit(0)
