@@ -18,7 +18,6 @@
 #
 # Writes the last goal state processed line in the log to stdout
 #
-from datetime import timedelta
 import re
 import sys
 
