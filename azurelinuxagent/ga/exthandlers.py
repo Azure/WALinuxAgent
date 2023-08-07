@@ -299,9 +299,6 @@ class ExtHandlersHandler(object):
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
             self.ext_handlers = copy.deepcopy(egs.extensions)
 
-            if not self._extension_processing_allowed():
-                return
-
             utc_start = datetime.datetime.utcnow()
             error = None
             message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
@@ -337,10 +334,15 @@ class ExtHandlersHandler(object):
 
     def __process_and_handle_extensions(self, svd_sequence_number, goal_state_id):
         try:
-            # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
+            # Check that extension processing is enabled and verify we satisfy all required features, if any. If not,
+            # report failure here itself, no need to process anything further.
             unsupported_features = self.__get_unsupported_features()
-            if any(unsupported_features):
-                msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
+            if not self._extension_processing_allowed() or any(unsupported_features):
+                if not self._extension_processing_allowed():
+                    msg = "Failing GS {0} as extension processing is disabled. To enable extension processing, set " \
+                          "Extensions.Enabled=y in '/etc/waagent.conf'".format(goal_state_id)
+                else:
+                    msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
                 logger.warn(msg)
                 self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                       code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
