@@ -46,28 +46,23 @@ class ExtensionsDisabled(AgentTest):
         log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
-
-        # From now on, extensions will time out; set the timeout to the minimum allowed(15 minutes)
-        log.info("Setting the extension timeout to 15 minutes")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-
-        vm.update({"extensionsTimeBudget": "PT15M"})
 
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
         #
         # Validate that the agent is not processing extensions by attempting to run CustomScript
         #
-        log.info("Executing CustomScript; it should time out after 15 min or so.")
+        log.info("Executing CustomScript; the agent should report a GoalStateUnsupported error")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
         try:
-            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True, timeout=20 * 60)
-            fail("CustomScript should have timed out")
+            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True)
+            fail("The agent should have reported an error processing the goal state")
         except Exception as error:
-            assert_that("VMExtensionProvisioningTimeout" in str(error)) \
-                .described_as(f"Expected a VMExtensionProvisioningTimeout: {error}") \
+            assert_that("extension processing is disabled" in str(error)) \
+                .described_as(f"Expected a GoalStateUnsupported error: {error}") \
                 .is_true()
-            log.info("CustomScript timed out as expected")
+            log.info("Goal state processing failed as expected")
 
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
