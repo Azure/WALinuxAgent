@@ -46,17 +46,22 @@ class ExtensionsDisabled(AgentTest):
         log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
+
+        # From now on, extensions will time out; set the timeout to the minimum allowed(15 minutes)
+        log.info("Setting the extension timeout to 15 minutes")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
+
+        vm.update({"extensionsTimeBudget": "PT15M"})
 
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
         #
         # Validate that the agent is not processing extensions by attempting to run CustomScript
         #
-        log.info("Executing CustomScript; the agent should report a GoalStateUnsupported error")
+        log.info("Executing CustomScript; the agent should report a GoalStateUnsupported error without processing the extension")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
         try:
-            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True)
+            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True, timeout=20 * 60)
             fail("The agent should have reported an error processing the goal state")
         except Exception as error:
             assert_that("extension processing is disabled" in str(error)) \

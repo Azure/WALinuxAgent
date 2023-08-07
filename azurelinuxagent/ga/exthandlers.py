@@ -299,6 +299,9 @@ class ExtHandlersHandler(object):
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
             self.ext_handlers = copy.deepcopy(egs.extensions)
 
+            if self._extensions_on_hold():
+                return
+
             utc_start = datetime.datetime.utcnow()
             error = None
             message = "ProcessExtensionsGoalState started [{0} channel: {1} source: {2} activity: {3} correlation {4} created: {5}]".format(
@@ -337,8 +340,9 @@ class ExtHandlersHandler(object):
             # Check that extension processing is enabled and verify we satisfy all required features, if any. If not,
             # report failure here itself, no need to process anything further.
             unsupported_features = self.__get_unsupported_features()
-            if not self._extension_processing_allowed() or any(unsupported_features):
-                if not self._extension_processing_allowed():
+            extensions_enabled = conf.get_extensions_enabled()
+            if not extensions_enabled or any(unsupported_features):
+                if not extensions_enabled:
                     msg = "Failing GS {0} as extension processing is disabled. To enable extension processing, set " \
                           "Extensions.Enabled=y in '/etc/waagent.conf'".format(goal_state_id)
                 else:
@@ -394,7 +398,7 @@ class ExtHandlersHandler(object):
         # Build a collection of uninstalled handlers and orphaned packages
         # Note:
         # -- An orphaned package is one without a corresponding handler
-        #    directory
+        #    directoryExtensionProcessing
 
         for item, path in list_agent_lib_directory(skip_agent_package=True):
             try:
@@ -435,17 +439,15 @@ class ExtHandlersHandler(object):
                 except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def _extension_processing_allowed(self):
-        if not conf.get_extensions_enabled():
-            logger.verbose("Extension handling is disabled")
-            return False
-
+    def _extensions_on_hold(self):
         if conf.get_enable_overprovisioning():
             if self.protocol.get_goal_state().extensions_goal_state.on_hold:
-                logger.info("Extension handling is on hold")
-                return False
+                msg = "Extension handling is on hold"
+                logger.info(msg)
+                add_event(op=WALAEventOperation.ExtensionProcessing, message=msg)
+                return True
 
-        return True
+        return False
 
     @staticmethod
     def __get_dependency_level(tup):
