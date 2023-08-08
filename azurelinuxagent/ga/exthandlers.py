@@ -545,7 +545,7 @@ class ExtHandlersHandler(object):
                 continue
 
             # Process extensions and get if it was successfully executed or not
-            extension_success = extensions_enabled and self.handle_ext_handler(handler_i, extension, goal_state_id)
+            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
@@ -622,6 +622,11 @@ class ExtHandlersHandler(object):
         """
 
         try:
+            # Ensure extensions are enabled
+            if not conf.get_extensions_enabled():
+                err_msg = "Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
+                raise ExtensionError(msg=err_msg)
+
             # Ensure the extension config was valid
             if ext_handler_i.ext_handler.is_invalid_setting:
                 raise ExtensionsGoalStateError(ext_handler_i.ext_handler.invalid_setting_reason)
