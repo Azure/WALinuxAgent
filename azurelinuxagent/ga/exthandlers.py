@@ -491,9 +491,9 @@ class ExtHandlersHandler(object):
 
         depends_on_err_msg = None
         # extensions_enabled = conf.get_extensions_enabled()
-        # for extension, ext_handler in all_extensions:
+        for extension, ext_handler in all_extensions:
         #
-        #     handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+            handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
         #
         #     # In case of extensions disabled, we skip processing extensions.
         #     # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status
