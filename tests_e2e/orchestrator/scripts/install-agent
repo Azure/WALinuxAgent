@@ -123,7 +123,7 @@ if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
   # As of today debian distro disable extensions by default, so we need to enable them to verify agent extension scenarios
   if [[ $pypy_get_distro == *"debian"* ]] || [[ $python_get_distro == *"debian"* ]]; then
       echo "Enabling extensions for debian distro"
-      sed -i 's/Extensions.Enabled=n/Extensions.Enabled=y/g' "$waagent_conf_path"
+      update-waagent-conf Extensions.Enabled=y
   else
       echo "Extension processing disabled by default, so exiting test setup!"
       exit 1
