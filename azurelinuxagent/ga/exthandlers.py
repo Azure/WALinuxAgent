@@ -498,13 +498,13 @@ class ExtHandlersHandler(object):
             # In case of extensions disabled, we skip processing extensions.
             # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status
             # back to CRP, we will report status back here with an error message.
-            if not extensions_enabled:
-                msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
-                      "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
-
-                self.__handle_and_report_ext_handler_errors(ext_handler_i=handler_i, error=ExtensionError(),
-                                                            report_op=WALAEventOperation.ExtensionProcessing,
-                                                            message=msg, extension=extension)
+            # if not extensions_enabled:
+            #     msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
+            #           "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
+            #
+            #     self.__handle_and_report_ext_handler_errors(ext_handler_i=handler_i, error=ExtensionError(),
+            #                                                 report_op=WALAEventOperation.ExtensionProcessing,
+            #                                                 message=msg, extension=extension)
 
                 # # For MC extensions, report the HandlerStatus as is and create a new placeholder per extension if doesnt
                 # # exist
@@ -521,7 +521,7 @@ class ExtHandlersHandler(object):
                 # else:
                 #     handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
 
-                continue
+                # continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
             # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status back to CRP,
@@ -545,7 +545,7 @@ class ExtHandlersHandler(object):
                 continue
 
             # Process extensions and get if it was successfully executed or not
-            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
+            extension_success = extensions_enabled and self.handle_ext_handler(handler_i, extension, goal_state_id)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:
