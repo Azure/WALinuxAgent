@@ -506,7 +506,7 @@ class ExtHandlersHandler(object):
                 if handler_i.should_perform_multi_config_op(extension):
                     # Ensure some handler status exists for the Handler, if not, set it here
                     if handler_i.get_handler_status() is None:
-                        handler_i.set_handler_status(message=msg, code=-1)
+                        handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
 
                     handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=-1,
                                                               operation=WALAEventOperation.ExtensionProcessing,
@@ -514,7 +514,7 @@ class ExtHandlersHandler(object):
 
                 # For SC extensions, overwrite the HandlerStatus with the relevant message
                 else:
-                    handler_i.set_handler_status(message=msg, code=-1)
+                    handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
 
                 continue
 
