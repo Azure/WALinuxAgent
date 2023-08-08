@@ -123,10 +123,10 @@ if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
   # As we know debian distros disable extensions by default, so we need to enable them to verify agent extension scenarios
   # If rest of the distros disable extensions, then we exit the test setup to fail the test.
   if [[ $pypy_get_distro == *"debian"* ]] || [[ $python_get_distro == *"debian"* ]]; then
-      echo "Extensions.Enabled flag is disabled but expected in debian distro, so enabling it"
+      echo "Extensions.Enabled flag is disabled and this is expected in debian distro, so enabling it"
       update-waagent-conf Extensions.Enabled=y
   else
-      echo "Extensions.Enabled flag is disabled which is unexpected in this distro, so exiting test setup!"
+      echo "Extensions.Enabled flag is disabled which is unexpected in this distro, so exiting test setup to fail the test"
       exit 1
   fi
 fi
