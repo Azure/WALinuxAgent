@@ -337,16 +337,11 @@ class ExtHandlersHandler(object):
 
     def __process_and_handle_extensions(self, svd_sequence_number, goal_state_id):
         try:
-            # Check that extension processing is enabled and verify we satisfy all required features, if any. If not,
-            # report failure here itself, no need to process anything further.
+            # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process
+            # anything further.
             unsupported_features = self.__get_unsupported_features()
-            extensions_enabled = conf.get_extensions_enabled()
-            if not extensions_enabled or any(unsupported_features):
-                if not extensions_enabled:
-                    msg = "Failing GS {0} as extension processing is disabled. To enable extension processing, set " \
-                          "Extensions.Enabled=y in '/etc/waagent.conf'".format(goal_state_id)
-                else:
-                    msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
+            if any(unsupported_features):
+                msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
                 logger.warn(msg)
                 self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed, seq_no=svd_sequence_number,
                                                                       code=GoalStateAggregateStatusCodes.GoalStateUnsupportedRequiredFeatures,
@@ -482,9 +477,33 @@ class ExtHandlersHandler(object):
         max_dep_level = self.__get_dependency_level(all_extensions[-1]) if any(all_extensions) else 0
 
         depends_on_err_msg = None
+        extensions_enabled = conf.get_extensions_enabled()
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
+            # In case of extensions disabled, we skip processing extensions.
+            # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status
+            # back to CRP, we will report status back here with an error message.
+            if not extensions_enabled:
+                msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
+                      "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
+                # For MC extensions, report the HandlerStatus as is and create a new placeholder per extension if doesnt
+                # exist
+                if handler_i.should_perform_multi_config_op(extension):
+                    # Ensure some handler status exists for the Handler, if not, set it here
+                    if handler_i.get_handler_status() is None:
+                        handler_i.set_handler_status(message=msg, code=-1)
+
+                    handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=-1,
+                                                              operation=WALAEventOperation.ExtensionProcessing,
+                                                              message=msg)
+
+                # For SC extensions, overwrite the HandlerStatus with the relevant message
+                else:
+                    handler_i.set_handler_status(message=msg, code=-1)
+
+                continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
             # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status back to CRP,
