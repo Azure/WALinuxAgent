@@ -120,12 +120,13 @@ sed -i '$a Debug.DownloadNewAgents=n' "$waagent_conf_path"
 if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
   pypy_get_distro=$(pypy3 -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
   python_get_distro=$($python -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
-  # As of today debian distro disable extensions by default, so we need to enable them to verify agent extension scenarios
+  # As we know debian distros disable extensions by default, so we need to enable them to verify agent extension scenarios
+  # If rest of the distros disable extensions, then we exit the test setup to fail the test.
   if [[ $pypy_get_distro == *"debian"* ]] || [[ $python_get_distro == *"debian"* ]]; then
-      echo "Enabling extensions for debian distro"
+      echo "Extensions.Enabled flag is disabled but expected in debian distro, so enabling it"
       update-waagent-conf Extensions.Enabled=y
   else
-      echo "Extension processing disabled by default, so exiting test setup!"
+      echo "Extensions.Enabled flag is disabled which is unexpected in this distro, so exiting test setup!"
       exit 1
   fi
 fi
