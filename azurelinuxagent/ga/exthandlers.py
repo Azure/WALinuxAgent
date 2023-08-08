@@ -501,20 +501,25 @@ class ExtHandlersHandler(object):
             if not extensions_enabled:
                 msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
-                # For MC extensions, report the HandlerStatus as is and create a new placeholder per extension if doesnt
-                # exist
-                if handler_i.should_perform_multi_config_op(extension):
-                    # Ensure some handler status exists for the Handler, if not, set it here
-                    if handler_i.get_handler_status() is None:
-                        handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
 
-                    handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=-1,
-                                                              operation=WALAEventOperation.ExtensionProcessing,
-                                                              message=msg)
+                self.__handle_and_report_ext_handler_errors(ext_handler=handler_i, error=ExtensionError,
+                                                            report_op=WALAEventOperation.ExtensionProcessing,
+                                                            message=msg, extension=extension)
 
-                # For SC extensions, overwrite the HandlerStatus with the relevant message
-                else:
-                    handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
+                # # For MC extensions, report the HandlerStatus as is and create a new placeholder per extension if doesnt
+                # # exist
+                # if handler_i.should_perform_multi_config_op(extension):
+                #     # Ensure some handler status exists for the Handler, if not, set it here
+                #     if handler_i.get_handler_status() is None:
+                #         handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
+                #
+                #     handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=-1,
+                #                                               operation=WALAEventOperation.ExtensionProcessing,
+                #                                               message=msg)
+                #
+                # # For SC extensions, overwrite the HandlerStatus with the relevant message
+                # else:
+                #     handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
 
                 continue
 
