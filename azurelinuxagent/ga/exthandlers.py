@@ -337,22 +337,8 @@ class ExtHandlersHandler(object):
 
     def __process_and_handle_extensions(self, svd_sequence_number, goal_state_id):
         try:
-            # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process
-            # anything further.
+            # Verify we satisfy all required features, if any. If not, report failure here itself, no need to process anything further.
             unsupported_features = self.__get_unsupported_features()
-            # extensions_enabled = conf.get_extensions_enabled()
-            # if not extensions_enabled:
-            #     msg = "Failing GS {0} as extension processing is disabled. To enable extension processing, set " \
-            #           "Extensions.Enabled=y in '/etc/waagent.conf'".format(goal_state_id)
-            #     logger.warn(msg)
-            #     self.__gs_aggregate_status = GoalStateAggregateStatus(status=GoalStateStatus.Failed,
-            #                                                           seq_no=svd_sequence_number,
-            #                                                           code=GoalStateAggregateStatusCodes.GoalStateUnknownFailure,
-            #                                                           message=msg)
-            #     add_event(op=WALAEventOperation.GoalStateUnsupportedFeatures,
-            #               is_success=False,
-            #               message=msg,
-            #               log_event=False)
             if any(unsupported_features):
                 msg = "Failing GS {0} as Unsupported features found: {1}".format(goal_state_id, ', '.join(unsupported_features))
                 logger.warn(msg)
@@ -406,7 +392,7 @@ class ExtHandlersHandler(object):
         # Build a collection of uninstalled handlers and orphaned packages
         # Note:
         # -- An orphaned package is one without a corresponding handler
-        #    directoryExtensionProcessing
+        #    directory
 
         for item, path in list_agent_lib_directory(skip_agent_package=True):
             try:
@@ -498,30 +484,13 @@ class ExtHandlersHandler(object):
             # In case of extensions disabled, we skip processing extensions.
             # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status
             # back to CRP, we will report status back here with an error message.
-            # if not extensions_enabled:
-            #     msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
-            #           "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
-            #
-            #     self.__handle_and_report_ext_handler_errors(ext_handler_i=handler_i, error=ExtensionError(),
-            #                                                 report_op=WALAEventOperation.ExtensionProcessing,
-            #                                                 message=msg, extension=extension)
-
-                # # For MC extensions, report the HandlerStatus as is and create a new placeholder per extension if doesnt
-                # # exist
-                # if handler_i.should_perform_multi_config_op(extension):
-                #     # Ensure some handler status exists for the Handler, if not, set it here
-                #     if handler_i.get_handler_status() is None:
-                #         handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
-                #
-                #     handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=-1,
-                #                                               operation=WALAEventOperation.ExtensionProcessing,
-                #                                               message=msg)
-                #
-                # # For SC extensions, overwrite the HandlerStatus with the relevant message
-                # else:
-                #     handler_i.set_handler_status(status=ExtensionStatusValue.error, message=msg, code=-1)
-
-                # continue
+            if not extensions_enabled:
+                msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
+                      "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
+                self.__handle_and_report_ext_handler_errors(ext_handler_i=handler_i, error=ExtensionError(),
+                                                            report_op=WALAEventOperation.ExtensionProcessing,
+                                                            message=msg, extension=extension)
+                continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
             # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status back to CRP,
@@ -622,11 +591,6 @@ class ExtHandlersHandler(object):
         """
 
         try:
-            # Ensure extensions are enabled
-            if not conf.get_extensions_enabled():
-                err_msg = "Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
-                raise ExtensionError(msg=err_msg)
-
             # Ensure the extension config was valid
             if ext_handler_i.ext_handler.is_invalid_setting:
                 raise ExtensionsGoalStateError(ext_handler_i.ext_handler.invalid_setting_reason)
