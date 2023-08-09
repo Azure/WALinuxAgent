@@ -49,13 +49,13 @@ from azurelinuxagent.ga.update import  \
     get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
-from tests.ga.mocks import mock_update_handler
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
-from tests.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
+from tests.lib.mock_update_handler import mock_update_handler
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
+from tests.lib.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances, is_python_version_26_or_34, skip_if_predicate_true
-from tests.protocol import mockwiredata
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
+from tests.lib import wire_protocol_data
+from tests.lib.http_request_predicates import HttpRequestPredicates
 
 
 NO_ERROR = {
@@ -1504,7 +1504,7 @@ class TestAgentUpgrade(UpdateTestCase):
                          "Guest Agent should be reported as Ready")
 
     def test_it_should_upgrade_agent_on_process_start_if_auto_upgrade_enabled(self):
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(test_data=data_file, iterations=10) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
@@ -1543,7 +1543,7 @@ class TestAgentUpgrade(UpdateTestCase):
                                  "New agent directory should not be found")
 
     def test_it_should_download_only_requested_version_if_available(self):
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
@@ -1553,7 +1553,7 @@ class TestAgentUpgrade(UpdateTestCase):
         self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10"])
 
     def test_it_should_download_largest_version_if_ga_versioning_disabled(self):
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             with patch.object(conf, "get_enable_ga_versioning", return_value=False):
@@ -1564,7 +1564,7 @@ class TestAgentUpgrade(UpdateTestCase):
         self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0"])
 
     def test_it_should_cleanup_all_agents_except_requested_version_and_current_version(self):
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
 
         # Set the test environment by adding 20 random agents to the agent directory
@@ -1580,7 +1580,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
         self.prepare_agents(1)
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version_missing_in_manifest.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
@@ -1628,7 +1628,7 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.call_count = 0
         reload_conf.incarnation = 2
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
@@ -1673,7 +1673,7 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.call_count = 0
         reload_conf.incarnation = 2
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
@@ -1712,7 +1712,7 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.call_count = 0
         reload_conf.incarnation = 2
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         # This is to fail the agent update at first attempt so that agent doesn't go through update
         data_file["ga_manifest"] = "wire/ga_manifest_no_uris.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
@@ -1752,7 +1752,7 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.call_count = 0
         reload_conf.incarnation = 2
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ga_manifest"] = "wire/ga_manifest_no_uris.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
                                        hotfix_frequency=0.001, normal_frequency=0.001) as (update_handler, mock_telemetry):
@@ -1765,7 +1765,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
 
     def test_it_should_not_download_anything_if_requested_version_is_current_version(self):
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
 
         # Set the test environment by adding 20 random agents to the agent directory
@@ -1803,7 +1803,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
         reload_conf.call_count = 0
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_ga_manifest_version_version(str(CURRENT_VERSION))
@@ -1824,7 +1824,7 @@ class TestAgentUpgrade(UpdateTestCase):
                          "The current agent should not be blacklisted")
         downgraded_version = "2.5.0"
 
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_extension_config_requested_version(downgraded_version)
@@ -2047,11 +2047,11 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """
     def test_it_should_return_true_on_success(self):
         update_handler = get_update_handler()
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             self.assertTrue(update_handler._try_update_goal_state(protocol), "try_update_goal_state should have succeeded")
 
     def test_it_should_return_false_on_failure(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_goal_state_request(url):
                     return HttpError('Exception to fake an error retrieving the goal state')
@@ -2063,7 +2063,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
     def test_it_should_update_the_goal_state(self):
         update_handler = get_update_handler()
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.mock_wire_data.set_incarnation(12345)
 
             # the first goal state should produce an update
@@ -2080,7 +2080,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(update_handler._goal_state.incarnation, '6789', "The goal state was not updated (received unexpected incarnation)")
 
     def test_it_should_log_errors_only_when_the_error_state_changes(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_goal_state_request(url):
                     if fail_goal_state_request:
@@ -2259,7 +2259,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
         invokes HostPluginProtocol.fetch_vm_settings() to save the Fast Track status to disk
         """
         # Do a query for the vmSettings; this would retrieve a FastTrack goal state and keep track of its timestamp
-        mock_wire_data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        mock_wire_data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         with mock_wire_protocol(mock_wire_data_file) as protocol:
             protocol.mock_wire_data.set_etag("0123456789")
             _ = protocol.client.get_host_plugin().fetch_vm_settings()
@@ -2359,7 +2359,7 @@ class HeartbeatTestCase(AgentTestCase):
     @patch("azurelinuxagent.ga.update.add_event")
     def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as mock_protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as mock_protocol:
             update_handler = get_update_handler()
 
             update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)

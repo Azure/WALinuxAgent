@@ -13,10 +13,10 @@ from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.guestagent import GAUpdateReportState
 from tests.ga.test_update import UpdateTestCase
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import clear_singleton_instances, load_bin_data, patch
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.wire_protocol_data import DATA_FILE
+from tests.lib.tools import clear_singleton_instances, load_bin_data, patch
 
 
 class TestAgentUpdate(UpdateTestCase):

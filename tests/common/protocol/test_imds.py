@@ -26,8 +26,8 @@ from azurelinuxagent.common.datacontract import set_properties
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.utils import restutil
-from tests.protocol.mocks import MockHttpResponse
-from tests.tools import AgentTestCase, data_dir, MagicMock, Mock, patch
+from tests.lib.mock_wire_protocol import MockHttpResponse
+from tests.lib.tools import AgentTestCase, data_dir, MagicMock, Mock, patch
 
 
 def get_mock_compute_response():

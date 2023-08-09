@@ -39,8 +39,8 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.common.mock_environment import MockCommand
 from tests.common.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
-from tests.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir, is_python_version_26_or_34, skip_if_predicate_true
-from tests.utils.miscellaneous_tools import format_processes, wait_for
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir, is_python_version_26_or_34, skip_if_predicate_true
+from tests.lib.miscellaneous_tools import format_processes, wait_for
 
 
 class CGroupConfiguratorSystemdTestCase(AgentTestCase):

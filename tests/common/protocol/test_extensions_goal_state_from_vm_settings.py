@@ -5,13 +5,13 @@ import json
 from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
-from tests.protocol.mocks import mockwiredata, mock_wire_protocol
-from tests.tools import AgentTestCase
+from tests.lib.mock_wire_protocol import wire_protocol_data, mock_wire_protocol
+from tests.lib.tools import AgentTestCase
 
 
 class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
     def test_it_should_parse_vm_settings(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             def assert_property(name, value):
@@ -49,13 +49,13 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             self.assertEqual(1, extensions_goal_state.extensions[3].settings[1].dependencyLevel, "Incorrect dependency level (multi-config)")
 
     def test_it_should_parse_requested_version_properly(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             goal_state = GoalState(protocol.client)
             families = goal_state.extensions_goal_state.agent_families
             for family in families:
                 self.assertEqual(family.requested_version_string, "0.0.0.0", "Version should be None")
 
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
         with mock_wire_protocol(data_file) as protocol:
             protocol.mock_wire_data.set_etag(888)
@@ -65,7 +65,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
                 self.assertEqual(family.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
 
     def test_it_should_parse_missing_status_upload_blob_as_none(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-no_status_upload_blob.json"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
@@ -74,7 +74,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, "Expected status upload blob to be Block")
 
     def test_it_should_parse_missing_agent_manifests_as_empty(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-no_manifests.json"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
@@ -82,7 +82,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             self.assertListEqual([], extensions_goal_state.agent_families[0].uris, "Expected an empty list of agent manifests")
 
     def test_it_should_parse_missing_extension_manifests_as_empty(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-no_manifests.json"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
@@ -98,7 +98,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
                 extensions_goal_state.extensions[2].manifest_uris, "Incorrect list of manifests for {0}".format(extensions_goal_state.extensions[2]))
 
     def test_it_should_default_to_block_blob_when_the_status_blob_type_is_not_valid(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-invalid_blob_type.json"
         with mock_wire_protocol(data_file) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
@@ -106,7 +106,7 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             self.assertEqual("BlockBlob", extensions_goal_state.status_upload_blob_type, 'Expected BlockBlob for an invalid statusBlobType')
 
     def test_its_source_channel_should_be_host_ga_plugin(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             self.assertEqual(GoalStateChannel.HostGAPlugin, extensions_goal_state.channel, "The channel is incorrect")

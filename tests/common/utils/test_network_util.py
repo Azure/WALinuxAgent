@@ -19,7 +19,7 @@ import subprocess
 from mock.mock import patch
 
 import azurelinuxagent.common.utils.networkutil as networkutil
-from tests.tools import AgentTestCase
+from tests.lib.tools import AgentTestCase
 
 
 class TestNetworkOperations(AgentTestCase):

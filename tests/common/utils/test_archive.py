@@ -9,7 +9,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.utils import fileutil, timeutil
 from azurelinuxagent.common.utils.archive import GoalStateHistory, StateArchiver, _MAX_ARCHIVED_STATES, ARCHIVE_DIRECTORY_NAME
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 debug = False
 if os.environ.get('DEBUG') == '1':

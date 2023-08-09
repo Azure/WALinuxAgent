@@ -17,7 +17,7 @@
 #
 import contextlib
 import os
-from tests.tools import patch, data_dir
+from tests.lib.tools import patch, data_dir
 from tests.common.mock_environment import MockEnvironment, MockCommand
 
 _MOCKED_COMMANDS = [
