@@ -85,6 +85,9 @@ class ExtensionsDisabled(AgentTest):
             .is_greater_than(pytz.utc.localize(disabled_timestamp))
         log.info("The VM Agent reported status after extensions were disabled, as expected.")
 
+        # set extensions enabled for debugging
+        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=y", use_sudo=True)
+
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         return [
             {'message': 'No handler status found for Microsoft.Azure.Extensions.CustomScript'},
