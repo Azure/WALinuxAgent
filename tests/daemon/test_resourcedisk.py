@@ -85,7 +85,6 @@ class TestResourceDisk(AgentTestCase):
             size_mb=size_mb
         )
 
-class TestResourceDisk(AgentTestCase):
     def test_mkfile(self):
         # setup
         test_file = os.path.join(self.tmp_dir, 'test_file')
