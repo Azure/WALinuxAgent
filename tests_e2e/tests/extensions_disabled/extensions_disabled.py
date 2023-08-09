@@ -58,14 +58,17 @@ class ExtensionsDisabled(AgentTest):
         #
         # Validate that the agent is not processing extensions by attempting to run CustomScript
         #
-        log.info("Executing CustomScript; the agent should report a GoalStateUnsupported error without processing the extension")
+        log.info("Executing CustomScript; the agent should report a VMExtensionHandlerNonTransientError without processing the extension")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
         try:
             custom_script.enable(settings={'commandToExecute': "date"}, force_update=True, timeout=20 * 60)
             fail("The agent should have reported an error processing the goal state")
         except Exception as error:
-            assert_that("extension processing is disabled" in str(error)) \
-                .described_as(f"Expected a GoalStateUnsupported error: {error}") \
+            assert_that("VMExtensionHandlerNonTransientError" in str(error)) \
+                .described_as(f"Expected a VMExtensionHandlerNonTransientError error: {error}") \
+                .is_true()
+            assert_that("Extension will not be processed since extension processing is disabled" in str(error)) \
+                .described_as(f"Extension should not be processed when extension processing is disabled") \
                 .is_true()
             log.info("Goal state processing failed as expected")
 
