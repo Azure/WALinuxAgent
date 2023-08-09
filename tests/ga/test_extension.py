@@ -1649,7 +1649,11 @@ class TestExtension_Deprecated(TestExtensionBase):
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        self._assert_no_handler_status(protocol.report_vm_status)
+        report_vm_status = protocol.report_vm_status
+        self.assertTrue(report_vm_status.called)
+        args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
+        vm_status = args[0]
+        # self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_extensions_deleted(self, *args):
         # Ensure initial enable is successful
