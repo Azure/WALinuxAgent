@@ -51,7 +51,7 @@ class ExtensionsDisabled(AgentTest):
         log.info("Setting the extension timeout to 15 minutes")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
 
-        vm.update({"extensionsTimeBudget": "PT15M"})
+        vm.update({"extensionsTimeBudget": "PT20M"})
 
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
