@@ -18,7 +18,7 @@
 import contextlib
 import os
 from tests.lib.tools import patch, data_dir
-from tests.common.mock_environment import MockEnvironment, MockCommand
+from tests.lib.mock_environment import MockEnvironment, MockCommand
 
 _MOCKED_COMMANDS = [
    MockCommand(r"^systemctl --version$",
@@ -103,6 +103,7 @@ class UnitFilePaths:
     extension_service_cpu_quota = '/lib/systemd/system/extension.service.d/12-CPUQuota.conf'
     extension_service_memory_accounting = '/lib/systemd/system/extension.service.d/13-MemoryAccounting.conf'
     extension_service_memory_limit = '/lib/systemd/system/extension.service.d/14-MemoryLimit.conf'
+
 
 @contextlib.contextmanager
 def mock_cgroup_environment(tmp_dir):

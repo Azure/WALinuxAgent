@@ -26,7 +26,7 @@ from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil
-from tests.common.mock_cgroup_environment import mock_cgroup_environment
+from tests.lib.mock_cgroup_environment import mock_cgroup_environment
 from tests.lib.tools import AgentTestCase, patch, mock_sleep
 from tests.lib.cgroups_tools import CGroupsTools
 
