@@ -490,7 +490,7 @@ class ExtHandlersHandler(object):
                 handler_i.set_handler_status(message=msg, code=-1)
                 handler_i.create_status_file_if_not_exist(extension,
                                                           status=ExtensionStatusValue.error,
-                                                          code=0,
+                                                          code=-1,
                                                           operation=handler_i.operation,
                                                           message=msg)
                 continue

@@ -47,29 +47,34 @@ class ExtensionsDisabled(AgentTest):
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
 
-        # From now on, extensions will time out; set the timeout to the minimum allowed(15 minutes)
+        # Set the timeout to the minimum allowed(15 minutes) so we can check that the extension fails before timeout
         log.info("Setting the extension timeout to 15 minutes")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-
         vm.update({"extensionsTimeBudget": "PT15M"})
 
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
         #
-        # Validate that the agent is not processing extensions by attempting to run CustomScript
+        # Validate that the agent is not processing extensions by:
+        #   - attempting to run CSE & checking that provisioning fails
+        #   - checking that the commandToExecute was not executed
         #
-        log.info("Executing CustomScript; the agent should report a VMExtensionHandlerNonTransientError without processing the extension")
+        log.info("Executing CustomScript; the agent should report a VMExtensionProvisioningError without processing the extension")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
         try:
-            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True, timeout=20 * 60)
+            custom_script.enable(settings={'commandToExecute': "mkdir /var/lib/waagent/testdir"}, force_update=True, timeout=6 * 60)
             fail("The agent should have reported an error processing the goal state")
         except Exception as error:
-            assert_that("VMExtensionHandlerNonTransientError" in str(error)) \
-                .described_as(f"Expected a VMExtensionHandlerNonTransientError error: {error}") \
+            assert_that("VMExtensionProvisioningError" in str(error)) \
+                .described_as(f"Expected a VMExtensionProvisioningError error, but actual error was: {error}") \
                 .is_true()
             assert_that("Extension will not be processed since extension processing is disabled" in str(error)) \
-                .described_as(f"Extension should not be processed when extension processing is disabled") \
-                .is_true()
+                .described_as(f"Error message should communicate that extension will not be processed, but actual error "
+                              f"was: {error}").is_true()
+            output = ssh_client.run_command("if test -d /var/lib/waagent/testdir; then echo 'exists'; else echo "
+                                            "'not found'; fi", use_sudo=True)
+            assert_that(output).described_as("Extension should not be processed, but extension settings were executed")\
+                .contains('not found')
             log.info("Goal state processing failed as expected")
 
         #
@@ -85,10 +90,18 @@ class ExtensionsDisabled(AgentTest):
             .is_greater_than(pytz.utc.localize(disabled_timestamp))
         log.info("The VM Agent reported status after extensions were disabled, as expected.")
 
-        # set extensions enabled for debugging
-        log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
-        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
-        log.info("Disable completed:\n%s", output)
+        #
+        # Validate that the agent processes extensions after re-enabling extension processing
+        #
+        log.info("Enabling extension processing on the test VM [%s]", self._context.vm.name)
+        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=y", use_sudo=True)
+        log.info("Enable completed:\n%s", output)
+
+        try:
+            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True, timeout=15 * 60)
+        except Exception as error:
+            log.info("Goal state processing unexpectedly failed after re-enabling extension processing")
+
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         return [
