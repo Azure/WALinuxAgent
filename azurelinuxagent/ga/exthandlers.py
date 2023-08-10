@@ -481,29 +481,18 @@ class ExtHandlersHandler(object):
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
 
-            # In case of extensions disabled, we skip processing extensions.
-            # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status
-            # back to CRP, we will report status back here with an error message.
+            # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
+            # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
+            # here with an error message.
             if not extensions_enabled:
                 msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
-
-                # self.__handle_and_report_ext_handler_errors(ext_handler_i=handler_i, error=ExtensionError(),
-                #                                             report_op=WALAEventOperation.ExtensionProcessing,
-                #                                             message=msg, extension=extension)
                 handler_i.set_handler_status(message=msg, code=-1)
-                handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error,
-                                                              code=0,
-                                                              operation=handler_i.operation, message=msg)
-                # ext_status = ExtensionStatus(name=extension.name,
-                #                              configurationAppliedTime=None,
-                #                              operation=WALAEventOperation.ExtensionProcessing,
-                #                              status=ExtensionStatusValue.error,
-                #                              seq_no=extension.sequenceNumber,
-                #                              code=ExtensionErrorCodes.PluginUnknownFailure,
-                #                              message=msg)
-
-
+                handler_i.create_status_file_if_not_exist(extension,
+                                                          status=ExtensionStatusValue.error,
+                                                          code=0,
+                                                          operation=handler_i.operation,
+                                                          message=msg)
                 continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
@@ -1015,6 +1004,8 @@ class ExtHandlersHandler(object):
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
+        # We also need to report extension status for an uninstalled handler if extensions are disabled because CRP
+        # waits for extension runtime status before failing the extension operation.
         if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
@@ -1693,10 +1684,6 @@ class ExtHandlerInstance(object):
         # and has valid json.
         try:
             msg = "data in status file is: {0}".format(data)
-            add_event(op=WALAEventOperation.ExtensionProcessing,
-                      is_success=False,
-                      message=msg,
-                      log_event=False)
             parse_ext_status(ext_status, data)
             if len(data_str) > _MAX_STATUS_FILE_SIZE_IN_BYTES:
                 raise ExtensionStatusError(msg="For Extension Handler {0} for the sequence number {1}, the status "
