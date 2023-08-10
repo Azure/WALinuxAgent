@@ -51,7 +51,7 @@ class ExtensionsDisabled(AgentTest):
         log.info("Setting the extension timeout to 15 minutes")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
 
-        vm.update({"extensionsTimeBudget": "PT20M"})
+        vm.update({"extensionsTimeBudget": "PT15M"})
 
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
@@ -86,7 +86,9 @@ class ExtensionsDisabled(AgentTest):
         log.info("The VM Agent reported status after extensions were disabled, as expected.")
 
         # set extensions enabled for debugging
-        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=y", use_sudo=True)
+        log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
+        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
+        log.info("Disable completed:\n%s", output)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         return [
