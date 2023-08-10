@@ -48,11 +48,6 @@ class ExtensionsDisabled(AgentTest):
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
 
-        # Set the timeout to the minimum allowed(15 minutes) so we can check that the extension fails before timeout
-        log.info("Setting the extension timeout to 15 minutes")
-        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-        vm.update({"extensionsTimeBudget": "PT15M"})
-
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
         #
@@ -89,6 +84,7 @@ class ExtensionsDisabled(AgentTest):
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
         #
+        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
         assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
