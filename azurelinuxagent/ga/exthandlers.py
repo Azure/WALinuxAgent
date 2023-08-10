@@ -1692,6 +1692,11 @@ class ExtHandlerInstance(object):
         # We did not encounter InvalidJsonFile/CouldNotReadStatusFile and thus the status file was correctly written
         # and has valid json.
         try:
+            msg = "data in status file is: {0}".format(data)
+            add_event(op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=msg,
+                      log_event=False)
             parse_ext_status(ext_status, data)
             if len(data_str) > _MAX_STATUS_FILE_SIZE_IN_BYTES:
                 raise ExtensionStatusError(msg="For Extension Handler {0} for the sequence number {1}, the status "
