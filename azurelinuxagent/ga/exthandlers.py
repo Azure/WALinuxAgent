@@ -488,12 +488,13 @@ class ExtHandlersHandler(object):
                 msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
 
-                self.__handle_and_report_ext_handler_errors(ext_handler_i=handler_i, error=ExtensionError(),
-                                                            report_op=WALAEventOperation.ExtensionProcessing,
-                                                            message=msg, extension=extension)
-                # handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error,
-                #                                               code=-1,
-                #                                               operation=handler_i.operation, message=msg)
+                # self.__handle_and_report_ext_handler_errors(ext_handler_i=handler_i, error=ExtensionError(),
+                #                                             report_op=WALAEventOperation.ExtensionProcessing,
+                #                                             message=msg, extension=extension)
+                handler_i.set_handler_status(message=msg, code=-1)
+                handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error,
+                                                              code=0,
+                                                              operation=handler_i.operation, message=msg)
                 # ext_status = ExtensionStatus(name=extension.name,
                 #                              configurationAppliedTime=None,
                 #                              operation=WALAEventOperation.ExtensionProcessing,
