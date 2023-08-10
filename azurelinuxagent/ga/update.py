@@ -589,6 +589,10 @@ class UpdateHandler(object):
             if self._goal_state is not None:
                 agent_status = exthandlers_handler.get_ext_handlers_status_debug_info(vm_status)
                 self._goal_state.save_to_history(agent_status, AGENT_STATUS_FILE)
+                message = "saving agent status: {0}".format(agent_status)
+                logger.info('')
+                logger.info(message)
+                add_event(op=WALAEventOperation.ExtensionProcessing, message=message)
                 if self._goal_state.extensions_goal_state.is_outdated:
                     exthandlers_handler.protocol.client.get_host_plugin().clear_fast_track_state()
 
