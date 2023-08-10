@@ -1015,7 +1015,7 @@ class ExtHandlersHandler(object):
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.

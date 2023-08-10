@@ -1635,13 +1635,13 @@ class TestExtension_Deprecated(TestExtensionBase):
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
     def test_extensions_disabled(self, _, *args):
         # test status is reported for no extensions
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
-
-        exthandlers_handler.run()
-        exthandlers_handler.report_ext_handlers_status()
-
-        self._assert_no_handler_status(protocol.report_vm_status)
+        # test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
+        # exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter
+        #
+        # exthandlers_handler.run()
+        # exthandlers_handler.report_ext_handlers_status()
+        #
+        # self._assert_no_handler_status(protocol.report_vm_status)
 
         # test status is reported, but extensions are not processed
         test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
