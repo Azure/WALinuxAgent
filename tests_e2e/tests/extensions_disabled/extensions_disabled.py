@@ -33,6 +33,7 @@ from azure.mgmt.compute.models import VirtualMachineInstanceView
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
@@ -55,13 +56,12 @@ class ExtensionsDisabled(AgentTest):
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
         #
-        # Validate that the agent is not processing extensions by:
-        #   - attempting to run CSE & checking that provisioning fails fast
-        #   - checking that the commandToExecute was not executed
+        # Validate that the agent is not processing extensions by attempting to run CSE & checking that provisioning fails fast
         #
         log.info("Executing CustomScript; the agent should report a VMExtensionProvisioningError without processing the extension")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
         try:
+            # Use mkdir in script settings so we can check if the command was executed
             custom_script.enable(settings={'commandToExecute': "mkdir /var/lib/waagent/testdir"}, force_update=True, timeout=6 * 60)
             fail("The agent should have reported an error processing the goal state")
         except Exception as error:
@@ -71,11 +71,20 @@ class ExtensionsDisabled(AgentTest):
             assert_that("Extension will not be processed since extension processing is disabled" in str(error)) \
                 .described_as(f"Error message should communicate that extension will not be processed, but actual error "
                               f"was: {error}").is_true()
-            output = ssh_client.run_command("if test -d /var/lib/waagent/testdir; then echo 'exists'; else echo "
-                                            "'not found'; fi", use_sudo=True)
-            assert_that(output).described_as("Extension should not be processed, but extension settings were executed")\
-                .contains('not found')
             log.info("Goal state processing failed as expected")
+
+        #
+        # Validate the agent is not processing extensions by checking it did not execute the extension settings
+        #
+        try:
+            ssh_client.run_command("dir /var/lib/waagent/testdir", use_sudo=True)
+            fail("The extension settings should not have been executed")
+        except CommandError as error:
+            assert_that(error.stderr)\
+                .described_as("Extension should not be processed, but extension settings were executed")\
+                .contains('No such file or directory')
+            log.info("The agent did not execute the extension settings as expected")
+
 
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
