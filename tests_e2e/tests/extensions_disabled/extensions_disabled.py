@@ -56,7 +56,7 @@ class ExtensionsDisabled(AgentTest):
 
         #
         # Validate that the agent is not processing extensions by:
-        #   - attempting to run CSE & checking that provisioning fails
+        #   - attempting to run CSE & checking that provisioning fails fast
         #   - checking that the commandToExecute was not executed
         #
         log.info("Executing CustomScript; the agent should report a VMExtensionProvisioningError without processing the extension")
