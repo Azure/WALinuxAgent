@@ -23,6 +23,8 @@
 #
 
 import datetime
+import uuid
+
 import pytz
 
 from assertpy import assert_that, fail
@@ -54,6 +56,7 @@ class ExtensionsDisabled(AgentTest):
         #
         log.info("Executing CustomScript; the agent should report a VMExtensionProvisioningError without processing the extension")
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
+
         try:
             # Use mkdir in script settings so we can check if the command was executed
             custom_script.enable(settings={'commandToExecute': "mkdir /var/lib/waagent/testdir"}, force_update=True, timeout=6 * 60)
@@ -77,6 +80,34 @@ class ExtensionsDisabled(AgentTest):
             " unexpectedly processed") \
             .does_not_contain('testdir')
         log.info("The agent did not process the extension settings as expected")
+
+        #
+        # Validate that the agent is not processing multi-config extensions
+        #
+        log.info(
+            "Executing RunCommand v2; the agent should report a VMExtensionProvisioningError without processing the extension")
+        run_command = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                                    resource_name="RunCommandHandler")
+        try:
+            unique = str(uuid.uuid4())
+            test_file = f"/tmp/waagent-test.{unique}"
+            settings = \
+                {
+                    "source": {
+                        "script": f"echo '{unique}' > {test_file}"
+                    }
+                }
+
+            run_command.enable(settings=settings, force_update=True, timeout=6 * 60)
+            fail("The agent should have reported an error processing the goal state")
+        except Exception as error:
+            assert_that("VMExtensionProvisioningError" in str(error)) \
+                .described_as(f"Expected a VMExtensionProvisioningError error, but actual error was: {error}") \
+                .is_true()
+            assert_that("Extension will not be processed since extension processing is disabled" in str(error)) \
+                .described_as(f"Error message should communicate that extension will not be processed, but actual error "
+                              f"was: {error}").is_true()
+            log.info("Goal state processing failed as expected")
 
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
