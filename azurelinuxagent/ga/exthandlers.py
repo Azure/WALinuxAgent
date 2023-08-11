@@ -487,7 +487,7 @@ class ExtHandlersHandler(object):
             if not extensions_enabled:
                 msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
-                handler_i.set_handler_status(message=msg, code=-1)
+                handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
                 handler_i.create_status_file_if_not_exist(extension,
                                                           status=ExtensionStatusValue.error,
                                                           code=-1,
