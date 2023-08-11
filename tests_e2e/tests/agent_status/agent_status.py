@@ -93,7 +93,7 @@ class AgentStatus(AgentTest):
             "statuses": [
                 {
                     "level": "Info",
-                    "time": "<class 'datetime.datetime'>",
+                    "time": "2023-08-11T09:13:01.000Z",
                     "message": "Guest Agent is running",
                     "code": "ProvisioningState/succeeded",
                     "display_status": "Ready"
