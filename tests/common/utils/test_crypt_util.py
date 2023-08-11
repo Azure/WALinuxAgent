@@ -21,7 +21,7 @@ import unittest
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import CryptError
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from tests.tools import AgentTestCase, data_dir, load_data, is_python_version_26, skip_if_predicate_true
+from tests.lib.tools import AgentTestCase, data_dir, load_data, is_python_version_26, skip_if_predicate_true
 
 
 class TestCryptoUtilOperations(AgentTestCase):

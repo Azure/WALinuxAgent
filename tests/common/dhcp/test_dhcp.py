@@ -18,7 +18,7 @@
 import mock
 import azurelinuxagent.common.dhcp as dhcp
 import azurelinuxagent.common.osutil.default as osutil
-from tests.tools import AgentTestCase, open_patch, patch
+from tests.lib.tools import AgentTestCase, open_patch, patch
 
 
 class TestDHCP(AgentTestCase):

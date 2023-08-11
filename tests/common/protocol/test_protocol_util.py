@@ -30,7 +30,7 @@ from azurelinuxagent.common.protocol.metadata_server_migration_util import _META
 from azurelinuxagent.common.protocol.util import get_protocol_util, ProtocolUtil, PROTOCOL_FILE_NAME, \
     WIRE_PROTOCOL_NAME, ENDPOINT_FILE_NAME
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from tests.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
+from tests.lib.tools import AgentTestCase, MagicMock, Mock, patch, clear_singleton_instances
 
 
 @patch("time.sleep")
