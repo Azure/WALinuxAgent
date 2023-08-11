@@ -22,7 +22,7 @@
 # from fabric)
 #
 
-from azure.mgmt.compute.models import VirtualMachineInstanceView
+from azure.mgmt.compute.models import VirtualMachineInstanceView, InstanceViewStatus
 from assertpy import assert_that
 from datetime import datetime, timedelta
 from time import sleep
@@ -44,45 +44,25 @@ class AgentStatus(AgentTest):
         self._ssh_client = self._context.create_ssh_client()
 
     def validate_instance_view_vmagent_status(self, instance_view: VirtualMachineInstanceView):
-        status = instance_view.vm_agent.statuses[0]
+        status: InstanceViewStatus = instance_view.vm_agent.statuses[0]
 
         # Validate message field
-        message = status.message
-        if message is None:
-            raise RetryableAgentStatusException("Instance view is missing an agent status message")
-        elif 'unresponsive' in message:
-            raise RetryableAgentStatusException("Instance view shows unresponsive agent")
+        if 'message' not in status:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing an agent status message")
+        elif 'unresponsive' in status.message:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view shows unresponsive agent")
 
         # Validate display status field
-        display_status = status.display_status
-        if display_status is None:
-            raise RetryableAgentStatusException("Instance view is missing an agent display status")
-        elif 'Not Ready' in display_status:
-            raise RetryableAgentStatusException("Instance view shows agent status is not ready")
+        if 'display_status' not in status:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing an agent display status")
+        elif 'Not Ready' in status.display_status:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view shows agent status is not ready")
 
         # Validate time field
-        time = status.time
-        if time is None:
-            raise RetryableAgentStatusException("Instance view is missing an agent status timestamp")
+        if 'time' not in status:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing an agent status timestamp")
 
     def validate_instance_view_vmagent(self, instance_view: VirtualMachineInstanceView):
-        # Validate vm_agent_version field
-        vm_agent_version = instance_view.vm_agent.vm_agent_version
-        if vm_agent_version is None:
-            raise RetryableAgentStatusException("Instance view is missing agent version")
-        elif 'Unknown' in vm_agent_version:
-            raise RetryableAgentStatusException("Instance view shows agent version is unknown")
-
-        # Validate statuses field
-        statuses = instance_view.vm_agent.statuses
-        if statuses is None:
-            raise RetryableAgentStatusException("Instance view is missing agent statuses")
-        elif len(statuses) < 1:
-            raise RetryableAgentStatusException("Instance view is missing an agent status entry")
-        else:
-            self.validate_instance_view_vmagent_status(instance_view=instance_view)
-
-    def validate_instance_view(self, instance_view: VirtualMachineInstanceView):
         """
         Checks that instance view has vm_agent.statuses and vm_agent.vm_agent_version properties which report the Guest
         Agent as running and Ready:
@@ -101,13 +81,22 @@ class AgentStatus(AgentTest):
             ]
         }
         """
-        if instance_view.vm_agent is None:
-            raise RetryableAgentStatusException("Instance view is missing vm agent")
-        else:
-            self.validate_instance_view_vmagent(instance_view=instance_view)
+        if 'vm_agent' not in instance_view:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing vm agent")
 
-        if instance_view.statuses is None:
-            raise RetryableAgentStatusException("Instance view is missing statuses")
+        # Validate vm_agent_version field
+        if 'vm_agent_version' not in instance_view.vm_agent:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing agent version")
+        elif 'Unknown' in instance_view.vm_agent.vm_agent_version:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view shows agent version is unknown")
+
+        # Validate statuses field
+        if 'statuses' not in instance_view.vm_agent:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing agent statuses")
+        elif len(instance_view.vm_agent.statuses) < 1:
+            raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing an agent status entry")
+        else:
+            self.validate_instance_view_vmagent_status(instance_view=instance_view)
 
         log.info("Instance view has valid agent status, agent version: {0}, status: {1}"
                  .format(instance_view.vm_agent.vm_agent_version, instance_view.vm_agent.statuses[0].display_status))
@@ -164,7 +153,7 @@ class AgentStatus(AgentTest):
 
             try:
                 # Validate the guest agent reports valid status
-                self.validate_instance_view(instance_view)
+                self.validate_instance_view_vmagent(instance_view)
 
                 status_timestamp = instance_view.vm_agent.statuses[0].time
                 gs_processed_log = self._ssh_client.run_command(
@@ -183,7 +172,7 @@ class AgentStatus(AgentTest):
             except RetryableAgentStatusException as e:
                 instance_view_exception = str(e)
                 log.info("")
-                log.info("Agent status is invalid: {0}".format(instance_view_exception))
+                log.info(instance_view_exception)
                 log.info("Waiting 30s before retry...")
                 sleep(30)
 
