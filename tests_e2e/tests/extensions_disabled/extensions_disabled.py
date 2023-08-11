@@ -57,17 +57,17 @@ class ExtensionsDisabled(AgentTest):
 
         # Prepare test cases
         unique = str(uuid.uuid4())
-        test_file = f"/tmp/waagent-test.{unique}"
+        test_file = f"waagent-test.{unique}"
         test_cases = [
             ExtensionsDisabled.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
                                               resource_name="CustomScript"),
-                {'commandToExecute': f"echo '{unique}' > {test_file}"}
+                {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
             ),
             ExtensionsDisabled.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="RunCommandHandler"),
-                {'source': {'script': f"echo '{unique}' > {test_file}"}}
+                {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
             )
         ]
 
