@@ -23,9 +23,8 @@
 #
 
 import datetime
-import uuid
-
 import pytz
+import uuid
 
 from assertpy import assert_that, fail
 from typing import Any, Dict, List
@@ -74,7 +73,7 @@ class ExtensionsDisabled(AgentTest):
         for t in test_cases:
             log.info("Test case: %s", t.extension)
             #
-            # Validate that the agent is not processing extensions by attempting to extension & checking that
+            # Validate that the agent is not processing extensions by attempting to enable extension & checking that
             # provisioning fails fast
             #
             log.info(
@@ -100,10 +99,10 @@ class ExtensionsDisabled(AgentTest):
             output = ssh_client.run_command("dir /tmp", use_sudo=True)
             assert_that(output) \
                 .described_as(
-                f"Contents of '/tmp' on test VM contains {test_file}: {output}. \n This indicates "
+                f"Contents of '/tmp' on test VM contains {test_file}. Contents: {output}. \n This indicates "
                 f"{t.extension.__str__()} was unexpectedly processed") \
                 .does_not_contain(f"{test_file}")
-            log.info("The agent did not process the extension settings as expected")
+            log.info("The agent did not process the extension settings for {0} as expected".format(t.extension.__str__()))
 
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
@@ -130,6 +129,9 @@ class ExtensionsDisabled(AgentTest):
             try:
                 t.extension.enable(settings=t.settings, force_update=True, timeout=15 * 60)
                 log.info("Goal state processing for {0} succeeded as expected".format(t.extension.__str__()))
+            except Exception as error:
+                fail(f"Unexpected error while processing {t.extension.__str__()} after re-enabling extension "
+                     f"processing: {error}")
 
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
