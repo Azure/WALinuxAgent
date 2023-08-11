@@ -22,7 +22,7 @@ from distutils.version import LooseVersion as Version  # pylint: disable=no-name
 
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.future import ustr
-from tests.tools import AgentTestCase
+from tests.lib.tools import AgentTestCase
 
 
 class TestTextUtil(AgentTestCase):

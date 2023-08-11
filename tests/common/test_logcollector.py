@@ -25,7 +25,7 @@ import zipfile
 from azurelinuxagent.common.logcollector import LogCollector
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import rm_dirs, mkdir, rm_files
-from tests.tools import AgentTestCase, is_python_version_26, patch, skip_if_predicate_true, data_dir
+from tests.lib.tools import AgentTestCase, is_python_version_26, patch, skip_if_predicate_true, data_dir
 
 SMALL_FILE_SIZE = 1 * 1024 * 1024  # 1 MB
 LARGE_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
