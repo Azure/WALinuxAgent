@@ -32,8 +32,8 @@ from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
     ExtensionStatusError, _DEFAULT_SEQ_NO, get_exthandlers_handler, ExtHandlerState
-from tests.protocol.mocks import mock_wire_protocol, mockwiredata
-from tests.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
+from tests.lib.mock_wire_protocol import mock_wire_protocol, wire_protocol_data
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, clear_singleton_instances
 
 
 class TestExtHandlers(AgentTestCase):
@@ -247,7 +247,7 @@ class TestExtHandlers(AgentTestCase):
                                               expected_sequence_number=-1)
 
     def test_it_should_report_error_if_plugin_settings_version_mismatch(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_PLUGIN_SETTINGS_MISMATCH) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_PLUGIN_SETTINGS_MISMATCH) as protocol:
             with patch("azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config.add_event") as mock_add_event:
                 # Forcing update of GoalState to allow the ExtConfig to report an event
                 protocol.mock_wire_data.set_incarnation(2)
@@ -292,7 +292,7 @@ class TestExtHandlers(AgentTestCase):
             return {'code': 0, 'formattedMessage': {'lang': 'en-US', 'message': 'This is a heartbeat message'},
                     'status': 'ready'}
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             with patch("azurelinuxagent.common.protocol.wire.WireProtocol.report_vm_status", return_value=None):
                 with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.collect_heartbeat",
                            side_effect=heartbeat_with_message):

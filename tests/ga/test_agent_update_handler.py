@@ -13,10 +13,10 @@ from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.guestagent import GAUpdateReportState
 from tests.ga.test_update import UpdateTestCase
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import clear_singleton_instances, load_bin_data, patch
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.wire_protocol_data import DATA_FILE
+from tests.lib.tools import clear_singleton_instances, load_bin_data, patch
 
 
 class TestAgentUpdate(UpdateTestCase):
@@ -147,6 +147,14 @@ class TestAgentUpdate(UpdateTestCase):
                         self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
                         self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
                         self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
+
+    def test_it_should_not_allow_update_if_largest_version_below_current_version(self):
+        self.prepare_agents(count=1)
+        data_file = DATA_FILE.copy()
+        data_file["ga_manifest"] = "wire/ga_manifest_no_upgrade.xml"
+        with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
 
     def test_it_should_not_agent_update_if_last_attempted_update_time_not_elapsed(self):
         self.prepare_agents(count=1)

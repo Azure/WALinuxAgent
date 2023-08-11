@@ -42,11 +42,11 @@ from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from tests.ga.test_monitor import random_generator
-from tests.protocol.mocks import MockHttpResponse, mock_wire_protocol
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import AgentTestCase, clear_singleton_instances, mock_sleep
-from tests.utils.event_logger_tools import EventLoggerTools
+from tests.lib.mock_wire_protocol import MockHttpResponse, mock_wire_protocol
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE
+from tests.lib.tools import AgentTestCase, clear_singleton_instances, mock_sleep
+from tests.lib.event_logger_tools import EventLoggerTools
 
 
 class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):

@@ -22,7 +22,7 @@ import time
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, data_dir, patch
+from tests.lib.tools import AgentTestCase, data_dir, patch
 
 
 def raise_ioerror(*_):

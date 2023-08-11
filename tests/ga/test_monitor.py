@@ -30,10 +30,10 @@ from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, SendImdsHeartbeat, \
     ResetPeriodicLogMessages, SendHostPluginHeartbeat, PollResourceUsage, \
     ReportNetworkErrors, ReportNetworkConfigurationChanges, PollSystemWideResourceUsage
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE
+from tests.lib.tools import Mock, MagicMock, patch, AgentTestCase, clear_singleton_instances
 
 
 def random_generator(size=6, chars=string.ascii_uppercase + string.digits + string.ascii_lowercase):

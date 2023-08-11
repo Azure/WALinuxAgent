@@ -16,7 +16,7 @@
 #
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, GuestAgentExtensionEventsSchema, \
     CommonTelemetryEventSchema
-from tests.tools import AgentTestCase
+from tests.lib.tools import AgentTestCase
 
 
 def get_test_event(name="DummyExtension", op="Unknown", is_success=True, duration=0, version="foo", evt_type="", is_internal=False,
