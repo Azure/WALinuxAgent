@@ -110,8 +110,8 @@ class ExtensionsDisabled(AgentTest):
         # Validate that the agent continued reporting status even if it is not processing extensions
         #
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-        instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         log.info("")
+        instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
         assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
         assert_that(instance_view.vm_agent.statuses[0].display_status).described_as("The VM Agent should be ready").is_equal_to('Ready')
@@ -138,12 +138,6 @@ class ExtensionsDisabled(AgentTest):
             except Exception as error:
                 fail(f"Unexpected error while processing {t.extension.__str__()} after re-enabling extension "
                      f"processing: {error}")
-
-
-    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
-        return [
-            {'message': 'No handler status found for Microsoft.Azure.Extensions.CustomScript'},
-        ]
 
 
 if __name__ == "__main__":
