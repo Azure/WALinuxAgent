@@ -23,7 +23,7 @@ from azurelinuxagent.ga.agent_update_handler import AgentUpdateHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from azurelinuxagent.ga.update import UpdateHandler, get_update_handler
-from tests.tools import patch, Mock, mock_sleep
+from tests.lib.tools import patch, Mock, mock_sleep
 
 
 @contextlib.contextmanager

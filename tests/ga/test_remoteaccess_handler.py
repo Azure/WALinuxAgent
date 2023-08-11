@@ -22,9 +22,9 @@ from azurelinuxagent.common.protocol.goal_state import RemoteAccess
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
-from tests.tools import AgentTestCase, load_data, patch, clear_singleton_instances
-from tests.protocol.mocks import mock_wire_protocol
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_REMOTE_ACCESS
+from tests.lib.tools import AgentTestCase, load_data, patch, clear_singleton_instances
+from tests.lib.mock_wire_protocol import mock_wire_protocol
+from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_REMOTE_ACCESS
 
 
 class MockOSUtil(DefaultOSUtil):

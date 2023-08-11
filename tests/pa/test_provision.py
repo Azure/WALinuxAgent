@@ -28,7 +28,7 @@ from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.provision.cloudinit import CloudInitProvisionHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, distros, load_data, MagicMock, Mock, patch
+from tests.lib.tools import AgentTestCase, distros, load_data, MagicMock, Mock, patch
 
 
 class TestProvision(AgentTestCase):

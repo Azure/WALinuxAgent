@@ -19,15 +19,15 @@ from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateIncon
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol import mockwiredata
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.tools import AgentTestCase, patch, load_data
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib import wire_protocol_data
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.tools import AgentTestCase, patch, load_data
 
 
 class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
     def test_it_should_use_vm_settings_by_default(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_etag(888)
             extensions_goal_state = GoalState(protocol.client).extensions_goal_state
             self.assertTrue(
@@ -41,7 +41,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
     def test_it_should_use_extensions_config_when_fast_track_is_disabled(self):
         with patch("azurelinuxagent.common.conf.get_enable_fast_track", return_value=False):
-            with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+            with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
                 self._assert_is_extensions_goal_state_from_extensions_config(GoalState(protocol.client).extensions_goal_state)
 
     def test_it_should_use_extensions_config_when_fast_track_is_not_supported(self):
@@ -50,11 +50,11 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 return MockHttpResponse(httpclient.NOT_FOUND)
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
             self._assert_is_extensions_goal_state_from_extensions_config(GoalState(protocol.client).extensions_goal_state)
 
     def test_it_should_use_extensions_config_when_the_host_ga_plugin_version_is_not_supported(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-unsupported_version.json"
 
         with mock_wire_protocol(data_file) as protocol:
@@ -63,7 +63,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
     def test_it_should_retry_get_vm_settings_on_resource_gone_error(self):
         # Requests to the hostgaplugin incude the Container ID and the RoleConfigName as headers; when the hostgaplugin returns GONE (HTTP status 410) the agent
         # needs to get a new goal state and retry the request with updated values for the Container ID and RoleConfigName headers.
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             # Do not mock the vmSettings request at the level of azurelinuxagent.common.utils.restutil.http_request. The GONE status is handled
             # in the internal _http_request, which we mock below.
             protocol.do_not_mock = lambda method, url: method == "GET" and self.is_host_plugin_vm_settings_request(url)
@@ -89,8 +89,8 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertEqual("GET_VM_SETTINGS_TEST_ROLE_CONFIG_NAME", request_headers[1][hostplugin._HEADER_HOST_CONFIG_NAME], "The retry request did not include the expected header for the RoleConfigName")
 
     def test_fetch_goal_state_should_raise_on_incomplete_goal_state(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
-            protocol.mock_wire_data.data_files = mockwiredata.DATA_FILE_NOOP_GS
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            protocol.mock_wire_data.data_files = wire_protocol_data.DATA_FILE_NOOP_GS
             protocol.mock_wire_data.reload()
             protocol.mock_wire_data.set_incarnation(2)
 
@@ -101,14 +101,14 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
     def test_fetching_the_goal_state_should_save_the_shared_config(self):
         # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband); verify that we do not delete it
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             _ = GoalState(protocol.client)
 
             shared_config = os.path.join(conf.get_lib_dir(), 'SharedConfig.xml')
             self.assertTrue(os.path.exists(shared_config), "{0} should have been created".format(shared_config))
 
     def test_fetching_the_goal_state_should_save_the_goal_state_to_the_history_directory(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(999)
             protocol.mock_wire_data.set_etag(888)
 
@@ -132,7 +132,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
         self.assertEqual(expected_files, actual_files, "The expected files were not saved to {0}".format(directory))
 
     def test_update_should_create_new_history_subdirectories(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(123)
             protocol.mock_wire_data.set_etag(654)
 
@@ -160,7 +160,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 self._find_history_subdirectory("234-987"), ["VmSettings.json", "Certificates.json"])
 
     def test_it_should_redact_the_protected_settings_when_saving_to_the_history_directory(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.mock_wire_data.set_incarnation(888)
             protocol.mock_wire_data.set_etag(888)
 
@@ -195,11 +195,11 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                         "Could not find the expected number of redacted settings in {0}.\nExpected {1}.\n{2}".format(file_name, len(protected_settings), file_contents))
 
     def test_it_should_save_vm_settings_on_parse_errors(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             invalid_vm_settings_file = "hostgaplugin/vm_settings-parse_error.json"
-            data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+            data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
             data_file["vm_settings"] = invalid_vm_settings_file
-            protocol.mock_wire_data = mockwiredata.WireProtocolData(data_file)
+            protocol.mock_wire_data = wire_protocol_data.WireProtocolData(data_file)
 
             with self.assertRaises(ProtocolError):  # the parsing error will cause an exception
                 _ = GoalState(protocol.client)
@@ -228,7 +228,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
         Creates a mock protocol in which the HostGAPlugin and the WireServer are in sync, both of them returning
         the same Fabric goal state.
         """
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
 
         with mock_wire_protocol(data_file) as protocol:
             timestamp = datetime.datetime.utcnow()
@@ -372,7 +372,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertTrue(goal_state.extensions_goal_state.is_outdated, "The updated goal state should be marked as outdated")
 
     def test_it_should_raise_when_the_tenant_certificate_is_missing(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
 
         with mock_wire_protocol(data_file) as protocol:
             data_file["vm_settings"] = "hostgaplugin/vm_settings-missing_cert.json"
@@ -386,7 +386,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertIn(expected_message, str(context.exception))
 
     def test_it_should_download_certs_on_a_new_fast_track_goal_state(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
 
         with mock_wire_protocol(data_file) as protocol:
             goal_state = GoalState(protocol.client)
@@ -410,7 +410,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertTrue(os.path.isfile(crt_path))
 
     def test_it_should_download_certs_on_a_new_fabric_goal_state(self):
-        data_file = mockwiredata.DATA_FILE_VM_SETTINGS.copy()
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
 
         with mock_wire_protocol(data_file) as protocol:
             protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.Fabric)
@@ -457,7 +457,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             return None
         http_get_handler.certificate_requests = 0
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             protocol.mock_wire_data.reset_call_counts()
 

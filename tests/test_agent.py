@@ -22,7 +22,7 @@ from azurelinuxagent.common import cgroupconfigurator, conf, logcollector
 from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
-from tests.tools import AgentTestCase, data_dir, Mock, patch
+from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True

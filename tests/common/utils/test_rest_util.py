@@ -22,7 +22,7 @@ from azurelinuxagent.common.exception import HttpError, ResourceGoneError, Inval
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.utils.restutil import HTTP_USER_AGENT
 from azurelinuxagent.common.future import httpclient, ustr
-from tests.tools import AgentTestCase, call, Mock, MagicMock, patch
+from tests.lib.tools import AgentTestCase, call, Mock, MagicMock, patch
 
 
 class TestIOErrorCounter(AgentTestCase):

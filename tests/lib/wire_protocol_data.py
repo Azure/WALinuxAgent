@@ -21,8 +21,8 @@ import re
 
 from azurelinuxagent.common.utils import timeutil
 from azurelinuxagent.common.utils.textutil import parse_doc, find, findall
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.tools import load_bin_data, load_data, MagicMock, Mock
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.tools import load_bin_data, load_data, MagicMock, Mock
 from azurelinuxagent.common.protocol.imds import IMDS_ENDPOINT
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient

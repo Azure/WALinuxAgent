@@ -34,10 +34,10 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.protocol.goal_state import GoalState
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import AGENT_VERSION, AGENT_NAME
-from tests.protocol.mocks import mock_wire_protocol, mockwiredata, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE, DATA_FILE_NO_EXT
-from tests.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
+from tests.lib.mock_wire_protocol import mock_wire_protocol, wire_protocol_data, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_NO_EXT
+from tests.lib.tools import AgentTestCase, PY_VERSION_MAJOR, Mock, patch
 
 
 hostplugin_status_url = "http://168.63.129.16:32526/status"
@@ -852,7 +852,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR, body="TEST ERROR")
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             with self.assertRaisesRegexCM(ProtocolError, r'GET vmSettings \[correlation ID: .* eTag: .*\]: \[HTTP Failed\] \[500: None].*TEST ERROR.*'):
                 protocol.client.get_host_plugin().fetch_vm_settings()
@@ -875,7 +875,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 return mock_response
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
             mock_response = MockHttpResponse(httpclient.INTERNAL_SERVER_ERROR)
             self._fetch_vm_settings_ignoring_errors(protocol)
 
@@ -913,7 +913,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(expected, summary, "The count of errors is incorrect")
 
     def test_it_should_limit_the_number_of_errors_it_reports(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_host_plugin_vm_settings_request(url):
                     return MockHttpResponse(httpclient.BAD_GATEWAY)  # HostGAPlugin returns 502 for internal errors
@@ -941,7 +941,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(1, len(telemetry_messages), "Expected additional errors to be reported to telemetry in the next period (got: {0})".format(telemetry_messages))
 
     def test_it_should_stop_issuing_vm_settings_requests_when_api_is_not_supported(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_host_plugin_vm_settings_request(url):
                     return MockHttpResponse(httpclient.NOT_FOUND)  # HostGAPlugin returns 404 if the API is not supported
@@ -969,7 +969,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(httpclient.NOT_FOUND)  # HostGAPlugin returns 404 if the API is not supported
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             host_ga_plugin = protocol.client.get_host_plugin()
 
             # Do an initial call to ensure the API is supported
@@ -984,7 +984,7 @@ class TestHostPluginVmSettings(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(vm_settings.created_on_timestamp, cm.exception.timestamp)
 
     def test_it_should_save_the_timestamp_of_the_most_recent_fast_track_goal_state(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             host_ga_plugin = protocol.client.get_host_plugin()
 
             vm_settings, _ = host_ga_plugin.fetch_vm_settings()
