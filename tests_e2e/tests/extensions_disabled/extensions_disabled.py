@@ -80,6 +80,16 @@ class ExtensionsDisabled(AgentTest):
                 .contains('No such file or directory')
             log.info("The agent did not execute the extension settings as expected")
 
+        #
+        # Validate the agent is not processing extensions by checking it did not execute the extension settings
+        #
+        output = ssh_client.run_command("dir /var/lib/waagent", use_sudo=True)
+        assert_that(output) \
+            .described_as(
+            "Contents of '/var/lib/waagent' on test VM contains 'testdir': {output}. \n This indicates the extension was"
+            " unexpectedly processed") \
+            .does_not_contain('testdir')
+        log.info("The agent did not process the extension settings as expected")
 
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
