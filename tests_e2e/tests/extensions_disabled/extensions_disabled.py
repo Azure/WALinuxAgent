@@ -49,6 +49,7 @@ class ExtensionsDisabled(AgentTest):
         ssh_client: SshClient = self._context.create_ssh_client()
 
         # Disable extension processing on the test VM
+        log.info("")
         log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
@@ -71,6 +72,7 @@ class ExtensionsDisabled(AgentTest):
         ]
 
         for t in test_cases:
+            log.info("")
             log.info("Test case: %s", t.extension)
             #
             # Validate that the agent is not processing extensions by attempting to enable extension & checking that
@@ -109,6 +111,7 @@ class ExtensionsDisabled(AgentTest):
         #
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
+        log.info("")
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
         assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
         assert_that(instance_view.vm_agent.statuses[0].display_status).described_as("The VM Agent should be ready").is_equal_to('Ready')
@@ -121,12 +124,15 @@ class ExtensionsDisabled(AgentTest):
         #
         # Validate that the agent processes extensions after re-enabling extension processing
         #
+        log.info("")
         log.info("Enabling extension processing on the test VM [%s]", self._context.vm.name)
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=y", use_sudo=True)
         log.info("Enable completed:\n%s", output)
 
         for t in test_cases:
             try:
+                log.info("")
+                log.info("Executing {0}; the agent should process the extension".format(t.extension.__str__()))
                 t.extension.enable(settings=t.settings, force_update=True, timeout=15 * 60)
                 log.info("Goal state processing for {0} succeeded as expected".format(t.extension.__str__()))
             except Exception as error:
