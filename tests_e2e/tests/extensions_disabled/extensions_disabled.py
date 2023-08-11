@@ -71,18 +71,6 @@ class ExtensionsDisabled(AgentTest):
         #
         # Validate the agent is not processing extensions by checking it did not execute the extension settings
         #
-        try:
-            ssh_client.run_command("dir /var/lib/waagent/testdir", use_sudo=True)
-            fail("The extension settings should not have been executed")
-        except CommandError as error:
-            assert_that(error.stderr)\
-                .described_as("Extension should not be processed, but extension settings were executed")\
-                .contains('No such file or directory')
-            log.info("The agent did not execute the extension settings as expected")
-
-        #
-        # Validate the agent is not processing extensions by checking it did not execute the extension settings
-        #
         output = ssh_client.run_command("dir /var/lib/waagent", use_sudo=True)
         assert_that(output) \
             .described_as(
