@@ -27,7 +27,7 @@ import pytz
 import uuid
 
 from assertpy import assert_that, fail
-from typing import Any, Dict, List
+from typing import Any
 
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
