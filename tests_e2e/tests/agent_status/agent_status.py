@@ -100,7 +100,7 @@ class AgentStatus(AgentTest):
             self.validate_instance_view_vmagent_status(instance_view=instance_view)
 
         log.info("Instance view has valid agent status, agent version: {0}, status: {1}"
-                 .format(instance_view.vm_agent.vm_agent_version, instance_view.vm_agent.statuses[0].display_status))
+                 .format(vm_agent.vm_agent_version, vm_agent.statuses[0].display_status))
 
     def check_status_updated(self, status_timestamp: datetime, prev_status_timestamp: datetime, gs_processed_log: str, prev_gs_processed_log: str):
         log.info("")
