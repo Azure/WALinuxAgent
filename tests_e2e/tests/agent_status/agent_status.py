@@ -22,7 +22,7 @@
 # from fabric)
 #
 
-from azure.mgmt.compute.models import VirtualMachineInstanceView, InstanceViewStatus
+from azure.mgmt.compute.models import VirtualMachineInstanceView, InstanceViewStatus, VirtualMachineAgentInstanceView
 from assertpy import assert_that
 from datetime import datetime, timedelta
 from time import sleep
@@ -48,19 +48,19 @@ class AgentStatus(AgentTest):
 
         # Validate message field
         if status.message is None:
-            raise RetryableAgentStatusException("Agent status is invalid: Instance view agent status message is None")
+            raise RetryableAgentStatusException("Agent status is invalid: 'message' property in instance view is None")
         elif 'unresponsive' in status.message:
             raise RetryableAgentStatusException("Agent status is invalid: Instance view shows unresponsive agent")
 
         # Validate display status field
-        if status.display_status:
-            raise RetryableAgentStatusException("Agent status is invalid: Instance view agent display status is None")
+        if status.display_status is None:
+            raise RetryableAgentStatusException("Agent status is invalid: 'display_status' property in instance view is None")
         elif 'Not Ready' in status.display_status:
             raise RetryableAgentStatusException("Agent status is invalid: Instance view shows agent status is not ready")
 
         # Validate time field
-        if status.time:
-            raise RetryableAgentStatusException("Agent status is invalid: Instance view agent status timestamp is None")
+        if status.time is None:
+            raise RetryableAgentStatusException("Agent status is invalid: 'time' property in instance view is None")
 
     def validate_instance_view_vmagent(self, instance_view: VirtualMachineInstanceView):
         """
@@ -81,18 +81,19 @@ class AgentStatus(AgentTest):
             ]
         }
         """
-        if instance_view.vm_agent:
-            raise RetryableAgentStatusException("Agent status is invalid: Instance view vm agent is None")
+        if instance_view.vm_agent is None:
+            raise RetryableAgentStatusException("Agent status is invalid: 'vm_agent' property in instance view is None")
 
         # Validate vm_agent_version field
-        if instance_view.vm_agent.vm_agent_version:
-            raise RetryableAgentStatusException("Agent status is invalid: Instance view agent version is None")
-        elif 'Unknown' in instance_view.vm_agent.vm_agent_version:
+        vm_agent: VirtualMachineAgentInstanceView = instance_view.vm_agent
+        if vm_agent.vm_agent_version is None:
+            raise RetryableAgentStatusException("Agent status is invalid: 'vm_agent_version' property in instance view is None")
+        elif 'Unknown' in vm_agent.vm_agent_version:
             raise RetryableAgentStatusException("Agent status is invalid: Instance view shows agent version is unknown")
 
         # Validate statuses field
-        if instance_view.vm_agent.statuses:
-            raise RetryableAgentStatusException("Agent status is invalid: Instance view agent statuses is None")
+        if vm_agent.statuses is None:
+            raise RetryableAgentStatusException("Agent status is invalid: 'statuses' property in instance view is None")
         elif len(instance_view.vm_agent.statuses) < 1:
             raise RetryableAgentStatusException("Agent status is invalid: Instance view is missing an agent status entry")
         else:
