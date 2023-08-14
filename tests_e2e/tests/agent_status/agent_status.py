@@ -81,6 +81,9 @@ class AgentStatus(AgentTest):
             ]
         }
         """
+        # Using dot operator for properties here because azure.mgmt.compute.models has classes for InstanceViewStatus
+        # and VirtualMachineAgentInstanceView. All the properties we validate are attributes of these classes and
+        # initialized to None
         if instance_view.vm_agent is None:
             raise RetryableAgentStatusException("Agent status is invalid: 'vm_agent' property in instance view is None")
 
