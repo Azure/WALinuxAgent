@@ -9,9 +9,9 @@ from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackage
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.ga.test_update import UpdateTestCase, EMPTY_MANIFEST, WITH_ERROR, NO_ERROR
-from tests.protocol import mockwiredata
-from tests.protocol.mocks import MockHttpResponse, mock_wire_protocol
-from tests.tools import load_bin_data, patch
+from tests.lib import wire_protocol_data
+from tests.lib.mock_wire_protocol import MockHttpResponse, mock_wire_protocol
+from tests.lib.tools import load_bin_data, patch
 
 
 class TestGuestAgent(UpdateTestCase):
@@ -155,7 +155,7 @@ class TestGuestAgent(UpdateTestCase):
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(agent_uri)
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             agent = GuestAgent.from_agent_package(pkg, protocol, False)
 
@@ -176,7 +176,7 @@ class TestGuestAgent(UpdateTestCase):
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(agent_uri)
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             with patch("azurelinuxagent.ga.guestagent.add_event") as add_event:
                 agent = GuestAgent.from_agent_package(pkg, protocol, False)
@@ -201,7 +201,7 @@ class TestGuestAgent(UpdateTestCase):
         pkg = ExtHandlerPackage(version="9.9.9.9")
         pkg.uris.append(agent_uri)
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             agent = GuestAgent.from_agent_package(pkg, protocol, False)
 

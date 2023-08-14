@@ -17,18 +17,18 @@
 import contextlib
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
-from tests.tools import patch
-from tests.protocol import mockwiredata
+from tests.lib.tools import patch
+from tests.lib import wire_protocol_data
 
 
 @contextlib.contextmanager
 def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True):
     """
     Creates a WireProtocol object that handles requests to the WireServer, the Host GA Plugin, and some requests to storage (requests that provide mock data
-    in mockwiredata.py).
+    in wire_protocol_data.py).
 
     The data returned by those requests is read from the files specified by 'mock_wire_data_file' (which must follow the structure of the data
-    files defined in tests/protocol/mockwiredata.py).
+    files defined in tests/protocol/wire_protocol_data.py).
 
     The caller can also provide handler functions for specific HTTP methods using the http_*_handler arguments. The return value of the handler
     function is interpreted similarly to the "return_value" argument of patch(): if it is an exception the exception is raised or, if it is
@@ -135,7 +135,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     # create the protocol object
     #
     protocol = WireProtocol(restutil.KNOWN_WIRESERVER_IP)
-    protocol.mock_wire_data = mockwiredata.WireProtocolData(mock_wire_data_file)
+    protocol.mock_wire_data = wire_protocol_data.WireProtocolData(mock_wire_data_file)
     protocol.start = start
     protocol.stop = stop
     protocol.track_url = lambda url: tracked_urls.append(url)  # pylint: disable=unnecessary-lambda

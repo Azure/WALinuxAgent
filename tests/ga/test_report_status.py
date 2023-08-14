@@ -7,11 +7,11 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler
 from azurelinuxagent.ga.update import get_update_handler
-from tests.ga.mocks import mock_update_handler
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.tools import AgentTestCase, patch
-from tests.protocol import mockwiredata
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
+from tests.lib.mock_update_handler import mock_update_handler
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.tools import AgentTestCase, patch
+from tests.lib import wire_protocol_data
+from tests.lib.http_request_predicates import HttpRequestPredicates
 
 
 class ReportStatusTestCase(AgentTestCase):
@@ -32,7 +32,7 @@ class ReportStatusTestCase(AgentTestCase):
         def on_new_iteration(iteration):
             fail_goal_state_request[0] = iteration == 2
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             exthandlers_handler = ExtHandlersHandler(protocol)
             with patch.object(exthandlers_handler, "run", wraps=exthandlers_handler.run) as exthandlers_handler_run:
                 with mock_update_handler(protocol, iterations=2, on_new_iteration=on_new_iteration, exthandlers_handler=exthandlers_handler) as update_handler:
@@ -75,7 +75,7 @@ class ReportStatusTestCase(AgentTestCase):
                         self.assertEqual(first_status, second_status)
 
     def test_report_status_should_log_errors_only_once_per_goal_state(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=False):  # skip agent update
                 with patch("azurelinuxagent.ga.update.logger.warn") as logger_warn:
                     with patch("azurelinuxagent.common.version.get_daemon_version", return_value=FlexibleVersion("2.2.53")):
@@ -101,7 +101,7 @@ class ReportStatusTestCase(AgentTestCase):
                             self.assertEqual(2, len(get_warnings()), "UpdateHandler._report_status() should continue reporting errors after a new goal state")
 
     def test_update_handler_should_add_fast_track_to_supported_features_when_it_is_supported(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             self._test_supported_features_includes_fast_track(protocol, True)
 
     def test_update_handler_should_not_add_fast_track_to_supported_features_when_it_is_not_supported(self):
@@ -110,7 +110,7 @@ class ReportStatusTestCase(AgentTestCase):
                 return MockHttpResponse(status=404)
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS, http_get_handler=http_get_handler) as protocol:
             self._test_supported_features_includes_fast_track(protocol, False)
 
     def _test_supported_features_includes_fast_track(self, protocol, expected):

@@ -26,7 +26,7 @@ import azurelinuxagent.daemon.scvmm as scvmm
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, Mock, patch
+from tests.lib.tools import AgentTestCase, Mock, patch
 
 
 class TestSCVMM(AgentTestCase):

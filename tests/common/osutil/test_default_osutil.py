@@ -16,7 +16,7 @@
 #
 
 from azurelinuxagent.common.osutil.default import DefaultOSUtil, shellutil  # pylint: disable=unused-import
-from tests.tools import AgentTestCase, patch  # pylint: disable=unused-import
+from tests.lib.tools import AgentTestCase, patch  # pylint: disable=unused-import
 
 
 class DefaultOsUtilTestCase(AgentTestCase):

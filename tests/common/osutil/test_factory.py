@@ -34,7 +34,7 @@ from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
 from azurelinuxagent.common.osutil.suse import SUSEOSUtil, SUSE11OSUtil
 from azurelinuxagent.common.osutil.ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class TestOsUtilFactory(AgentTestCase):

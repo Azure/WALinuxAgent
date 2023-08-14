@@ -7,7 +7,7 @@ import sys
 
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPackage
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class ExtHandlerInstanceTestCase(AgentTestCase):

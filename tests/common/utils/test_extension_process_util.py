@@ -24,7 +24,7 @@ from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
-from tests.tools import AgentTestCase, patch, data_dir
+from tests.lib.tools import AgentTestCase, patch, data_dir
 
 
 class TestProcessUtils(AgentTestCase):
