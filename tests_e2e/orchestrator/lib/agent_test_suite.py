@@ -384,7 +384,6 @@ class AgentTestSuite(LisaTestSuite):
                 else:
                     raise Exception(f"Unexpected error when creating or extracting tarball during node setup: {error}")
 
-
         if self.context.is_vhd:
             log.info("Using a VHD; will not install the Test Agent.")
         elif not install_test_agent:
