@@ -304,66 +304,85 @@ class AgentTestSuite(LisaTestSuite):
             log.info("Downloading %s to %s", pypy_download, pypy_path)
             run_command(["wget", pypy_download, "-O",  pypy_path])
 
+        #
+        # Cleanup the test node (useful for developer runs)
+        #
+        log.info('Preparing the test node for setup')
+        # Note that removing lib requires sudo, since a Python cache may have been created by tests using sudo
+        self.context.ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
+
+        #
+        # Copy Pypy and the test Agent to the test node
+        #
+        target_path = Path("~") / "tmp"
+        self.context.ssh_client.run_command(f"mkdir {target_path}")
+        log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(pypy_path, target_path)
+        agent_package_path: Path = self._get_agent_package_path()
+        log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, target_path)
+        self.context.ssh_client.copy_to_node(agent_package_path, target_path)
+
         # tar commands sometimes fail with 'tar: Unexpected EOF in archive' error. Retry tarball creation, copy, and
         # extraction if we hit this error
-        try:
-            #
-            # Create a tarball with the files we need to copy to the test node. The tarball includes two directories:
-            #
-            #     * bin - Executables file (Bash and Python scripts)
-            #     * lib - Library files (Python modules)
-            #
-            # After extracting the tarball on the test node, 'bin' will be added to PATH and PYTHONPATH will be set to 'lib'.
-            #
-            # Note that executables are placed directly under 'bin', while the path for Python modules is preserved under 'lib.
-            #
-            tarball_path: Path = Path("/tmp/waagent.tar")
-            log.info("Creating %s with the files need on the test node", tarball_path)
-            log.info("Adding orchestrator/scripts")
-            command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"orchestrator"/"scripts", str(tarball_path))
-            log.info("%s\n%s", command, run_command(command, shell=True))
-            log.info("Adding tests/scripts")
-            command = "cd {0} ; tar rvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"tests"/"scripts", str(tarball_path))
-            log.info("%s\n%s", command, run_command(command, shell=True))
-            log.info("Adding tests/lib")
-            command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
-            log.info("%s\n%s", command, run_command(command, shell=True))
-            local_tarball_contents = run_command(['tar', 'tvf', str(tarball_path)])
-            log.info("Contents of %s:\n\n%s", tarball_path, local_tarball_contents)
+        tar_retries = 3
+        while tar_retries > 0:
+            try:
+                #
+                # Create a tarball with the files we need to copy to the test node. The tarball includes two directories:
+                #
+                #     * bin - Executables file (Bash and Python scripts)
+                #     * lib - Library files (Python modules)
+                #
+                # After extracting the tarball on the test node, 'bin' will be added to PATH and PYTHONPATH will be set to 'lib'.
+                #
+                # Note that executables are placed directly under 'bin', while the path for Python modules is preserved under 'lib.
+                #
+                tarball_path: Path = Path("/tmp/waagent.tar")
+                log.info("Creating %s with the files need on the test node", tarball_path)
+                log.info("Adding orchestrator/scripts")
+                command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"orchestrator"/"scripts", str(tarball_path))
+                log.info("%s\n%s", command, run_command(command, shell=True))
+                log.info("Adding tests/scripts")
+                command = "cd {0} ; tar rvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"tests"/"scripts", str(tarball_path))
+                log.info("%s\n%s", command, run_command(command, shell=True))
+                log.info("Adding tests/lib")
+                command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
+                log.info("%s\n%s", command, run_command(command, shell=True))
+                log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
 
-            #
-            # Cleanup the test node (useful for developer runs)
-            #
-            log.info('Preparing the test node for setup')
-            # Note that removing lib requires sudo, since a Python cache may have been created by tests using sudo
-            self.context.ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
+                #
+                # Copy the tarball to the test node
+                #
+                log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
+                self.context.ssh_client.copy_to_node(tarball_path, target_path)
 
-            #
-            # Copy the tarball, Pypy and the test Agent to the test node
-            #
-            target_path = Path("~")/"tmp"
-            self.context.ssh_client.run_command(f"mkdir {target_path}")
-            log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
-            self.context.ssh_client.copy_to_node(tarball_path, target_path)
-            log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, target_path)
-            self.context.ssh_client.copy_to_node(pypy_path, target_path)
-            agent_package_path: Path = self._get_agent_package_path()
-            log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, target_path)
-            self.context.ssh_client.copy_to_node(agent_package_path, target_path)
+                #
+                # Extract the tarball and execute the install scripts
+                #
+                log.info('Installing tools on the test node')
+                command = f"tar xvf {target_path/tarball_path.name} && ~/bin/install-tools"
+                log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
 
-            #
-            # Extract the tarball and execute the install scripts
-            #
-            log.info('Installing tools on the test node')
-            command = f"tar xvf {target_path/tarball_path.name} && ~/bin/install-tools"
-            log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
+                # Tarball creation and extraction was successful - no need to retry
+                tar_retries = 0
 
-        except CommandError as error:
-            if "tar: Unexpected EOF in archive" in error.stdout:
-                # handle retry here
-                # cleanup created tarball 
-            else:
-                raise Exception(f"Unexpected error when creating or extracting tarball during node setup: {error.stderr}")
+            except CommandError as error:
+                if "tar: Unexpected EOF in archive" in error.stdout:
+                    tar_retries -= 1
+                    # Log the error with traceback to see which tar operation failed
+                    log.info(f"Tarball creation or extraction failed: \n{error}")
+
+                    # Prepare for retry
+                    if tar_retries > 0:
+                        # Cleanup local and remote tarballs if they exist
+                        log.info("Cleanup local and remote tarball files if they exist")
+                        command = "rm -rf {0}".format(str(tarball_path))
+                        log.info("%s\n%s", command, run_command(command, shell=True))
+                        command = f"rm -rf {target_path/tarball_path.name}"
+                        log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
+                        log.info("Retrying tarball creation and extraction...")
+                else:
+                    raise Exception(f"Unexpected error when creating or extracting tarball during node setup: {error}")
 
 
         if self.context.is_vhd:
