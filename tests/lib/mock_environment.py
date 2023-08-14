@@ -22,7 +22,7 @@ import subprocess
 
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import patch, patch_builtin
+from tests.lib.tools import patch, patch_builtin
 
 
 class MockCommand:

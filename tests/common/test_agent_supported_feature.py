@@ -18,7 +18,7 @@
 from azurelinuxagent.common.agent_supported_feature import SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp, get_supported_feature_by_name, \
     get_agent_supported_features_list_for_extensions
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class TestAgentSupportedFeature(AgentTestCase):

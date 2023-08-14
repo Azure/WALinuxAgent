@@ -3,7 +3,7 @@ from multiprocessing import Queue
 from threading import Thread, currentThread
 
 from azurelinuxagent.common.singletonperthread import SingletonPerThread
-from tests.tools import AgentTestCase, clear_singleton_instances
+from tests.lib.tools import AgentTestCase, clear_singleton_instances
 
 
 class TestClassToTestSingletonPerThread(SingletonPerThread):

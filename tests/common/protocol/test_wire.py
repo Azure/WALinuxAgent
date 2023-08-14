@@ -40,12 +40,12 @@ from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
 from tests.ga.test_monitor import random_generator
-from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE_NO_EXT, DATA_FILE
-from tests.protocol.mockwiredata import WireProtocolData
-from tests.tools import patch, AgentTestCase, load_bin_data
+from tests.lib import wire_protocol_data
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE_NO_EXT, DATA_FILE
+from tests.lib.wire_protocol_data import WireProtocolData
+from tests.lib.tools import patch, AgentTestCase, load_bin_data
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -120,37 +120,37 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
     def test_getters(self, *args):
         """Normal case"""
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE)
         self._test_getters(test_data, True, *args)
 
     def test_getters_no_ext(self, *args):
         """Provision with agent is not checked"""
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_EXT)
+        test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE_NO_EXT)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_settings(self, *args):
         """Extensions without any settings"""
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_SETTINGS)
+        test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE_EXT_NO_SETTINGS)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_public(self, *args):
         """Extensions without any public settings"""
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_EXT_NO_PUBLIC)
+        test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE_EXT_NO_PUBLIC)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_cert_format(self, *args):
         """Certificate format not specified"""
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_NO_CERT_FORMAT)
+        test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE_NO_CERT_FORMAT)
         self._test_getters(test_data, True, *args)
 
     def test_getters_ext_cert_format_not_pfx(self, *args):
         """Certificate format is not Pkcs7BlobWithPfxContents specified"""
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE_CERT_FORMAT_NOT_PFX)
+        test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE_CERT_FORMAT_NOT_PFX)
         self._test_getters(test_data, False, *args)
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")
     def test_getters_with_stale_goal_state(self, patch_report, *args):
-        test_data = mockwiredata.WireProtocolData(mockwiredata.DATA_FILE)
+        test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE)
         test_data.emulate_stale_goal_state = True
 
         self._test_getters(test_data, True, *args)
@@ -202,7 +202,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                 self.assertTrue(c == (True if i != 3 else False))
 
     def test_status_blob_parsing(self, *args):  # pylint: disable=unused-argument
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
             self.assertIsInstance(extensions_goal_state, ExtensionsGoalStateFromExtensionsConfig)
             self.assertEqual(extensions_goal_state.status_upload_blob,
@@ -212,7 +212,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             self.assertEqual(protocol.get_goal_state().extensions_goal_state.status_upload_blob_type, u'BlockBlob')
 
     def test_get_host_ga_plugin(self, *args):  # pylint: disable=unused-argument
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             host_plugin = protocol.client.get_host_plugin()
             goal_state = protocol.client.get_goal_state()
             self.assertEqual(goal_state.container_id, host_plugin.container_id)
@@ -223,7 +223,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             if protocol.get_endpoint() in url and url.endswith('/status'):
                 return MockHttpResponse(200)
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_put_handler=http_put_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_put_handler=http_put_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
             protocol.client.status_blob.vm_status = VMStatus(message="Ready", status="Ready")
 
@@ -254,14 +254,14 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                 self.assertEqual(1, mock_prepare.call_count)
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *_):
-        data_file = mockwiredata.DATA_FILE.copy()
+        data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_in_vm_empty_artifacts_profile.xml"
 
         with mock_wire_protocol(data_file) as protocol:
             self.assertFalse(protocol.get_goal_state().extensions_goal_state.on_hold)
 
     def test_it_should_set_on_hold_to_false_when_the_in_vm_artifacts_profile_is_not_valid(self, *_):
-        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             extensions_on_hold = protocol.get_goal_state().extensions_goal_state.on_hold
             self.assertTrue(extensions_on_hold, "Extensions should be on hold in the test data")
 
@@ -485,7 +485,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         # Basic test for extensions_goal_state when extensions are not present in the config. The test verifies that
         # extensions_goal_state fetches the correct data by comparing the returned data with the test data provided the
         # mock_wire_protocol.
-        with mock_wire_protocol(mockwiredata.DATA_FILE_NO_EXT) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_NO_EXT) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
@@ -500,7 +500,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
     def test_get_ext_conf_with_extensions_should_retrieve_ext_handlers_and_vmagent_manifests_info(self):
         # Basic test for extensions_goal_state when extensions are present in the config. The test verifies that extensions_goal_state
         # fetches the correct data by comparing the returned data with the test data provided the mock_wire_protocol.
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             ext_handlers_names = [ext_handler.name for ext_handler in extensions_goal_state.extensions]
@@ -527,7 +527,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(200, body=load_bin_data("ga/fake_extension.zip"))
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
 
             self.assertTrue(os.path.exists(target_directory), "The extension package was not downloaded")
@@ -545,7 +545,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.fail('The host channel should not have been used')
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
@@ -568,7 +568,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(200, body=load_bin_data("ga/fake_extension.zip"))
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             protocol.client.download_zip_package("extension package", [extension_url], target_file, target_directory, use_verify_header=False)
@@ -599,7 +599,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
         http_get_handler.goal_state_requests = 0
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             try:
@@ -633,7 +633,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.track_url(url)  # keep track of goal state requests
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
@@ -661,7 +661,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(status=200, body=b"NOT A ZIP")
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             with self.assertRaises(ExtensionDownloadError):
@@ -681,7 +681,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.fail('The Host GA Plugin should not have been invoked')
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             manifest = protocol.client.fetch_manifest("test", [manifest_url], use_verify_header=False)
@@ -703,7 +703,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 return MockHttpResponse(200, body=manifest_xml.encode('utf-8'))
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_get_handler=http_get_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_get_handler=http_get_handler) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             try:
@@ -736,7 +736,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
         http_get_handler.goal_state_requests = 0
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             try:
@@ -768,7 +768,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
 
         # Everything fails. Goal state should have been updated and host channel should not have been set as default.
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             # initialization of the host plugin triggers a request for the goal state; do it here before we start
@@ -796,7 +796,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.track_url(url)
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             HostPluginProtocol.is_default_channel = False
 
@@ -814,7 +814,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 protocol.track_url(url)
             return None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
 
             HostPluginProtocol.is_default_channel = False
@@ -843,7 +843,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
         http_get_handler.host_plugin_calls = 0
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             try:
@@ -876,7 +876,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
             return None
         http_get_handler.host_plugin_calls = 0
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE) as protocol:
             HostPluginProtocol.is_default_channel = False
 
             # initialization of the host plugin triggers a request for the goal state; do it here before we start tracking those requests.
@@ -917,7 +917,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
         return direct_func, host_func
 
     def test_download_using_appropriate_channel_should_not_invoke_secondary_when_primary_channel_succeeds(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             # Scenario #1: Direct channel default
             HostPluginProtocol.is_default_channel = False
 
@@ -943,7 +943,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertTrue(HostPluginProtocol.is_default_channel)
 
     def test_download_using_appropriate_channel_should_not_change_default_channel_if_none_succeeds(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             # Scenario #1: Direct channel is default
             HostPluginProtocol.is_default_channel = False
             direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=True)
@@ -969,7 +969,7 @@ class TestWireClient(HttpRequestPredicates, AgentTestCase):
                 self.assertTrue(HostPluginProtocol.is_default_channel)
 
     def test_download_using_appropriate_channel_should_change_default_channel_when_secondary_succeeds(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             # Scenario #1: Direct channel is default
             HostPluginProtocol.is_default_channel = False
             direct_func, host_func = self._set_and_fail_helper_channel_functions(fail_direct=True, fail_host=False)
@@ -1015,7 +1015,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """
 
     def test_it_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_changes(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
 
             # if the incarnation changes the behavior is the same for forced and non-forced updates
@@ -1072,7 +1072,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_non_forced_update_should_not_update_the_goal_state_but_should_update_the_host_plugin_when_the_incarnation_does_not_change(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
 
             # The container id, role config name and shared config can change without the incarnation changing; capture the initial
@@ -1096,7 +1096,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_forced_update_should_update_the_goal_state_and_the_host_plugin_when_the_incarnation_does_not_change(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
 
             # The container id, role config name and shared config can change without the incarnation changing
@@ -1119,7 +1119,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertEqual(protocol.client.get_host_plugin().role_config_name, new_role_config_name)
 
     def test_reset_should_init_provided_goal_state_properties(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.All & ~GoalStateProperties.Certificates)
 
             with self.assertRaises(ProtocolError) as context:
@@ -1129,7 +1129,7 @@ class UpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             self.assertIn(expected_message, str(context.exception))
 
     def test_reset_should_init_the_goal_state(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             new_container_id = str(uuid.uuid4())
             new_role_config_name = str(uuid.uuid4())
             protocol.mock_wire_data.set_container_id(new_container_id)
@@ -1146,7 +1146,7 @@ class UpdateHostPluginFromGoalStateTestCase(AgentTestCase):
     Tests for WireClient.update_host_plugin_from_goal_state()
     """
     def test_it_should_update_the_host_plugin_with_or_without_incarnation_changes(self):
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.client.get_host_plugin()
 
             # the behavior should be the same whether the incarnation changes or not

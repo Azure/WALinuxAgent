@@ -36,8 +36,8 @@ from azurelinuxagent.common.telemetryevent import GuestAgentGenericLogsSchema, \
     CommonTelemetryEventSchema
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_telemetry_events import ExtensionEventSchema, _ProcessExtensionEvents
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.tools import AgentTestCase, clear_singleton_instances, data_dir
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.tools import AgentTestCase, clear_singleton_instances, data_dir
 
 
 class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):

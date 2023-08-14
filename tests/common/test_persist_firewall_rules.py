@@ -28,7 +28,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules, FirewallCmdDirectCommands
-from tests.tools import AgentTestCase, MagicMock, patch
+from tests.lib.tools import AgentTestCase, MagicMock, patch
 
 
 class TestPersistFirewallRulesHandler(AgentTestCase):

@@ -27,7 +27,7 @@ import uuid
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.future import ustr
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class TestFileOperations(AgentTestCase):

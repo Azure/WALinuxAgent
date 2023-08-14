@@ -27,10 +27,10 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, ExtCommandEnvVariable
 
-from tests.tools import Mock, patch
-from tests.protocol.mockwiredata import WireProtocolData
-from tests.protocol.mocks import MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
+from tests.lib.tools import Mock, patch
+from tests.lib.wire_protocol_data import WireProtocolData
+from tests.lib.mock_wire_protocol import MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
 
 
 class ExtensionCommandNames(object):
@@ -107,7 +107,7 @@ def enable_invocations(*emulators):
 def generate_put_handler(*emulators):
     """
     Create a HTTP handler to store status blobs for each provided emulator.
-    For use with tests.protocol.mocks.mock_wire_protocol.
+    For use with tests.lib.mocks.mock_wire_protocol.
     """
 
     def mock_put_handler(url, *args, **_):

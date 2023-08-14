@@ -26,7 +26,7 @@ import azurelinuxagent.common.osutil.default as default
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 
 

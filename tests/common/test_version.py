@@ -30,7 +30,7 @@ from azurelinuxagent.common.version import set_current_agent, \
     get_f5_platform, get_distro, get_lis_version, PY_VERSION_MAJOR, \
     PY_VERSION_MINOR, get_daemon_version, set_daemon_version, __DAEMON_VERSION_ENV_VARIABLE as DAEMON_VERSION_ENV_VARIABLE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from tests.tools import AgentTestCase, open_patch, patch
+from tests.lib.tools import AgentTestCase, open_patch, patch
 
 
 def freebsd_system():

@@ -13,12 +13,12 @@ from azurelinuxagent.common.protocol.restapi import ExtensionRequestedState, Ext
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionStatusValue, ExtCommandEnvVariable, \
     GoalStateStatus, ExtHandlerInstance
-from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
+from tests.lib.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
-from tests.tools import AgentTestCase, mock_sleep, patch
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE, WireProtocolData
+from tests.lib.tools import AgentTestCase, mock_sleep, patch
 
 
 class TestMultiConfigExtensionsConfigParsing(AgentTestCase):

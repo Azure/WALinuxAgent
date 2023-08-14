@@ -27,7 +27,7 @@ from azurelinuxagent.common.protocol.metadata_server_migration_util import _LEGA
                                                                            _LEGACY_METADATA_SERVER_P7B_FILE_NAME, \
                                                                            _KNOWN_METADATASERVER_IP
 from azurelinuxagent.common.utils.restutil import KNOWN_WIRESERVER_IP
-from tests.tools import AgentTestCase, patch, MagicMock
+from tests.lib.tools import AgentTestCase, patch, MagicMock
 
 class TestMetadataServerMigrationUtil(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_lib_dir')
