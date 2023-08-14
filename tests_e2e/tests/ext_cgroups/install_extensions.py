@@ -33,10 +33,7 @@ class InstallExtensions:
 
     def __init__(self, context: AgentTestContext):
         self._context = context
-        self._ssh_client = SshClient(
-            ip_address=self._context.vm_ip_address,
-            username=self._context.username,
-            private_key_file=self._context.private_key_file)
+        self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
         self._prepare_agent()
@@ -97,14 +94,10 @@ class InstallExtensions:
 
     def _install_cse(self):
         # Use custom script to output the cgroups assigned to it at runtime and save to /var/lib/waagent/tmp/custom_script_check.
-        script_contents = """#!/usr/bin/env bash
+        script_contents = """
 mkdir /var/lib/waagent/tmp
 cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check
 """
-
-        base64script: str = self._ssh_client.run_command("echo '{0}' | base64 -w0".format(script_contents))
-
-        settings = {"script": base64script}
         custom_script_2_0 = VirtualMachineExtensionClient(
             self._context.vm,
             VmExtensionIds.CustomScript,
@@ -112,7 +105,9 @@ cp /proc/$$/cgroup /var/lib/waagent/tmp/custom_script_check
 
         log.info("Installing %s", custom_script_2_0)
         custom_script_2_0.enable(
-            settings=settings
+            protected_settings={
+                'commandToExecute': f"echo \'{script_contents}\' | bash"
+            }
         )
         custom_script_2_0.assert_instance_view()
 

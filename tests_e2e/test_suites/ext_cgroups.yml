@@ -6,4 +6,5 @@ name: "ExtCgroups"
 tests:
   - "ext_cgroups/ext_cgroups.py"
 images: "cgroups-endorsed"
+# This test suite uses the DCR Test Extension, which is only published in southcentralus region in public cloud
 locations: "AzureCloud:southcentralus"
