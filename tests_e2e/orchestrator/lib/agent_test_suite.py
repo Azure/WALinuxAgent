@@ -367,19 +367,12 @@ class AgentTestSuite(LisaTestSuite):
                 tar_retries = 0
 
             except CommandError as error:
-                if "tar: Unexpected EOF in archive" in error.stdout:
+                if "tar: Unexpected EOF in archive" in error.stderr:
                     tar_retries -= 1
                     # Log the error with traceback to see which tar operation failed
                     log.info(f"Tarball creation or extraction failed: \n{error}")
-
-                    # Prepare for retry
+                    # Retry tar operations
                     if tar_retries > 0:
-                        # Cleanup local and remote tarballs if they exist
-                        log.info("Cleanup local and remote tarball files if they exist")
-                        command = "rm -rf {0}".format(str(tarball_path))
-                        log.info("%s\n%s", command, run_command(command, shell=True))
-                        command = f"rm -rf {target_path/tarball_path.name}"
-                        log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
                         log.info("Retrying tarball creation and extraction...")
                 else:
                     raise Exception(f"Unexpected error when creating or extracting tarball during node setup: {error}")
