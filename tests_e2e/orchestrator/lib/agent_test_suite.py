@@ -415,7 +415,6 @@ class AgentTestSuite(LisaTestSuite):
 
         except:  # pylint: disable=bare-except
             log.exception("Failed to collect logs from the test machine")
-            raise Exception(f"[{self.context.environment_name}] Unexpected error in AgentTestSuite: {e}")
 
     # NOTES:
     #
