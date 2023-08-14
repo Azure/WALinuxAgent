@@ -33,6 +33,7 @@ from functools import partial
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
@@ -485,8 +486,9 @@ class ExtHandlersHandler(object):
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
             # here with an error message.
             if not extensions_enabled:
+                agent_conf_file_path = get_osutil().agent_conf_file_path
                 msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
-                      "processing, set Extensions.Enabled=y in '/etc/waagent.conf'"
+                      "processing, set Extensions.Enabled=y in '{0}'".format(agent_conf_file_path)
                 handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
                 handler_i.create_status_file_if_not_exist(extension,
                                                           status=ExtensionStatusValue.error,
