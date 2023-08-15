@@ -489,6 +489,10 @@ class ExtHandlersHandler(object):
                 agent_conf_file_path = get_osutil().agent_conf_file_path
                 msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '{0}'".format(agent_conf_file_path)
+                ext_full_name = handler_i.get_extension_full_name(extension)
+                logger.info('')
+                logger.info(f"{ext_full_name}: {msg}")
+                add_event(op=WALAEventOperation.ExtensionProcessing, message=f"{ext_full_name}: {msg}")
                 handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
                 handler_i.create_status_file_if_not_exist(extension,
                                                           status=ExtensionStatusValue.error,
