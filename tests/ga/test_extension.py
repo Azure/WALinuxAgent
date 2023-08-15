@@ -1649,7 +1649,19 @@ class TestExtension_Deprecated(TestExtensionBase):
         exthandlers_handler.run()
         exthandlers_handler.report_ext_handlers_status()
 
-        self._assert_no_handler_status(protocol.report_vm_status)
+        report_vm_status = protocol.report_vm_status
+        self.assertTrue(report_vm_status.called)
+        args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
+        vm_status = args[0]
+        self.assertEqual(1, len(vm_status.vmAgent.extensionHandlers))
+        exthandler = vm_status.vmAgent.extensionHandlers[0]
+        self.assertEqual(-1, exthandler.code)
+        self.assertEqual('NotReady', exthandler.status)
+        self.assertEqual("Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", exthandler.message)
+        ext_status = exthandler.extension_status
+        self.assertEqual(-1, ext_status.code)
+        self.assertEqual('error', ext_status.status)
+        self.assertEqual("Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", ext_status.message)
 
     def test_extensions_deleted(self, *args):
         # Ensure initial enable is successful
