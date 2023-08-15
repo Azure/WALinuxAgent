@@ -24,9 +24,10 @@
 
 import datetime
 import pytz
+import uuid
 
 from assertpy import assert_that, fail
-from typing import Any, Dict, List
+from typing import Any
 
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
@@ -39,39 +40,77 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 
 class ExtensionsDisabled(AgentTest):
+    class TestCase:
+        def __init__(self, extension: VirtualMachineExtensionClient, settings: Any):
+            self.extension = extension
+            self.settings = settings
+
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
         # Disable extension processing on the test VM
+        log.info("")
         log.info("Disabling extension processing on the test VM [%s]", self._context.vm.name)
         output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=n", use_sudo=True)
         log.info("Disable completed:\n%s", output)
-
-        # From now on, extensions will time out; set the timeout to the minimum allowed(15 minutes)
-        log.info("Setting the extension timeout to 15 minutes")
-        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-
-        vm.update({"extensionsTimeBudget": "PT15M"})
-
         disabled_timestamp: datetime.datetime = datetime.datetime.utcnow() - datetime.timedelta(minutes=60)
 
-        #
-        # Validate that the agent is not processing extensions by attempting to run CustomScript
-        #
-        log.info("Executing CustomScript; it should time out after 15 min or so.")
-        custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
-        try:
-            custom_script.enable(settings={'commandToExecute': "date"}, force_update=True, timeout=20 * 60)
-            fail("CustomScript should have timed out")
-        except Exception as error:
-            assert_that("VMExtensionProvisioningTimeout" in str(error)) \
-                .described_as(f"Expected a VMExtensionProvisioningTimeout: {error}") \
-                .is_true()
-            log.info("CustomScript timed out as expected")
+        # Prepare test cases
+        unique = str(uuid.uuid4())
+        test_file = f"waagent-test.{unique}"
+        test_cases = [
+            ExtensionsDisabled.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
+                                              resource_name="CustomScript"),
+                {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
+            ),
+            ExtensionsDisabled.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="RunCommandHandler"),
+                {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
+            )
+        ]
+
+        for t in test_cases:
+            log.info("")
+            log.info("Test case: %s", t.extension)
+            #
+            # Validate that the agent is not processing extensions by attempting to enable extension & checking that
+            # provisioning fails fast
+            #
+            log.info(
+                "Executing {0}; the agent should report a VMExtensionProvisioningError without processing the extension"
+                .format(t.extension.__str__()))
+
+            try:
+                t.extension.enable(settings=t.settings, force_update=True, timeout=6 * 60)
+                fail("The agent should have reported an error processing the goal state")
+            except Exception as error:
+                assert_that("VMExtensionProvisioningError" in str(error)) \
+                    .described_as(f"Expected a VMExtensionProvisioningError error, but actual error was: {error}") \
+                    .is_true()
+                assert_that("Extension will not be processed since extension processing is disabled" in str(error)) \
+                    .described_as(
+                    f"Error message should communicate that extension will not be processed, but actual error "
+                    f"was: {error}").is_true()
+                log.info("Goal state processing for {0} failed as expected".format(t.extension.__str__()))
+
+            #
+            # Validate the agent did not process the extension by checking it did not execute the extension settings
+            #
+            output = ssh_client.run_command("dir /tmp", use_sudo=True)
+            assert_that(output) \
+                .described_as(
+                f"Contents of '/tmp' on test VM contains {test_file}. Contents: {output}. \n This indicates "
+                f"{t.extension.__str__()} was unexpectedly processed") \
+                .does_not_contain(f"{test_file}")
+            log.info("The agent did not process the extension settings for {0} as expected".format(t.extension.__str__()))
 
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
         #
+        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
+        log.info("")
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
         assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
@@ -82,10 +121,23 @@ class ExtensionsDisabled(AgentTest):
             .is_greater_than(pytz.utc.localize(disabled_timestamp))
         log.info("The VM Agent reported status after extensions were disabled, as expected.")
 
-    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
-        return [
-            {'message': 'No handler status found for Microsoft.Azure.Extensions.CustomScript'},
-        ]
+        #
+        # Validate that the agent processes extensions after re-enabling extension processing
+        #
+        log.info("")
+        log.info("Enabling extension processing on the test VM [%s]", self._context.vm.name)
+        output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=y", use_sudo=True)
+        log.info("Enable completed:\n%s", output)
+
+        for t in test_cases:
+            try:
+                log.info("")
+                log.info("Executing {0}; the agent should process the extension".format(t.extension.__str__()))
+                t.extension.enable(settings=t.settings, force_update=True, timeout=15 * 60)
+                log.info("Goal state processing for {0} succeeded as expected".format(t.extension.__str__()))
+            except Exception as error:
+                fail(f"Unexpected error while processing {t.extension.__str__()} after re-enabling extension "
+                     f"processing: {error}")
 
 
 if __name__ == "__main__":
