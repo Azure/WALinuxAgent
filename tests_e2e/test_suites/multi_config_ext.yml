@@ -7,3 +7,4 @@ tests:
   - "multi_config_ext/multi_config_ext.py"
 images:
   - "endorsed"
+  - "endorsed-arm64"
