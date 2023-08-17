@@ -20,7 +20,7 @@
 #
 # This test adds multiple instances of RCv2 and verifies that the extensions are processed and deleted as expected.
 #
-import json
+
 import uuid
 from typing import Dict, Callable, Any
 
@@ -97,8 +97,7 @@ class MultiConfigExt(AgentTest):
         }
         sc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
             "CSE": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                              resource_name="CSE"), sc_settings)
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), sc_settings)
         }
         test_cases: Dict[str, MultiConfigExt.TestCase] = {**mc_test_cases, **sc_test_cases}
 
@@ -117,8 +116,7 @@ class MultiConfigExt(AgentTest):
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt4"), mc_settings),
             "CSE": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                              resource_name="CSE"), sc_settings)
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), sc_settings)
         }
         test_cases.update(updated_test_cases)
 
