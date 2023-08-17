@@ -16,7 +16,6 @@
 #
 
 import json
-import http.client
 from subprocess import PIPE, Popen
 
 from typing import Any, Dict, List
