@@ -55,7 +55,7 @@ class MultiConfigExt(AgentTest):
             log.info("Checking {0} has expected status message with {1}".format(resource_name, test_case.test_guid))
             test_case.extension.assert_instance_view(expected_message=f"{test_case.test_guid}")
 
-        # Delete each extension on the VM and assert that there are no unexpected extensions left
+        # Delete each extension on the VM
         if delete_extensions:
             log.info("")
             log.info("Delete each extension...")
