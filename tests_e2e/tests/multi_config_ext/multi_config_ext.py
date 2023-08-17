@@ -41,73 +41,27 @@ class MultiConfigExt(AgentTest):
             self.get_settings = get_settings
             self.test_guid: str = str(uuid.uuid4())
 
-    def enable_extensions(self, test_cases: Dict[str, TestCase]):
-        for resource_name, test_case in test_cases.items():
+    def enable_and_assert_test_cases(self, cases_to_enable: Dict[str, TestCase], cases_to_assert: Dict[str, TestCase], delete_extensions: bool = False):
+        for resource_name, test_case in cases_to_enable.items():
             log.info("")
             log.info("Adding {0} to the test VM. guid={1}".format(resource_name, test_case.test_guid))
             test_case.extension.enable(settings=test_case.get_settings(test_case.test_guid))
             test_case.extension.assert_instance_view()
 
-    def assert_expected_guids_in_ext_status(self, test_cases: Dict[str, TestCase]):
-        for resource_name, test_case in test_cases.items():
+        log.info("")
+        log.info("Check that each extension has the expected guid in its status message...")
+        for resource_name, test_case in cases_to_assert.items():
             log.info("")
             log.info("Checking {0} has expected status message with {1}".format(resource_name, test_case.test_guid))
             test_case.extension.assert_instance_view(expected_message=f"{test_case.test_guid}")
 
-    def run(self):
-        # Create 3 different RCv2 extensions and a single config extension (CSE) and assign each a unique guid. Each
-        # extension will have settings that echo its assigned guid. We will use this guid to verify the extension
-        # statuses later.
-        multi_config_settings: Callable[[Any], Dict[str, Dict[str, str]]] = lambda s: {
-            "source": {"script": f"echo {s}"}}
-        single_config_settings: Callable[[Any], Dict[str, str]] = lambda s: {'commandToExecute': f"echo {s}"}
-
-        test_cases: Dict[str, MultiConfigExt.TestCase] = {
-            "MCExt1": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                              resource_name="MCExt1"), multi_config_settings),
-            "MCExt2": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                              resource_name="MCExt2"), multi_config_settings),
-            "MCExt3": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                              resource_name="MCExt3"), multi_config_settings),
-            "CSE": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), single_config_settings)
-        }
-
-        # Add each extension to the VM and validate the instance view has succeeded status with its assigned guid in the
-        # status message.
-        log.info("")
-        log.info("Add 3 instances of RCv2 to the VM. Each instance will echo a unique guid...")
-        self.enable_extensions(test_cases=test_cases)
-        log.info("")
-        log.info("Check that each extension has the expected guid in its status message...")
-        self.assert_expected_guids_in_ext_status(test_cases=test_cases)
-
-        # Update MCExt3 and CSE with new guids and add a new instance of RCv2 to the VM
-        updated_test_cases: Dict[str, MultiConfigExt.TestCase] = {
-            "MCExt3": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                              resource_name="MCExt3"), multi_config_settings),
-            "MCExt4": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                              resource_name="MCExt4"), multi_config_settings),
-            "CSE": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), single_config_settings)
-        }
-        test_cases.update(updated_test_cases)
-
-        log.info("")
-        log.info("Update MCExt3 and CSE with new guids and add a new instance of RCv2 to the VM...")
-        self.enable_extensions(test_cases=updated_test_cases)
-        log.info("")
-        log.info("Check that each extension has the expected guid in its status message...")
-        self.assert_expected_guids_in_ext_status(test_cases=test_cases)
-
         # Delete each extension on the VM and assert that there are no unexpected extensions left
-        log.info("")
-        log.info("Delete each instance of RCv2 and CSE...")
+        if delete_extensions:
+            log.info("")
+            log.info("Delete each extension...")
+            self.delete_extensions(cases_to_assert)
+
+    def delete_extensions(self, test_cases: Dict[str, TestCase]):
         for resource_name, test_case in test_cases.items():
             log.info("")
             log.info("Deleting {0} from the test VM".format(resource_name))
@@ -118,8 +72,73 @@ class MultiConfigExt(AgentTest):
         if instance_view.extensions is not None and any(instance_view.extensions):
             fail("Unwanted extension found: \n{0}".format(json.dumps(instance_view.serialize(), indent=2)))
         log.info("")
-        log.info("All instances of RCv2 were successfully deleted, and no unexpected extensions were found in the "
+        log.info("All extensions were successfully deleted, and no unexpected extensions were found in the "
                  "instance view.")
+
+    def run(self):
+        # Create 3 different RCv2 extensions and a single config extension (CSE) and assign each a unique guid. Each
+        # extension will have settings that echo its assigned guid. We will use this guid to verify the extension
+        # statuses later.
+        mc_settings: Callable[[Any], Dict[str, Dict[str, str]]] = lambda s: {
+            "source": {"script": f"echo {s}"}}
+        sc_settings: Callable[[Any], Dict[str, str]] = lambda s: {'commandToExecute': f"echo {s}"}
+
+        mc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
+            "MCExt1": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt1"), mc_settings),
+            "MCExt2": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt2"), mc_settings),
+            "MCExt3": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt3"), mc_settings)
+        }
+        sc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
+            "CSE": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
+                                              resource_name="CSE"), sc_settings)
+        }
+        test_cases: Dict[str, MultiConfigExt.TestCase] = {**mc_test_cases, **sc_test_cases}
+
+        # Add each extension to the VM and validate the instance view has succeeded status with its assigned guid in the
+        # status message
+        log.info("")
+        log.info("Add CSE and 3 instances of RCv2 to the VM. Each instance will echo a unique guid...")
+        self.enable_and_assert_test_cases(cases_to_enable=test_cases, cases_to_assert=test_cases)
+
+        # Update MCExt3 and CSE with new guids and add a new instance of RCv2 to the VM
+        updated_test_cases: Dict[str, MultiConfigExt.TestCase] = {
+            "MCExt3": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt3"), mc_settings),
+            "MCExt4": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt4"), mc_settings),
+            "CSE": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
+                                              resource_name="CSE"), sc_settings)
+        }
+        test_cases.update(updated_test_cases)
+
+        # Enable only the updated extensions, verify every extension has the correct test guid is in status message, and
+        # remove all extensions from the test vm
+        log.info("")
+        log.info("Update MCExt3 and CSE with new guids and add a new instance of RCv2 to the VM...")
+        self.enable_and_assert_test_cases(cases_to_enable=updated_test_cases, cases_to_assert=test_cases,
+                                          delete_extensions=True)
+
+        # Enable, verify, and remove only multi config extensions
+        log.info("")
+        log.info("Add only multi-config extensions to the VM...")
+        self.enable_and_assert_test_cases(cases_to_enable=mc_test_cases, cases_to_assert=mc_test_cases,
+                                          delete_extensions=True)
+
+        # Enable, verify, and delete only single config extensions
+        log.info("")
+        log.info("Add only single-config extension to the VM...")
+        self.enable_and_assert_test_cases(cases_to_enable=sc_test_cases, cases_to_assert=sc_test_cases,
+                                          delete_extensions=True)
 
 
 if __name__ == "__main__":
