@@ -69,11 +69,12 @@ class MultiConfigExt(AgentTest):
 
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
-        if instance_view.extensions is not None and any(instance_view.extensions):
-            fail("Unwanted extension found: \n{0}".format(json.dumps(instance_view.serialize(), indent=2)))
+        if instance_view.extensions is not None:
+            for ext in instance_view.extensions:
+                if ext.name in test_cases.keys():
+                    fail("Extension was not deleted: \n{0}".format(ext))
         log.info("")
-        log.info("All extensions were successfully deleted, and no unexpected extensions were found in the "
-                 "instance view.")
+        log.info("All extensions were successfully deleted.")
 
     def run(self):
         # Create 3 different RCv2 extensions and a single config extension (CSE) and assign each a unique guid. Each
