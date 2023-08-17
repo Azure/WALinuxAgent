@@ -10,6 +10,5 @@ name: "AgentFirewall"
 tests:
   - "agent_firewall/agent_firewall.py"
 images:
-  - "endorsed"
-  - "endorsed-arm64"
+  - "ubuntu_2004"
 owns_vm: true  # This vm cannot be shared with other tests because it modifies the firewall rules and agent status.

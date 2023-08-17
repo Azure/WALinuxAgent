@@ -72,9 +72,9 @@ def retry_if_false(operation: Callable[[], bool], attempts: int = 5, delay: int 
             log.warning("Error in operation: %s", e)
             if attempts == 0:
                 raise
-        if not success:
+        if not success and attempts != 0:
             log.info("Current operation failed, retrying in %s secs.", delay)
-        time.sleep(delay)
+            time.sleep(delay)
     return success
 
 
