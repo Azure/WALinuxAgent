@@ -22,7 +22,7 @@
 #
 import json
 import uuid
-from typing import Dict
+from typing import Dict, Callable, Any
 
 from assertpy import fail
 from azure.mgmt.compute.models import VirtualMachineInstanceView
@@ -36,19 +36,16 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 class MultiConfigExt(AgentTest):
     class TestCase:
-        def __init__(self, extension: VirtualMachineExtensionClient):
+        def __init__(self, extension: VirtualMachineExtensionClient, get_settings: Callable[[str], Dict[str, str]]):
             self.extension = extension
+            self.get_settings = get_settings
             self.test_guid: str = str(uuid.uuid4())
 
     def enable_extensions(self, test_cases: Dict[str, TestCase]):
         for resource_name, test_case in test_cases.items():
             log.info("")
             log.info("Adding {0} to the test VM. guid={1}".format(resource_name, test_case.test_guid))
-            test_case.extension.enable(settings={
-                "source": {
-                    "script": f"echo {test_case.test_guid}"
-                }
-            })
+            test_case.extension.enable(settings=test_case.get_settings(test_case.test_guid))
             test_case.extension.assert_instance_view()
 
     def assert_expected_guids_in_ext_status(self, test_cases: Dict[str, TestCase]):
@@ -58,27 +55,29 @@ class MultiConfigExt(AgentTest):
             test_case.extension.assert_instance_view(expected_message=f"{test_case.test_guid}")
 
     def run(self):
-        # Create 3 different RCv2 extensions and assign each a unique guid. We will use this guid to verify the
-        # extension status later
+        # Create 3 different RCv2 extensions and a single config extension (CSE) and assign each a unique guid. Each
+        # extension will have settings that echo its assigned guid. We will use this guid to verify the extension
+        # statuses later.
+        multi_config_settings: Callable[[Any], Dict[str, Dict[str, str]]] = lambda s: {
+            "source": {"script": f"echo {s}"}}
+        single_config_settings: Callable[[Any], Dict[str, str]] = lambda s: {'commandToExecute': f"echo {s}"}
+
         test_cases: Dict[str, MultiConfigExt.TestCase] = {
-            "MCExt1": MultiConfigExt.TestCase(VirtualMachineExtensionClient(self._context.vm,
-                                                                            VmExtensionIds.RunCommandHandler,
-                                                                            resource_name="MCExt1")),
-            "MCExt2": MultiConfigExt.TestCase(VirtualMachineExtensionClient(self._context.vm,
-                                                                            VmExtensionIds.RunCommandHandler,
-                                                                            resource_name="MCExt2")),
-            "MCExt3": MultiConfigExt.TestCase(VirtualMachineExtensionClient(self._context.vm,
-                                                                            VmExtensionIds.RunCommandHandler,
-                                                                            resource_name="MCExt3"))
+            "MCExt1": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt1"), multi_config_settings),
+            "MCExt2": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt2"), multi_config_settings),
+            "MCExt3": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt3"), multi_config_settings),
+            "CSE": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), single_config_settings)
         }
 
-        # Add each extension to the VM and validate instance view has succeeded status.
-        # Each extension will be added with settings to echo its assigned test_guid:
-        # {
-        #     "source": {
-        #         "script": f"echo {t.test_guid}"
-        #     }
-        # }
+        # Add each extension to the VM and validate the instance view has succeeded status with its assigned guid in the
+        # status message.
         log.info("")
         log.info("Add 3 instances of RCv2 to the VM. Each instance will echo a unique guid...")
         self.enable_extensions(test_cases=test_cases)
@@ -86,19 +85,21 @@ class MultiConfigExt(AgentTest):
         log.info("Check that each extension has the expected guid in its status message...")
         self.assert_expected_guids_in_ext_status(test_cases=test_cases)
 
-        # Update MCExt3 with a new guid and add a new instance of RCv2 to the VM
+        # Update MCExt3 and CSE with new guids and add a new instance of RCv2 to the VM
         updated_test_cases: Dict[str, MultiConfigExt.TestCase] = {
-            "MCExt3": MultiConfigExt.TestCase(VirtualMachineExtensionClient(self._context.vm,
-                                                                            VmExtensionIds.RunCommandHandler,
-                                                                            resource_name="MCExt3")),
-            "MCExt4": MultiConfigExt.TestCase(VirtualMachineExtensionClient(self._context.vm,
-                                                                            VmExtensionIds.RunCommandHandler,
-                                                                            resource_name="MCExt4"))
+            "MCExt3": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt3"), multi_config_settings),
+            "MCExt4": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt4"), multi_config_settings),
+            "CSE": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), single_config_settings)
         }
         test_cases.update(updated_test_cases)
 
         log.info("")
-        log.info("Update MCExt3 with new guid and add a new instance of RCv2 to the VM...")
+        log.info("Update MCExt3 and CSE with new guids and add a new instance of RCv2 to the VM...")
         self.enable_extensions(test_cases=updated_test_cases)
         log.info("")
         log.info("Check that each extension has the expected guid in its status message...")
@@ -106,7 +107,7 @@ class MultiConfigExt(AgentTest):
 
         # Delete each extension on the VM and assert that there are no unexpected extensions left
         log.info("")
-        log.info("Delete each instance of RCv2...")
+        log.info("Delete each instance of RCv2 and CSE...")
         for resource_name, test_case in test_cases.items():
             log.info("")
             log.info("Deleting {0} from the test VM".format(resource_name))
