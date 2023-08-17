@@ -180,8 +180,6 @@ def delete_iptable_rules(commands: List[List[str]] = None) -> None:
     """
     This function is used to delete the provided rule or all(if not specified) iptable rules
     """
-    if cmd is None:
-        cmd = command
     if commands is None:
         commands = []
     if not commands:
@@ -191,8 +189,10 @@ def delete_iptable_rules(commands: List[List[str]] = None) -> None:
     log.info("-----Deleting ip table rules \n %s", commands)
 
     try:
+        cmd = None
         for command in commands:
-            retry(lambda: execute_cmd(cmd=command), attempts=3)
+            cmd = command
+            retry(lambda: execute_cmd(cmd=cmd), attempts=3)
     except Exception as e:
         raise Exception("Error -- Failed to Delete the ip table rule set {0}".format(e))
 
