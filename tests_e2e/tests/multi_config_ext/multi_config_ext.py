@@ -67,6 +67,7 @@ class MultiConfigExt(AgentTest):
             log.info("Deleting {0} from the test VM".format(resource_name))
             test_case.extension.delete()
 
+        log.info("")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         if instance_view.extensions is not None:
@@ -84,7 +85,7 @@ class MultiConfigExt(AgentTest):
             "source": {"script": f"echo {s}"}}
         sc_settings: Callable[[Any], Dict[str, str]] = lambda s: {'commandToExecute': f"echo {s}"}
 
-        mc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
+        test_cases: Dict[str, MultiConfigExt.TestCase] = {
             "MCExt1": MultiConfigExt.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt1"), mc_settings),
@@ -93,13 +94,10 @@ class MultiConfigExt(AgentTest):
                                               resource_name="MCExt2"), mc_settings),
             "MCExt3": MultiConfigExt.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                              resource_name="MCExt3"), mc_settings)
-        }
-        sc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
+                                              resource_name="MCExt3"), mc_settings),
             "CSE": MultiConfigExt.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), sc_settings)
         }
-        test_cases: Dict[str, MultiConfigExt.TestCase] = {**mc_test_cases, **sc_test_cases}
 
         # Add each extension to the VM and validate the instance view has succeeded status with its assigned guid in the
         # status message
@@ -130,12 +128,24 @@ class MultiConfigExt(AgentTest):
         # Enable, verify, and remove only multi config extensions
         log.info("")
         log.info("Add only multi-config extensions to the VM...")
+        mc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
+            "MCExt5": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt5"), mc_settings),
+            "MCExt6": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="MCExt6"), mc_settings)
+        }
         self.enable_and_assert_test_cases(cases_to_enable=mc_test_cases, cases_to_assert=mc_test_cases,
                                           delete_extensions=True)
 
         # Enable, verify, and delete only single config extensions
         log.info("")
         log.info("Add only single-config extension to the VM...")
+        sc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
+            "CSE": MultiConfigExt.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), sc_settings)
+        }
         self.enable_and_assert_test_cases(cases_to_enable=sc_test_cases, cases_to_assert=sc_test_cases,
                                           delete_extensions=True)
 
