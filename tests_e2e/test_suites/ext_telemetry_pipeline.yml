@@ -6,3 +6,4 @@ name: "ExtTelemetryPipeline"
 tests:
   - "ext_telemetry_pipeline/ext_telemetry_pipeline.py"
 images: "random(endorsed)"
+owns_vm: true
