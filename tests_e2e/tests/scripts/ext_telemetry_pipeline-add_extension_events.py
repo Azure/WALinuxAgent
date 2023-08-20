@@ -110,10 +110,8 @@ def add_extension_events(extensions: List[str], bad_event_count=0, no_of_events_
         bad_count = bad_event_count
         event_dir = os.path.join("/var/log/azure/", ext, "events")
         if not os.path.isdir(event_dir):
-            # TODO check this fails correctly
             fail(f"Expected events dir: {event_dir} does not exist")
-        else:
-            log.info("Expected dir: {0} exists".format(event_dir))
+        log.info("Expected dir: {0} exists".format(event_dir))
 
         log.info("")
         log.info("Creating random extension events for {0}. No of Good Events: {1}, No of Bad Events: {2}".format(
@@ -168,7 +166,7 @@ def wait_for_extension_events_dir_empty(extensions: List[str]):
             return
 
         time.sleep(20)
-    # TODO check this fails correctly
+
     fail("Extension events dir not empty before 2 minute timeout")
 
 
@@ -194,18 +192,16 @@ def main():
     found_error = False
     agent_log = AgentLog()
 
-    # TODO determine if bad num check is needed
-    if args.num_events_bad != 0:
-        log.info("")
-        log.info("Check that the TelemetryEventsCollector did not emit any errors...")
-        telemetry_event_collector_name = "TelemetryEventsCollector"
-        for agent_record in agent_log.read():
-            if agent_record.thread == telemetry_event_collector_name and agent_record.level == "ERROR":
-                found_error = True
-                log.info("waagent.log contains the following errors emitted by the {0} thread: \n{1}".format(telemetry_event_collector_name, agent_record))
+    log.info("")
+    log.info("Check that the TelemetryEventsCollector did not emit any errors...")
+    telemetry_event_collector_name = "TelemetryEventsCollector"
+    for agent_record in agent_log.read():
+        if agent_record.thread == telemetry_event_collector_name and agent_record.level == "ERROR":
+            found_error = True
+            log.info("waagent.log contains the following errors emitted by the {0} thread: \n{1}".format(telemetry_event_collector_name, agent_record))
 
-        if found_error:
-            fail("Found error(s) emitted by the TelemetryEventsCollector, but none were expected.")
+    if found_error:
+        fail("Found error(s) emitted by the TelemetryEventsCollector, but none were expected.")
 
     for ext in extensions:
         good_count = args.num_events_total - args.num_events_bad
