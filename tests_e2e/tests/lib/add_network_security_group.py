@@ -16,13 +16,12 @@
 #
 
 import json
-from subprocess import PIPE, Popen
 
 from typing import Any, Dict, List
 
+from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry
-from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
 # Name of the security group added by this class
@@ -143,10 +142,7 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
             def get_my_address():
                 # Forcing -4 option to fetch the ipv4 address
                 cmd = ["curl", "-4", "ifconfig.io/ip"]
-                process = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=False, text=True)
-                stdout, stderr = process.communicate()
-                if process.returncode != 0:
-                    raise CommandError(cmd, process.returncode, stdout, stderr)
+                stdout = shellutil.run_command(cmd)
                 return stdout.strip()
             self.__my_ip_address = retry(get_my_address, attempts=3, delay=10)
         return self.__my_ip_address
