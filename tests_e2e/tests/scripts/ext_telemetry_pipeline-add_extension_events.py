@@ -180,7 +180,7 @@ def main():
     parser.add_argument("--num_events_bad", dest='num_events_bad', type=int, required=False, default=0)
     args, _ = parser.parse_known_args()
 
-    extensions = [ext for ext in args.extensions.split(',')]
+    extensions = args.extensions.split(',')
     add_extension_events(extensions=extensions, bad_event_count=args.num_events_bad,
                          no_of_events_per_extension=args.num_events_total)
 
