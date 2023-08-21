@@ -35,13 +35,13 @@ from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
-from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util

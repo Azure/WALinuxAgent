@@ -22,8 +22,8 @@ import re
 import subprocess
 import tempfile
 
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cgroupapi import CGroupsApi, SystemdCgroupsApi
+from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil
 from tests.lib.mock_cgroup_environment import mock_cgroup_environment
@@ -39,7 +39,7 @@ class _MockedFileSystemTestCase(AgentTestCase):
         os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
         os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
 
-        self.mock_cgroups_file_system_root = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
+        self.mock_cgroups_file_system_root = patch("azurelinuxagent.ga.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
         self.mock_cgroups_file_system_root.start()
 
     def tearDown(self):
@@ -73,7 +73,7 @@ class CGroupsApiTestCase(_MockedFileSystemTestCase):
         ]
 
         for (distro, supported) in test_cases:
-            with patch("azurelinuxagent.common.cgroupapi.get_distro", return_value=distro):
+            with patch("azurelinuxagent.ga.cgroupapi.get_distro", return_value=distro):
                 self.assertEqual(CGroupsApi.cgroups_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
 
                 
@@ -150,7 +150,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
         with mock_cgroup_environment(self.tmp_dir):
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patch:  # pylint: disable=unused-variable
+                with patch("subprocess.Popen", side_effect=mock_popen) as popen_patch:  # pylint: disable=unused-variable
                     command_output = SystemdCgroupsApi().start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="A_TEST_COMMAND",
@@ -191,7 +191,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_use_systemd_to_execute_the_command(self, _):
         with mock_cgroup_environment(self.tmp_dir):
-            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                 SystemdCgroupsApi().start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="the-test-extension-command",
@@ -219,7 +219,7 @@ class SystemdCgroupsApiMockedFileSystemTestCase(_MockedFileSystemTestCase):
         legacy_cpu_cgroup = CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "cpu", '')
         legacy_memory_cgroup = CGroupsTools.create_legacy_agent_cgroup(self.cgroups_file_system_root, "memory", '')
 
-        with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file):
+        with patch("azurelinuxagent.ga.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file):
             legacy_cgroups = SystemdCgroupsApi().cleanup_legacy_cgroups()
 
         self.assertEqual(legacy_cgroups, 2, "cleanup_legacy_cgroups() did not find all the expected cgroups")

@@ -23,15 +23,15 @@ import threading
 import uuid
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cgroup import CpuCgroup, MemoryCgroup
+from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
     ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil, shellutil
-from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output, \
+from azurelinuxagent.ga.extensionprocessutil import handle_process_completion, read_output, \
     TELEMETRY_MESSAGE_MAX_LEN
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_distro

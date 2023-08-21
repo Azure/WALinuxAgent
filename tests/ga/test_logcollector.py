@@ -22,7 +22,7 @@ import shutil
 import tempfile
 import zipfile
 
-from azurelinuxagent.common.logcollector import LogCollector
+from azurelinuxagent.ga.logcollector import LogCollector
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import rm_dirs, mkdir, rm_files
 from tests.lib.tools import AgentTestCase, is_python_version_26, patch, skip_if_predicate_true, data_dir
@@ -48,26 +48,26 @@ class TestLogCollector(AgentTestCase):
 
     @classmethod
     def _mock_constants(cls):
-        cls.mock_manifest = patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL", cls._build_manifest())
+        cls.mock_manifest = patch("azurelinuxagent.ga.logcollector.MANIFEST_NORMAL", cls._build_manifest())
         cls.mock_manifest.start()
 
         cls.log_collector_dir = os.path.join(cls.tmp_dir, "logcollector")
-        cls.mock_log_collector_dir = patch("azurelinuxagent.common.logcollector._LOG_COLLECTOR_DIR",
+        cls.mock_log_collector_dir = patch("azurelinuxagent.ga.logcollector._LOG_COLLECTOR_DIR",
                                            cls.log_collector_dir)
         cls.mock_log_collector_dir.start()
 
         cls.truncated_files_dir = os.path.join(cls.tmp_dir, "truncated")
-        cls.mock_truncated_files_dir = patch("azurelinuxagent.common.logcollector._TRUNCATED_FILES_DIR",
+        cls.mock_truncated_files_dir = patch("azurelinuxagent.ga.logcollector._TRUNCATED_FILES_DIR",
                                              cls.truncated_files_dir)
         cls.mock_truncated_files_dir.start()
 
         cls.output_results_file_path = os.path.join(cls.log_collector_dir, "results.txt")
-        cls.mock_output_results_file_path = patch("azurelinuxagent.common.logcollector.OUTPUT_RESULTS_FILE_PATH",
+        cls.mock_output_results_file_path = patch("azurelinuxagent.ga.logcollector.OUTPUT_RESULTS_FILE_PATH",
                                                   cls.output_results_file_path)
         cls.mock_output_results_file_path.start()
 
         cls.compressed_archive_path = os.path.join(cls.log_collector_dir, "logs.zip")
-        cls.mock_compressed_archive_path = patch("azurelinuxagent.common.logcollector.COMPRESSED_ARCHIVE_PATH",
+        cls.mock_compressed_archive_path = patch("azurelinuxagent.ga.logcollector.COMPRESSED_ARCHIVE_PATH",
                                                  cls.compressed_archive_path)
         cls.mock_compressed_archive_path.start()
 
@@ -210,8 +210,8 @@ ll,{0}
 copy,{1}
 diskinfo,""".format(folder_to_list, file_to_collect)
 
-        with patch("azurelinuxagent.common.logcollector.MANIFEST_NORMAL", manifest):
-            with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch("azurelinuxagent.ga.logcollector.MANIFEST_NORMAL", manifest):
+            with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                 log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
                 archive = log_collector.collect_logs_and_get_archive()
 
@@ -239,8 +239,8 @@ echo,### Test header ###
 copy,{0}
 """.format(file_to_collect)
 
-        with patch("azurelinuxagent.common.logcollector.MANIFEST_FULL", manifest):
-            with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch("azurelinuxagent.ga.logcollector.MANIFEST_FULL", manifest):
+            with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                 log_collector = LogCollector(is_full_mode=True, cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
                 archive = log_collector.collect_logs_and_get_archive()
 
@@ -254,7 +254,7 @@ copy,{0}
         # All files in the manifest should be collected, since none of them are over the individual file size limit,
         # and combined they do not cross the archive size threshold.
 
-        with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
             log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
             archive = log_collector.collect_logs_and_get_archive()
 
@@ -275,8 +275,8 @@ copy,{0}
 
     def test_log_collector_should_truncate_large_text_files_and_ignore_large_binary_files(self):
         # Set the size limit so that some files are too large to collect in full.
-        with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-            with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
+            with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                 log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
                 archive = log_collector.collect_logs_and_get_archive()
 
@@ -308,9 +308,9 @@ copy,{0}
             os.path.join(self.root_collect_dir, "less_important_file*")
         ]
 
-        with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
-            with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
-                with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch("azurelinuxagent.ga.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
+            with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
+                with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                     log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
                     archive = log_collector.collect_logs_and_get_archive()
 
@@ -336,8 +336,8 @@ copy,{0}
         # if there is enough space.
         rm_files(os.path.join(self.root_collect_dir, "waagent.log.3.gz"))
 
-        with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
-            with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
+        with patch("azurelinuxagent.ga.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
+            with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 second_archive = log_collector.collect_logs_and_get_archive()
 
         expected_files = [
@@ -361,7 +361,7 @@ copy,{0}
     def test_log_collector_should_update_archive_when_files_are_new_or_modified_or_deleted(self):
         # Ensure the archive reflects the state of files on the disk at collection time. If a file was updated, it
         # needs to be updated in the archive, deleted if removed from disk, and added if not previously seen.
-        with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
             log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
             first_archive = log_collector.collect_logs_and_get_archive()
         self._assert_archive_created(first_archive)
@@ -429,10 +429,10 @@ copy,{0}
         # Set the archive size limit so that not all files can be collected. In that case, files will be added to the
         # archive according to their priority.
         # Set the size limit so that only two files can be collected, of which one needs to be truncated.
-        with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
-            with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
-                with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-                    with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch("azurelinuxagent.ga.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
+            with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
+                with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
+                    with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                         log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
                         archive = log_collector.collect_logs_and_get_archive()
 
@@ -451,10 +451,10 @@ copy,{0}
         # removed both from the archive and from the filesystem.
         rm_files(os.path.join(self.root_collect_dir, "waagent.log.1"))
 
-        with patch("azurelinuxagent.common.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
-            with patch("azurelinuxagent.common.logcollector._MUST_COLLECT_FILES", must_collect_files):
-                with patch("azurelinuxagent.common.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
-                    with patch('azurelinuxagent.common.logcollector.LogCollector._initialize_telemetry'):
+        with patch("azurelinuxagent.ga.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 2 * SMALL_FILE_SIZE):
+            with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
+                with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
+                    with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                         log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
                         second_archive = log_collector.collect_logs_and_get_archive()
 

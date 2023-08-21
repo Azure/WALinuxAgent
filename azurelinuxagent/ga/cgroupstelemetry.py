@@ -17,7 +17,7 @@ import errno
 import threading
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup
+from azurelinuxagent.ga.cgroup import CpuCgroup
 from azurelinuxagent.common.future import ustr
 
 

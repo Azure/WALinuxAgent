@@ -23,15 +23,15 @@ import threading
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
-from azurelinuxagent.common.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
+from azurelinuxagent.ga.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX
+from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils import shellutil, fileutil
-from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
+from azurelinuxagent.ga.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
 AZURE_SLICE = "azure.slice"
