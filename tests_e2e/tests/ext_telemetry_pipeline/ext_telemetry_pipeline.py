@@ -60,8 +60,8 @@ class ExtTelemetryPipeline(AgentTest):
         log.info("Check agent log to verify ETP is enabled...")
         log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
 
+        # Add good extension events for each extension and check that the TelemetryEventsCollector collects them
         extensions = ["Microsoft.OSTCExtensions.VMAccessForLinux", "Microsoft.Azure.Extensions.CustomScript"]
-
         log.info("")
         log.info("Add good extension events and check they are reported...")
         max_events = random.randint(10, 50)
@@ -72,6 +72,7 @@ class ExtTelemetryPipeline(AgentTest):
         log.info("")
         log.info("Good extension events were successfully reported.")
 
+        # Add invalid events for each extension and check that the TelemetryEventsCollector drops them
         log.info("")
         log.info("Add bad extension events and check they are reported...")
         output = ssh_client.run_command(f"ext_telemetry_pipeline-add_extension_events.py "

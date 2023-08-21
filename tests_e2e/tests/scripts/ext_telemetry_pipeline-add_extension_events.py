@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Asserts that goal state processing completed no more than 15 seconds after agent start
+# Adds extension events for each provided extension and verifies the TelemetryEventsCollector collected or dropped them
 #
 
 import argparse
