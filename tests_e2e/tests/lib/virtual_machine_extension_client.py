@@ -40,11 +40,11 @@ class VirtualMachineExtensionClient(AzureClient):
     """
     Client for operations virtual machine extensions.
     """
-    def __init__(self, vm: VmIdentifier, extension: VmExtensionIdentifier, resource_name: str):
+    def __init__(self, vm: VmIdentifier, extension: VmExtensionIdentifier, resource_name: str = None):
         super().__init__()
         self._vm: VmIdentifier = vm
         self._identifier = extension
-        self._resource_name = resource_name
+        self._resource_name = resource_name or extension.type
         cloud: Cloud = AZURE_CLOUDS[vm.cloud]
         credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
         self._compute_client: ComputeManagementClient = ComputeManagementClient(
