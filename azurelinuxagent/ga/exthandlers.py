@@ -33,6 +33,7 @@ from functools import partial
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
@@ -299,7 +300,7 @@ class ExtHandlersHandler(object):
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
             self.ext_handlers = copy.deepcopy(egs.extensions)
 
-            if not self._extension_processing_allowed():
+            if self._extensions_on_hold():
                 return
 
             utc_start = datetime.datetime.utcnow()
@@ -433,17 +434,15 @@ class ExtHandlersHandler(object):
                 except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def _extension_processing_allowed(self):
-        if not conf.get_extensions_enabled():
-            logger.verbose("Extension handling is disabled")
-            return False
-
+    def _extensions_on_hold(self):
         if conf.get_enable_overprovisioning():
             if self.protocol.get_goal_state().extensions_goal_state.on_hold:
-                logger.info("Extension handling is on hold")
-                return False
+                msg = "Extension handling is on hold"
+                logger.info(msg)
+                add_event(op=WALAEventOperation.ExtensionProcessing, message=msg)
+                return True
 
-        return True
+        return False
 
     @staticmethod
     def __get_dependency_level(tup):
@@ -478,9 +477,29 @@ class ExtHandlersHandler(object):
         max_dep_level = self.__get_dependency_level(all_extensions[-1]) if any(all_extensions) else 0
 
         depends_on_err_msg = None
+        extensions_enabled = conf.get_extensions_enabled()
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
+            # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
+            # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
+            # here with an error message.
+            if not extensions_enabled:
+                agent_conf_file_path = get_osutil().agent_conf_file_path
+                msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
+                      "processing, set Extensions.Enabled=y in '{0}'".format(agent_conf_file_path)
+                ext_full_name = handler_i.get_extension_full_name(extension)
+                logger.info('')
+                logger.info("{0}: {1}".format(ext_full_name, msg))
+                add_event(op=WALAEventOperation.ExtensionProcessing, message="{0}: {1}".format(ext_full_name, msg))
+                handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
+                handler_i.create_status_file_if_not_exist(extension,
+                                                          status=ExtensionStatusValue.error,
+                                                          code=-1,
+                                                          operation=handler_i.operation,
+                                                          message=msg)
+                continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
             # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status back to CRP,
@@ -991,7 +1010,9 @@ class ExtHandlersHandler(object):
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
+        # We also need to report extension status for an uninstalled handler if extensions are disabled because CRP
+        # waits for extension runtime status before failing the extension operation.
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
