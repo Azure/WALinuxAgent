@@ -111,9 +111,9 @@ def add_extension_events(extensions: List[str], bad_event_count=0, no_of_events_
         event_dir = os.path.join("/var/log/azure/", ext, "events")
         if not os.path.isdir(event_dir):
             fail(f"Expected events dir: {event_dir} does not exist")
-        log.info("Expected dir: {0} exists".format(event_dir))
 
         log.info("")
+        log.info("Expected dir: {0} exists".format(event_dir))
         log.info("Creating random extension events for {0}. No of Good Events: {1}, No of Bad Events: {2}".format(
             ext, no_of_events_per_extension - bad_event_count, bad_event_count))
 
@@ -140,7 +140,7 @@ def add_extension_events(extensions: List[str], bad_event_count=0, no_of_events_
             event_list.append(event)
 
         file_name = os.path.join(event_dir, '{0}.json'.format(int(time.time() * 1000000)))
-        log.info("Create json with extension events: {0}".format(file_name))
+        log.info("Create json with extension events in event directory: {0}".format(file_name))
         with open("{0}.tmp".format(file_name), 'w+') as f:
             json.dump(event_list, f)
         os.rename("{0}.tmp".format(file_name), file_name)
@@ -154,7 +154,7 @@ def wait_for_extension_events_dir_empty(extensions: List[str]):
 
     while (start_time + timeout) >= datetime.now():
         log.info("")
-        log.info("Checking that extension event directories are empty...")
+        log.info("Waiting for extension event directories to be empty...")
         all_dir_empty = True
         for event_dir in ext_event_dirs:
             if not os.path.exists(event_dir) or len(os.listdir(event_dir)) != 0:
@@ -162,7 +162,7 @@ def wait_for_extension_events_dir_empty(extensions: List[str]):
                 all_dir_empty = False
 
         if all_dir_empty:
-            log.info("Extension event directories are empty")
+            log.info("Extension event directories are empty: \n{0}".format(ext_event_dirs))
             return
 
         time.sleep(20)
@@ -193,7 +193,7 @@ def main():
     agent_log = AgentLog()
 
     log.info("")
-    log.info("Check that the TelemetryEventsCollector did not emit any errors...")
+    log.info("Check that the TelemetryEventsCollector did not emit any errors while collecting and reporting events...")
     telemetry_event_collector_name = "TelemetryEventsCollector"
     for agent_record in agent_log.read():
         if agent_record.thread == telemetry_event_collector_name and agent_record.level == "ERROR":
@@ -202,16 +202,17 @@ def main():
 
     if found_error:
         fail("Found error(s) emitted by the TelemetryEventsCollector, but none were expected.")
+    log.info("The TelemetryEventsCollector did not emit any errors while collecting and reporting events")
 
     for ext in extensions:
         good_count = args.num_events_total - args.num_events_bad
         log.info("")
         if not agent_log.agent_log_contains("Collected {0} events for extension: {1}".format(good_count, ext)):
             fail("The TelemetryEventsCollector did not collect the expected number of events: {0} for {1}".format(good_count, ext))
-        log.info("All good events for {0} were collected by the TelemetryEventsCollector".format(ext))
+        log.info("All {0} good events for {1} were collected by the TelemetryEventsCollector".format(good_count, ext))
 
-        log.info("")
         if args.num_events_bad != 0:
+            log.info("")
             if not agent_log.agent_log_contains("Dropped events for Extension: {0}".format(ext)):
                 fail("The TelemetryEventsCollector did not drop bad events for {0} as expected".format(ext))
             log.info("The TelemetryEventsCollector dropped bad events for {0} as expected".format(ext))
