@@ -1,0 +1,9 @@
+#
+# Multi-config extensions are no longer supported but there are still customers running RCv2 and we don't want to break
+# them. This test suite is used to verify that the agent processes RCv2 (a multi-config extension) as expected.
+#
+name: "MultiConfigExt"
+tests:
+  - "multi_config_ext/multi_config_ext.py"
+images:
+  - "endorsed"
