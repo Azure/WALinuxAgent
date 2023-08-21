@@ -36,6 +36,12 @@ class ExtTelemetryPipeline(AgentTest):
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
+        # Extensions we will create events for
+        extensions = ["Microsoft.OSTCExtensions.VMAccessForLinux", "Microsoft.Azure.Extensions.CustomScript"]
+        if "-flatcar" in ssh_client.run_command("uname -a"):
+            # Currently VmAccess is not supported on flatcar
+            extensions = ["Microsoft.Azure.Extensions.CustomScript"]
+
         # Set the etp collection period to 30 seconds instead of default 5 minutes
         log.info("")
         log.info("Set ETP collection period to 30 seconds on the test VM [%s]", self._context.vm.name)
@@ -61,7 +67,6 @@ class ExtTelemetryPipeline(AgentTest):
         log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
 
         # Add good extension events for each extension and check that the TelemetryEventsCollector collects them
-        extensions = ["Microsoft.OSTCExtensions.VMAccessForLinux", "Microsoft.Azure.Extensions.CustomScript"]
         log.info("")
         log.info("Add good extension events and check they are reported...")
         max_events = random.randint(10, 50)
