@@ -27,7 +27,7 @@ FAIL_EXIT_CODE = 100
 ERROR_EXIT_CODE = 200
 
 
-def run_remote_test(test_method: Callable[[], int]) -> None:
+def run_remote_test(test_method: Callable[[], None]) -> None:
     """
     Helper function to run a remote test; implements coding conventions for remote tests, e.g. error message goes
     to stderr, test log goes to stdout, etc.

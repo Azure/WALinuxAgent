@@ -37,6 +37,12 @@ image-sets:
       - "rhel_90_arm64"
       - "ubuntu_2204_arm64"
 
+   # As of today agent only support and enabled resource governance feature on following distros
+   cgroups-endorsed:
+      - "ubuntu_1604"
+      - "ubuntu_1804"
+      - "ubuntu_2004"
+
 #
 # An image can be specified by a string giving its urn, as in
 #
