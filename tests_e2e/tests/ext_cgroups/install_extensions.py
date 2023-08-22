@@ -36,13 +36,13 @@ class InstallExtensions:
 
     def run(self):
         self._prepare_agent()
-        # Install the GATest extension
+        # Install the GATest extension to test service cgroups
         self._install_gatest_extension()
-        # Install the Azure Monitor Agent
+        # Install the Azure Monitor Agent to test long running process cgroup
         self._install_ama()
-        # Install the VM Access extension
+        # Install the VM Access extension to test sample extension
         self._install_vmaccess()
-        # Install the CSE extension
+        # Install the CSE extension to test extension cgroup
         self._install_cse()
 
     def _prepare_agent(self):
