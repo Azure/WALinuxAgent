@@ -18,7 +18,7 @@
 #
 import sys
 
-from typing import Callable, Any
+from typing import Callable
 
 from tests_e2e.tests.lib.logging import log
 
