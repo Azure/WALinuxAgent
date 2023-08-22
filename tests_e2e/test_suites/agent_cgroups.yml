@@ -1,0 +1,7 @@
+#
+# The test suite verify the agent running in expected cgroups and also, checks agent tracking the cgroups for polling resource metrics.
+#
+name: "AgentCgroups"
+tests:
+  - "agent_cgroups/agent_cgroups.py"
+images: "cgroups-endorsed"

@@ -1,0 +1,15 @@
+#
+# This test verifies that the agent firewall rules are set correctly. The expected firewall rules are:
+#        0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        tcp dpt:53
+#       0        0 ACCEPT     tcp  --  *      *       0.0.0.0/0            168.63.129.16        owner UID match 0
+#       0        0 DROP       tcp  --  *      *       0.0.0.0/0            168.63.129.16        ctstate INVALID,NEW
+# The first rule allows tcp traffic to port 53 for non root user. The second rule allows traffic to wireserver for root user.
+# The third rule drops all other traffic to wireserver.
+#
+name: "AgentFirewall"
+tests:
+  - "agent_firewall/agent_firewall.py"
+images:
+  - "endorsed"
+  - "endorsed-arm64"
+owns_vm: true  # This vm cannot be shared with other tests because it modifies the firewall rules and agent status.

@@ -16,10 +16,10 @@
 #
 
 import json
-import http.client
 
 from typing import Any, Dict, List
 
+from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
@@ -140,10 +140,10 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
         """
         if self.__my_ip_address is None:
             def get_my_address():
-                connection = http.client.HTTPSConnection("ifconfig.io")
-                connection.request("GET", "/ip")
-                response = connection.getresponse()
-                return response.read().decode().strip()
+                # Forcing -4 option to fetch the ipv4 address
+                cmd = ["curl", "-4", "ifconfig.io/ip"]
+                stdout = shellutil.run_command(cmd)
+                return stdout.strip()
             self.__my_ip_address = retry(get_my_address, attempts=3, delay=10)
         return self.__my_ip_address
 
