@@ -21,9 +21,11 @@
 import argparse
 import glob
 import json
-import logging
-import sys
 
+from assertpy import fail
+
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
 
 
@@ -33,27 +35,28 @@ def check_agent_reported_update_status(expected_version: str) -> bool:
     for file in file_paths:
         with open(file, 'r') as f:
             data = json.load(f)
-            logging.info("Agent status file is %s and it's content %s", file, data)
+            log.info("Agent status file is %s and it's content %s", file, data)
             status = data["__status__"]
             guest_agent_status = status["aggregateStatus"]["guestAgentStatus"]
             if "updateStatus" in guest_agent_status.keys():
                 if guest_agent_status["updateStatus"]["expectedVersion"] == expected_version:
+                    log.info("we found the expected version %s in agent status file", expected_version)
                     return True
+    log.info("we did not find the expected version %s in agent status file", expected_version)
     return False
 
 
-try:
+def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', required=True)
     args = parser.parse_args()
 
+    log.info("checking agent status file to verify if agent reported update status")
     found: bool = retry_if_false(lambda: check_agent_reported_update_status(args.version))
     if not found:
-        raise Exception("Agent failed to report update status, so skipping rest of the agent update validations")
+        fail("Agent failed to report update status, so skipping rest of the agent update validations")
 
-except Exception as e:
-    print(f"{e}", file=sys.stderr)
-    sys.exit(1)
 
-sys.exit(0)
+run_remote_test(main)
+
