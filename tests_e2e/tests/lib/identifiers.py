@@ -55,10 +55,9 @@ class VmExtensionIdentifier(object):
         """
         Returns true if an unsupported distro name for the extension is found in the provided system info
         """
-        ext_unsupported_distros = VmExtensionIdentifier.unsupported_distros.get(self.publisher + self.type)
-        for d in ext_unsupported_distros:
-            if d in system_info:
-                return False
+        ext_unsupported_distros = VmExtensionIdentifier.unsupported_distros.get(self.publisher + "." + self.type)
+        if ext_unsupported_distros is not None:
+            return any(distro in system_info for distro in ext_unsupported_distros)
         return True
 
     def __str__(self):
