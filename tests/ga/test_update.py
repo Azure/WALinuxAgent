@@ -32,7 +32,7 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
     ExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr, httpclient
-from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, \
     ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
@@ -1875,7 +1875,7 @@ class MonitorThreadTest(AgentTestCaseWithGetVmSizeMock):
                         with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                             with patch('azurelinuxagent.ga.agent_update_handler.get_agent_update_handler'):
                                 with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                                    with patch('azurelinuxagent.common.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                    with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                             with patch('time.sleep'):
                                                 with patch('sys.exit'):
@@ -2374,7 +2374,7 @@ class AgentMemoryCheckTestCase(AgentTestCase):
     @patch("azurelinuxagent.common.logger.info")
     @patch("azurelinuxagent.ga.update.add_event")
     def test_check_agent_memory_usage_raises_exit_exception(self, patch_add_event, patch_info, *_):
-        with patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=AgentMemoryExceededException()):
+        with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=AgentMemoryExceededException()):
             with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
                 with self.assertRaises(ExitException) as context_manager:
                     update_handler = get_update_handler()
@@ -2390,7 +2390,7 @@ class AgentMemoryCheckTestCase(AgentTestCase):
     @patch("azurelinuxagent.common.logger.warn")
     @patch("azurelinuxagent.ga.update.add_event")
     def test_check_agent_memory_usage_fails(self, patch_add_event, patch_warn, *_):
-        with patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=Exception()):
+        with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=Exception()):
             with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
                 update_handler = get_update_handler()
 

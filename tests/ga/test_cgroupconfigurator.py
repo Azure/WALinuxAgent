@@ -29,9 +29,9 @@ import threading
 from nose.plugins.attrib import attr
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, DisableCgroups
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, DisableCgroups
+from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes, \
     AgentMemoryExceededException
@@ -361,7 +361,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         with self._get_cgroup_configurator() as configurator:
             configurator.disable("UNIT TEST", DisableCgroups.ALL)
 
-            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
+            with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="date",
@@ -381,7 +381,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_use_systemd_run_when_cgroups_are_enabled(self, _):
         with self._get_cgroup_configurator() as configurator:
-            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+            with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="the-test-extension-command",
@@ -432,7 +432,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     raise Exception("A TEST EXCEPTION")
                 return original_popen(command_arg, *args, **kwargs)
 
-            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+            with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                 with self.assertRaises(Exception) as context_manager:
                     configurator.start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
@@ -454,7 +454,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr='Failed to start transient scope unit: syntax error'))
 
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
-                with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as mock_add_event:
+                with patch("azurelinuxagent.ga.cgroupconfigurator.add_event") as mock_add_event:
                     with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                         CGroupsTelemetry.reset()
 
@@ -539,7 +539,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                     with self.assertRaises(ExtensionError) as context_manager:
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
@@ -567,7 +567,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
     @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
     @attr('requires_sudo')
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    @patch("azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
+    @patch("azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
     def test_start_extension_command_should_not_use_fallback_option_if_extension_fails_with_long_output(self, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
@@ -579,7 +579,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                     with self.assertRaises(ExtensionError) as context_manager:
                         configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
@@ -613,9 +613,9 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.utils.extensionprocessutil.wait_for_process_completion_or_timeout",
+                with patch("azurelinuxagent.ga.extensionprocessutil.wait_for_process_completion_or_timeout",
                            return_value=[True, None, 0]):
-                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
+                    with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
                                return_value=False):
                         with self.assertRaises(ExtensionError) as context_manager:
                             configurator.start_extension_command(
@@ -654,7 +654,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                     # We expect this call to fail because of the syntax error
                     process_output = configurator.start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
@@ -896,7 +896,7 @@ exit 0
                     return process
 
                 with patch('time.sleep', side_effect=lambda _: original_sleep(0.1)):  # start_extension_command has a small delay; skip it
-                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                    with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
                             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                                 configurator.start_extension_command(
@@ -943,7 +943,7 @@ exit 0
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
             other_processes = [1, get_completed_process()] + extension_processes
 
-            with patch("azurelinuxagent.common.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
+            with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
                 with self.assertRaises(CGroupsException) as context_manager:
                     configurator._check_processes_in_agent_cgroup()
 
@@ -987,7 +987,7 @@ exit 0
                         patchers.append(p)
                         p.start()
 
-                    with patch("azurelinuxagent.common.cgroupconfigurator.add_event") as add_event:
+                    with patch("azurelinuxagent.ga.cgroupconfigurator.add_event") as add_event:
                         configurator.enable()
 
                         tracked_metrics = [
@@ -1017,7 +1017,7 @@ exit 0
 
         with self.assertRaises(AgentMemoryExceededException) as context_manager:
             with self._get_cgroup_configurator() as configurator:
-                with patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_tracked_metrics") as tracked_metrics:
+                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_tracked_metrics") as tracked_metrics:
                     tracked_metrics.return_value = metrics
                     configurator.check_agent_memory_usage()
 

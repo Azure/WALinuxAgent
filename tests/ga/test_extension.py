@@ -30,7 +30,7 @@ import unittest
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     get_agent_supported_features_list_for_crp
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
@@ -198,7 +198,7 @@ class TestExtensionCleanup(AgentTestCase):
             return original_popen("fail_this_command", **kwargs)
 
         with self._setup_test_env(wire_protocol_data.DATA_FILE_EXT_SINGLE) as (exthandlers_handler, protocol, no_of_exts):
-            with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_fail_popen):
+            with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", mock_fail_popen):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
@@ -1331,7 +1331,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                     os.remove(status_path)
             return original_popen(["echo", "Yes"], *args, **kwargs)
 
-        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+        with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
             with patch('azurelinuxagent.ga.exthandlers._DEFAULT_EXT_TIMEOUT_MINUTES', 0.01):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
@@ -1374,7 +1374,7 @@ class TestExtension_Deprecated(TestExtensionBase):
         exthandlers_handler, protocol = self._create_mock(wire_protocol_data.WireProtocolData(aks_test_mock),
                                                           mock_http_get, mock_crypt_util, *args)
 
-        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+        with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
@@ -1422,7 +1422,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
             return original_popen(["echo", "Yes"], *args, **kwargs)
 
-        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+        with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
@@ -1473,7 +1473,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                 return original_popen(["/fail/this/command"], *args, **kwargs)
             return original_popen(cmd, *args, **kwargs)
 
-        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+        with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
@@ -1835,7 +1835,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                 extension_calls.append(args[0])
             return original_popen(*args, **kwargs)
 
-        with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+        with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
@@ -2160,7 +2160,7 @@ class TestExtension_Deprecated(TestExtensionBase):
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
 
-    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    @patch("azurelinuxagent.ga.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
     def test_ext_sequence_no_should_be_set_for_every_command_call(self, _, *args):
         test_data = wire_protocol_data.WireProtocolData(wire_protocol_data.DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)  # pylint: disable=no-value-for-parameter

@@ -19,10 +19,10 @@ import shutil
 import subprocess
 import tempfile
 
-from azurelinuxagent.common.cgroup import CpuCgroup
+from azurelinuxagent.ga.cgroup import CpuCgroup
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
+from azurelinuxagent.ga.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
 from tests.lib.tools import AgentTestCase, patch, data_dir
 
@@ -68,7 +68,7 @@ class TestProcessUtils(AgentTestCase):
             preexec_fn=os.setsid)
 
         # We don't actually mock the kill, just wrap it so we can assert its call count
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.os.killpg', wraps=os.killpg) as patch_kill:
+        with patch('azurelinuxagent.ga.extensionprocessutil.os.killpg', wraps=os.killpg) as patch_kill:
             with patch('time.sleep') as mock_sleep:
                 timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=timeout, cpu_cgroup=None)
 
@@ -211,20 +211,20 @@ class TestProcessUtils(AgentTestCase):
                 self.assertIn("Non-zero exit code:", ustr(context_manager.exception))
 
     def test_read_output_should_return_no_content(self):
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 0):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 0):
             expected = ""
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
     def test_read_output_should_truncate_the_content(self):
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 50):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 50):
             expected = "[stdout]\nr the lazy dog.\n\n" \
                        "[stderr]\ns jump quickly."
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
     def test_read_output_should_not_truncate_the_content(self):
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 90):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 90):
             expected = "[stdout]\nThe quick brown fox jumps over the lazy dog.\n\n" \
                        "[stderr]\nThe five boxing wizards jump quickly."
             actual = read_output(self.stdout, self.stderr)
@@ -240,7 +240,7 @@ class TestProcessUtils(AgentTestCase):
         stderr = "The five boxing wizards jump quickly."
 
         expected = "[stdout]\n{0}\n\n[stderr]\n{1}".format(stdout, stderr)
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 1000):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 1000):
             actual = format_stdout_stderr(stdout, stderr)
             self.assertEqual(expected, actual)
 
@@ -254,7 +254,7 @@ class TestProcessUtils(AgentTestCase):
 
         # noinspection SpellCheckingInspection
         expected = '[stdout]\ns over the lazy dog.\n\n[stderr]\nizards jump quickly.'
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 60):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 60):
             actual = format_stdout_stderr(stdout, stderr)
             self.assertEqual(expected, actual)
             self.assertEqual(60, len(actual))
@@ -268,7 +268,7 @@ class TestProcessUtils(AgentTestCase):
         stderr = "The five boxing wizards jump quickly."
 
         expected = '[stdout]\nempty\n\n[stderr]\ns jump quickly.'
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 40):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 40):
             actual = format_stdout_stderr(stdout, stderr)
             self.assertEqual(expected, actual)
             self.assertEqual(40, len(actual))
@@ -282,7 +282,7 @@ class TestProcessUtils(AgentTestCase):
         stderr = "empty"
 
         expected = '[stdout]\nr the lazy dog.\n\n[stderr]\nempty'
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 40):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 40):
             actual = format_stdout_stderr(stdout, stderr)
             self.assertEqual(expected, actual)
             self.assertEqual(40, len(actual))
@@ -296,7 +296,7 @@ class TestProcessUtils(AgentTestCase):
         stderr = "The five boxing wizards jump quickly."
 
         expected = ''
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 4):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 4):
             actual = format_stdout_stderr(stdout, stderr)
             self.assertEqual(expected, actual)
             self.assertEqual(0, len(actual))
@@ -307,6 +307,6 @@ class TestProcessUtils(AgentTestCase):
         """
 
         expected = '[stdout]\n\n\n[stderr]\n'
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 1000):
+        with patch('azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 1000):
             actual = format_stdout_stderr('', '')
             self.assertEqual(expected, actual)

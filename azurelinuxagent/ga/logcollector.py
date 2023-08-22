@@ -26,11 +26,11 @@ import zipfile
 from datetime import datetime
 from heapq import heappush, heappop
 
-from azurelinuxagent.common.cgroup import CpuCgroup, AGENT_LOG_COLLECTOR, MemoryCgroup
+from azurelinuxagent.ga.cgroup import CpuCgroup, AGENT_LOG_COLLECTOR, MemoryCgroup
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
 from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
+from azurelinuxagent.ga.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
 # Please note: be careful when adding agent dependencies in this module.
 # This module uses its own logger and logs to its own file, not to the agent log.

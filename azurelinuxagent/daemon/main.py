@@ -30,7 +30,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.util import get_protocol_util
-from azurelinuxagent.common.rdma import setup_rdma_device
+from azurelinuxagent.pa.rdma.rdma import setup_rdma_device
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
     AGENT_VERSION, \

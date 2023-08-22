@@ -18,8 +18,8 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger, conf
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricValue
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.cgroup import CpuCgroup, MemoryCgroup, MetricValue
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.utils import fileutil
@@ -225,7 +225,7 @@ class TestLogCollectorMonitorHandler(AgentTestCase):
     @patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage")
     def test_verify_log_collector_memory_limit_exceeded(self, patch_poll_resource_usage, mock_exit):
         with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
-            with patch("azurelinuxagent.common.cgroupconfigurator.LOGCOLLECTOR_MEMORY_LIMIT", 8):
+            with patch("azurelinuxagent.ga.cgroupconfigurator.LOGCOLLECTOR_MEMORY_LIMIT", 8):
                 patch_poll_resource_usage.return_value = [MetricValue("Process", "% Processor Time", "service", 1),
                                                           MetricValue("Process", "Throttled Time", "service", 1),
                                                           MetricValue("Memory", "Total Memory Usage", "service", 9),

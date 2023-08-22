@@ -28,7 +28,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSe
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
+from azurelinuxagent.ga.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, \
     read_output
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, ExtCommandEnvVariable, \
     ExtensionStatusError, _DEFAULT_SEQ_NO, get_exthandlers_handler, ExtHandlerState
@@ -653,7 +653,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         # Mocking the call to file.read() is difficult, so instead we mock the call to format_stdout_stderr, which takes the
         # return value of the calls to file.read(). The intention of the test is to verify we never read (and load in memory)
         # more than a few KB of data from the files used to capture stdout/stderr
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
+        with patch('azurelinuxagent.ga.extensionprocessutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertGreaterEqual(len(output), 1024)
@@ -686,7 +686,7 @@ sys.stderr.write("STDERR")
         def capture_process_output(stdout_file, stderr_file):  # pylint: disable=unused-argument
             return original_capture_process_output(None, None)
 
-        with patch('azurelinuxagent.common.utils.extensionprocessutil.read_output', side_effect=capture_process_output):
+        with patch('azurelinuxagent.ga.extensionprocessutil.read_output', side_effect=capture_process_output):
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)

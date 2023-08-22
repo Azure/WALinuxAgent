@@ -687,7 +687,7 @@ Match host 192.168.1.2\n\
             return mock_popen.original(command, *args, **kwargs)
         mock_popen.original = subprocess.Popen
 
-        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patcher:
+        with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patcher:
             with patch('os.getuid', return_value=uid):
                 popen_patcher.wait = wait
                 popen_patcher.destination = destination
@@ -910,7 +910,7 @@ Match host 192.168.1.2\n\
                     return mock_popen.original(command, *args, **kwargs)
                 mock_popen.original = subprocess.Popen
 
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                     success = osutil.DefaultOSUtil().remove_firewall(mock_iptables.destination, mock_iptables.uid, mock_iptables.wait)
 
                     delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))

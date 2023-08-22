@@ -22,7 +22,7 @@ import os
 import random
 import shutil
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, MetricsCounter, CounterNotFound
+from azurelinuxagent.ga.cgroup import CpuCgroup, MemoryCgroup, MetricsCounter, CounterNotFound
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
