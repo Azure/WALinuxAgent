@@ -25,7 +25,7 @@ import uuid
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules, FirewallCmdDirectCommands
 from tests.lib.tools import AgentTestCase, MagicMock, patch
@@ -90,9 +90,9 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         # Just for these tests, ignoring the mode of mkdir to allow non-sudo tests
         orig_mkdir = fileutil.mkdir
-        with patch("azurelinuxagent.common.persist_firewall_rules.fileutil.mkdir",
+        with patch("azurelinuxagent.ga.persist_firewall_rules.fileutil.mkdir",
                    side_effect=lambda path, **mode: orig_mkdir(path)):
-            with patch("azurelinuxagent.common.persist_firewall_rules.get_osutil", return_value=osutil):
+            with patch("azurelinuxagent.ga.persist_firewall_rules.get_osutil", return_value=osutil):
                 with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=systemd):
                     with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=self.__mock_popen):
                         yield PersistFirewallRulesHandler(self.__test_dst_ip, self.__test_uid)
@@ -343,7 +343,7 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             test_files = [self._binary_file, self._network_service_unit_file]
             for file_to_fail in test_files:
                 files_to_fail = [file_to_fail]
-                with patch("azurelinuxagent.common.persist_firewall_rules.fileutil.write_file",
+                with patch("azurelinuxagent.ga.persist_firewall_rules.fileutil.write_file",
                            side_effect=mock_write_file):
                     with self.assertRaises(Exception) as context_manager:
                         handler.setup()

@@ -38,7 +38,7 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \

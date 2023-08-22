@@ -26,11 +26,11 @@ import sys
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common import version
-from azurelinuxagent.common.cgroupconfigurator import _AGENT_DROP_IN_FILE_SLICE, _DROP_IN_FILE_CPU_ACCOUNTING, \
+from azurelinuxagent.ga.cgroupconfigurator import _AGENT_DROP_IN_FILE_SLICE, _DROP_IN_FILE_CPU_ACCOUNTING, \
     _DROP_IN_FILE_CPU_QUOTA, _DROP_IN_FILE_MEMORY_ACCOUNTING, LOGCOLLECTOR_SLICE
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil, systemd
-from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.ga.exthandlers import HANDLER_COMPLETE_NAME_PATTERN
 

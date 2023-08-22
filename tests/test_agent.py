@@ -18,8 +18,9 @@
 import os.path
 
 from azurelinuxagent.agent import parse_args, Agent, usage, AgentCommands
-from azurelinuxagent.common import cgroupconfigurator, conf, logcollector
-from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
+from azurelinuxagent.common import conf
+from azurelinuxagent.ga import logcollector, cgroupconfigurator
+from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
 from tests.lib.tools import AgentTestCase, data_dir, Mock, patch

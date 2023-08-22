@@ -28,7 +28,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation, add_event
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
