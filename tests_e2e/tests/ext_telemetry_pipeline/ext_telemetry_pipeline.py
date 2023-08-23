@@ -77,21 +77,19 @@ class ExtTelemetryPipeline(AgentTest):
         log.info("")
         log.info("Add good extension events and check they are reported...")
         max_events = random.randint(10, 50)
-        output = ssh_client.run_command(f"ext_telemetry_pipeline-add_extension_events.py "
-                                        f"--extensions {','.join(extensions)} "
-                                        f"--num_events_total {max_events}", use_sudo=True)
-        log.info(output)
+        self._run_remote_test(f"ext_telemetry_pipeline-add_extension_events.py "
+                              f"--extensions {','.join(extensions)} "
+                              f"--num_events_total {max_events}", use_sudo=True)
         log.info("")
         log.info("Good extension events were successfully reported.")
 
         # Add invalid events for each extension and check that the TelemetryEventsCollector drops them
         log.info("")
         log.info("Add bad extension events and check they are reported...")
-        output = ssh_client.run_command(f"ext_telemetry_pipeline-add_extension_events.py "
-                                        f"--extensions {','.join(extensions)} "
-                                        f"--num_events_total {max_events} "
-                                        f"--num_events_bad {random.randint(5, max_events-5)}", use_sudo=True)
-        log.info(output)
+        self._run_remote_test(f"ext_telemetry_pipeline-add_extension_events.py "
+                              f"--extensions {','.join(extensions)} "
+                              f"--num_events_total {max_events} "
+                              f"--num_events_bad {random.randint(5, max_events-5)}", use_sudo=True)
         log.info("")
         log.info("Bad extension events were successfully dropped.")
 
