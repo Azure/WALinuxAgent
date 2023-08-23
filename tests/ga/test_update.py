@@ -2409,7 +2409,7 @@ class AgentMemoryCheckTestCase(AgentTestCase):
                     add_events[0]["message"],
                     "The error message is not correct when memory usage check failed")
 
-    @patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage")
+    @patch("azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage")
     @patch("azurelinuxagent.ga.update.add_event")
     def test_check_agent_memory_usage_not_called(self, patch_add_event, patch_memory_usage, *_):
         # This test ensures that agent not called immediately on startup, instead waits for CHILD_LAUNCH_INTERVAL
