@@ -761,7 +761,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 # Case 1: Check normal scenario - Install/Enable
                 mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
                                                                              no_of_extensions)
@@ -924,7 +924,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
@@ -1209,7 +1209,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
             return original_popen(cmd, *_, **kwargs)
 
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 

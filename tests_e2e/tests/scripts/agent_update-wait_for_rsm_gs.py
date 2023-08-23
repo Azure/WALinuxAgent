@@ -19,13 +19,13 @@
 # Verify the latest goal state included rsm requested version and if not, retry
 #
 import argparse
-import sys
-import logging
 
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from tests_e2e.tests.lib.retry import retry_if_false
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.remote_test import run_remote_test
+from tests_e2e.tests.lib.retry import retry_if_false, retry
 
 
 def get_requested_version(gs: GoalState) -> str:
@@ -41,6 +41,7 @@ def get_requested_version(gs: GoalState) -> str:
 
 
 def verify_rsm_requested_version(wire_protocol: WireProtocol, expected_version: str) -> bool:
+    log.info("fetching the goal state to check if it includes rsm requested version")
     wire_protocol.client.update_goal_state()
     goal_state = wire_protocol.client.get_goal_state()
     requested_version = get_requested_version(goal_state)
@@ -50,25 +51,21 @@ def verify_rsm_requested_version(wire_protocol: WireProtocol, expected_version: 
         return False
 
 
-try:
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--version', required=True)
     args = parser.parse_args()
 
     protocol = get_protocol_util().get_protocol(init_goal_state=False)
-    protocol.client.reset_goal_state(
-        goal_state_properties=GoalStateProperties.ExtensionsGoalState)
+    retry(lambda: protocol.client.reset_goal_state(
+        goal_state_properties=GoalStateProperties.ExtensionsGoalState))
 
     found: bool = retry_if_false(lambda: verify_rsm_requested_version(protocol, args.version))
 
     if not found:
-        raise Exception("Latest GS does not include rsm requested version : {0}.".format(args.version))
+        raise Exception("The latest goal state didn't contain requested version after we submit the rsm request for: {0}.".format(args.version))
     else:
-        logging.info("Latest GS includes rsm requested version : %s", args.version)
+        log.info("Successfully verified that latest GS contains rsm requested version : %s", args.version)
 
 
-except Exception as e:
-    print(f"{e}", file=sys.stderr)
-    sys.exit(1)
-
-sys.exit(0)
+run_remote_test(main)

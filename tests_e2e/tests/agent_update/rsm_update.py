@@ -27,7 +27,7 @@ import json
 from typing import List, Dict, Any
 
 import requests
-from assertpy import assert_that
+from assertpy import assert_that, fail
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute.models import VirtualMachine
 from msrestazure.azure_cloud import Cloud
@@ -123,10 +123,10 @@ class RsmUpdateBvt(AgentTest):
         self._verify_agent_reported_update_status(version)
 
     def _check_rsm_gs(self, requested_version: str) -> None:
-        # This checks if RSM GS available to the agent after we mock the rsm update request
-        log.info('Verifying latest GS includes requested version available to the agent')
-        output = self._ssh_client.run_command(f"agent_update-wait_for_rsm_gs.py --version {requested_version}", use_sudo=True)
-        log.info('Verified latest GS includes requested version available to the agent. \n%s', output)
+        # This checks if RSM GS available to the agent after we send the rsm update request
+        log.info('Executing wait_for_rsm_gs.py remote script to verify latest GS contain requested version after rsm update requested')
+        self._run_remote_test(f"agent_update-wait_for_rsm_gs.py --version {requested_version}", use_sudo=True)
+        log.info('Verified latest GS contain requested version after rsm update requested')
 
     def _prepare_agent(self, daemon_version="1.0.0.0", update_config=True) -> None:
         """
@@ -134,13 +134,13 @@ class RsmUpdateBvt(AgentTest):
         1) Changing daemon version since daemon has a hard check on agent version in order to update agent. It doesn't allow versions which are less than daemon version.
         2) Updating GAFamily type "Test" and GAUpdates flag to process agent updates on test versions.
         """
-        log.info('Modifying agent installed version')
-        output = self._ssh_client.run_command(f"agent_update-modify_agent_version {daemon_version}", use_sudo=True)
-        log.info('Updated agent installed version \n%s', output)
+        log.info('Executing modify_agent_version remote script to update agent installed version to lower than requested version')
+        self._run_remote_test(f"agent_update-modify_agent_version {daemon_version}", use_sudo=True)
+        log.info('Successfully updated agent installed version')
         if update_config:
-            log.info('Modifying agent update config flags')
-            output = self._ssh_client.run_command("update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test", use_sudo=True)
-            log.info('updated agent update required config \n%s', output)
+            log.info('Executing update-waagent-conf remote script to update agent update config flags to allow and download test versions')
+            self._run_remote_test("update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test", use_sudo=True)
+            log.info('Successfully updated agent update config')
 
     @staticmethod
     def _verify_agent_update_flag_enabled(vm: VirtualMachineClient) -> bool:
@@ -161,6 +161,7 @@ class RsmUpdateBvt(AgentTest):
                 }
             }
         }
+        log.info("updating the vm with osProfile property:\n%s", osprofile)
         vm.update(osprofile)
 
     def _request_rsm_update(self, requested_version: str) -> None:
@@ -173,7 +174,7 @@ class RsmUpdateBvt(AgentTest):
             # enable the flag
             log.info("Attempting vm update to set the enableVMAgentPlatformUpdates flag")
             self._enable_agent_update_flag(vm)
-            log.info("Set the enableVMAgentPlatformUpdates flag to True")
+            log.info("Updated the enableVMAgentPlatformUpdates flag to True")
         else:
             log.info("Already enableVMAgentPlatformUpdates flag set to True")
 
@@ -190,29 +191,33 @@ class RsmUpdateBvt(AgentTest):
             "targetVersion": requested_version
         }
 
+        log.info("Attempting rsm upgrade post request to endpoint: {0} with data: {1}".format(url, data))
         response = requests.post(url, data=json.dumps(data), headers=headers)
         if response.status_code == 202:
             log.info("RSM upgrade request accepted")
         else:
-            raise Exception("Error occurred while RSM upgrade request. Status code : {0} and msg: {1}".format(response.status_code, response.content))
+            raise Exception("Error occurred while making RSM upgrade request. Status code : {0} and msg: {1}".format(response.status_code, response.content))
 
     def _verify_guest_agent_update(self, requested_version: str) -> None:
         """
         Verify current agent version running on rsm requested version
         """
         def _check_agent_version(requested_version: str) -> bool:
-            stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+            waagent_version: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
             expected_version = f"Goal state agent: {requested_version}"
-            if expected_version in stdout:
+            if expected_version in waagent_version:
                 return True
             else:
-                raise Exception("Guest agent didn't update to requested version {0} but found \n {1}. \n "
-                                             "To debug verify if CRP has upgrade operation around that time and also check if agent log has any errors ".format(requested_version, stdout))
+                return False
 
-        log.info("Verifying agent updated to requested version")
-        retry_if_false(lambda: _check_agent_version(requested_version))
-        stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
-        log.info(f"Verified agent updated to requested version. Current agent version running:\n {stdout}")
+        waagent_version: str = ""
+        log.info("Verifying agent updated to requested version: {0}".format(requested_version))
+        success: bool = retry_if_false(lambda: _check_agent_version(requested_version))
+        if not success:
+            fail("Guest agent didn't update to requested version {0} but found \n {1}. \n "
+                 "To debug verify if CRP has upgrade operation around that time and also check if agent log has any errors ".format(requested_version, waagent_version))
+        waagent_version: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+        log.info(f"Successfully verified agent updated to requested version. Current agent version running:\n {waagent_version}")
 
     def _verify_no_guest_agent_update(self, version: str) -> None:
         """
@@ -228,17 +233,17 @@ class RsmUpdateBvt(AgentTest):
         RSM update rely on supported flag that agent sends to CRP.So, checking if GA reports feature flag from the agent log
         """
 
-        log.info("Verifying agent reported supported feature flag")
-        self._ssh_client.run_command("agent_update-verify_versioning_supported_feature.py", use_sudo=True)
-        log.info("Agent reported VersioningGovernance supported feature flag")
+        log.info("Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag, so that CRP can send RSM update request")
+        self._run_remote_test("agent_update-verify_versioning_supported_feature.py", use_sudo=True)
+        log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
 
     def _verify_agent_reported_update_status(self, version: str):
         """
         Verify if the agent reported update status to CRP after update performed
         """
 
-        log.info("Verifying agent reported update status for version {0}".format(version))
-        self._ssh_client.run_command(f"agent_update-verify_agent_reported_update_status.py --version {version}", use_sudo=True)
+        log.info("Executing verify_agent_reported_update_status.py remote script to verify agent reported update status for version {0}".format(version))
+        self._run_remote_test(f"agent_update-verify_agent_reported_update_status.py --version {version}", use_sudo=True)
         log.info("Successfully Agent reported update status for version {0}".format(version))
 
 

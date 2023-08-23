@@ -28,14 +28,14 @@ import re
 import subprocess
 import sys
 import threading
-from azurelinuxagent.common import cgroupconfigurator, logcollector
-from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
+from azurelinuxagent.ga import logcollector, cgroupconfigurator
+from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
+from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion

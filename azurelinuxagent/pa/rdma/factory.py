@@ -18,7 +18,7 @@
 from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module, import-error
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.rdma import RDMAHandler
+from azurelinuxagent.pa.rdma.rdma import RDMAHandler
 from azurelinuxagent.common.version import DISTRO_FULL_NAME, DISTRO_VERSION
 from .centos import CentOSRDMAHandler
 from .suse import SUSERDMAHandler

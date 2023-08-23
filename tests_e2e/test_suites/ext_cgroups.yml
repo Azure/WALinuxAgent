@@ -8,3 +8,6 @@ tests:
 images: "cgroups-endorsed"
 # The DCR test extension installs sample service, so this test suite uses it to test services cgroups but this is only published in southcentralus region in public cloud.
 locations: "AzureCloud:southcentralus"
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"
