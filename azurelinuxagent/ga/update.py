@@ -1017,6 +1017,7 @@ class UpdateHandler(object):
         """
         try:
             if conf.get_enable_agent_memory_usage_check() and self._extensions_summary.converged:
+                # we delay first attempt memory usage check, so that current agent won't get blacklisted due to multiple restarts(because of memory limit reach) too frequently
                 if (self._initial_attempt_check_memory_usage and time.time() - self._last_check_memory_usage_time > CHILD_LAUNCH_INTERVAL) or \
                         (not self._initial_attempt_check_memory_usage and time.time() - self._last_check_memory_usage_time > conf.get_cgroup_check_period()):
                     self._last_check_memory_usage_time = time.time()
