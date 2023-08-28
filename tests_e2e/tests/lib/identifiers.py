@@ -15,6 +15,8 @@
 # limitations under the License.
 #
 
+from typing import Dict, List
+
 
 class VmIdentifier(object):
     def __init__(self, cloud: str, location: str, subscription: str, resource_group: str, name: str):
@@ -44,6 +46,19 @@ class VmExtensionIdentifier(object):
         self.publisher: str = publisher
         self.type: str = ext_type
         self.version: str = version
+
+    unsupported_distros: Dict[str, List[str]] = {
+        "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar"]
+    }
+
+    def supports_distro(self, system_info: str) -> bool:
+        """
+        Returns true if an unsupported distro name for the extension is found in the provided system info
+        """
+        ext_unsupported_distros = VmExtensionIdentifier.unsupported_distros.get(self.publisher + "." + self.type)
+        if ext_unsupported_distros is not None and any(distro in system_info for distro in ext_unsupported_distros):
+            return False
+        return True
 
     def __str__(self):
         return f"{self.publisher}.{self.type}"
