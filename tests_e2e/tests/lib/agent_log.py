@@ -351,7 +351,15 @@ class AgentLog(object):
             {
                 'message': r"Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent.*op=Install.*Non-zero exit code: 56,",
             },
-
+            #
+            # Ignore LogCollector failure to fetch vmSettings if it recovers
+            #
+            #     2023-08-27T08:13:42.520557Z WARNING MainThread LogCollector Fetch failed: [HttpError] [HTTP Failed] GET https://md-hdd-tkst3125n3x0.blob.core.chinacloudapi.cn/$system/lisa-WALinuxAgent-20230827-080144-029-e0-n0.cb9a406f-584b-4702-98bb-41a3ad5e334f.vmSettings -- IOError timed out -- 6 attempts made
+            #
+            {
+                'message': r"Fetch failed:.*GET.*vmSettings.*timed out",
+                'if': lambda r: r.prefix == 'LogCollector' and self.agent_log_contains("LogCollector Log collection successfully completed", after_timestamp=r.timestamp)
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
@@ -381,14 +389,16 @@ class AgentLog(object):
 
         return errors
 
-    def agent_log_contains(self, data: str):
+    def agent_log_contains(self, data: str, after_timestamp: str = datetime.min):
         """
         This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
         :param data: The string to look for in the agent logs
-        :return: True if test data string found in the agent log and False if not.
+        :param after_timestamp: A timestamp
+        appears after this timestamp
+        :return: True if test data string found in the agent log after after_timestamp and False if not.
        """
         for record in self.read():
-            if data in record.text:
+            if data in record.text and record.timestamp > after_timestamp:
                 return True
         return False
 
