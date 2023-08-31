@@ -208,9 +208,15 @@ class GoalState(object):
         try:
             self._update(force_update=False)
         except GoalStateInconsistentError as e:
-            self.logger.warn("Detected an inconsistency in the goal state: {0}", ustr(e))
+            message = "Detected an inconsistency in the goal state: {0}", ustr(e)
+            self.logger.warn(message)
+            add_event(op=WALAEventOperation.GoalState, is_success=False, message=message)
+
             self._update(force_update=True)
-            self.logger.info("The goal state is consistent")
+
+            message = "The goal state is consistent"
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
     def _update(self, force_update):
         #
@@ -219,7 +225,9 @@ class GoalState(object):
         timestamp = datetime.datetime.utcnow()
 
         if force_update:
-            self.logger.info("Refreshing goal state and vmSettings")
+            message = "Refreshing goal state and vmSettings"
+            self.logger.info(message)
+            add_event(op=WALAEventOperation.GoalState, message=message)
 
         incarnation, xml_text, xml_doc = GoalState._fetch_goal_state(self._wire_client)
         goal_state_updated = force_update or incarnation != self._incarnation
