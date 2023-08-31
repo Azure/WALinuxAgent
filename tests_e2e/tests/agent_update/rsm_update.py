@@ -139,7 +139,7 @@ class RsmUpdateBvt(AgentTest):
         log.info('Updated agent installed version \n%s', output)
         if update_config:
             log.info('Modifying agent update config flags')
-            output = self._ssh_client.run_command("update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test", use_sudo=True)
+            output = self._ssh_client.run_command("update-waagent-conf Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
             log.info('updated agent update required config \n%s', output)
 
     @staticmethod

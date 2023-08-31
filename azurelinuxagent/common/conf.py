@@ -643,7 +643,7 @@ def get_enable_ga_versioning(conf=__conf__):
     If True, the agent looks for rsm updates(checking requested version in GS) otherwise it will fall back to self-update and finds the highest version from PIR.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableGAVersioning", True)
+    return conf.get_switch("Debug.EnableGAVersioning", False)
 
 
 def get_firewall_rules_log_period(conf=__conf__):
