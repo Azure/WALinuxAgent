@@ -292,11 +292,9 @@ class GoalState(object):
         #
         if self._extensions_goal_state.source == GoalStateSource.FastTrack and self._goal_state_properties & GoalStateProperties.Certificates:
             self._check_certificates()
+            self._check_and_download_missing_certs_on_disk()
 
     def _check_certificates(self):
-        # Re-download certificates in case they have been removed from disk since last download
-        if self._certs_uri is not None:
-            self._download_certificates(self._certs_uri)
         # Check that certificates needed by extensions are in goal state certs.summary
         for extension in self.extensions_goal_state.extensions:
             for settings in extension.settings:
@@ -320,6 +318,32 @@ class GoalState(object):
             add_event(op=WALAEventOperation.GoalState, message=certs.warnings)
         self._history.save_certificates(json.dumps(certs.summary))
         return certs
+
+    def _check_and_download_missing_certs_on_disk(self):
+        # Re-download certificates if any have been removed from disk since last download
+        if self._certs_uri is not None:
+            certificates = self.certs.summary
+            certs_missing_from_disk = False
+
+            for c in certificates:
+                cert_path = os.path.join(conf.get_lib_dir(), c['thumbprint'] + '.crt')
+                if not os.path.isfile(cert_path):
+                    certs_missing_from_disk = True
+                    message = "Certificate required by goal state is not on disk: {0}".format(cert_path)
+                    self.logger.info(message)
+                    add_event(op=WALAEventOperation.GoalState, message=message)
+            if certs_missing_from_disk:
+                # Try to re-download certs. Sometimes download may fail if certs_uri is outdated/contains wrong
+                # container id (for example, when the VM is moved to a new container after resuming from
+                # hibernation). If download fails we should report and continue with goal state processing, as some
+                # extensions in the goal state may succeed.
+                try:
+                    self._download_certificates(self._certs_uri)
+                except Exception as e:
+                    message = "Unable to download certificates. Goal state processing will continue, some " \
+                              "extensions requiring certificates may fail. Error: {0}".format(ustr(e))
+                    self.logger.warn(message)
+                    add_event(op=WALAEventOperation.GoalState, is_success=False, message=message)
 
     def _restore_wire_server_goal_state(self, incarnation, xml_text, xml_doc, vm_settings_support_stopped_error):
         msg = 'The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.'
