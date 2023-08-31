@@ -1250,68 +1250,69 @@ class TestUpdate(UpdateTestCase):
     def test_it_should_report_update_status_in_status_blob(self):
         with mock_wire_protocol(DATA_FILE) as protocol:
             with patch.object(conf, "get_autoupdate_gafamily", return_value="Prod"):
-                with patch("azurelinuxagent.common.logger.warn") as patch_warn:
+                with patch("azurelinuxagent.common.conf.get_enable_ga_versioning", return_value=True):
+                    with patch("azurelinuxagent.common.logger.warn") as patch_warn:
 
-                    protocol.aggregate_status = None
-                    protocol.incarnation = 1
+                        protocol.aggregate_status = None
+                        protocol.incarnation = 1
 
-                    def get_handler(url, **kwargs):
-                        if HttpRequestPredicates.is_agent_package_request(url):
-                            return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
-                        return protocol.mock_wire_data.mock_http_get(url, **kwargs)
+                        def get_handler(url, **kwargs):
+                            if HttpRequestPredicates.is_agent_package_request(url):
+                                return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
+                            return protocol.mock_wire_data.mock_http_get(url, **kwargs)
 
-                    def put_handler(url, *args, **_):
-                        if HttpRequestPredicates.is_host_plugin_status_request(url):
-                            # Skip reading the HostGA request data as its encoded
-                            return MockHttpResponse(status=500)
-                        protocol.aggregate_status = json.loads(args[0])
-                        return MockHttpResponse(status=201)
+                        def put_handler(url, *args, **_):
+                            if HttpRequestPredicates.is_host_plugin_status_request(url):
+                                # Skip reading the HostGA request data as its encoded
+                                return MockHttpResponse(status=500)
+                            protocol.aggregate_status = json.loads(args[0])
+                            return MockHttpResponse(status=201)
 
-                    def update_goal_state_and_run_handler(autoupdate_enabled = True):
-                        protocol.incarnation += 1
-                        protocol.mock_wire_data.set_incarnation(protocol.incarnation)
-                        self._add_write_permission_to_goal_state_files()
-                        with _get_update_handler(iterations=1, protocol=protocol, autoupdate_enabled=autoupdate_enabled) as (update_handler, _):
-                            GAUpdateReportState.report_error_msg = ""
-                            update_handler.run(debug=True)
-                        self.assertEqual(0, update_handler.get_exit_code(),
-                                         "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
-                                             patch_warn.call_args_list))
+                        def update_goal_state_and_run_handler(autoupdate_enabled = True):
+                            protocol.incarnation += 1
+                            protocol.mock_wire_data.set_incarnation(protocol.incarnation)
+                            self._add_write_permission_to_goal_state_files()
+                            with _get_update_handler(iterations=1, protocol=protocol, autoupdate_enabled=autoupdate_enabled) as (update_handler, _):
+                                GAUpdateReportState.report_error_msg = ""
+                                update_handler.run(debug=True)
+                            self.assertEqual(0, update_handler.get_exit_code(),
+                                             "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
+                                                 patch_warn.call_args_list))
 
-                    protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
+                        protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
 
-                    # Case 1: Requested version removed in GS; report missing requested version errr
-                    protocol.mock_wire_data.set_extension_config("wire/ext_conf.xml")
-                    protocol.mock_wire_data.reload()
-                    update_goal_state_and_run_handler()
-                    self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                                     "updateStatus should be reported")
-                    update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
-                    self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-                    self.assertEqual(update_status['code'], 1, "incorrect code reported")
-                    self.assertIn("Missing requested version", update_status['formattedMessage']['message'], "incorrect message reported")
+                        # Case 1: Requested version removed in GS; report missing requested version errr
+                        protocol.mock_wire_data.set_extension_config("wire/ext_conf.xml")
+                        protocol.mock_wire_data.reload()
+                        update_goal_state_and_run_handler()
+                        self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                         "updateStatus should be reported")
+                        update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                        self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
+                        self.assertEqual(update_status['code'], 1, "incorrect code reported")
+                        self.assertIn("Missing requested version", update_status['formattedMessage']['message'], "incorrect message reported")
 
-                    # Case 2: Requested version in GS == Current Version; updateStatus should be Success
-                    protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
-                    protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
-                    update_goal_state_and_run_handler()
-                    self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                                    "updateStatus should be reported if asked in GS")
-                    update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
-                    self.assertEqual(VMAgentUpdateStatuses.Success, update_status['status'], "Status should be successful")
-                    self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
-                    self.assertEqual(update_status['code'], 0, "incorrect code reported")
+                        # Case 2: Requested version in GS == Current Version; updateStatus should be Success
+                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
+                        protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+                        update_goal_state_and_run_handler()
+                        self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                        "updateStatus should be reported if asked in GS")
+                        update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                        self.assertEqual(VMAgentUpdateStatuses.Success, update_status['status'], "Status should be successful")
+                        self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
+                        self.assertEqual(update_status['code'], 0, "incorrect code reported")
 
-                    # Case 3: Requested version in GS != Current Version; update fail and report error
-                    protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
-                    protocol.mock_wire_data.set_extension_config_requested_version("5.2.0.1")
-                    update_goal_state_and_run_handler()
-                    self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
-                                    "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
-                    update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
-                    self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
-                    self.assertEqual(update_status['expectedVersion'], "5.2.0.1", "incorrect version reported")
-                    self.assertEqual(update_status['code'], 1, "incorrect code reported")
+                        # Case 3: Requested version in GS != Current Version; update fail and report error
+                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
+                        protocol.mock_wire_data.set_extension_config_requested_version("5.2.0.1")
+                        update_goal_state_and_run_handler()
+                        self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
+                                        "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
+                        update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
+                        self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
+                        self.assertEqual(update_status['expectedVersion'], "5.2.0.1", "incorrect version reported")
+                        self.assertEqual(update_status['code'], 1, "incorrect code reported")
 
     def test_it_should_wait_to_fetch_first_goal_state(self):
         with _get_update_handler() as (update_handler, protocol):
@@ -1438,7 +1439,8 @@ class TestAgentUpgrade(UpdateTestCase):
                 with patch("azurelinuxagent.common.conf.get_hotfix_upgrade_frequency", return_value=hotfix_frequency):
                     with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency", return_value=normal_frequency):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                            yield
+                            with patch("azurelinuxagent.common.conf.get_enable_ga_versioning", return_value=True):
+                                yield
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None,
