@@ -208,7 +208,7 @@ class GoalState(object):
         try:
             self._update(force_update=False)
         except GoalStateInconsistentError as e:
-            message = "Detected an inconsistency in the goal state: {0}", ustr(e)
+            message = "Detected an inconsistency in the goal state: {0}".format(ustr(e))
             self.logger.warn(message)
             add_event(op=WALAEventOperation.GoalState, is_success=False, message=message)
 
