@@ -462,12 +462,19 @@ class AgentTestSuite(LisaTestSuite):
                                 test_suite_success = False
                                 raise
 
+                        # initialize and save test classes at once to avoid multiple initialization and also keep the context of the test class around
+                        load_tests = {}
+                        for suite in self.context.test_suites:  # pylint: disable=E1133
+                            for test in suite.tests:
+                                if test.name not in load_tests:
+                                    load_tests[test.name] = test.test_class(self.context)
+
                         for suite in self.context.test_suites:  # pylint: disable=E1133
                             log.info("Executing test suite %s", suite.name)
                             self.context.lisa_log.info("Executing Test Suite %s", suite.name)
-                            test_suite_success = self._execute_test_suite(suite) and test_suite_success
+                            test_suite_success = self._execute_test_suite(suite, load_tests) and test_suite_success
 
-                        test_suite_success = self._check_agent_log() and test_suite_success
+                        test_suite_success = self._check_agent_log(load_tests) and test_suite_success
 
                     finally:
                         collect = self.context.collect_logs
@@ -493,7 +500,7 @@ class AgentTestSuite(LisaTestSuite):
                     if not success:
                         self._mark_log_as_failed()
 
-    def _execute_test_suite(self, suite: TestSuiteInfo) -> bool:
+    def _execute_test_suite(self, suite: TestSuiteInfo, load_tests: Dict[str, Any]) -> bool:
         """
         Executes the given test suite and returns True if all the tests in the suite succeeded.
         """
@@ -523,8 +530,7 @@ class AgentTestSuite(LisaTestSuite):
                         test_success: bool = True
 
                         try:
-                            test.test_class(self.context).run()
-
+                            load_tests[test.name].run()
                             summary.append(f"[Passed]  {test.name}")
                             log.info("******** [Passed] %s", test.name)
                             self.context.lisa_log.info("[Passed] %s", test_full_name)
@@ -609,7 +615,7 @@ class AgentTestSuite(LisaTestSuite):
 
                 return suite_success
 
-    def _check_agent_log(self) -> bool:
+    def _check_agent_log(self, load_tests: Dict[str, Any]) -> bool:
         """
         Checks the agent log for errors; returns true on success (no errors int the log)
         """
@@ -628,7 +634,7 @@ class AgentTestSuite(LisaTestSuite):
             #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
             for suite in self.context.test_suites:  # pylint: disable=E1133
                 for test in suite.tests:
-                    ignore_error_rules.extend(test.test_class(self.context).get_ignore_error_rules())
+                    ignore_error_rules.extend(load_tests[test.name].get_ignore_error_rules())
 
             if len(ignore_error_rules) > 0:
                 new = []
