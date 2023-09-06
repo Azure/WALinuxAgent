@@ -51,6 +51,7 @@ class RsmUpdateBvt(AgentTest):
             username=self._context.username,
             private_key_file=self._context.private_key_file)
         self._installed_agent_version = "9.9.9.9"
+        self._downgrade_version = "9.9.9.9"
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
@@ -60,7 +61,8 @@ class RsmUpdateBvt(AgentTest):
             # WARNING ExtHandler ExtHandler Agent WALinuxAgent-9.9.9.9 is permanently blacklisted
             # Note: Version varies depending on the pipeline branch the test is running on
             {
-                'message': rf"Agent WALinuxAgent-{self._installed_agent_version} is permanently blacklisted"
+                'message': rf"Agent WALinuxAgent-{self._installed_agent_version} is permanently blacklisted",
+                'if': lambda r: r.prefix == 'ExtHandler' and self._installed_agent_version > self._downgrade_version
             },
             # We don't allow downgrades below then daemon version
             # 2023-07-11T02:28:21.249836Z WARNING ExtHandler ExtHandler [AgentUpdateError] The Agent received a request to downgrade to version 1.4.0.0, but downgrading to a version less than the Agent installed on the image (1.4.0.1) is not supported. Skipping downgrade.
@@ -81,14 +83,14 @@ class RsmUpdateBvt(AgentTest):
         log.info("*******Verifying the Agent Downgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update is \n%s", stdout)
-        downgrade_version: str = "1.5.0.0"
-        log.info("Attempting downgrade version %s", downgrade_version)
-        self._request_rsm_update(downgrade_version)
-        self._check_rsm_gs(downgrade_version)
+        self._downgrade_version: str = "1.5.0.0"
+        log.info("Attempting downgrade version %s", self._downgrade_version)
+        self._request_rsm_update(self._downgrade_version)
+        self._check_rsm_gs(self._downgrade_version)
         self._prepare_agent()
         # Verify downgrade scenario
-        self._verify_guest_agent_update(downgrade_version)
-        self._verify_agent_reported_update_status(downgrade_version)
+        self._verify_guest_agent_update(self._downgrade_version)
+        self._verify_agent_reported_update_status(self._downgrade_version)
 
 
         # Verify upgrade scenario
