@@ -257,6 +257,8 @@ class RsmUpdateBvt(AgentTest):
         match = re.search(r'.*Goal state agent: (\S*)', stdout)
         if match:
             self._installed_agent_version = match.groups()[0]
+        else:
+            log.warning("Unable to retrieve installed agent version and set to default value {0}".format(self._installed_agent_version))
 
 
 if __name__ == "__main__":

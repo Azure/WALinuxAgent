@@ -521,9 +521,9 @@ class AgentTestSuite(LisaTestSuite):
 
                         test_success: bool = True
 
-                        load_test = test.test_class(self.context)
+                        test_instance = test.test_class(self.context)
                         try:
-                            load_test.run()
+                            test_instance.run()
                             summary.append(f"[Passed]  {test.name}")
                             log.info("******** [Passed] %s", test.name)
                             self.context.lisa_log.info("[Passed] %s", test_full_name)
@@ -582,11 +582,11 @@ class AgentTestSuite(LisaTestSuite):
 
                         suite_success = suite_success and test_success
 
+                        ignore_error_rules.extend(test_instance.get_ignore_error_rules())
+
                         if not test_success and test.blocks_suite:
                             log.warning("%s failed and blocks the suite. Stopping suite execution.", test.name)
                             break
-
-                        ignore_error_rules.extend(load_test.get_ignore_error_rules())
 
                     log.info("")
                     log.info("******** [Test Results]")
