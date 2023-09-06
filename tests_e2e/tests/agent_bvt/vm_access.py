@@ -39,8 +39,8 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 class VmAccessBvt(AgentTest):
     def run(self):
         ssh: SshClient = self._context.create_ssh_client()
-        if "-flatcar" in ssh.run_command("uname -a"):
-            raise TestSkipped("Currently VMAccess is not supported on Flatcar")
+        if not VmExtensionIds.VmAccess.supports_distro(ssh.run_command("uname -a")):
+            raise TestSkipped("Currently VMAccess is not supported on this distro")
 
         # Try to use a unique username for each test run (note that we truncate to 32 chars to
         # comply with the rules for usernames)

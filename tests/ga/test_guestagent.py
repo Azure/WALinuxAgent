@@ -173,6 +173,7 @@ class TestGuestAgent(UpdateTestCase):
                 return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
             return None
 
+        agent_version = self._get_agent_version()
         pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
         pkg.uris.append(agent_uri)
 
@@ -185,7 +186,7 @@ class TestGuestAgent(UpdateTestCase):
 
         messages = [kwargs['message'] for _, kwargs in add_event.call_args_list if kwargs['op'] == 'Install' and kwargs['is_success'] == False]
         self.assertEqual(1, len(messages), "Expected exactly 1 install error/ Got: {0}".format(add_event.call_args_list))
-        self.assertIn('[UpdateError] Unable to download Agent WALinuxAgent-9.9.9.9', messages[0], "The install error does not include the expected message")
+        self.assertIn(str.format('[UpdateError] Unable to download Agent WALinuxAgent-{0}', agent_version), messages[0], "The install error does not include the expected message")
 
         self.assertFalse(agent.is_blacklisted, "Download failures should not blacklist the Agent")
 
