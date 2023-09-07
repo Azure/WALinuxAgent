@@ -53,7 +53,7 @@ class Fips(AgentTest):
             log.info("Verifying that FIPS is enabled [%s]", command)
             output = ssh_client.run_command(command).rstrip()
             if output != "FIPS mode is enabled.":
-                fail(f"FIPS i not enabled - '{command}' returned '{output}'")
+                fail(f"FIPS is not enabled - '{command}' returned '{output}'")
             log.info(output)
         except CommandError as e:
             raise Exception(f"Failed to verify that FIPS is enabled: {e}")
