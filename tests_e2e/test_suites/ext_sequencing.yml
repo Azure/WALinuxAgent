@@ -1,0 +1,10 @@
+#
+# Adds extensions with multiple dependencies to VMSS using 'provisionAfterExtensions' property and validates they are
+# enabled in order of dependencies.
+# NOTE: This scenario is executed on an instance of a scaleset created by the combinator.
+#
+name: "ExtSequencing"
+tests:
+  - "ext_sequencing/ext_sequencing.py"
+images: "endorsed"
+owns_vm: true
