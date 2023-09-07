@@ -145,7 +145,8 @@ class UpdateHandler(object):
         self._heartbeat_id = str(uuid.uuid4()).upper()
         self._heartbeat_counter = 0
 
-        self._last_check_memory_usage = datetime.min
+        self._initial_attempt_check_memory_usage = True
+        self._last_check_memory_usage_time = time.time()
         self._check_memory_usage_last_error_report = datetime.min
 
         # VM Size is reported via the heartbeat, default it here.
@@ -1016,8 +1017,11 @@ class UpdateHandler(object):
         """
         try:
             if conf.get_enable_agent_memory_usage_check() and self._extensions_summary.converged:
-                if self._last_check_memory_usage == datetime.min or datetime.utcnow() >= (self._last_check_memory_usage + UpdateHandler.CHECK_MEMORY_USAGE_PERIOD):
-                    self._last_check_memory_usage = datetime.utcnow()
+                # we delay first attempt memory usage check, so that current agent won't get blacklisted due to multiple restarts(because of memory limit reach) too frequently
+                if (self._initial_attempt_check_memory_usage and time.time() - self._last_check_memory_usage_time > CHILD_LAUNCH_INTERVAL) or \
+                        (not self._initial_attempt_check_memory_usage and time.time() - self._last_check_memory_usage_time > conf.get_cgroup_check_period()):
+                    self._last_check_memory_usage_time = time.time()
+                    self._initial_attempt_check_memory_usage = False
                     CGroupConfigurator.get_instance().check_agent_memory_usage()
         except AgentMemoryExceededException as exception:
             msg = "Check on agent memory usage:\n{0}".format(ustr(exception))
