@@ -2380,7 +2380,7 @@ class AgentMemoryCheckTestCase(AgentTestCase):
             with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
                 with self.assertRaises(ExitException) as context_manager:
                     update_handler = get_update_handler()
-
+                    update_handler._last_check_memory_usage_time = time.time() - 24 * 60
                     update_handler._check_agent_memory_usage()
                     self.assertEqual(1, patch_add_event.call_count)
                     self.assertTrue(any("Check on agent memory usage" in call_args[0]
@@ -2395,7 +2395,7 @@ class AgentMemoryCheckTestCase(AgentTestCase):
         with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage", side_effect=Exception()):
             with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
                 update_handler = get_update_handler()
-
+                update_handler._last_check_memory_usage_time = time.time() - 24 * 60
                 update_handler._check_agent_memory_usage()
                 self.assertTrue(any("Error checking the agent's memory usage" in call_args[0]
                                     for call_args in patch_warn.call_args),
@@ -2411,6 +2411,15 @@ class AgentMemoryCheckTestCase(AgentTestCase):
                     add_events[0]["message"],
                     "The error message is not correct when memory usage check failed")
 
+    @patch("azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl.check_agent_memory_usage")
+    @patch("azurelinuxagent.ga.update.add_event")
+    def test_check_agent_memory_usage_not_called(self, patch_add_event, patch_memory_usage, *_):
+        # This test ensures that agent not called immediately on startup, instead waits for CHILD_LAUNCH_INTERVAL
+        with patch('azurelinuxagent.common.conf.get_enable_agent_memory_usage_check', return_value=True):
+            update_handler = get_update_handler()
+            update_handler._check_agent_memory_usage()
+            self.assertEqual(0, patch_memory_usage.call_count)
+            self.assertEqual(0, patch_add_event.call_count)
 
 class GoalStateIntervalTestCase(AgentTestCase):
     def test_initial_goal_state_period_should_default_to_goal_state_period(self):
