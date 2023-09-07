@@ -12,6 +12,7 @@ image-sets:
 #
       - "alma_9"
       - "centos_79"
+      - "centos_82"
       - "debian_9"
       - "debian_10"
       - "debian_11"
@@ -39,6 +40,8 @@ image-sets:
 
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
+      - "centos_82"
+      - "rhel_82"
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
@@ -78,6 +81,7 @@ images:
          AzureChinaCloud: []
    centos_610: "OpenLogic CentOS 6.10 latest"
    centos_79: "OpenLogic CentOS 7_9 latest"
+   centos_82: "OpenLogic CentOS 8_2 latest"
    debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
