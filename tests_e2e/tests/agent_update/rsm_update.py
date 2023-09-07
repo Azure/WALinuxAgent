@@ -24,6 +24,7 @@
 # For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
 #
 import json
+import re
 from typing import List, Dict, Any
 
 import requests
@@ -49,6 +50,8 @@ class RsmUpdateBvt(AgentTest):
             ip_address=self._context.vm_ip_address,
             username=self._context.username,
             private_key_file=self._context.private_key_file)
+        self._installed_agent_version = "9.9.9.9"
+        self._downgrade_version = "9.9.9.9"
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
@@ -56,9 +59,10 @@ class RsmUpdateBvt(AgentTest):
             # This is expected as we validate the downgrade scenario
             #
             # WARNING ExtHandler ExtHandler Agent WALinuxAgent-9.9.9.9 is permanently blacklisted
-            #
+            # Note: Version varies depending on the pipeline branch the test is running on
             {
-                'message': r"Agent WALinuxAgent-9.9.9.9 is permanently blacklisted"
+                'message': rf"Agent WALinuxAgent-{self._installed_agent_version} is permanently blacklisted",
+                'if': lambda r: r.prefix == 'ExtHandler' and self._installed_agent_version > self._downgrade_version
             },
             # We don't allow downgrades below then daemon version
             # 2023-07-11T02:28:21.249836Z WARNING ExtHandler ExtHandler [AgentUpdateError] The Agent received a request to downgrade to version 1.4.0.0, but downgrading to a version less than the Agent installed on the image (1.4.0.1) is not supported. Skipping downgrade.
@@ -71,20 +75,22 @@ class RsmUpdateBvt(AgentTest):
         return ignore_rules
 
     def run(self) -> None:
+        # retrieve the installed agent version in the vm before run the scenario
+        self._retrieve_installed_agent_version()
         # Allow agent to send supported feature flag
         self._verify_agent_reported_supported_feature_flag()
 
         log.info("*******Verifying the Agent Downgrade scenario*******")
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info("Current agent version running on the vm before update is \n%s", stdout)
-        downgrade_version: str = "1.5.0.0"
-        log.info("Attempting downgrade version %s", downgrade_version)
-        self._request_rsm_update(downgrade_version)
-        self._check_rsm_gs(downgrade_version)
+        self._downgrade_version: str = "1.5.0.0"
+        log.info("Attempting downgrade version %s", self._downgrade_version)
+        self._request_rsm_update(self._downgrade_version)
+        self._check_rsm_gs(self._downgrade_version)
         self._prepare_agent()
         # Verify downgrade scenario
-        self._verify_guest_agent_update(downgrade_version)
-        self._verify_agent_reported_update_status(downgrade_version)
+        self._verify_guest_agent_update(self._downgrade_version)
+        self._verify_agent_reported_update_status(self._downgrade_version)
 
 
         # Verify upgrade scenario
@@ -240,6 +246,19 @@ class RsmUpdateBvt(AgentTest):
         log.info("Verifying agent reported update status for version {0}".format(version))
         self._ssh_client.run_command(f"agent_update-verify_agent_reported_update_status.py --version {version}", use_sudo=True)
         log.info("Successfully Agent reported update status for version {0}".format(version))
+
+    def _retrieve_installed_agent_version(self):
+        """
+        Retrieve the installed agent version
+        """
+        log.info("Retrieving installed agent version")
+        stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
+        log.info("Retrieved installed agent version \n {0}".format(stdout))
+        match = re.search(r'.*Goal state agent: (\S*)', stdout)
+        if match:
+            self._installed_agent_version = match.groups()[0]
+        else:
+            log.warning("Unable to retrieve installed agent version and set to default value {0}".format(self._installed_agent_version))
 
 
 if __name__ == "__main__":
