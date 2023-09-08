@@ -467,8 +467,6 @@ class AgentTestSuite(LisaTestSuite):
                             self.context.lisa_log.info("Executing Test Suite %s", suite.name)
                             test_suite_success = self._execute_test_suite(suite) and test_suite_success
 
-                        test_suite_success = self._check_agent_log() and test_suite_success
-
                     finally:
                         collect = self.context.collect_logs
                         if collect == CollectLogs.Always or collect == CollectLogs.Failed and not test_suite_success:
@@ -512,6 +510,7 @@ class AgentTestSuite(LisaTestSuite):
                     log.info("")
 
                     summary: List[str] = []
+                    ignore_error_rules: List[Dict[str, Any]] = []
 
                     for test in suite.tests:
                         test_full_name = f"{suite_name}-{test.name}"
@@ -522,9 +521,9 @@ class AgentTestSuite(LisaTestSuite):
 
                         test_success: bool = True
 
+                        test_instance = test.test_class(self.context)
                         try:
-                            test.test_class(self.context).run()
-
+                            test_instance.run()
                             summary.append(f"[Passed]  {test.name}")
                             log.info("******** [Passed] %s", test.name)
                             self.context.lisa_log.info("[Passed] %s", test_full_name)
@@ -583,6 +582,8 @@ class AgentTestSuite(LisaTestSuite):
 
                         suite_success = suite_success and test_success
 
+                        ignore_error_rules.extend(test_instance.get_ignore_error_rules())
+
                         if not test_success and test.blocks_suite:
                             log.warning("%s failed and blocks the suite. Stopping suite execution.", test.name)
                             break
@@ -607,9 +608,11 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
+                suite_success = suite_success and self._check_agent_log(ignore_error_rules)
+
                 return suite_success
 
-    def _check_agent_log(self) -> bool:
+    def _check_agent_log(self, ignore_error_rules: List[Dict[str, Any]]) -> bool:
         """
         Checks the agent log for errors; returns true on success (no errors int the log)
         """
@@ -623,13 +626,6 @@ class AgentTestSuite(LisaTestSuite):
             errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
 
             # Individual tests may have rules to ignore known errors; filter those out
-            ignore_error_rules = []
-            # pylint seems to think self.context.test_suites is not iterable. Suppressing warning, since its type is List[AgentTestSuite]
-            #  E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
-            for suite in self.context.test_suites:  # pylint: disable=E1133
-                for test in suite.tests:
-                    ignore_error_rules.extend(test.test_class(self.context).get_ignore_error_rules())
-
             if len(ignore_error_rules) > 0:
                 new = []
                 for e in errors:
