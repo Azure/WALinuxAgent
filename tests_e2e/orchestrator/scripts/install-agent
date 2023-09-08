@@ -115,7 +115,7 @@ echo "Agent's conf path: $waagent_conf_path"
 sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' "$waagent_conf_path"
 # By default GAUpdates flag set to True, so that agent go through update logic to look for new agents.
 # But in e2e tests this flag needs to be off in test version 9.9.9.9 to stop the agent updates, so that our scenarios run on 9.9.9.9.
-sed -i '$a Debug.DownloadNewAgents=n' "$waagent_conf_path"
+# sed -i '$a Debug.DownloadNewAgents=n' "$waagent_conf_path"
 # Logging and exiting tests if Extensions.Enabled flag is disabled for other distros than debian
 if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
   pypy_get_distro=$(pypy3 -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
