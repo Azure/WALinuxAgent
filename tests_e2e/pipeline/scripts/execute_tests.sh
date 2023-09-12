@@ -36,7 +36,7 @@ sudo chown "$WAAGENT_UID" "$LOGS_DIRECTORY"
 #
 az acr login --name waagenttests --username "$CR_USER" --password "$CR_SECRET"
 
-docker pull waagenttests.azurecr.io/waagenttests:latest
+docker pull waagenttests.azurecr.io/waagenttests-mariner:version1.0
 
 # Azure Pipelines does not allow an empty string as the value for a pipeline parameter; instead we use "-" to indicate
 # an empty value. Change "-" to "" for the variables that capture the parameter values.
@@ -62,7 +62,7 @@ docker run --rm \
     --env AZURE_CLIENT_ID \
     --env AZURE_CLIENT_SECRET \
     --env AZURE_TENANT_ID \
-    waagenttests.azurecr.io/waagenttests \
+    waagenttests.azurecr.io/waagenttests-mariner:version1.0 \
     bash --login -c \
       "lisa \
           --runbook \$HOME/WALinuxAgent/tests_e2e/orchestrator/runbook.yml \
