@@ -87,7 +87,6 @@ class AgentUpdateHandler(object):
         else:
             self.update_state.last_attempted_normal_update_time = now
             self.update_state.last_attempted_hotfix_update_time = now
-            self.update_state.last_attempted_manifest_download_time = now
 
     def __should_agent_attempt_manifest_download(self):
         """
@@ -103,6 +102,7 @@ class AgentUpdateHandler(object):
 
         if next_attempt_time > now:
             return False
+        self.update_state.last_attempted_manifest_download_time = now
         return True
 
     @staticmethod
