@@ -58,12 +58,7 @@ class AgentUpdateHandler(object):
         largest version update(self-update):
             update is allowed once per (as specified in the conf.get_hotfix_upgrade_frequency() or conf.get_normal_upgrade_frequency())
             return false when we don't allow updates.
-        Note: Downgrades are not allowed for self-update.
         """
-
-        if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
-            return False
-
         now = datetime.datetime.now()
 
         if self._is_requested_version_update:
@@ -92,7 +87,6 @@ class AgentUpdateHandler(object):
         else:
             self.update_state.last_attempted_normal_update_time = now
             self.update_state.last_attempted_hotfix_update_time = now
-            self.update_state.last_attempted_manifest_download_time = now
 
     def __should_agent_attempt_manifest_download(self):
         """
@@ -108,6 +102,7 @@ class AgentUpdateHandler(object):
 
         if next_attempt_time > now:
             return False
+        self.update_state.last_attempted_manifest_download_time = now
         return True
 
     @staticmethod
@@ -290,11 +285,11 @@ class AgentUpdateHandler(object):
         add_event(op=WALAEventOperation.AgentUpgrade, is_success=success, message=msg, log_event=False)
 
     def run(self, goal_state):
-        # Ignore new agents if update is disabled. The latter flag only used in e2e tests.
-        if not self._autoupdate_enabled or not conf.get_download_new_agents():
-            return
-
         try:
+            # Ignore new agents if update is disabled. The latter flag only used in e2e tests.
+            if not self._autoupdate_enabled or not conf.get_download_new_agents():
+                return
+
             self._gs_id = goal_state.extensions_goal_state.id
             agent_family = self.__get_agent_family_manifests(goal_state)
             requested_version = self.__get_requested_version(agent_family)
@@ -328,30 +323,39 @@ class AgentUpdateHandler(object):
             if warn_msg != "":
                 self.__log_event(LogLevel.WARNING, warn_msg)
 
-            daemon_version = get_daemon_version()
-            if requested_version < daemon_version:
-                # Don't process the update if the requested version is less than daemon version,
-                # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
-                # installed latest version again. When that happens agent go into loop of downloading the requested version, exiting and start again with same version.
-                #
-                raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
-                                       "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
+            try:
+                # Downgrades are not allowed for self-update version
+                # Added it in try block after agent update timewindow check so that we don't log it too frequently
+                if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
+                    return
 
-            msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
-                self._gs_id, str(requested_version))
-            self.__log_event(LogLevel.INFO, msg)
+                daemon_version = get_daemon_version()
+                if requested_version < daemon_version:
+                    # Don't process the update if the requested version is less than daemon version,
+                    # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
+                    # installed latest version again. When that happens agent go into loop of downloading the requested version, exiting and start again with same version.
+                    #
+                    raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
+                                           "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
 
-            agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
+                msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
+                    self._gs_id, str(requested_version))
+                self.__log_event(LogLevel.INFO, msg)
 
-            if agent.is_blacklisted or not agent.is_downloaded:
-                msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
-                    str(agent.version))
-                self.__log_event(LogLevel.WARNING, msg)
-                return
+                agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
 
-            # We delete the directory and the zip package from the filesystem except current version and target version
-            self.__purge_extra_agents_from_disk(CURRENT_VERSION, known_agents=[agent])
-            self.__proceed_with_update(requested_version)
+                if agent.is_blacklisted or not agent.is_downloaded:
+                    msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
+                        str(agent.version))
+                    self.__log_event(LogLevel.WARNING, msg)
+                    return
+
+                # We delete the directory and the zip package from the filesystem except current version and target version
+                self.__purge_extra_agents_from_disk(CURRENT_VERSION, known_agents=[agent])
+                self.__proceed_with_update(requested_version)
+
+            finally:
+                self.__update_last_attempt_update_times()
 
         except Exception as err:
             if isinstance(err, AgentUpgradeExitException):
@@ -363,9 +367,6 @@ class AgentUpdateHandler(object):
             self.__log_event(LogLevel.WARNING, error_msg, success=False)
             if "Missing requested version" not in GAUpdateReportState.report_error_msg:
                 GAUpdateReportState.report_error_msg = error_msg
-
-        finally:
-            self.__update_last_attempt_update_times()
 
     def get_vmagent_update_status(self):
         """
