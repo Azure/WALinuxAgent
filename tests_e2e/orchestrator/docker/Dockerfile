@@ -19,7 +19,7 @@ USER root
 
 RUN \
     tdnf -y update                                                                                            && \
-                                                                                                                 \
+    # mariner packages can be found in this repository https://cvedashboard.azurewebsites.net/#/packages         \
     #                                                                                                            \
     # Install basic dependencies                                                                                 \
     #                                                                                                            \
