@@ -7,11 +7,6 @@
 #
 #   docker run --rm -it -v /home/nam/src/WALinuxAgent:/home/waagent/WALinuxAgent waagenttests bash --login
 #
-#
-# NOTE: Update this comment when publishing a new image
-#
-# Published as  "waagenttests.azurecr.io/waagenttests:latest"
-#
 FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 LABEL description="Test environment for WALinuxAgent"
 
