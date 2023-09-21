@@ -19,11 +19,11 @@
 # This module includes facilities to execute operations on virtual machines scale sets (list extensions, add extensions, etc).
 #
 
-from typing import Any, Dict, List
+from typing import List
 
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.compute.models import VirtualMachineScaleSet, VirtualMachineScaleSetInstanceView, VirtualMachineScaleSetExtension, VirtualMachineScaleSetVM
+from azure.mgmt.compute.models import VirtualMachineScaleSet, VirtualMachineScaleSetInstanceView, VirtualMachineScaleSetExtension
 from azure.mgmt.resource import ResourceManagementClient
 from msrestazure.azure_cloud import Cloud
 

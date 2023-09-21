@@ -215,8 +215,7 @@ class AgentTestSuitesCombinator(Combinator):
                         "c_vm_tags": c_vm_tags,
                         "c_deploy": True
                     }
-                # pylint: enable=W0640
-
+                
                 def create_environment_ext_sequencing(c_env_name: str) -> Dict[str, Any]:
                     log.info("Creating VMSS for ExtSequencing scenario")
                     curr_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -439,7 +438,7 @@ class AgentTestSuitesCombinator(Combinator):
                 raise Exception("No VM instances were found in scale set")
             return vms
         except Exception:
-            log.exception("Error creating test resources for {0}".format(c_env_name))
+            log.exception("Error creating test resources for %s", c_env_name)
             self._report_test_result(
                 c_env_name,
                 "ExtSeqVMSSResourceCreation",
