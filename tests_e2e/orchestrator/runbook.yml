@@ -23,6 +23,8 @@ variable:
   - name: admin_password
     value: ""
     is_secret: true
+  - name: keep_environment
+    value: "no"
   #
   # These variables define parameters for the AgentTestSuite; see the test wiki for details.
   #
@@ -149,7 +151,6 @@ combinator:
   subscription_id: $(subscription_id)
   user: $(user)
   identity_file: $(identity_file)
-
 
 concurrency: 32
 

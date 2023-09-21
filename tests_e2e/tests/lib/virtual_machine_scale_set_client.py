@@ -96,24 +96,6 @@ class VirtualMachineScaleSetClient(AzureClient):
                 virtual_machine_scale_set_name=self._identifier.name))
         return [vm.name for vm in vms]
 
-    # def update(self, properties: Dict[str, Any], timeout: int = AzureClient._DEFAULT_TIMEOUT) -> None:
-    #     """
-    #     Updates a set of properties on the virtual machine scale set
-    #     """
-    #     # location is a required by begin_create_or_update, always add it
-    #     properties_copy = properties.copy()
-    #     properties_copy["location"] = self._identifier.location
-    #
-    #     log.info("Updating %s with properties: %s", self._identifier, properties_copy)
-    #
-    #     self._execute_async_operation(
-    #         lambda: self._compute_client.virtual_machines.begin_create_or_update(
-    #             self._identifier.resource_group,
-    #             self._identifier.name,
-    #             properties_copy),
-    #         operation_name=f"Update {self._identifier}",
-    #         timeout=timeout)
-
     def __str__(self):
         return f"{self._identifier}"
 

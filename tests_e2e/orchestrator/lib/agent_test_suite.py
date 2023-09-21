@@ -48,11 +48,10 @@ from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
-from tests_e2e.tests.lib.identifiers import VmIdentifier, RgIdentifier
+from tests_e2e.tests.lib.identifiers import VmIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.logging import set_current_thread_log
 from tests_e2e.tests.lib.agent_log import AgentLogRecord
-from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
 from tests_e2e.tests.lib.shell import run_command, CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 
@@ -129,6 +128,7 @@ class AgentTestSuite(LisaTestSuite):
         super().__init__(metadata)
         # The context is initialized by _set_context() via the call to execute()
         self.__context: AgentTestSuite._Context = None
+
     def _initialize(self, node: Node, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
         connection_info = node.connection_info
         node_context = get_node_context(node)

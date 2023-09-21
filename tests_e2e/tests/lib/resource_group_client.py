@@ -98,3 +98,6 @@ class ResourceGroupClient(AzureClient):
             filter="resourceType eq 'Microsoft.Compute/virtualMachines'"
         )
         return [vm.name for vm in virtual_machine_resources]
+
+    def __str__(self):
+        return f"{self._identifier}"
