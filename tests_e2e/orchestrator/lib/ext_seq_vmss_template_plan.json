@@ -205,6 +205,11 @@
                 "tier": "Standard",
                 "capacity": 3
             },
+            "plan": {
+                "name": "[parameters('sku')]",
+                "product": "[parameters('offer')]",
+                "publisher": "[parameters('publisher')]"
+            },
             "properties": {
                 "orchestrationMode": "Flexible",
                 "virtualMachineProfile": {

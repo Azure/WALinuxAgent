@@ -419,9 +419,7 @@ class AgentTestSuitesCombinator(Combinator):
             self._created_rgs.append(rg_name)
 
             # Create VMSS using ARM template
-            template_file_path = Path(__file__).parent / "ext_seq_vmss_template.json"
-            with open(template_file_path, "r") as f:
-                template = json.load(f)
+            template = self._get_template(urn)
             parameters = self._get_vmss_deployment_parameters(name=rg_name.replace('-', '').lower(), urn=urn)
             rg.deploy_template(template, parameters)
 
@@ -440,7 +438,7 @@ class AgentTestSuitesCombinator(Combinator):
                 raise Exception("No VM instances were found in scale set")
             return vms
         except Exception:
-            log.exception("Error creating test resources for ExtSequencing scenario")
+            log.exception(f"Error creating test resources for {c_env_name}")
             self._report_test_result(
                 c_env_name,
                 "ExtSeqVMSSResourceCreation",
@@ -449,6 +447,17 @@ class AgentTestSuitesCombinator(Combinator):
                 f"Error creating VMSS resources for {c_env_name}",
                 add_exception_stack_trace=True)
             return []
+
+    def _get_template(self, urn: str) -> Any:
+        publisher = urn.split(' ')[0]
+        plan_required_publishers = ["almalinux", "erockyenterprisesoftwarefoundationinc1653071250513", "kinvolk"]
+        if publisher in plan_required_publishers:
+            template_file_path = Path(__file__).parent / "ext_seq_vmss_template_plan.json"
+        else:
+            template_file_path = Path(__file__).parent / "ext_seq_vmss_template.json"
+        with open(template_file_path, "r") as f:
+            template = json.load(f)
+        return template
 
     @staticmethod
     def _get_image_name(urn: str) -> str:
