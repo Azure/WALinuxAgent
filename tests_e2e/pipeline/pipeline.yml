@@ -135,6 +135,15 @@ jobs:
         displayName: 'Publish test artifacts'
         condition: always()
 
+      - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/delete_resource_groups.sh
+        displayName: "Delete VMSS resources"
+        condition: always()
+        env:
+          SUBSCRIPTION_ID: $(SUBSCRIPTION-ID)
+          AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
+          AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
+          AZURE_TENANT_ID: $(AZURE-TENANT-ID)
+
       - task: PublishTestResults@2
         displayName: 'Publish test results'
         condition: always()

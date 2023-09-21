@@ -91,3 +91,6 @@ ENV/
 # pyenv
 .python-version
 .vscode/
+
+# resource group txt created for ext_sequencing scenario in e2e pipeline
+resource_groups_to_delete.txt

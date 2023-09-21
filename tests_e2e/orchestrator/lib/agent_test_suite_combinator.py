@@ -95,7 +95,7 @@ class AgentTestSuitesCombinator(Combinator):
         if self.runbook.vm_name != '' and (self.runbook.image != '' or self.runbook.vm_size != ''):
             raise Exception("Invalid runbook parameters: When 'vm_name' is specified, 'image' and 'vm_size' should not be specified.")
 
-        self._created_rgs = []
+        self._created_rg_count = 0
         if self.runbook.vm_name != '':
             self._environments = self.create_environment_for_existing_vm()
         else:
@@ -219,7 +219,7 @@ class AgentTestSuitesCombinator(Combinator):
                 def create_environment_ext_sequencing(c_env_name: str) -> Dict[str, Any]:
                     log.info("Creating VMSS for ExtSequencing scenario")
                     curr_datetime = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-                    rg_name = f"lisa-WALinuxAgent-extseq-{curr_datetime}-e{len(self._created_rgs)}"
+                    rg_name = f"lisa-WALinuxAgent-extseq-{curr_datetime}-e{self._created_rg_count}"
                     vms = self._create_vmss_resources(c_env_name=c_env_name, rg_name=rg_name, location=c_location, urn=image.urn)
                     environment: Dict[str, Any] = {}
                     if len(vms) > 0:
@@ -416,10 +416,11 @@ class AgentTestSuitesCombinator(Combinator):
         try:
             # Create RG and keep name for cleanup
             rg.create()
-            self._created_rgs.append(rg_name)
+            self._write_rg_to_file(rg_name)
+            self._created_rg_count += 1
 
             # Create VMSS using ARM template
-            template = self._get_template(urn)
+            template = self._get_template()
             parameters = self._get_vmss_deployment_parameters(name=rg_name.replace('-', '').lower(), urn=urn)
             rg.deploy_template(template, parameters)
 
@@ -448,17 +449,25 @@ class AgentTestSuitesCombinator(Combinator):
                 add_exception_stack_trace=True)
             return []
 
-    @staticmethod
-    def _get_template(urn: str) -> Any:
-        publisher = urn.split(' ')[0]
-        plan_required_publishers = ["almalinux", "erockyenterprisesoftwarefoundationinc1653071250513", "kinvolk"]
-        if publisher in plan_required_publishers:
+    def _get_template(self) -> Any:
+        plan_required_publishers = ["alma_9", "flatcar", "rocky_9"]
+        if self.runbook.image in plan_required_publishers:
             template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template_plan.json"
         else:
             template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template.json"
         with open(template_file_path, "r") as f:
             template = json.load(f)
         return template
+
+    @staticmethod
+    def _write_rg_to_file(rg) -> None:
+        path = Path(__file__).parent.parent.parent.parent / "resource_groups_to_delete.txt"
+        if path.exists():
+            with open(path, 'a') as f:
+                f.write(f"{rg}\n")
+        else:
+            with open(path, 'w+') as f:
+                f.write(f"{rg}\n")
 
     @staticmethod
     def _get_image_name(urn: str) -> str:
