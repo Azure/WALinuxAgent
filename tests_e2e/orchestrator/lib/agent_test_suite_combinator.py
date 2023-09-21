@@ -21,7 +21,7 @@ from dataclasses_json import dataclass_json  # pylint: disable=E0401
 #     etc
 from lisa import notifier, schema  # pylint: disable=E0401
 from lisa.combinator import Combinator  # pylint: disable=E0401
-from lisa.messages import TestStatus, TestResultMessage
+from lisa.messages import TestStatus, TestResultMessage # pylint: disable=E0401
 from lisa.util import get_public_key_data, field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
@@ -233,6 +233,7 @@ class AgentTestSuitesCombinator(Combinator):
                             "c_deploy": False
                         }
                     return environment
+                # pylint: enable=W0640
 
                 if suite_info.owns_vm:
                     env_name = f"{image_name}-{suite_info.name}"
@@ -438,7 +439,7 @@ class AgentTestSuitesCombinator(Combinator):
                 raise Exception("No VM instances were found in scale set")
             return vms
         except Exception:
-            log.exception(f"Error creating test resources for {c_env_name}")
+            log.exception("Error creating test resources for {0}".format(c_env_name))
             self._report_test_result(
                 c_env_name,
                 "ExtSeqVMSSResourceCreation",
@@ -448,13 +449,14 @@ class AgentTestSuitesCombinator(Combinator):
                 add_exception_stack_trace=True)
             return []
 
-    def _get_template(self, urn: str) -> Any:
+    @staticmethod
+    def _get_template(urn: str) -> Any:
         publisher = urn.split(' ')[0]
         plan_required_publishers = ["almalinux", "erockyenterprisesoftwarefoundationinc1653071250513", "kinvolk"]
         if publisher in plan_required_publishers:
-            template_file_path = Path(__file__).parent / "ext_seq_vmss_template_plan.json"
+            template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template_plan.json"
         else:
-            template_file_path = Path(__file__).parent / "ext_seq_vmss_template.json"
+            template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template.json"
         with open(template_file_path, "r") as f:
             template = json.load(f)
         return template
