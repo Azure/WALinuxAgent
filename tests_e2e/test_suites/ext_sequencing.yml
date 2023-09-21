@@ -6,5 +6,5 @@
 name: "ExtSequencing"
 tests:
   - "ext_sequencing/ext_sequencing.py"
-images: "endorsed"
+images: "random(endorsed)"
 owns_vm: true
