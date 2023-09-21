@@ -42,25 +42,26 @@ class UpdateArmTemplateHook:
     def azure_update_arm_template(self, template: Any, environment: Environment) -> None:
         log: logging.Logger = logging.getLogger("lisa")
 
-        #
-        # Add the network security group for the test VM. This group includes a rule allowing SSH access from the current machine.
-        #
-        log.info("******** Waagent: Adding network security rule to the ARM template")
-        AddNetworkSecurityGroup().update(template)
+        if 'extsequencing' not in environment.nodes.default.capability.extended_schemas.get('azure').get('name'):
+            #
+            # Add the network security group for the test VM. This group includes a rule allowing SSH access from the current machine.
+            #
+            log.info("******** Waagent: Adding network security rule to the ARM template")
+            AddNetworkSecurityGroup().update(template)
 
-        #
-        # Apply any template customizations provided by the tests.
-        #
-        azure_runbook: AzurePlatformSchema = environment.platform.runbook.get_extended_runbook(AzurePlatformSchema)
-        vm_tags = azure_runbook.vm_tags
-        # The "templates" tag is a comma-separated list of the template customizations provided by the tests
-        test_templates = vm_tags.get("templates")
-        if test_templates is not None:
-            log.info("******** Waagent: Applying custom templates '%s' to environment '%s'", test_templates, environment.name)
+            #
+            # Apply any template customizations provided by the tests.
+            #
+            azure_runbook: AzurePlatformSchema = environment.platform.runbook.get_extended_runbook(AzurePlatformSchema)
+            vm_tags = azure_runbook.vm_tags
+            # The "templates" tag is a comma-separated list of the template customizations provided by the tests
+            test_templates = vm_tags.get("templates")
+            if test_templates is not None:
+                log.info("******** Waagent: Applying custom templates '%s' to environment '%s'", test_templates, environment.name)
 
-            for t in test_templates.split(","):
-                update_arm_template = self._get_update_arm_template(t)
-                update_arm_template().update(template)
+                for t in test_templates.split(","):
+                    update_arm_template = self._get_update_arm_template(t)
+                    update_arm_template().update(template)
 
     _SOURCE_CODE_ROOT: Path = Path(tests_e2e.__path__[0])
 

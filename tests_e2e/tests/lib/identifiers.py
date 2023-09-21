@@ -33,6 +33,35 @@ class VmIdentifier(object):
         return f"{self.resource_group}:{self.name}"
 
 
+class VmssIdentifier(object):
+    def __init__(self, cloud: str, location: str, subscription: str, resource_group: str, name: str):
+        """
+        Represents the information that identifies a VMSS to the ARM APIs
+        """
+        self.cloud: str = cloud
+        self.location = location
+        self.subscription: str = subscription
+        self.resource_group: str = resource_group
+        self.name: str = name
+
+    def __str__(self):
+        return f"{self.resource_group}:{self.name}"
+
+
+class RgIdentifier(object):
+    def __init__(self, cloud: str, subscription: str, name: str, location: str = ""):
+        """
+        Represents the information that identifies a resource group to the ARM APIs
+        """
+        self.cloud: str = cloud
+        self.location = location
+        self.subscription: str = subscription
+        self.name: str = name
+
+    def __str__(self):
+        return self.name
+
+
 class VmExtensionIdentifier(object):
     def __init__(self, publisher: str, ext_type: str, version: str):
         """

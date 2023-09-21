@@ -23,8 +23,6 @@ variable:
   - name: admin_password
     value: ""
     is_secret: true
-  - name: keep_environment
-    value: "no"
   #
   # These variables define parameters for the AgentTestSuite; see the test wiki for details.
   #
@@ -96,6 +94,12 @@ variable:
     is_case_visible: true
   - name: c_vm_tags
     value: {}
+  - name: c_deploy
+    value: ""
+  - name: c_resource_group_name
+    value: ""
+  - name: c_vm_name
+    value: ""
 
   #
   # Set these variables to use an SSH proxy when executing the runbook
@@ -117,11 +121,12 @@ platform:
     admin_password: $(admin_password)
     keep_environment: $(keep_environment)
     azure:
-      deploy: True
+      deploy: $(c_deploy)
       cloud: $(cloud)
       marketplace_image_information_location: $(c_marketplace_image_information_location)
       shared_resource_group_location: $(c_shared_resource_group_location)
       subscription_id: $(subscription_id)
+      resource_group_name: $(c_resource_group_name)
       wait_delete: false
       vm_tags: $(c_vm_tags)
     requirement:
@@ -132,6 +137,7 @@ platform:
         vhd: $(c_vhd)
         location: $(c_location)
         vm_size: $(c_vm_size)
+        name: $(c_vm_name)
 
 combinator:
   type: agent_test_suites
@@ -140,6 +146,10 @@ combinator:
   image: $(image)
   location: $(location)
   vm_size: $(vm_size)
+  subscription_id: $(subscription_id)
+  user: $(user)
+  identity_file: $(identity_file)
+
 
 concurrency: 32
 
