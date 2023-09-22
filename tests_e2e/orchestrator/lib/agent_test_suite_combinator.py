@@ -450,13 +450,21 @@ class AgentTestSuitesCombinator(Combinator):
             return []
 
     def _get_template(self) -> Any:
-        plan_required_publishers = ["alma_9", "flatcar", "rocky_9"]
-        if self.runbook.image in plan_required_publishers:
-            template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template_plan.json"
-        else:
-            template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template.json"
+        template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template.json"
         with open(template_file_path, "r") as f:
-            template = json.load(f)
+            template: Dict[str, Any] = json.load(f)
+
+        # Scale sets for some images need to be deployed with 'plan' property
+        plan_required_images = ["alma_9", "flatcar", "rocky_9"]
+        if self.runbook.image in plan_required_images:
+            resources: List[Dict[str, Any]] = template.get('resources')
+            for resource in resources:
+                if resource.get('type') == "Microsoft.Compute/virtualMachineScaleSets":
+                    resource["plan"] = {
+                        "name": "[parameters('sku')]",
+                        "product": "[parameters('offer')]",
+                        "publisher": "[parameters('publisher')]"
+                    }
         return template
 
     @staticmethod
