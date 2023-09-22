@@ -25,8 +25,8 @@ from typing import Dict, Any, List
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachine
-from azure.mgmt.network import NetworkManagementClient
-from azure.mgmt.network.models import NetworkInterface, PublicIPAddress
+from azure.mgmt.network import NetworkManagementClient  # pylint: disable=E0401, E0611
+from azure.mgmt.network.models import NetworkInterface, PublicIPAddress  # pylint: disable=E0401, E0611
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.resource.resources.models import DeploymentProperties, DeploymentMode
 from msrestazure.azure_cloud import Cloud
@@ -41,7 +41,6 @@ class ResourceGroupClient(AzureClient):
     """
     Provides operations on resource group (create, template deployment, etc).
     """
-
     def __init__(self, rg: RgIdentifier):
         super().__init__()
         self._identifier: RgIdentifier = rg
@@ -64,6 +63,9 @@ class ResourceGroupClient(AzureClient):
             credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
 
     def create(self) -> None:
+        """
+        Creates a resource group
+        """
         self._resource_client.resource_groups.create_or_update(
             self._identifier.name, {"location": self._identifier.location})
 
@@ -80,6 +82,9 @@ class ResourceGroupClient(AzureClient):
             raise Exception(f"Resource group {self._identifier} creation timed out")
 
     def deploy_template(self, template: Dict[str, Any], parameters: Dict[str, Any]):
+        """
+        Deploys an ARM template in the resource group
+        """
         props = DeploymentProperties(template=template,
                                      parameters=parameters,
                                      mode=DeploymentMode.incremental)
@@ -89,18 +94,15 @@ class ResourceGroupClient(AzureClient):
             operation_name=f"Deploy template to resource group {self._identifier}",
             timeout=AzureClient._DEFAULT_TIMEOUT)
 
-    def delete_if_exists(self):
-        rg_exists = self._resource_client.resource_groups.check_existence(
-            self._identifier.name
-        )
-        if rg_exists:
-            self._execute_async_operation(
-                lambda: self._resource_client.resource_groups.begin_delete(
-                    self._identifier.name),
-                operation_name=f"Delete resource group {self._identifier}",
-                timeout=AzureClient._DEFAULT_TIMEOUT)
-
     def get_virtual_machines(self) -> List[Dict[str, str]]:
+        """
+        Gets the virtual machines in the resource group. Returns a List of Dicts describing the virtual machine by their
+        name and public ip address:
+        {
+            "name": vm_name,
+            "ip": vm_public_ip_address
+        }
+        """
         virtual_machines: List[Dict[str, str]] = []
         virtual_machine_resources = self._resource_client.resources.list_by_resource_group(
             resource_group_name=self._identifier.name,

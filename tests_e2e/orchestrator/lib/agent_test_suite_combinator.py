@@ -25,6 +25,7 @@ from lisa.messages import TestStatus, TestResultMessage # pylint: disable=E0401
 from lisa.util import get_public_key_data, field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
+from tests_e2e.orchestrator.lib.agent_test_suite import AgentTestSuite
 from tests_e2e.tests.lib.add_network_security_group import AddNetworkSecurityGroup
 from tests_e2e.tests.lib.identifiers import RgIdentifier, VmssIdentifier
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
@@ -369,6 +370,9 @@ class AgentTestSuitesCombinator(Combinator):
         return ""
 
     def _get_vmss_deployment_parameters(self, name: str, urn: str) -> Dict[str, Any]:
+        """
+        Returns values required by 'templates/ext_seq_vmss_template.json' to create VMSS for ExtSequencing scenario
+        """
         image = urn.split(' ')
         ip_address = AddNetworkSecurityGroup()._my_ip_address
         return {
@@ -398,10 +402,13 @@ class AgentTestSuitesCombinator(Combinator):
             },
             "ip_address": {
                 "value": ip_address
-            },
+            }
         }
 
     def _create_vmss_resources(self, c_env_name: str, rg_name: str, location: str, urn: str) -> List[str]:
+        """
+        Creates resource group and VMSS for ExtSequencing scenario
+        """
         log: logging.Logger = logging.getLogger("lisa")
         rg = ResourceGroupClient(
             RgIdentifier(
@@ -414,7 +421,7 @@ class AgentTestSuitesCombinator(Combinator):
 
         # Catch any failures creating resource and report as test failure
         try:
-            # Create RG and keep name for cleanup
+            # Create RG and keep name on disk for cleanup
             rg.create()
             self._write_rg_to_file(rg_name)
             self._created_rg_count += 1
@@ -424,7 +431,7 @@ class AgentTestSuitesCombinator(Combinator):
             parameters = self._get_vmss_deployment_parameters(name=rg_name.replace('-', '').lower(), urn=urn)
             rg.deploy_template(template, parameters)
 
-            vmss = VirtualMachineScaleSetClient(
+            vms = VirtualMachineScaleSetClient(
                 VmssIdentifier(
                     cloud=self.runbook.cloud,
                     location=location,
@@ -432,15 +439,14 @@ class AgentTestSuitesCombinator(Combinator):
                     resource_group=rg_name,
                     name=parameters.get("vmName").get("value")
                 )
-            )
-            vms = vmss.get_vm_instance_names()
+            ).get_vm_instance_names()
 
             if len(vms) == 0:
                 raise Exception("No VM instances were found in scale set")
             return vms
         except Exception:
             log.exception("Error creating test resources for %s", c_env_name)
-            self._report_test_result(
+            AgentTestSuite.report_test_result(
                 c_env_name,
                 "ExtSeqVMSSResourceCreation",
                 TestStatus.FAILED,
@@ -450,6 +456,9 @@ class AgentTestSuitesCombinator(Combinator):
             return []
 
     def _get_template(self) -> Any:
+        """
+        Loads template to create VMSS for ExtSequencing scenario
+        """
         template_file_path = Path(__file__).parent / "templates/ext_seq_vmss_template.json"
         with open(template_file_path, "r") as f:
             template: Dict[str, Any] = json.load(f)
@@ -468,7 +477,10 @@ class AgentTestSuitesCombinator(Combinator):
         return template
 
     @staticmethod
-    def _write_rg_to_file(rg) -> None:
+    def _write_rg_to_file(rg: str) -> None:
+        """
+        Writes resource group name to 'WALinuxAgent' directory for the pipeline to read for resource cleanup
+        """
         path = Path(__file__).parent.parent.parent.parent / "resource_groups_to_delete.txt"
         if path.exists():
             with open(path, 'a') as f:
@@ -504,38 +516,3 @@ class AgentTestSuitesCombinator(Combinator):
         # VHDs are given as URIs to storage; do some basic validation, not intending to be exhaustive.
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
-
-    @staticmethod
-    def _report_test_result(
-            suite_name: str,
-            test_name: str,
-            status: TestStatus,
-            start_time: datetime.datetime,
-            message: str = "",
-            add_exception_stack_trace: bool = False
-    ) -> None:
-        """
-        Reports a test result to the junit notifier
-        """
-        # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
-        msg: TestResultMessage = TestResultMessage()
-        msg.type = "AgentTestResultMessage"
-        msg.id_ = str(uuid.uuid4())
-        msg.status = TestStatus.RUNNING
-        msg.suite_full_name = suite_name
-        msg.suite_name = msg.suite_full_name
-        msg.full_name = test_name
-        msg.name = msg.full_name
-        msg.elapsed = 0
-
-        notifier.notify(msg)
-
-        # Now send the actual result. The notifier pipeline makes a deep copy of the message so it is OK to re-use the
-        # same object and just update a few fields. If using a different object, be sure that the "id_" is the same.
-        msg.status = status
-        msg.message = message
-        if add_exception_stack_trace:
-            msg.stacktrace = traceback.format_exc()
-        msg.elapsed = (datetime.datetime.now() - start_time).total_seconds()
-
-        notifier.notify(msg)

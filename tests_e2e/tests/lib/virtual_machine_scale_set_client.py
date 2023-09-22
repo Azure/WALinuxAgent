@@ -87,7 +87,7 @@ class VirtualMachineScaleSetClient(AzureClient):
 
     def get_vm_instance_names(self) -> List[str]:
         """
-        Retrieves the vm instances of a virtual machine scale set
+        Retrieves the names of the vm instances in the virtual machine scale set
         """
         log.info("Retrieving vm instances for %s", self._identifier)
         vms = execute_with_retry(

@@ -160,7 +160,7 @@ class AgentTestSuite(LisaTestSuite):
         self.__context.collect_logs = self._get_required_parameter(variables, "collect_logs")
         self.__context.skip_setup = self._get_required_parameter(variables, "skip_setup")
         self.__context.ssh_client = SshClient(ip_address=self.__context.vm_ip_address, username=self.__context.username, private_key_file=self.__context.private_key_file)
-        self.__context.rg = ResourceGroupClient(RgIdentifier(cloud=self._get_required_parameter(variables, "cloud"),subscription=node.features._platform.subscription_id,name=node_context.resource_group_name,location=self._get_required_parameter(variables, "c_location")))
+        self.__context.rg = ResourceGroupClient(RgIdentifier(cloud=self._get_required_parameter(variables, "cloud"), subscription=node.features._platform.subscription_id, name=node_context.resource_group_name, location=self._get_required_parameter(variables, "c_location")))
 
     @staticmethod
     def _get_required_parameter(variables: Dict[str, Any], name: str) -> Any:
@@ -280,7 +280,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _setup_node(self, install_test_agent: bool, nodes: List[Dict[str, Any]]) -> None:
         """
-        Prepares the remote node for executing the test suite (installs tools and the test agent, etc)
+        Prepares the provided remote nodes for executing the test suite (installs tools and the test agent, etc)
         """
         for node in nodes:
             self.context.lisa_log.info(f"Setting up test node {node.get('name')}")
@@ -395,7 +395,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _collect_node_logs(self, nodes: List[Dict[str, Any]]) -> None:
         """
-        Collects the test logs from the remote machine and copies them to the local machine
+        Collects the test logs from the provided remote nodes and copies them to the local machine
         """
         for node in nodes:
             node_name = node.get('name')
@@ -459,7 +459,9 @@ class AgentTestSuite(LisaTestSuite):
 
                     try:
                         self._create_working_directory()
-
+                        # Get all the nodes to setup and check logs for. (Current node will be an instance of a scale
+                        # set if the test suite is ExtSequencing, we should setup and check logs for all instances of
+                        # the scale set)
                         nodes: List[Dict[str, Any]] = self._get_nodes()
 
                         if not self.context.skip_setup:
@@ -628,7 +630,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _check_agent_log(self, ignore_error_rules: List[Dict[str, Any]], nodes: List[Dict[str, Any]]) -> bool:
         """
-        Checks the agent log for errors; returns true on success (no errors in the log)
+        Checks the agent log on the remote nodes for errors; returns true on success (no errors in the logs)
         """
         found_error = False
         node_i = 0
@@ -677,23 +679,30 @@ class AgentTestSuite(LisaTestSuite):
                         start_time,
                         message=message + ' - First few errors:\n' + '\n'.join([e.text for e in errors[0:3]]))
             except:    # pylint: disable=bare-except
-                    log.exception(f"Error checking agent log on {node_name}")
-                    found_error = True
-                    self._report_test_result(
-                        test_result_name,
-                        "CheckAgentLog",
-                        TestStatus.FAILED,
-                        start_time,
-                        "Error checking agent log",
-                        add_exception_stack_trace=True)
+                log.exception(f"Error checking agent log on {node_name}")
+                found_error = True
+                self._report_test_result(
+                    test_result_name,
+                    "CheckAgentLog",
+                    TestStatus.FAILED,
+                    start_time,
+                    "Error checking agent log",
+                    add_exception_stack_trace=True)
 
         return not found_error
 
     def _get_nodes(self) -> List[Dict[str, Any]]:
-        is_vmss = "ExtSequencing" in [suite.name for suite in self.context.test_suites]
+        """
+        Returns a list of nodes defined by name, ip_address, and ssh_client. If the current node for the test suite is
+        an instance of a scaleset, return a list of all the instances in the scale set. Otherwise, return only the
+        details of the current node.
+        """
+        # If ExtSequencing is in test_suites, we know the current node is an instance of a scale set
+        is_vmss = "ExtSequencing" in [suite.name for suite in self.context.test_suites]  # pylint: disable=E1133
         nodes: List[Dict[str, Any]] = []
 
         if is_vmss:
+            # Append all instances of the scale set
             vms = self.context.rg.get_virtual_machines()
             for vm in vms:
                 nodes.append(
@@ -705,6 +714,7 @@ class AgentTestSuite(LisaTestSuite):
                     }
                 )
         else:
+            # We know this is a single VM, so only append the details of the current node
             nodes = [
                 {
                     "name": self.context.vm.name,
@@ -722,7 +732,7 @@ class AgentTestSuite(LisaTestSuite):
         log.info("MARKER-LOG-WITH-ERRORS")
 
     @staticmethod
-    def _report_test_result(
+    def report_test_result(
             suite_name: str,
             test_name: str,
             status: TestStatus,
