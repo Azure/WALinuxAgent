@@ -212,7 +212,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
 
         with patch("azurelinuxagent.ga.logcollector.MANIFEST_NORMAL", manifest):
             with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-                log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+                log_collector = LogCollector()
                 archive = log_collector.collect_logs_and_get_archive()
 
         with open(self.output_results_file_path, "r") as fh:
@@ -241,7 +241,7 @@ copy,{0}
 
         with patch("azurelinuxagent.ga.logcollector.MANIFEST_FULL", manifest):
             with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-                log_collector = LogCollector(is_full_mode=True, cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+                log_collector = LogCollector(is_full_mode=True)
                 archive = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
@@ -255,7 +255,7 @@ copy,{0}
         # and combined they do not cross the archive size threshold.
 
         with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-            log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+            log_collector = LogCollector()
             archive = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
@@ -277,7 +277,7 @@ copy,{0}
         # Set the size limit so that some files are too large to collect in full.
         with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
             with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-                log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+                log_collector = LogCollector()
                 archive = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
@@ -311,7 +311,7 @@ copy,{0}
         with patch("azurelinuxagent.ga.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
             with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-                    log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+                    log_collector = LogCollector()
                     archive = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
@@ -362,7 +362,7 @@ copy,{0}
         # Ensure the archive reflects the state of files on the disk at collection time. If a file was updated, it
         # needs to be updated in the archive, deleted if removed from disk, and added if not previously seen.
         with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-            log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+            log_collector = LogCollector()
             first_archive = log_collector.collect_logs_and_get_archive()
         self._assert_archive_created(first_archive)
 
@@ -433,7 +433,7 @@ copy,{0}
             with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
                     with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-                        log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+                        log_collector = LogCollector()
                         archive = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
@@ -455,7 +455,7 @@ copy,{0}
             with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
                     with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
-                        log_collector = LogCollector(cpu_cgroup_path="dummy_cpu_path", memory_cgroup_path="dummy_memory_path")
+                        log_collector = LogCollector()
                         second_archive = log_collector.collect_logs_and_get_archive()
 
         expected_files = [
