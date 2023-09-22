@@ -5,9 +5,7 @@ import json
 import logging
 import random
 import re
-import traceback
 import urllib.parse
-import uuid
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,9 +17,9 @@ from dataclasses_json import dataclass_json  # pylint: disable=E0401
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)
 #     etc
-from lisa import notifier, schema  # pylint: disable=E0401
+from lisa import schema  # pylint: disable=E0401
 from lisa.combinator import Combinator  # pylint: disable=E0401
-from lisa.messages import TestStatus, TestResultMessage # pylint: disable=E0401
+from lisa.messages import TestStatus # pylint: disable=E0401
 from lisa.util import get_public_key_data, field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
