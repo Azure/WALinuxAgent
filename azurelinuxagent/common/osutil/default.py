@@ -1154,6 +1154,9 @@ class DefaultOSUtil(object):
         self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def set_dhcp_hostname(self, hostname):
+        # ensure localhost is not sent to the dhcp server
+        if hostname.lower() == "localhost" or hostname.lower() == "localhost.localdomain":
+            hostname = ""
         autosend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
         dhclient_files = ['/etc/dhcp/dhclient.conf', '/etc/dhcp3/dhclient.conf', '/etc/dhclient.conf']
         for conf_file in dhclient_files:
