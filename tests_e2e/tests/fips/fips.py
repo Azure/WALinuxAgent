@@ -19,7 +19,6 @@
 
 import uuid
 from assertpy import fail
-from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.logging import log
@@ -32,18 +31,15 @@ from tests_e2e.tests.lib.identifiers import VmExtensionIds
 
 class Fips(AgentTest):
     """
-    Enables FIPS on the test VM, which is a RHEL 9 VM (see https://access.redhat.com/solutions/137833#rhel9), then executes the CustomScript extension.
-
-    TODO: Investigate whether extensions with protected settings are supported on FIPS-enabled systems. The Agent has issues handling the tenant
-          certificate on those systems (additional configuration on FIPS may be needed).
+    Enables FIPS on the test VM, which is Mariner 2 VM, and verifies that extensions with protected settings are handled correctly under FIPS.
     """
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
         try:
-            command = "fips-mode-setup --enable"
+            command = "fips-enable_fips_mariner"
             log.info("Enabling FIPS on the test VM [%s]", command)
-            output = ssh_client.run_command(command, use_sudo=True)
+            output = ssh_client.run_command(command)
             log.info("Enable FIPS completed\n%s", output)
         except CommandError as e:
             raise Exception(f"Failed to enable FIPS: {e}")
@@ -53,34 +49,25 @@ class Fips(AgentTest):
         vm.restart(wait_for_boot=True, ssh_client=ssh_client)
 
         try:
-            command = "fips-mode-setup --check"
+            command = "fips-check_fips_mariner"
             log.info("Verifying that FIPS is enabled [%s]", command)
             output = ssh_client.run_command(command).rstrip()
             if output != "FIPS mode is enabled.":
-                fail(f"FIPS i not enabled - '{command}' returned '{output}'")
+                fail(f"FIPS is not enabled - '{command}' returned '{output}'")
             log.info(output)
         except CommandError as e:
             raise Exception(f"Failed to verify that FIPS is enabled: {e}")
 
+        # Execute an extension with protected settings to ensure the tenant certificate can be decrypted under FIPS
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
-
         log.info("Installing %s", custom_script)
         message = f"Hello {uuid.uuid4()}!"
         custom_script.enable(
-            settings={
+            protected_settings={
                 'commandToExecute': f"echo \'{message}\'"
-            },
-            auto_upgrade_minor_version=False
+            }
         )
-        custom_script.assert_instance_view(expected_version="2.0", expected_message=message)
-
-    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
-        """
-        Some extensions added by policy on the test subscription use protected settings, which produce this error.
-        """
-        return [
-            {'message': r'Failed to decrypt /var/lib/waagent/Certificates.p7m'}
-        ]
+        custom_script.assert_instance_view(expected_message=message)
 
 
 if __name__ == "__main__":

@@ -319,7 +319,7 @@ class install(_install):  # pylint: disable=C0103
 # implementation may be broken prior to Python 3.7 wher the functionality
 # will be removed from Python 3
 requires = []  # pylint: disable=invalid-name
-if float(sys.version[:3]) >= 3.7:
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 7:
     requires = ['distro']  # pylint: disable=invalid-name
 
 modules = []  # pylint: disable=invalid-name

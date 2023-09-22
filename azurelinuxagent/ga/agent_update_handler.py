@@ -58,12 +58,7 @@ class AgentUpdateHandler(object):
         largest version update(self-update):
             update is allowed once per (as specified in the conf.get_hotfix_upgrade_frequency() or conf.get_normal_upgrade_frequency())
             return false when we don't allow updates.
-        Note: Downgrades are not allowed for self-update.
         """
-
-        if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
-            return False
-
         now = datetime.datetime.now()
 
         if self._is_requested_version_update:
@@ -329,6 +324,11 @@ class AgentUpdateHandler(object):
                 self.__log_event(LogLevel.WARNING, warn_msg)
 
             try:
+                # Downgrades are not allowed for self-update version
+                # Added it in try block after agent update timewindow check so that we don't log it too frequently
+                if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
+                    return
+
                 daemon_version = get_daemon_version()
                 if requested_version < daemon_version:
                     # Don't process the update if the requested version is less than daemon version,

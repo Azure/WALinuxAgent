@@ -57,10 +57,11 @@ class TestAgentUpdate(UpdateTestCase):
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
                     with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
-                        with patch("azurelinuxagent.ga.agent_update_handler.add_event") as mock_telemetry:
-                            agent_update_handler = get_agent_update_handler(protocol)
-                            agent_update_handler._protocol = protocol
-                            yield agent_update_handler, mock_telemetry
+                        with patch("azurelinuxagent.common.conf.get_enable_ga_versioning", return_value=True):
+                            with patch("azurelinuxagent.ga.agent_update_handler.add_event") as mock_telemetry:
+                                agent_update_handler = get_agent_update_handler(protocol)
+                                agent_update_handler._protocol = protocol
+                                yield agent_update_handler, mock_telemetry
 
 
     def __assert_agent_directories_available(self, versions):
