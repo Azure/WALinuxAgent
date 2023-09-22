@@ -48,10 +48,11 @@ from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
-from tests_e2e.tests.lib.identifiers import VmIdentifier
+from tests_e2e.tests.lib.identifiers import VmIdentifier, RgIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.logging import set_current_thread_log
 from tests_e2e.tests.lib.agent_log import AgentLogRecord
+from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
 from tests_e2e.tests.lib.shell import run_command, CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 
@@ -123,6 +124,7 @@ class AgentTestSuite(LisaTestSuite):
             self.collect_logs: str = None
             self.skip_setup: bool = None
             self.ssh_client: SshClient = None
+            self.rg: ResourceGroupClient = None
 
     def __init__(self, metadata: TestSuiteMetadata) -> None:
         super().__init__(metadata)
@@ -158,6 +160,7 @@ class AgentTestSuite(LisaTestSuite):
         self.__context.collect_logs = self._get_required_parameter(variables, "collect_logs")
         self.__context.skip_setup = self._get_required_parameter(variables, "skip_setup")
         self.__context.ssh_client = SshClient(ip_address=self.__context.vm_ip_address, username=self.__context.username, private_key_file=self.__context.private_key_file)
+        self.__context.rg = ResourceGroupClient(RgIdentifier(cloud=self._get_required_parameter(variables, "cloud"),subscription=node.features._platform.subscription_id,name=node_context.resource_group_name,location=self._get_required_parameter(variables, "c_location")))
 
     @staticmethod
     def _get_required_parameter(variables: Dict[str, Any], name: str) -> Any:
@@ -275,138 +278,147 @@ class AgentTestSuite(LisaTestSuite):
         Cleans up any leftovers from the test suite run. Currently just an empty placeholder for future use.
         """
 
-    def _setup_node(self, install_test_agent: bool) -> None:
+    def _setup_node(self, install_test_agent: bool, nodes: List[Dict[str, Any]]) -> None:
         """
         Prepares the remote node for executing the test suite (installs tools and the test agent, etc)
         """
-        self.context.lisa_log.info("Setting up test node")
-        log.info("")
-        log.info("************************************** [Node Setup] **************************************")
-        log.info("")
-        log.info("Test Node: %s", self.context.vm.name)
-        log.info("IP Address: %s", self.context.vm_ip_address)
-        log.info("Resource Group: %s", self.context.vm.resource_group)
-        log.info("")
+        for node in nodes:
+            self.context.lisa_log.info(f"Setting up test node {node.get('name')}")
+            log.info("")
+            log.info("************************************** [Node Setup] **************************************")
+            log.info("")
+            log.info("Test Node: %s", node.get('name'))
+            log.info("IP Address: %s", node.get('ip'))
+            log.info("Resource Group: %s", self.context.vm.resource_group)
+            log.info("")
 
-        #
-        # Ensure that the correct version (x84 vs ARM64) Pypy has been downloaded; it is pre-downloaded to /tmp on the container image
-        # used for Azure Pipelines runs, but for developer runs it may need to be downloaded.
-        #
-        if self.context.ssh_client.get_architecture() == "aarch64":
-            pypy_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
-            pypy_download = "https://dcrdata.blob.core.windows.net/python/pypy3.7-arm64.tar.bz2"
-        else:
-            pypy_path = Path("/tmp/pypy3.7-x64.tar.bz2")
-            pypy_download = "https://dcrdata.blob.core.windows.net/python/pypy3.7-x64.tar.bz2"
-        if pypy_path.exists():
-            log.info("Found Pypy at %s", pypy_path)
-        else:
-            log.info("Downloading %s to %s", pypy_download, pypy_path)
-            run_command(["wget", pypy_download, "-O",  pypy_path])
+            ssh_client = node.get('ssh_client')
+            #
+            # Ensure that the correct version (x84 vs ARM64) Pypy has been downloaded; it is pre-downloaded to /tmp on the container image
+            # used for Azure Pipelines runs, but for developer runs it may need to be downloaded.
+            #
+            if ssh_client.get_architecture() == "aarch64":
+                pypy_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
+                pypy_download = "https://dcrdata.blob.core.windows.net/python/pypy3.7-arm64.tar.bz2"
+            else:
+                pypy_path = Path("/tmp/pypy3.7-x64.tar.bz2")
+                pypy_download = "https://dcrdata.blob.core.windows.net/python/pypy3.7-x64.tar.bz2"
+            if pypy_path.exists():
+                log.info("Found Pypy at %s", pypy_path)
+            else:
+                log.info("Downloading %s to %s", pypy_download, pypy_path)
+                run_command(["wget", pypy_download, "-O",  pypy_path])
 
-        #
-        # Cleanup the test node (useful for developer runs)
-        #
-        log.info('Preparing the test node for setup')
-        # Note that removing lib requires sudo, since a Python cache may have been created by tests using sudo
-        self.context.ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
+            #
+            # Cleanup the test node (useful for developer runs)
+            #
+            log.info('Preparing the test node for setup')
+            # Note that removing lib requires sudo, since a Python cache may have been created by tests using sudo
+            ssh_client.run_command("rm -rvf ~/{bin,lib,tmp}", use_sudo=True)
 
-        #
-        # Copy Pypy and the test Agent to the test node
-        #
-        target_path = Path("~")/"tmp"
-        self.context.ssh_client.run_command(f"mkdir {target_path}")
-        log.info("Copying %s to %s:%s", pypy_path, self.context.node.name, target_path)
-        self.context.ssh_client.copy_to_node(pypy_path, target_path)
-        agent_package_path: Path = self._get_agent_package_path()
-        log.info("Copying %s to %s:%s", agent_package_path, self.context.node.name, target_path)
-        self.context.ssh_client.copy_to_node(agent_package_path, target_path)
+            #
+            # Copy Pypy and the test Agent to the test node
+            #
+            target_path = Path("~")/"tmp"
+            ssh_client.run_command(f"mkdir {target_path}")
+            log.info("Copying %s to %s:%s", pypy_path, node.get('name'), target_path)
+            ssh_client.copy_to_node(pypy_path, target_path)
+            agent_package_path: Path = self._get_agent_package_path()
+            log.info("Copying %s to %s:%s", agent_package_path, node.get('name'), target_path)
+            ssh_client.copy_to_node(agent_package_path, target_path)
 
-        # tar commands sometimes fail with 'tar: Unexpected EOF in archive' error. Retry tarball creation, copy, and
-        # extraction if we hit this error
-        tar_retries = 3
-        while tar_retries > 0:
-            try:
-                #
-                # Create a tarball with the files we need to copy to the test node. The tarball includes two directories:
-                #
-                #     * bin - Executables file (Bash and Python scripts)
-                #     * lib - Library files (Python modules)
-                #
-                # After extracting the tarball on the test node, 'bin' will be added to PATH and PYTHONPATH will be set to 'lib'.
-                #
-                # Note that executables are placed directly under 'bin', while the path for Python modules is preserved under 'lib.
-                #
-                tarball_path: Path = Path("/tmp/waagent.tar")
-                log.info("Creating %s with the files need on the test node", tarball_path)
-                log.info("Adding orchestrator/scripts")
-                command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"orchestrator"/"scripts", str(tarball_path))
-                log.info("%s\n%s", command, run_command(command, shell=True))
-                log.info("Adding tests/scripts")
-                command = "cd {0} ; tar rvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"tests"/"scripts", str(tarball_path))
-                log.info("%s\n%s", command, run_command(command, shell=True))
-                log.info("Adding tests/lib")
-                command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
-                log.info("%s\n%s", command, run_command(command, shell=True))
-                log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
+            # tar commands sometimes fail with 'tar: Unexpected EOF in archive' error. Retry tarball creation, copy, and
+            # extraction if we hit this error
+            tar_retries = 3
+            while tar_retries > 0:
+                try:
+                    #
+                    # Create a tarball with the files we need to copy to the test node. The tarball includes two directories:
+                    #
+                    #     * bin - Executables file (Bash and Python scripts)
+                    #     * lib - Library files (Python modules)
+                    #
+                    # After extracting the tarball on the test node, 'bin' will be added to PATH and PYTHONPATH will be set to 'lib'.
+                    #
+                    # Note that executables are placed directly under 'bin', while the path for Python modules is preserved under 'lib.
+                    #
+                    tarball_path: Path = Path("/tmp/waagent.tar")
+                    log.info("Creating %s with the files need on the test node", tarball_path)
+                    log.info("Adding orchestrator/scripts")
+                    command = "cd {0} ; tar cvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"orchestrator"/"scripts", str(tarball_path))
+                    log.info("%s\n%s", command, run_command(command, shell=True))
+                    log.info("Adding tests/scripts")
+                    command = "cd {0} ; tar rvf {1} --transform='s,^,bin/,' *".format(self.context.test_source_directory/"tests"/"scripts", str(tarball_path))
+                    log.info("%s\n%s", command, run_command(command, shell=True))
+                    log.info("Adding tests/lib")
+                    command = "cd {0} ; tar rvf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/lib".format(self.context.test_source_directory.parent, str(tarball_path))
+                    log.info("%s\n%s", command, run_command(command, shell=True))
+                    log.info("Contents of %s:\n\n%s", tarball_path, run_command(['tar', 'tvf', str(tarball_path)]))
 
-                #
-                # Copy the tarball to the test node
-                #
-                log.info("Copying %s to %s:%s", tarball_path, self.context.node.name, target_path)
-                self.context.ssh_client.copy_to_node(tarball_path, target_path)
+                    #
+                    # Copy the tarball to the test node
+                    #
+                    log.info("Copying %s to %s:%s", tarball_path, node.get('name'), target_path)
+                    ssh_client.copy_to_node(tarball_path, target_path)
 
-                #
-                # Extract the tarball and execute the install scripts
-                #
-                log.info('Installing tools on the test node')
-                command = f"tar xvf {target_path/tarball_path.name} && ~/bin/install-tools"
-                log.info("Remote command [%s] completed:\n%s", command, self.context.ssh_client.run_command(command))
+                    #
+                    # Extract the tarball and execute the install scripts
+                    #
+                    log.info('Installing tools on the test node')
+                    command = f"tar xvf {target_path/tarball_path.name} && ~/bin/install-tools"
+                    log.info("Remote command [%s] completed:\n%s", command, ssh_client.run_command(command))
 
-                # Tarball creation and extraction was successful - no need to retry
-                tar_retries = 0
+                    # Tarball creation and extraction was successful - no need to retry
+                    tar_retries = 0
 
-            except CommandError as error:
-                if "tar: Unexpected EOF in archive" in error.stderr:
-                    tar_retries -= 1
-                    # Log the error with traceback to see which tar operation failed
-                    log.info(f"Tarball creation or extraction failed: \n{error}")
-                    # Retry tar operations
-                    if tar_retries > 0:
-                        log.info("Retrying tarball creation and extraction...")
-                else:
-                    raise Exception(f"Unexpected error when creating or extracting tarball during node setup: {error}")
+                except CommandError as error:
+                    if "tar: Unexpected EOF in archive" in error.stderr:
+                        tar_retries -= 1
+                        # Log the error with traceback to see which tar operation failed
+                        log.info(f"Tarball creation or extraction failed: \n{error}")
+                        # Retry tar operations
+                        if tar_retries > 0:
+                            log.info("Retrying tarball creation and extraction...")
+                    else:
+                        raise Exception(f"Unexpected error when creating or extracting tarball during node setup: {error}")
 
-        if self.context.is_vhd:
-            log.info("Using a VHD; will not install the Test Agent.")
-        elif not install_test_agent:
-            log.info("Will not install the Test Agent per the test suite configuration.")
-        else:
-            log.info("Installing the Test Agent on the test node")
-            command = f"install-agent --package ~/tmp/{agent_package_path.name} --version {AGENT_VERSION}"
-            log.info("%s\n%s", command, self.context.ssh_client.run_command(command, use_sudo=True))
+            if self.context.is_vhd:
+                log.info("Using a VHD; will not install the Test Agent.")
+            elif not install_test_agent:
+                log.info("Will not install the Test Agent per the test suite configuration.")
+            else:
+                log.info("Installing the Test Agent on the test node")
+                command = f"install-agent --package ~/tmp/{agent_package_path.name} --version {AGENT_VERSION}"
+                log.info("%s\n%s", command, ssh_client.run_command(command, use_sudo=True))
 
-        log.info("Completed test node setup")
+            log.info("Completed test node setup")
 
-    def _collect_node_logs(self) -> None:
+    def _collect_node_logs(self, nodes: List[Dict[str, Any]]) -> None:
         """
         Collects the test logs from the remote machine and copies them to the local machine
         """
-        try:
-            # Collect the logs on the test machine into a compressed tarball
-            self.context.lisa_log.info("Collecting logs on test node")
-            log.info("Collecting logs on test node")
-            stdout = self.context.ssh_client.run_command("collect-logs", use_sudo=True)
-            log.info(stdout)
+        for node in nodes:
+            node_name = node.get('name')
+            ssh_client = node.get('ssh_client')
+            try:
+                # Collect the logs on the test machine into a compressed tarball
+                self.context.lisa_log.info(f"Collecting logs on test node {node_name}")
+                log.info(f"Collecting logs on test node {node_name}")
+                stdout = ssh_client.run_command("collect-logs", use_sudo=True)
+                log.info(stdout)
 
-            # Copy the tarball to the local logs directory
-            remote_path = "/tmp/waagent-logs.tgz"
-            local_path = self.context.log_path/'{0}.tgz'.format(self.context.environment_name)
-            log.info("Copying %s:%s to %s", self.context.node.name, remote_path, local_path)
-            self.context.ssh_client.copy_from_node(remote_path, local_path)
+                # Copy the tarball to the local logs directory
+                tgz_name = self.context.environment_name
+                if len(nodes) > 1:
+                    # Append instance of scale set to the end of tarball name
+                    tgz_name += '_' + node_name.split('_')[-1]
+                remote_path = "/tmp/waagent-logs.tgz"
+                local_path = self.context.log_path/'{0}.tgz'.format(tgz_name)
+                log.info("Copying %s:%s to %s", node_name, remote_path, local_path)
+                ssh_client.copy_from_node(remote_path, local_path)
 
-        except:  # pylint: disable=bare-except
-            log.exception("Failed to collect logs from the test machine")
+            except:  # pylint: disable=bare-except
+                log.exception("Failed to collect logs from the test machine")
 
     # NOTES:
     #
@@ -448,6 +460,8 @@ class AgentTestSuite(LisaTestSuite):
                     try:
                         self._create_working_directory()
 
+                        nodes: List[Dict[str, Any]] = self._get_nodes()
+
                         if not self.context.skip_setup:
                             self._setup()
 
@@ -457,7 +471,7 @@ class AgentTestSuite(LisaTestSuite):
                             # E1133: Non-iterable value self.context.test_suites is used in an iterating context (not-an-iterable)
                             install_test_agent = all([suite.install_test_agent for suite in self.context.test_suites])   # pylint: disable=E1133
                             try:
-                                self._setup_node(install_test_agent)
+                                self._setup_node(install_test_agent, nodes)
                             except:
                                 test_suite_success = False
                                 raise
@@ -465,12 +479,12 @@ class AgentTestSuite(LisaTestSuite):
                         for suite in self.context.test_suites:  # pylint: disable=E1133
                             log.info("Executing test suite %s", suite.name)
                             self.context.lisa_log.info("Executing Test Suite %s", suite.name)
-                            test_suite_success = self._execute_test_suite(suite) and test_suite_success
+                            test_suite_success = self._execute_test_suite(suite, nodes) and test_suite_success
 
                     finally:
                         collect = self.context.collect_logs
                         if collect == CollectLogs.Always or collect == CollectLogs.Failed and not test_suite_success:
-                            self._collect_node_logs()
+                            self._collect_node_logs(nodes)
 
                 except Exception as e:   # pylint: disable=bare-except
                     # Report the error and raise an exception to let LISA know that the test errored out.
@@ -491,7 +505,7 @@ class AgentTestSuite(LisaTestSuite):
                     if not success:
                         self._mark_log_as_failed()
 
-    def _execute_test_suite(self, suite: TestSuiteInfo) -> bool:
+    def _execute_test_suite(self, suite: TestSuiteInfo, nodes: List[Dict[str, Any]]) -> bool:
         """
         Executes the given test suite and returns True if all the tests in the suite succeeded.
         """
@@ -608,58 +622,97 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
-                suite_success = suite_success and self._check_agent_log(ignore_error_rules)
+                suite_success = suite_success and self._check_agent_log(ignore_error_rules, nodes)
 
                 return suite_success
 
-    def _check_agent_log(self, ignore_error_rules: List[Dict[str, Any]]) -> bool:
+    def _check_agent_log(self, ignore_error_rules: List[Dict[str, Any]], nodes: List[Dict[str, Any]]) -> bool:
         """
-        Checks the agent log for errors; returns true on success (no errors int the log)
+        Checks the agent log for errors; returns true on success (no errors in the log)
         """
-        start_time: datetime.datetime = datetime.datetime.now()
+        found_error = False
+        node_i = 0
+        while not found_error and node_i < len(nodes):
+            node = nodes[node_i]
+            node_i += 1
+            node_name = node.get('name')
+            ssh_client = node.get('ssh_client')
 
-        try:
-            self.context.lisa_log.info("Checking agent log on the test node")
-            log.info("Checking agent log on the test node")
+            test_result_name = self.context.environment_name
+            if len(nodes) > 1:
+                # Append instance of scale set to the end of result name
+                test_result_name += '_' + node_name.split('_')[-1]
 
-            output = self.context.ssh_client.run_command("check-agent-log.py -j")
-            errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
+            start_time: datetime.datetime = datetime.datetime.now()
 
-            # Individual tests may have rules to ignore known errors; filter those out
-            if len(ignore_error_rules) > 0:
-                new = []
-                for e in errors:
-                    if not AgentLog.matches_ignore_rule(e, ignore_error_rules):
-                        new.append(e)
-                errors = new
+            try:
+                self.context.lisa_log.info(f"Checking agent log on the test node {node_name}")
+                log.info(f"Checking agent log on the test node {node_name}")
 
-            if len(errors) == 0:
-                # If no errors, we are done; don't create a log or test result.
-                log.info("There are no errors in the agent log")
-                return True
+                output = ssh_client.run_command("check-agent-log.py -j")
+                errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
 
-            message = f"Detected {len(errors)} error(s) in the agent log"
-            self.context.lisa_log.error(message)
-            log.error("%s:\n\n%s\n", message, '\n'.join(['\t\t' + e.text.replace('\n', '\n\t\t') for e in errors]))
-            self._mark_log_as_failed()
+                # Individual tests may have rules to ignore known errors; filter those out
+                if len(ignore_error_rules) > 0:
+                    new = []
+                    for e in errors:
+                        if not AgentLog.matches_ignore_rule(e, ignore_error_rules):
+                            new.append(e)
+                    errors = new
 
-            self._report_test_result(
-                self.context.environment_name,
-                "CheckAgentLog",
-                TestStatus.FAILED,
-                start_time,
-                message=message + ' - First few errors:\n' + '\n'.join([e.text for e in errors[0:3]]))
-        except:    # pylint: disable=bare-except
-            log.exception("Error checking agent log")
-            self._report_test_result(
-                self.context.environment_name,
-                "CheckAgentLog",
-                TestStatus.FAILED,
-                start_time,
-                "Error checking agent log",
-                add_exception_stack_trace=True)
+                if len(errors) == 0:
+                    # If no errors, we are done; don't create a log or test result.
+                    log.info("There are no errors in the agent log")
+                else:
+                    message = f"Detected {len(errors)} error(s) in the agent log on {node_name}"
+                    self.context.lisa_log.error(message)
+                    log.error("%s:\n\n%s\n", message, '\n'.join(['\t\t' + e.text.replace('\n', '\n\t\t') for e in errors]))
+                    self._mark_log_as_failed()
+                    found_error = True
 
-        return False
+                    self._report_test_result(
+                        test_result_name,
+                        "CheckAgentLog",
+                        TestStatus.FAILED,
+                        start_time,
+                        message=message + ' - First few errors:\n' + '\n'.join([e.text for e in errors[0:3]]))
+            except:    # pylint: disable=bare-except
+                    log.exception(f"Error checking agent log on {node_name}")
+                    found_error = True
+                    self._report_test_result(
+                        test_result_name,
+                        "CheckAgentLog",
+                        TestStatus.FAILED,
+                        start_time,
+                        "Error checking agent log",
+                        add_exception_stack_trace=True)
+
+        return not found_error
+
+    def _get_nodes(self) -> List[Dict[str, Any]]:
+        is_vmss = "ExtSequencing" in [suite.name for suite in self.context.test_suites]
+        nodes: List[Dict[str, Any]] = []
+
+        if is_vmss:
+            vms = self.context.rg.get_virtual_machines()
+            for vm in vms:
+                nodes.append(
+                    {
+                        "name": vm.get('name'),
+                        "ip": vm.get('ip'),
+                        "ssh_client": SshClient(ip_address=vm.get('ip'), username=self.__context.username,
+                                                private_key_file=self.__context.private_key_file)
+                    }
+                )
+        else:
+            nodes = [
+                {
+                    "name": self.context.vm.name,
+                    "ip": self.context.vm_ip_address,
+                    "ssh_client": self.context.ssh_client
+                }
+            ]
+        return nodes
 
     @staticmethod
     def _mark_log_as_failed():

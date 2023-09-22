@@ -24,6 +24,9 @@ from typing import Dict, Any, List
 
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.compute.models import VirtualMachine
+from azure.mgmt.network import NetworkManagementClient
+from azure.mgmt.network.models import NetworkInterface, PublicIPAddress
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.resource.resources.models import DeploymentProperties, DeploymentMode
 from msrestazure.azure_cloud import Cloud
@@ -50,6 +53,11 @@ class ResourceGroupClient(AzureClient):
             base_url=cloud.endpoints.resource_manager,
             credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
         self._resource_client = ResourceManagementClient(
+            credential=credential,
+            subscription_id=rg.subscription,
+            base_url=cloud.endpoints.resource_manager,
+            credential_scopes=[cloud.endpoints.resource_manager + "/.default"])
+        self._network_client = NetworkManagementClient(
             credential=credential,
             subscription_id=rg.subscription,
             base_url=cloud.endpoints.resource_manager,
@@ -92,12 +100,32 @@ class ResourceGroupClient(AzureClient):
                 operation_name=f"Delete resource group {self._identifier}",
                 timeout=AzureClient._DEFAULT_TIMEOUT)
 
-    def get_virtual_machine_names(self) -> List[str]:
+    def get_virtual_machines(self) -> List[Dict[str, str]]:
+        virtual_machines: List[Dict[str, str]] = []
         virtual_machine_resources = self._resource_client.resources.list_by_resource_group(
             resource_group_name=self._identifier.name,
             filter="resourceType eq 'Microsoft.Compute/virtualMachines'"
         )
-        return [vm.name for vm in virtual_machine_resources]
+        for vm in virtual_machine_resources:
+            vm_model: VirtualMachine = self._compute_client.virtual_machines.get(
+                resource_group_name=self._identifier.name,
+                vm_name=vm.name
+            )
+            nic: NetworkInterface = self._network_client.network_interfaces.get(
+                resource_group_name=self._identifier.name,
+                network_interface_name=vm_model.network_profile.network_interfaces[0].id.split('/')[-1]
+            )
+            public_ip: PublicIPAddress = self._network_client.public_ip_addresses.get(
+                resource_group_name=self._identifier.name,
+                public_ip_address_name=nic.ip_configurations[0].public_ip_address.id.split('/')[-1]
+            )
+            virtual_machines.append(
+                {
+                    "name": vm.name,
+                    "ip": public_ip.ip_address
+                }
+            )
+        return virtual_machines
 
     def __str__(self):
         return f"{self._identifier}"
