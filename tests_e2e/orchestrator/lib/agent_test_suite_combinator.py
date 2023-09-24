@@ -5,7 +5,9 @@ import json
 import logging
 import random
 import re
+import traceback
 import urllib.parse
+import uuid
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,13 +19,12 @@ from dataclasses_json import dataclass_json  # pylint: disable=E0401
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
 #     E0401: Unable to import 'lisa' (import-error)
 #     etc
-from lisa import schema  # pylint: disable=E0401
+from lisa import notifier, schema  # pylint: disable=E0401
 from lisa.combinator import Combinator  # pylint: disable=E0401
-from lisa.messages import TestStatus # pylint: disable=E0401
+from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.util import get_public_key_data, field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
-from tests_e2e.orchestrator.lib.agent_test_suite import AgentTestSuite
 from tests_e2e.tests.lib.add_network_security_group import AddNetworkSecurityGroup
 from tests_e2e.tests.lib.identifiers import RgIdentifier, VmssIdentifier
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
@@ -444,7 +445,7 @@ class AgentTestSuitesCombinator(Combinator):
             return vms
         except Exception:
             log.exception("Error creating test resources for %s", c_env_name)
-            AgentTestSuite.report_test_result(
+            self._report_test_result(
                 c_env_name,
                 "ExtSeqVMSSResourceCreation",
                 TestStatus.FAILED,
@@ -514,3 +515,38 @@ class AgentTestSuitesCombinator(Combinator):
         # VHDs are given as URIs to storage; do some basic validation, not intending to be exhaustive.
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
+
+    @staticmethod
+    def _report_test_result(
+            suite_name: str,
+            test_name: str,
+            status: TestStatus,
+            start_time: datetime.datetime,
+            message: str = "",
+            add_exception_stack_trace: bool = False
+    ) -> None:
+        """
+        Reports a test result to the junit notifier
+        """
+        # The junit notifier requires an initial RUNNING message in order to register the test in its internal cache.
+        msg: TestResultMessage = TestResultMessage()
+        msg.type = "AgentTestResultMessage"
+        msg.id_ = str(uuid.uuid4())
+        msg.status = TestStatus.RUNNING
+        msg.suite_full_name = suite_name
+        msg.suite_name = msg.suite_full_name
+        msg.full_name = test_name
+        msg.name = msg.full_name
+        msg.elapsed = 0
+
+        notifier.notify(msg)
+
+        # Now send the actual result. The notifier pipeline makes a deep copy of the message so it is OK to re-use the
+        # same object and just update a few fields. If using a different object, be sure that the "id_" is the same.
+        msg.status = status
+        msg.message = message
+        if add_exception_stack_trace:
+            msg.stacktrace = traceback.format_exc()
+        msg.elapsed = (datetime.datetime.now() - start_time).total_seconds()
+
+        notifier.notify(msg)

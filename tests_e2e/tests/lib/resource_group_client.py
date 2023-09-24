@@ -81,13 +81,17 @@ class ResourceGroupClient(AzureClient):
         if not rg_created:
             raise Exception(f"Resource group {self._identifier} creation timed out")
 
-    def deploy_template(self, template: Dict[str, Any], parameters: Dict[str, Any]):
+    def deploy_template(self, template: Dict[str, Any], parameters: Dict[str, Any] = None):
         """
         Deploys an ARM template in the resource group
         """
-        props = DeploymentProperties(template=template,
-                                     parameters=parameters,
-                                     mode=DeploymentMode.incremental)
+        if parameters:
+            props = DeploymentProperties(template=template,
+                                         parameters=parameters,
+                                         mode=DeploymentMode.incremental)
+        else:
+            props = DeploymentProperties(template=template,
+                                         mode=DeploymentMode.incremental)
         self._execute_async_operation(
             lambda: self._resource_client.deployments.begin_create_or_update(
                 self._identifier.name, 'TestDeployment',  {'properties': props}),

@@ -208,7 +208,35 @@
             "properties": {
                 "orchestrationMode": "Flexible",
                 "virtualMachineProfile": {
-                    "extensionProfile": {},
+                    "extensionProfile": {
+                        "extensions": [
+                            {
+                                "name": "RunCommand",
+                                "properties": {
+                                    "publisher": "Microsoft.CPlat.Core",
+                                    "type": "RunCommandLinux",
+                                    "typeHandlerVersion": "1.0",
+                                    "autoUpgradeMinorVersion": true,
+                                    "settings": {
+                                        "commandToExecute": "echo $(date +%Y-%m-%dT%H:%M:%S.%3NZ)"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "CSE",
+                                "properties": {
+                                    "provisionAfterExtensions": ["RunCommand"],
+                                    "publisher": "Microsoft.Azure.Extensions",
+                                    "type": "CustomScript",
+                                    "typeHandlerVersion": "2.0",
+                                    "autoUpgradeMinorVersion": true,
+                                    "settings": {
+                                        "commandToExecute": "echo $(date +%Y-%m-%dT%H:%M:%S.%3NZ)"
+                                    }
+                                }
+                            }
+                        ]
+                    },
                     "osProfile": {
                         "computerNamePrefix": "[parameters('vmName')]",
                         "adminUsername": "[parameters('username')]",

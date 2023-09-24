@@ -23,7 +23,7 @@ from typing import List
 
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.compute.models import VirtualMachineScaleSet, VirtualMachineScaleSetInstanceView, VirtualMachineScaleSetExtension
+from azure.mgmt.compute.models import VirtualMachineScaleSet
 from azure.mgmt.resource import ResourceManagementClient
 from msrestazure.azure_cloud import Cloud
 
@@ -61,27 +61,6 @@ class VirtualMachineScaleSetClient(AzureClient):
         log.info("Retrieving VM model for %s", self._identifier)
         return execute_with_retry(
             lambda: self._compute_client.virtual_machine_scale_sets.get(
-                resource_group_name=self._identifier.resource_group,
-                vm_scale_set_name=self._identifier.name))
-
-    def get_instance_view(self) -> VirtualMachineScaleSetInstanceView:
-        """
-        Retrieves the instance view of the virtual machine scale set
-        """
-        log.info("Retrieving instance view for %s", self._identifier)
-        return execute_with_retry(lambda: self._compute_client.virtual_machine_scale_sets.get(
-            resource_group_name=self._identifier.resource_group,
-            vm_scale_set_name=self._identifier.name,
-            expand="instanceView"
-        ).instance_view)
-
-    def get_extensions(self) -> List[VirtualMachineScaleSetExtension]:
-        """
-        Retrieves the extensions installed on the virtual machine scale set
-        """
-        log.info("Retrieving extensions for %s", self._identifier)
-        return execute_with_retry(
-            lambda: self._compute_client.virtual_machine_scale_set_extensions.list(
                 resource_group_name=self._identifier.resource_group,
                 vm_scale_set_name=self._identifier.name))
 
