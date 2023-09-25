@@ -64,7 +64,7 @@ class ExtSequencing(AgentTest):
         # Log the extension enabled datetime
         for ext in extensions:
             ext.time = self.__get_time(ext)
-            log.info("Extension {0} Status: {1}".format(ext.name, ext.statuses[0]))
+            log.info("Extension {0} Status from instance view: {1}".format(ext.name, ext.statuses[0]))
 
         # sort the extensions based on their enabled datetime
         sorted_extensions = sorted(extensions, key=lambda ext_: ext_.time)
@@ -106,21 +106,23 @@ class ExtSequencing(AgentTest):
         template_file_path = Path(__file__).parent.parent.parent / "orchestrator/lib/templates/ext_seq_vmss_template.json"
         with open(template_file_path, "r") as f:
             template: Dict[str, Any] = json.load(f)
-        vmss_resource: Dict[str, Any] = {}
+        vmss_resource = {}
         for resource in template['resources']:
             if resource['type'] == "Microsoft.Compute/virtualMachineScaleSets":
                 vmss_resource = resource
         extensions = vmss_resource['properties']['virtualMachineProfile']['extensionProfile']['extensions']
+        log.info("")
         log.info("The extensions on the scale set instance are: {0}".format(extensions))
 
         # Get the dependency map for the extensions on the VM
         dependency_map = self.get_dependency_map(extensions)
+        log.info("")
         log.info("The dependency map of the extensions is: {0}".format(dependency_map))
 
         # Get the extensions from the instance view for the VM
+        log.info("")
         vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
         instance_view_extensions = vm.get_instance_view().extensions
-        log.info("Instance view extensions: {0}".format(instance_view_extensions))
 
         # Sort the VM extensions by the time they were enabled
         sorted_extension_names = self.get_sorted_extension_names(instance_view_extensions)

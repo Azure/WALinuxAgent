@@ -55,7 +55,6 @@ from tests_e2e.tests.lib.agent_log import AgentLogRecord
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
 from tests_e2e.tests.lib.shell import run_command, CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
 def _initialize_lisa_logger():
