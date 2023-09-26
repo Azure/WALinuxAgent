@@ -84,6 +84,9 @@ class Redhat6xOSUtil(DefaultOSUtil):
         self._run_command_without_raising(["hostname", hostname], log_error=False)
 
     def set_dhcp_hostname(self, hostname):
+        # ensure localhost is not sent to the dhcp server
+        if hostname.lower() == "localhost" or hostname.lower() == "localhost.localdomain":
+            hostname = ""
         ifname = self.get_if_name()
         filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
         fileutil.update_conf_file(filepath,
