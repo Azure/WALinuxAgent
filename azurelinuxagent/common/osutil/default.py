@@ -1162,7 +1162,7 @@ class DefaultOSUtil(object):
         for conf_file in dhclient_files:
             if not os.path.isfile(conf_file):
                 continue
-            if fileutil.findre_in_file(conf_file, autosend):
+            if hostname != "" and fileutil.findre_in_file(conf_file, autosend):
                 # Return if auto send host-name is configured
                 return
             fileutil.update_conf_file(conf_file,
