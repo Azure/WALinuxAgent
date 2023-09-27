@@ -34,9 +34,9 @@ from assertpy import fail
 from azure.core.exceptions import HttpResponseError
 from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
 
-from tests_e2e.tests.lib.agent_test import AgentTest, TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentTest
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext
-from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmssIdentifier, VmIdentifier
+from tests_e2e.tests.lib.identifiers import VmssIdentifier, VmIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
@@ -138,9 +138,6 @@ class ExtSequencing(AgentTest):
         return True
 
     def run(self):
-        if not VmExtensionIds.VmAccess.supports_distro(self._ssh_client.run_command("uname -a")):
-            raise TestSkipped("Currently VMAccess is not supported on this distro")
-
         # Get the extensions that were added to the scale set instances at VMSS creation
         template_file_path = Path(__file__).parent.parent.parent / "orchestrator/lib/templates/ext_seq_vmss_template.json"
         with open(template_file_path, "r") as f:
