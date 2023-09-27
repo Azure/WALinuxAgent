@@ -20,6 +20,9 @@
 #
 # This test adds extensions with multiple dependencies to a VMSS using the 'provisionAfterExtensions' property and
 # validates they are enabled in order of dependencies.
+# TODO: Currently Flexible VMSS does not support UpgradePolicy. Once UpgradePolicy is supported, this scenario should
+#  be improved to update the scale set model with new extensions/dependencies and validate the order in which they were
+#  enabled
 #
 import json
 import random

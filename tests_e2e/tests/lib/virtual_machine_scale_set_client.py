@@ -16,7 +16,7 @@
 #
 
 #
-# This module includes facilities to execute operations on virtual machines scale sets (list extensions, add extensions, etc).
+# This module includes facilities to execute operations on virtual machines scale sets (list instances, delete extensions, etc).
 #
 
 from typing import List, Dict
