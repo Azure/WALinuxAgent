@@ -187,6 +187,19 @@ class TestAgentUpdate(UpdateTestCase):
                 self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
                 self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
 
+    def test_it_should_update_to_largest_version_if_requested_version_not_from_rsm(self):
+        self.prepare_agents(count=1)
+
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf_requested_version_not_from_rsm.xml"
+        with self.__get_agent_update_handler(test_data=data_file) as (agent_update_handler, mock_telemetry):
+            with self.assertRaises(AgentUpgradeExitException) as context:
+                agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
+                self.__assert_agent_requested_version_in_goal_state(mock_telemetry, inc=2, version="99999.0.0.0")
+                self.__assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
+                self.assertIn("Agent update found, exiting current process", ustr(context.exception.reason))
+
+
     def test_it_should_not_download_manifest_again_if_last_attempted_download_time_not_elapsed(self):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()

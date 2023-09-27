@@ -4,6 +4,7 @@
             <GAFamily>
                 <Name>Prod</Name>
                 <Version>5.2.1.0</Version>
+                <IsVersionFromRSM>true</IsVersionFromRSM>
                 <Uris>
                     <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
                 </Uris>
@@ -11,6 +12,7 @@
             <GAFamily>
                 <Name>Test</Name>
                 <Version>5.2.1.0</Version>
+                <IsVersionFromRSM>true</IsVersionFromRSM>
                 <Uris>
                     <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
                 </Uris>

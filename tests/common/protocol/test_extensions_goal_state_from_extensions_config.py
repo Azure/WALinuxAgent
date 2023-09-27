@@ -60,3 +60,16 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
             extensions_goal_state = protocol.get_goal_state().extensions_goal_state
 
             self.assertEqual(GoalStateChannel.WireServer, extensions_goal_state.channel, "The channel is incorrect")
+
+    def test_it_should_parse_is_version_from_rsm_properly(self):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
+            for family in agent_families:
+                self.assertEqual(family.is_version_from_rsm, False, "is_version_from_rsm should be False")
+
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
+        with mock_wire_protocol(data_file) as protocol:
+            agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
+            for family in agent_families:
+                self.assertEqual(family.is_version_from_rsm, True, "is_version_from_rsm should be True")

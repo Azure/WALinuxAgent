@@ -295,23 +295,23 @@ class AgentUpdateHandler(object):
             requested_version = self.__get_requested_version(agent_family)
             agent_manifest = None  # This is to make sure fetch agent manifest once per update
             warn_msg = ""
-            if requested_version is None:
-                # Do not proceed with update if self-update needs to download the manifest again with in an hour
-                if not self.__should_agent_attempt_manifest_download():
-                    return
-                if conf.get_enable_ga_versioning():  # log the warning only when ga versioning is enabled
-                    warn_msg = "Missing requested version in agent family: {0} for incarnation: {1}, fallback to largest version update".format(self._ga_family, self._gs_id)
-                    GAUpdateReportState.report_error_msg = warn_msg
-                agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
-                requested_version = self.__get_largest_version(agent_manifest)
-                self._is_requested_version_update = False
-            else:
+            if requested_version is not None and agent_family.is_version_from_rsm:
                 self._is_requested_version_update = True
                 # Save the requested version to report back
                 GAUpdateReportState.report_expected_version = requested_version
                 # Remove the missing requested version warning once requested version becomes available
                 if "Missing requested version" in GAUpdateReportState.report_error_msg:
                     GAUpdateReportState.report_error_msg = ""
+            else:
+                # Do not proceed with update if self-update needs to download the manifest again with in an hour
+                if not self.__should_agent_attempt_manifest_download():
+                    return
+                if conf.get_enable_ga_versioning() and not agent_family.is_version_from_rsm:  # log the warning only when ga versioning is enabled
+                    warn_msg = "Missing requested version in agent family: {0} for incarnation: {1}, fallback to largest version update".format(self._ga_family, self._gs_id)
+                    GAUpdateReportState.report_error_msg = warn_msg
+                agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
+                requested_version = self.__get_largest_version(agent_manifest)
+                self._is_requested_version_update = False
 
             if requested_version == CURRENT_VERSION:
                 return
@@ -338,8 +338,8 @@ class AgentUpdateHandler(object):
                     raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
                                            "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
 
-                msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
-                    self._gs_id, str(requested_version))
+                msg = "Goal state {0} is requesting a new agent version {1} [VersionFromRSM:{2}], will update the agent before processing the goal state.".format(
+                    self._gs_id, str(requested_version), agent_family.is_version_from_rsm)
                 self.__log_event(LogLevel.INFO, msg)
 
                 agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)

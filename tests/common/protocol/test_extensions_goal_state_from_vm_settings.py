@@ -64,6 +64,22 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             for family in families:
                 self.assertEqual(family.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
 
+    def test_it_should_parse_is_version_from_rsm_properly(self):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertEqual(family.is_version_from_rsm, False, "is_version_from_rsm should be False")
+
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertEqual(family.is_version_from_rsm, True, "is_version_from_rsm should be True")
+
     def test_it_should_parse_missing_status_upload_blob_as_none(self):
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
         data_file["vm_settings"] = "hostgaplugin/vm_settings-no_status_upload_blob.json"

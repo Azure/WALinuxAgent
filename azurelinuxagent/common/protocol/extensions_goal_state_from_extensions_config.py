@@ -61,9 +61,12 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
         for ga_family in ga_families:
             name = findtext(ga_family, "Name")
             version = findtext(ga_family, "Version")
+            is_version_from_rsm = findtext(ga_family, "IsVersionFromRSM")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
             family = VMAgentFamily(name, version)
+            if is_version_from_rsm is not None:
+                family.is_version_from_rsm = is_version_from_rsm.lower() == "true"
             for uri in uris:
                 family.uris.append(gettext(uri))
             self._agent_families.append(family)
