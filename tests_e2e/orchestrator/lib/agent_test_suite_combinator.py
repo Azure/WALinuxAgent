@@ -426,7 +426,7 @@ class AgentTestSuitesCombinator(Combinator):
             self._created_rg_count += 1
 
             # Create VMSS using ARM template
-            template = self._get_template()
+            template = self._get_template(urn)
             parameters = self._get_vmss_deployment_parameters(name=rg_name.replace('-', '').lower(), urn=urn)
             rg.deploy_template(template, parameters)
 
@@ -454,7 +454,8 @@ class AgentTestSuitesCombinator(Combinator):
                 add_exception_stack_trace=True)
             return []
 
-    def _get_template(self) -> Any:
+    @staticmethod
+    def _get_template(urn: str) -> Any:
         """
         Loads template to create VMSS for ExtSequencing scenario
         """
@@ -463,8 +464,8 @@ class AgentTestSuitesCombinator(Combinator):
             template: Dict[str, Any] = json.load(f)
 
         # Scale sets for some images need to be deployed with 'plan' property
-        plan_required_images = ["alma_9", "flatcar", "rocky_9"]
-        if self.runbook.image in plan_required_images:
+        plan_required_images = ["almalinux", "kinvolk", "erockyenterprisesoftwarefoundationinc1653071250513"]
+        if urn.split(' ')[0] in plan_required_images:
             resources: List[Dict[str, Any]] = template.get('resources')
             for resource in resources:
                 if resource.get('type') == "Microsoft.Compute/virtualMachineScaleSets":

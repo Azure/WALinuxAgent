@@ -211,8 +211,19 @@
                     "extensionProfile": {
                         "extensions": [
                             {
+                                "name": "MonitorLinuxAgent",
+                                "properties": {
+                                    "publisher": "Microsoft.Azure.Monitor",
+                                    "type": "AzureMonitorLinuxAgent",
+                                    "typeHandlerVersion": "1.5",
+                                    "autoUpgradeMinorVersion": true,
+                                    "settings": {}
+                                }
+                            },
+                            {
                                 "name": "RunCommand",
                                 "properties": {
+                                    "provisionAfterExtensions": ["MonitorLinuxAgent"],
                                     "publisher": "Microsoft.CPlat.Core",
                                     "type": "RunCommandLinux",
                                     "typeHandlerVersion": "1.0",
@@ -225,7 +236,7 @@
                             {
                                 "name": "CSE",
                                 "properties": {
-                                    "provisionAfterExtensions": ["RunCommand"],
+                                    "provisionAfterExtensions": ["RunCommand", "MonitorLinuxAgent"],
                                     "publisher": "Microsoft.Azure.Extensions",
                                     "type": "CustomScript",
                                     "typeHandlerVersion": "2.0",
