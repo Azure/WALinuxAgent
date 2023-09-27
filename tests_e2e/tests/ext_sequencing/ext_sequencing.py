@@ -86,7 +86,8 @@ class ExtSequencing(AgentTest):
         ext_to_remove = None
         for ext in dependency_map:
             can_be_removed = True
-            for ext_key, dependencies in dependency_map.items():
+            for ext_key in dependency_map:
+                dependencies = dependency_map.get(ext_key)
                 if dependencies is not None and ext in dependencies:
                     can_be_removed = False
             if can_be_removed:
