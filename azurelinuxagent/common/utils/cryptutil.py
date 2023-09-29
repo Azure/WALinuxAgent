@@ -56,13 +56,14 @@ class CryptUtil(object):
 
         # OpenSSL's pkey command may not be available on older versions so try 'rsa' first.
         try:
-            return shellutil.run_command([self.openssl_cmd, "rsa", "-in", file_name, "-pubout"], log_error=False)
+            command = [self.openssl_cmd, "rsa", "-in", file_name, "-pubout"]
+            return shellutil.run_command(command, log_error=False)
         except shellutil.CommandError as error:
             if not ("Not an RSA key" in error.stderr or "expecting an rsa key" in error.stderr):
                 logger.error(
                     "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
                     " ".join(command),
-                    error.return_code,
+                    error.returncode,
                     error.stdout,
                     error.stderr)
                 raise

@@ -17,7 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import glob
-import logging
 import os
 import platform
 import re
