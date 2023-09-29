@@ -43,7 +43,7 @@ class KeyvaultCertificates(AgentTest):
                 'AzureUSGovernment': 'https://waagenttests.vault.usgovcloudapi.net/secrets/rsa-cert/463a8a6be3b3436d85d3d4e406621c9e'
             }
         }
-        thumbprints = [t for t in test_certificates.keys()]
+        thumbprints = test_certificates.keys()
         certificate_urls = [u[self._context.vm.cloud] for u in test_certificates.values()]
 
         # The test certificates should be downloaded to these locations
