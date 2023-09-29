@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import glob
+import logging
 import os
 import platform
 import re
@@ -316,7 +317,8 @@ class UpdateHandler(object):
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
-                u"OSUtil: {util_name}; AgentService: {service_name}; "\
+                u"OSUtil: {util_name}; "\
+                u"AgentService: {service_name}; "\
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
                 u"systemd: {systemd}; "\
                 u"LISDrivers: {lis_ver}; "\
@@ -343,6 +345,7 @@ class UpdateHandler(object):
 
             # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)
+            self._log_openssl_info()
 
             #
             # Perform initialization tasks
@@ -408,6 +411,29 @@ class UpdateHandler(object):
 
         self._shutdown()
         sys.exit(0)
+
+    @staticmethod
+    def _log_openssl_info():
+        try:
+            version = shellutil.run_command(["openssl", "version"])
+            message = "OpenSSL version: {0}".format(version)
+            logger.info(message)
+            add_event(op=WALAEventOperation.OpenSsl, message=message, is_success=True)
+        except Exception as e:
+            message = "Failed to get OpenSSL version: {0}".format(e)
+            logger.info(message)
+            add_event(op=WALAEventOperation.OpenSsl, message=message, is_success=False, log_event=False)
+        #
+        # Collect telemetry about the 'pkey' command. CryptUtil get_pubkey_from_prv() uses the 'pkey' command only as a fallback after trying 'rsa'.
+        # 'pkey' also works for RSA keys, but it may not be available on older versions of OpenSSL. Check telemetry after a few releases and if there
+        # are no versions of OpenSSL that do not support 'pkey' consider removing the use of 'rsa' altogether.
+        #
+        try:
+            shellutil.run_command(["openssl", "help", "pkey"])
+        except Exception as e:
+            message = "OpenSSL does not support the pkey command: {0}".format(e)
+            logger.info(message)
+            add_event(op=WALAEventOperation.OpenSsl, message=message, is_success=False, log_event=False)
 
     def _initialize_goal_state(self, protocol):
         #
