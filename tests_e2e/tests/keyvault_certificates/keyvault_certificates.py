@@ -50,7 +50,7 @@ class KeyvaultCertificates(AgentTest):
         expected_certificates = " ".join([f"/var/lib/waagent/{t}.{{crt,prv}}" for t in thumbprints])
 
         # The test may be running on a VM that has already been tested (e.g. while debugging the test), so we need to delete any existing test certificates first
-        # (note that rm -f does not fail if the give files do not exist)
+        # (note that rm -f does not fail if the given files do not exist)
         ssh_client: SshClient = self._context.create_ssh_client()
         log.info("Deleting any existing test certificates on the test VM.")
         existing_certificates = ssh_client.run_command(f"rm -f -v {expected_certificates}", use_sudo=True)
