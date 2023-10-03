@@ -7,7 +7,7 @@
 #
 #   docker run --rm -it -v /home/nam/src/WALinuxAgent:/home/waagent/WALinuxAgent waagenttests bash --login
 #
-FROM ubuntu:latest
+FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
 LABEL description="Test environment for WALinuxAgent"
 
 SHELL ["/bin/bash", "-c"]
@@ -18,24 +18,23 @@ SHELL ["/bin/bash", "-c"]
 USER root
 
 RUN \
-    apt-get update                                                                                            && \
-                                                                                                                 \
+    tdnf -y update                                                                                            && \
+    # mariner packages can be found in this repository https://cvedashboard.azurewebsites.net/#/packages         \
     #                                                                                                            \
     # Install basic dependencies                                                                                 \
     #                                                                                                            \
-    apt-get install -y git python3.10 python3.10-dev wget bzip2                                               && \
-    ln /usr/bin/python3.10 /usr/bin/python3                                                                   && \
+    tdnf -y install git python3 python3-devel wget bzip2 ca-certificates                                      && \
                                                                                                                  \
     #                                                                                                            \
     # Install LISA dependencies                                                                                  \
     #                                                                                                            \
-    apt-get install -y git gcc libgirepository1.0-dev libcairo2-dev qemu-utils libvirt-dev                       \
-            python3-pip python3-venv                                                                          && \
+    tdnf install -y git gcc gobject-introspection-devel cairo-devel pkg-config python3-devel libvirt-devel       \
+            cairo-gobject binutils kernel-headers glibc-devel python3-pip python3-virtualenv                  && \
                                                                                                                  \
     #                                                                                                            \
     # Install test dependencies                                                                                  \
     #                                                                                                            \
-    apt-get install -y zip                                                                                    && \
+    tdnf -y install zip tar                                                                                   && \
                                                                                                                  \
     #                                                                                                            \
     # Create user waagent, which is used to execute the tests                                                    \
@@ -46,17 +45,8 @@ RUN \
     #                                                                                                            \
     # Install the Azure CLI                                                                                      \
     #                                                                                                            \
-    apt-get install ca-certificates curl apt-transport-https lsb-release gnupg                                && \
-    mkdir -p /etc/apt/keyrings                                                                                && \
-    curl -sLS https://packages.microsoft.com/keys/microsoft.asc                                                  \
-        | gpg --dearmor                                                                                          \
-        | tee /etc/apt/keyrings/microsoft.gpg > /dev/null                                                     && \
-    chmod go+r /etc/apt/keyrings/microsoft.gpg                                                                && \
-    AZ_REPO=$(lsb_release -cs)                                                                                && \
-    echo "deb [arch=`dpkg --print-architecture` signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" \
-      | tee /etc/apt/sources.list.d/azure-cli.list                                                            && \
-    apt-get update                                                                                            && \
-    apt-get install azure-cli                                                                                 && \
+    tdnf -y install azure-cli                                                                                 && \
+    tdnf clean all                                                                                            && \
     :
 
 #
@@ -77,7 +67,7 @@ RUN \
     cd $HOME                                                                                                  && \
     git clone https://github.com/microsoft/lisa.git                                                           && \
     cd lisa                                                                                                   && \
-    git checkout a030c5e6a0695db77dbf5bd52a45d07cbbf00087                                                     && \
+    git checkout 7396cbd6d9b31a99b13c184f735ce9827334f21b                                                     && \
                                                                                                                  \
     python3 -m pip install --upgrade pip                                                                      && \
     python3 -m pip install --editable .[azure,libvirt] --config-settings editable_mode=compat                 && \

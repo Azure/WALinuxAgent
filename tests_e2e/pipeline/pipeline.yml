@@ -62,6 +62,7 @@ pool:
 
 jobs:
   - job: "ExecuteTests"
+    timeoutInMinutes: 90
 
     steps:
       - task: UsePythonVersion@0
@@ -107,7 +108,6 @@ jobs:
       - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/execute_tests.sh
         displayName: "Execute tests"
         continueOnError: true
-        timeoutInMinutes: 90
         env:
           SUBSCRIPTION_ID: $(SUBSCRIPTION-ID)
           AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
