@@ -107,6 +107,10 @@ def _check_noexec():
     """
     Check if /var is mounted with the noexec flag.
     """
+    # W0603: Using the global statement (global-statement)
+    # OK to disable; _COLLECT_NOEXEC_ERRORS is used only within _check_noexec, but needs to persist across calls.
+    global _COLLECT_NOEXEC_ERRORS  # pylint: disable=W0603
+
     try:
         agent_dir = conf.get_lib_dir()
         with open('/proc/mounts', 'r') as f:
