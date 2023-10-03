@@ -315,9 +315,13 @@ class UpdateHandler(object):
             logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
+            vm_arch = self._get_vm_arch()
+            logger.info("CPU Arch: {0}", vm_arch)
+
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; AgentService: {service_name}; "\
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
+                u"Arch: {vm_arch}; "\
                 u"systemd: {systemd}; "\
                 u"LISDrivers: {lis_ver}; "\
                 u"logrotate: {has_logrotate};".format(
@@ -325,7 +329,7 @@ class UpdateHandler(object):
                     util_name=type(self.osutil).__name__,
                     service_name=self.osutil.service_name,
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
-                    py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
+                    py_micro=PY_VERSION_MICRO, vm_arch=vm_arch, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
                 )
             logger.info(os_info_msg)

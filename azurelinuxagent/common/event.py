@@ -383,6 +383,10 @@ class EventLogger(object):
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ImageOrigin, 0))
 
     @staticmethod
+    def _get_vm_arch(self):
+        return platform.machine()
+
+    @staticmethod
     def _get_os_version():
         return "{0}:{1}-{2}-{3}:{4}".format(platform.system(), DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, platform.release())
 
@@ -591,13 +595,16 @@ class EventLogger(object):
         This method is called for all events and ensures all telemetry fields are added before the event is sent out.
         Note that the event timestamp is saved in the OpcodeName field.
         """
+        keyword_name = {
+            "CpuArchitecture": self._get_vm_arch()
+        }
         common_params = [TelemetryEventParam(CommonTelemetryEventSchema.GAVersion, CURRENT_AGENT),
                          TelemetryEventParam(CommonTelemetryEventSchema.ContainerId, AgentGlobals.get_container_id()),
                          TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventTid, threading.current_thread().ident),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventPid, os.getpid()),
                          TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName()),
-                         TelemetryEventParam(CommonTelemetryEventSchema.KeywordName, '')]
+                         TelemetryEventParam(CommonTelemetryEventSchema.KeywordName, json.dumps(keyword_name))]
 
         if event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID:
             # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping
