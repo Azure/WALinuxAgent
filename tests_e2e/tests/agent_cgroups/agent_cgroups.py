@@ -31,6 +31,9 @@ class AgentCgroups(AgentTest):
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
+        log.info("=====Prepare agent=====")
+        log.info("Restarting agent service to make sure service starts with new configuration that was setup by the cgroupconfigurator")
+        self._ssh_client.run_command("agent-service restart", use_sudo=True)
         log.info("=====Validating agent cgroups=====")
         self._run_remote_test("agent_cgroups-check_cgroups_agent.py")
         log.info("Successfully Verified that agent present in correct cgroups")

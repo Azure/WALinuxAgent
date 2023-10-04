@@ -59,7 +59,8 @@ class CGroupsApi(object):
             distro_version = FlexibleVersion(distro_info[1])
         except ValueError:
             return False
-        return distro_name.lower() == 'ubuntu' and distro_version.major >= 16
+        return (distro_name.lower() == 'ubuntu' and distro_version.major >= 16) or \
+               (distro_name.lower() in ('centos', 'redhat') and 8 <= distro_version.major < 9)
 
     @staticmethod
     def track_cgroups(extension_cgroups):
