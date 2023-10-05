@@ -81,7 +81,10 @@ images:
          AzureChinaCloud: []
    centos_610: "OpenLogic CentOS 6.10 latest"
    centos_79: "OpenLogic CentOS 7_9 latest"
-   centos_82: "OpenLogic CentOS 8_2 latest"
+   centos_82:
+      urn: "OpenLogic CentOS 8_2 latest"
+      vm_sizes:
+         - "Standard_B2s"
    debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
    debian_10: "Debian debian-10 10 latest"
@@ -126,6 +129,8 @@ images:
       urn: "RedHat RHEL 8.2 latest"
       locations:
          AzureChinaCloud: []
+      vm_sizes:
+         - "Standard_B2s"
    rhel_90:
       urn: "RedHat RHEL 9_0 latest"
       locations:
