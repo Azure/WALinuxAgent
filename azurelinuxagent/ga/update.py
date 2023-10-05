@@ -992,13 +992,10 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
-            # Include vm architecture in the heartbeat message because the kusto table does not have
-            # a separate column for it.
-            vmarch = self._get_vm_arch()
 
-            telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled, vmarch)
+                                                         auto_update_enabled)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
