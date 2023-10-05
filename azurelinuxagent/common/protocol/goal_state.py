@@ -579,8 +579,6 @@ class Certificates(object):
 
         # The parsing process use public key to match prv and crt.
         buf = []
-        begin_crt = False  # pylint: disable=W0612
-        begin_prv = False  # pylint: disable=W0612
         prvs = {}
         thumbprints = {}
         index = 0
@@ -588,17 +586,12 @@ class Certificates(object):
         with open(pem_file) as pem:
             for line in pem.readlines():
                 buf.append(line)
-                if re.match(r'[-]+BEGIN.*KEY[-]+', line):
-                    begin_prv = True
-                elif re.match(r'[-]+BEGIN.*CERTIFICATE[-]+', line):
-                    begin_crt = True
-                elif re.match(r'[-]+END.*KEY[-]+', line):
+                if re.match(r'[-]+END.*KEY[-]+', line):
                     tmp_file = Certificates._write_to_tmp_file(index, 'prv', buf)
                     pub = cryptutil.get_pubkey_from_prv(tmp_file)
                     prvs[pub] = tmp_file
                     buf = []
                     index += 1
-                    begin_prv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmp_file = Certificates._write_to_tmp_file(index, 'crt', buf)
                     pub = cryptutil.get_pubkey_from_crt(tmp_file)
@@ -613,7 +606,6 @@ class Certificates(object):
                     os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
                     buf = []
                     index += 1
-                    begin_crt = False
 
         # Rename prv key with thumbprint as the file name
         for pubkey in prvs:

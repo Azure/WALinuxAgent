@@ -106,6 +106,7 @@ class WALAEventOperation:
     LogCollection = "LogCollection"
     NoExec = "NoExec"
     OSInfo = "OSInfo"
+    OpenSsl = "OpenSsl"
     Partition = "Partition"
     PersistFirewallRules = "PersistFirewallRules"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
