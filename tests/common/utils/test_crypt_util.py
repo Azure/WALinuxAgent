@@ -67,6 +67,19 @@ class TestCryptoUtilOperations(AgentTestCase):
         with open(expected_pub_key) as fh:
             self.assertEqual(fh.read(), crypto.get_pubkey_from_prv(prv_key))
 
+    def test_get_pubkey_from_prv(self):
+        crypto = CryptUtil(conf.get_openssl_cmd())
+
+        def do_test(prv_key, expected_pub_key):
+            prv_key = os.path.join(data_dir, "wire", prv_key)
+            expected_pub_key = os.path.join(data_dir, "wire", expected_pub_key)
+
+            with open(expected_pub_key) as fh:
+                self.assertEqual(fh.read(), crypto.get_pubkey_from_prv(prv_key))
+
+        do_test("rsa-key.pem", "rsa-key.pub.pem")
+        do_test("ec-key.pem", "ec-key.pub.pem")
+
     def test_get_pubkey_from_crt_invalid_file(self):
         crypto = CryptUtil(conf.get_openssl_cmd())
         prv_key = os.path.join(data_dir, "wire", "trans_prv_does_not_exist")

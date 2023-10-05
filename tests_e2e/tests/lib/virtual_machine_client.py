@@ -108,6 +108,15 @@ class VirtualMachineClient(AzureClient):
             operation_name=f"Update {self._identifier}",
             timeout=timeout)
 
+    def reapply(self, timeout: int = AzureClient._DEFAULT_TIMEOUT) -> None:
+        """
+        Reapplies the goal state on the virtual machine
+        """
+        self._execute_async_operation(
+            lambda: self._compute_client.virtual_machines.begin_reapply(self._identifier.resource_group, self._identifier.name),
+            operation_name=f"Reapply {self._identifier}",
+            timeout=timeout)
+
     def restart(
         self,
         wait_for_boot,
