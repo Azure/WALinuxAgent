@@ -383,7 +383,7 @@ class EventLogger(object):
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ImageOrigin, 0))
 
     @staticmethod
-    def _get_vm_arch(self):
+    def _get_vm_arch():
         return platform.machine()
 
     @staticmethod
