@@ -315,7 +315,7 @@ class UpdateHandler(object):
             logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
-            vm_arch = self._get_vm_arch()
+            vm_arch = self.osutil.get_vm_arch()
             logger.info("CPU Arch: {0}", vm_arch)
 
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
