@@ -150,7 +150,7 @@ class DefaultOSUtil(object):
         return "/usr/sbin"
 
     @staticmethod
-    def get_vm_arch() -> str:
+    def get_vm_arch():
         try:
             return platform.machine()
         except Exception as e:
