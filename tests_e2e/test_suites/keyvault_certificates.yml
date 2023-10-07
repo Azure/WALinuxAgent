@@ -1,0 +1,9 @@
+#
+# This test verifies that the Agent can download and extract KeyVault certificates that use different encryption algorithms
+#
+name: "KeyvaultCertificates"
+tests:
+  - "keyvault_certificates/keyvault_certificates.py"
+images:
+  - "endorsed"
+  - "endorsed-arm64"
