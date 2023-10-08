@@ -315,10 +315,14 @@ class UpdateHandler(object):
             logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
             logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
 
+            vm_arch = self.osutil.get_vm_arch()
+            logger.info("CPU Arch: {0}", vm_arch)
+
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; "\
                 u"AgentService: {service_name}; "\
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
+                u"Arch: {vm_arch}; "\
                 u"systemd: {systemd}; "\
                 u"LISDrivers: {lis_ver}; "\
                 u"logrotate: {has_logrotate};".format(
@@ -326,7 +330,7 @@ class UpdateHandler(object):
                     util_name=type(self.osutil).__name__,
                     service_name=self.osutil.service_name,
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
-                    py_micro=PY_VERSION_MICRO, systemd=systemd.is_systemd(),
+                    py_micro=PY_VERSION_MICRO, vm_arch=vm_arch, systemd=systemd.is_systemd(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
                 )
             logger.info(os_info_msg)
@@ -1013,13 +1017,10 @@ class UpdateHandler(object):
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
             auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
-            # Include vm architecture in the heartbeat message because the kusto table does not have
-            # a separate column for it.
-            vmarch = self._get_vm_arch()
 
-            telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled, vmarch)
+                                                         auto_update_enabled)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
                             "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
