@@ -366,10 +366,14 @@ class EventLogger(object):
 
         # Parameters from OS
         osutil = get_osutil()
+        keyword_name = {
+            "CpuArchitecture": osutil.get_vm_arch()
+        }
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.OSVersion, EventLogger._get_os_version()))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.ExecutionMode, AGENT_EXECUTION_MODE))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.RAM, int(EventLogger._get_ram(osutil))))
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.Processors, int(EventLogger._get_processors(osutil))))
+        self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.KeywordName, json.dumps(keyword_name)))
 
         # Parameters from goal state
         self._common_parameters.append(TelemetryEventParam(CommonTelemetryEventSchema.TenantName, "TenantName_UNINITIALIZED"))
@@ -597,8 +601,7 @@ class EventLogger(object):
                          TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventTid, threading.current_thread().ident),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventPid, os.getpid()),
-                         TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName()),
-                         TelemetryEventParam(CommonTelemetryEventSchema.KeywordName, '')]
+                         TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName())]
 
         if event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID:
             # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping
