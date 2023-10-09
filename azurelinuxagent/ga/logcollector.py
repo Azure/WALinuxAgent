@@ -26,7 +26,6 @@ import zipfile
 from datetime import datetime
 from heapq import heappush, heappop
 
-from azurelinuxagent.ga.cgroup import CpuCgroup, AGENT_LOG_COLLECTOR, MemoryCgroup
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
 from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters
 from azurelinuxagent.common.future import ustr
@@ -71,14 +70,13 @@ class LogCollector(object):
 
     _TRUNCATED_FILE_PREFIX = "truncated_"
 
-    def __init__(self, is_full_mode=False, cpu_cgroup_path=None, memory_cgroup_path=None):
+    def __init__(self, is_full_mode=False):
         self._is_full_mode = is_full_mode
         self._manifest = MANIFEST_FULL if is_full_mode else MANIFEST_NORMAL
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
         self._initialize_telemetry()
-        self.cgroups = self._set_resource_usage_cgroups(cpu_cgroup_path, memory_cgroup_path)
 
     @staticmethod
     def _mkdir(dirname):
@@ -104,17 +102,6 @@ class LogCollector(object):
         _f_handler.setFormatter(_f_format)
         _LOGGER.addHandler(_f_handler)
         _LOGGER.setLevel(logging.INFO)
-
-    @staticmethod
-    def _set_resource_usage_cgroups(cpu_cgroup_path, memory_cgroup_path):
-        cpu_cgroup = CpuCgroup(AGENT_LOG_COLLECTOR, cpu_cgroup_path)
-        msg = "Started tracking cpu cgroup {0}".format(cpu_cgroup)
-        _LOGGER.info(msg)
-        cpu_cgroup.initialize_cpu_usage()
-        memory_cgroup = MemoryCgroup(AGENT_LOG_COLLECTOR, memory_cgroup_path)
-        msg = "Started tracking memory cgroup {0}".format(memory_cgroup)
-        _LOGGER.info(msg)
-        return [cpu_cgroup, memory_cgroup]
 
     @staticmethod
     def _initialize_telemetry():

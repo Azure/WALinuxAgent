@@ -233,7 +233,7 @@ class TestAgent(AgentTestCase):
     @patch("azurelinuxagent.agent.LogCollector")
     def test_calls_collect_logs_on_valid_cgroups(self, mock_log_collector):
         try:
-            CollectLogsHandler.enable_cgroups_validation()
+            CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
@@ -248,12 +248,12 @@ class TestAgent(AgentTestCase):
                 
                 mock_log_collector.assert_called_once()
         finally:
-            CollectLogsHandler.disable_cgroups_validation()
+            CollectLogsHandler.disable_monitor_cgroups_check()
 
     @patch("azurelinuxagent.agent.LogCollector")
     def test_doesnt_call_collect_logs_on_invalid_cgroups(self, mock_log_collector):
         try:
-            CollectLogsHandler.enable_cgroups_validation()
+            CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
@@ -272,7 +272,7 @@ class TestAgent(AgentTestCase):
                         mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
                         self.assertEqual(exit_error, re)
         finally:
-            CollectLogsHandler.disable_cgroups_validation()
+            CollectLogsHandler.disable_monitor_cgroups_check()
         
     def test_it_should_parse_setup_firewall_properly(self):
 
