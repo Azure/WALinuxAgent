@@ -16,7 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+# This script starts the actual agent and then launches an instance of the dummy process periodically to consume the CPU
+#
 import signal
 import subprocess
 import sys
