@@ -84,7 +84,7 @@ images:
    centos_82:
       urn: "OpenLogic CentOS 8_2 latest"
       vm_sizes:
-         # Since centos is clone of redhat, please see the comment for vm size in rhel_82
+         # Since centos derived from redhat, please see the comment for vm size in rhel_82
          - "Standard_B2s"
    debian_8: "credativ Debian 8 latest"
    debian_9: "credativ Debian 9 latest"
