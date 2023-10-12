@@ -32,9 +32,6 @@ __DAEMON_VERSION_ENV_VARIABLE = '_AZURE_GUEST_AGENT_DAEMON_VERSION_'
     The variable is set only on versions >= 2.2.53
 """
 
-# cache the daemon version to avoid running the command multiple times
-_DAEMON_VERSION = FlexibleVersion("0.0.0.0")
-
 
 def set_daemon_version(version):
     """
@@ -54,25 +51,21 @@ def get_daemon_version():
     If the variable is not set (because the agent is < 2.2.53, or the process was not started by the daemon and
     the process is not the daemon itself) the function returns version of agent which started by the python
     """
-    # W0603: Using the global statement (global-statement)
-    # OK to disable; _DAEMON_VERSION is used only within get_daemon_version, but needs to persist across calls.
-    global _DAEMON_VERSION  # pylint: disable=W0603
     if __DAEMON_VERSION_ENV_VARIABLE in os.environ:
         return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
-    elif _DAEMON_VERSION == FlexibleVersion("0.0.0.0"):
+    else:
         # The agent process which execute the extensions can have different version(after upgrades) and importing version from that process may provide wrong version for daemon.
         # so launching new process with sys.executable python provides the correct version for daemon which preinstalled in the image.
+        daemon_version = "0.0.0.0"
         try:
             cmd = ["{0}".format(sys.executable), "-c", "from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)"]
-            version = shellutil.run_command(cmd)
-            _DAEMON_VERSION = FlexibleVersion(version)
-            return _DAEMON_VERSION
-        except Exception as e:  # Make the best effort to get the daemon version, but don't fail the update if we can't. So default to 2.2.53 as env variable is not set < 2.2.53
+            daemon_version = shellutil.run_command(cmd)
+        except Exception as e:  # Make the best effort to get the daemon version, otherwise default to 0.0.0.0(unknown)
             logger.warn("Failed to get the daemon version: {0}", ustr(e))
-            _DAEMON_VERSION = FlexibleVersion("2.2.53")
-            return _DAEMON_VERSION
-    else:
-        return _DAEMON_VERSION
+        # set the daemon version to the environment variable to cache it for future calls.
+        set_daemon_version(daemon_version)
+        return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
+
 
 def get_f5_platform():
     """

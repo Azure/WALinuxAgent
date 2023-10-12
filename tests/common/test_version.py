@@ -137,14 +137,13 @@ class TestAgentVersion(AgentTestCase):
             os.environ.pop(DAEMON_VERSION_ENV_VARIABLE)
 
     def test_get_daemon_version_from_fallback_when_the_version_has_not_been_set(self):
-        with patch("azurelinuxagent.common.utils.shellutil.run_command", return_value="2.2.53") as mock_run_command:
+        with patch("azurelinuxagent.common.utils.shellutil.run_command", return_value="2.3.53") as mock_run_command:
             self.assertEqual(
-                FlexibleVersion("2.2.53"), get_daemon_version(),
-                "The daemon version should not be defined. Environment={0}".format(os.environ)
+                FlexibleVersion("2.3.53"), get_daemon_version(),
+                "The daemon version should be defined. Environment={0}".format(os.environ)
             )
-            self.assertEqual(FlexibleVersion("2.2.53"), get_daemon_version(), "The daemon version should be 2.2.53")
-            self.assertEqual(1, mock_run_command.call_count, "The daemon version should be read from cache value on second time")
-
+            self.assertEqual(FlexibleVersion("2.3.53"), get_daemon_version(), "The daemon version should be 2.3.53")
+            self.assertEqual(1, mock_run_command.call_count, "The daemon version should be read from env value on second time")
 
 
 class TestCurrentAgentName(AgentTestCase):
