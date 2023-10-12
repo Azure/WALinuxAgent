@@ -145,6 +145,8 @@ class TestAgentVersion(AgentTestCase):
             self.assertEqual(FlexibleVersion("2.3.53"), get_daemon_version(), "The daemon version should be 2.3.53")
             self.assertEqual(1, mock_run_command.call_count, "The daemon version should be read from env value on second time")
 
+        os.environ.pop(DAEMON_VERSION_ENV_VARIABLE)
+
 
 class TestCurrentAgentName(AgentTestCase):
     def setUp(self):
