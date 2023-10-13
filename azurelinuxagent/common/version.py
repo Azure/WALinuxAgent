@@ -61,7 +61,7 @@ def get_daemon_version():
             cmd = ["{0}".format(sys.executable), "-c", "from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)"]
             daemon_version = shellutil.run_command(cmd)
         except Exception as e:  # Make the best effort to get the daemon version, otherwise default to 0.0.0.0(unknown)
-            logger.warn("Failed to get the daemon version: {0}", ustr(e))
+            logger.info("Failed to get the daemon version. The error is: {0} \n[This error can be ignored since it has no impact on customer. So we return as unknown version: 0.0.0.0]", ustr(e))
         # set the daemon version to the environment variable to cache it for future calls.
         set_daemon_version(daemon_version)
         return FlexibleVersion(os.environ[__DAEMON_VERSION_ENV_VARIABLE])
