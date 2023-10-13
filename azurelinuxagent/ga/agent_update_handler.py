@@ -9,7 +9,7 @@ from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpd
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
-from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus
+from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus, VERSION_0
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
@@ -112,6 +112,15 @@ class AgentUpdateHandler(object):
         if requested_version.major == CURRENT_VERSION.major and requested_version.minor == CURRENT_VERSION.minor and requested_version.patch == CURRENT_VERSION.patch:
             return AgentUpgradeType.Hotfix
         return AgentUpgradeType.Normal
+
+    @staticmethod
+    def __get_daemon_version_for_update():
+        daemon_version = get_daemon_version()
+        if daemon_version != FlexibleVersion(VERSION_0):
+            return daemon_version
+        # We return 0.0.0.0 if we failed to retrieve daemon version. In that case,
+        # use the min version as 2.2.53 as we started setting the daemon version starting 2.2.53.
+        return FlexibleVersion("2.2.53")
 
     def __get_next_upgrade_times(self, now):
         """
@@ -326,7 +335,7 @@ class AgentUpdateHandler(object):
                 if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
                     return
 
-                daemon_version = get_daemon_version()
+                daemon_version = self.__get_daemon_version_for_update()
                 if requested_version < daemon_version:
                     # Don't process the update if the requested version is less than daemon version,
                     # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
