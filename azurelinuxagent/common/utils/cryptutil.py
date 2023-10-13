@@ -53,10 +53,21 @@ class CryptUtil(object):
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
-        else:
-            cmd = [self.openssl_cmd, "rsa", "-in", file_name, "-pubout"]
-            pub = shellutil.run_command(cmd, log_error=True)
-            return pub
+
+        # OpenSSL's pkey command may not be available on older versions so try 'rsa' first.
+        try:
+            command = [self.openssl_cmd, "rsa", "-in", file_name, "-pubout"]
+            return shellutil.run_command(command, log_error=False)
+        except shellutil.CommandError as error:
+            if not ("Not an RSA key" in error.stderr or "expecting an rsa key" in error.stderr):
+                logger.error(
+                    "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
+                    " ".join(command),
+                    error.returncode,
+                    error.stdout,
+                    error.stderr)
+                raise
+            return shellutil.run_command([self.openssl_cmd, "pkey", "-in", file_name, "-pubout"], log_error=True)
 
     def get_pubkey_from_crt(self, file_name):
         if not os.path.exists(file_name):
