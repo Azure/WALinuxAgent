@@ -83,6 +83,7 @@ class MetricsCounter(object):
     SWAP_MEM_USAGE = "Swap Memory Usage"
     AVAILABLE_MEM = "Available MBytes"
     USED_MEM = "Used MBytes"
+    CACHE_MEMORY_USAGE = "Cache Memory Usage"
 
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
@@ -347,6 +348,17 @@ class MemoryCgroup(CGroup):
         rss = self._get_memory_stat_counter("rss")
         return cache + rss
 
+    def get_cache_memory_usage(self):
+        """
+        Collect CACHE from memory.stat cgroup.
+
+        :return: Cache Memory in bytes
+        :rtype: int
+        """
+
+        cache = self._get_memory_stat_counter("cache")
+        return cache
+
     def try_swap_memory_usage(self):
         """
         Collect SWAP from memory.stat cgroup.
@@ -385,6 +397,11 @@ class MemoryCgroup(CGroup):
         return [
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, self.name,
                         self.get_memory_usage()),
+            # Total memory usage = RSS + Cache
+            # Reporting Cache usage as separate metric to understand how much cache is used by the application in total memory usage.
+            # Not reporting RSS as separate metric as we could compute from Total memory usage - Cache memory usage.
+            MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.CACHE_MEMORY_USAGE, self.name,
+                        self.get_cache_memory_usage()),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.MAX_MEM_USAGE, self.name,
                         self.get_max_memory_usage(), _REPORT_EVERY_HOUR),
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
