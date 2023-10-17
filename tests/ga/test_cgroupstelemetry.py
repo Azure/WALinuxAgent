@@ -116,16 +116,18 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
             self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
-    def _assert_polled_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value, max_memory_metric_value, swap_memory_value):
+    def _assert_polled_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value, cache_memory_value, max_memory_metric_value, swap_memory_value):
         for metric in metrics:
             self.assertIn(metric.category, ["CPU", "Memory"])
             if metric.category == "CPU":
                 self.assertEqual(metric.counter, "% Processor Time")
                 self.assertEqual(metric.value, cpu_metric_value)
             if metric.category == "Memory":
-                self.assertIn(metric.counter, ["Total Memory Usage", "Max Memory Usage", "Swap Memory Usage"])
+                self.assertIn(metric.counter, ["Total Memory Usage", "Cache Memory Usage", "Max Memory Usage", "Swap Memory Usage"])
                 if metric.counter == "Total Memory Usage":
                     self.assertEqual(metric.value, memory_metric_value)
+                elif metric.counter == "Cache Memory Usage":
+                    self.assertEqual(metric.value, cache_memory_value)
                 elif metric.counter == "Max Memory Usage":
                     self.assertEqual(metric.value, max_memory_metric_value)
                 elif metric.counter == "Swap Memory Usage":
@@ -138,7 +140,7 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
+                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_cache_memory_usage") as patch_get_cache_memory_usage:
                     with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.try_swap_memory_usage") as patch_try_swap_memory_usage:
                         with patch("azurelinuxagent.ga.cgroup.CpuCgroup.get_cpu_usage") as patch_get_cpu_usage:
                             with patch("azurelinuxagent.ga.cgroup.CGroup.is_active") as patch_is_active:
@@ -146,13 +148,15 @@ class TestCGroupsTelemetry(AgentTestCase):
 
                                 current_cpu = 30
                                 current_memory = 209715200
+                                cache_memory = 104857600
                                 current_max_memory = 471859200
                                 current_swap_memory = 20971520
 
-                                # 1 CPU metric + 1 Current Memory + 1 Max memory + 1 swap memory
-                                num_of_metrics_per_extn_expected = 4
+                                # 1 CPU metric + 1 Current Memory + 1 Cache Memory + 1 Max memory + 1 swap memory
+                                num_of_metrics_per_extn_expected = 5
                                 patch_get_cpu_usage.return_value = current_cpu
                                 patch_get_memory_usage.return_value = current_memory  # example 200 MB
+                                patch_get_cache_memory_usage.return_value = cache_memory  # example 100 MB
                                 patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
                                 patch_try_swap_memory_usage.return_value = current_swap_memory  # example 20MB
                                 num_polls = 12
@@ -161,7 +165,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                                     metrics = CGroupsTelemetry.poll_all_tracked()
 
                                     self.assertEqual(len(metrics), num_extensions * num_of_metrics_per_extn_expected)
-                                    self._assert_polled_metrics_equal(metrics, current_cpu, current_memory, current_max_memory, current_swap_memory)
+                                    self._assert_polled_metrics_equal(metrics, current_cpu, current_memory, cache_memory, current_max_memory, current_swap_memory)
 
     @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_max_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
@@ -276,10 +280,11 @@ class TestCGroupsTelemetry(AgentTestCase):
 
     @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.try_swap_memory_usage")
     @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_max_memory_usage")
+    @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_cache_memory_usage")
     @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_memory_usage")
     @patch("azurelinuxagent.ga.cgroup.CpuCgroup.get_cpu_usage")
     @patch("azurelinuxagent.ga.cgroup.CGroup.is_active")
-    def test_telemetry_calculations(self,  patch_is_active, patch_get_cpu_usage, patch_get_memory_usage, patch_get_memory_max_usage, patch_try_memory_swap_usage,
+    def test_telemetry_calculations(self,  patch_is_active, patch_get_cpu_usage, patch_get_memory_usage, patch_get_cache_memory_usage, patch_get_memory_max_usage, patch_try_memory_swap_usage,
                                     *args):  # pylint: disable=unused-argument
         num_polls = 10
         num_extensions = 1
@@ -288,6 +293,7 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         # only verifying calculations and not validity of the values.
         memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
+        cache_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
         max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
         swap_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
@@ -298,14 +304,15 @@ class TestCGroupsTelemetry(AgentTestCase):
             patch_is_active.return_value = True
             patch_get_cpu_usage.return_value = cpu_percent_values[i]
             patch_get_memory_usage.return_value = memory_usage_values[i]
+            patch_get_cache_memory_usage.return_value = cache_memory_usage_values[i]
             patch_get_memory_max_usage.return_value = max_memory_usage_values[i]
             patch_try_memory_swap_usage.return_value = swap_usage_values[i]
 
             metrics = CGroupsTelemetry.poll_all_tracked()
 
-            # 1 CPU metric + 1 Current Memory + 1 Max memory + 1 swap memory
-            self.assertEqual(len(metrics), 4 * num_extensions)
-            self._assert_polled_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i], max_memory_usage_values[i], swap_usage_values[i])
+            # 1 CPU metric + 1 Current Memory +1 Cache memory + 1 Max memory + 1 swap memory
+            self.assertEqual(len(metrics), 5 * num_extensions)
+            self._assert_polled_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i], cache_memory_usage_values[i], max_memory_usage_values[i], swap_usage_values[i])
 
     def test_cgroup_tracking(self, *args):  # pylint: disable=unused-argument
         num_extensions = 5
@@ -339,7 +346,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                     metrics = CGroupsTelemetry.poll_all_tracked()
 
                     self.assertEqual(len(metrics), num_extensions * 1)  # Only CPU populated
-                    self._assert_polled_metrics_equal(metrics, current_cpu, 0, 0, 0)
+                    self._assert_polled_metrics_equal(metrics, current_cpu, 0, 0, 0, 0)
 
     @patch("azurelinuxagent.ga.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
     def test_process_cgroup_metric_with_no_cpu_cgroup_mounted(self, *args):  # pylint: disable=unused-argument
@@ -349,23 +356,26 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_max_memory_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_memory_usage") as patch_get_memory_usage:
-                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.try_swap_memory_usage") as patch_try_swap_memory_usage:
-                    with patch("azurelinuxagent.ga.cgroup.CGroup.is_active") as patch_is_active:
-                        patch_is_active.return_value = True
+                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_cache_memory_usage") as patch_get_cache_memory_usage:
+                    with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.try_swap_memory_usage") as patch_try_swap_memory_usage:
+                        with patch("azurelinuxagent.ga.cgroup.CGroup.is_active") as patch_is_active:
+                            patch_is_active.return_value = True
 
-                        current_memory = 209715200
-                        current_max_memory = 471859200
-                        current_swap_memory = 20971520
+                            current_memory = 209715200
+                            cache_memory = 104857600
+                            current_max_memory = 471859200
+                            current_swap_memory = 20971520
 
-                        patch_get_memory_usage.return_value = current_memory  # example 200 MB
-                        patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
-                        patch_try_swap_memory_usage.return_value = current_swap_memory  # example 20MB
-                        num_polls = 10
-                        for data_count in range(1, num_polls + 1):  # pylint: disable=unused-variable
-                            metrics = CGroupsTelemetry.poll_all_tracked()
-                            # Memory is only populated, CPU is not. Thus 3 metrics for memory.
-                            self.assertEqual(len(metrics), num_extensions * 3)
-                            self._assert_polled_metrics_equal(metrics, 0, current_memory, current_max_memory, current_swap_memory)
+                            patch_get_memory_usage.return_value = current_memory  # example 200 MB
+                            patch_get_cache_memory_usage.return_value = cache_memory  # example 100 MB
+                            patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
+                            patch_try_swap_memory_usage.return_value = current_swap_memory  # example 20MB
+                            num_polls = 10
+                            for data_count in range(1, num_polls + 1):  # pylint: disable=unused-variable
+                                metrics = CGroupsTelemetry.poll_all_tracked()
+                                # Memory is only populated, CPU is not. Thus 4 metrics for memory.
+                                self.assertEqual(len(metrics), num_extensions * 4)
+                                self._assert_polled_metrics_equal(metrics, 0, current_memory, cache_memory, current_max_memory, current_swap_memory)
 
     @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_max_memory_usage", side_effect=raise_ioerror)

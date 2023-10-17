@@ -208,6 +208,9 @@ class TestMemoryCgroup(AgentTestCase):
         memory_usage = test_mem_cg.get_memory_usage()
         self.assertEqual(150000, memory_usage)
 
+        cache_memory_usage = test_mem_cg.get_cache_memory_usage()
+        self.assertEqual(50000, cache_memory_usage)
+
         max_memory_usage = test_mem_cg.get_max_memory_usage()
         self.assertEqual(1000000, max_memory_usage)
 
