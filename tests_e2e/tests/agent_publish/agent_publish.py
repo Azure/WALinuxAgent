@@ -50,6 +50,8 @@ class AgentPublishTest(AgentTest):
         self._check_update()
         self._get_agent_info()
         self._check_cse()
+        self._rename_agent_log()
+
 
     def _get_agent_info(self) -> None:
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
@@ -57,7 +59,7 @@ class AgentPublishTest(AgentTest):
 
     def _prepare_agent(self) -> None:
         log.info("Modifying agent update related config flags")
-        self._run_remote_test("update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test", use_sudo=True)
+        self._run_remote_test("update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y", use_sudo=True)
         log.info('Updated agent-update DownloadNewAgents  GAFamily config flags')
 
     def _check_update(self) -> None:
@@ -94,6 +96,13 @@ class AgentPublishTest(AgentTest):
 
         ]
         return ignore_rules
+
+    def _rename_agent_log(self):
+        """
+        This test don't install test agent, so it skip the agent log rename in setup. So I'm renaming here to ignore known errors from old versions of the agent.
+        """
+        log.info("Renaming agent log to ignore errors from old versions of the agent")
+        self._run_remote_test("sh -c 'agent-service stop && mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && agent-service restart && sleep 10'", use_sudo=True)
 
 
 if __name__ == "__main__":
