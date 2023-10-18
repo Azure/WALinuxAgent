@@ -18,10 +18,10 @@
 #
 
 from assertpy import fail
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 
 
-class FailTest(AgentTest):
+class FailTest(AgentVmTest):
     """
     A trivial test that fails
     """

@@ -28,8 +28,8 @@ from datetime import datetime, timedelta
 from time import sleep
 import json
 
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
@@ -38,8 +38,8 @@ class RetryableAgentStatusException(BaseException):
     pass
 
 
-class AgentStatus(AgentTest):
-    def __init__(self, context: AgentTestContext):
+class AgentStatus(AgentVmTest):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
 

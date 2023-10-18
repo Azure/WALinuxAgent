@@ -16,23 +16,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
 
-class AgentFirewall(AgentTest):
+class AgentFirewall(AgentVmTest):
     """
     This test verifies the agent firewall rules are added properly. It checks each firewall rule is present and working as expected.
     """
 
-    def __init__(self, context: AgentTestContext):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
         log.info("Checking iptable rules added by the agent")
-        self._run_remote_test(f"agent_firewall-verify_all_firewall_rules.py --user {self._context.username}", use_sudo=True)
+        self._run_remote_test(self._ssh_client, f"agent_firewall-verify_all_firewall_rules.py --user {self._context.username}", use_sudo=True)
         log.info("Successfully verified all rules present and working as expected.")
 
 

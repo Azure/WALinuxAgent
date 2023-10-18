@@ -31,19 +31,16 @@ from assertpy import assert_that
 
 from azure.core.exceptions import ResourceNotFoundError
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class ExtensionOperationsBvt(AgentTest):
+class ExtensionOperationsBvt(AgentVmTest):
     def run(self):
-        ssh_client: SshClient = SshClient(
-            ip_address=self._context.vm_ip_address,
-            username=self._context.username,
-            private_key_file=self._context.private_key_file)
+        ssh_client: SshClient = self._context.create_ssh_client()
 
         is_arm64: bool = ssh_client.get_architecture() == "aarch64"
 

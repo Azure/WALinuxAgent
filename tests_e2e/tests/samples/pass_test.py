@@ -17,11 +17,11 @@
 # limitations under the License.
 #
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 
 
-class PassTest(AgentTest):
+class PassTest(AgentVmTest):
     """
     A trivial test that passes.
     """

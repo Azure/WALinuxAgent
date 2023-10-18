@@ -27,14 +27,14 @@ from typing import Dict, Callable, Any
 from assertpy import fail
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class MultiConfigExt(AgentTest):
+class MultiConfigExt(AgentVmTest):
     class TestCase:
         def __init__(self, extension: VirtualMachineExtensionClient, get_settings: Callable[[str], Dict[str, str]]):
             self.extension = extension

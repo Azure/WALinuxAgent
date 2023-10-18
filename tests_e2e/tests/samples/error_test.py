@@ -17,10 +17,10 @@
 # limitations under the License.
 #
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 
 
-class ErrorTest(AgentTest):
+class ErrorTest(AgentVmTest):
     """
     A trivial test that errors out
     """

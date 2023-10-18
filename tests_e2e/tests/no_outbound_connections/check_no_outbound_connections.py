@@ -18,13 +18,13 @@
 #
 from assertpy import fail
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 
 
-class CheckNoOutboundConnections(AgentTest):
+class CheckNoOutboundConnections(AgentVmTest):
     """
     Verifies that there is no outbound connectivity on the test VM.
     """

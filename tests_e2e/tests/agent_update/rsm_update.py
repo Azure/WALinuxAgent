@@ -33,23 +33,19 @@ from azure.identity import DefaultAzureCredential
 from azure.mgmt.compute.models import VirtualMachine
 from msrestazure.azure_cloud import Cloud
 
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
-from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
-class RsmUpdateBvt(AgentTest):
+class RsmUpdateBvt(AgentVmTest):
 
-    def __init__(self, context: AgentTestContext):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
-        self._ssh_client = SshClient(
-            ip_address=self._context.vm_ip_address,
-            username=self._context.username,
-            private_key_file=self._context.private_key_file)
+        self._ssh_client = self._context.create_ssh_client()
         self._installed_agent_version = "9.9.9.9"
         self._downgrade_version = "9.9.9.9"
 
@@ -131,7 +127,7 @@ class RsmUpdateBvt(AgentTest):
     def _check_rsm_gs(self, requested_version: str) -> None:
         # This checks if RSM GS available to the agent after we send the rsm update request
         log.info('Executing wait_for_rsm_gs.py remote script to verify latest GS contain requested version after rsm update requested')
-        self._run_remote_test(f"agent_update-wait_for_rsm_gs.py --version {requested_version}", use_sudo=True)
+        self._run_remote_test(self._ssh_client, f"agent_update-wait_for_rsm_gs.py --version {requested_version}", use_sudo=True)
         log.info('Verified latest GS contain requested version after rsm update requested')
 
     def _prepare_agent(self, daemon_version="1.0.0.0", update_config=True) -> None:
@@ -141,11 +137,11 @@ class RsmUpdateBvt(AgentTest):
         2) Updating GAFamily type "Test" and GAUpdates flag to process agent updates on test versions.
         """
         log.info('Executing modify_agent_version remote script to update agent installed version to lower than requested version')
-        self._run_remote_test(f"agent_update-modify_agent_version {daemon_version}", use_sudo=True)
+        self._run_remote_test(self._ssh_client, f"agent_update-modify_agent_version {daemon_version}", use_sudo=True)
         log.info('Successfully updated agent installed version')
         if update_config:
             log.info('Executing update-waagent-conf remote script to update agent update config flags to allow and download test versions')
-            self._run_remote_test("update-waagent-conf Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
+            self._run_remote_test(self._ssh_client, "update-waagent-conf Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
             log.info('Successfully updated agent update config')
 
     @staticmethod
@@ -175,23 +171,22 @@ class RsmUpdateBvt(AgentTest):
         This method is to simulate the rsm request.
         First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
         """
-        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-        if not self._verify_agent_update_flag_enabled(vm):
+        if not self._verify_agent_update_flag_enabled(self._context.vm):
             # enable the flag
             log.info("Attempting vm update to set the enableVMAgentPlatformUpdates flag")
-            self._enable_agent_update_flag(vm)
+            self._enable_agent_update_flag(self._context.vm)
             log.info("Updated the enableVMAgentPlatformUpdates flag to True")
         else:
             log.info("Already enableVMAgentPlatformUpdates flag set to True")
 
-        cloud: Cloud = AZURE_CLOUDS[self._context.vm.cloud]
+        cloud: Cloud = AZURE_CLOUDS[self._context.cloud]
         credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
         token = credential.get_token(cloud.endpoints.resource_manager + "/.default")
         headers = {'Authorization': 'Bearer ' + token.token, 'Content-Type': 'application/json'}
         # Later this api call will be replaced by azure-python-sdk wrapper
         base_url = cloud.endpoints.resource_manager
         url = base_url + "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Compute/virtualMachines/{2}/" \
-              "UpgradeVMAgent?api-version=2022-08-01".format(self._context.vm.subscription, self._context.vm.resource_group, self._context.vm.name)
+              "UpgradeVMAgent?api-version=2022-08-01".format(self._context.subscription, self._context.resource_group, self._context.name)
         data = {
             "target": "Microsoft.OSTCLinuxAgent.Test",
             "targetVersion": requested_version
@@ -240,7 +235,7 @@ class RsmUpdateBvt(AgentTest):
         """
 
         log.info("Executing verify_versioning_supported_feature.py remote script to verify agent reported supported feature flag, so that CRP can send RSM update request")
-        self._run_remote_test("agent_update-verify_versioning_supported_feature.py", use_sudo=True)
+        self._run_remote_test(self._ssh_client, "agent_update-verify_versioning_supported_feature.py", use_sudo=True)
         log.info("Successfully verified that Agent reported VersioningGovernance supported feature flag")
 
     def _verify_agent_reported_update_status(self, version: str):
@@ -249,7 +244,7 @@ class RsmUpdateBvt(AgentTest):
         """
 
         log.info("Executing verify_agent_reported_update_status.py remote script to verify agent reported update status for version {0}".format(version))
-        self._run_remote_test(f"agent_update-verify_agent_reported_update_status.py --version {version}", use_sudo=True)
+        self._run_remote_test(self._ssh_client, f"agent_update-verify_agent_reported_update_status.py --version {version}", use_sudo=True)
         log.info("Successfully Agent reported update status for version {0}".format(version))
 
     def _retrieve_installed_agent_version(self):

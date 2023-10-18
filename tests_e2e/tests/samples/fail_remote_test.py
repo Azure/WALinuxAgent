@@ -17,15 +17,15 @@
 # limitations under the License.
 #
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 
 
-class FailRemoteTest(AgentTest):
+class FailRemoteTest(AgentVmTest):
     """
     A trivial remote test that fails
     """
     def run(self):
-        self._run_remote_test("samples-fail_remote_test.py")
+        self._run_remote_test(self._context.create_ssh_client(), "samples-fail_remote_test.py")
 
 
 if __name__ == "__main__":

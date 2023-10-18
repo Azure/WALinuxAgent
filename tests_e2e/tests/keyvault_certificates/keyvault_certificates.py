@@ -22,14 +22,14 @@
 #
 from assertpy import fail
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
-class KeyvaultCertificates(AgentTest):
+class KeyvaultCertificates(AgentVmTest):
     def run(self):
         test_certificates = {
             'C49A06B3044BD1778081366929B53EBF154133B3': {

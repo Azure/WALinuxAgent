@@ -20,7 +20,7 @@
 import uuid
 from assertpy import fail
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -29,7 +29,7 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 
 
-class Fips(AgentTest):
+class Fips(AgentVmTest):
     """
     Enables FIPS on the test VM, which is Mariner 2 VM, and verifies that extensions with protected settings are handled correctly under FIPS.
     """

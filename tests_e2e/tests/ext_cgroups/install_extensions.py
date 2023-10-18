@@ -19,7 +19,7 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
@@ -30,7 +30,7 @@ class InstallExtensions:
     This test installs the multiple extensions in order to verify extensions cgroups in the next test.
     """
 
-    def __init__(self, context: AgentTestContext):
+    def __init__(self, context: AgentVmTestContext):
         self._context = context
         self._ssh_client = self._context.create_ssh_client()
 
@@ -67,7 +67,7 @@ class InstallExtensions:
 
     def _install_vmaccess(self):
         # fetch the public key
-        public_key_file: Path = Path(self._context.private_key_file).with_suffix(".pub")
+        public_key_file: Path = Path(self._context.identity_file).with_suffix(".pub")
         with public_key_file.open() as f:
             public_key = f.read()
         # Invoke the extension

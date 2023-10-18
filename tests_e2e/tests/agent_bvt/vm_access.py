@@ -28,7 +28,7 @@ import uuid
 from assertpy import assert_that
 from pathlib import Path
 
-from tests_e2e.tests.lib.agent_test import AgentTest, TestSkipped
+from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
 from tests_e2e.tests.lib.identifiers import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -36,10 +36,10 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class VmAccessBvt(AgentTest):
+class VmAccessBvt(AgentVmTest):
     def run(self):
-        ssh: SshClient = self._context.create_ssh_client()
-        if not VmExtensionIds.VmAccess.supports_distro(ssh.run_command("uname -a")):
+        ssh_client: SshClient = self._context.create_ssh_client()
+        if not VmExtensionIds.VmAccess.supports_distro(ssh_client.run_command("uname -a")):
             raise TestSkipped("Currently VMAccess is not supported on this distro")
 
         # Try to use a unique username for each test run (note that we truncate to 32 chars to
@@ -52,8 +52,8 @@ class VmAccessBvt(AgentTest):
         private_key_file: Path = self._context.working_directory/f"{username}_rsa"
         public_key_file: Path = self._context.working_directory/f"{username}_rsa.pub"
         log.info("Generating SSH key as %s", private_key_file)
-        ssh = SshClient(ip_address=self._context.vm_ip_address, username=username, private_key_file=private_key_file)
-        ssh.generate_ssh_key(private_key_file)
+        ssh_client = SshClient(ip_address=self._context.ip_address, username=username, identity_file=private_key_file)
+        ssh_client.generate_ssh_key(private_key_file)
         with public_key_file.open() as f:
             public_key = f.read()
 
@@ -70,7 +70,7 @@ class VmAccessBvt(AgentTest):
 
         # Verify the user was added correctly by starting an SSH session to the VM
         log.info("Verifying SSH connection to the test VM")
-        stdout = ssh.run_command("echo -n $USER")
+        stdout = ssh_client.run_command("echo -n $USER")
         assert_that(stdout).described_as("Output from SSH command").is_equal_to(username)
         log.info("SSH command output ($USER): %s", stdout)
 

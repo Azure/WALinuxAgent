@@ -18,12 +18,12 @@
 #
 from assertpy import assert_that
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 
 
-class NoOutboundConnections(AgentTest):
+class CheckFallbackToHGAP(AgentVmTest):
     """
     Check the agent log to verify that the default channel was changed to HostGAPlugin before executing any extensions.
     """
@@ -47,5 +47,5 @@ class NoOutboundConnections(AgentTest):
 
 
 if __name__ == "__main__":
-    NoOutboundConnections.run_from_command_line()
+    CheckFallbackToHGAP.run_from_command_line()
 
