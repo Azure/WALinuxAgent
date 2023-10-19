@@ -22,11 +22,14 @@ from typing import Any, Dict
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
 
-class DenyOutboundConnections(UpdateArmTemplate):
+class DisableAgentProvisioning(UpdateArmTemplate):
     """
     Updates the ARM template to set osProfile.linuxConfiguration.provisionVMAgent to false.
     """
-    def update(self, template: Dict[str, Any]) -> None:
+    def update(self, template: Dict[str, Any], is_lisa_template: bool) -> None:
+        if not is_lisa_template:
+            raise Exception('This test can only customize LISA ARM templates.')
+
         #
         # NOTE: LISA's template uses this function to generate the value for osProfile.linuxConfiguration. The function is
         #       under the 'lisa' namespace.

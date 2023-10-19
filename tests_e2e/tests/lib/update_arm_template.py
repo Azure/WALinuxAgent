@@ -22,12 +22,13 @@ from typing import Any, Dict, List
 class UpdateArmTemplate(ABC):
 
     @abstractmethod
-    def update(self, template: Dict[str, Any]) -> None:
+    def update(self, template: Dict[str, Any], is_lisa_template: bool) -> None:
         """
         Derived classes implement this method to customize the ARM template used to create the test VMs. The 'template' parameter is a dictionary
         created from the template's JSON document, as parsed by json.loads().
 
-        The original JSON document is currently at https://github.com/microsoft/lisa/blob/main/lisa/sut_orchestrator/azure/arm_template.json
+        If the 'is_lisa_template' parameter is True, the template was created by LISA. The original JSON document is located at
+        https://github.com/microsoft/lisa/blob/main/lisa/sut_orchestrator/azure/arm_template.json
         """
 
     @staticmethod
