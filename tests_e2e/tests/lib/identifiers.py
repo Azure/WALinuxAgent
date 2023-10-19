@@ -18,31 +18,16 @@
 from typing import Dict, List
 
 
-class VmIdentifier(object):
-    def __init__(self, cloud: str, location: str, subscription: str, resource_group: str, name: str):
-        """
-        Represents the information that identifies a VM to the ARM APIs
-        """
-        self.cloud: str = cloud
-        self.location = location
-        self.subscription: str = subscription
-        self.resource_group: str = resource_group
-        self.name: str = name
-
-    def __str__(self):
-        return f"{self.resource_group}:{self.name}"
-
-
 class VmExtensionIdentifier(object):
-    def __init__(self, publisher: str, ext_type: str, version: str):
-        """
-        Represents the information that identifies an extension to the ARM APIs
+    """
+    Represents the information that identifies an extension to the ARM APIs
 
-            publisher - e.g. Microsoft.Azure.Extensions
-            type      - e.g. CustomScript
-            version   - e.g. 2.1, 2.*
-            name      - arbitrary name for the extension ARM resource
-        """
+        publisher - e.g. Microsoft.Azure.Extensions
+        type      - e.g. CustomScript
+        version   - e.g. 2.1, 2.*
+        name      - arbitrary name for the extension ARM resource
+    """
+    def __init__(self, publisher: str, ext_type: str, version: str):
         self.publisher: str = publisher
         self.type: str = ext_type
         self.version: str = version

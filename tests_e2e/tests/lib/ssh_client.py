@@ -28,11 +28,11 @@ ATTEMPT_DELAY: int = 30
 
 
 class SshClient(object):
-    def __init__(self, ip_address: str, username: str, private_key_file: Path, port: int = 22):
-        self._ip_address: str = ip_address
-        self._username: str = username
-        self._private_key_file: Path = private_key_file
-        self._port: int = port
+    def __init__(self, ip_address: str, username: str, identity_file: Path, port: int = 22):
+        self.ip_address: str = ip_address
+        self.username: str = username
+        self.identity_file: Path = identity_file
+        self.port: int = port
 
     def run_command(self, command: str, use_sudo: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> str:
         """
@@ -42,13 +42,13 @@ class SshClient(object):
         if re.match(r"^\s*sudo\s*", command):
             raise Exception("Do not include 'sudo' in the 'command' argument, use the 'use_sudo' parameter instead")
 
-        destination = f"ssh://{self._username}@{self._ip_address}:{self._port}"
+        destination = f"ssh://{self.username}@{self.ip_address}:{self.port}"
 
         # Note that we add ~/bin to the remote PATH, since Python (Pypy) and other test tools are installed there.
         # Note, too, that when using sudo we need to carry over the value of PATH to the sudo session
         sudo = "sudo env PATH=$PATH PYTHONPATH=$PYTHONPATH" if use_sudo else ''
         command = [
-            "ssh", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file,
+            "ssh", "-o", "StrictHostKeyChecking=no", "-i", self.identity_file,
             destination,
             f"if [[ -e ~/bin/set-agent-env ]]; then source ~/bin/set-agent-env; fi; {sudo} {command}"
         ]
@@ -79,11 +79,11 @@ class SshClient(object):
 
     def _copy(self, source: Path, target: Path, remote_source: bool, remote_target: bool, recursive: bool, attempts: int, attempt_delay: int) -> None:
         if remote_source:
-            source = f"{self._username}@{self._ip_address}:{source}"
+            source = f"{self.username}@{self.ip_address}:{source}"
         if remote_target:
-            target = f"{self._username}@{self._ip_address}:{target}"
+            target = f"{self.username}@{self.ip_address}:{target}"
 
-        command = ["scp", "-o", "StrictHostKeyChecking=no", "-i", self._private_key_file]
+        command = ["scp", "-o", "StrictHostKeyChecking=no", "-i", self.identity_file]
         if recursive:
             command.append("-r")
         command.extend([str(source), str(target)])
