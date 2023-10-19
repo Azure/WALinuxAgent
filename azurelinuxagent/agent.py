@@ -29,6 +29,7 @@ import subprocess
 import sys
 import threading
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
+from azurelinuxagent.ga.cgroup import AGENT_LOG_COLLECTOR, CpuCgroup, MemoryCgroup
 from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
 
 import azurelinuxagent.common.conf as conf
@@ -204,11 +205,10 @@ class Agent(object):
             logger.info("Running log collector mode normal")
 
         # Check the cgroups unit
-        cpu_cgroup_path, memory_cgroup_path, log_collector_monitor = None, None, None
-        if CollectLogsHandler.should_validate_cgroups():
-            cgroups_api = SystemdCgroupsApi()
-            cpu_cgroup_path, memory_cgroup_path = cgroups_api.get_process_cgroup_paths("self")
-
+        log_collector_monitor = None
+        cgroups_api = SystemdCgroupsApi()
+        cpu_cgroup_path, memory_cgroup_path = cgroups_api.get_process_cgroup_paths("self")
+        if CollectLogsHandler.is_enabled_monitor_cgroups_check():
             cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
             memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
 
@@ -221,10 +221,24 @@ class Agent(object):
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
+        def initialize_cgroups_tracking(cpu_cgroup_path, memory_cgroup_path):
+            cpu_cgroup = CpuCgroup(AGENT_LOG_COLLECTOR, cpu_cgroup_path)
+            msg = "Started tracking cpu cgroup {0}".format(cpu_cgroup)
+            logger.info(msg)
+            cpu_cgroup.initialize_cpu_usage()
+            memory_cgroup = MemoryCgroup(AGENT_LOG_COLLECTOR, memory_cgroup_path)
+            msg = "Started tracking memory cgroup {0}".format(memory_cgroup)
+            logger.info(msg)
+            return [cpu_cgroup, memory_cgroup]
+
         try:
-            log_collector = LogCollector(is_full_mode, cpu_cgroup_path, memory_cgroup_path)
-            log_collector_monitor = get_log_collector_monitor_handler(log_collector.cgroups)
-            log_collector_monitor.run()
+            log_collector = LogCollector(is_full_mode)
+            # Running log collector resource(CPU, Memory) monitoring only if agent starts the log collector.
+            # If Log collector start by any other means, then it will not be monitored.
+            if CollectLogsHandler.is_enabled_monitor_cgroups_check():
+                tracked_cgroups = initialize_cgroups_tracking(cpu_cgroup_path, memory_cgroup_path)
+                log_collector_monitor = get_log_collector_monitor_handler(tracked_cgroups)
+                log_collector_monitor.run()
             archive = log_collector.collect_logs_and_get_archive()
             logger.info("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))

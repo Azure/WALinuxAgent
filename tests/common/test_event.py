@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import json
 import os
+import platform
 import re
 import shutil
 import threading
@@ -70,7 +71,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
             CommonTelemetryEventSchema.EventPid: os.getpid(),
             CommonTelemetryEventSchema.TaskName: threading.current_thread().getName(),
-            CommonTelemetryEventSchema.KeywordName: '',
+            CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine()}),
             # common parameters computed from the OS platform
             CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),
             CommonTelemetryEventSchema.ExecutionMode: AGENT_EXECUTION_MODE,

@@ -149,6 +149,14 @@ class DefaultOSUtil(object):
     def get_agent_bin_path():
         return "/usr/sbin"
 
+    @staticmethod
+    def get_vm_arch():
+        try:
+            return platform.machine()
+        except Exception as e:
+            logger.warn("Unable to determine cpu architecture: {0}", ustr(e))
+            return "unknown"
+
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603

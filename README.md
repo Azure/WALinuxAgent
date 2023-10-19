@@ -84,11 +84,13 @@ Waagent depends on some system packages in order to function properly:
 
 ## Installation
 
-Installation via your distribution's package repository is preferred.
-You can also customize your own RPM or DEB packages using the configuration
-samples provided (see deb and rpm sections below).
+Installing via your distribution's package repository is the only method that is supported.
 
-For more advanced installation options, such as installing to custom locations or prefixes, you can use **setuptools** to install from source by running:
+You can install from source for more advanced options, such as installing to a custom location or creating 
+custom images. Installing from source, though, may override customizations done to the Agent by your 
+distribution, and is meant only for advanced users. We provide very limited support for this method.
+
+To install from source, you can use **setuptools**:
 
 ```bash
     sudo python setup.py install --register-service
@@ -108,11 +110,18 @@ You can view more installation options by running:
 
 The agent's log file is kept at `/var/log/waagent.log`.
 
+Lastly, you can also customize your own RPM or DEB packages using the configuration
+samples provided in the deb and rpm sections below. This method is also meant for advanced users and we
+provide very limited support for it.
+
+
 ## Upgrade
 
-Upgrading via your distribution's package repository is strongly preferred.
+Upgrading via your distribution's package repository or using automatic updates are the only supported
+methods. More information can be found here: [Update Linux Agent](https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/update-linux-agent) 
 
-If upgrading manually, same with installation above by running:
+To upgrade the Agent from source, you can use **setuptools**. Upgrading from source is meant for advanced 
+users and we provide very limited support for it.
 
 ```bash
     sudo python setup.py install --force
