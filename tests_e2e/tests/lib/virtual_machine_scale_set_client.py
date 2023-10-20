@@ -61,13 +61,14 @@ class VirtualMachineScaleSetClient(AzureSdkClient):
         """
         Returns the VM instances of the virtual machine scale set
         """
+        log.info("Retrieving instances of scale set %s", self)
         return list(self._compute_client.virtual_machine_scale_set_vms.list(resource_group_name=self.resource_group, virtual_machine_scale_set_name=self.name))
 
     def get_instances_ip_address(self) -> List[VmssInstanceIpAddress]:
         """
         Returns a list containing the IP addresses of scale set instances
         """
-        log.info("Retrieving instances of scale set %s", self)
+        log.info("Retrieving IP addresses of scale set %s", self)
         ip_addresses = self._network_client.public_ip_addresses.list_virtual_machine_scale_set_public_ip_addresses(resource_group_name=self.resource_group, virtual_machine_scale_set_name=self.name)
         ip_addresses = list(ip_addresses)
 

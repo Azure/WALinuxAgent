@@ -22,7 +22,7 @@ import traceback
 import uuid
 
 from pathlib import Path
-from threading import current_thread, RLock
+from threading import RLock
 from typing import Any, Dict, List, Tuple
 
 # Disable those warnings, since 'lisa' is an external, non-standard, dependency
@@ -55,11 +55,10 @@ from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
-from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.logging import set_current_thread_log
+from tests_e2e.tests.lib.logging import log, set_thread_name, set_current_thread_log
 from tests_e2e.tests.lib.agent_log import AgentLogRecord
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
-from tests_e2e.tests.lib.shell import run_command, CommandError
+from tests_e2e.tests.lib.shell import run_command
 from tests_e2e.tests.lib.ssh_client import SshClient
 
 
@@ -85,19 +84,6 @@ def _initialize_lisa_logger():
 # happen early in the LISA workflow, when it loads the test suites to execute.
 #
 _initialize_lisa_logger()
-
-
-#
-# Helper to change the current thread name temporarily
-#
-@contextlib.contextmanager
-def _set_thread_name(name: str):
-    initial_name = current_thread().name
-    current_thread().name = name
-    try:
-        yield
-    finally:
-        current_thread().name = initial_name
 
 
 #
@@ -135,54 +121,79 @@ class AgentTestSuite(LisaTestSuite):
     """
     def __init__(self, metadata: TestSuiteMetadata) -> None:
         super().__init__(metadata)
-        self._test_source_directory: Path
-        self._working_directory: Path
-        self._test_agent_package_path: Path
-        self._test_tools_tarball_path: Path
-        self._log_path: Path
-        self._lisa_log: Logger
-        self._runbook_name: str
-        self._environment_name: str
-        self._subscription_id: str
-        self._cloud: str
-        self._location: str
-        self._marketplace_image: str
-        self._is_vhd: bool
+        self._working_directory: Path  # Root directory for temporary files
+        self._log_path: Path  # Root directory for log files
+        self._test_agent_package_path: Path  # Path to the package for the test Agent
+        self._test_source_directory: Path  # Root directory of the source code for the end-to-end tests
+        self._test_tools_tarball_path: Path  # Path to the tarball with the tools needed on the test node
+
+        self._runbook_name: str  # name of the runbook execution, used as prefix on ARM resources created by the AgentTestSuite
+
+        self._lisa_log: Logger  # Main log for the LISA run
+
+        self._lisa_environment_name: str  # Name assigned by LISA to the test environment, useful for correlation with LISA logs
+        self._environment_name: str  # Name assigned by the AgentTestSuiteCombinator to the test environment
+
+        self._test_suites: List[AgentTestSuite]  # Test suites to execute in the environment
+
+        self._cloud: str  # Azure cloud where test VMs are located
+        self._subscription_id: str  # Azure subscription where test VMs are located
+        self._location: str  # Azure location (region) where test VMs are located
+        self._image: str   # Image used to create the test VMs; it can be empty if LISA chose the size, or when using an existing VM
+
+        self._is_vhd: bool  # True when the test VMs were created by LISA from a VHD; this is usually used to validate a new VHD and the test Agent is not installed
+
+        # username and public SSH key for the admin account used to connect to the test VMs
         self._user: str
         self._identity_file: str
-        self._test_suites: List[AgentTestSuite]
-        self._skip_setup: bool
-        self._collect_logs: str
-        self._keep_environment: str
-        self._existing_resource_group: str
-        self._existing_vmss: str
-        self._resource_groups_to_delete: List[ResourceGroupClient]
+
+        self._skip_setup: bool  # If True, skip the setup of the test VMs
+        self._collect_logs: str  # Whether to collect logs from the test VMs (one of 'always', 'failed', or 'no')
+        self._keep_environment: str  # Whether to skip deletion of the resources created by the test suite (one of 'always', 'failed', or 'no')
+
+        # Resource group, VM, and VMSS names passed as arguments to the runbook. They are non-empty only when executing the runbook on an existing VM/VMSS
+        self._resource_group_name_arg: str
+        self._vm_name_arg: str
+        self._vmss_name_arg: str
+
+        self._resource_groups_to_delete: List[ResourceGroupClient]  # Resource groups created by the AgentTestSuite, to be deleted at the end of the run
 
     def _initialize(self, environment: Environment, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
-        self._test_source_directory = Path(tests_e2e.__path__[0])
         self._working_directory = self._get_working_directory(lisa_working_path)
+        self._log_path = self._get_log_path(variables, lisa_log_path)
         self._test_agent_package_path = self._working_directory/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
+        self._test_source_directory = Path(tests_e2e.__path__[0])
         self._test_tools_tarball_path = self._working_directory/"waagent-tools.tar"
         self._pypy_x64_path = Path("/tmp/pypy3.7-x64.tar.bz2")
         self._pypy_arm64_path = Path("/tmp/pypy3.7-arm64.tar.bz2")
-        self._log_path = self._get_log_path(variables, lisa_log_path)
-        self._lisa_log = lisa_log
+
         self._runbook_name = variables["name"]
+
+        self._lisa_log = lisa_log
+
+        self._lisa_environment_name = environment.name
         self._environment_name = variables["c_env_name"]
-        self._subscription_id = variables["subscription_id"]
+
+        self._test_suites = variables["c_test_suites"]
+
         self._cloud = variables["cloud"]
+        self._subscription_id = variables["subscription_id"]
         self._location = variables["c_location"]
-        self._marketplace_image = variables["c_marketplace_image"]
-        self._is_vhd = variables["c_vhd"] != ""
+        self._image = variables["c_image"]
+
+        self._is_vhd = variables["c_is_vhd"]
+
         self._user = variables["user"]
         self._identity_file = variables["identity_file"]
-        self._test_suites = variables["c_test_suites"]
+
         self._skip_setup = variables["skip_setup"]
         self._keep_environment = variables["keep_environment"]
         self._collect_logs = variables["collect_logs"]
-        # If an existing VMSS was passed in the command line, these variables will contain its name and resource group, otherwise they will be empty
-        self._existing_resource_group = variables["resource_group_name"]
-        self._existing_vmss = variables["vmss_name"]
+
+        self._resource_group_name_arg = variables["resource_group_name"]
+        self._vm_name_arg = variables["vm_name"]
+        self._vmss_name_arg = variables["vmss_name"]
+
         self._resource_groups_to_delete = []
 
     @staticmethod
@@ -416,27 +427,22 @@ class AgentTestSuite(LisaTestSuite):
         Entry point from LISA
         """
         self._initialize(environment, variables, working_path, log_path, log)
-        self._execute(environment, variables)
+        self._execute(environment)
 
-    def _execute(self, environment: Environment, variables: Dict[str, Any]) -> None:
-        """
-        Executes each of the AgentTests included in the "c_test_suites" variable (which is generated by the AgentTestSuitesCombinator).
-        """
+    def _execute(self, environment: Environment) -> None:
         unexpected_error = False
         test_suite_success = True
 
         # Set the thread name to the name of the environment. The thread name is added to each item in LISA's log.
-        with _set_thread_name(self._environment_name):
+        with set_thread_name(self._environment_name):
             log_path: Path = self._log_path / f"env-{self._environment_name}.log"
             with set_current_thread_log(log_path):
                 start_time: datetime.datetime = datetime.datetime.now()
 
                 try:
                     # Log the environment's name and the variables received from the runbook (note that we need to expand the names of the test suites)
-                    log.info("LISA Environment (for correlation with the LISA log): %s", environment.name)
-                    log.info("Runbook variables:")
-                    for name, value in variables.items():
-                        log.info("    %s: %s", name, value if name != 'c_test_suites' else [t.name for t in value])
+                    log.info("LISA Environment (for correlation with the LISA log): %s", self._lisa_environment_name)
+                    log.info("Test suites: %s", [t.name for t in self._test_suites])
 
                     self._create_working_directory()
 
@@ -444,7 +450,7 @@ class AgentTestSuite(LisaTestSuite):
                         self._setup_test_run()
 
                     try:
-                        test_context, test_nodes = self._create_test_context(environment, variables)
+                        test_context, test_nodes = self._create_test_context(environment)
 
                         if not self._skip_setup:
                             try:
@@ -489,7 +495,7 @@ class AgentTestSuite(LisaTestSuite):
         suite_full_name = f"{suite_name}-{self._environment_name}"
         suite_start_time: datetime.datetime = datetime.datetime.now()
 
-        with _set_thread_name(suite_full_name):  # The thread name is added to the LISA log
+        with set_thread_name(suite_full_name):  # The thread name is added to the LISA log
             log_path: Path = self._log_path / f"{suite_full_name}.log"
             with set_current_thread_log(log_path):
                 suite_success: bool = True
@@ -663,14 +669,14 @@ class AgentTestSuite(LisaTestSuite):
 
         return success
 
-    def _create_test_context(self, environment: Environment, variables: Dict[str, Any]) -> Tuple[AgentTestContext,  List[_TestNode]]:
+    def _create_test_context(self, environment: Environment) -> Tuple[AgentTestContext,  List[_TestNode]]:
         """
         """
-        # Note that all the test suites in the environment have the same value for executes_on_scale_set
+        # Note that all the test suites in the environment have the same value for executes_on_scale_set so we can use the first one
         if self._test_suites[0].executes_on_scale_set:
             log.info("Creating test context for scale set")
-            if self._existing_vmss != "":
-                scale_set_client = VirtualMachineScaleSetClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, resource_group=self._existing_resource_group, name=self._existing_vmss)
+            if self._vmss_name_arg != "":  # If an existing scale set was passed as argument to the runbook
+                scale_set_client = VirtualMachineScaleSetClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, resource_group=self._resource_group_name_arg, name=self._vmss_name_arg)
                 log.info("Using existing scale set %s", scale_set_client)
             else:
                 log.info("Creating scale set")
@@ -688,8 +694,8 @@ class AgentTestSuite(LisaTestSuite):
             if isinstance(test_node.features._platform, ReadyPlatform):
                 # A "ready" platform indicates that the tests are running on an existing VM and the vm and resource group names
                 # were passed as arguments in the command line
-                resource_group_name = variables["resource_group_name"]
-                node_name = variables["vm_name"]
+                resource_group_name = self._resource_group_name_arg
+                node_name = self._vm_name_arg
             else:
                 # Else the test VM was created by LISA and we need to get the vm and resource group names from the node context
                 node_context = get_node_context(test_node)
@@ -702,9 +708,8 @@ class AgentTestSuite(LisaTestSuite):
                 working_directory=self._working_directory,
                 vm=vm,
                 ip_address=connection_info['address'],
-                username=connection_info['username'],
-                identity_file=connection_info['private_key_file'],
-                ssh_port=connection_info['port'])
+                username=self._user,
+                identity_file=self._identity_file)
 
             nodes = [_TestNode(test_context.vm.name, test_context.ip_address)]
 
@@ -790,7 +795,7 @@ class AgentTestSuite(LisaTestSuite):
             with open(path, "r") as file_:
                 return file_.read().strip()
 
-        publisher, offer, sku, version = self._marketplace_image.replace(":", " ").split(' ')
+        publisher, offer, sku, version = self._image.replace(":", " ").split(' ')
 
         template: Dict[str, Any] = json.loads(read_file(str(self._test_source_directory/"orchestrator"/"templates/vmss.json")))
 

@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 import datetime
+import json
 import logging
 import random
 import re
@@ -23,6 +24,7 @@ from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.util import field_metadata  # pylint: disable=E0401
 
 from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
+from tests_e2e.tests.lib.logging import set_thread_name
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
 
@@ -30,67 +32,34 @@ from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineS
 @dataclass_json()
 @dataclass
 class AgentTestSuitesCombinatorSchema(schema.Combinator):
-    test_suites: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    cloud: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    subscription_id: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    location: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    image: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    vm_size: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    resource_group_name: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    vm_name: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    vmss_name: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    keep_environment: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    user: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
-    identity_file: str = field(
-        default_factory=str, metadata=field_metadata(required=True)
-    )
+    """
+    Defines parameters passed to the combinator from the runbook.
+
+    The runbook is a static document and always passes all these parameters to the combinator, so they are all
+    marked as required. Optional parameters can pass an empty value to indicate that they are not specified.
+    """
+    cloud: str = field(default_factory=str, metadata=field_metadata(required=True))
+    identity_file: str = field(default_factory=str, metadata=field_metadata(required=True))
+    image: str = field(default_factory=str, metadata=field_metadata(required=True))
+    keep_environment: str = field(default_factory=str, metadata=field_metadata(required=True))
+    location: str = field(default_factory=str, metadata=field_metadata(required=True))
+    resource_group_name: str = field(default_factory=str, metadata=field_metadata(required=True))
+    subscription_id: str = field(default_factory=str, metadata=field_metadata(required=True))
+    test_suites: str = field(default_factory=str, metadata=field_metadata(required=True))
+    user: str = field(default_factory=str, metadata=field_metadata(required=True))
+    vm_name: str = field(default_factory=str, metadata=field_metadata(required=True))
+    vm_size: str = field(default_factory=str, metadata=field_metadata(required=True))
+    vmss_name: str = field(default_factory=str, metadata=field_metadata(required=True))
 
 
 class AgentTestSuitesCombinator(Combinator):
     """
-    The "agent_test_suites" combinator returns a list of variables that specify the environments (i.e. test VMs) that the agent
-    test suites must be executed on:
+    The "agent_test_suites" combinator returns a list of variables that specify the test environments (i.e. test VMs) that the
+    test suites must be executed on. These variables are prefixed with "c_" to distinguish them from the command line arguments
+    of the runbook. See the runbook definition for details on each of those variables.
 
-        * c_env_name: Unique name for the environment, e.g. "0001-com-ubuntu-server-focal-20_04-lts-westus2"
-        * c_marketplace_image: e.g. "Canonical UbuntuServer 18.04-LTS latest",
-        * c_location: e.g. "westus2",
-        * c_vm_size: e.g. "Standard_D2pls_v5"
-        * c_vhd: e.g "https://rhel.blob.core.windows.net/images/RHEL_8_Standard-8.3.202006170423.vhd?se=..."
-        * c_test_suites: e.g. [AgentBvt, FastTrack]
-
-    (c_marketplace_image, c_location, c_vm_size) and vhd are mutually exclusive and define the environment (i.e. the test VM)
-    in which the test will be executed. c_test_suites defines the test suites that should be executed in that
-    environment.
-
-    The 'vm_name' runbook parameter can be used to execute the test suites on an existing VM. In that case, the combinator
-    generates a single item with these variables:
-
-        * c_env_name: Name for the environment, same as vm_name
-        * c_vm_name:  Name of the test VM
-        * c_location: Location of the test VM e.g. "westus2",
-        * c_test_suites: e.g. [AgentBvt, FastTrack]
+    The combinator can generate environments for VMs created and managed by LISA, Scale Sets created and managed by the AgentTestSuite,
+    or existing VMs or Scale Sets.
     """
     def __init__(self, runbook: AgentTestSuitesCombinatorSchema) -> None:
         super().__init__(runbook)
@@ -99,18 +68,29 @@ class AgentTestSuitesCombinator(Combinator):
 
         if self.runbook.vm_name != '' and self.runbook.vmss_name != '':
             raise Exception("Invalid runbook parameters: 'vm_name' and 'vmss_name' are mutually exclusive.")
-        if self.runbook.vm_name != '' and (self.runbook.image != '' or self.runbook.vm_size != ''):
-            raise Exception("Invalid runbook parameters: When 'vm_name' is specified, 'image' and 'vm_size' should not be specified.")
-        if self.runbook.vmss_name != '' and (self.runbook.image != '' or self.runbook.vm_size != ''):
-            raise Exception("Invalid runbook parameters: When 'vmss_name' is specified, 'image' and 'vm_size' should not be specified.")
 
         if self.runbook.vm_name != '':
-            self._environments = [self.create_existing_vm_environment()]
-        elif self.runbook.vmss_name != '':
-            self._environments = [self.create_existing_vmss_environment()]
-        else:
-            self._environments = self.create_environment_list()
-        self._index = 0
+            if self.runbook.image != '' or self.runbook.vm_size != '':
+                raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, 'image' and 'vm_size' should not be specified.")
+            if self.runbook.resource_group_name == '':
+                raise Exception("Invalid runbook parameters: The 'vm_name' parameter indicates an existing VM, a 'resource_group_name' must be specified.")
+
+        if self.runbook.vmss_name != '':
+            if self.runbook.image != '' or self.runbook.vm_size != '':
+                raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, 'image' and 'vm_size' should not be specified.")
+            if self.runbook.resource_group_name == '':
+                raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, a 'resource_group_name' must be specified.")
+
+        self._log: logging.Logger = logging.getLogger("lisa")
+
+        with set_thread_name("AgentTestSuitesCombinator"):
+            if self.runbook.vm_name != '':
+                self._environments = [self.create_existing_vm_environment()]
+            elif self.runbook.vmss_name != '':
+                self._environments = [self.create_existing_vmss_environment()]
+            else:
+                self._environments = self.create_environment_list()
+            self._index = 0
 
     @classmethod
     def type_name(cls) -> str:
@@ -147,13 +127,12 @@ class AgentTestSuitesCombinator(Combinator):
 
     def create_environment_list(self) -> List[Dict[str, Any]]:
         """
-        Examines the test_suites specified in the runbook and returns a list of the environments (i.e. test VMs) that need to be
+        Examines the test_suites specified in the runbook and returns a list of the environments (i.e. test VMs or scale sets) that need to be
         created in order to execute these suites.
 
         Note that if the runbook provides an 'image', 'location', or 'vm_size', those values override any values provided in the
         configuration of the test suites.
         """
-        log: logging.Logger = logging.getLogger("lisa")
         environments: List[Dict[str, Any]] = []
         shared_environments: Dict[str, Dict[str, Any]] = {}  # environments shared by multiple test suites
 
@@ -193,7 +172,7 @@ class AgentTestSuitesCombinator(Combinator):
                     # TODO: Allow test suites that set 'install_test_agent' to False to share environments (we need to ensure that
                     #      all the suites in the shared environment have the same value for 'install_test_agent')
                     env = self.create_vm_environment(
-                        c_env_name=f"{image_name}-{test_suite_info.name}",
+                        env_name=f"{image_name}-{test_suite_info.name}",
                         marketplace_image=marketplace_image,
                         vhd=vhd,
                         location=location,
@@ -219,7 +198,7 @@ class AgentTestSuitesCombinator(Combinator):
                                 test_suite_info=test_suite_info)
                         else:
                             env = self.create_vm_environment(
-                                c_env_name=env_name,
+                                env_name=env_name,
                                 marketplace_image=marketplace_image,
                                 vhd=vhd,
                                 location=location,
@@ -228,27 +207,26 @@ class AgentTestSuitesCombinator(Combinator):
                         shared_environments[env_name] = env
 
                 if test_suite_info.template != '':
-                    vm_tags = env["c_vm_tags"]
-                    if "templates" not in vm_tags:
-                        vm_tags["templates"] = test_suite_info.template
-                    else:
-                        vm_tags["templates"] += ", " + test_suite_info.template
+                    vm_tags = env.get("vm_tags")
+                    if vm_tags is not None:
+                        if "templates" not in vm_tags:
+                            vm_tags["templates"] = test_suite_info.template
+                        else:
+                            vm_tags["templates"] += ", " + test_suite_info.template
 
         environments.extend(shared_environments.values())
 
         if len(environments) == 0:
             raise Exception("No VM images were found to execute the test suites.")
 
+        # Log a summary of each environment and the suites that will be executed on it
+        format_suites = lambda suites: ", ".join([s.name for s in suites])
+        summary = [f"{e['c_env_name']}: [{format_suites(e['c_test_suites'])}]" for e in environments]
+        summary.sort()
+        self._log.info("Executing tests on %d environments\n\n%s\n", len(environments), '\n'.join([f"\t{s}" for s in summary]))
+
         if len(skip_test_suites) > 0:
-            log.info("")
-            log.info("Test suites skipped on %s:\n\n\t%s\n", self.runbook.cloud, '\n\t'.join(skip_test_suites))
-        log.info("")
-        log.info("******** Waagent: Test Environments *****")
-        log.info("")
-        log.info("Will execute tests on %d environments:\n\n\t%s\n", len(environments), '\n\t'.join([env['c_env_name'] for env in environments]))
-        for env in environments:
-            log.info("Settings for %s:\n%s\n", env['c_env_name'], self._get_env_settings(env))
-        log.info("")
+            self._log.info("Skipping test suites %s", skip_test_suites)
 
         return environments
 
@@ -263,7 +241,7 @@ class AgentTestSuitesCombinator(Combinator):
             name=self.runbook.vm_name)
         ip_address = vm.get_ip_address()
 
-        return {
+        environment = {
             "c_env_name": self.runbook.vm_name,
             "c_platform": [
                 {
@@ -289,6 +267,10 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
+        self._log.info("Created environment %s for an existing VM *** Scale set: %s IP_Addresses: %s", environment['c_env_name'], self.runbook.vm_name, ip_address)
+
+        return environment
+
     def create_existing_vmss_environment(self) -> Dict[str, Any]:
         loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
 
@@ -301,7 +283,7 @@ class AgentTestSuitesCombinator(Combinator):
 
         ip_addresses = vmss.get_instances_ip_address()
 
-        return {
+        environment = {
             "c_env_name": self.runbook.vmss_name,
             "c_environment": {
                 "environments": [
@@ -327,12 +309,23 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-    def create_vm_environment(self, c_env_name: str, marketplace_image: str, vhd: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+        self._log.info(
+            "Created environment %s for an existing scale set *** Scale set: %s IP_Addresses: %s", environment['c_env_name'], self.runbook.vmss_name, [i.ip_address for i in ip_addresses])
+
+        return environment
+
+    def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+        #
+        # Custom ARM templates (to create the test VMs) require special handling. These templates are processed by the azure_update_arm_template
+        # hook, which does not have access to the runbook variables. Instead, we use a dummy VM tag named "template" and pass the
+        # names of the custom templates in its value. The hook can then retrieve the value from the Platform object (see wiki for more details).
+        # We also use a dummy item, "vm_tags" in the environment dictionary in order to concatenate templates from multiple test suites when they
+        # share the same test environment.
+        #
         vm_tags = {}
         if test_suite_info.template != '':
             vm_tags["templates"] = test_suite_info.template
-        return {
-            "c_env_name": c_env_name,
+        environment = {
             "c_platform": [
                 {
                     "type": "azure",
@@ -361,22 +354,34 @@ class AgentTestSuitesCombinator(Combinator):
                     }
                 }
             ],
+
             "c_environment": None,
-            "c_location": location,
-            "c_vhd": vhd,
+
+            "c_env_name": env_name,
             "c_test_suites": [test_suite_info],
+            "c_location": location,
+            "c_image": marketplace_image,
+            "c_is_vhd": vhd != "",
             "vm_tags": vm_tags
         }
 
-    @staticmethod
-    def create_vmss_environment(env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
-        return {
-            "c_env_name": env_name,
+        self._log.info(
+            "Created environment %s for a new VM *** Image: %s Location: %s VM_Size: %s",
+            environment['c_env_name'],
+            vhd if vhd != "" else marketplace_image.replace(" ", ":"),
+            location,
+            vm_size if vm_size != "" else "default")
+
+        return environment
+
+    def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+        environment = {
             "c_platform": [
                 {
                     "type": "ready"
                 }
             ],
+
             "c_environment": {
                 "environments": [
                     {
@@ -386,11 +391,23 @@ class AgentTestSuitesCombinator(Combinator):
                     }
                 ]
             },
+
+            "c_env_name": env_name,
             "c_test_suites": [test_suite_info],
-            "c_marketplace_image": marketplace_image,
             "c_location": location,
+            "c_image": marketplace_image,
+            "c_is_vhd": False,
             "c_vm_size": vm_size
         }
+
+        self._log.info(
+            "Created environment %s for a new VMSS *** Image: %s Location: %s VM_Size: %s",
+            environment['c_env_name'],
+            marketplace_image.replace(" ", ":"),
+            location,
+            vm_size if vm_size != "" else "default")
+
+        return environment
 
     def _get_runbook_images(self, loader: AgentTestLoader) -> List[VmImageInfo]:
         """
@@ -491,11 +508,6 @@ class AgentTestSuitesCombinator(Combinator):
         if match is None:
             raise Exception(f"Invalid URN: {urn}")
         return f"{match.group('offer')}-{match.group('sku')}"
-
-    @staticmethod
-    def _get_env_settings(environment: Dict[str, Any]):
-        suite_names = [s.name for s in environment['c_test_suites']]
-        return '\n'.join([f"\t{name}: {value if name != 'c_test_suites' else suite_names}" for name, value in environment.items()])
 
     _URN = re.compile(r"(?P<publisher>[^\s:]+)[\s:](?P<offer>[^\s:]+)[\s:](?P<sku>[^\s:]+)[\s:](?P<version>[^\s:]+)")
 

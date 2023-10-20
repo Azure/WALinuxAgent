@@ -155,3 +155,18 @@ def set_current_thread_log(log_file: Path):
         log.close_current_thread_log()
         if initial_value is not None:
             log.set_current_thread_log(initial_value)
+
+
+@contextlib.contextmanager
+def set_thread_name(name: str):
+    """
+    Context Manager to change the name of the current thread temporarily
+    """
+    initial_name = current_thread().name
+    current_thread().name = name
+    try:
+        yield
+    finally:
+        current_thread().name = initial_name
+
+
