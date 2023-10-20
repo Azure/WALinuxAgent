@@ -269,9 +269,13 @@ class AgentTestLoader(object):
                 test_suite_info.locations = locations
 
         test_suite_info.owns_vm = "owns_vm" in test_suite and test_suite["owns_vm"]
-        test_suite_info.executes_on_scale_set = "executes_on_scale_set" in test_suite and test_suite["executes_on_scale_set"]
         test_suite_info.install_test_agent = "install_test_agent" not in test_suite or test_suite["install_test_agent"]
+        test_suite_info.executes_on_scale_set = "executes_on_scale_set" in test_suite and test_suite["executes_on_scale_set"]
         test_suite_info.template = test_suite.get("template", "")
+
+        # TODO: Add support for custom templates
+        if test_suite_info.executes_on_scale_set and test_suite_info.template != '':
+            raise Exception(f"Currently custom templates are not supported on scale sets. [Test suite: {test_suite_info.name}]")
 
         skip_on_clouds = test_suite.get("skip_on_clouds")
         if skip_on_clouds is not None:
