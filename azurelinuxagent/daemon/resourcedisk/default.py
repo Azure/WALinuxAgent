@@ -373,6 +373,7 @@ class ResourceDiskHandler(object):
         if blocks > 0:
             ret = shellutil.run(dd_cmd.format(dd_maxbs, blocks, fn_sh)) << 8
 
+        dd_cmd += " oflag=append"
         remains = int(nbytes % dd_maxbs)
         if remains > 0:
             ret += shellutil.run(dd_cmd.format(remains, 1, fn_sh))
