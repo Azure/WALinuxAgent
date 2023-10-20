@@ -1,7 +1,8 @@
 #
-# The test suite verify the agent running in expected cgroups and also, checks agent tracking the cgroups for polling resource metrics.
+# The test suite verify the agent running in expected cgroups and also, checks agent tracking the cgroups for polling resource metrics. Also, it verifies the agent cpu quota is set as expected.
 #
 name: "AgentCgroups"
 tests:
   - "agent_cgroups/agent_cgroups.py"
+  - "agent_cgroups/agent_cpu_quota.py"
 images: "cgroups-endorsed"
