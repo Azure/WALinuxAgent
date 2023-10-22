@@ -22,6 +22,7 @@ from datetime import datetime
 
 from tests_e2e.tests.lib.agent_log import AgentLog
 
+# pylint: disable=W0105
 """
 > WALinuxAgent-2.2.18 discovered WALinuxAgent-2.2.47 as an update and will exit
 (None, 'WALinuxAgent-2.2.18', '2.2.47')
@@ -51,6 +52,8 @@ _UPDATE_PATTERN_03 = re.compile(
 """
 This script return timestamp of update message in the agent log
 """
+
+
 def main():
     try:
         agentlog = AgentLog()

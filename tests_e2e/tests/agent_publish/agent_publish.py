@@ -53,7 +53,7 @@ class AgentPublishTest(AgentTest):
         self._check_cse()
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
-        timestamp = self._ssh_client.run_command("agent_publish-get_log_record_timestamp.py")
+        timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
         return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f')
 
     def _get_agent_info(self) -> None:
