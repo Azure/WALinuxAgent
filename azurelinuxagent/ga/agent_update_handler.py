@@ -329,7 +329,6 @@ class AgentUpdateHandler(object):
                 self.__log_event(LogLevel.WARNING, warn_msg)
 
             # Downgrades are not allowed for self-update version
-            # Added it in try block after agent update timewindow check so that we don't log it too frequently
             if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
                 return
 
@@ -342,8 +341,8 @@ class AgentUpdateHandler(object):
                 raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
                                        "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
 
-            msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
-                self._gs_id, str(requested_version))
+            msg = "Goal state {0} is requesting a new agent version {1} [IsRSMUpdate:{2}], will update the agent before processing the goal state.".format(
+                self._gs_id, str(requested_version), self._is_requested_version_update)
             self.__log_event(LogLevel.INFO, msg)
 
             agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
