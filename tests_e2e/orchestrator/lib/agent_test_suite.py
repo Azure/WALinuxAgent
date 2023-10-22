@@ -511,6 +511,7 @@ class AgentTestSuite(LisaTestSuite):
 
                     summary: List[str] = []
                     ignore_error_rules: List[Dict[str, Any]] = []
+                    before_timestamp = datetime.datetime.min
 
                     for test in suite.tests:
                         test_full_name = f"{suite_name}-{test.name}"
@@ -584,6 +585,14 @@ class AgentTestSuite(LisaTestSuite):
 
                         ignore_error_rules.extend(test_instance.get_ignore_error_rules())
 
+                        # If the test has a timestamp before which errors should be ignored in the agent log, use that timestamp
+                        # if multiple tests have this setting, use the earliest timestamp
+                        if test_instance.get_ignore_errors_before_timestamp() != datetime.datetime.min:
+                            if before_timestamp != datetime.datetime.min:
+                                before_timestamp = min(before_timestamp, test_instance.get_ignore_errors_before_timestamp())
+                            else:
+                                before_timestamp = test_instance.get_ignore_errors_before_timestamp()
+
                         if not test_success and test.blocks_suite:
                             log.warning("%s failed and blocks the suite. Stopping suite execution.", test.name)
                             break
@@ -595,7 +604,7 @@ class AgentTestSuite(LisaTestSuite):
                         log.info("\t%s", r)
                     log.info("")
 
-                except:  # pylint: disable=bare-except
+                except Exception as e:  # pylint: disable=bare-except
                     suite_success = False
                     self._report_test_result(
                         suite_full_name,
@@ -608,11 +617,11 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
-                suite_success = suite_success and self._check_agent_log(ignore_error_rules)
+                suite_success = suite_success and self._check_agent_log(ignore_error_rules, before_timestamp)
 
                 return suite_success
 
-    def _check_agent_log(self, ignore_error_rules: List[Dict[str, Any]]) -> bool:
+    def _check_agent_log(self, ignore_error_rules: List[Dict[str, Any]], before_timestamp: datetime) -> bool:
         """
         Checks the agent log for errors; returns true on success (no errors int the log)
         """
@@ -629,6 +638,9 @@ class AgentTestSuite(LisaTestSuite):
             if len(ignore_error_rules) > 0:
                 new = []
                 for e in errors:
+                    # Ignore errors that occurred before the timestamp
+                    if e.timestamp < before_timestamp:
+                        continue
                     if not AgentLog.matches_ignore_rule(e, ignore_error_rules):
                         new.append(e)
                 errors = new

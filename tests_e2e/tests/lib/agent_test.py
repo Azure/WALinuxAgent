@@ -20,6 +20,8 @@
 import sys
 
 from abc import ABC, abstractmethod
+from datetime import datetime
+
 from assertpy import fail
 from typing import Any, Dict, List
 
@@ -58,6 +60,10 @@ class AgentTest(ABC):
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         # Tests can override this method to return a list with rules to ignore errors in the agent log (see agent_log.py for sample rules).
         return []
+
+    def get_ignore_errors_before_timestamp(self) -> datetime:
+        # Ignore errors in the agent log before this timestamp
+        return datetime.min
 
     @classmethod
     def run_from_command_line(cls):
