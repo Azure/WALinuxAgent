@@ -17,6 +17,7 @@
 import datetime
 import json
 import logging
+import re
 import traceback
 import uuid
 
@@ -38,9 +39,10 @@ from lisa import (  # pylint: disable=E0401
 )
 from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
-from lisa.node import Node  # pylint: disable=E0401
+from lisa.node import Node, LocalNode  # pylint: disable=E0401
+from lisa.util.constants import RUN_ID  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
-from lisa.sut_orchestrator.ready import ReadyPlatform  # pylint: disable=E0401
+from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disable=E0401
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
@@ -152,12 +154,17 @@ class AgentTestSuite(LisaTestSuite):
         self._collect_logs: str  # Whether to collect logs from the test VMs (one of 'always', 'failed', or 'no')
         self._keep_environment: str  # Whether to skip deletion of the resources created by the test suite (one of 'always', 'failed', or 'no')
 
-        # Resource group, VM, and VMSS names passed as arguments to the runbook. They are non-empty only when executing the runbook on an existing VM/VMSS
-        self._resource_group_name_arg: str
-        self._vm_name_arg: str
-        self._vmss_name_arg: str
+        # Resource group and VM/VMSS for the test machines. self._vm_name and self._vmss_name are mutually exclusive, only one of them will be set.
+        self._resource_group_name: str
+        self._vm_name: str
+        self._vm_ip_address: str
+        self._vmss_name: str
 
-        self._resource_groups_to_delete: List[ResourceGroupClient]  # Resource groups created by the AgentTestSuite, to be deleted at the end of the run
+        self._test_nodes: List[_TestNode]  # VMs or scale set instances the tests will run on
+
+        # Whether to create and delete a scale set.
+        self._create_scale_set: bool
+        self._delete_scale_set: bool
 
     def _initialize(self, environment: Environment, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
         self._working_directory = self._get_working_directory(lisa_working_path)
@@ -191,11 +198,56 @@ class AgentTestSuite(LisaTestSuite):
         self._keep_environment = variables["keep_environment"]
         self._collect_logs = variables["collect_logs"]
 
-        self._resource_group_name_arg = variables["resource_group_name"]
-        self._vm_name_arg = variables["vm_name"]
-        self._vmss_name_arg = variables["vmss_name"]
+        # The AgentTestSuiteCombinator can create 4 kinds of platform/environment combinations:
+        #
+        #    * New VM
+        #      The VM is created by LISA. The platform will be 'azure' and the environment will contain a single 'remote' node.
+        #
+        #    * Existing VM
+        #      The VM was passed as argument to the runbook. The platform will be 'ready' and the environment will contain a single 'remote' node.
+        #
+        #    * New VMSS
+        #      The AgentTestSuite will create the scale set before executing the tests. The platform will be 'ready' and the environment will a single 'local' node.
+        #
+        #    * Existing VMSS
+        #      The VMSS was passed as argument to the runbook. The platform will be 'ready' and the environment will contain a list 'remote' nodes,
+        #      one for each instance of the scale set.
+        #
 
-        self._resource_groups_to_delete = []
+        # Note that _vm_name and _vmss_name are mutually exclusive, only one of them will be set.
+        self._vm_name = None
+        self._vm_ip_address = None
+        self._vmss_name = None
+        self._create_scale_set = False
+        self._delete_scale_set = False
+
+        if isinstance(environment.nodes[0], LocalNode):
+            # We need to create a new VMSS.
+            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0.  Note that we hardcode the resource group
+            # id to "n0" and the scale set name to "n0" since we are creating a single scale set.
+            self._resource_group_name = f"lisa-{self._runbook_name}-{RUN_ID}-e0"
+            self._vmss_name = f"{self._resource_group_name}-n0"
+            self._test_nodes = []  # we'll fill this up when the scale set is created
+            self._create_scale_set = True
+            self._delete_scale_set = False  # we set it to True once we create the scale set
+        else:
+            # Else we are using a VM that was created by LISA, or an existing VM/VMSS
+            node_context = get_node_context(environment.nodes[0])
+
+            if isinstance(environment.nodes[0].features._platform, AzurePlatform):  # The test VM was created by LISA
+                self._resource_group_name = node_context.resource_group_name
+                self._vm_name = node_context.vm_name
+                self._vm_ip_address = environment.nodes[0].connection_info['address']
+                self._test_nodes = [_TestNode(self._vm_name, self._vm_ip_address)]
+            else:  # An existing VM/VMSS was passed as argument to the runbook
+                self._resource_group_name = variables["resource_group_name"]
+                if variables["vm_name"] != "":
+                    self._vm_name = variables["vm_name"]
+                    self._vm_ip_address = environment.nodes[0].connection_info['address']
+                    self._test_nodes = [_TestNode(self._vm_name, self._vm_ip_address)]
+                else:
+                    self._vmss_name = variables["vmss_name"]
+                    self._test_nodes = [_TestNode(node.name, node.connection_info['address']) for node in environment.nodes.list()]
 
     @staticmethod
     def _get_log_path(variables: Dict[str, Any], lisa_log_path: str) -> Path:
@@ -275,6 +327,7 @@ class AgentTestSuite(LisaTestSuite):
                     log.info("Found Pypy at %s", pypy)
                 else:
                     pypy_download = f"https://dcrdata.blob.core.windows.net/python/{pypy.name}"
+                    self._lisa_log.info("Downloading %s to %s", pypy_download, pypy)
                     log.info("Downloading %s to %s", pypy_download, pypy)
                     run_command(["wget", pypy_download, "-O",  pypy])
 
@@ -284,6 +337,7 @@ class AgentTestSuite(LisaTestSuite):
             #     * bin - Executables file (Bash and Python scripts)
             #     * lib - Library files (Python modules)
             #
+            self._lisa_log.info("Creating %s with the tools needed on the test node", self._test_tools_tarball_path)
             log.info("Creating %s with the tools needed on the test node", self._test_tools_tarball_path)
             log.info("Adding orchestrator/scripts")
             command = "cd {0} ; tar cf {1} --transform='s,^,bin/,' *".format(self._test_source_directory/"orchestrator"/"scripts", self._test_tools_tarball_path)
@@ -309,18 +363,18 @@ class AgentTestSuite(LisaTestSuite):
         """
         Cleans up any items created by the test suite run.
         """
-        if len(self._resource_groups_to_delete) > 0:
+        if self._delete_scale_set:
             if self._keep_environment == KeepEnvironment.Always:
-                log.info("Won't delete resource groups %s, per the test suite configuration.", self._resource_groups_to_delete)
-            elif self._keep_environment == KeepEnvironment.No or self._keep_environment == KeepEnvironment.Failed and not success:
-                for resource_group in self._resource_groups_to_delete:
-                    try:
-                        self._lisa_log.info("Deleting resource group %s", resource_group)
-                        resource_group.delete()
-                    except Exception as error:  # pylint: disable=broad-except
-                        log.warning("Error deleting resource group %s: %s", resource_group, error)
+                log.info("Won't delete the scale set %s, per the test suite configuration.", self._vmss_name)
+            elif self._keep_environment == KeepEnvironment.No or self._keep_environment == KeepEnvironment.Failed and success:
+                try:
+                    self._lisa_log.info("Deleting resource group containing the test VMSS: %s", self._resource_group_name)
+                    resource_group = ResourceGroupClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, name=self._resource_group_name)
+                    resource_group.delete()
+                except Exception as error:  # pylint: disable=broad-except
+                    log.warning("Error deleting resource group %s: %s", self._resource_group_name, error)
 
-    def _setup_test_nodes(self, test_nodes: List[_TestNode]) -> None:
+    def _setup_test_nodes(self) -> None:
         """
         Prepares the provided remote nodes for executing the test suite (installs tools and the test agent, etc)
         """
@@ -329,7 +383,7 @@ class AgentTestSuite(LisaTestSuite):
         log.info("")
         log.info("************************************ [Test Nodes Setup] ************************************")
         log.info("")
-        for node in test_nodes:
+        for node in self._test_nodes:
             self._lisa_log.info(f"Setting up test node {node}")
             log.info("Test Node: %s", node.name)
             log.info("IP Address: %s", node.ip_address)
@@ -386,11 +440,11 @@ class AgentTestSuite(LisaTestSuite):
 
             log.info("Completed test node setup")
 
-    def _collect_logs_from_test_nodes(self, test_nodes: List[_TestNode]) -> None:
+    def _collect_logs_from_test_nodes(self) -> None:
         """
         Collects the test logs from the provided remote nodes and copies them to the local machine
         """
-        for node in test_nodes:
+        for node in self._test_nodes:
             node_name = node.name
             ssh_client = SshClient(ip_address=node.ip_address, username=self._user, identity_file=Path(self._identity_file))
             try:
@@ -428,9 +482,9 @@ class AgentTestSuite(LisaTestSuite):
         Entry point from LISA
         """
         self._initialize(environment, variables, working_path, log_path, log)
-        self._execute(environment)
+        self._execute()
 
-    def _execute(self, environment: Environment) -> None:
+    def _execute(self) -> None:
         unexpected_error = False
         test_suite_success = True
 
@@ -451,11 +505,11 @@ class AgentTestSuite(LisaTestSuite):
                         self._setup_test_run()
 
                     try:
-                        test_context, test_nodes = self._create_test_context(environment)
+                        test_context = self._create_test_context()
 
                         if not self._skip_setup:
                             try:
-                                self._setup_test_nodes(test_nodes)
+                                self._setup_test_nodes()
                             except:
                                 test_suite_success = False
                                 raise
@@ -463,11 +517,11 @@ class AgentTestSuite(LisaTestSuite):
                         for suite in self._test_suites:
                             log.info("Executing test suite %s", suite.name)
                             self._lisa_log.info("Executing Test Suite %s", suite.name)
-                            test_suite_success = self._execute_test_suite(suite, test_context, test_nodes) and test_suite_success
+                            test_suite_success = self._execute_test_suite(suite, test_context) and test_suite_success
 
                     finally:
                         if self._collect_logs == CollectLogs.Always or self._collect_logs == CollectLogs.Failed and not test_suite_success:
-                            self._collect_logs_from_test_nodes(test_nodes)
+                            self._collect_logs_from_test_nodes()
 
                 except Exception as e:   # pylint: disable=bare-except
                     # Report the error and raise an exception to let LISA know that the test errored out.
@@ -488,7 +542,7 @@ class AgentTestSuite(LisaTestSuite):
                     if unexpected_error:
                         self._mark_log_as_failed()
 
-    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext, test_nodes: List[_TestNode]) -> bool:
+    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext) -> bool:
         """
         Executes the given test suite and returns True if all the tests in the suite succeeded.
         """
@@ -605,22 +659,22 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
-                suite_success = suite_success and self._check_agent_log_on_test_nodes(test_nodes, ignore_error_rules)
+                suite_success = suite_success and self._check_agent_log_on_test_nodes(ignore_error_rules)
 
                 return suite_success
 
-    def _check_agent_log_on_test_nodes(self, test_nodes: List[_TestNode], ignore_error_rules: List[Dict[str, Any]]) -> bool:
+    def _check_agent_log_on_test_nodes(self, ignore_error_rules: List[Dict[str, Any]]) -> bool:
         """
         Checks the agent log on the remote nodes for errors; returns true on success (no errors in the logs)
         """
         success: bool = True
 
-        for node in test_nodes:
+        for node in self._test_nodes:
             node_name = node.name
             ssh_client = SshClient(ip_address=node.ip_address, username=self._user, identity_file=Path(self._identity_file))
 
             test_result_name = self._environment_name
-            if len(test_nodes) > 1:
+            if len(self._test_nodes) > 1:
                 # If there are multiple test nodes, as in a scale set, append the name of the node to the name of the result
                 test_result_name += '_' + node_name.split('_')[-1]
 
@@ -670,52 +724,47 @@ class AgentTestSuite(LisaTestSuite):
 
         return success
 
-    def _create_test_context(self, environment: Environment) -> Tuple[AgentTestContext,  List[_TestNode]]:
+    def _create_test_context(self,) -> AgentTestContext:
         """
         Creates the context for the test suite run. Returns a tuple containing the test context and the list of test nodes
         """
-        # Note that all the test suites in the environment have the same value for executes_on_scale_set so we can use the first one
-        if self._test_suites[0].executes_on_scale_set:
-            log.info("Creating test context for scale set")
-            if self._vmss_name_arg != "":  # If an existing scale set was passed as argument to the runbook
-                scale_set_client = VirtualMachineScaleSetClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, resource_group=self._resource_group_name_arg, name=self._vmss_name_arg)
-                log.info("Using existing scale set %s", scale_set_client)
-            else:
-                log.info("Creating scale set")
-                scale_set_client = self._create_scale_set()
-
-            test_context = AgentVmssTestContext(working_directory=self._working_directory, vmss=scale_set_client, username=self._user, identity_file=self._identity_file)
-            ip_addresses = scale_set_client.get_instances_ip_address()
-            log.info("Scale set instances: %s", [str(i) for i in ip_addresses])
-            nodes = [_TestNode(i.instance_name, i.ip_address) for i in ip_addresses]
-        else:
+        if self._vm_name is not None:
             self._lisa_log.info("Creating test context for virtual machine")
-            test_node: Node = environment.nodes[0]
-            connection_info = test_node.connection_info
-
-            if isinstance(test_node.features._platform, ReadyPlatform):
-                # A "ready" platform indicates that the tests are running on an existing VM and the vm and resource group names
-                # were passed as arguments in the command line
-                resource_group_name = self._resource_group_name_arg
-                node_name = self._vm_name_arg
-            else:
-                # Else the test VM was created by LISA and we need to get the vm and resource group names from the node context
-                node_context = get_node_context(test_node)
-                resource_group_name = node_context.resource_group_name
-                node_name = node_context.vm_name
-
-            vm: VirtualMachineClient = VirtualMachineClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, resource_group=resource_group_name, name=node_name)
-
-            test_context = AgentVmTestContext(
+            vm: VirtualMachineClient = VirtualMachineClient(
+                cloud=self._cloud,
+                location=self._location,
+                subscription=self._subscription_id,
+                resource_group=self._resource_group_name,
+                name=self._vm_name)
+            return AgentVmTestContext(
                 working_directory=self._working_directory,
                 vm=vm,
-                ip_address=connection_info['address'],
+                ip_address=self._vm_ip_address,
                 username=self._user,
                 identity_file=self._identity_file)
+        else:
+            log.info("Creating test context for scale set")
+            if self._create_scale_set:
+                self._create_test_scale_set()
+            else:
+                log.info("Using existing scale set %s", self._vmss_name)
 
-            nodes = [_TestNode(test_context.vm.name, test_context.ip_address)]
+            scale_set = VirtualMachineScaleSetClient(
+                cloud=self._cloud,
+                location=self._location,
+                subscription=self._subscription_id,
+                resource_group=self._resource_group_name,
+                name=self._vmss_name)
 
-        return test_context, nodes
+            # If we created the scale set, fill up the test nodes
+            if self._create_scale_set:
+                self._test_nodes = [_TestNode(name=i.instance_name, ip_address=i.ip_address) for i in scale_set.get_instances_ip_address()]
+
+            return AgentVmssTestContext(
+                working_directory=self._working_directory,
+                vmss=scale_set,
+                username=self._user,
+                identity_file=self._identity_file)
 
     @staticmethod
     def _mark_log_as_failed():
@@ -759,36 +808,19 @@ class AgentTestSuite(LisaTestSuite):
 
         notifier.notify(msg)
 
-    _resource_group_counter: int = 0  # Used to generate unique resource group names
-    _resource_group_counter_lock: RLock = RLock()
-
-    def _create_scale_set(self) -> VirtualMachineScaleSetClient:
+    def _create_test_scale_set(self) -> None:
         """
         Creates a scale set for the test suite run
         """
-        self._resource_group_counter_lock.acquire()
-        try:
-            unique_id = self._resource_group_counter
-            self._resource_group_counter += 1
-        finally:
-            self._resource_group_counter_lock.release()
-
-        # We use a naming convention similar to LISA's, to facilitate automatic cleanup and to identify resources created by automation
-        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        resource_group_name = f"lisa-{self._runbook_name}-{timestamp}-e{unique_id}"
-        scale_set_name = f"{resource_group_name}-n0"
-
-        resource_group = ResourceGroupClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, name=resource_group_name)
-        self._lisa_log.info("Creating resource group %s", resource_group)
+        self._lisa_log.info("Creating resource group %s", self._resource_group_name)
+        resource_group = ResourceGroupClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, name=self._resource_group_name)
         resource_group.create()
-        self._resource_groups_to_delete.append(resource_group)
+        self._delete_scale_set = True
 
-        self._lisa_log.info("Creating scale set %s", scale_set_name)
-        log.info("Creating scale set %s", scale_set_name)
-        template, parameters = self._get_scale_set_deployment_template(scale_set_name)
+        self._lisa_log.info("Creating scale set %s", self._vmss_name)
+        log.info("Creating scale set %s", self._vmss_name)
+        template, parameters = self._get_scale_set_deployment_template(self._vmss_name)
         resource_group.deploy_template(template, parameters)
-
-        return VirtualMachineScaleSetClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, resource_group=resource_group_name, name=scale_set_name)
 
     def _get_scale_set_deployment_template(self, scale_set_name: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """

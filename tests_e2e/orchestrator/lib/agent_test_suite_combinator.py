@@ -238,6 +238,7 @@ class AgentTestSuitesCombinator(Combinator):
             subscription=self.runbook.subscription_id,
             resource_group=self.runbook.resource_group_name,
             name=self.runbook.vm_name)
+
         ip_address = vm.get_ip_address()
 
         return {
@@ -253,6 +254,7 @@ class AgentTestSuitesCombinator(Combinator):
                         "nodes": [
                             {
                                 "type": "remote",
+                                "name": self.runbook.vm_name,
                                 "public_address": ip_address,
                                 "public_port": 22,
                                 "username": self.runbook.user,
@@ -286,6 +288,7 @@ class AgentTestSuitesCombinator(Combinator):
                         "nodes": [
                             {
                                 "type": "remote",
+                                "name": i.instance_name,
                                 "public_address": i.ip_address,
                                 "public_port": 22,
                                 "username": self.runbook.user,

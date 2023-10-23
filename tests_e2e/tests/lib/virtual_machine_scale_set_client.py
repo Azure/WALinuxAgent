@@ -24,11 +24,12 @@ import re
 from typing import List
 
 from azure.mgmt.compute import ComputeManagementClient
-from azure.mgmt.compute.models import VirtualMachineScaleSetVM
+from azure.mgmt.compute.models import VirtualMachineScaleSetVM, VirtualMachineScaleSetInstanceView
 from azure.mgmt.network import NetworkManagementClient
 
 from tests_e2e.tests.lib.azure_sdk_client import AzureSdkClient
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.retry import execute_with_retry
 
 
 class VmssInstanceIpAddress(object):
@@ -90,6 +91,16 @@ class VirtualMachineScaleSetClient(AzureSdkClient):
             operation=lambda: self._compute_client.virtual_machine_scale_set_extensions.begin_delete(resource_group_name=self.resource_group, vm_scale_set_name=self.name, vmss_extension_name=extension),
             operation_name=f"Delete {extension} from {self}",
             timeout=timeout)
+
+    def get_instance_view(self) -> VirtualMachineScaleSetInstanceView:
+        """
+        Retrieves the instance view of the virtual machine
+        """
+        log.info("Retrieving instance view for %s", self)
+        return execute_with_retry(lambda: self._compute_client.virtual_machine_scale_sets.get_instance_view(
+            resource_group_name=self.resource_group,
+            vm_scale_set_name=self.name
+        ))
 
     def __str__(self):
         return f"{self.resource_group}:{self.name}"

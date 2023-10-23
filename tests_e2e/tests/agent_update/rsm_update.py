@@ -179,14 +179,14 @@ class RsmUpdateBvt(AgentVmTest):
         else:
             log.info("Already enableVMAgentPlatformUpdates flag set to True")
 
-        cloud: Cloud = AZURE_CLOUDS[self._context.cloud]
+        cloud: Cloud = AZURE_CLOUDS[self._context.vm.cloud]
         credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
         token = credential.get_token(cloud.endpoints.resource_manager + "/.default")
         headers = {'Authorization': 'Bearer ' + token.token, 'Content-Type': 'application/json'}
         # Later this api call will be replaced by azure-python-sdk wrapper
         base_url = cloud.endpoints.resource_manager
         url = base_url + "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Compute/virtualMachines/{2}/" \
-              "UpgradeVMAgent?api-version=2022-08-01".format(self._context.subscription, self._context.resource_group, self._context.name)
+              "UpgradeVMAgent?api-version=2022-08-01".format(self._context.vm.subscription, self._context.vm.resource_group, self._context.vm.name)
         data = {
             "target": "Microsoft.OSTCLinuxAgent.Test",
             "targetVersion": requested_version
