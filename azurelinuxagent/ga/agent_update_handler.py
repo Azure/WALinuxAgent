@@ -305,6 +305,7 @@ class AgentUpdateHandler(object):
                 if not self.__should_agent_attempt_manifest_download():
                     return
                 if conf.get_enable_ga_versioning():  # log the warning only when ga versioning is enabled
+                    # Need to revisit this msg when version is missing in Goal state. We may need to handle better way to report the error
                     warn_msg = "Missing requested version in agent family: {0} for incarnation: {1}, fallback to largest version update".format(self._ga_family, self._gs_id)
                     GAUpdateReportState.report_error_msg = warn_msg
                 agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
