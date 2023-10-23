@@ -17,7 +17,6 @@
 import datetime
 import json
 import logging
-import re
 import traceback
 import uuid
 
@@ -39,7 +38,7 @@ from lisa import (  # pylint: disable=E0401
 )
 from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
-from lisa.node import Node, LocalNode  # pylint: disable=E0401
+from lisa.node import LocalNode  # pylint: disable=E0401
 from lisa.util.constants import RUN_ID  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.common import get_node_context  # pylint: disable=E0401
 from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disable=E0401
@@ -456,7 +455,7 @@ class AgentTestSuite(LisaTestSuite):
 
                 # Copy the tarball to the local logs directory
                 tgz_name = self._environment_name
-                if len(test_nodes) > 1:
+                if len(self._test_nodes) > 1:
                     # Append instance of scale set to the end of tarball name
                     tgz_name += '_' + node_name.split('_')[-1]
                 remote_path = "/tmp/waagent-logs.tgz"
