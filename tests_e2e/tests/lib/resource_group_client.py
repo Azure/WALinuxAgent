@@ -38,10 +38,10 @@ class ResourceGroupClient(AzureSdkClient):
         self.location = location
         self.subscription: str = subscription
         self.name: str = name
-        self._compute_client = AzureSdkClient.create(ComputeManagementClient, cloud, subscription)
-        self._resource_client = AzureSdkClient.create(ResourceManagementClient, cloud, subscription)
+        self._compute_client = AzureSdkClient.create_client(ComputeManagementClient, cloud, subscription)
+        self._resource_client = AzureSdkClient.create_client(ResourceManagementClient, cloud, subscription)
 
-    def create(self) -> None:
+    def create_client(self) -> None:
         """
         Creates a resource group
         """

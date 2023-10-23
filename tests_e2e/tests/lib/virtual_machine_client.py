@@ -48,9 +48,9 @@ class VirtualMachineClient(AzureSdkClient):
         self.subscription: str = subscription
         self.resource_group: str = resource_group
         self.name: str = name
-        self._compute_client = AzureSdkClient.create(ComputeManagementClient, cloud, subscription)
-        self._resource_client = AzureSdkClient.create(ResourceManagementClient, cloud, subscription)
-        self._network_client = AzureSdkClient.create(NetworkManagementClient, cloud, subscription)
+        self._compute_client = AzureSdkClient.create_client(ComputeManagementClient, cloud, subscription)
+        self._resource_client = AzureSdkClient.create_client(ResourceManagementClient, cloud, subscription)
+        self._network_client = AzureSdkClient.create_client(NetworkManagementClient, cloud, subscription)
 
     def get_ip_address(self) -> str:
         """

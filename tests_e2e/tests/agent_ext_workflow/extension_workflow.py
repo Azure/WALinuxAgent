@@ -61,7 +61,7 @@ class ExtensionWorkflow(AgentVmTest):
     """
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
-        self._ssh_client = self.create_ssh_client()
+        self._ssh_client = context.create_ssh_client()
 
     # This class represents the GuestAgentDcrTestExtension running on the test VM
     class GuestAgentDcrTestExtension:

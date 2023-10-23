@@ -109,7 +109,7 @@ class ExtensionsDisabled(AgentVmTest):
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
         #
-        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
+        vm: VirtualMachineClient = VirtualMachineClient(cloud=self._context.vm.cloud, location=self._context.vm.location, resource_group=self._context.vm.resource_group, name=self._context.vm.name)
         log.info("")
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())

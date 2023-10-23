@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import contextlib
 import datetime
 import json
 import logging
@@ -123,6 +122,8 @@ class AgentTestSuite(LisaTestSuite):
         super().__init__(metadata)
         self._working_directory: Path  # Root directory for temporary files
         self._log_path: Path  # Root directory for log files
+        self._pypy_x64_path: Path  # Path to the Pypy x64 download
+        self._pypy_arm64_path: Path  # Path to the Pypy ARM64 download
         self._test_agent_package_path: Path  # Path to the package for the test Agent
         self._test_source_directory: Path  # Root directory of the source code for the end-to-end tests
         self._test_tools_tarball_path: Path  # Path to the tarball with the tools needed on the test node
@@ -671,6 +672,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _create_test_context(self, environment: Environment) -> Tuple[AgentTestContext,  List[_TestNode]]:
         """
+        Creates the context for the test suite run. Returns a tuple containing the test context and the list of test nodes
         """
         # Note that all the test suites in the environment have the same value for executes_on_scale_set so we can use the first one
         if self._test_suites[0].executes_on_scale_set:
@@ -762,6 +764,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _create_scale_set(self) -> VirtualMachineScaleSetClient:
         """
+        Creates a scale set for the test suite run
         """
         self._resource_group_counter_lock.acquire()
         try:
@@ -777,7 +780,7 @@ class AgentTestSuite(LisaTestSuite):
 
         resource_group = ResourceGroupClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, name=resource_group_name)
         self._lisa_log.info("Creating resource group %s", resource_group)
-        resource_group.create()
+        resource_group.create_client()
         self._resource_groups_to_delete.append(resource_group)
 
         self._lisa_log.info("Creating scale set %s", scale_set_name)

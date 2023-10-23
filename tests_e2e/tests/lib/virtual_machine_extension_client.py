@@ -43,7 +43,7 @@ class VirtualMachineExtensionClient(AzureSdkClient):
         self._vm: VirtualMachineClient = vm
         self._identifier = extension
         self._resource_name = resource_name or extension.type
-        self._compute_client: ComputeManagementClient = AzureSdkClient.create(ComputeManagementClient, self._vm.cloud, self._vm.subscription)
+        self._compute_client: ComputeManagementClient = AzureSdkClient.create_client(ComputeManagementClient, self._vm.cloud, self._vm.subscription)
 
     def get_instance_view(self) -> VirtualMachineExtensionInstanceView:
         """

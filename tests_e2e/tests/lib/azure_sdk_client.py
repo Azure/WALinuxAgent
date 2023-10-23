@@ -32,7 +32,7 @@ class AzureSdkClient:
     _DEFAULT_TIMEOUT = 10 * 60  # (in seconds)
 
     @staticmethod
-    def create(client_type: type, cloud: str, subscription_id: str):
+    def create_client(client_type: type, cloud: str, subscription_id: str):
         """
         Creates an SDK client of the given 'client_type'
         """

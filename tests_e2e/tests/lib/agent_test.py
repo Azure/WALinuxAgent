@@ -55,7 +55,6 @@ class AgentTest(ABC):
         """
         Test must define this method, which is used to execute the test.
         """
-        pass
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         """

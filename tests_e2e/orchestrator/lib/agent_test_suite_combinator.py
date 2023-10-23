@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 import datetime
-import json
 import logging
 import random
 import re
@@ -241,7 +240,7 @@ class AgentTestSuitesCombinator(Combinator):
             name=self.runbook.vm_name)
         ip_address = vm.get_ip_address()
 
-        environment = {
+        return {
             "c_env_name": self.runbook.vm_name,
             "c_platform": [
                 {
@@ -267,10 +266,6 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-        self._log.info("Created environment %s for an existing VM *** Scale set: %s IP_Addresses: %s", environment['c_env_name'], self.runbook.vm_name, ip_address)
-
-        return environment
-
     def create_existing_vmss_environment(self) -> Dict[str, Any]:
         loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
 
@@ -283,7 +278,7 @@ class AgentTestSuitesCombinator(Combinator):
 
         ip_addresses = vmss.get_instances_ip_address()
 
-        environment = {
+        return {
             "c_env_name": self.runbook.vmss_name,
             "c_environment": {
                 "environments": [
@@ -309,11 +304,6 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-        self._log.info(
-            "Created environment %s for an existing scale set *** Scale set: %s IP_Addresses: %s", environment['c_env_name'], self.runbook.vmss_name, [i.ip_address for i in ip_addresses])
-
-        return environment
-
     def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
         #
         # Custom ARM templates (to create the test VMs) require special handling. These templates are processed by the azure_update_arm_template
@@ -325,7 +315,7 @@ class AgentTestSuitesCombinator(Combinator):
         vm_tags = {}
         if test_suite_info.template != '':
             vm_tags["templates"] = test_suite_info.template
-        environment = {
+        return {
             "c_platform": [
                 {
                     "type": "azure",
@@ -365,17 +355,8 @@ class AgentTestSuitesCombinator(Combinator):
             "vm_tags": vm_tags
         }
 
-        self._log.info(
-            "Created environment %s for a new VM *** Image: %s Location: %s VM_Size: %s",
-            environment['c_env_name'],
-            vhd if vhd != "" else marketplace_image.replace(" ", ":"),
-            location,
-            vm_size if vm_size != "" else "default")
-
-        return environment
-
     def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
-        environment = {
+        return {
             "c_platform": [
                 {
                     "type": "ready"
@@ -399,15 +380,6 @@ class AgentTestSuitesCombinator(Combinator):
             "c_is_vhd": False,
             "c_vm_size": vm_size
         }
-
-        self._log.info(
-            "Created environment %s for a new VMSS *** Image: %s Location: %s VM_Size: %s",
-            environment['c_env_name'],
-            marketplace_image.replace(" ", ":"),
-            location,
-            vm_size if vm_size != "" else "default")
-
-        return environment
 
     def _get_runbook_images(self, loader: AgentTestLoader) -> List[VmImageInfo]:
         """

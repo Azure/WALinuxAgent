@@ -139,7 +139,7 @@ class AgentStatus(AgentVmTest):
         log.info("")
         log.info("*******Verifying the agent status updates 3 times*******")
 
-        vm = VirtualMachineClient(self._context.vm)
+        vm = VirtualMachineClient(cloud=self._context.vm.cloud, location=self._context.vm.location, resource_group=self._context.vm.resource_group, name=self._context.vm.name)
 
         timeout = datetime.now() + timedelta(minutes=6)
         instance_view_exception = None

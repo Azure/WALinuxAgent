@@ -68,7 +68,7 @@ class MultiConfigExt(AgentVmTest):
             test_case.extension.delete()
 
         log.info("")
-        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
+        vm: VirtualMachineClient = VirtualMachineClient(cloud=self._context.vm.cloud, location=self._context.vm.location, resource_group=self._context.vm.resource_group, name=self._context.vm.name)
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
         if instance_view.extensions is not None:
             for ext in instance_view.extensions:
