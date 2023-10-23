@@ -21,7 +21,6 @@ import platform
 import sys
 
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common import logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr, get_linux_distribution
