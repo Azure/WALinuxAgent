@@ -624,18 +624,18 @@ def get_etp_collection_period(conf=__conf__):
 
 def get_hotfix_upgrade_frequency(conf=__conf__):
     """
-    Determines the frequency to check for Hotfix upgrades (<Patch>.<Build> version changed in new upgrades).
+    Determines the frequency to check for Hotfix upgrades (<Build> version changed in new upgrades).
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.AutoUpdateHotfixFrequency", 4 * 60 * 60)
 
 
-def get_normal_upgrade_frequency(conf=__conf__):
+def get_regular_upgrade_frequency(conf=__conf__):
     """
-    Determines the frequency to check for Normal upgrades (<Major>.<Minor> version changed in new upgrades).
+    Determines the frequency to check for regular upgrades (<Major>.<Minor>.<patch> version changed in new upgrades).
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AutoUpdateNormalFrequency", 24 * 60 * 60)
+    return conf.get_int("Debug.AutoUpdateRegularFrequency", 24 * 60 * 60)
 
 
 def get_enable_ga_versioning(conf=__conf__):
@@ -643,7 +643,7 @@ def get_enable_ga_versioning(conf=__conf__):
     If True, the agent looks for rsm updates(checking requested version in GS) otherwise it will fall back to self-update and finds the highest version from PIR.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableGAVersioning", False)
+    return conf.get_switch("Debug.EnableGAVersioning", True)
 
 
 def get_firewall_rules_log_period(conf=__conf__):

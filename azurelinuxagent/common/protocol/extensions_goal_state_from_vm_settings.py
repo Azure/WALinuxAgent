@@ -243,6 +243,8 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         #         {
         #             "name": "Prod",
         #             "version": "9.9.9.9",
+        #             "isVersionFromRSM": true,
+        #             "isVMEnabledForRSMUpgrades": true,
         #             "uris": [
         #                 "https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml",
         #                 "https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml"
@@ -267,10 +269,16 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
         for family in families:
             name = family["name"]
             version = family.get("version")
+            is_version_from_rsm = family.get("isVersionFromRSM")
+            is_vm_enabled_for_rsm_upgrades = family.get("isVMEnabledForRSMUpgrades")
             uris = family.get("uris")
             if uris is None:
                 uris = []
             agent_family = VMAgentFamily(name, version)
+            if is_version_from_rsm is not None:
+                agent_family.is_version_from_rsm = is_version_from_rsm
+            if is_vm_enabled_for_rsm_upgrades is not None:
+                agent_family.is_vm_enabled_for_rsm_upgrades = is_vm_enabled_for_rsm_upgrades
             for u in uris:
                 agent_family.uris.append(u)
             self._agent_families.append(agent_family)
