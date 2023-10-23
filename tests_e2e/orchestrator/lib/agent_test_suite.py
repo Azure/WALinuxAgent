@@ -604,7 +604,7 @@ class AgentTestSuite(LisaTestSuite):
                         log.info("\t%s", r)
                     log.info("")
 
-                except Exception as e:  # pylint: disable=bare-except
+                except:  # pylint: disable=bare-except
                     suite_success = False
                     self._report_test_result(
                         suite_full_name,
