@@ -1593,7 +1593,7 @@ class TestAgentUpgrade(UpdateTestCase):
                       kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
         # This will throw if corresponding message not found so not asserting on that
         requested_version_found = next(kwarg for kwarg in agent_msgs if
-                                       "Goal state incarnation_1 is requesting a new agent version 5.2.1.0, will update the agent before processing the goal state" in kwarg['message'])
+                                       "discovered new agent version:5.2.1.0 in agent manifest for goal state incarnation_1, will update the agent before processing the goal state" in kwarg['message'])
         self.assertTrue(requested_version_found['is_success'],
                         "The requested version found op should be reported as a success")
 
