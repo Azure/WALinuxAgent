@@ -68,8 +68,16 @@ class MultiConfigExt(AgentVmTest):
             test_case.extension.delete()
 
         log.info("")
-        vm: VirtualMachineClient = VirtualMachineClient(cloud=self._context.vm.cloud, location=self._context.vm.location, resource_group=self._context.vm.resource_group, name=self._context.vm.name)
+
+        vm: VirtualMachineClient = VirtualMachineClient(
+            cloud=self._context.vm.cloud,
+            location=self._context.vm.location,
+            subscription=self._context.vm.subscription,
+            resource_group=self._context.vm.resource_group,
+            name=self._context.vm.name)
+
         instance_view: VirtualMachineInstanceView = vm.get_instance_view()
+
         if instance_view.extensions is not None:
             for ext in instance_view.extensions:
                 if ext.name in test_cases.keys():

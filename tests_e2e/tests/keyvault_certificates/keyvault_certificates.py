@@ -59,7 +59,12 @@ class KeyvaultCertificates(AgentVmTest):
         else:
             log.info("Some test certificates had already been downloaded to the test VM (they have been deleted now):\n%s", existing_certificates)
 
-        vm: VirtualMachineClient = VirtualMachineClient(cloud=self._context.vm.cloud, location=self._context.vm.location, resource_group=self._context.vm.resource_group, name=self._context.vm.name)
+        vm: VirtualMachineClient = VirtualMachineClient(
+            cloud=self._context.vm.cloud,
+            location=self._context.vm.location,
+            subscription=self._context.vm.subscription,
+            resource_group=self._context.vm.resource_group,
+            name=self._context.vm.name)
 
         osprofile = {
             "location": self._context.vm.location,

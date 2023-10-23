@@ -91,7 +91,7 @@ class AgentVmTestContext(AgentTestContext):
         if not working_directory.exists():
             working_directory.mkdir(exist_ok=True)
 
-        vm = VirtualMachineClient(cloud=args.cloud, location=args.location, subscription=args.subscription, resource_group=args.group, name=args.vm)
+        vm: VirtualMachineClient = VirtualMachineClient(cloud=args.cloud, location=args.location, subscription=args.subscription, resource_group=args.group, name=args.vm)
         ip_address = args.ip_address if args.ip_address is not None else args.vm
         return AgentVmTestContext(working_directory=working_directory, vm=vm, ip_address=ip_address, username=args.username, identity_file=Path(args.identity_file), ssh_port=args.ssh_port)
 

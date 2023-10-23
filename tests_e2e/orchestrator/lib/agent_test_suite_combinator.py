@@ -232,7 +232,7 @@ class AgentTestSuitesCombinator(Combinator):
     def create_existing_vm_environment(self) -> Dict[str, Any]:
         loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
 
-        vm = VirtualMachineClient(
+        vm: VirtualMachineClient = VirtualMachineClient(
             cloud=self.runbook.cloud,
             location=self.runbook.location,
             subscription=self.runbook.subscription_id,

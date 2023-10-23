@@ -45,7 +45,12 @@ class Fips(AgentVmTest):
             raise Exception(f"Failed to enable FIPS: {e}")
 
         log.info("Restarting test VM")
-        vm: VirtualMachineClient = VirtualMachineClient(cloud=self._context.vm.cloud, location=self._context.vm.location, resource_group=self._context.vm.resource_group, name=self._context.vm.name)
+        vm: VirtualMachineClient = VirtualMachineClient(
+            cloud=self._context.vm.cloud,
+            location=self._context.vm.location,
+            subscription=self._context.vm.subscription,
+            resource_group=self._context.vm.resource_group,
+            name=self._context.vm.name)
         vm.restart(wait_for_boot=True, ssh_client=ssh_client)
 
         try:

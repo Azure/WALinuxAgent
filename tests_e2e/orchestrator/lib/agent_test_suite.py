@@ -704,7 +704,7 @@ class AgentTestSuite(LisaTestSuite):
                 resource_group_name = node_context.resource_group_name
                 node_name = node_context.vm_name
 
-            vm = VirtualMachineClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, resource_group=resource_group_name, name=node_name)
+            vm: VirtualMachineClient = VirtualMachineClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, resource_group=resource_group_name, name=node_name)
 
             test_context = AgentVmTestContext(
                 working_directory=self._working_directory,
@@ -780,7 +780,7 @@ class AgentTestSuite(LisaTestSuite):
 
         resource_group = ResourceGroupClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, name=resource_group_name)
         self._lisa_log.info("Creating resource group %s", resource_group)
-        resource_group.create_client()
+        resource_group.create()
         self._resource_groups_to_delete.append(resource_group)
 
         self._lisa_log.info("Creating scale set %s", scale_set_name)
