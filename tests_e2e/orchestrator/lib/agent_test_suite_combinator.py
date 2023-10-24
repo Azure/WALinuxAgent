@@ -32,7 +32,7 @@ from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineS
 @dataclass
 class AgentTestSuitesCombinatorSchema(schema.Combinator):
     """
-    Defines parameters passed to the combinator from the runbook.
+    Defines the parameters passed to the combinator from the runbook.
 
     The runbook is a static document and always passes all these parameters to the combinator, so they are all
     marked as required. Optional parameters can pass an empty value to indicate that they are not specified.

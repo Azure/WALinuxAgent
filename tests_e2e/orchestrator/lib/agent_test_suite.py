@@ -105,6 +105,9 @@ class KeepEnvironment(object):
 
 
 class _TestNode(object):
+    """
+    Name and IP address of a test VM
+    """
     def __init__(self, name: str, ip_address: str):
         self.name = name
         self.ip_address = ip_address
@@ -166,6 +169,11 @@ class AgentTestSuite(LisaTestSuite):
         self._delete_scale_set: bool
 
     def _initialize(self, environment: Environment, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
+        """
+        Initializes the AgentTestSuite from the data passed as arguments by LISA.
+
+        NOTE: All the interface with LISA should be confined to this method. The rest of the test code should not have any dependencies on LISA.
+        """
         self._working_directory = self._get_working_directory(lisa_working_path)
         self._log_path = self._get_log_path(variables, lisa_log_path)
         self._test_agent_package_path = self._working_directory/"eggs"/f"WALinuxAgent-{AGENT_VERSION}.zip"
@@ -375,7 +383,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _setup_test_nodes(self) -> None:
         """
-        Prepares the provided remote nodes for executing the test suite (installs tools and the test agent, etc)
+        Prepares the test nodes for execution of the test suite (installs tools and the test agent, etc)
         """
         install_test_agent = self._test_suites[0].install_test_agent  # All suites in the environment have the same value for install_test_agent
 
@@ -441,7 +449,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _collect_logs_from_test_nodes(self) -> None:
         """
-        Collects the test logs from the provided remote nodes and copies them to the local machine
+        Collects the test logs from the test nodes and copies them to the local machine
         """
         for node in self._test_nodes:
             node_name = node.name
@@ -664,7 +672,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _check_agent_log_on_test_nodes(self, ignore_error_rules: List[Dict[str, Any]]) -> bool:
         """
-        Checks the agent log on the remote nodes for errors; returns true on success (no errors in the logs)
+        Checks the agent log on the test nodes for errors; returns true on success (no errors in the logs)
         """
         success: bool = True
 
@@ -725,7 +733,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _create_test_context(self,) -> AgentTestContext:
         """
-        Creates the context for the test suite run. Returns a tuple containing the test context and the list of test nodes
+        Creates the context for the test run.
         """
         if self._vm_name is not None:
             self._lisa_log.info("Creating test context for virtual machine")
@@ -809,7 +817,7 @@ class AgentTestSuite(LisaTestSuite):
 
     def _create_test_scale_set(self) -> None:
         """
-        Creates a scale set for the test suite run
+        Creates a scale set for the test run
         """
         self._lisa_log.info("Creating resource group %s", self._resource_group_name)
         resource_group = ResourceGroupClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, name=self._resource_group_name)
