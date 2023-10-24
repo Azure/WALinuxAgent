@@ -205,13 +205,13 @@ class AgentTestSuitesCombinator(Combinator):
                                 test_suite_info=test_suite_info)
                         shared_environments[env_name] = env
 
-                if test_suite_info.template != '':
-                    vm_tags = env.get("vm_tags")
-                    if vm_tags is not None:
-                        if "templates" not in vm_tags:
-                            vm_tags["templates"] = test_suite_info.template
-                        else:
-                            vm_tags["templates"] += ", " + test_suite_info.template
+                    if test_suite_info.template != '':
+                        vm_tags = env.get("vm_tags")
+                        if vm_tags is not None:
+                            if "templates" not in vm_tags:
+                                vm_tags["templates"] = test_suite_info.template
+                            else:
+                                vm_tags["templates"] += "," + test_suite_info.template
 
         environments.extend(shared_environments.values())
 
