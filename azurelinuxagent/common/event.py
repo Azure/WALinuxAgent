@@ -109,6 +109,7 @@ class WALAEventOperation:
     OpenSsl = "OpenSsl"
     Partition = "Partition"
     PersistFirewallRules = "PersistFirewallRules"
+    ProvisionAfterExtensions = "ProvisionAfterExtensions"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     InvalidExtensionConfig = "InvalidExtensionConfig"
     Provision = "Provision"
