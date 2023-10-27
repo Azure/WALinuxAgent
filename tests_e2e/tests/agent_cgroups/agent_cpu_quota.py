@@ -1,14 +1,15 @@
 from typing import List, Dict, Any
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
 
-class AgentCPUQuota(AgentTest):
+class AgentCPUQuota(AgentVmTest):
     """
     The test verify that the agent detects when it is throttled for using too much CPU, that it detects processes that do belong to the agent's cgroup, and that resource metrics are generated.
     """
-    def __init__(self, context):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
 
