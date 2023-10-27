@@ -28,18 +28,17 @@ from datetime import datetime, timedelta
 from time import sleep
 import json
 
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
 class RetryableAgentStatusException(BaseException):
     pass
 
 
-class AgentStatus(AgentTest):
-    def __init__(self, context: AgentTestContext):
+class AgentStatus(AgentVmTest):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
 
@@ -139,8 +138,6 @@ class AgentStatus(AgentTest):
         log.info("")
         log.info("*******Verifying the agent status updates 3 times*******")
 
-        vm = VirtualMachineClient(self._context.vm)
-
         timeout = datetime.now() + timedelta(minutes=6)
         instance_view_exception = None
         status_updated = 0
@@ -149,7 +146,7 @@ class AgentStatus(AgentTest):
 
         # Retry validating agent status updates 2 times with timeout of 6 minutes
         while datetime.now() <= timeout and status_updated < 2:
-            instance_view = vm.get_instance_view()
+            instance_view = self._context.vm.get_instance_view()
             log.info("")
             log.info(
                 "Check instance view to validate that the Guest Agent reports valid status...")

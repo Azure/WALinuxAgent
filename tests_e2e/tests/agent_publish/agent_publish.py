@@ -20,20 +20,20 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List
 
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
-from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class AgentPublishTest(AgentTest):
+class AgentPublishTest(AgentVmTest):
     """
     This script verifies if the agent update performed in the vm.
     """
 
-    def __init__(self, context: AgentTestContext):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client: SshClient = self._context.create_ssh_client()
 
@@ -62,12 +62,12 @@ class AgentPublishTest(AgentTest):
 
     def _prepare_agent(self) -> None:
         log.info("Modifying agent update related config flags")
-        self._run_remote_test("update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y", use_sudo=True)
+        self._run_remote_test(self._ssh_client, "update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y", use_sudo=True)
         log.info('Updated agent-update DownloadNewAgents  GAFamily config flags')
 
     def _check_update(self) -> None:
         log.info("Verifying for agent update status")
-        self._run_remote_test("agent_publish-check_update.py")
+        self._run_remote_test(self._ssh_client, "agent_publish-check_update.py")
         log.info('Successfully checked the agent update')
 
     def _check_cse(self) -> None:

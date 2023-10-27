@@ -29,14 +29,14 @@ from typing import List, Dict, Any
 
 from azurelinuxagent.common.conf import get_etp_collection_period
 
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.identifiers import VmExtensionIds
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class ExtTelemetryPipeline(AgentTest):
+class ExtTelemetryPipeline(AgentVmTest):
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
@@ -77,7 +77,8 @@ class ExtTelemetryPipeline(AgentTest):
         log.info("")
         log.info("Add good extension events and check they are reported...")
         max_events = random.randint(10, 50)
-        self._run_remote_test(f"ext_telemetry_pipeline-add_extension_events.py "
+        self._run_remote_test(ssh_client,
+                              f"ext_telemetry_pipeline-add_extension_events.py "
                               f"--extensions {','.join(extensions)} "
                               f"--num_events_total {max_events}", use_sudo=True)
         log.info("")
@@ -86,7 +87,8 @@ class ExtTelemetryPipeline(AgentTest):
         # Add invalid events for each extension and check that the TelemetryEventsCollector drops them
         log.info("")
         log.info("Add bad extension events and check they are reported...")
-        self._run_remote_test(f"ext_telemetry_pipeline-add_extension_events.py "
+        self._run_remote_test(ssh_client,
+                              f"ext_telemetry_pipeline-add_extension_events.py "
                               f"--extensions {','.join(extensions)} "
                               f"--num_events_total {max_events} "
                               f"--num_events_bad {random.randint(5, max_events-5)}", use_sudo=True)

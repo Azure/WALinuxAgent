@@ -20,16 +20,15 @@
 import uuid
 from assertpy import fail
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
-from tests_e2e.tests.lib.identifiers import VmExtensionIds
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 
 
-class Fips(AgentTest):
+class Fips(AgentVmTest):
     """
     Enables FIPS on the test VM, which is Mariner 2 VM, and verifies that extensions with protected settings are handled correctly under FIPS.
     """
@@ -45,8 +44,7 @@ class Fips(AgentTest):
             raise Exception(f"Failed to enable FIPS: {e}")
 
         log.info("Restarting test VM")
-        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-        vm.restart(wait_for_boot=True, ssh_client=ssh_client)
+        self._context.vm.restart(wait_for_boot=True, ssh_client=ssh_client)
 
         try:
             command = "fips-check_fips_mariner"

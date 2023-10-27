@@ -21,16 +21,15 @@ from typing import Any, Dict, List
 
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.identifiers import VmExtensionIds
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class AgentNotProvisioned(AgentTest):
+class AgentNotProvisioned(AgentVmTest):
     """
     When osProfile.linuxConfiguration.provisionVMAgent is set to 'false', this test verifies that
     the agent is disabled and that extension operations are not allowed.
@@ -66,8 +65,7 @@ class AgentNotProvisioned(AgentTest):
         # Validate that the agent is not reporting status.
         #
         log.info("Verifying that the Agent status is 'Not Ready' (i.e. it is not reporting status).")
-        vm: VirtualMachineClient = VirtualMachineClient(self._context.vm)
-        instance_view: VirtualMachineInstanceView = vm.get_instance_view()
+        instance_view: VirtualMachineInstanceView = self._context.vm.get_instance_view()
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
         assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
         assert_that(instance_view.vm_agent.statuses[0].code).described_as("The VM Agent should not be available").is_equal_to('ProvisioningState/Unavailable')

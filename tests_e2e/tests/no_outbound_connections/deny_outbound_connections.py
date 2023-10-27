@@ -29,7 +29,10 @@ class DenyOutboundConnections(UpdateArmTemplate):
     """
     Updates the ARM template to add a security rule that denies all outbound connections.
     """
-    def update(self, template: Dict[str, Any]) -> None:
+    def update(self, template: Dict[str, Any], is_lisa_template: bool) -> None:
+        if not is_lisa_template:
+            raise Exception('This test can only customize LISA ARM templates.')
+
         resources = template["resources"]
         nsg = self._get_resource_by_name(resources, NETWORK_SECURITY_GROUP, "Microsoft.Network/networkSecurityGroups")
         properties = nsg.get("properties")

@@ -17,16 +17,21 @@
 # limitations under the License.
 #
 
-from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test import AgentVmssTest
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.ssh_client import SshClient
 
 
-class PassRemoteTest(AgentVmTest):
+class VmssTest(AgentVmssTest):
     """
-    A trivial remote test that succeeds
+    Sample test for scale sets
     """
     def run(self):
-        self._run_remote_test(self._context.create_ssh_client(), "samples-pass_remote_test.py")
+        for address in self._context.vmss.get_instances_ip_address():
+            ssh_client: SshClient = SshClient(ip_address=address.ip_address, username=self._context.username, identity_file=self._context.identity_file)
+            log.info("%s: Hostname: %s", address.instance_name, ssh_client.run_command("hostname").strip())
+        log.info("* PASSED *")
 
 
 if __name__ == "__main__":
-    PassRemoteTest.run_from_command_line()
+    VmssTest.run_from_command_line()

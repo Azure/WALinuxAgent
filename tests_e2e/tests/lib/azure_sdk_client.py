@@ -17,17 +17,31 @@
 
 from typing import Any, Callable
 
+from azure.identity import DefaultAzureCredential
 from azure.core.polling import LROPoller
 
+from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import execute_with_retry
 
 
-class AzureClient:
+class AzureSdkClient:
     """
-    Utilities for classes using the Azure SDK.
+    Base class for classes implementing clients of the Azure SDK.
     """
     _DEFAULT_TIMEOUT = 10 * 60  # (in seconds)
+
+    @staticmethod
+    def create_client(client_type: type, cloud: str, subscription_id: str):
+        """
+        Creates an SDK client of the given 'client_type'
+        """
+        azure_cloud = AZURE_CLOUDS[cloud]
+        return client_type(
+            base_url=azure_cloud.endpoints.resource_manager,
+            credential=DefaultAzureCredential(authority=azure_cloud.endpoints.active_directory),
+            credential_scopes=[azure_cloud.endpoints.resource_manager + "/.default"],
+            subscription_id=subscription_id)
 
     @staticmethod
     def _execute_async_operation(operation: Callable[[], LROPoller], operation_name: str, timeout: int) -> Any:
@@ -42,3 +56,4 @@ class AzureClient:
             raise TimeoutError(f"[{operation_name}] did not complete within {timeout} seconds")
         log.info("[%s] completed", operation_name)
         return poller.result()
+

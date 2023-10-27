@@ -23,15 +23,15 @@ from datetime import datetime
 from random import choice
 import uuid
 
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
-from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class ExtensionWorkflow(AgentTest):
+class ExtensionWorkflow(AgentVmTest):
     """
     This scenario tests if the correct extension workflow sequence is being executed from the agent. It installs the
     GuestAgentDcrTestExtension on the test VM and makes requests to install, enable, update, and delete the extension
@@ -59,12 +59,9 @@ class ExtensionWorkflow(AgentTest):
         - Match the operation sequence as per the test and make sure they are in the correct chronological order
         - Restart the agent and verify if the correct operation sequence is followed
     """
-    def __init__(self, context: AgentTestContext):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
-        self._ssh_client = SshClient(
-            ip_address=self._context.vm_ip_address,
-            username=self._context.username,
-            private_key_file=self._context.private_key_file)
+        self._ssh_client = context.create_ssh_client()
 
     # This class represents the GuestAgentDcrTestExtension running on the test VM
     class GuestAgentDcrTestExtension:

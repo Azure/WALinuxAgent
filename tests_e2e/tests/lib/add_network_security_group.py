@@ -32,14 +32,14 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
     """
     Updates the ARM template to add a network security group allowing SSH access from the current machine.
     """
-    def update(self, template: Dict[str, Any]) -> None:
+    def update(self, template: Dict[str, Any], is_lisa_template: bool) -> None:
         resources: List[Dict[str, Any]] = template["resources"]
 
         # Append the NSG to the list of resources
         network_security_group = json.loads(f"""{{
             "type": "Microsoft.Network/networkSecurityGroups",
             "name": "{NETWORK_SECURITY_GROUP}",
-            "location": "[parameters('location')]",
+            "location": "[resourceGroup().location]",
             "apiVersion": "2020-05-01",
             "properties": {{
                 "securityRules": []
@@ -66,72 +66,106 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
         except Exception as e:
             log.warning("******** Waagent: Failed to create Allow security rule for SSH, skipping rule: %s", e)
 
-
         #
-        # Add reference to the NSG to the properties of the subnets.
-        #
-        # The subnets are a copy property of the virtual network in LISA's ARM template:
-        #
-        #     {
-        #         "condition": "[empty(parameters('virtual_network_resource_group'))]",
-        #         "apiVersion": "2020-05-01",
-        #         "type": "Microsoft.Network/virtualNetworks",
-        #         "name": "[parameters('virtual_network_name')]",
-        #         "location": "[parameters('location')]",
-        #         "properties": {
-        #             "addressSpace": {
-        #                 "addressPrefixes": [
-        #                     "10.0.0.0/16"
-        #                 ]
-        #             },
-        #             "copy": [
-        #                 {
-        #                     "name": "subnets",
-        #                     "count": "[parameters('subnet_count')]",
-        #                     "input": {
-        #                         "name": "[concat(parameters('subnet_prefix'), copyIndex('subnets'))]",
-        #                         "properties": {
-        #                             "addressPrefix": "[concat('10.0.', copyIndex('subnets'), '.0/24')]"
-        #                         }
-        #                     }
-        #                 }
-        #             ]
-        #         }
-        #     }
+        # Add a dependency on the NSG to the virtual network
         #
         network_resource = self._get_resource(resources, "Microsoft.Network/virtualNetworks")
-
-        # Add a dependency on the NSG
-        nsg_reference = f"[resourceId('Microsoft.Network/networkSecurityGroups', '{NETWORK_SECURITY_GROUP}')]"
         network_resource_dependencies = network_resource.get("dependsOn")
+        nsg_reference = f"[resourceId('Microsoft.Network/networkSecurityGroups', '{NETWORK_SECURITY_GROUP}')]"
         if network_resource_dependencies is None:
             network_resource["dependsOn"] = [nsg_reference]
         else:
             network_resource_dependencies.append(nsg_reference)
 
-        subnets_copy = network_resource["properties"].get("copy") if network_resource.get("properties") is not None else None
-        if subnets_copy is None:
-            raise Exception("Cannot find the copy property of the virtual network in the ARM template")
-
-        subnets = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
-        if len(subnets) == 0:
-            raise Exception("Cannot find the subnets of the virtual network in the ARM template")
-
-        subnets_input = subnets[0].get("input")
-        if subnets_input is None:
-            raise Exception("Cannot find the input property of the subnets in the ARM template")
-
+        #
+        # Add a reference to the NSG to the properties of the subnets.
+        #
         nsg_reference = json.loads(f"""{{
           "networkSecurityGroup": {{
             "id": "[resourceId('Microsoft.Network/networkSecurityGroups', '{NETWORK_SECURITY_GROUP}')]"
           }}
         }}""")
 
-        subnets_properties = subnets_input.get("properties")
-        if subnets_properties is None:
-            subnets_input["properties"] = nsg_reference
+        if is_lisa_template:
+            # The subnets are a copy property of the virtual network in LISA's ARM template:
+            #
+            #     {
+            #         "condition": "[empty(parameters('virtual_network_resource_group'))]",
+            #         "apiVersion": "2020-05-01",
+            #         "type": "Microsoft.Network/virtualNetworks",
+            #         "name": "[parameters('virtual_network_name')]",
+            #         "location": "[parameters('location')]",
+            #         "properties": {
+            #             "addressSpace": {
+            #                 "addressPrefixes": [
+            #                     "10.0.0.0/16"
+            #                 ]
+            #             },
+            #             "copy": [
+            #                 {
+            #                     "name": "subnets",
+            #                     "count": "[parameters('subnet_count')]",
+            #                     "input": {
+            #                         "name": "[concat(parameters('subnet_prefix'), copyIndex('subnets'))]",
+            #                         "properties": {
+            #                             "addressPrefix": "[concat('10.0.', copyIndex('subnets'), '.0/24')]"
+            #                         }
+            #                     }
+            #                 }
+            #             ]
+            #         }
+            #     }
+            #
+            subnets_copy = network_resource["properties"].get("copy") if network_resource.get("properties") is not None else None
+            if subnets_copy is None:
+                raise Exception("Cannot find the copy property of the virtual network in the ARM template")
+
+            subnets = [i for i in subnets_copy if "name" in i and i["name"] == 'subnets']
+            if len(subnets) == 0:
+                raise Exception("Cannot find the subnets of the virtual network in the ARM template")
+
+            subnets_input = subnets[0].get("input")
+            if subnets_input is None:
+                raise Exception("Cannot find the input property of the subnets in the ARM template")
+
+            subnets_properties = subnets_input.get("properties")
+            if subnets_properties is None:
+                subnets_input["properties"] = nsg_reference
+            else:
+                subnets_properties.update(nsg_reference)
         else:
-            subnets_properties.update(nsg_reference)
+            #
+            # The subnets are simple property of the virtual network in template for scale sets:
+            #     {
+            #         "apiVersion": "2023-06-01",
+            #         "type": "Microsoft.Network/virtualNetworks",
+            #         "name": "[variables('virtualNetworkName')]",
+            #         "location": "[resourceGroup().location]",
+            #         "properties": {
+            #             "addressSpace": {
+            #                 "addressPrefixes": [
+            #                     "[variables('vnetAddressPrefix')]"
+            #                 ]
+            #             },
+            #             "subnets": [
+            #                 {
+            #                     "name": "[variables('subnetName')]",
+            #                     "properties": {
+            #                         "addressPrefix": "[variables('subnetPrefix')]",
+            #                     }
+            #                 }
+            #             ]
+            #         }
+            #     }
+            subnets = network_resource["properties"].get("subnets") if network_resource.get("properties") is not None else None
+            if subnets is None:
+                raise Exception("Cannot find the subnets property of the virtual network in the ARM template")
+
+            subnets_properties = subnets[0].get("properties")
+            if subnets_properties is None:
+                subnets["properties"] = nsg_reference
+            else:
+                subnets_properties.update(nsg_reference)
 
     @property
     def _my_ip_address(self) -> str:

@@ -1,20 +1,21 @@
 from typing import List, Dict, Any
 
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
 
-class AgentCPUQuota(AgentTest):
+class AgentCPUQuota(AgentVmTest):
     """
     The test verify that the agent detects when it is throttled for using too much CPU, that it detects processes that do belong to the agent's cgroup, and that resource metrics are generated.
     """
-    def __init__(self, context):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
         log.info("=====Validating agent cpu quota checks")
-        self._run_remote_test("agent_cpu_quota-check_agent_cpu_quota.py", use_sudo=True)
+        self._run_remote_test(self._ssh_client, "agent_cpu_quota-check_agent_cpu_quota.py", use_sudo=True)
         log.info("Successfully Verified that agent running in expected CPU quotas")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:

@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Type
 
 import tests_e2e
-from tests_e2e.tests.lib.agent_test import AgentTest
+from tests_e2e.tests.lib.agent_test import AgentTest, AgentVmTest, AgentVmssTest
 
 
 class TestInfo(object):
@@ -31,7 +31,7 @@ class TestInfo(object):
     Description of a test
     """
     # The class that implements the test
-    test_class: Type[AgentTest]
+    test_class: Type[AgentVmTest]
     # If True, an error in the test blocks the execution of the test suite (defaults to False)
     blocks_suite: bool
 
@@ -57,6 +57,8 @@ class TestSuiteInfo(object):
     locations: List[str]
     # Whether this suite must run on its own test VM
     owns_vm: bool
+    # If True, the suite must run on a scale set (instead of a single VM)
+    executes_on_scale_set: bool
     # Whether to install the test Agent on the test VM
     install_test_agent: bool
     # Customization for the ARM template used when creating the test VM
@@ -222,6 +224,7 @@ class AgentTestLoader(object):
                     This is useful for suites that modify the test VMs in such a way that the setup may cause problems
                     in other test suites (for example, some tests targeted to the HGAP block internet access in order to
                     force the agent to use the HGAP).
+        * executes_on_scale_set - [Optional; boolean] True indicates that the test runs on a scale set. 
         * install_test_agent - [Optional; boolean] By default the setup process installs the test Agent on the test VMs; set this property
                     to False to skip the installation.
         * template - [Optional; string] If given, the ARM template for the test VM is customized using the given Python module.
@@ -267,7 +270,12 @@ class AgentTestLoader(object):
 
         test_suite_info.owns_vm = "owns_vm" in test_suite and test_suite["owns_vm"]
         test_suite_info.install_test_agent = "install_test_agent" not in test_suite or test_suite["install_test_agent"]
+        test_suite_info.executes_on_scale_set = "executes_on_scale_set" in test_suite and test_suite["executes_on_scale_set"]
         test_suite_info.template = test_suite.get("template", "")
+
+        # TODO: Add support for custom templates
+        if test_suite_info.executes_on_scale_set and test_suite_info.template != '':
+            raise Exception(f"Currently custom templates are not supported on scale sets. [Test suite: {test_suite_info.name}]")
 
         skip_on_clouds = test_suite.get("skip_on_clouds")
         if skip_on_clouds is not None:
@@ -281,7 +289,7 @@ class AgentTestLoader(object):
         return test_suite_info
 
     @staticmethod
-    def _load_test_class(relative_path: str) -> Type[AgentTest]:
+    def _load_test_class(relative_path: str) -> Type[AgentVmTest]:
         """
         Loads an AgentTest from its source code file, which is given as a path relative to WALinuxAgent/tests_e2e/tests.
         """
@@ -289,8 +297,8 @@ class AgentTestLoader(object):
         spec = importlib.util.spec_from_file_location(f"tests_e2e.tests.{relative_path.replace('/', '.').replace('.py', '')}", str(full_path))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        # return all the classes in the module that are subclasses of AgentTest but are not AgentTest itself.
-        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentTest]
+        # return all the classes in the module that are subclasses of AgentTest but are not AgentVmTest or AgentVmssTest themselves.
+        matches = [v for v in module.__dict__.values() if isinstance(v, type) and issubclass(v, AgentTest) and v != AgentVmTest and v != AgentVmssTest]
         if len(matches) != 1:
             raise Exception(f"Error in {full_path} (each test file must contain exactly one class derived from AgentTest)")
         return matches[0]

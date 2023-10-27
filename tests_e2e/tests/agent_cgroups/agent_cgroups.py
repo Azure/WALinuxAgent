@@ -16,17 +16,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from tests_e2e.tests.lib.agent_test import AgentTest
-from tests_e2e.tests.lib.agent_test_context import AgentTestContext
+from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 
 
-class AgentCgroups(AgentTest):
+class AgentCgroups(AgentVmTest):
     """
     This test verifies that the agent is running in the expected cgroups.
     """
 
-    def __init__(self, context: AgentTestContext):
+    def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
 
@@ -35,7 +35,7 @@ class AgentCgroups(AgentTest):
         log.info("Restarting agent service to make sure service starts with new configuration that was setup by the cgroupconfigurator")
         self._ssh_client.run_command("agent-service restart", use_sudo=True)
         log.info("=====Validating agent cgroups=====")
-        self._run_remote_test("agent_cgroups-check_cgroups_agent.py")
+        self._run_remote_test(self._ssh_client, "agent_cgroups-check_cgroups_agent.py")
         log.info("Successfully Verified that agent present in correct cgroups")
 
 

@@ -46,7 +46,7 @@ class UpdateArmTemplateHook:
         # Add the network security group for the test VM. This group includes a rule allowing SSH access from the current machine.
         #
         log.info("******** Waagent: Adding network security rule to the ARM template")
-        AddNetworkSecurityGroup().update(template)
+        AddNetworkSecurityGroup().update(template, is_lisa_template=True)
 
         #
         # Apply any template customizations provided by the tests.
@@ -60,7 +60,7 @@ class UpdateArmTemplateHook:
 
             for t in test_templates.split(","):
                 update_arm_template = self._get_update_arm_template(t)
-                update_arm_template().update(template)
+                update_arm_template().update(template, is_lisa_template=True)
 
     _SOURCE_CODE_ROOT: Path = Path(tests_e2e.__path__[0])
 
