@@ -9,3 +9,4 @@ images:
   - "random(endorsed-arm64, 2)"
 locations: "AzureCloud:centraluseuap"
 owns_vm: true
+install_test_agent: false
