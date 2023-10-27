@@ -15,7 +15,7 @@ class AgentCPUQuota(AgentVmTest):
 
     def run(self):
         log.info("=====Validating agent cpu quota checks")
-        self._run_remote_test("agent_cpu_quota-check_agent_cpu_quota.py", use_sudo=True)
+        self._run_remote_test(self._ssh_client, "agent_cpu_quota-check_agent_cpu_quota.py", use_sudo=True)
         log.info("Successfully Verified that agent running in expected CPU quotas")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
