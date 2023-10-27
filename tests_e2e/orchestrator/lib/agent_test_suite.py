@@ -217,7 +217,7 @@ class AgentTestSuite(LisaTestSuite):
         #      The AgentTestSuite will create the scale set before executing the tests. The platform will be 'ready' and the environment will a single 'local' node.
         #
         #    * Existing VMSS
-        #      The VMSS was passed as argument to the runbook. The platform will be 'ready' and the environment will contain a list 'remote' nodes,
+        #      The VMSS was passed as argument to the runbook. The platform will be 'ready' and the environment will contain a list of 'remote' nodes,
         #      one for each instance of the scale set.
         #
 
@@ -230,8 +230,8 @@ class AgentTestSuite(LisaTestSuite):
 
         if isinstance(environment.nodes[0], LocalNode):
             # We need to create a new VMSS.
-            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0.  Note that we hardcode the resource group
-            # id to "n0" and the scale set name to "n0" since we are creating a single scale set.
+            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0. Note that we hardcode the resource group
+            # id to "e0" and the scale set name to "n0" since we are creating a single scale set.
             self._resource_group_name = f"lisa-{self._runbook_name}-{RUN_ID}-e0"
             self._vmss_name = f"{self._resource_group_name}-n0"
             self._test_nodes = []  # we'll fill this up when the scale set is created

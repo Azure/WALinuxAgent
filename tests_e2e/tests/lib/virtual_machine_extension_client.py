@@ -28,7 +28,7 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineExtension, VirtualMachineExtensionInstanceView
 
 from tests_e2e.tests.lib.azure_sdk_client import AzureSdkClient
-from tests_e2e.tests.lib.identifiers import VmExtensionIdentifier
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import execute_with_retry
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient

@@ -103,13 +103,13 @@ class AgentTest(ABC):
         return "\n".join(f"{indent}{line}" for line in text.splitlines())
 
 
-class AgentVmTest(AgentTest, ABC):
+class AgentVmTest(AgentTest):
     """
     Base class for Agent tests that run on a single VM
     """
 
 
-class AgentVmssTest(AgentTest, ABC):
+class AgentVmssTest(AgentTest):
     """
     Base class for Agent tests that run on a scale set
     """

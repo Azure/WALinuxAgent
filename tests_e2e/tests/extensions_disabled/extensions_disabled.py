@@ -32,10 +32,9 @@ from typing import Any
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
-from tests_e2e.tests.lib.identifiers import VmExtensionIds
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
@@ -109,14 +108,8 @@ class ExtensionsDisabled(AgentVmTest):
         #
         # Validate that the agent continued reporting status even if it is not processing extensions
         #
-        vm: VirtualMachineClient = VirtualMachineClient(
-            cloud=self._context.vm.cloud,
-            location=self._context.vm.location,
-            subscription=self._context.vm.subscription,
-            resource_group=self._context.vm.resource_group,
-            name=self._context.vm.name)
         log.info("")
-        instance_view: VirtualMachineInstanceView = vm.get_instance_view()
+        instance_view: VirtualMachineInstanceView = self._context.vm.get_instance_view()
         log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
         assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
         assert_that(instance_view.vm_agent.statuses[0].display_status).described_as("The VM Agent should be ready").is_equal_to('Ready')

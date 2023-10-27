@@ -31,7 +31,6 @@ import json
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
 class RetryableAgentStatusException(BaseException):
@@ -139,13 +138,6 @@ class AgentStatus(AgentVmTest):
         log.info("")
         log.info("*******Verifying the agent status updates 3 times*******")
 
-        vm: VirtualMachineClient = VirtualMachineClient(
-            cloud=self._context.vm.cloud,
-            location=self._context.vm.location,
-            subscription=self._context.vm.subscription,
-            resource_group=self._context.vm.resource_group,
-            name=self._context.vm.name)
-
         timeout = datetime.now() + timedelta(minutes=6)
         instance_view_exception = None
         status_updated = 0
@@ -154,7 +146,7 @@ class AgentStatus(AgentVmTest):
 
         # Retry validating agent status updates 2 times with timeout of 6 minutes
         while datetime.now() <= timeout and status_updated < 2:
-            instance_view = vm.get_instance_view()
+            instance_view = self._context.vm.get_instance_view()
             log.info("")
             log.info(
                 "Check instance view to validate that the Guest Agent reports valid status...")
