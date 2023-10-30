@@ -32,7 +32,7 @@ from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineS
 @dataclass
 class AgentTestSuitesCombinatorSchema(schema.Combinator):
     """
-    Defines parameters passed to the combinator from the runbook.
+    Defines the parameters passed to the combinator from the runbook.
 
     The runbook is a static document and always passes all these parameters to the combinator, so they are all
     marked as required. Optional parameters can pass an empty value to indicate that they are not specified.
@@ -167,16 +167,27 @@ class AgentTestSuitesCombinator(Combinator):
                 vm_size = self._get_vm_size(image)
 
                 if test_suite_info.owns_vm or not test_suite_info.install_test_agent:
-                    # create a VM environment for exclusive use by this suite
+                    #
+                    # Create an environment for exclusive use by this suite
+                    #
                     # TODO: Allow test suites that set 'install_test_agent' to False to share environments (we need to ensure that
-                    #      all the suites in the shared environment have the same value for 'install_test_agent')
-                    env = self.create_vm_environment(
-                        env_name=f"{image_name}-{test_suite_info.name}",
-                        marketplace_image=marketplace_image,
-                        vhd=vhd,
-                        location=location,
-                        vm_size=vm_size,
-                        test_suite_info=test_suite_info)
+                    #       all the suites in the shared environment have the same value for 'install_test_agent')
+                    #
+                    if test_suite_info.executes_on_scale_set:
+                        env = self.create_vmss_environment(
+                            env_name=f"{image_name}-vmss-{test_suite_info.name}",
+                            marketplace_image=marketplace_image,
+                            location=location,
+                            vm_size=vm_size,
+                            test_suite_info=test_suite_info)
+                    else:
+                        env = self.create_vm_environment(
+                            env_name=f"{image_name}-{test_suite_info.name}",
+                            marketplace_image=marketplace_image,
+                            vhd=vhd,
+                            location=location,
+                            vm_size=vm_size,
+                            test_suite_info=test_suite_info)
                     environments.append(env)
                 else:
                     # add this suite to the shared environments

@@ -17,11 +17,12 @@
 # limitations under the License.
 #
 import uuid
+from datetime import datetime
 from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.identifiers import VmExtensionIds, VmExtensionIdentifier
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
@@ -51,13 +52,17 @@ class AgentPublishTest(AgentVmTest):
         self._get_agent_info()
         self._check_cse()
 
+    def get_ignore_errors_before_timestamp(self) -> datetime:
+        timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
+        return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f')
+
     def _get_agent_info(self) -> None:
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info('Agent info \n%s', stdout)
 
     def _prepare_agent(self) -> None:
         log.info("Modifying agent update related config flags")
-        self._run_remote_test(self._ssh_client, "update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test", use_sudo=True)
+        self._run_remote_test(self._ssh_client, "update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y", use_sudo=True)
         log.info('Updated agent-update DownloadNewAgents  GAFamily config flags')
 
     def _check_update(self) -> None:

@@ -134,6 +134,8 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
             else:
                 subnets_properties.update(nsg_reference)
         else:
+            #
+            # The subnets are simple property of the virtual network in template for scale sets:
             #     {
             #         "apiVersion": "2023-06-01",
             #         "type": "Microsoft.Network/virtualNetworks",

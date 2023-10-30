@@ -133,6 +133,7 @@ def check_agent_quota_disabled():
     Returns True if the cpu quota is infinity
     """
     cpu_quota = get_agent_cpu_quota()
+    # the quota can be expressed as seconds (s) or milliseconds (ms); no quota is expressed as "infinity"
     return cpu_quota == 'infinity'
 
 

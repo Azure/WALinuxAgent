@@ -20,6 +20,8 @@
 import sys
 
 from abc import ABC, abstractmethod
+from datetime import datetime
+
 from assertpy import fail
 from typing import Any, Dict, List
 
@@ -62,6 +64,10 @@ class AgentTest(ABC):
         """
         return []
 
+    def get_ignore_errors_before_timestamp(self) -> datetime:
+        # Ignore errors in the agent log before this timestamp
+        return datetime.min
+
     @classmethod
     def run_from_command_line(cls):
         """
@@ -103,13 +109,13 @@ class AgentTest(ABC):
         return "\n".join(f"{indent}{line}" for line in text.splitlines())
 
 
-class AgentVmTest(AgentTest, ABC):
+class AgentVmTest(AgentTest):
     """
     Base class for Agent tests that run on a single VM
     """
 
 
-class AgentVmssTest(AgentTest, ABC):
+class AgentVmssTest(AgentTest):
     """
     Base class for Agent tests that run on a scale set
     """

@@ -26,7 +26,6 @@ from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
 class KeyvaultCertificates(AgentVmTest):
@@ -59,13 +58,6 @@ class KeyvaultCertificates(AgentVmTest):
         else:
             log.info("Some test certificates had already been downloaded to the test VM (they have been deleted now):\n%s", existing_certificates)
 
-        vm: VirtualMachineClient = VirtualMachineClient(
-            cloud=self._context.vm.cloud,
-            location=self._context.vm.location,
-            subscription=self._context.vm.subscription,
-            resource_group=self._context.vm.resource_group,
-            name=self._context.vm.name)
-
         osprofile = {
             "location": self._context.vm.location,
             "properties": {
@@ -82,13 +74,13 @@ class KeyvaultCertificates(AgentVmTest):
             }
         }
         log.info("updating the vm's osProfile with the certificates to download:\n%s", osprofile)
-        vm.update(osprofile)
+        self._context.vm.update(osprofile)
 
         # If the test has already run on the VM, force a new goal state to ensure the certificates are downloaded since the VM model most likely already had the certificates
         # and the update operation would not have triggered a goal state
         if existing_certificates != "":
             log.info("Reapplying the goal state to ensure the test certificates are downloaded.")
-            vm.reapply()
+            self._context.vm.reapply()
 
         try:
             output = ssh_client.run_command(f"ls {expected_certificates}", use_sudo=True)
