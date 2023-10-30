@@ -33,7 +33,7 @@ from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_
     remove_one_dependent_extension, remove_all_dependencies, add_one_dependent_extension, \
     add_single_dependencies, remove_all_dependent_extensions, add_failing_dependent_extension_with_one_dependency, add_failing_dependent_extension_with_two_dependencies
 from tests_e2e.tests.lib.agent_test import AgentVmssTest
-from tests_e2e.tests.lib.identifiers import VmExtensionIds
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -54,32 +54,18 @@ class ExtSequencing(AgentVmssTest):
     ]
 
     @staticmethod
-    def get_dependency_map(extensions: List[Dict[str, Any]]) -> Dict[str, List[str]]:
-        dependency_map = dict()
+    def get_dependency_map(extensions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        dependency_map: Dict[str, Dict[str, Any]] = dict()
 
         for ext in extensions:
             ext_name = ext['name']
             provisioned_after = ext['properties'].get('provisionAfterExtensions')
-            dependency_map[ext_name] = provisioned_after
+            # We know an extension should fail if a script was provided
+            ext_settings = ext['properties'].get("settings")
+            should_fail = True if ext_settings and "script" in ext_settings else False
+            dependency_map[ext_name] = {"should_fail": should_fail, "depends_on": provisioned_after}
 
         return dependency_map
-
-    @staticmethod
-    def validate_dependent_extensions_fail(dependency_map: Dict[str, List[str]], extensions: List[VirtualMachineScaleSetVMExtensionsSummary]):
-        failed_extensions = [ext.name for ext in extensions if "failed" in ext.statuses_summary[0].code]
-        for ext, dependencies in dependency_map.items():
-            for dep in dependencies:
-                if dep in failed_extensions:
-                    assert_that(ext in failed_extensions).described_as("{0} dependent on failing extension {1} should also fail")
-
-        for ext in extensions:
-            dependencies = dependency_map[ext.name]
-            assert_that("failed" in ext.statuses_summary[0].code).described_as(
-                    "CustomScript should have failed to enable").is_true()
-            if "CustomScript" in dependency_map[ext.name]:
-                assert_that("failed" in ext.statuses_summary[0].code).described_as(
-                    "{0} should have failed to enable as it's dependent on CustomScript".format(ext.name)).is_true()
-        log.info("Validated that all extensions dependent on a failing extension also failed")
 
     @staticmethod
     def get_sorted_extension_names(extensions: List[VirtualMachineScaleSetVMExtensionsSummary], ssh_client: SshClient) -> List[str]:
@@ -91,7 +77,7 @@ class ExtSequencing(AgentVmssTest):
         }
         enabled_times = []
         for ext in extensions:
-            # Only add extensions which succeeded provisioning
+            # Only check extensions which succeeded provisioning
             if "succeeded" in ext.statuses_summary[0].code:
                 enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext_type {extension_full_names[ext.name]}",
                                                       use_sudo=True)
@@ -111,7 +97,7 @@ class ExtSequencing(AgentVmssTest):
         return sorted_extension_names
 
     @staticmethod
-    def validate_extension_sequencing(dependency_map: Dict[str, List[str]], sorted_extension_names: List[str]):
+    def validate_extension_sequencing(dependency_map: Dict[str, Dict[str, Any]], sorted_extension_names: List[str]):
         installed_ext = dict()
 
         # Iterate through the extensions in the enabled order and validate if their depending extensions are already
@@ -121,13 +107,20 @@ class ExtSequencing(AgentVmssTest):
             if ext not in dependency_map:
                 fail("Unwanted extension found in VMSS Instance view: {0}".format(ext))
             if dependency_map[ext] is not None:
-                for dep in dependency_map[ext]:
+                dependencies = dependency_map[ext].get('depends_on')
+                for dep in dependencies:
                     if installed_ext.get(dep) is None:
                         # The depending extension is not installed prior to the current extension
                         fail("{0} is not installed prior to {1}".format(dep, ext))
 
             # Mark the current extension as installed
             installed_ext[ext] = ext
+
+        # Validate that only extensions expected to fail, and their dependent extensions, failed
+        for ext, details in dependency_map.items():
+            failing_ext_dependencies = [dep for dep in details['depends_on'] if dependency_map[dep]['should_fail']]
+            if ext not in installed_ext and not details['should_fail'] and not failing_ext_dependencies:
+                fail("{0} unexpectedly failed. Only extensions that are dependent on a failing extension should fail".format(ext))
 
         log.info("Validated extension sequencing")
 
@@ -179,7 +172,8 @@ class ExtSequencing(AgentVmssTest):
             dependency_map = self.get_dependency_map(extensions)
             log.info("")
             log.info("The dependency map of the extensions for this test case is:")
-            for ext, dependencies in dependency_map.items():
+            for ext, details in dependency_map.items():
+                dependencies = details.get('depends_on')
                 dependency_list = "-" if not dependencies else ' and '.join(dependencies)
                 log.info("{0} depends on {1}".format(ext, dependency_list))
 
@@ -199,10 +193,6 @@ class ExtSequencing(AgentVmssTest):
             # Get the extensions on the VMSS from the instance view
             log.info("")
             instance_view_extensions = self._context.vmss.get_instance_view().extensions
-
-            # If deployment failed, assert that all and only dependent extensions failed
-            if deployment_should_fail:
-                self.validate_dependent_extensions_fail(dependency_map, instance_view_extensions)
 
             # Validate that the extensions were enabled in the correct order on each instance of the scale set
             for address in self._context.vmss.get_instances_ip_address():
