@@ -26,7 +26,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any
 
-from assertpy import fail, assert_that
+from assertpy import fail
 from azure.mgmt.compute.models import VirtualMachineScaleSetVMExtensionsSummary
 
 from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_ext_without_settings, add_two_extensions_with_dependencies, \
@@ -60,10 +60,11 @@ class ExtSequencing(AgentVmssTest):
         for ext in extensions:
             ext_name = ext['name']
             provisioned_after = ext['properties'].get('provisionAfterExtensions')
+            depends_on = provisioned_after if provisioned_after else []
             # We know an extension should fail if a script was provided
             ext_settings = ext['properties'].get("settings")
             should_fail = True if ext_settings and "script" in ext_settings else False
-            dependency_map[ext_name] = {"should_fail": should_fail, "depends_on": provisioned_after}
+            dependency_map[ext_name] = {"should_fail": should_fail, "depends_on": depends_on}
 
         return dependency_map
 

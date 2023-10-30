@@ -29,10 +29,12 @@ def add_two_extensions_with_dependencies():
         {
             "name": "AzureMonitorLinuxAgent",
             "properties": {
+                "provisionAfterExtensions": [],
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
                 "autoUpgradeMinorVersion": True,
+                "settings": {}
             }
         },
         {
@@ -69,6 +71,7 @@ def remove_one_dependent_extension():
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
                 "autoUpgradeMinorVersion": True,
+                "settings": {}
             }
         },
         {
@@ -94,6 +97,7 @@ def remove_all_dependencies():
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
                 "autoUpgradeMinorVersion": True,
+                "settings": {}
             }
         },
         {
@@ -128,7 +132,7 @@ def add_one_dependent_extension():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
+                "autoUpgradeMinorVersion": True
             }
         },
         {
@@ -159,10 +163,12 @@ def add_single_dependencies():
         {
             "name": "AzureMonitorLinuxAgent",
             "properties": {
+                "provisionAfterExtensions": [],
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
                 "autoUpgradeMinorVersion": True,
+                "settings": {}
             }
         },
         {
@@ -198,7 +204,7 @@ def remove_all_dependent_extensions():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
+                "autoUpgradeMinorVersion": True
             }
         }
     ]
@@ -216,6 +222,7 @@ def add_failing_dependent_extension_with_one_dependency():
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
                 "autoUpgradeMinorVersion": True,
+                "settings": {}
             }
         },
         {
@@ -259,6 +266,7 @@ def add_failing_dependent_extension_with_two_dependencies():
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
                 "autoUpgradeMinorVersion": True,
+                "settings": {}
             }
         },
         {
