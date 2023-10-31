@@ -232,7 +232,7 @@ class AgentTestSuite(LisaTestSuite):
             # We need to create a new VMSS.
             # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0. Note that we hardcode the resource group
             # id to "e0" and the scale set name to "n0" since we are creating a single scale set.
-            self._resource_group_name = f"lisa-{self._runbook_name}-{RUN_ID}-e0"
+            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e0"
             self._vmss_name = f"{self._resource_group_name}-n0"
             self._test_nodes = []  # we'll fill this up when the scale set is created
             self._create_scale_set = True
