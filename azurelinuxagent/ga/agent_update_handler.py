@@ -9,7 +9,7 @@ from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpd
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
-from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus
+from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus, VERSION_0
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_daemon_version, CURRENT_VERSION, AGENT_NAME, AGENT_DIR_PATTERN
@@ -50,7 +50,7 @@ class AgentUpdateHandler(object):
         self._is_requested_version_update = True  # This is to track the current update type(requested version or self update)
         self.update_state = AgentUpdateHandlerUpdateState()
 
-    def __should_update_agent(self, requested_version):
+    def __check_if_agent_update_allowed_and_update_next_upgrade_times(self, requested_version):
         """
         requested version update:
             update is allowed once per (as specified in the conf.get_autoupdate_frequency())
@@ -70,6 +70,7 @@ class AgentUpdateHandler(object):
             if next_attempt_time > now:
                 return False
             # The time limit elapsed for us to allow updates.
+            self.update_state.last_attempted_requested_version_update_time = now
             return True
         else:
             next_hotfix_time, next_normal_time = self.__get_next_upgrade_times(now)
@@ -77,16 +78,11 @@ class AgentUpdateHandler(object):
 
             if (upgrade_type == AgentUpgradeType.Hotfix and next_hotfix_time <= now) or (
                     upgrade_type == AgentUpgradeType.Normal and next_normal_time <= now):
+                # Update the last upgrade check time even if no new agent is available for upgrade
+                self.update_state.last_attempted_hotfix_update_time = now
+                self.update_state.last_attempted_normal_update_time = now
                 return True
             return False
-
-    def __update_last_attempt_update_times(self):
-        now = datetime.datetime.now()
-        if self._is_requested_version_update:
-            self.update_state.last_attempted_requested_version_update_time = now
-        else:
-            self.update_state.last_attempted_normal_update_time = now
-            self.update_state.last_attempted_hotfix_update_time = now
 
     def __should_agent_attempt_manifest_download(self):
         """
@@ -112,6 +108,15 @@ class AgentUpdateHandler(object):
         if requested_version.major == CURRENT_VERSION.major and requested_version.minor == CURRENT_VERSION.minor and requested_version.patch == CURRENT_VERSION.patch:
             return AgentUpgradeType.Hotfix
         return AgentUpgradeType.Normal
+
+    @staticmethod
+    def __get_daemon_version_for_update():
+        daemon_version = get_daemon_version()
+        if daemon_version != FlexibleVersion(VERSION_0):
+            return daemon_version
+        # We return 0.0.0.0 if we failed to retrieve daemon version. In that case,
+        # use the min version as 2.2.53 as we started setting the daemon version starting 2.2.53.
+        return FlexibleVersion("2.2.53")
 
     def __get_next_upgrade_times(self, now):
         """
@@ -297,6 +302,7 @@ class AgentUpdateHandler(object):
                 if not self.__should_agent_attempt_manifest_download():
                     return
                 if conf.get_enable_ga_versioning():  # log the warning only when ga versioning is enabled
+                    # TODO: Need to revisit this msg when version is missing in Goal state. We may need to handle better way to report the error
                     warn_msg = "Missing requested version in agent family: {0} for incarnation: {1}, fallback to largest version update".format(self._ga_family, self._gs_id)
                     GAUpdateReportState.report_error_msg = warn_msg
                 agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
@@ -310,49 +316,46 @@ class AgentUpdateHandler(object):
                 if "Missing requested version" in GAUpdateReportState.report_error_msg:
                     GAUpdateReportState.report_error_msg = ""
 
-            if requested_version == CURRENT_VERSION:
+            # Check if an update is allowed and update next upgrade times even if no new agent is available for upgrade
+            if not self.__check_if_agent_update_allowed_and_update_next_upgrade_times(requested_version):
                 return
 
-            # Check if an update is allowed
-            if not self.__should_update_agent(requested_version):
+            if requested_version == CURRENT_VERSION:
                 return
 
             if warn_msg != "":
                 self.__log_event(LogLevel.WARNING, warn_msg)
 
-            try:
-                # Downgrades are not allowed for self-update version
-                # Added it in try block after agent update timewindow check so that we don't log it too frequently
-                if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
-                    return
+            # Downgrades are not allowed for self-update version
+            if not self.__check_if_downgrade_is_requested_and_allowed(requested_version):
+                return
 
-                daemon_version = get_daemon_version()
-                if requested_version < daemon_version:
-                    # Don't process the update if the requested version is less than daemon version,
-                    # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
-                    # installed latest version again. When that happens agent go into loop of downloading the requested version, exiting and start again with same version.
-                    #
-                    raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
-                                           "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
+            daemon_version = self.__get_daemon_version_for_update()
+            if requested_version < daemon_version:
+                # Don't process the update if the requested version is less than daemon version,
+                # as historically we don't support downgrades below daemon versions. So daemon will not pickup that requested version rather start with
+                # installed latest version again. When that happens agent go into loop of downloading the requested version, exiting and start again with same version.
+                #
+                raise AgentUpdateError("The Agent received a request to downgrade to version {0}, but downgrading to a version less than "
+                                       "the Agent installed on the image ({1}) is not supported. Skipping downgrade.".format(requested_version, daemon_version))
 
-                msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(
-                    self._gs_id, str(requested_version))
-                self.__log_event(LogLevel.INFO, msg)
+            # Todo: Need to update the message when we fix RSM stuff
+            msg = "Self-update discovered new agent version:{0} in agent manifest for goal state {1}, will update the agent before processing the goal state.".format(
+                str(requested_version), self._gs_id)
+            self.__log_event(LogLevel.INFO, msg)
 
-                agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
+            agent = self.__download_and_get_agent(goal_state, agent_family, agent_manifest, requested_version)
 
-                if agent.is_blacklisted or not agent.is_downloaded:
-                    msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
-                        str(agent.version))
-                    self.__log_event(LogLevel.WARNING, msg)
-                    return
+            if agent.is_blacklisted or not agent.is_downloaded:
+                msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
+                    str(agent.version))
+                self.__log_event(LogLevel.WARNING, msg)
+                return
 
-                # We delete the directory and the zip package from the filesystem except current version and target version
-                self.__purge_extra_agents_from_disk(CURRENT_VERSION, known_agents=[agent])
-                self.__proceed_with_update(requested_version)
+            # We delete the directory and the zip package from the filesystem except current version and target version
+            self.__purge_extra_agents_from_disk(CURRENT_VERSION, known_agents=[agent])
+            self.__proceed_with_update(requested_version)
 
-            finally:
-                self.__update_last_attempt_update_times()
 
         except Exception as err:
             if isinstance(err, AgentUpgradeExitException):
