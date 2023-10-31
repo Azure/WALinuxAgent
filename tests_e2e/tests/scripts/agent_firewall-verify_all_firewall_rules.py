@@ -39,7 +39,7 @@ ROOT_USER = 'root'
 WIRESERVER_ENDPOINT_FILE = '/var/lib/waagent/WireServerEndpoint'
 WIRESERVER_IP = '168.63.129.16'
 VERSIONS_PATH = '/?comp=versions'
-FIREWALL_PERIOD = 60
+FIREWALL_PERIOD = 30
 
 
 class FirewallRules(object):
