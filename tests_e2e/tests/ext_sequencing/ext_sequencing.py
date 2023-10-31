@@ -98,7 +98,7 @@ class ExtSequencing(AgentVmssTest):
         return sorted_extension_names
 
     @staticmethod
-    def validate_extension_sequencing(dependency_map: Dict[str, Dict[str, Any]], sorted_extension_names: List[str]):
+    def validate_extension_sequencing(dependency_map: Dict[str, Dict[str, Any]], sorted_extension_names: List[str], relax_check: bool):
         installed_ext = dict()
 
         # Iterate through the extensions in the enabled order and validate if their depending extensions are already
@@ -112,7 +112,10 @@ class ExtSequencing(AgentVmssTest):
                 for dep in dependencies:
                     if installed_ext.get(dep) is None:
                         # The depending extension is not installed prior to the current extension
-                        fail("{0} is not installed prior to {1}".format(dep, ext))
+                        if relax_check:
+                            log.info("{0} is not installed prior to {1}".format(dep, ext))
+                        else:
+                            fail("{0} is not installed prior to {1}".format(dep, ext))
 
             # Mark the current extension as installed
             installed_ext[ext] = ext
@@ -120,8 +123,13 @@ class ExtSequencing(AgentVmssTest):
         # Validate that only extensions expected to fail, and their dependent extensions, failed
         for ext, details in dependency_map.items():
             failing_ext_dependencies = [dep for dep in details['depends_on'] if dependency_map[dep]['should_fail']]
-            if ext not in installed_ext and not details['should_fail'] and not failing_ext_dependencies:
-                fail("{0} unexpectedly failed. Only extensions that are dependent on a failing extension should fail".format(ext))
+            if ext not in installed_ext:
+                if details['should_fail']:
+                    log.info("Extension {0} failed as expected".format(ext))
+                elif failing_ext_dependencies:
+                    log.info("Extension {0} failed as expected because it is dependent on {1}".format(ext, ' and '.join(failing_ext_dependencies)))
+                else:
+                    fail("{0} unexpectedly failed. Only extensions that are expected to fail or depend on a failing extension should fail".format(ext))
 
         log.info("Validated extension sequencing")
 
@@ -151,7 +159,6 @@ class ExtSequencing(AgentVmssTest):
             # Update the settings for each extension in this scenario to make sure they're always unique to force CRP
             # to generate a new sequence number each time
             test_guid = str(uuid.uuid4())
-            deployment_should_fail = "failing" in case.__name__
             extensions = case()
             for ext in extensions:
                 # We only want to update the settings if they are empty (so we don't overwrite any failing script
@@ -188,7 +195,7 @@ class ExtSequencing(AgentVmssTest):
             except Exception as e:
                 # We only expect to catch an exception during deployment if we are forcing one of the extensions to
                 # fail. Otherwise, report the failure.
-                if not deployment_should_fail:
+                if "failing" not in case.__name__:
                     fail("Extension template deployment unexpectedly failed: {0}".format(e))
 
             # Get the extensions on the VMSS from the instance view
@@ -205,10 +212,59 @@ class ExtSequencing(AgentVmssTest):
                 # Sort the VM extensions by the time they were enabled
                 sorted_extension_names = self.get_sorted_extension_names(instance_view_extensions, ssh_client)
 
-                # Validate that the extensions were enabled in the correct order
-                self.validate_extension_sequencing(dependency_map, sorted_extension_names)
+                # Validate that the extensions were enabled in the correct order. We relax this check if no settings
+                # are provided for a dependent extension.
+                relax_check = True if "settings" in case.__name__ else False
+                self.validate_extension_sequencing(dependency_map, sorted_extension_names, relax_check)
 
             log.info("------")
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            #
+            # WARNING ExtHandler ExtHandler Missing dependsOnExtension on extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
+            # This message appears when an extension doesn't depend on another extension
+            #
+            {
+                'message': r"Missing dependsOnExtension on extension .*"
+            },
+            #
+            # WARNING ExtHandler ExtHandler Extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent does not have any settings. Will ignore dependency (dependency level: 1)
+            # We currently ignore dependencies for extensions without settings
+            #
+            {
+                'message': r"Extension .* does not have any settings\. Will ignore dependency \(dependency level: \d\)"
+            },
+            #
+            # 2023-10-31T17:46:59.675959Z WARNING ExtHandler ExtHandler Dependent extension Microsoft.Azure.Extensions.CustomScript failed or timed out, will skip processing the rest of the extensions
+            # We intentionally make CustomScript fail to test that dependent extensions are skipped
+            #
+            {
+                'message': r"Dependent extension Microsoft.Azure.Extensions.CustomScript failed or timed out, will skip processing the rest of the extensions"
+            },
+            #
+            # 2023-10-31T17:48:13.349214Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionProcessing, message=Dependent Extension Microsoft.Azure.Extensions.CustomScript did not succeed. Status was error, duration=0
+            # We intentionally make CustomScript fail to test that dependent extensions are skipped
+            #
+            {
+                'message': r"Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionProcessing, message=Dependent Extension Microsoft.Azure.Extensions.CustomScript did not succeed. Status was error, duration=0"
+            },
+            #
+            # 2023-10-31T17:47:07.689083Z WARNING ExtHandler ExtHandler [PERIODIC] This status is being reported by the Guest Agent since no status file was reported by extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent: [ExtensionStatusError] Status file /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.28.11/status/6.status does not exist
+            # We expect extensions that are dependent on a failing extension to not report status
+            #
+            {
+                'message': r"\[PERIODIC\] This status is being reported by the Guest Agent since no status file was reported by extension .*: \[ExtensionStatusError\] Status file \/var\/lib\/waagent\/.*\/status\/\d.status does not exist"
+            },
+            #
+            # 2023-10-31T17:48:11.306835Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed: [('Microsoft.Azure.Extensions.CustomScript', 'error'), ('Microsoft.Azure.Monitor.AzureMonitorLinuxAgent', 'transitioning'), ('Microsoft.CPlat.Core.RunCommandLinux', 'success')]
+            # This message appears when the previous test scenario had failing extensions due to extension dependencies
+            #
+            {
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed: \[(\('.*', '(error|transitioning|success)'\),?)+\]"
+            }
+        ]
+        return ignore_rules
 
 
 if __name__ == "__main__":

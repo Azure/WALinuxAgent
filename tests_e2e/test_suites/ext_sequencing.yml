@@ -6,6 +6,6 @@ name: "ExtSequencing"
 tests:
   - "ext_sequencing/ext_sequencing.py"
 images: "endorsed"
-locations: "AzureCloud:eastus2euap"
+locations: "AzureCloud:eastus2"
 # This scenario is executed on instances of a scaleset created by the agent test suite.
 executes_on_scale_set: true
