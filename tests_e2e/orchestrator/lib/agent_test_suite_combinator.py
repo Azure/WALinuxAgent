@@ -81,6 +81,7 @@ class AgentTestSuitesCombinator(Combinator):
                 raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, a 'resource_group_name' must be specified.")
 
         self._log: logging.Logger = logging.getLogger("lisa")
+        self._vmss_resource_group_count: int = 0
 
         with set_thread_name("AgentTestSuitesCombinator"):
             if self.runbook.vm_name != '':
@@ -176,10 +177,12 @@ class AgentTestSuitesCombinator(Combinator):
                     if test_suite_info.executes_on_scale_set:
                         env = self.create_vmss_environment(
                             env_name=f"{image_name}-vmss-{test_suite_info.name}",
+                            vmss_resource_group_count=self._vmss_resource_group_count,
                             marketplace_image=marketplace_image,
                             location=location,
                             vm_size=vm_size,
                             test_suite_info=test_suite_info)
+                        self._vmss_resource_group_count += 1
                     else:
                         env = self.create_vm_environment(
                             env_name=f"{image_name}-{test_suite_info.name}",
@@ -202,10 +205,12 @@ class AgentTestSuitesCombinator(Combinator):
                                 raise Exception("VHDS are currently not supported on scale sets.")
                             env = self.create_vmss_environment(
                                 env_name=env_name,
+                                vmss_resource_group_count=self._vmss_resource_group_count,
                                 marketplace_image=marketplace_image,
                                 location=location,
                                 vm_size=vm_size,
                                 test_suite_info=test_suite_info)
+                            self._vmss_resource_group_count += 1
                         else:
                             env = self.create_vm_environment(
                                 env_name=env_name,
@@ -369,7 +374,7 @@ class AgentTestSuitesCombinator(Combinator):
             "vm_tags": vm_tags
         }
 
-    def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+    def create_vmss_environment(self, env_name: str, vmss_resource_group_count: int, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
         return {
             "c_platform": [
                 {
@@ -388,6 +393,7 @@ class AgentTestSuitesCombinator(Combinator):
             },
 
             "c_env_name": env_name,
+            "c_vmss_resource_group_count": vmss_resource_group_count,
             "c_test_suites": [test_suite_info],
             "c_location": location,
             "c_image": marketplace_image,

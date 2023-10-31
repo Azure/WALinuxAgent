@@ -189,6 +189,8 @@ class AgentTestSuite(LisaTestSuite):
         self._lisa_environment_name = environment.name
         self._environment_name = variables["c_env_name"]
 
+        self._vmss_resource_group_count = variables["c_vmss_resource_group_count"]
+
         self._test_suites = variables["c_test_suites"]
 
         self._cloud = variables["cloud"]
@@ -230,9 +232,9 @@ class AgentTestSuite(LisaTestSuite):
 
         if isinstance(environment.nodes[0], LocalNode):
             # We need to create a new VMSS.
-            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0. Note that we hardcode the resource group
-            # id to "e0" and the scale set name to "n0" since we are creating a single scale set.
-            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e0"
+            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0. Note
+            # that we hardcode the scale set name to "n0" since we are creating a single scale set.
+            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{self._vmss_resource_group_count}"
             self._vmss_name = f"{self._resource_group_name}-n0"
             self._test_nodes = []  # we'll fill this up when the scale set is created
             self._create_scale_set = True
