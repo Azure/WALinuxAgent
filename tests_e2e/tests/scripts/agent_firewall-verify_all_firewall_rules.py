@@ -144,7 +144,7 @@ def verify_all_rules_exist() -> None:
 
     log.info("-----Verifying all ip table rules are present in rule set")
     # Agent will re-add rules within OS.EnableFirewallPeriod, So waiting that time + some buffer
-    found: bool = retry_if_false(check_all_iptables, attempts=2, delay=FIREWALL_PERIOD+30)
+    found: bool = retry_if_false(check_all_iptables, attempts=2, delay=FIREWALL_PERIOD+15)
 
     if not found:
         fail("IP table rules missing in rule set.\n Current iptable rules:\n {0}".format(
