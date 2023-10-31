@@ -139,6 +139,8 @@ class AgentTestSuite(LisaTestSuite):
         self._lisa_environment_name: str  # Name assigned by LISA to the test environment, useful for correlation with LISA logs
         self._environment_name: str  # Name assigned by the AgentTestSuiteCombinator to the test environment
 
+        self._vmss_resource_group_count: int # Counter to keep track of how many resource groups have been created for vmss suites
+
         self._test_suites: List[AgentTestSuite]  # Test suites to execute in the environment
 
         self._cloud: str  # Azure cloud where test VMs are located

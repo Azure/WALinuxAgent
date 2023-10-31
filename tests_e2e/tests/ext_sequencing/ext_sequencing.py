@@ -32,7 +32,7 @@ from azure.mgmt.compute.models import VirtualMachineScaleSetVMExtensionsSummary
 from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_ext_without_settings, add_two_extensions_with_dependencies, \
     remove_one_dependent_extension, remove_all_dependencies, add_one_dependent_extension, \
     add_single_dependencies, remove_all_dependent_extensions, add_failing_dependent_extension_with_one_dependency, add_failing_dependent_extension_with_two_dependencies
-from tests_e2e.tests.lib.agent_test import AgentVmssTest
+from tests_e2e.tests.lib.agent_test import AgentVmssTest, TestSkipped
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
@@ -134,6 +134,12 @@ class ExtSequencing(AgentVmssTest):
         log.info("Validated extension sequencing")
 
     def run(self):
+        instances_ip_address = self._context.vmss.get_instances_ip_address()
+        ssh_clients: List[SshClient] = [SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file) for instance in instances_ip_address]
+
+        if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(ssh_clients[0].run_command("uname -a")):
+            raise TestSkipped("Currently AzureMonitorLinuxAgent is not supported on this distro")
+
         # This is the base ARM template that's used for deploying extensions for this scenario
         base_extension_template = {
             "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
@@ -203,11 +209,9 @@ class ExtSequencing(AgentVmssTest):
             instance_view_extensions = self._context.vmss.get_instance_view().extensions
 
             # Validate that the extensions were enabled in the correct order on each instance of the scale set
-            for address in self._context.vmss.get_instances_ip_address():
-                ssh_client: SshClient = SshClient(ip_address=address.ip_address, username=self._context.username, identity_file=self._context.identity_file)
-
+            for ssh_client in ssh_clients:
                 log.info("")
-                log.info("Validate extension sequencing on {0}...".format(address.ip_address))
+                log.info("Validate extension sequencing on {0}...".format(ssh_client.ip_address))
 
                 # Sort the VM extensions by the time they were enabled
                 sorted_extension_names = self.get_sorted_extension_names(instance_view_extensions, ssh_client)
@@ -261,7 +265,7 @@ class ExtSequencing(AgentVmssTest):
             # This message appears when the previous test scenario had failing extensions due to extension dependencies
             #
             {
-                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed: \[(\('.*', '(error|transitioning|success)'\),?)+\]"
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed: \[(\(u?'.*', u?'(error|transitioning|success)'\),?)+\]"
             }
         ]
         return ignore_rules
