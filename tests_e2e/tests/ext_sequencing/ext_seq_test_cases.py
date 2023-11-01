@@ -18,13 +18,16 @@ def add_one_dependent_ext_without_settings():
                 "type": "CustomScript",
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         }
     ]
 
 
 def add_two_extensions_with_dependencies():
+    # Checks that extensions are enabled in the correct order when there is only one valid sequence
     return [
         {
             "name": "AzureMonitorLinuxAgent",
@@ -33,8 +36,7 @@ def add_two_extensions_with_dependencies():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "autoUpgradeMinorVersion": True
             }
         },
         {
@@ -45,7 +47,9 @@ def add_two_extensions_with_dependencies():
                 "type": "RunCommandLinux",
                 "typeHandlerVersion": "1.0",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         },
         {
@@ -56,13 +60,17 @@ def add_two_extensions_with_dependencies():
                 "type": "CustomScript",
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         }
     ]
 
 
 def remove_one_dependent_extension():
+    # Checks that remaining extensions with dependencies are enabled in the correct order after removing a dependent
+    # extension
     return [
         {
             "name": "AzureMonitorLinuxAgent",
@@ -70,8 +78,7 @@ def remove_one_dependent_extension():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "autoUpgradeMinorVersion": True
             }
         },
         {
@@ -82,13 +89,16 @@ def remove_one_dependent_extension():
                 "type": "CustomScript",
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         }
     ]
 
 
 def remove_all_dependencies():
+    # Checks that extensions are enabled after adding and removing dependencies
     return [
         {
             "name": "AzureMonitorLinuxAgent",
@@ -96,8 +106,7 @@ def remove_all_dependencies():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "autoUpgradeMinorVersion": True
             }
         },
         {
@@ -107,7 +116,9 @@ def remove_all_dependencies():
                 "type": "RunCommandLinux",
                 "typeHandlerVersion": "1.0",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         },
         {
@@ -117,13 +128,16 @@ def remove_all_dependencies():
                 "type": "CustomScript",
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         }
     ]
 
 
 def add_one_dependent_extension():
+    # Checks that a valid enable sequence occurs when only one extension has dependencies
     return [
         {
             "name": "AzureMonitorLinuxAgent",
@@ -142,7 +156,9 @@ def add_one_dependent_extension():
                 "type": "RunCommandLinux",
                 "typeHandlerVersion": "1.0",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         },
         {
@@ -152,13 +168,17 @@ def add_one_dependent_extension():
                 "type": "CustomScript",
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         }
     ]
 
 
 def add_single_dependencies():
+    # Checks that extensions are enabled in the correct order when there is only one valid sequence and each extension
+    # has no more than one dependency
     return [
         {
             "name": "AzureMonitorLinuxAgent",
@@ -167,8 +187,7 @@ def add_single_dependencies():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "autoUpgradeMinorVersion": True
             }
         },
         {
@@ -179,7 +198,9 @@ def add_single_dependencies():
                 "type": "RunCommandLinux",
                 "typeHandlerVersion": "1.0",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         },
         {
@@ -190,13 +211,17 @@ def add_single_dependencies():
                 "type": "CustomScript",
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         }
     ]
 
 
 def remove_all_dependent_extensions():
+    # Checks that remaining extensions with dependencies are enabled in the correct order after removing all dependent
+    # extension
     return [
         {
             "name": "AzureMonitorLinuxAgent",
@@ -221,8 +246,7 @@ def add_failing_dependent_extension_with_one_dependency():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "autoUpgradeMinorVersion": True
             }
         },
         {
@@ -232,7 +256,9 @@ def add_failing_dependent_extension_with_one_dependency():
                 "type": "RunCommandLinux",
                 "typeHandlerVersion": "1.0",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         },
         {
@@ -243,12 +269,7 @@ def add_failing_dependent_extension_with_one_dependency():
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
                 "settings": {
-                    # script contents are base-64 encoded:
-                    # #!/bin/bash
-                    #
-                    # echo "Exit script with non-zero exit code"
-                    # exit 1
-                    "script": "IyEvYmluL2Jhc2gKCmVjaG8gIkV4aXQgc2NyaXB0IHdpdGggbm9uLXplcm8gZXhpdCBjb2RlIgpleGl0IDEK"
+                    "commandToExecute": "exit 1"
                 }
             }
         }
@@ -265,8 +286,7 @@ def add_failing_dependent_extension_with_two_dependencies():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "autoUpgradeMinorVersion": True
             }
         },
         {
@@ -277,7 +297,9 @@ def add_failing_dependent_extension_with_two_dependencies():
                 "type": "RunCommandLinux",
                 "typeHandlerVersion": "1.0",
                 "autoUpgradeMinorVersion": True,
-                "settings": {}
+                "settings": {
+                    "commandToExecute": "date"
+                }
             }
         },
         {
@@ -288,12 +310,7 @@ def add_failing_dependent_extension_with_two_dependencies():
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
                 "settings": {
-                    # script contents are base-64 encoded:
-                    # #!/bin/bash
-                    #
-                    # echo "Exit script with non-zero exit code"
-                    # exit 2
-                    "script": "IyEvYmluL2Jhc2gKCmVjaG8gIkV4aXQgc2NyaXB0IHdpdGggbm9uLXplcm8gZXhpdCBjb2RlIgpleGl0IDIK"
+                    "commandToExecute": "exit 2"
                 }
             }
         }

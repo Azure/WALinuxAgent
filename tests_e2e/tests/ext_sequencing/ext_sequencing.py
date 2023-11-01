@@ -33,6 +33,7 @@ from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_
     remove_one_dependent_extension, remove_all_dependencies, add_one_dependent_extension, \
     add_single_dependencies, remove_all_dependent_extensions, add_failing_dependent_extension_with_one_dependency, add_failing_dependent_extension_with_two_dependencies
 from tests_e2e.tests.lib.agent_test import AgentVmssTest, TestSkipped
+from tests_e2e.tests.lib.virtual_machine_scale_set_client import VmssInstanceIpAddress
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
@@ -41,35 +42,42 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 
 class ExtSequencing(AgentVmssTest):
     # Cases to test different dependency scenarios
-    test_cases = [
+    _test_cases = [
         add_one_dependent_ext_without_settings,
         add_two_extensions_with_dependencies,
+        # remove_one_dependent_extension should only be run after another test case which has RunCommandLinux in the
+        # model
         remove_one_dependent_extension,
+        # remove_all_dependencies should only be run after another test case which has extension dependencies in the
+        # model
         remove_all_dependencies,
         add_one_dependent_extension,
         add_single_dependencies,
+        # remove_all_dependent_extensions should only be run after another test case which has dependent extension in
+        # the model
         remove_all_dependent_extensions,
         add_failing_dependent_extension_with_one_dependency,
         add_failing_dependent_extension_with_two_dependencies
     ]
 
     @staticmethod
-    def get_dependency_map(extensions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    def _get_dependency_map(extensions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         dependency_map: Dict[str, Dict[str, Any]] = dict()
 
         for ext in extensions:
             ext_name = ext['name']
             provisioned_after = ext['properties'].get('provisionAfterExtensions')
             depends_on = provisioned_after if provisioned_after else []
-            # We know an extension should fail if a script was provided
+            # We know an extension should fail if commandToExecute is exactly "exit 1"
             ext_settings = ext['properties'].get("settings")
-            should_fail = True if ext_settings and "script" in ext_settings else False
+            ext_command = ext['properties']['settings'].get("commandToExecute") if ext_settings else None
+            should_fail = ext_command == "exit 1"
             dependency_map[ext_name] = {"should_fail": should_fail, "depends_on": depends_on}
 
         return dependency_map
 
     @staticmethod
-    def get_sorted_extension_names(extensions: List[VirtualMachineScaleSetVMExtensionsSummary], ssh_client: SshClient) -> List[str]:
+    def _get_sorted_extension_names(extensions: List[VirtualMachineScaleSetVMExtensionsSummary], ssh_client: SshClient) -> List[str]:
         # Using VmExtensionIds to get publisher for each ext to be used in remote script
         extension_full_names = {
             "AzureMonitorLinuxAgent": VmExtensionIds.AzureMonitorLinuxAgent,
@@ -85,7 +93,7 @@ class ExtSequencing(AgentVmssTest):
                 enabled_times.append(
                     {
                         "name": ext.name,
-                        "enabled_time": datetime.strptime(enabled_time.replace('\n', ''), u'%Y-%m-%d %H:%M:%S')
+                        "enabled_time": datetime.strptime(enabled_time.strip(), u'%Y-%m-%d %H:%M:%S')
                      }
                 )
 
@@ -98,7 +106,7 @@ class ExtSequencing(AgentVmssTest):
         return sorted_extension_names
 
     @staticmethod
-    def validate_extension_sequencing(dependency_map: Dict[str, Dict[str, Any]], sorted_extension_names: List[str], relax_check: bool):
+    def _validate_extension_sequencing(dependency_map: Dict[str, Dict[str, Any]], sorted_extension_names: List[str], relax_check: bool):
         installed_ext = dict()
 
         # Iterate through the extensions in the enabled order and validate if their depending extensions are already
@@ -106,6 +114,9 @@ class ExtSequencing(AgentVmssTest):
         for ext in sorted_extension_names:
             # Check if the depending extension are already installed
             if ext not in dependency_map:
+                # There should not be any unexpected extensions on the scale set, even in the case we share the VMSS,
+                # because we update the scale set model with the extensions. Any extensions that are not in the scale
+                # set model would be disabled.
                 fail("Unwanted extension found in VMSS Instance view: {0}".format(ext))
             if dependency_map[ext] is not None:
                 dependencies = dependency_map[ext].get('depends_on')
@@ -134,10 +145,12 @@ class ExtSequencing(AgentVmssTest):
         log.info("Validated extension sequencing")
 
     def run(self):
-        instances_ip_address = self._context.vmss.get_instances_ip_address()
-        ssh_clients: List[SshClient] = [SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file) for instance in instances_ip_address]
+        instances_ip_address: List[VmssInstanceIpAddress] = self._context.vmss.get_instances_ip_address()
+        ssh_clients: Dict[str, SshClient] = dict()
+        for instance in instances_ip_address:
+            ssh_clients[instance.instance_name] = SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file)
 
-        if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(ssh_clients[0].run_command("uname -a")):
+        if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(ssh_clients.values()[0].run_command("uname -a")):
             raise TestSkipped("Currently AzureMonitorLinuxAgent is not supported on this distro")
 
         # This is the base ARM template that's used for deploying extensions for this scenario
@@ -161,18 +174,15 @@ class ExtSequencing(AgentVmssTest):
             ]
         }
 
-        for case in self.test_cases:
-            # Update the settings for each extension in this scenario to make sure they're always unique to force CRP
+        for case in self._test_cases:
+            # Assign unique guid to forceUpdateTag for each extension to make sure they're always unique to force CRP
             # to generate a new sequence number each time
             test_guid = str(uuid.uuid4())
             extensions = case()
             for ext in extensions:
-                # We only want to update the settings if they are empty (so we don't overwrite any failing script
-                # scenarios)
-                if "settings" in ext["properties"] and not ext["properties"]["settings"]:
-                    ext["properties"]["settings"].update({
-                        "commandToExecute": "echo \"{0}: $(date +%Y-%m-%dT%H:%M:%S.%3NZ)\"".format(test_guid)
-                    })
+                ext["properties"].update({
+                    "forceUpdateTag": test_guid
+                })
 
             # We update the extension template here with extensions that are specific to the scenario that we want to
             # test out
@@ -183,7 +193,7 @@ class ExtSequencing(AgentVmssTest):
                 'extensions'] = extensions
 
             # Log the dependency map for the extensions in this test case
-            dependency_map = self.get_dependency_map(extensions)
+            dependency_map = self._get_dependency_map(extensions)
             log.info("")
             log.info("The dependency map of the extensions for this test case is:")
             for ext, details in dependency_map.items():
@@ -209,17 +219,18 @@ class ExtSequencing(AgentVmssTest):
             instance_view_extensions = self._context.vmss.get_instance_view().extensions
 
             # Validate that the extensions were enabled in the correct order on each instance of the scale set
-            for ssh_client in ssh_clients:
+            for instance_name, ssh_client in ssh_clients.items():
                 log.info("")
-                log.info("Validate extension sequencing on {0}...".format(ssh_client.ip_address))
+                log.info("Validate extension sequencing on {0}:{1}...".format(instance_name, ssh_client.ip_address))
 
                 # Sort the VM extensions by the time they were enabled
-                sorted_extension_names = self.get_sorted_extension_names(instance_view_extensions, ssh_client)
+                sorted_extension_names = self._get_sorted_extension_names(instance_view_extensions, ssh_client)
 
                 # Validate that the extensions were enabled in the correct order. We relax this check if no settings
-                # are provided for a dependent extension.
+                # are provided for a dependent extension, since the guest agent currently ignores dependencies in this
+                # case.
                 relax_check = True if "settings" in case.__name__ else False
-                self.validate_extension_sequencing(dependency_map, sorted_extension_names, relax_check)
+                self._validate_extension_sequencing(dependency_map, sorted_extension_names, relax_check)
 
             log.info("------")
 

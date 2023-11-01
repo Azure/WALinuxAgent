@@ -234,9 +234,14 @@ class AgentTestSuite(LisaTestSuite):
 
         if isinstance(environment.nodes[0], LocalNode):
             # We need to create a new VMSS.
-            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0. Note
-            # that we hardcode the scale set name to "n0" since we are creating a single scale set.
-            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{self._vmss_resource_group_count}"
+            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e<rg count>-n0
+            # Note that we hardcode the scale set name to "n0" since we are creating a single scale set.
+            # Resource group name cannot have any uppercase characters, because the publicIP cannot have uppercase
+            # characters in its domain name label.
+            self._rg_count_lock.acquire()
+            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{self._rg_count}"
+            self._rg_count += 1
+            self._rg_count_lock.release()
             self._vmss_name = f"{self._resource_group_name}-n0"
             self._test_nodes = []  # we'll fill this up when the scale set is created
             self._create_scale_set = True
@@ -290,6 +295,8 @@ class AgentTestSuite(LisaTestSuite):
     #
     _working_directory_lock = RLock()
     _setup_lock = RLock()
+    _rg_count_lock = RLock()
+    _rg_count = 0
 
     def _create_working_directory(self) -> None:
         """

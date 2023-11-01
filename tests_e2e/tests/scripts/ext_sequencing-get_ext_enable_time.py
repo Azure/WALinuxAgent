@@ -61,7 +61,7 @@ def main():
 
     if not enabled_match:
         # Try to get enabled time from extension command execution logs
-        print("Agent log does not show extension was enabled")
+        print("Agent log does not show extension was enabled", file=sys.stderr)
         sys.exit(1)
 
     if args.ext_type == "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent":
