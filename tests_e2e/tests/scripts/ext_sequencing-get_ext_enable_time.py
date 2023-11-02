@@ -32,6 +32,7 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--ext_type", dest='ext_type', required=True)
+    parser.add_argument("--start_time", dest='start_time', required=True)
     args, _ = parser.parse_known_args()
 
     # Extension enabled time is in extension CommandExecution.log
@@ -41,7 +42,9 @@ def main():
     for line in command_exec_log.readlines():
         line = line.rstrip()
         if args.ext_type == "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent":
-            # AMA logs enable succeeded and its timestamp to the agent log:
+            # AMA logs enable succeeded and its timestamp to the command execution log:
+            # 2023-11-01T23:22:53.124603Z INFO ExtHandler [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.28.11] Command: ./shim.sh -enable
+            # [stdout]
             # 2023/09/26 04:07:33 [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.28.5] Enable,success,0,Enable succeeded
             enable_pattern = r'.*(?P<timestamp>\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}) \[Microsoft\.Azure\.Monitor\.AzureMonitorLinuxAgent\-.*] .*Enable succeeded.*'
             match = re.match(enable_pattern, line)
@@ -49,7 +52,7 @@ def main():
                 enabled_match = match
         else:
             # For RC and CSE, we can determine when enable succeeded from the stdout of the enable command execution from
-            # the agent log:
+            # the command execution log:
             # 2023-09-26T04:07:39.042948Z INFO ExtHandler [Microsoft.CPlat.Core.RunCommandLinux-1.0.5] Command: bin/run-command-shim enable
             # [stdout]
             # ...
@@ -65,9 +68,16 @@ def main():
         sys.exit(1)
 
     if args.ext_type == "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent":
-        print(datetime.strptime(enabled_match.group('timestamp'), u'%Y/%m/%d %H:%M:%S'))
+        enable_time = datetime.strptime(enabled_match.group('timestamp'), u'%Y/%m/%d %H:%M:%S')
     else:
-        print(datetime.strptime(enabled_match.group('timestamp'), u'%Y-%m-%dT%H:%M:%SZ'))
+        enable_time = datetime.strptime(enabled_match.group('timestamp'), u'%Y-%m-%dT%H:%M:%SZ')
+
+    start_time = datetime.strptime(args.start_time, u'%Y-%m-%dT%H:%M:%SZ')
+    if enable_time < start_time:
+        print("Agent log does not show extension was enabled after this test case started", file=sys.stderr)
+        sys.exit(1)
+    else:
+        print(enable_time)
 
     sys.exit(0)
 

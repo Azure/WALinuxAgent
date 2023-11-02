@@ -170,6 +170,9 @@ class AgentTestSuite(LisaTestSuite):
         self._create_scale_set: bool
         self._delete_scale_set: bool
 
+    _rg_count_lock = RLock()
+    _rg_count = 0
+
     def _initialize(self, environment: Environment, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
         """
         Initializes the AgentTestSuite from the data passed as arguments by LISA.
@@ -295,8 +298,6 @@ class AgentTestSuite(LisaTestSuite):
     #
     _working_directory_lock = RLock()
     _setup_lock = RLock()
-    _rg_count_lock = RLock()
-    _rg_count = 0
 
     def _create_working_directory(self) -> None:
         """

@@ -71,13 +71,13 @@ class ExtSequencing(AgentVmssTest):
             # We know an extension should fail if commandToExecute is exactly "exit 1"
             ext_settings = ext['properties'].get("settings")
             ext_command = ext['properties']['settings'].get("commandToExecute") if ext_settings else None
-            should_fail = ext_command == "exit 1"
+            should_fail = ext_command == "exit 1" or ext_command == "exit 2"
             dependency_map[ext_name] = {"should_fail": should_fail, "depends_on": depends_on}
 
         return dependency_map
 
     @staticmethod
-    def _get_sorted_extension_names(extensions: List[VirtualMachineScaleSetVMExtensionsSummary], ssh_client: SshClient) -> List[str]:
+    def _get_sorted_extension_names(extensions: List[VirtualMachineScaleSetVMExtensionsSummary], ssh_client: SshClient, test_case_start: datetime) -> List[str]:
         # Using VmExtensionIds to get publisher for each ext to be used in remote script
         extension_full_names = {
             "AzureMonitorLinuxAgent": VmExtensionIds.AzureMonitorLinuxAgent,
@@ -88,8 +88,7 @@ class ExtSequencing(AgentVmssTest):
         for ext in extensions:
             # Only check extensions which succeeded provisioning
             if "succeeded" in ext.statuses_summary[0].code:
-                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext_type {extension_full_names[ext.name]}",
-                                                      use_sudo=True)
+                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext_type {extension_full_names[ext.name]} --start_time {test_case_start.strftime(u'%Y-%m-%dT%H:%M:%SZ')}", use_sudo=True)
                 enabled_times.append(
                     {
                         "name": ext.name,
@@ -175,6 +174,8 @@ class ExtSequencing(AgentVmssTest):
         }
 
         for case in self._test_cases:
+            test_case_start = datetime.now()
+
             # Assign unique guid to forceUpdateTag for each extension to make sure they're always unique to force CRP
             # to generate a new sequence number each time
             test_guid = str(uuid.uuid4())
@@ -211,7 +212,7 @@ class ExtSequencing(AgentVmssTest):
             except Exception as e:
                 # We only expect to catch an exception during deployment if we are forcing one of the extensions to
                 # fail. Otherwise, report the failure.
-                if "failing" not in case.__name__:
+                if "failing" not in case.__name__ or "VMExtensionProvisioningError" not in e.message or "Enable failed: failed to execute command" not in e.message:
                     fail("Extension template deployment unexpectedly failed: {0}".format(e))
 
             # Get the extensions on the VMSS from the instance view
@@ -224,7 +225,7 @@ class ExtSequencing(AgentVmssTest):
                 log.info("Validate extension sequencing on {0}:{1}...".format(instance_name, ssh_client.ip_address))
 
                 # Sort the VM extensions by the time they were enabled
-                sorted_extension_names = self._get_sorted_extension_names(instance_view_extensions, ssh_client)
+                sorted_extension_names = self._get_sorted_extension_names(instance_view_extensions, ssh_client, test_case_start)
 
                 # Validate that the extensions were enabled in the correct order. We relax this check if no settings
                 # are provided for a dependent extension, since the guest agent currently ignores dependencies in this
