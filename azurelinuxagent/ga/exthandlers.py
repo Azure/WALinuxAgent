@@ -964,33 +964,6 @@ class ExtHandlersHandler(object):
                       message=msg)
             return None
 
-    def get_ext_handlers_status_debug_info(self, vm_status):
-        status_blob_text = self.protocol.get_status_blob_data()
-        if status_blob_text is None:
-            status_blob_text = ""
-
-        support_multi_config = {}
-        vm_status_data = get_properties(vm_status)
-        vm_handler_statuses = vm_status_data.get('vmAgent', {}).get('extensionHandlers')
-        for handler_status in vm_handler_statuses:
-            if handler_status.get('name') is not None:
-                support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
-
-        debug_text = json.dumps({
-            "agentName": AGENT_NAME,
-            "daemonVersion": str(version.get_daemon_version()),
-            "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
-            "supportsMultiConfig": support_multi_config
-        })
-
-        return '''{{
-    "__comment__": "The __status__ property is the actual status reported to CRP",
-    "__status__": {0},
-    "__debug__": {1}
-}}
-'''.format(status_blob_text, debug_text)
-
     def report_ext_handler_status(self, vm_status, ext_handler, goal_state_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
