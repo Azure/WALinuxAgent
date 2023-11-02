@@ -243,9 +243,11 @@ class AgentTestSuite(LisaTestSuite):
             # Resource group name cannot have any uppercase characters, because the publicIP cannot have uppercase
             # characters in its domain name label.
             AgentTestSuite._rg_count_lock.acquire()
-            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{AgentTestSuite._rg_count}"
-            AgentTestSuite._rg_count += 1
-            AgentTestSuite._rg_count_lock.release()
+            try:
+                self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{AgentTestSuite._rg_count}"
+                AgentTestSuite._rg_count += 1
+            finally:
+                AgentTestSuite._rg_count_lock.release()
             self._vmss_name = f"{self._resource_group_name}-n0"
             self._test_nodes = []  # we'll fill this up when the scale set is created
             self._create_scale_set = True
