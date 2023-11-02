@@ -170,6 +170,11 @@ class AgentTestSuite(LisaTestSuite):
         self._create_scale_set: bool
         self._delete_scale_set: bool
 
+    #
+    # Test suites within the same runbook may be executed concurrently, and we need to keep track of how many resource
+    # groups are being created. We use this lock and counter to allow only 1 thread to increment the resource group
+    # count.
+    #
     _rg_count_lock = RLock()
     _rg_count = 0
 
@@ -241,10 +246,10 @@ class AgentTestSuite(LisaTestSuite):
             # Note that we hardcode the scale set name to "n0" since we are creating a single scale set.
             # Resource group name cannot have any uppercase characters, because the publicIP cannot have uppercase
             # characters in its domain name label.
-            self._rg_count_lock.acquire()
-            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{self._rg_count}"
-            self._rg_count += 1
-            self._rg_count_lock.release()
+            AgentTestSuite._rg_count_lock.acquire()
+            self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{AgentTestSuite._rg_count}"
+            AgentTestSuite._rg_count += 1
+            AgentTestSuite._rg_count_lock.release()
             self._vmss_name = f"{self._resource_group_name}-n0"
             self._test_nodes = []  # we'll fill this up when the scale set is created
             self._create_scale_set = True

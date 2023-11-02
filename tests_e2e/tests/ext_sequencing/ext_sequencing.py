@@ -22,6 +22,7 @@
 # validates they are enabled in order of dependencies.
 #
 import copy
+import re
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any
@@ -212,8 +213,13 @@ class ExtSequencing(AgentVmssTest):
             except Exception as e:
                 # We only expect to catch an exception during deployment if we are forcing one of the extensions to
                 # fail. Otherwise, report the failure.
-                if "failing" not in case.__name__ or "VMExtensionProvisioningError" not in e.message or "Enable failed: failed to execute command" not in e.message:
+                deployment_failure_pattern = r"[\s\S]*\"details\": [\s\S]* \"code\": \"(?P<code>.*)\"[\s\S]* \"message\": \"(?P<msg>.*)\"[\s\S]*"
+                msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM. Please see the VM extension instance view for other failures. The first extension failed due to the error: VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
+                deployment_failure_match = re.match(deployment_failure_pattern, str(e))
+                if "failing" not in case.__name__:
                     fail("Extension template deployment unexpectedly failed: {0}".format(e))
+                elif not deployment_failure_match or deployment_failure_match.group("code") != "VMExtensionProvisioningError" or not re.match(msg_pattern, deployment_failure_match.group("msg")):
+                    fail("Extension template deployment failed as expected, but with an unexpected error: {0}".format(e))
 
             # Get the extensions on the VMSS from the instance view
             log.info("")

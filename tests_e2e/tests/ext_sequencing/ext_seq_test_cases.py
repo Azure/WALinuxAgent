@@ -246,7 +246,8 @@ def add_failing_dependent_extension_with_one_dependency():
                 "publisher": "Microsoft.Azure.Monitor",
                 "type": "AzureMonitorLinuxAgent",
                 "typeHandlerVersion": "1.5",
-                "autoUpgradeMinorVersion": True
+                "autoUpgradeMinorVersion": True,
+                "settings": {}
             }
         },
         {
