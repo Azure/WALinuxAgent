@@ -137,14 +137,6 @@ variable:
     is_case_visible: true
 
   #
-  # Count of how many resource groups have been created, used to create a unique resource group name for each vmss test
-  # environment
-  #
-  - name: c_vmss_resource_group_count
-    value: 0
-    is_case_visible: true
-
-  #
   # Test suites assigned for execution in the current test environment.
   #
   # The combinator splits the test suites specified in the 'test_suites' variable in subsets and assigns each subset
