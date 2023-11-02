@@ -11,3 +11,4 @@ locations: "AzureCloud:southcentralus"
 skip_on_clouds:
   - "AzureChinaCloud"
   - "AzureUSGovernment"
+owns_vm: true
