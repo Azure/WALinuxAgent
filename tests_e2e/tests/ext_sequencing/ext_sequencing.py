@@ -72,7 +72,7 @@ class ExtSequencing(AgentVmssTest):
             # We know an extension should fail if commandToExecute is exactly "exit 1"
             ext_settings = ext['properties'].get("settings")
             ext_command = ext['properties']['settings'].get("commandToExecute") if ext_settings else None
-            should_fail = ext_command == "exit 1" or ext_command == "exit 2"
+            should_fail = ext_command == "exit 1"
             dependency_map[ext_name] = {"should_fail": should_fail, "depends_on": depends_on}
 
         return dependency_map
@@ -89,7 +89,7 @@ class ExtSequencing(AgentVmssTest):
         for ext in extensions:
             # Only check extensions which succeeded provisioning
             if "succeeded" in ext.statuses_summary[0].code:
-                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext_type {extension_full_names[ext.name]} --start_time {test_case_start.strftime(u'%Y-%m-%dT%H:%M:%SZ')}", use_sudo=True)
+                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext_type '{extension_full_names[ext.name]}' --start_time '{str(test_case_start)}'", use_sudo=True)
                 enabled_times.append(
                     {
                         "name": ext.name,

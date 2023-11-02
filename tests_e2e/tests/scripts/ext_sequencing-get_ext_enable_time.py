@@ -18,6 +18,7 @@
 #
 # Gets the timestamp for when the provided extension was enabled
 #
+
 import argparse
 import re
 import sys
@@ -72,9 +73,9 @@ def main():
     else:
         enable_time = datetime.strptime(enabled_match.group('timestamp'), u'%Y-%m-%dT%H:%M:%SZ')
 
-    start_time = datetime.strptime(args.start_time, u'%Y-%m-%dT%H:%M:%SZ')
+    start_time = datetime.strptime(args.start_time, u'%Y-%m-%d %H:%M:%S.%f')
     if enable_time < start_time:
-        print("Agent log does not show extension was enabled after this test case started", file=sys.stderr)
+        print("Agent log does not show extension was enabled after this test case started. Last enabled time was {0}. This test case started at {1}".format(enable_time, start_time), file=sys.stderr)
         sys.exit(1)
     else:
         print(enable_time)

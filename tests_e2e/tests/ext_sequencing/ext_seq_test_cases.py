@@ -311,7 +311,7 @@ def add_failing_dependent_extension_with_two_dependencies():
                 "typeHandlerVersion": "2.1",
                 "autoUpgradeMinorVersion": True,
                 "settings": {
-                    "commandToExecute": "exit 2"
+                    "commandToExecute": "exit 1"
                 }
             }
         }
