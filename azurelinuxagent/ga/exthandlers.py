@@ -53,8 +53,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSu
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
-    PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
