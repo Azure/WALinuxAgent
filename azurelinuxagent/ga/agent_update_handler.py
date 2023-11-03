@@ -155,7 +155,7 @@ class AgentUpdateHandler(object):
         Persisting state to address the issue when HGPA supported(properties present) to unsupported(properties not present) and also sync between Wireserver and HGAP.
         Updates the isVrsionFromRSM and isVMEnabledForRSMUpgrades of the most recent goal state retrieved if
         properties changed from last rsm state.
-        Timestamp is the timestamp of the goal state used to update the state.
+        Timestamp is the timestamp of the goal state used to update the state. This timestamp helps ignore old goal states when it gets to the vm as a recent goal state.
         """
         last_timestamp = self._get_rsm_state_used_gs_timestamp()
         # update the state if the goal state is newer than the last goal state used to update the state.
