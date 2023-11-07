@@ -2176,7 +2176,7 @@ def _create_update_handler():
 
 
 @contextlib.contextmanager
-def _mock_exthandlers_handler(extension_statuses=None):
+def _mock_exthandlers_handler(extension_statuses=None, save_to_history=False):
     """
     Creates an ExtHandlersHandler that doesn't actually handle any extensions, but that returns status for 1 extension.
     The returned ExtHandlersHandler uses a mock WireProtocol, and both the run() and report_ext_handlers_status() are
@@ -2191,7 +2191,7 @@ def _mock_exthandlers_handler(extension_statuses=None):
         vm_status.vmAgent.extensionHandlers[0].extension_status.status = extension_status
         return vm_status
 
-    with mock_wire_protocol(DATA_FILE) as protocol:
+    with mock_wire_protocol(DATA_FILE, save_to_history=save_to_history) as protocol:
         exthandlers_handler = ExtHandlersHandler(protocol)
         exthandlers_handler.run = Mock()
         if extension_statuses is None:
@@ -2238,7 +2238,7 @@ class ProcessGoalStateTestCase(AgentTestCase):
             self.assertEqual(3, agent_update_handler.run.call_count, "agent_update_handler.run() should have been called on the new goal state")
 
     def test_it_should_write_the_agent_status_to_the_history_folder(self):
-        with _mock_exthandlers_handler() as exthandlers_handler:
+        with _mock_exthandlers_handler(save_to_history=True) as exthandlers_handler:
             update_handler = _create_update_handler()
             remote_access_handler = Mock()
             remote_access_handler.run = Mock()

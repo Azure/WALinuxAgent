@@ -339,7 +339,7 @@ class UpdateHandler(object):
             # Initialize the goal state; some components depend on information provided by the goal state and this
             # call ensures the required info is initialized (e.g. telemetry depends on the container ID.)
             #
-            protocol = self.protocol_util.get_protocol()
+            protocol = self.protocol_util.get_protocol(save_to_history=True)
 
             self._initialize_goal_state(protocol)
 
@@ -503,7 +503,7 @@ class UpdateHandler(object):
         try:
             max_errors_to_log = 3
 
-            protocol.client.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log)
+            protocol.client.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
 
             self._goal_state = protocol.get_goal_state()
 
@@ -530,8 +530,7 @@ class UpdateHandler(object):
             else:
                 if self._update_goal_state_last_error_report + timedelta(hours=6) > datetime.now():
                     self._update_goal_state_last_error_report = datetime.now()
-                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))
-                    logger.error(message)
+                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))                    logger.error(message)
                     add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
             return False
 

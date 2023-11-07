@@ -112,14 +112,18 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             protocol.mock_wire_data.set_incarnation(999)
             protocol.mock_wire_data.set_etag(888)
 
-            _ = GoalState(protocol.client)
+            _ = GoalState(protocol.client, save_to_history=True)
 
             self._assert_directory_contents(
                 self._find_history_subdirectory("999-888"),
                 ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json", "Certificates.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
 
+    @staticmethod
+    def _get_history_directory():
+        return os.path.join(conf.get_lib_dir(), ARCHIVE_DIRECTORY_NAME)
+
     def _find_history_subdirectory(self, tag):
-        matches = glob.glob(os.path.join(self.tmp_dir, ARCHIVE_DIRECTORY_NAME, "*_{0}".format(tag)))
+        matches = glob.glob(os.path.join(self._get_history_directory(), "*_{0}".format(tag)))
         self.assertTrue(len(matches) == 1, "Expected one history directory for tag {0}. Got: {1}".format(tag, matches))
         return matches[0]
 
@@ -136,7 +140,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             protocol.mock_wire_data.set_incarnation(123)
             protocol.mock_wire_data.set_etag(654)
 
-            goal_state = GoalState(protocol.client)
+            goal_state = GoalState(protocol.client, save_to_history=True)
             self._assert_directory_contents(
                 self._find_history_subdirectory("123-654"),
                 ["GoalState.xml", "ExtensionsConfig.xml", "VmSettings.json",  "Certificates.json", "SharedConfig.xml", "HostingEnvironmentConfig.xml"])
@@ -164,7 +168,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             protocol.mock_wire_data.set_incarnation(888)
             protocol.mock_wire_data.set_etag(888)
 
-            goal_state = GoalState(protocol.client)
+            goal_state = GoalState(protocol.client, save_to_history=True)
 
             extensions_goal_state = goal_state.extensions_goal_state
             protected_settings = []
@@ -220,6 +224,12 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             actual = fileutil.read_file(vm_settings_file)
 
             self.assertEqual(expected, actual, "The vmSettings were not saved correctly")
+
+    def test_should_not_save_to_the_history_by_default(self):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
+            _ = GoalState(protocol.client)  # omit the save_to_history parameter
+            history = self._get_history_directory()
+            self.assertFalse(os.path.exists(history), "The history directory not should have been created")
 
     @staticmethod
     @contextlib.contextmanager

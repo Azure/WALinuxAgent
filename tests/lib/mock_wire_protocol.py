@@ -22,7 +22,7 @@ from tests.lib import wire_protocol_data
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True, save_to_history=False):
     """
     Creates a WireProtocol object that handles requests to the WireServer, the Host GA Plugin, and some requests to storage (requests that provide mock data
     in wire_protocol_data.py).
@@ -37,6 +37,8 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
 
     The 'do_not_mock' lambda can be used to skip the mocks for specific requests; if the lambda returns True, the mocks won't be applied and the
     original common.utils.restutil.http_request will be invoked instead.
+
+    The 'save_to_history' parameter is passed thru in the call to WireProtocol.detect().
 
     The returned protocol object maintains a list of "tracked" urls. When a handler function returns a value than is not None the url for the
     request is automatically added to the tracked list. The handler function can add other items to this list using the track_url() method on
@@ -147,7 +149,7 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     # go do it
     try:
         protocol.start()
-        protocol.detect()
+        protocol.detect(save_to_history=save_to_history)
         yield protocol
     finally:
         protocol.stop()
