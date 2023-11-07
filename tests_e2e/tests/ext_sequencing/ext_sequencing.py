@@ -61,6 +61,8 @@ class ExtSequencing(AgentVmssTest):
         add_failing_dependent_extension_with_two_dependencies
     ]
 
+    _scenario_start = datetime.min
+
     @staticmethod
     def _get_dependency_map(extensions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         dependency_map: Dict[str, Dict[str, Any]] = dict()
@@ -176,6 +178,8 @@ class ExtSequencing(AgentVmssTest):
 
         for case in self._test_cases:
             test_case_start = datetime.now()
+            if self._scenario_start == datetime.min:
+                self._scenario_start = test_case_start
 
             # Assign unique guid to forceUpdateTag for each extension to make sure they're always unique to force CRP
             # to generate a new sequence number each time
@@ -212,7 +216,8 @@ class ExtSequencing(AgentVmssTest):
                 rg_client.deploy_template(template=ext_template)
             except Exception as e:
                 # We only expect to catch an exception during deployment if we are forcing one of the extensions to
-                # fail. Otherwise, report the failure.
+                # fail. We know an extension should fail if "failing" is in the case name. Otherwise, report the
+                # failure.
                 deployment_failure_pattern = r"[\s\S]*\"details\": [\s\S]* \"code\": \"(?P<code>.*)\"[\s\S]* \"message\": \"(?P<msg>.*)\"[\s\S]*"
                 msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM. Please see the VM extension instance view for other failures. The first extension failed due to the error: VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
                 deployment_failure_match = re.match(deployment_failure_pattern, str(e))
@@ -240,6 +245,10 @@ class ExtSequencing(AgentVmssTest):
                 self._validate_extension_sequencing(dependency_map, sorted_extension_names, relax_check)
 
             log.info("------")
+
+    def get_ignore_errors_before_timestamp(self) -> datetime:
+        # Ignore errors in the agent log before the first test case starts
+        return self._scenario_start
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
