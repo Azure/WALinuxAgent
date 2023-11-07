@@ -6,3 +6,4 @@ tests:
   - "agent_cgroups/agent_cgroups.py"
   - "agent_cgroups/agent_cpu_quota.py"
 images: "cgroups-endorsed"
+owns_vm: true
