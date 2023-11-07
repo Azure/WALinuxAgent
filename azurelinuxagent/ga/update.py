@@ -530,7 +530,8 @@ class UpdateHandler(object):
             else:
                 if self._update_goal_state_last_error_report + timedelta(hours=6) > datetime.now():
                     self._update_goal_state_last_error_report = datetime.now()
-                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))                    logger.error(message)
+                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))
+                    logger.error(message)
                     add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
             return False
 
