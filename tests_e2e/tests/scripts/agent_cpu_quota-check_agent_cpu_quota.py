@@ -169,7 +169,7 @@ def verify_process_check_on_agent_cgroups():
     #     [CGroupsException] The agent's cgroup includes unexpected processes: ['[PID: 25826] python3\x00/home/nam/Compute-Runtime-Tux-Pipeline/dungeon_crawler/s']
     wait_for_log_message(
         "Disabling resource usage monitoring. Reason: Check on cgroups failed:.+The agent's cgroup includes unexpected processes")
-    disabled: bool = retry_if_false(lambda: check_agent_quota_disabled())
+    disabled: bool = retry_if_false(check_agent_quota_disabled)
     if not disabled:
         fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))
 
@@ -200,7 +200,7 @@ def verify_throttling_time_check_on_agent_cgroups():
         timeout=datetime.timedelta(minutes=10))
     wait_for_log_message("Stopped tracking cgroup walinuxagent.service", timeout=datetime.timedelta(minutes=10))
     wait_for_log_message("Executing systemctl daemon-reload...", timeout=datetime.timedelta(minutes=5))
-    disabled: bool = retry_if_false(lambda: check_agent_quota_disabled())
+    disabled: bool = retry_if_false(check_agent_quota_disabled)
     if not disabled:
         fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))
 
