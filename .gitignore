@@ -91,3 +91,6 @@ ENV/
 # pyenv
 .python-version
 .vscode/
+
+# Local e2e test run files
+runtime/
