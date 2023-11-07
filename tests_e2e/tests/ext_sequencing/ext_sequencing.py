@@ -34,6 +34,7 @@ from tests_e2e.tests.ext_sequencing.ext_seq_test_cases import add_one_dependent_
     remove_one_dependent_extension, remove_all_dependencies, add_one_dependent_extension, \
     add_single_dependencies, remove_all_dependent_extensions, add_failing_dependent_extension_with_one_dependency, add_failing_dependent_extension_with_two_dependencies
 from tests_e2e.tests.lib.agent_test import AgentVmssTest, TestSkipped
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VmssInstanceIpAddress
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
@@ -42,6 +43,11 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 
 
 class ExtSequencing(AgentVmssTest):
+
+    def __init__(self, context: AgentVmTestContext):
+        super().__init__(context)
+        self._scenario_start = datetime.min
+
     # Cases to test different dependency scenarios
     _test_cases = [
         add_one_dependent_ext_without_settings,
@@ -60,8 +66,6 @@ class ExtSequencing(AgentVmssTest):
         add_failing_dependent_extension_with_one_dependency,
         add_failing_dependent_extension_with_two_dependencies
     ]
-
-    _scenario_start = datetime.min
 
     @staticmethod
     def _get_dependency_map(extensions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
