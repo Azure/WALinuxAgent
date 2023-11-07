@@ -28,16 +28,14 @@ import time
 import unittest
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
-    get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.fileutil import read_file
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO, AGENT_NAME, \
-    AGENT_VERSION
+from azurelinuxagent.common.version import AGENT_VERSION
 from azurelinuxagent.common.exception import ResourceGoneError, ExtensionDownloadError, ProtocolError, \
     ExtensionErrorCodes, ExtensionError, GoalStateAggregateStatusCodes
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, ExtHandlerStatus, \
@@ -3247,91 +3245,75 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
                 )
 
             expected_status = {
-                "__comment__": "The __status__ property is the actual status reported to CRP",
-                "__status__": {
-                    "version": "1.1",
-                    "timestampUTC": "1970-01-01T00:00:00Z",
-                    "aggregateStatus": {
-                        "guestAgentStatus": {
-                            "version": AGENT_VERSION,
-                            "status": "Ready",
-                            "formattedMessage": {
-                                "lang": "en-US",
-                                "message": "Guest Agent is running"
-                            }
-                        },
-                        "handlerAggregateStatus": [
-                            {
-                                "handlerVersion": "1.0.0",
-                                "handlerName": "OSTCExtensions.ExampleHandlerLinux",
-                                "status": "Ready",
-                                "code": 0,
-                                "useExactVersion": True,
-                                "formattedMessage": {
-                                    "lang": "en-US",
-                                    "message": "Plugin enabled"
-                                },
-                                "runtimeSettingsStatus": {
-                                    "settingsStatus": {
-                                        "status": {
-                                            "name": "OSTCExtensions.ExampleHandlerLinux",
-                                            "configurationAppliedTime": None,
-                                            "operation": None,
-                                            "status": "success",
-                                            "code": 0,
-                                            "formattedMessage": {
-                                                "lang": "en-US",
-                                                "message": None
-                                            }
-                                        },
-                                        "version": 1.0,
-                                        "timestampUTC": "1970-01-01T00:00:00Z"
-                                    },
-                                    "sequenceNumber": 0
-                                }
-                            }
-                        ],
-                        "vmArtifactsAggregateStatus": {
-                            "goalStateAggregateStatus": {
-                                "formattedMessage": {
-                                    "lang": "en-US",
-                                    "message": "GoalState executed successfully"
-                                },
-                                "timestampUTC": "1970-01-01T00:00:00Z",
-                                "inSvdSeqNo": "1",
-                                "status": "Success",
-                                "code": 0
-                            }
+                "version": "1.1",
+                "timestampUTC": "1970-01-01T00:00:00Z",
+                "aggregateStatus": {
+                    "guestAgentStatus": {
+                        "version": AGENT_VERSION,
+                        "status": "Ready",
+                        "formattedMessage": {
+                            "lang": "en-US",
+                            "message": "Guest Agent is running"
                         }
                     },
-                    "guestOSInfo": None,
-                    "supportedFeatures": supported_features
-                },
-                "__debug__": {
-                    "agentName": AGENT_NAME,
-                    "daemonVersion": "0.0.0.0",
-                    "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-                    "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
-                    "supportsMultiConfig": {
-                        "OSTCExtensions.ExampleHandlerLinux": False
+                    "handlerAggregateStatus": [
+                        {
+                            "handlerVersion": "1.0.0",
+                            "handlerName": "OSTCExtensions.ExampleHandlerLinux",
+                            "status": "Ready",
+                            "code": 0,
+                            "useExactVersion": True,
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "Plugin enabled"
+                            },
+                            "runtimeSettingsStatus": {
+                                "settingsStatus": {
+                                    "status": {
+                                        "name": "OSTCExtensions.ExampleHandlerLinux",
+                                        "configurationAppliedTime": None,
+                                        "operation": None,
+                                        "status": "success",
+                                        "code": 0,
+                                        "formattedMessage": {
+                                            "lang": "en-US",
+                                            "message": None
+                                        }
+                                    },
+                                    "version": 1.0,
+                                    "timestampUTC": "1970-01-01T00:00:00Z"
+                                },
+                                "sequenceNumber": 0
+                            }
+                        }
+                    ],
+                    "vmArtifactsAggregateStatus": {
+                        "goalStateAggregateStatus": {
+                            "formattedMessage": {
+                                "lang": "en-US",
+                                "message": "GoalState executed successfully"
+                            },
+                            "timestampUTC": "1970-01-01T00:00:00Z",
+                            "inSvdSeqNo": "1",
+                            "status": "Success",
+                            "code": 0
+                        }
                     }
-                }
+                },
+                "guestOSInfo": None,
+                "supportedFeatures": supported_features
             }
 
-
             exthandlers_handler.run()
-            vm_status = exthandlers_handler.report_ext_handlers_status()
-            actual_status_json = json.loads(exthandlers_handler.get_ext_handlers_status_debug_info(vm_status))
+            exthandlers_handler.report_ext_handlers_status()
+
+            actual_status = json.loads(protocol.get_status_blob_data())
 
             # Don't compare the guestOSInfo
-            status_property = actual_status_json.get("__status__")
-            self.assertIsNotNone(status_property, "The status file is missing the __status__ property")
-            self.assertIsNotNone(status_property.get("guestOSInfo"), "The status file is missing the guestOSInfo property")
-            status_property["guestOSInfo"] = None
+            self.assertIsNotNone(actual_status.get("guestOSInfo"), "The status file is missing the guestOSInfo property")
+            actual_status["guestOSInfo"] = None
 
-            actual_status_json.pop('guestOSInfo', None)
-
-            self.assertEqual(expected_status, actual_status_json)
+            self.assertEqual(expected_status, actual_status)
 
     def test_it_should_process_extensions_only_if_allowed(self):
         def assert_extensions_called(exthandlers_handler, expected_call_count=0):
