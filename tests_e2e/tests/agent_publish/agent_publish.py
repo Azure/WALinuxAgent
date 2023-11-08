@@ -61,9 +61,9 @@ class AgentPublishTest(AgentVmTest):
         log.info('Agent info \n%s', stdout)
 
     def _prepare_agent(self) -> None:
-        log.info("Modifying agent update related config flags")
-        self._run_remote_test(self._ssh_client, "update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y", use_sudo=True)
-        log.info('Updated agent-update DownloadNewAgents  GAFamily config flags')
+        log.info("Modifying agent update related config flags and renaming the log file")
+        self._run_remote_test(self._ssh_client, "sh -c 'agent-service stop && mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && update-waagent-conf Debug.DownloadNewAgents=y AutoUpdate.GAFamily=Test AutoUpdate.Enabled=y Extensions.Enabled=y'", use_sudo=True)
+        log.info('Renamed log file and updated agent-update DownloadNewAgents GAFamily config flags')
 
     def _check_update(self) -> None:
         log.info("Verifying for agent update status")
