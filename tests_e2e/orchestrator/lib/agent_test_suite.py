@@ -239,13 +239,14 @@ class AgentTestSuite(LisaTestSuite):
 
         if isinstance(environment.nodes[0], LocalNode):
             # We need to create a new VMSS.
-            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e<rg count>-n0
-            # Note that we hardcode the scale set name to "n0" since we are creating a single scale set.
-            # Resource group name cannot have any uppercase characters, because the publicIP cannot have uppercase
-            # characters in its domain name label.
+            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-<rg_name>-n0,
+            # except that, for the "rg_name", LISA uses "e" as prefix (e.g. "e0", "e1", etc.), while we use "w" (for
+            # WALinuxAgent, e.g. "w0", "w1", etc.) to avoid name collisions. Also, note that we hardcode the scale set name
+            # to "n0" since we are creating a single scale set. Lastly, the resource group name cannot have any uppercase
+            # characters, because the publicIP cannot have uppercase characters in its domain name label.
             AgentTestSuite._rg_count_lock.acquire()
             try:
-                self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{AgentTestSuite._rg_count}"
+                self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-w{AgentTestSuite._rg_count}"
                 AgentTestSuite._rg_count += 1
             finally:
                 AgentTestSuite._rg_count_lock.release()
