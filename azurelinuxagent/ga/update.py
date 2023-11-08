@@ -617,8 +617,10 @@ class UpdateHandler(object):
         if vm_status is not None:
             self._report_extensions_summary(vm_status)
             if self._goal_state is not None:
-                agent_status = exthandlers_handler.get_ext_handlers_status_debug_info(vm_status)
-                self._goal_state.save_to_history(agent_status, AGENT_STATUS_FILE)
+                status_blob_text = exthandlers_handler.protocol.get_status_blob_data()
+                if status_blob_text is None:
+                    status_blob_text = "{}"
+                self._goal_state.save_to_history(status_blob_text, AGENT_STATUS_FILE)
                 if self._goal_state.extensions_goal_state.is_outdated:
                     exthandlers_handler.protocol.client.get_host_plugin().clear_fast_track_state()
 

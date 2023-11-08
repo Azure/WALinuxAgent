@@ -119,4 +119,8 @@ echo,
 
 echo,### Gathering Disk Info ###
 diskinfo,
+
+echo,### Gathering Guest ProxyAgent Log Files ###
+copy,/var/log/proxyagent/*
+echo,
 """
