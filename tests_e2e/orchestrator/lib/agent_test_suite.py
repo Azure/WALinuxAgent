@@ -17,6 +17,7 @@
 import datetime
 import json
 import logging
+import time
 import traceback
 import uuid
 
@@ -58,7 +59,7 @@ from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTest
 from tests_e2e.tests.lib.logging import log, set_thread_name, set_current_thread_log
 from tests_e2e.tests.lib.agent_log import AgentLogRecord
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
-from tests_e2e.tests.lib.shell import run_command
+from tests_e2e.tests.lib.shell import run_command, CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 
 
@@ -168,6 +169,14 @@ class AgentTestSuite(LisaTestSuite):
         self._create_scale_set: bool
         self._delete_scale_set: bool
 
+    #
+    # Test suites within the same runbook may be executed concurrently, and we need to keep track of how many resource
+    # groups are being created. We use this lock and counter to allow only 1 thread to increment the resource group
+    # count.
+    #
+    _rg_count_lock = RLock()
+    _rg_count = 0
+
     def _initialize(self, environment: Environment, variables: Dict[str, Any], lisa_working_path: str, lisa_log_path: str, lisa_log: Logger):
         """
         Initializes the AgentTestSuite from the data passed as arguments by LISA.
@@ -230,9 +239,16 @@ class AgentTestSuite(LisaTestSuite):
 
         if isinstance(environment.nodes[0], LocalNode):
             # We need to create a new VMSS.
-            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e0-n0. Note that we hardcode the resource group
-            # id to "e0" and the scale set name to "n0" since we are creating a single scale set.
-            self._resource_group_name = f"lisa-{self._runbook_name}-{RUN_ID}-e0"
+            # Use the same naming convention as LISA for the scale set name: lisa-<runbook name>-<run id>-e<rg count>-n0
+            # Note that we hardcode the scale set name to "n0" since we are creating a single scale set.
+            # Resource group name cannot have any uppercase characters, because the publicIP cannot have uppercase
+            # characters in its domain name label.
+            AgentTestSuite._rg_count_lock.acquire()
+            try:
+                self._resource_group_name = f"lisa-{self._runbook_name.lower()}-{RUN_ID}-e{AgentTestSuite._rg_count}"
+                AgentTestSuite._rg_count += 1
+            finally:
+                AgentTestSuite._rg_count_lock.release()
             self._vmss_name = f"{self._resource_group_name}-n0"
             self._test_nodes = []  # we'll fill this up when the scale set is created
             self._create_scale_set = True
@@ -398,6 +414,8 @@ class AgentTestSuite(LisaTestSuite):
 
             ssh_client = SshClient(ip_address=node.ip_address, username=self._user, identity_file=Path(self._identity_file))
 
+            self._check_ssh_connectivity(ssh_client)
+
             #
             # Cleanup the test node (useful for developer runs)
             #
@@ -446,6 +464,26 @@ class AgentTestSuite(LisaTestSuite):
                 log.info("%s\n%s", command, ssh_client.run_command(command, use_sudo=True))
 
             log.info("Completed test node setup")
+
+    @staticmethod
+    def _check_ssh_connectivity(ssh_client: SshClient) -> None:
+        # We may be trying to connect to the test node while it is still booting. Execute a simple command to check that SSH is ready,
+        # and raise an exception if it is not after a few attempts.
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                log.info("Checking SSH connectivity to the test node...")
+                ssh_client.run_command("echo 'SSH connectivity check'")
+                log.info("SSH is ready.")
+                break
+            except CommandError as error:
+                # Check for "System is booting up. Unprivileged users are not permitted to log in yet. Please come back later. For technical details, see pam_nologin(8)."
+                if "Unprivileged users are not permitted to log in yet" not in error.stderr:
+                    raise
+                if attempt >= max_attempts - 1:
+                    raise Exception(f"SSH connectivity check failed after {max_attempts} attempts, giving up [{error}]")
+                log.info("SSH is not ready [%s], will retry after a short delay.", error)
+                time.sleep(15)
 
     def _collect_logs_from_test_nodes(self) -> None:
         """
