@@ -83,6 +83,7 @@ copy,/etc/waagent.conf
 copy,/var/lib/dhcp/dhclient.eth0.leases
 copy,/var/lib/dhclient/dhclient-eth0.leases
 copy,/var/lib/wicked/lease-eth0-dhcp-ipv4.xml
+copy,/run/systemd/netif/leases/2
 echo,
 
 echo,### Gathering Log Files ###

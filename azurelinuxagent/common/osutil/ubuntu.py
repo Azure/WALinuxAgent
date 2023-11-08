@@ -16,6 +16,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import glob
+import textwrap
 import time
 
 import azurelinuxagent.common.logger as logger
@@ -131,6 +133,30 @@ class Ubuntu18OSUtil(Ubuntu16OSUtil):
 
     def stop_agent_service(self):
         return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
+
+    def get_dhcp_lease_endpoint(self):
+        pathglob = "/run/systemd/netif/leases/*"
+        logger.info("looking for leases in path [{0}]".format(pathglob))
+        endpoint = None
+        for lease_file in glob.glob(pathglob):
+            try:
+                with open(lease_file) as f:
+                    lease = f.read()
+                for line in lease.splitlines():
+                    if line.startswith("OPTION_245"):
+                        option_245 = line.split("=")[1]
+                        options = [int(i, 16) for i in textwrap.wrap(option_245, 2)]
+                        endpoint = "{0}.{1}.{2}.{3}".format(*options)
+                        logger.info("found endpoint [{0}]".format(endpoint))
+            except Exception as e:
+                logger.info(
+                    "Failed to parse {0}: {1}".format(lease_file, str(e))
+                )
+        if endpoint is not None:
+            logger.info("cached endpoint found [{0}]".format(endpoint))
+        else:
+            logger.info("cached endpoint not found")
+        return endpoint
 
 
 class UbuntuOSUtil(Ubuntu16OSUtil):
