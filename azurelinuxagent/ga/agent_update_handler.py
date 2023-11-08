@@ -3,7 +3,6 @@ import glob
 import json
 import os
 import shutil
-from abc import abstractmethod, ABC
 
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -273,7 +272,7 @@ class AgentUpdateHandler(object):
         return None
 
 
-class GAVersionUpdater(ABC):
+class GAVersionUpdater(object):
 
     def __init__(self, gs_id, agent_family, agent_manifest, version, update_state):
         self._gs_id = gs_id
@@ -282,7 +281,6 @@ class GAVersionUpdater(ABC):
         self._version = version
         self._update_state = update_state
 
-    @abstractmethod
     def should_update_agent(self, goal_state):
         """
         RSM requested version update:
@@ -295,14 +293,14 @@ class GAVersionUpdater(ABC):
             3) not below than current version
             return false when we don't allow updates.
         """
+        raise NotImplementedError
 
-    @abstractmethod
     def log_new_agent_update_message(self):
         """
         This function logs the update message after we check agent allowed to update.
         """
+        raise NotImplementedError
 
-    @abstractmethod
     def purge_extra_agents_from_disk(self):
         """
         RSM requested version update:
@@ -311,8 +309,8 @@ class GAVersionUpdater(ABC):
         Largest version update(self-update):
             remove the agents from disk except current version and new agent version if exists
         """
+        raise NotImplementedError
 
-    @abstractmethod
     def proceed_with_update(self):
         """
         RSM requested version update:
@@ -322,6 +320,7 @@ class GAVersionUpdater(ABC):
                 If largest version is found in manifest, upgrade to that version. Downgrade is not supported.
                 Raises: AgentUpgradeExitException
         """
+        raise NotImplementedError
 
     def download_and_get_new_agent(self, protocol, goal_state):
         """
