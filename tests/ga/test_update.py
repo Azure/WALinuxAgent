@@ -2198,7 +2198,6 @@ def _mock_exthandlers_handler(extension_statuses=None, save_to_history=False):
             exthandlers_handler.report_ext_handlers_status = Mock(return_value=create_vm_status(ExtensionStatusValue.success))
         else:
             exthandlers_handler.report_ext_handlers_status = Mock(side_effect=[create_vm_status(s) for s in extension_statuses])
-        exthandlers_handler.get_ext_handlers_status_debug_info = Mock(return_value='')
         yield exthandlers_handler
 
 

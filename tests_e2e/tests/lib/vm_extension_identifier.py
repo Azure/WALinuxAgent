@@ -33,7 +33,8 @@ class VmExtensionIdentifier(object):
         self.version: str = version
 
     unsupported_distros: Dict[str, List[str]] = {
-        "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar"]
+        "Microsoft.OSTCExtensions.VMAccessForLinux": ["flatcar"],
+        "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": ["flatcar"]
     }
 
     def supports_distro(self, system_info: str) -> bool:

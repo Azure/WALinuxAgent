@@ -1,0 +1,10 @@
+#
+# Adds extensions with multiple dependencies to VMSS using 'provisionAfterExtensions' property and validates they are
+# enabled in order of dependencies.
+#
+name: "ExtSequencing"
+tests:
+  - "ext_sequencing/ext_sequencing.py"
+images: "endorsed"
+# This scenario is executed on instances of a scaleset created by the agent test suite.
+executes_on_scale_set: true
