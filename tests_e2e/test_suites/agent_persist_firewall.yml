@@ -1,0 +1,11 @@
+#
+# Iptable rules that agent add not persisted on reboot. So we use firewalld service if distro supports it otherwise agent creates custom service and only runs on boot before network up.
+# so that attacker will not have room to contact the wireserver
+# This test verifies that either of the service is active. Ensure those rules are added on boot and working as expected.
+#
+name: "AgentPersistFirewall"
+tests:
+  - "agent_persist_firewall/agent_persist_firewall.py"
+images:
+  - "persist-firewall-endorsed"
+owns_vm: true  # This vm cannot be shared with other tests because it modifies the firewall rules and agent status.
