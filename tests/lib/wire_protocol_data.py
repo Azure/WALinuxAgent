@@ -463,7 +463,7 @@ class WireProtocolData(object):
     def set_ga_manifest(self, ga_manifest):
         self.ga_manifest = load_data(ga_manifest)
 
-    def set_extension_config_requested_version(self, version):
+    def set_version_in_agent_family(self, version):
         self.ext_conf = WireProtocolData.replace_xml_element_value(self.ext_conf, "Version", version)
 
     def set_extension_config_is_vm_enabled_for_rsm_upgrades(self, is_vm_enabled_for_rsm_upgrades):

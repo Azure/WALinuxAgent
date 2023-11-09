@@ -70,8 +70,8 @@ class CertList(DataContract):
 class VMAgentFamily(object):
     def __init__(self, name, version):
         self.name = name
-        # This is the Requested version as specified by the Goal State
-        self.requested_version = version
+        # This is the version as specified by the Goal State
+        self.version = version
         # Set to None if the property not specified in the GS and later computed True/False based on previous state in agent update
         self.is_version_from_rsm = None
         # Set to None if this property not specified in the GS and later computed True/False based on previous state in agent update

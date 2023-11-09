@@ -68,14 +68,14 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
                 self.assertIsNone(family.is_version_from_rsm, "is_version_from_rsm should be None")
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-agent_family_version.xml"
         with mock_wire_protocol(data_file) as protocol:
             agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
             for family in agent_families:
                 self.assertTrue(family.is_version_from_rsm, "is_version_from_rsm should be True")
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version_properties_false.xml"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-rsm_version_properties_false.xml"
         with mock_wire_protocol(data_file) as protocol:
             agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
             for family in agent_families:
@@ -88,14 +88,14 @@ class ExtensionsGoalStateFromExtensionsConfigTestCase(AgentTestCase):
                 self.assertIsNone(family.is_vm_enabled_for_rsm_upgrades, "is_vm_enabled_for_rsm_upgrades should be None")
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version.xml"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-agent_family_version.xml"
         with mock_wire_protocol(data_file) as protocol:
             agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
             for family in agent_families:
                 self.assertTrue(family.is_vm_enabled_for_rsm_upgrades, "is_vm_enabled_for_rsm_upgrades should be True")
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "hostgaplugin/ext_conf-requested_version_properties_false.xml"
+        data_file["ext_conf"] = "hostgaplugin/ext_conf-rsm_version_properties_false.xml"
         with mock_wire_protocol(data_file) as protocol:
             agent_families = protocol.get_goal_state().extensions_goal_state.agent_families
             for family in agent_families:

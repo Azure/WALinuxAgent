@@ -622,20 +622,20 @@ def get_etp_collection_period(conf=__conf__):
     return conf.get_int("Debug.EtpCollectionPeriod", 300)
 
 
-def get_hotfix_upgrade_frequency(conf=__conf__):
+def get_self_update_hotfix_frequency(conf=__conf__):
     """
     Determines the frequency to check for Hotfix upgrades (<Build> version changed in new upgrades).
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AutoUpdateHotfixFrequency", 4 * 60 * 60)
+    return conf.get_int("Debug.SelfUpdateHotfixFrequency", 4 * 60 * 60)
 
 
-def get_regular_upgrade_frequency(conf=__conf__):
+def get_self_update_regular_frequency(conf=__conf__):
     """
     Determines the frequency to check for regular upgrades (<Major>.<Minor>.<patch> version changed in new upgrades).
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AutoUpdateRegularFrequency", 24 * 60 * 60)
+    return conf.get_int("Debug.SelfUpdateRegularFrequency", 24 * 60 * 60)
 
 
 def get_enable_ga_versioning(conf=__conf__):

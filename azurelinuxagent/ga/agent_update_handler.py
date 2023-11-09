@@ -20,9 +20,9 @@ def get_agent_update_handler(protocol):
     return AgentUpdateHandler(protocol)
 
 
-class AgentUpgradeType(object):
+class SelfUpdateType(object):
     """
-    Enum for different modes of Agent Upgrade
+    Enum for different modes of Self updates
     """
     Hotfix = "Hotfix"
     Regular = "Regular"
@@ -34,9 +34,9 @@ class AgentUpdateHandlerUpdateState(object):
     This state will be persisted throughout the current service run.
     """
     def __init__(self):
-        self.last_attempted_requested_version_update_time = datetime.datetime.min
-        self.last_attempted_hotfix_update_time = datetime.datetime.min
-        self.last_attempted_regular_update_time = datetime.datetime.min
+        self.last_attempted_rsm_version_update_time = datetime.datetime.min
+        self.last_attempted_self_update_hotfix_time = datetime.datetime.min
+        self.last_attempted_self_update_regular_time = datetime.datetime.min
         self.last_attempted_manifest_download_time = datetime.datetime.min
         self.last_attempted_update_error_msg = ""
         self.last_attempted_update_version = FlexibleVersion("0.0.0.0")
@@ -49,11 +49,11 @@ class AgentUpdateHandler(object):
                     version: it will have what version to update
                     isVersionFromRSM: True if the version is from RSM deployment.
                     isVMEnabledForRSMUpgrades: True if the VM is enabled for RSM upgrades.
-                    if vm enabled for RSM upgrades and get a requested version, we use RSM update path. But if requested update is downgarde then we check
-                    isVersionFomRSM true to consider the update otherwise we ignore the update if version not from RSM deployment.
+                    if vm enabled for RSM upgrades, we use RSM update path. But if requested update is not by rsm deployment
+                    we ignore the update.
                     This update is allowed once per (as specified in the conf.get_autoupdate_frequency())
-        Largest version update(self-update): We fallback to this if above is condition not met. This update to the largest version available in the manifest
-                    we allow update once per (as specified in the conf.get_hotfix_upgrade_frequency() or conf.get_normal_upgrade_frequency())
+        Self update: We fallback to this if above is condition not met. This update to the largest version available in the manifest
+                    we allow update once per (as specified in the conf.get_self_update_hotfix_frequency() or conf.get_self_update_regular_frequency())
                     Note: Self-update don't support downgrade.
     """
     def __init__(self, protocol):
@@ -198,14 +198,14 @@ class AgentUpdateHandler(object):
         return agent_family_manifests[0]
 
     @staticmethod
-    def _get_requested_version(agent_family):
+    def _get_version_from_gs(agent_family):
         """
-        Get the requested version from agent family
-        Returns: Requested version if supported and available in the GS
-                 None if requested version missing
+        Get the version from agent family
+        Returns: version if supported and available in the GS
+                 None if version is missing
         """
-        if agent_family.requested_version is not None:
-            return FlexibleVersion(agent_family.requested_version)
+        if agent_family.version is not None:
+            return FlexibleVersion(agent_family.version)
         return None
 
     def run(self, goal_state):
@@ -216,15 +216,15 @@ class AgentUpdateHandler(object):
                 return
 
             agent_family = self._get_agent_family_manifest(goal_state)
-            requested_version = self._get_requested_version(agent_family)
+            version = self._get_version_from_gs(agent_family)
             gs_id = goal_state.extensions_goal_state.id
             self._update_rsm_version_state_if_changed(goal_state.extensions_goal_state.created_on_timestamp, agent_family)
-            # if requested version is specified and vm is enabled for rsm upgrades, use rsm update path, else sef-update
-            if requested_version is None and self._is_vm_enabled_for_rsm_upgrades:
-                raise AgentUpdateError("VM Enabled for RSM upgrades but requested version is missing in Goal state: {0}, so skipping agent update".format(gs_id))
-            elif conf.get_enable_ga_versioning() and requested_version is not None and self._is_vm_enabled_for_rsm_upgrades:
-                updater = RSMVersionUpdater(gs_id, agent_family, None, requested_version, self.update_state, self._is_version_from_rsm, self._daemon_version)
-                self.update_state.last_attempted_update_version = requested_version
+            # if version is specified and vm is enabled for rsm upgrades, use rsm update path, else sef-update
+            if version is None and self._is_vm_enabled_for_rsm_upgrades and self._is_version_from_rsm:
+                raise AgentUpdateError("VM Enabled for RSM upgrades but version is missing in Goal state: {0}, so skipping agent update".format(gs_id))
+            elif conf.get_enable_ga_versioning() and self._is_vm_enabled_for_rsm_upgrades:
+                updater = RSMVersionUpdater(gs_id, agent_family, None, version, self.update_state, self._is_version_from_rsm, self._daemon_version)
+                self.update_state.last_attempted_update_version = version
             else:
                 updater = SelfUpdateVersionUpdater(gs_id, agent_family, None, None, self.update_state)
 
@@ -254,10 +254,10 @@ class AgentUpdateHandler(object):
     def get_vmagent_update_status(self):
         """
         This function gets the VMAgent update status as per the last attempted update.
-        Returns: None if fail to report or update never attempted with requested version
+        Returns: None if fail to report or update never attempted with rsm version specified in GS
         """
         try:
-            if conf.get_enable_ga_versioning() and self._is_vm_enabled_for_rsm_upgrades:
+            if conf.get_enable_ga_versioning() and self._is_vm_enabled_for_rsm_upgrades and self._is_version_from_rsm:
                 if not self.update_state.last_attempted_update_error_msg:
                     status = VMAgentUpdateStatuses.Success
                     code = 0
@@ -283,13 +283,13 @@ class GAVersionUpdater(object):
 
     def should_update_agent(self, goal_state):
         """
-        RSM requested version update:
+        RSM version update:
             update is allowed once per (as specified in the conf.get_autoupdate_frequency()) and
             if new version not same as current version, not below than daemon version and if version is from rsm request
             return false when we don't allow updates.
-        Largest version update(self-update):
+        self-update:
             1) checks if we allowed download manifest as per manifest download frequency
-            2) update is allowed once per (as specified in the conf.get_hotfix_upgrade_frequency() or conf.get_regular_upgrade_frequency())
+            2) update is allowed once per (as specified in the conf.get_self_update_hotfix_frequency() or conf.get_self_update_regular_frequency())
             3) not below than current version
             return false when we don't allow updates.
         """
@@ -303,20 +303,20 @@ class GAVersionUpdater(object):
 
     def purge_extra_agents_from_disk(self):
         """
-        RSM requested version update:
-            remove the agents( including requested version if exists) from disk except current version. There is a chance that requested version could exist and/or blacklisted
-            on previous update attempts. So we should remove it from disk in order to honor current requested version update.
-        Largest version update(self-update):
+        RSM version update:
+            remove the agents( including rsm version if exists) from disk except current version. There is a chance that rsm version could exist and/or blacklisted
+            on previous update attempts. So we should remove it from disk in order to honor current rsm version update.
+        self-update:
             remove the agents from disk except current version and new agent version if exists
         """
         raise NotImplementedError
 
     def proceed_with_update(self):
         """
-        RSM requested version update:
-                If requested version is specified, upgrade/downgrade to the specified version.
+        RSM version update:
+                upgrade/downgrade to the specified version.
                 Raises: AgentUpgradeExitException
-        Largest version update(self-update):
+        self-update:
                 If largest version is found in manifest, upgrade to that version. Downgrade is not supported.
                 Raises: AgentUpgradeExitException
         """
@@ -385,19 +385,19 @@ class RSMVersionUpdater(GAVersionUpdater):
     def _is_update_allowed_this_time(self):
         """
         update is allowed once per (as specified in the conf.get_autoupdate_frequency())
-        If update allowed, we update the last_attempted_requested_version_update_time to current time.
+        If update allowed, we update the last_attempted_rsm_version_update_time to current time.
         """
         now = datetime.datetime.now()
 
-        if self._update_state.last_attempted_requested_version_update_time != datetime.datetime.min:
-            next_attempt_time = self._update_state.last_attempted_requested_version_update_time + datetime.timedelta(
+        if self._update_state.last_attempted_rsm_version_update_time != datetime.datetime.min:
+            next_attempt_time = self._update_state.last_attempted_rsm_version_update_time + datetime.timedelta(
                 seconds=conf.get_autoupdate_frequency())
         else:
             next_attempt_time = now
 
         if next_attempt_time > now:
             return False
-        self._update_state.last_attempted_requested_version_update_time = now
+        self._update_state.last_attempted_rsm_version_update_time = now
         # The time limit elapsed for us to allow updates.
         return True
 
@@ -405,14 +405,14 @@ class RSMVersionUpdater(GAVersionUpdater):
         if not self._is_update_allowed_this_time():
             return False
 
-        # we don't allow downgrades below daemon version, or if it's same as current version, or requested version < current version and that version not from RSM
-        if self._version < self._daemon_version or self._version == CURRENT_VERSION or (self._version < CURRENT_VERSION and not self._is_version_from_rsm):
+        # we don't allow updates if version is not from RSM or downgrades below daemon version or if version is same as current version
+        if not self._is_version_from_rsm or self._version < self._daemon_version or self._version == CURRENT_VERSION:
             return False
 
         return True
 
     def log_new_agent_update_message(self):
-        msg = "Goal state {0} is requesting a new agent version {1}, will update the agent before processing the goal state.".format(self._gs_id, str(self._version))
+        msg = "New agent version:{0} requested by RSM in Goal state {1}, will update the agent before processing the goal state.".format(str(self._version), self._gs_id)
         logger.info(msg)
         add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
@@ -468,8 +468,8 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         # We follow semantic versioning for the agent, if <Major>.<Minor>.<Patch> is same, then <Build> has changed.
         # In this case, we consider it as a Hotfix upgrade. Else we consider it a Regular upgrade.
         if version.major == CURRENT_VERSION.major and version.minor == CURRENT_VERSION.minor and version.patch == CURRENT_VERSION.patch:
-            return AgentUpgradeType.Hotfix
-        return AgentUpgradeType.Regular
+            return SelfUpdateType.Hotfix
+        return SelfUpdateType.Regular
 
     def _get_next_upgrade_times(self, now):
         """
@@ -480,10 +480,10 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         def get_next_process_time(last_val, frequency):
             return now if last_val == datetime.datetime.min else last_val + datetime.timedelta(seconds=frequency)
 
-        next_hotfix_time = get_next_process_time(self._update_state.last_attempted_hotfix_update_time,
-                                                 conf.get_hotfix_upgrade_frequency())
-        next_regular_time = get_next_process_time(self._update_state.last_attempted_regular_update_time,
-                                                 conf.get_regular_upgrade_frequency())
+        next_hotfix_time = get_next_process_time(self._update_state.last_attempted_self_update_hotfix_time,
+                                                 conf.get_self_update_hotfix_frequency())
+        next_regular_time = get_next_process_time(self._update_state.last_attempted_self_update_regular_time,
+                                                  conf.get_self_update_regular_frequency())
 
         return next_hotfix_time, next_regular_time
 
@@ -495,11 +495,11 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         next_hotfix_time, next_regular_time = self._get_next_upgrade_times(now)
         upgrade_type = self._get_agent_upgrade_type(self._version)
 
-        if (upgrade_type == AgentUpgradeType.Hotfix and next_hotfix_time <= now) or (
-                upgrade_type == AgentUpgradeType.Regular and next_regular_time <= now):
+        if (upgrade_type == SelfUpdateType.Hotfix and next_hotfix_time <= now) or (
+                upgrade_type == SelfUpdateType.Regular and next_regular_time <= now):
             # Update the last upgrade check time even if no new agent is available for upgrade
-            self._update_state.last_attempted_hotfix_update_time = now
-            self._update_state.last_attempted_regular_update_time = now
+            self._update_state.last_attempted_self_update_hotfix_time = now
+            self._update_state.last_attempted_self_update_regular_time = now
             return True
         return False
 
