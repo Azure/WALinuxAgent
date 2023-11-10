@@ -70,7 +70,7 @@ class GoalStateInconsistentError(ProtocolError):
 
 
 class GoalState(object):
-    def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False):
+    def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False, save_to_history=False):
         """
         Fetches the goal state using the given wire client.
 
@@ -84,6 +84,7 @@ class GoalState(object):
         try:
             self._wire_client = wire_client
             self._history = None
+            self._save_to_history = save_to_history
             self._extensions_goal_state = None  # populated from vmSettings or extensionsConfig
             self._goal_state_properties = goal_state_properties
             self.logger = logger.Logger(logger.DEFAULT_LOGGER)
@@ -186,7 +187,8 @@ class GoalState(object):
         try:
             is_fast_track = self.extensions_goal_state.source == GoalStateSource.FastTrack
             xml_text = self._wire_client.fetch_manifest(manifest_type, uris, use_verify_header=is_fast_track)
-            self._history.save_manifest(name, xml_text)
+            if self._save_to_history:
+                self._history.save_manifest(name, xml_text)
             return ExtensionManifest(xml_text)
         except Exception as e:
             raise ProtocolError("Failed to retrieve {0} manifest. Error: {1}".format(manifest_type, ustr(e)))
@@ -263,11 +265,12 @@ class GoalState(object):
 
         # Start a new history subdirectory and capture the updated goal state
         tag = "{0}".format(incarnation) if vm_settings is None else "{0}-{1}".format(incarnation, vm_settings.etag)
-        self._history = GoalStateHistory(timestamp, tag)
-        if goal_state_updated:
-            self._history.save_goal_state(xml_text)
-        if vm_settings_updated:
-            self._history.save_vm_settings(vm_settings.get_redacted_text())
+        if self._save_to_history:
+            self._history = GoalStateHistory(timestamp, tag)
+            if goal_state_updated:
+                self._history.save_goal_state(xml_text)
+            if vm_settings_updated:
+                self._history.save_vm_settings(vm_settings.get_redacted_text())
 
         #
         # Continue fetching the rest of the goal state
@@ -324,7 +327,8 @@ class GoalState(object):
         if len(certs.warnings) > 0:
             self.logger.warn(certs.warnings)
             add_event(op=WALAEventOperation.GoalState, message=certs.warnings)
-        self._history.save_certificates(json.dumps(certs.summary))
+        if self._save_to_history:
+            self._history.save_certificates(json.dumps(certs.summary))
         return certs
 
     def _check_and_download_missing_certs_on_disk(self):
@@ -357,8 +361,9 @@ class GoalState(object):
         msg = 'The HGAP stopped supporting vmSettings; will fetched the goal state from the WireServer.'
         self.logger.info(msg)
         add_event(op=WALAEventOperation.VmSettings, message=msg)
-        self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
-        self._history.save_goal_state(xml_text)
+        if self._save_to_history:
+            self._history = GoalStateHistory(datetime.datetime.utcnow(), incarnation)
+            self._history.save_goal_state(xml_text)
         self._extensions_goal_state = self._fetch_full_wire_server_goal_state(incarnation, xml_doc)
         if self._extensions_goal_state.created_on_timestamp < vm_settings_support_stopped_error.timestamp:
             self._extensions_goal_state.is_outdated = True
@@ -368,7 +373,8 @@ class GoalState(object):
             add_event(op=WALAEventOperation.VmSettings, message=msg)
 
     def save_to_history(self, data, file_name):
-        self._history.save(data, file_name)
+        if self._save_to_history:
+            self._history.save(data, file_name)
 
     @staticmethod
     def _fetch_goal_state(wire_client):
@@ -463,21 +469,24 @@ class GoalState(object):
             else:
                 xml_text = self._wire_client.fetch_config(extensions_config_uri, self._wire_client.get_header())
                 extensions_config = ExtensionsGoalStateFactory.create_from_extensions_config(incarnation, xml_text, self._wire_client)
-                self._history.save_extensions_config(extensions_config.get_redacted_text())
+                if self._save_to_history:
+                    self._history.save_extensions_config(extensions_config.get_redacted_text())
 
             hosting_env = None
             if GoalStateProperties.HostingEnv & self._goal_state_properties:
                 hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
                 xml_text = self._wire_client.fetch_config(hosting_env_uri, self._wire_client.get_header())
                 hosting_env = HostingEnv(xml_text)
-                self._history.save_hosting_env(xml_text)
+                if self._save_to_history:
+                    self._history.save_hosting_env(xml_text)
 
             shared_config = None
             if GoalStateProperties.SharedConfig & self._goal_state_properties:
                 shared_conf_uri = findtext(xml_doc, "SharedConfig")
                 xml_text = self._wire_client.fetch_config(shared_conf_uri, self._wire_client.get_header())
                 shared_config = SharedConfig(xml_text)
-                self._history.save_shared_conf(xml_text)
+                if self._save_to_history:
+                    self._history.save_shared_conf(xml_text)
                 # SharedConfig.xml is used by other components (Azsec and Singularity/HPC Infiniband), so save it to the agent's root directory as well
                 shared_config_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
                 try:
@@ -496,7 +505,8 @@ class GoalState(object):
                 if remote_access_uri is not None:
                     xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_cert())
                     remote_access = RemoteAccess(xml_text)
-                    self._history.save_remote_access(xml_text)
+                    if self._save_to_history:
+                        self._history.save_remote_access(xml_text)
 
             self._incarnation = incarnation
             self._role_instance_id = role_instance_id

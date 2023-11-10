@@ -73,7 +73,7 @@ class WireProtocol(DataContract):
             raise ProtocolError("WireProtocol endpoint is None")
         self.client = WireClient(endpoint)
 
-    def detect(self, init_goal_state=True):
+    def detect(self, init_goal_state=True, save_to_history=False):
         self.client.check_wire_protocol_version()
 
         trans_prv_file = os.path.join(conf.get_lib_dir(),
@@ -86,7 +86,7 @@ class WireProtocol(DataContract):
         # Initialize the goal state, including all the inner properties
         if init_goal_state:
             logger.info('Initializing goal state during protocol detection')
-            self.client.reset_goal_state()
+            self.client.reset_goal_state(save_to_history=save_to_history)
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -777,13 +777,13 @@ class WireClient(object):
             self._host_plugin.update_container_id(container_id)
             self._host_plugin.update_role_config_name(role_config_name)
 
-    def update_goal_state(self, silent=False):
+    def update_goal_state(self, silent=False, save_to_history=False):
         """
         Updates the goal state if the incarnation or etag changed
         """
         try:
             if self._goal_state is None:
-                self._goal_state = GoalState(self, silent=silent)
+                self._goal_state = GoalState(self, silent=silent, save_to_history=save_to_history)
             else:
                 self._goal_state.update(silent=silent)
 
@@ -792,7 +792,7 @@ class WireClient(object):
         except Exception as exception:
             raise ProtocolError("Error fetching goal state: {0}".format(ustr(exception)))
 
-    def reset_goal_state(self, goal_state_properties=GoalStateProperties.All, silent=False):
+    def reset_goal_state(self, goal_state_properties=GoalStateProperties.All, silent=False, save_to_history=False):
         """
         Resets the goal state
         """
@@ -800,7 +800,7 @@ class WireClient(object):
             if not silent:
                 logger.info("Forcing an update of the goal state.")
 
-            self._goal_state = GoalState(self, goal_state_properties=goal_state_properties, silent=silent)
+            self._goal_state = GoalState(self, goal_state_properties=goal_state_properties, silent=silent, save_to_history=save_to_history)
 
         except ProtocolError:
             raise
@@ -936,7 +936,7 @@ class WireClient(object):
 
         if extensions_goal_state.status_upload_blob is None:
             # the status upload blob is in ExtensionsConfig so force a full goal state refresh
-            self.reset_goal_state(silent=True)
+            self.reset_goal_state(silent=True, save_to_history=True)
             extensions_goal_state = self.get_goal_state().extensions_goal_state
 
             if extensions_goal_state.status_upload_blob is None:

@@ -127,14 +127,14 @@ class TestProtocolUtil(AgentTestCase):
         endpoint_file = protocol_util._get_wireserver_endpoint_file_path()  # pylint: disable=unused-variable
 
         # Test wire protocol when no endpoint file has been written
-        protocol_util._detect_protocol()
+        protocol_util._detect_protocol(save_to_history=False)
         self.assertEqual(KNOWN_WIRESERVER_IP, protocol_util.get_wireserver_endpoint())
 
         # Test wire protocol on dhcp failure
         protocol_util.osutil.is_dhcp_available.return_value = True
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
-        self.assertRaises(ProtocolError, protocol_util._detect_protocol)
+        self.assertRaises(ProtocolError, lambda: protocol_util._detect_protocol(save_to_history=False))
 
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
     def test_get_protocol(self, WireProtocol, _):
