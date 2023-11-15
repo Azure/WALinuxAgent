@@ -63,6 +63,8 @@ The Agent will use an HTTP proxy if provided via the `http_proxy` (for `http` re
 `https_proxy` (for `https` requests) environment variables. Due to limitations of Python, 
 the agent *does not* support HTTP proxies requiring authentication. 
 
+Similarly, the Agent will bypass the proxy if the environment variable `no_proxy` is set.
+
 Note that the way to define those environment variables for the Agent service varies across different distros. For distros
 that use systemd, a common approach is to use Environment or EnvironmentFile in the [Service] section of the service 
 definition, for example using an override or a drop-in file (see "systemctl edit" for overrides).
