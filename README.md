@@ -58,13 +58,31 @@ The information flow from the platform to the agent occurs via two channels:
 * A TCP endpoint exposing a REST API used to obtain deployment and topology
   configuration.
 
-The agent will use an HTTP proxy if provided via the `http_proxy` (for `http` requests) or
-`https_proxy` (for `https` requests) environment variables. The `HttpProxy.Host` and
-`HttpProxy.Port` configuration variables (see below), if used, will override the environment
-settings. Due to limitations of Python, the agent *does not* support HTTP proxies requiring
-authentication. Note that when the agent service is managed by systemd, environment variables 
-such as `http_proxy` and `https_proxy` should be defined using one the mechanisms provided by 
-systemd (e.g. by using Environment or EnvironmentFile in the service file).
+### HTTP Proxy
+The Agent will use an HTTP proxy if provided via the `http_proxy` (for `http` requests) or
+`https_proxy` (for `https` requests) environment variables. Due to limitations of Python, 
+the agent *does not* support HTTP proxies requiring authentication. 
+
+Note that the way to define those environment variables for the Agent service varies across different distros. For distros
+that use systemd, a common approach is to use Environment or EnvironmentFile in the [Service] section of the service 
+definition, for example using an override or a drop-in file (see "systemctl edit" for overrides).
+
+Example
+```bash
+    # cat /etc/systemd/system/walinuxagent.service.d/http-proxy.conf
+    [Service]
+    Environment="http_proxy=http://proxy.example.com:80/"
+    Environment="https_proxy=http://proxy.example.com:80/"
+    #
+```
+
+The Agent passes its environment to the VM Extensions it executes, including `http_proxy` and `https_proxy`, so defining
+a proxy for the Agent will also define it for the VM Extensions.
+
+
+The [`HttpProxy.Host` and `HttpProxy.Port`](#httpproxyhost-httpproxyport) configuration variables, if used, override 
+the environment settings. Note that this configuration variables are local to the Agent process and are not passed to
+VM Extensions.
 
 ## Requirements
 
@@ -564,7 +582,7 @@ directory.
 _Type: String_  
 _Default: None_
 
-If set, the agent will use this proxy server to access the internet. These values
+If set, the agent will use this proxy server for HTTP/HTTPS requests. These values
 *will* override the `http_proxy` or `https_proxy` environment variables. Lastly,
 `HttpProxy.Host` is required (if to be used) and `HttpProxy.Port` is optional.
 
