@@ -99,6 +99,13 @@ class TestOsUtilFactory(AgentTestCase):
         self.assertEqual(ret.get_service_name(), "walinuxagent")
 
         ret = _get_osutil(distro_name="ubuntu",
+                          distro_code_name="focal",
+                          distro_version="24.04",
+                          distro_full_name="")
+        self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
+
+        ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="",
                           distro_version="10.04",
                           distro_full_name="Snappy Ubuntu Core")
