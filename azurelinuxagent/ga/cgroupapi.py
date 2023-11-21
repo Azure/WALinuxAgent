@@ -172,10 +172,14 @@ class SystemdCgroupsApi(CGroupsApi):
         The values returned can be None if the process is not in a cgroup for that controller (e.g. the controller is not mounted).
         """
         # The contents of the file are similar to
+        # In Cgroup v1
         #    # cat /proc/1218/cgroup
         #    10:memory:/system.slice/walinuxagent.service
         #    3:cpu,cpuacct:/system.slice/walinuxagent.service
         #    etc
+        # In Cgroup v2
+        #    # cat /proc/1218/cgroup
+        #    10::/system.slice/walinuxagent.service
         cpu_path = None
         memory_path = None
         for line in fileutil.read_file("/proc/{0}/cgroup".format(process_id)).splitlines():
@@ -187,6 +191,13 @@ class SystemdCgroupsApi(CGroupsApi):
                     memory_path = path
                 else:
                     cpu_path = path
+            else:
+                match = re.match(r'\d+::(?P<path>.+)', line)
+                if match:
+                    path = match.group('path').lstrip('/') if match.group('path') != '/' else None
+                    cpu_path = path
+                    memory_path = path
+
 
         return cpu_path, memory_path
 
@@ -198,6 +209,20 @@ class SystemdCgroupsApi(CGroupsApi):
         cpu_cgroup_relative_path, memory_cgroup_relative_path = self.get_process_cgroup_relative_paths(process_id)
 
         cpu_mount_point, memory_mount_point = self.get_cgroup_mount_points()
+        if cpu_mount_point is None or memory_mount_point is None:
+            logger.warn("Cgroup v1 mount points not found")
+            cgroup2_mount_point, cgroup2_controllers = self.get_cgroup2_controllers()
+            if cgroup2_mount_point is not None:
+                controller_missing = False
+                if "memory" not in cgroup2_controllers or "-memory" in cgroup2_controllers:
+                    logger.warn("Memory controller not active in cgroup v2")
+                    controller_missing = True
+                if "cpu" not in cgroup2_controllers or "-cpu" in cgroup2_controllers:
+                    logger.warn("CPU controller not active in cgroup v2")
+                    controller_missing = True
+                if not controller_missing:
+                    cpu_mount_point = cgroup2_mount_point
+                    memory_mount_point = cgroup2_mount_point
 
         cpu_cgroup_path = os.path.join(cpu_mount_point, cpu_cgroup_relative_path) \
             if cpu_mount_point is not None and cpu_cgroup_relative_path is not None else None
@@ -240,7 +265,8 @@ class SystemdCgroupsApi(CGroupsApi):
             if match is not None:
                 mount_point = match.group('path')
                 controllers = None
-                controllers_file = os.path.join(mount_point, 'cgroup.controllers')
+                # Check for enabled controllers only
+                controllers_file = os.path.join(mount_point, 'cgroup.subtree_control')
                 if os.path.exists(controllers_file):
                     controllers = fileutil.read_file(controllers_file)
                 return mount_point, controllers

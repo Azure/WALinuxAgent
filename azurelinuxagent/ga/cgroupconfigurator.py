@@ -76,7 +76,7 @@ CPUQuota={cpu_quota}
 MemoryAccounting=yes
 """
 _LOGCOLLECTOR_CPU_QUOTA = "5%"
-LOGCOLLECTOR_MEMORY_LIMIT = 30 * 1024 ** 2  # 30Mb
+LOGCOLLECTOR_MEMORY_LIMIT = 40 * 1024 ** 2  # 40Mb
 
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
@@ -299,24 +299,37 @@ class CGroupConfigurator(object):
             # check v1 controllers
             #
             cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
+            controller_missing = False
 
             if cpu_controller_root is not None:
                 logger.info("The CPU cgroup controller is mounted at {0}", cpu_controller_root)
             else:
                 _log_cgroup_warning("The CPU cgroup controller is not mounted")
+                controller_missing = True
 
             if memory_controller_root is not None:
                 logger.info("The memory cgroup controller is mounted at {0}", memory_controller_root)
             else:
                 _log_cgroup_warning("The memory cgroup controller is not mounted")
+                controller_missing = True
 
             #
             # check v2 controllers
             #
-            cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
-            if cgroup2_mount_point is not None:
-                _log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point,
-                                 cgroup2_controllers)
+            if controller_missing:
+                cgroup2_mount_point, cgroup2_controllers = self._cgroups_api.get_cgroup2_controllers()
+                if cgroup2_mount_point is not None:
+                    _log_cgroup_info("cgroups v2 mounted at {0}.  Controllers: [{1}]", cgroup2_mount_point,
+                                     cgroup2_controllers)
+                    controller_missing = False
+                    if "memory" not in cgroup2_controllers or "-memory" in cgroup2_controllers:
+                        _log_cgroup_warning("Memory controller not active in cgroup v2")
+                        controller_missing = True
+                    if "cpu" not in cgroup2_controllers or "-cpu" in cgroup2_controllers:
+                        _log_cgroup_warning("CPU controller not active in cgroup v2")
+                        controller_missing = True
+                    if not controller_missing:
+                        return cgroup2_mount_point, cgroup2_mount_point
 
             return cpu_controller_root, memory_controller_root
 

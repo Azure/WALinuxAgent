@@ -50,7 +50,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         AgentTestCase.tearDownClass()
 
     @contextlib.contextmanager
-    def _get_cgroup_configurator(self, initialize=True, enable=True, mock_commands=None):
+    def _get_cgroup_configurator(self, initialize=True, enable=True, mock_commands=None, mock_files=None):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
@@ -58,6 +58,9 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             if mock_commands is not None:
                 for command in mock_commands:
                     mock_environment.add_command(command)
+            if mock_files is not None:
+                for file in mock_files:
+                    mock_environment.add_file(*file)
             configurator.mocks = mock_environment
             if initialize:
                 if not enable:
@@ -115,7 +118,8 @@ cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
 cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
-        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+        v2_files = [("/sys/fs/cgroup/unified/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup_no_mem_cpu.controllers'))]
+        with self._get_cgroup_configurator(mock_commands=command_mocks, mock_files=v2_files) as configurator:
             tracked = CGroupsTelemetry._tracked
 
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
@@ -135,7 +139,8 @@ cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,de
 cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
 ''')]
 
-        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+        v2_files = [("/sys/fs/cgroup/unified/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup_no_mem_cpu.controllers'))]
+        with self._get_cgroup_configurator(mock_commands=command_mocks, mock_files=v2_files) as configurator:
             tracked = CGroupsTelemetry._tracked
             agent_drop_in_file_cpu_quota = configurator.mocks.get_mapped_path(UnitFilePaths.cpu_quota)
 
