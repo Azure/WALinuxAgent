@@ -22,41 +22,22 @@ import argparse
 import os
 import pwd
 import socket
-from typing import List, Tuple
+from typing import List
 
-from assertpy import fail
 
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.utils.textutil import format_exception
+from tests_e2e.tests.lib.firewall_helpers import get_root_accept_rule_command, get_non_root_accept_rule_command, \
+    get_non_root_drop_rule_command, print_current_iptable_rules, get_wireserver_ip, get_all_iptable_rule_commands, \
+    check_if_iptable_rule_is_available, IPTableRules, verify_all_rules_exist, FIREWALL_PERIOD, execute_cmd
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 import http.client as httpclient
 
-from tests_e2e.tests.lib.retry import retry_if_false, retry
+from tests_e2e.tests.lib.retry import retry
 
 ROOT_USER = 'root'
-WIRESERVER_ENDPOINT_FILE = '/var/lib/waagent/WireServerEndpoint'
-WIRESERVER_IP = '168.63.129.16'
 VERSIONS_PATH = '/?comp=versions'
-FIREWALL_PERIOD = 30
-
-
-class FirewallRules(object):
-    # -D deletes the specific rule in the iptable chain
-    DELETE_COMMAND = "-D"
-
-    # -C checks if a specific rule exists
-    CHECK_COMMAND = "-C"
-
-
-def get_wireserver_ip() -> str:
-    try:
-        with open(WIRESERVER_ENDPOINT_FILE, 'r') as f:
-            wireserver_ip = f.read()
-    except Exception:
-        wireserver_ip = WIRESERVER_IP
-    return wireserver_ip
 
 
 def switch_user(user: str) -> None:
@@ -71,88 +52,6 @@ def switch_user(user: str) -> None:
         raise Exception("Error -- failed to switch user to {0} : Failed with exception {1}".format(user, e))
 
 
-def get_root_accept_rule_command(command: str) -> List[str]:
-    return ['sudo', 'iptables', '-t', 'security', command, 'OUTPUT', '-d', get_wireserver_ip(), '-p', 'tcp', '-m',
-            'owner',
-            '--uid-owner',
-            '0', '-j', 'ACCEPT', '-w']
-
-
-def get_non_root_accept_rule_command(command: str) -> List[str]:
-    return ['sudo', 'iptables', '-t', 'security', command, 'OUTPUT', '-d', get_wireserver_ip(), '-p', 'tcp',
-            '--destination-port', '53', '-j',
-            'ACCEPT', '-w']
-
-
-def get_non_root_drop_rule_command(command: str) -> List[str]:
-    return ['sudo', 'iptables', '-t', 'security', command, 'OUTPUT', '-d', get_wireserver_ip(), '-p', 'tcp', '-m',
-            'conntrack', '--ctstate',
-            'INVALID,NEW', '-j', 'DROP', '-w']
-
-
-def execute_cmd(cmd: List[str]):
-    """
-    Note: The shellutil.run_command return stdout if exit_code=0, otherwise returns commanderror
-    """
-    try:
-        stdout = shellutil.run_command(cmd)
-    except CommandError as e:
-        return e.returncode, e.stdout, e.stderr
-    return 0, stdout, ""
-
-
-def check_if_iptable_rule_is_available(full_command: List[str]) -> bool:
-    """
-    This function is used to check if given rule is present in iptable rule set
-    "-C" return exit code 0 if the rule is available.
-    """
-    exit_code, _, _ = execute_cmd(full_command)
-    if exit_code == 0:
-        return True
-    return False
-
-
-def print_current_iptable_rules():
-    """
-    This function prints the current iptable rules
-    """
-    try:
-        cmd = ['sudo', 'iptables', '-L', 'OUTPUT', '-t', 'security', '-nxv']
-        exit_code, stdout, stderr = execute_cmd(cmd)
-        if exit_code != 0:
-            log.warning("Warning -- Failed to fetch the ip table rules with error code: %s and error: %s", exit_code, stderr)
-        else:
-            for line in stdout.splitlines():
-                log.info(str(line))
-    except Exception as error:
-        raise Exception("Error -- Failed to fetch the ip table rule set {0}".format(error))
-
-
-def get_all_iptable_rule_commands(command: str) -> Tuple[List[str], List[str], List[str]]:
-    return get_root_accept_rule_command(command), get_non_root_accept_rule_command(command), get_non_root_drop_rule_command(command)
-
-
-def verify_all_rules_exist() -> None:
-    """
-    This function is used to verify all the iptable rules are present in the rule set
-    """
-    def check_all_iptables() -> bool:
-        root_accept, non_root_accept, non_root_drop = get_all_iptable_rule_commands(FirewallRules.CHECK_COMMAND)
-        found: bool = check_if_iptable_rule_is_available(root_accept) and check_if_iptable_rule_is_available(
-            non_root_accept) and check_if_iptable_rule_is_available(non_root_drop)
-        return found
-
-    log.info("-----Verifying all ip table rules are present in rule set")
-    # Agent will re-add rules within OS.EnableFirewallPeriod, So waiting that time + some buffer
-    found: bool = retry_if_false(check_all_iptables, attempts=2, delay=FIREWALL_PERIOD+15)
-
-    if not found:
-        fail("IP table rules missing in rule set.\n Current iptable rules:\n {0}".format(
-            print_current_iptable_rules()))
-
-    log.info("verified All ip table rules are present in rule set")
-
-
 def verify_rules_deleted_successfully(commands: List[List[str]] = None) -> None:
     """
     This function is used to verify if provided rule or all(if not specified) iptable rules are deleted successfully.
@@ -163,7 +62,7 @@ def verify_rules_deleted_successfully(commands: List[List[str]] = None) -> None:
         commands = []
 
     if not commands:
-        root_accept, non_root_accept, non_root_drop = get_all_iptable_rule_commands("-C")
+        root_accept, non_root_accept, non_root_drop = get_all_iptable_rule_commands(IPTableRules.CHECK_COMMAND)
         commands.extend([root_accept, non_root_accept, non_root_drop])
 
     # "-C" return error code 1 when not available which is expected after deletion
@@ -183,7 +82,7 @@ def delete_iptable_rules(commands: List[List[str]] = None) -> None:
     if commands is None:
         commands = []
     if not commands:
-        root_accept, non_root_accept, non_root_drop = get_all_iptable_rule_commands(FirewallRules.CHECK_COMMAND)
+        root_accept, non_root_accept, non_root_drop = get_all_iptable_rule_commands(IPTableRules.DELETE_COMMAND)
         commands.extend([root_accept, non_root_accept, non_root_drop])
 
     log.info("-----Deleting ip table rules \n %s", commands)
@@ -297,10 +196,10 @@ def verify_non_root_accept_rule():
     shellutil.run_command(stop_agent)
 
     # deleting non root accept rule
-    non_root_accept_delete_cmd = get_non_root_accept_rule_command(FirewallRules.DELETE_COMMAND)
+    non_root_accept_delete_cmd = get_non_root_accept_rule_command(IPTableRules.DELETE_COMMAND)
     delete_iptable_rules([non_root_accept_delete_cmd])
     # verifying deletion successful
-    non_root_accept_check_cmd = get_non_root_accept_rule_command(FirewallRules.CHECK_COMMAND)
+    non_root_accept_check_cmd = get_non_root_accept_rule_command(IPTableRules.CHECK_COMMAND)
     verify_rules_deleted_successfully([non_root_accept_check_cmd])
 
     log.info("** Current IP table rules\n")
@@ -326,7 +225,7 @@ def verify_non_root_accept_rule():
 
     log.info("Ensuring missing rules are re-added by the running agent")
     # deleting non root accept rule
-    non_root_accept_delete_cmd = get_non_root_accept_rule_command(FirewallRules.DELETE_COMMAND)
+    non_root_accept_delete_cmd = get_non_root_accept_rule_command(IPTableRules.DELETE_COMMAND)
     delete_iptable_rules([non_root_accept_delete_cmd])
 
     verify_all_rules_exist()
@@ -354,13 +253,13 @@ def verify_root_accept_rule():
     shellutil.run_command(stop_agent)
 
     # deleting root accept rule
-    root_accept_delete_cmd = get_root_accept_rule_command(FirewallRules.DELETE_COMMAND)
+    root_accept_delete_cmd = get_root_accept_rule_command(IPTableRules.DELETE_COMMAND)
     # deleting drop rule too otherwise after restart, the daemon will go into loop since it cannot connect to wireserver. This would block the agent initialization
-    drop_delete_cmd = get_non_root_drop_rule_command(FirewallRules.DELETE_COMMAND)
+    drop_delete_cmd = get_non_root_drop_rule_command(IPTableRules.DELETE_COMMAND)
     delete_iptable_rules([root_accept_delete_cmd, drop_delete_cmd])
     # verifying deletion successful
-    root_accept_check_cmd = get_root_accept_rule_command(FirewallRules.CHECK_COMMAND)
-    drop_check_cmd = get_non_root_drop_rule_command(FirewallRules.CHECK_COMMAND)
+    root_accept_check_cmd = get_root_accept_rule_command(IPTableRules.CHECK_COMMAND)
+    drop_check_cmd = get_non_root_drop_rule_command(IPTableRules.CHECK_COMMAND)
     verify_rules_deleted_successfully([root_accept_check_cmd, drop_check_cmd])
 
     log.info("** Current IP table rules\n")
@@ -383,7 +282,7 @@ def verify_root_accept_rule():
 
     log.info("Ensuring missing rules are re-added by the running agent")
     # deleting root accept rule
-    root_accept_delete_cmd = get_root_accept_rule_command(FirewallRules.DELETE_COMMAND)
+    root_accept_delete_cmd = get_root_accept_rule_command(IPTableRules.DELETE_COMMAND)
     delete_iptable_rules([root_accept_delete_cmd])
 
     verify_all_rules_exist()
@@ -393,7 +292,7 @@ def verify_root_accept_rule():
     log.info("root accept rule verified successfully\n")
 
 
-def verify_non_root_dcp_rule():
+def verify_non_root_drop_rule():
     """
     This function verifies drop rule and make sure it is re added by agent after deletion
     """
@@ -407,10 +306,10 @@ def verify_non_root_dcp_rule():
     shellutil.run_command(stop_agent)
 
     # deleting non root delete rule
-    non_root_drop_delete_cmd = get_non_root_drop_rule_command(FirewallRules.DELETE_COMMAND)
+    non_root_drop_delete_cmd = get_non_root_drop_rule_command(IPTableRules.DELETE_COMMAND)
     delete_iptable_rules([non_root_drop_delete_cmd])
     # verifying deletion successful
-    non_root_drop_check_cmd = get_non_root_drop_rule_command(FirewallRules.CHECK_COMMAND)
+    non_root_drop_check_cmd = get_non_root_drop_rule_command(IPTableRules.CHECK_COMMAND)
     verify_rules_deleted_successfully([non_root_drop_check_cmd])
 
     log.info("** Current IP table rules\n")
@@ -436,7 +335,7 @@ def verify_non_root_dcp_rule():
 
     log.info("Ensuring missing rules are re-added by the running agent")
     # deleting non root delete rule
-    non_root_drop_delete_cmd = get_non_root_drop_rule_command(FirewallRules.DELETE_COMMAND)
+    non_root_drop_delete_cmd = get_non_root_drop_rule_command(IPTableRules.DELETE_COMMAND)
     delete_iptable_rules([non_root_drop_delete_cmd])
 
     verify_all_rules_exist()
@@ -462,7 +361,7 @@ def main():
 
     verify_non_root_accept_rule()
     verify_root_accept_rule()
-    verify_non_root_dcp_rule()
+    verify_non_root_drop_rule()
 
 
 parser = argparse.ArgumentParser()
