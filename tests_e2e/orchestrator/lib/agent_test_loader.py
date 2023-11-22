@@ -241,9 +241,9 @@ class AgentTestLoader(object):
         * skip_on_clouds - [Optional; string or list of strings] If given, the test suite will be skipped in the specified cloud(e.g. "AzureCloud").
                     If not specified, the test suite will be executed in all the clouds that we use. This is useful
                     if you want to skip a test suite validation in a particular cloud when certain feature is not available in that cloud.
-        # skip_on_images - [Optional; string or list of strings] If given, the test suite will be skipped on the specified images or image-set(e.g. "ubuntu_2004").
+        # skip_on_images - [Optional; string or list of strings] If given, the test suite will be skipped on the specified images or image sets(e.g. "ubuntu_2004").
                     If not specified, the test suite will be executed on all the images that we use. This is useful
-                    if you want to skip a test suite validation on a particular image or image-set when certain feature is not available on that image.
+                    if you want to skip a test suite validation on a particular images or image sets when certain feature is not available on that image.
         """
         test_suite: Dict[str, Any] = AgentTestLoader._load_file(description_file)
 

@@ -454,9 +454,9 @@ class AgentTestSuitesCombinator(Combinator):
     @staticmethod
     def _get_test_suite_skip_images(suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
         """
-        Returns images that need to skip by the suite.
+        Returns images that need to be skipped by the suite.
 
-        A test suite may be reference multiple image sets and sets can intersect; this method eliminates any duplicates.
+        A test suite may reference multiple image sets and sets can intersect; this method eliminates any duplicates.
         """
         skip_unique: Dict[str, VmImageInfo] = {}
         for image in suite.skip_on_images:
