@@ -7,5 +7,13 @@ name: "AgentPersistFirewall"
 tests:
   - "agent_persist_firewall/agent_persist_firewall.py"
 images:
-  - "persist-firewall-endorsed"
+  - "endorsed"
+  - "endorsed-arm64"
 owns_vm: true  # This vm cannot be shared with other tests because it modifies the firewall rules and agent status.
+# agent persist firewall service not running on flatcar distro since agent can't install custom service due to read only filesystem.
+# so skipping the test run on flatcar distro.
+# (2023-11-14T19:04:13.738695Z ERROR ExtHandler ExtHandler Unable to setup the persistent firewall rules: [Errno 30] Read-only file system: '/lib/systemd/system/waagent-network-setup.service)
+skip_on_images:
+  - "flatcar"
+  - "flatcar_arm64"
+  - "debian_9"  # TODO: Reboot is slow on debian_9. Need to investigate further.

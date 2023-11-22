@@ -166,7 +166,7 @@ class VirtualMachineClient(AzureSdkClient):
                 # that the reboot actually happened by checking the system's uptime.
                 log.info("Verifying VM's uptime to ensure the reboot has completed...")
                 try:
-                    uptime = ssh_client.run_command("cat /proc/uptime | sed 's/ .*//'", attempts=1).rstrip()  # The uptime is the first field in the file
+                    uptime = ssh_client.run_command("cat /proc/uptime | sed 's/ .*//'", attempts=3).rstrip()  # The uptime is the first field in the file
                     log.info("Uptime: %s", uptime)
                     boot_time = datetime.datetime.utcnow() - datetime.timedelta(seconds=float(uptime))
                     if boot_time > before_restart:

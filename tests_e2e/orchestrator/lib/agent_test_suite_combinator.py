@@ -140,6 +140,7 @@ class AgentTestSuitesCombinator(Combinator):
         runbook_images = self._get_runbook_images(loader)
 
         skip_test_suites: List[str] = []
+        skip_test_suites_images: List[str] = []
         for test_suite_info in loader.test_suites:
             if self.runbook.cloud in test_suite_info.skip_on_clouds:
                 skip_test_suites.append(test_suite_info.name)
@@ -149,7 +150,14 @@ class AgentTestSuitesCombinator(Combinator):
             else:
                 images_info: List[VmImageInfo] = self._get_test_suite_images(test_suite_info, loader)
 
+            skip_images_info: List[VmImageInfo] = self._get_test_suite_skip_images(test_suite_info, loader)
+            if len(skip_images_info) > 0:
+                skip_test_suite_image = f"{test_suite_info.name}: {','.join([i.urn for i in skip_images_info])}"
+                skip_test_suites_images.append(skip_test_suite_image)
+
             for image in images_info:
+                if image in skip_images_info:
+                    continue
                 # 'image.urn' can actually be the URL to a VHD if the runbook provided it in the 'image' parameter
                 if self._is_vhd(image.urn):
                     marketplace_image = ""
@@ -237,6 +245,9 @@ class AgentTestSuitesCombinator(Combinator):
 
         if len(skip_test_suites) > 0:
             self._log.info("Skipping test suites %s", skip_test_suites)
+
+        if len(skip_test_suites_images) > 0:
+            self._log.info("Skipping test suits run on images \n %s", '\n'.join([f"\t{skip}" for skip in skip_test_suites_images]))
 
         return environments
 
@@ -439,6 +450,20 @@ class AgentTestSuitesCombinator(Combinator):
             for i in image_list:
                 unique[i.urn] = i
         return [v for k, v in unique.items()]
+
+    @staticmethod
+    def _get_test_suite_skip_images(suite: TestSuiteInfo, loader: AgentTestLoader) -> List[VmImageInfo]:
+        """
+        Returns images that need to skip by the suite.
+
+        A test suite may be reference multiple image sets and sets can intersect; this method eliminates any duplicates.
+        """
+        skip_unique: Dict[str, VmImageInfo] = {}
+        for image in suite.skip_on_images:
+            image_list = loader.images[image]
+            for i in image_list:
+                skip_unique[i.urn] = i
+        return [v for k, v in skip_unique.items()]
 
     def _get_location(self, suite_info: TestSuiteInfo, image: VmImageInfo) -> str:
         """

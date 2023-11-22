@@ -46,30 +46,6 @@ image-sets:
       - "ubuntu_1804"
       - "ubuntu_2004"
 
-   # agent persist firewall service not running on flatcar distro since agent can't install custom service due to read only filesystem.
-   # so creating a separate image set for agent-persist-firewall scenario
-   persist-firewall-endorsed:
-      - "alma_9"
-      - "centos_79"
-      - "centos_82"
-      - "debian_9"
-      - "debian_10"
-      - "debian_11"
-      - "suse_12"
-      - "suse_15"
-      - "rhel_79"
-      - "rhel_82"
-      - "rhel_90"
-      - "rocky_9"
-      - "ubuntu_1604"
-      - "ubuntu_1804"
-      - "ubuntu_2004"
-      - "ubuntu_2204"
-      - "debian_11_arm64"
-      - "mariner_2_arm64"
-      - "rhel_90_arm64"
-      - "ubuntu_2204_arm64"
-
 #
 # An image can be specified by a string giving its urn, as in
 #
