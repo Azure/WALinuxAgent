@@ -2015,7 +2015,7 @@ class GoalStateMock(object):
         families = []
 
         if len(versions) > 0 and family is not None:
-            manifest = VMAgentFamily(name=family, version=None)
+            manifest = VMAgentFamily(name=family)
             for i in range(0, 10):
                 manifest.uris.append("https://nowhere.msft/agent/{0}".format(i))
             families.append(manifest)

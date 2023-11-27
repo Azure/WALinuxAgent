@@ -59,7 +59,7 @@ class GAVersionUpdater(object):
     def check_and_switch_updater_if_changed(self, agent_family, gs_id):
         """
         checks and raise the updater exception if we need to switch to self-update from rsm update or vice versa
-        @param agent_family: goal state agent family
+        @param agent_family: agent family
         @param gs_id: incarnation of the goal state
         @return: VMDisabledRSMUpdates: raise when agent need to stop rsm updates and switch to self-update
                  VMEnabledRSMUpdates: raise when agent need to switch to rsm update
@@ -69,15 +69,15 @@ class GAVersionUpdater(object):
     def retrieve_agent_version(self, agent_family, goal_state):
         """
         This function fetches the agent version from the goal state for the given family.
-        @param agent_family: goal state agent family
+        @param agent_family: agent family
         @param goal_state: goal state
         """
         raise NotImplementedError
 
-    def is_retrieved_version_allowed_to_update(self, goal_state):
+    def is_retrieved_version_allowed_to_update(self, agent_family):
         """
         Checks all base condition if new version allow to update.
-        @param goal_state: goal state
+        @param agent_family: agent family
         @return: True if allowed to update else False
         """
         raise NotImplementedError
