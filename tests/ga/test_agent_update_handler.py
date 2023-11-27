@@ -27,7 +27,7 @@ class TestAgentUpdate(UpdateTestCase):
         clear_singleton_instances(ProtocolUtil)
 
     @contextlib.contextmanager
-    def _get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, protocol_get_error=False):
+    def _get_agent_update_handler(self, test_data=None, agentupdate_frequency=0.001, autoupdate_enabled=True, protocol_get_error=False):
         # Default to DATA_FILE of test_data parameter raises the pylint warning
         # W0102: Dangerous default value DATA_FILE (builtins.dict) as argument (dangerous-default-value)
         test_data = DATA_FILE if test_data is None else test_data
@@ -54,10 +54,10 @@ class TestAgentUpdate(UpdateTestCase):
             protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
 
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
-                with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
+                with patch("azurelinuxagent.common.conf.get_agentupdate_frequency", return_value=agentupdate_frequency):
                     with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
                         with patch("azurelinuxagent.common.conf.get_enable_ga_versioning", return_value=True):
-                            with patch("azurelinuxagent.ga.agent_update_handler.add_event") as mock_telemetry:
+                            with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
                                 agent_update_handler = get_agent_update_handler(protocol)
                                 agent_update_handler._protocol = protocol
                                 yield agent_update_handler, mock_telemetry
@@ -122,12 +122,12 @@ class TestAgentUpdate(UpdateTestCase):
             self._assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
             self._assert_agent_exit_process_telemetry_emitted(ustr(context.exception.reason))
 
-    def test_it_should_update_to_largest_version_if_time_window_not_elapsed(self):
+    def test_it_should_not_update_to_largest_version_if_time_window_not_elapsed(self):
         self.prepare_agents(count=1)
 
         data_file = DATA_FILE.copy()
         data_file["ga_manifest"] = "wire/ga_manifest_no_uris.xml"
-        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+        with self._get_agent_update_handler(test_data=data_file, agentupdate_frequency=10) as (agent_update_handler, _):
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
                              "New agent directory should not be found")
@@ -171,7 +171,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
         version = "5.2.0.1"
-        with self._get_agent_update_handler(test_data=data_file, autoupdate_frequency=10) as (agent_update_handler, mock_telemetry):
+        with self._get_agent_update_handler(test_data=data_file, agentupdate_frequency=10) as (agent_update_handler, mock_telemetry):
             agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(version)
             agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
             agent_update_handler._protocol.client.update_goal_state()
@@ -200,7 +200,7 @@ class TestAgentUpdate(UpdateTestCase):
         self.prepare_agents(count=1)
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf.xml"
-        with self._get_agent_update_handler(test_data=data_file, autoupdate_frequency=10, protocol_get_error=True) as (agent_update_handler, _):
+        with self._get_agent_update_handler(test_data=data_file, agentupdate_frequency=10, protocol_get_error=True) as (agent_update_handler, _):
             # making multiple agent update attempts
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
@@ -214,7 +214,7 @@ class TestAgentUpdate(UpdateTestCase):
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf.xml"
 
-        with self._get_agent_update_handler(test_data=data_file, autoupdate_frequency=0.00001, protocol_get_error=True) as (agent_update_handler, _):
+        with self._get_agent_update_handler(test_data=data_file, agentupdate_frequency=0.00001, protocol_get_error=True) as (agent_update_handler, _):
             # making multiple agent update attempts
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
             agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
@@ -402,7 +402,7 @@ class TestAgentUpdate(UpdateTestCase):
             vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
-            self.assertIn("VM Enabled for RSM upgrades but version is missing in Goal state", vm_agent_update_status.message)
+            self.assertIn("missing version property. So, skipping agent update", vm_agent_update_status.message)
 
     def test_it_should_not_log_same_error_next_hours(self):
         data_file = DATA_FILE.copy()
@@ -438,17 +438,13 @@ class TestAgentUpdate(UpdateTestCase):
             with self.assertRaises(AgentUpgradeExitException):
                 agent_update_handler.run(agent_update_handler._protocol.get_goal_state())
 
-            state_file = os.path.join(conf.get_lib_dir(), "rsm_version.json")
+            state_file = os.path.join(conf.get_lib_dir(), "rsm_update.json")
             self.assertTrue(os.path.exists(state_file), "The rsm properties was not saved (can't find {0})".format(state_file))
 
             with open(state_file, "r") as state_file_:
                 state = json.load(state_file_)
 
-            self.assertTrue(state["isVersionFromRSM"], "{0} does not contain True".format(state_file))
-            self.assertTrue(state["isVMEnabledForRSMUpgrades"], "{0} does not contain True".format(state_file))
-            self.assertEqual(agent_update_handler._is_version_from_rsm, state["isVersionFromRSM"], "{0} does not contain the expected value".format(state_file))
-            self.assertEqual(agent_update_handler._is_vm_enabled_for_rsm_upgrades, state["isVMEnabledForRSMUpgrades"], "{0} does not contain the expected value".format(state_file))
-            self.assertEqual(agent_update_handler._protocol.get_goal_state().extensions_goal_state.created_on_timestamp, state["timestamp"], "{0} does not contain the expected value".format(state_file))
+            self.assertTrue(state["isLastUpdateWithRSM"], "{0} does not contain True".format(state_file))
 
             # check if state gets updated if most recent goal state has different values
             agent_update_handler._protocol.mock_wire_data.set_extension_config_is_vm_enabled_for_rsm_upgrades("False")
@@ -461,8 +457,4 @@ class TestAgentUpdate(UpdateTestCase):
             with open(state_file, "r") as state_file_:
                 state = json.load(state_file_)
 
-            self.assertTrue(state["isVersionFromRSM"], "{0} does not contain True".format(state_file))
-            self.assertFalse(state["isVMEnabledForRSMUpgrades"], "{0} does not contain False".format(state_file))
-            self.assertEqual(agent_update_handler._is_version_from_rsm, state["isVersionFromRSM"], "{0} does not contain the expected value".format(state_file))
-            self.assertEqual(agent_update_handler._is_vm_enabled_for_rsm_upgrades, state["isVMEnabledForRSMUpgrades"], "{0} does not contain the expected value".format(state_file))
-            self.assertEqual(agent_update_handler._protocol.get_goal_state().extensions_goal_state.created_on_timestamp, state["timestamp"], "{0} does not contain the expected value".format(state_file))
+            self.assertFalse(state["isLastUpdateWithRSM"], "{0} does not contain False".format(state_file))

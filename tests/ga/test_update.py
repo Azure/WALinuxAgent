@@ -1288,7 +1288,7 @@ class TestUpdate(UpdateTestCase):
                         update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                         self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
                         self.assertEqual(update_status['code'], 1, "incorrect code reported")
-                        self.assertIn("VM Enabled for RSM upgrades but version is missing in Goal state", update_status['formattedMessage']['message'], "incorrect message reported")
+                        self.assertIn("missing version property. So, skipping agent update", update_status['formattedMessage']['message'], "incorrect message reported")
 
                         # Case 2: rsm version in GS == Current Version; updateStatus should be Success
                         protocol.mock_wire_data.set_extension_config("wire/ext_conf_rsm_version.xml")
@@ -1430,10 +1430,10 @@ class UpdateHandlerRunTestCase(AgentTestCase):
 class TestAgentUpgrade(UpdateTestCase):
 
     @contextlib.contextmanager
-    def create_conf_mocks(self, autoupdate_frequency, hotfix_frequency, normal_frequency):
+    def create_conf_mocks(self, agentupdate_frequency, hotfix_frequency, normal_frequency):
         # Disabling extension processing to speed up tests as this class deals with testing agent upgrades
         with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
-            with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
+            with patch("azurelinuxagent.common.conf.get_agentupdate_frequency", return_value=agentupdate_frequency):
                 with patch("azurelinuxagent.common.conf.get_self_update_hotfix_frequency", return_value=hotfix_frequency):
                     with patch("azurelinuxagent.common.conf.get_self_update_regular_frequency", return_value=normal_frequency):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):

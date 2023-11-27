@@ -479,8 +479,8 @@ def get_autoupdate_enabled(conf=__conf__):
     return conf.get_switch("AutoUpdate.Enabled", True)
 
 
-def get_autoupdate_frequency(conf=__conf__):
-    return conf.get_int("Autoupdate.Frequency", 3600)
+def get_agentupdate_frequency(conf=__conf__):
+    return conf.get_int("AgentUpdate.Frequency", 3600)
 
 
 def get_enable_overprovisioning(conf=__conf__):

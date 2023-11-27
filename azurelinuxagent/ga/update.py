@@ -756,7 +756,7 @@ class UpdateHandler(object):
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())
 
             if conf.get_autoupdate_enabled():
-                log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_autoupdate_frequency())
+                log_if_int_changed_from_default("Autoupdate.Frequency", conf.get_agentupdate_frequency())
 
             if conf.get_enable_fast_track():
                 log_if_op_disabled("Debug.EnableFastTrack", conf.get_enable_fast_track())

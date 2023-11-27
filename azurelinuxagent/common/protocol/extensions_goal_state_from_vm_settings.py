@@ -274,7 +274,9 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
             uris = family.get("uris")
             if uris is None:
                 uris = []
-            agent_family = VMAgentFamily(name, version)
+            agent_family = VMAgentFamily(name)
+            if version is not None:
+                agent_family.version = version
             if is_version_from_rsm is not None:
                 agent_family.is_version_from_rsm = is_version_from_rsm
             if is_vm_enabled_for_rsm_upgrades is not None:

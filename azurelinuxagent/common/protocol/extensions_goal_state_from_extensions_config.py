@@ -65,7 +65,9 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             is_vm_enabled_for_rsm_upgrades = findtext(ga_family, "IsVMEnabledForRSMUpgrades")
             uris_list = find(ga_family, "Uris")
             uris = findall(uris_list, "Uri")
-            family = VMAgentFamily(name, version)
+            family = VMAgentFamily(name)
+            if version is not None:
+                family.version = version
             if is_version_from_rsm is not None:
                 family.is_version_from_rsm = is_version_from_rsm.lower() == "true"
             if is_vm_enabled_for_rsm_upgrades is not None:
