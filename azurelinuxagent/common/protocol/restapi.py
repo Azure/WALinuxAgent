@@ -70,11 +70,11 @@ class CertList(DataContract):
 class VMAgentFamily(object):
     def __init__(self, name):
         self.name = name
-        # This is the version as specified by the Goal State
+        # Two-state: None, string. Set to None if version not specified in the GS
         self.version = None
-        # Set to None if the property not specified in the GS and later computed True/False based on previous state in agent update
+        # Tri-state: None, True, False. Set to None if this property not specified in the GS.
         self.is_version_from_rsm = None
-        # Set to None if this property not specified in the GS and later computed True/False based on previous state in agent update
+        # Tri-state: None, True, False. Set to None if this property not specified in the GS.
         self.is_vm_enabled_for_rsm_upgrades = None
 
         self.uris = []
