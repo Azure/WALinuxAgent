@@ -84,13 +84,13 @@ class AgentUpdateHandler(object):
         # This file keeps if last attempted update is rsm or not.
         return os.path.join(conf.get_lib_dir(), "rsm_update.json")
 
-    def _save_rsm_update_state(self, is_last_update_with_RSM):
+    def _save_rsm_update_state(self, is_last_update_with_rsm):
         """
         Save the rsm state to the file when we switch between rsm and self-update
         """
         try:
             with open(self._get_rsm_update_state_file(), "w") as file_:
-                json.dump({"isLastUpdateWithRSM": is_last_update_with_RSM}, file_)
+                json.dump({"isLastUpdateWithRSM": is_last_update_with_rsm}, file_)
         except Exception as e:
             logger.warn("Error updating the RSM state ({0}): {1}", self._get_rsm_update_state_file(), ustr(e))
 
@@ -156,13 +156,13 @@ class AgentUpdateHandler(object):
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
                 self._updater = SelfUpdateVersionUpdater(gs_id, datetime.datetime.now())
-                self._save_rsm_update_state(is_last_update_with_RSM=False)
+                self._save_rsm_update_state(is_last_update_with_rsm=False)
             except VMEnabledRSMUpdates:
                 msg = "VM enabled for RSM updates, switching to RSM update mode"
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
                 self._updater = RSMVersionUpdater(gs_id, self._daemon_version, datetime.datetime.now())
-                self._save_rsm_update_state(is_last_update_with_RSM=True)
+                self._save_rsm_update_state(is_last_update_with_rsm=True)
 
             self._updater.retrieve_agent_version(agent_family, goal_state)
 
