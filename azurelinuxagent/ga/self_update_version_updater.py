@@ -23,7 +23,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import CURRENT_VERSION
-from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater, VMEnabledRSMUpdates
+from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater, RSMUpdates
 
 
 class SelfUpdateType(object):
@@ -60,31 +60,27 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
             return SelfUpdateType.Hotfix
         return SelfUpdateType.Regular
 
-    def _get_next_upgrade_times(self, now):
+    @staticmethod
+    def _get_next_process_time(last_val, frequency, now):
         """
-        Get the next upgrade times
-        return: Next Hotfix Upgrade Time, Next Regular Upgrade Time
+        Get the next upgrade time
         """
-        def get_next_process_time(last_val, frequency):
-            return now if last_val == datetime.datetime.min else last_val + datetime.timedelta(seconds=frequency)
-
-        next_hotfix_time = get_next_process_time(self._last_attempted_self_update_time,
-                                                 conf.get_self_update_hotfix_frequency())
-        next_regular_time = get_next_process_time(self._last_attempted_self_update_time,
-                                                  conf.get_self_update_regular_frequency())
-
-        return next_hotfix_time, next_regular_time
+        return now if last_val == datetime.datetime.min else last_val + datetime.timedelta(seconds=frequency)
 
     def _is_new_agent_allowed_update(self):
         """
         This method ensure that update is allowed only once per (hotfix/Regular) upgrade frequency
         """
         now = datetime.datetime.now()
-        next_hotfix_time, next_regular_time = self._get_next_upgrade_times(now)
         upgrade_type = self._get_agent_upgrade_type(self._version)
+        if upgrade_type == SelfUpdateType.Hotfix:
+            next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
+                                                           conf.get_self_update_hotfix_frequency(), now)
+        else:
+            next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
+                                                           conf.get_self_update_regular_frequency(), now)
 
-        if (upgrade_type == SelfUpdateType.Hotfix and next_hotfix_time <= now) or (
-                upgrade_type == SelfUpdateType.Regular and next_regular_time <= now):
+        if next_update_time <= now:
             # Update the last upgrade check time even if no new agent is available for upgrade
             self._last_attempted_self_update_time = now
             return True
@@ -99,7 +95,8 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         now = datetime.datetime.now()
 
         if self._last_attempted_manifest_download_time != datetime.datetime.min:
-            next_attempt_time = self._last_attempted_manifest_download_time + datetime.timedelta(seconds=conf.get_agentupdate_frequency())
+            next_attempt_time = self._last_attempted_manifest_download_time + datetime.timedelta(
+                seconds=conf.get_autoupdate_frequency())
         else:
             next_attempt_time = now
 
@@ -108,7 +105,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         self._last_attempted_manifest_download_time = now
         return True
 
-    def is_update_allowed_this_time(self):
+    def is_update_allowed_this_time(self, ext_gs_updated):
         """
         Checks if we allowed download manifest as per manifest download frequency
         """
@@ -116,21 +113,27 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
             return False
         return True
 
-    def check_and_switch_updater_if_changed(self, agent_family, gs_id):
+    def check_and_switch_updater_if_changed(self, agent_family, gs_id, ext_gs_updated):
         """
         Checks if there is a new goal state and decide if we need to continue with self-update or switch to rsm update.
-        if vm is not enabled for RSM updates or agent not supports GA versioning then we continue with self update, otherwise we raise exception to switch to rsm update.
+        if vm is not enabled for RSM updates or agent not supports GA versioning then we continue with self update, otherwise we rsm enabled to switch to rsm update.
         if isVersionFromRSM is missing but isVMEnabledForRSMUpgrades is present in the goal state, we ignore the update as we consider it as invalid goal state.
         """
-        if self._gs_id != gs_id:
+        if ext_gs_updated:
             self._gs_id = gs_id
-            if conf.get_enable_ga_versioning() and agent_family.is_vm_enabled_for_rsm_upgrades:
+            if conf.get_enable_ga_versioning() and agent_family.is_vm_enabled_for_rsm_upgrades is not None and agent_family.is_vm_enabled_for_rsm_upgrades:
                 if agent_family.is_version_from_rsm is None:
                     raise AgentUpdateError(
                         "Received invalid goal state:{0}, missing isVersionFromRSM property. So, skipping agent update".format(
-                            gs_id))
+                            self._gs_id))
                 else:
-                    raise VMEnabledRSMUpdates()
+                    if agent_family.version is None:
+                        raise AgentUpdateError(
+                            "Received invalid goal state:{0}, missing version property. So, skipping agent update".format(
+                                self._gs_id))
+                    return RSMUpdates.Enabled
+
+        return None
 
     def retrieve_agent_version(self, agent_family, goal_state):
         """
@@ -178,4 +181,6 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         if self._version > CURRENT_VERSION:
             # In case of an upgrade, we don't need to exclude anything as the daemon will automatically
             # start the next available highest version which would be the target version
-            raise AgentUpgradeExitException("Agent completed all update checks, exiting current process to upgrade to the new Agent version {0}".format(self._version))
+            raise AgentUpgradeExitException(
+                "Agent completed all update checks, exiting current process to upgrade to the new Agent version {0}".format(
+                    self._version))

@@ -16,7 +16,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
-import datetime
 import glob
 import os
 
@@ -25,15 +24,14 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME
-from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater, VMDisabledRSMUpdates
+from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater, RSMUpdates
 from azurelinuxagent.ga.guestagent import GuestAgent
 
 
 class RSMVersionUpdater(GAVersionUpdater):
-    def __init__(self, gs_id, daemon_version, last_attempted_rsm_version_update_time):
+    def __init__(self, gs_id, daemon_version):
         super(RSMVersionUpdater, self).__init__(gs_id)
         self._daemon_version = daemon_version
-        self._last_attempted_rsm_version_update_time = last_attempted_rsm_version_update_time
 
     @staticmethod
     def _get_all_agents_on_disk():
@@ -45,56 +43,46 @@ class RSMVersionUpdater(GAVersionUpdater):
         available_agents = [agent for agent in self._get_all_agents_on_disk() if agent.is_available]
         return sorted(available_agents, key=lambda agent: agent.version, reverse=True)
 
-    def is_update_allowed_this_time(self):
+    def is_update_allowed_this_time(self, ext_gs_updated):
         """
-        update is allowed once per (as specified in the conf.get_autoupdate_frequency())
-        If update allowed, we update the last_attempted_rsm_version_update_time to current time.
+        RSM update allowed if we have a new goal state
         """
-        now = datetime.datetime.now()
+        return ext_gs_updated
 
-        if self._last_attempted_rsm_version_update_time != datetime.datetime.min:
-            next_attempt_time = self._last_attempted_rsm_version_update_time + datetime.timedelta(
-                seconds=conf.get_agentupdate_frequency())
-        else:
-            next_attempt_time = now
-
-        if next_attempt_time > now:
-            return False
-        self._last_attempted_rsm_version_update_time = now
-        # The time limit elapsed for us to allow updates.
-        return True
-
-    def check_and_switch_updater_if_changed(self, agent_family, gs_id):
+    def check_and_switch_updater_if_changed(self, agent_family, gs_id, ext_gs_updated):
         """
         Checks if there is a new goal state and decide if we need to continue with rsm update or switch to self-update.
-        Firstly it checks agent supports GA versioning or not. If not, we raise exception to switch to self-update.
-        if vm is enabled for RSM updates and continue with rsm update, otherwise we raise exception to switch to self-update.
-        if either isVersionFromRSM or isVMEnabledForRSMUpgrades is missing in the goal state, we ignore the update as we consider it as invalid goal state.
+        Firstly it checks agent supports GA versioning or not. If not, we return rsm updates disabled to switch to self-update.
+        if vm is enabled for RSM updates and continue with rsm update, otherwise we return rsm updates disabled to switch to self-update.
+        if either isVersionFromRSM or isVMEnabledForRSMUpgrades or version is missing in the goal state, we ignore the update as we consider it as invalid goal state.
         """
-        if self._gs_id != gs_id:
+        if ext_gs_updated:
             self._gs_id = gs_id
             if not conf.get_enable_ga_versioning():
-                raise VMDisabledRSMUpdates()
+                return RSMUpdates.Disabled
 
             if agent_family.is_vm_enabled_for_rsm_upgrades is None:
                 raise AgentUpdateError(
                     "Received invalid goal state:{0}, missing isVMEnabledForRSMUpgrades property. So, skipping agent update".format(
-                        gs_id))
+                        self._gs_id))
             elif not agent_family.is_vm_enabled_for_rsm_upgrades:
-                raise VMDisabledRSMUpdates()
+                return RSMUpdates.Disabled
             else:
                 if agent_family.is_version_from_rsm is None:
                     raise AgentUpdateError(
                         "Received invalid goal state:{0}, missing isVersionFromRSM property. So, skipping agent update".format(
-                            gs_id))
+                            self._gs_id))
+                if agent_family.version is None:
+                    raise AgentUpdateError(
+                        "Received invalid goal state:{0}, missing version property. So, skipping agent update".format(
+                            self._gs_id))
+
+        return None
 
     def retrieve_agent_version(self, agent_family, goal_state):
         """
         Get the agent version from the goal state
         """
-        if agent_family.version is None and agent_family.is_vm_enabled_for_rsm_upgrades and agent_family.is_version_from_rsm:
-            raise AgentUpdateError(
-                "Received invalid goal state:{0}, missing version property. So, skipping agent update".format(self._gs_id))
         self._version = FlexibleVersion(agent_family.version)
 
     def is_retrieved_version_allowed_to_update(self, agent_family):

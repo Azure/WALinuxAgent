@@ -30,16 +30,12 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN
 from azurelinuxagent.ga.guestagent import GuestAgent
 
 
-class VMEnabledRSMUpdates(TypeError):
+class RSMUpdates(object):
     """
-    Thrown when agent needs to switch to RSM update mode if vm turn on RSM updates
+    Enum for switching between RSM updates and self updates
     """
-
-
-class VMDisabledRSMUpdates(TypeError):
-    """
-    Thrown when agent needs to switch to self update mode if vm turn off RSM updates
-    """
+    Enabled = "Enabled"
+    Disabled = "Disabled"
 
 
 class GAVersionUpdater(object):
@@ -49,20 +45,23 @@ class GAVersionUpdater(object):
         self._version = FlexibleVersion("0.0.0.0")  # Initialize to zero and retrieve from goal state later stage
         self._agent_manifest = None  # Initialize to None and fetch from goal state at different stage for different updater
 
-    def is_update_allowed_this_time(self):
+    def is_update_allowed_this_time(self, ext_gs_updated):
         """
         This function checks if we allowed to update the agent.
-        return false when we don't allow updates.
+        @param ext_gs_updated: True if extension goal state updated else False
+        @return false when we don't allow updates.
         """
         raise NotImplementedError
 
-    def check_and_switch_updater_if_changed(self, agent_family, gs_id):
+    def check_and_switch_updater_if_changed(self, agent_family, gs_id, ext_gs_updated):
         """
         checks and raise the updater exception if we need to switch to self-update from rsm update or vice versa
         @param agent_family: agent family
         @param gs_id: incarnation of the goal state
-        @return: VMDisabledRSMUpdates: raise when agent need to stop rsm updates and switch to self-update
-                 VMEnabledRSMUpdates: raise when agent need to switch to rsm update
+        @param ext_gs_updated: True if extension goal state updated else False
+        @return: RSMUpdates.Disabled: return when agent need to stop rsm updates and switch to self-update
+                 RSMUpdates.Enabled: return when agent need to switch to rsm update
+                 None: return when no need to switch
         """
         raise NotImplementedError
 

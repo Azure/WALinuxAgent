@@ -16,7 +16,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 import datetime
-import json
 import os
 
 from azurelinuxagent.common import conf, logger
@@ -27,7 +26,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAge
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_daemon_version
-from azurelinuxagent.ga.ga_version_updater import VMDisabledRSMUpdates, VMEnabledRSMUpdates
+from azurelinuxagent.ga.ga_version_updater import RSMUpdates
 from azurelinuxagent.ga.rsm_version_updater import RSMVersionUpdater
 from azurelinuxagent.ga.self_update_version_updater import SelfUpdateVersionUpdater
 
@@ -56,6 +55,8 @@ class AgentUpdateHandler(object):
         4. Purge the extra agents from disk.
         5. Download the new agent.
         6. Proceed with update.
+
+    [Note: 1.0.8.147 is the minimum supported version of HGPA which will have the isVersionFromRSM and isVMEnabledForRSMUpgrades properties in vmsettings.]
     """
     def __init__(self, protocol):
         self._protocol = protocol
@@ -68,7 +69,7 @@ class AgentUpdateHandler(object):
         if not self._get_is_last_update_with_rsm():
             self._updater = SelfUpdateVersionUpdater(self._gs_id, datetime.datetime.min)
         else:
-            self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version, datetime.datetime.min)
+            self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version)
 
     @staticmethod
     def _get_daemon_version_for_update():
@@ -81,34 +82,36 @@ class AgentUpdateHandler(object):
 
     @staticmethod
     def _get_rsm_update_state_file():
-        # This file keeps if last attempted update is rsm or not.
+        """
+        This file keeps if last attempted update is rsm or not.
+        """
         return os.path.join(conf.get_lib_dir(), "rsm_update.json")
 
-    def _save_rsm_update_state(self, is_last_update_with_rsm):
+    def _save_rsm_update_state(self):
         """
-        Save the rsm state to the file when we switch between rsm and self-update
+        Save the rsm state empty file when we switch to RSM
         """
         try:
-            with open(self._get_rsm_update_state_file(), "w") as file_:
-                json.dump({"isLastUpdateWithRSM": is_last_update_with_rsm}, file_)
+            with open(self._get_rsm_update_state_file(), "w"):
+                pass
         except Exception as e:
-            logger.warn("Error updating the RSM state ({0}): {1}", self._get_rsm_update_state_file(), ustr(e))
+            logger.warn("Error creating the RSM state ({0}): {1}", self._get_rsm_update_state_file(), ustr(e))
+
+    def _remove_rsm_update_state(self):
+        """
+        Remove the rsm state file when we switch to self-update
+        """
+        try:
+            if os.path.exists(self._get_rsm_update_state_file()):
+                os.remove(self._get_rsm_update_state_file())
+        except Exception as e:
+            logger.warn("Error removing the RSM state ({0}): {1}", self._get_rsm_update_state_file(), ustr(e))
 
     def _get_is_last_update_with_rsm(self):
         """
-        Returns isLastUpdateWithRSM from the state file.
+        Returns True if state file exists as this consider as last update with RSM is true
         """
-        if not os.path.exists(self._get_rsm_update_state_file()):
-            return False
-
-        try:
-            with open(self._get_rsm_update_state_file(), "r") as file_:
-                return json.load(file_)["isLastUpdateWithRSM"]
-        except Exception as e:
-            logger.warn(
-                "Can't retrieve the isLastUpdateWithRSM from rsm state file ({0}), will assume it False. Error: {1}",
-                self._get_rsm_update_state_file(), ustr(e))
-        return False
+        return os.path.exists(self._get_rsm_update_state_file())
 
     def _get_agent_family_manifest(self, goal_state):
         """
@@ -127,42 +130,44 @@ class AgentUpdateHandler(object):
                     agent_family_manifests.append(m)
 
         if not family_found:
-            raise AgentUpdateError(u"Agent family: {0} not found in the goal state incarnation: {1}, skipping agent update".format(family, self._gs_id))
+            raise AgentUpdateError(u"Agent family: {0} not found in the goal state: {1}, skipping agent update".format(family, self._gs_id))
 
         if len(agent_family_manifests) == 0:
             raise AgentUpdateError(
-                u"No manifest links found for agent family: {0} for incarnation: {1}, skipping agent update".format(
+                u"No manifest links found for agent family: {0} for goal state: {1}, skipping agent update".format(
                     family, self._gs_id))
         return agent_family_manifests[0]
 
-    def run(self, goal_state):
+    def run(self, goal_state, ext_gs_updated):
 
         try:
             # Ignore new agents if update is disabled. The latter flag only used in e2e tests.
             if not conf.get_autoupdate_enabled() or not conf.get_download_new_agents():
                 return
 
-            # verify if agent update is allowed this time (RSM checks 1 hr interval; self-update checks manifest download interval)
-            if not self._updater.is_update_allowed_this_time():
+            # verify if agent update is allowed this time (RSM checks new goal state; self-update checks manifest download interval)
+            if not self._updater.is_update_allowed_this_time(ext_gs_updated):
                 return
 
+            self._gs_id = goal_state.extensions_goal_state.id
             agent_family = self._get_agent_family_manifest(goal_state)
-            gs_id = goal_state.extensions_goal_state.id
-            try:
-                # updater will raise exception if we need to switch to self-update or rsm update
-                self._updater.check_and_switch_updater_if_changed(agent_family, gs_id)
-            except VMDisabledRSMUpdates:
+
+            # updater will return RSM enabled or disabled if we need to switch to self-update or rsm update
+            updater_mode = self._updater.check_and_switch_updater_if_changed(agent_family, self._gs_id, ext_gs_updated)
+
+            if updater_mode == RSMUpdates.Disabled:
                 msg = "VM not enabled for RSM updates, switching to self-update mode"
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
-                self._updater = SelfUpdateVersionUpdater(gs_id, datetime.datetime.now())
-                self._save_rsm_update_state(is_last_update_with_rsm=False)
-            except VMEnabledRSMUpdates:
+                self._updater = SelfUpdateVersionUpdater(self._gs_id, datetime.datetime.now())
+                self._remove_rsm_update_state()
+
+            if updater_mode == RSMUpdates.Enabled:
                 msg = "VM enabled for RSM updates, switching to RSM update mode"
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
-                self._updater = RSMVersionUpdater(gs_id, self._daemon_version, datetime.datetime.now())
-                self._save_rsm_update_state(is_last_update_with_rsm=True)
+                self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version)
+                self._save_rsm_update_state()
 
             self._updater.retrieve_agent_version(agent_family, goal_state)
 

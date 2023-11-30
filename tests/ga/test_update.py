@@ -1430,10 +1430,10 @@ class UpdateHandlerRunTestCase(AgentTestCase):
 class TestAgentUpgrade(UpdateTestCase):
 
     @contextlib.contextmanager
-    def create_conf_mocks(self, agentupdate_frequency, hotfix_frequency, normal_frequency):
+    def create_conf_mocks(self, autoupdate_frequency, hotfix_frequency, normal_frequency):
         # Disabling extension processing to speed up tests as this class deals with testing agent upgrades
         with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
-            with patch("azurelinuxagent.common.conf.get_agentupdate_frequency", return_value=agentupdate_frequency):
+            with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
                 with patch("azurelinuxagent.common.conf.get_self_update_hotfix_frequency", return_value=hotfix_frequency):
                     with patch("azurelinuxagent.common.conf.get_self_update_regular_frequency", return_value=normal_frequency):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
@@ -1514,7 +1514,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_agent_directories_available(versions=["9.9.9.10"])
             self.__assert_upgrade_telemetry_emitted(mock_telemetry)
 
-    def test_it_should_not_update_agent_if_last_update_time_not_permitted(self):
+    def test_it_should_not_update_agent_with_rsm_if_gs_not_updated_in_next_attempts(self):
         no_of_iterations = 10
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf_rsm_version.xml"
@@ -1523,7 +1523,8 @@ class TestAgentUpgrade(UpdateTestCase):
         test_frequency = 10
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file,
                                        autoupdate_frequency=test_frequency) as (update_handler, _):
-            update_handler._protocol.mock_wire_data.set_ga_manifest_version_version("5.2.0.1")
+            # Given version which will fail on first attempt, then rsm shouldn't make any futher attempts since GS is not updated
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family("5.2.1.0")
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1531,6 +1532,8 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertEqual(no_of_iterations, update_handler.get_iterations(), "Update handler should've run its course")
             self.assertFalse(os.path.exists(self.agent_dir("5.2.0.1")),
                              "New agent directory should not be found")
+            self.assertGreaterEqual(update_handler._protocol.mock_wire_data.call_counts["manifest_of_ga.xml"], 1,
+                             "only 1 agent manifest call should've been made - 1 per incarnation")
 
     def test_it_should_not_auto_upgrade_if_auto_update_disabled(self):
         with self.__get_update_handler(iterations=10) as (update_handler, _):
