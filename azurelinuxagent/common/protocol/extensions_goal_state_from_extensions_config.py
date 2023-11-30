@@ -67,9 +67,9 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
             uris = findall(uris_list, "Uri")
             family = VMAgentFamily(name)
             family.version = version
-            if is_version_from_rsm is not None:  # checking None because converting string to lower
+            if is_version_from_rsm is not None:  # checking None because converting string to lowercase
                 family.is_version_from_rsm = is_version_from_rsm.lower() == "true"
-            if is_vm_enabled_for_rsm_upgrades is not None:  # checking None because converting string to lower
+            if is_vm_enabled_for_rsm_upgrades is not None:  # checking None because converting string to lowercase
                 family.is_vm_enabled_for_rsm_upgrades = is_vm_enabled_for_rsm_upgrades.lower() == "true"
             for uri in uris:
                 family.uris.append(gettext(uri))
