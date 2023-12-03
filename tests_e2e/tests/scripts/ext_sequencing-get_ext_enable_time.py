@@ -36,8 +36,11 @@ def main():
     args, _ = parser.parse_known_args()
 
     # Extension enabled time is in extension extension status file
-    ext_dir = [item for item in os.listdir(Path('/var/lib/waagent')) if item.startswith(args.ext)][0]
-    ext_status_path = Path('/var/lib/waagent/' + ext_dir + '/status')
+    ext_dirs = [item for item in os.listdir(Path('/var/lib/waagent')) if item.startswith(args.ext)]
+    if not ext_dirs:
+        print("Extension {0} directory does not exist".format(args.ext), file=sys.stderr)
+        sys.exit(1)
+    ext_status_path = Path('/var/lib/waagent/' + ext_dirs[0] + '/status')
     ext_status_files = os.listdir(ext_status_path)
     ext_status_files.sort()
     if not ext_status_files:
