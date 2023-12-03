@@ -19,7 +19,6 @@
 
 from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
 from assertpy import assert_that, soft_assertions
-from datetime import datetime
 from random import choice
 import uuid
 
