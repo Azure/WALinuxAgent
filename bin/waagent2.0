@@ -23,7 +23,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 #
 
-import crypt
+import legacycrypt as crypt
 import random
 import array
 import base64

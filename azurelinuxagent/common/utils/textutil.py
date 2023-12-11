@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import base64
-import crypt
+import legacycrypt as crypt
 import hashlib
 import random
 import re
