@@ -53,16 +53,66 @@ class ExtensionsGoalStateFromVmSettingsTestCase(AgentTestCase):
             goal_state = GoalState(protocol.client)
             families = goal_state.extensions_goal_state.agent_families
             for family in families:
-                self.assertEqual(family.requested_version_string, "0.0.0.0", "Version should be None")
+                self.assertIsNone(family.version, "Version should be None")
 
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
-        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version.json"
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-agent_family_version.json"
         with mock_wire_protocol(data_file) as protocol:
             protocol.mock_wire_data.set_etag(888)
             goal_state = GoalState(protocol.client)
             families = goal_state.extensions_goal_state.agent_families
             for family in families:
-                self.assertEqual(family.requested_version_string, "9.9.9.9", "Version should be 9.9.9.9")
+                self.assertEqual(family.version, "9.9.9.9", "Version should be 9.9.9.9")
+
+    def test_it_should_parse_is_version_from_rsm_properly(self):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertIsNone(family.is_version_from_rsm, "is_version_from_rsm should be None")
+
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-agent_family_version.json"
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertTrue(family.is_version_from_rsm, "is_version_from_rsm should be True")
+
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version_properties_false.json"
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertFalse(family.is_version_from_rsm, "is_version_from_rsm should be False")
+
+    def test_it_should_parse_is_vm_enabled_for_rsm_upgrades_properly(self):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertIsNone(family.is_vm_enabled_for_rsm_upgrades, "is_vm_enabled_for_rsm_upgrades should be None")
+
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-agent_family_version.json"
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertTrue(family.is_vm_enabled_for_rsm_upgrades, "is_vm_enabled_for_rsm_upgrades should be True")
+
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
+        data_file["vm_settings"] = "hostgaplugin/vm_settings-requested_version_properties_false.json"
+        with mock_wire_protocol(data_file) as protocol:
+            protocol.mock_wire_data.set_etag(888)
+            goal_state = GoalState(protocol.client)
+            families = goal_state.extensions_goal_state.agent_families
+            for family in families:
+                self.assertFalse(family.is_vm_enabled_for_rsm_upgrades, "is_vm_enabled_for_rsm_upgrades should be False")
 
     def test_it_should_parse_missing_status_upload_blob_as_none(self):
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()

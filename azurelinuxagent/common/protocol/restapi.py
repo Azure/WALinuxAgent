@@ -22,7 +22,6 @@ import time
 
 from azurelinuxagent.common.datacontract import DataContract, DataContractList
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import getattrib
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 
@@ -69,23 +68,16 @@ class CertList(DataContract):
 
 
 class VMAgentFamily(object):
-    def __init__(self, name, version=None):
+    def __init__(self, name):
         self.name = name
-        # This is the Requested version as specified by the Goal State, it defaults to 0.0.0.0 if not specified in GS
-        self.requested_version_string = VERSION_0 if version is None else version
+        # Two-state: None, string. Set to None if version not specified in the GS
+        self.version = None
+        # Tri-state: None, True, False. Set to None if this property not specified in the GS.
+        self.is_version_from_rsm = None
+        # Tri-state: None, True, False. Set to None if this property not specified in the GS.
+        self.is_vm_enabled_for_rsm_upgrades = None
+
         self.uris = []
-
-    @property
-    def requested_version(self):
-        return FlexibleVersion(self.requested_version_string)
-
-    @property
-    def is_requested_version_specified(self):
-        """
-        If we don't get any requested_version from the GS, we default it to 0.0.0.0.
-        This property identifies if a requested Version was passed in the GS or not.
-        """
-        return self.requested_version > FlexibleVersion(VERSION_0)
 
     def __repr__(self):
         return self.__str__()

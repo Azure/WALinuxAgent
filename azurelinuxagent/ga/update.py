@@ -547,21 +547,20 @@ class UpdateHandler(object):
         """
         True if we are currently processing a new extensions goal state
         """
-        egs = self._goal_state.extensions_goal_state
-        return self._goal_state is not None and egs.id != self._last_extensions_gs_id and not egs.is_outdated
+        return self._goal_state is not None and self._goal_state.extensions_goal_state.id != self._last_extensions_gs_id and not self._goal_state.extensions_goal_state.is_outdated
 
     def _process_goal_state(self, exthandlers_handler, remote_access_handler, agent_update_handler):
         protocol = exthandlers_handler.protocol
 
         # update self._goal_state
         if not self._try_update_goal_state(protocol):
-            agent_update_handler.run(self._goal_state)
+            agent_update_handler.run(self._goal_state, self._processing_new_extensions_goal_state())
             # status reporting should be done even when the goal state is not updated
             self._report_status(exthandlers_handler, agent_update_handler)
             return
 
         # check for agent updates
-        agent_update_handler.run(self._goal_state)
+        agent_update_handler.run(self._goal_state, self._processing_new_extensions_goal_state())
 
         try:
             if self._processing_new_extensions_goal_state():
