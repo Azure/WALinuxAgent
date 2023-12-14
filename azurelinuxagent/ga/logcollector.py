@@ -360,9 +360,18 @@ class LogCollector(object):
             try:
                 compressed_archive = zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED)
 
+                max_errors = 8
+                error_count = 0
                 for file_to_collect in files_to_collect:
-                    archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
-                    compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
+                    try:
+                        archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
+                        compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
+                    except Exception as e:
+                        error_count += 1
+                        if error_count >= max_errors:
+                            raise Exception("Too many errors, giving up. Last error: {0}".format(ustr(e)))
+                        else:
+                            _LOGGER.warning("Failed to add file %s to the archive: %s", file_to_collect, ustr(e))
 
                 compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. Compressed archive size is %s b", compressed_archive_size)
