@@ -40,6 +40,7 @@ from .suse import SUSEOSUtil, SUSE11OSUtil
 from .photonos import PhotonOSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
+from .cacheguard import CacheGuardOSUtil
 
 
 def get_osutil(distro_name=DISTRO_NAME,
@@ -152,6 +153,9 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
     if distro_name == "openwrt":
         return OpenWRTOSUtil()
+
+    if distro_name == "cacheguard":
+        return CacheGuardOSUtil()
 
     logger.warn("Unable to load distro implementation for {0}. Using default distro implementation instead.", distro_name)
     return DefaultOSUtil()
