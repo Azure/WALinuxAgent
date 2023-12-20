@@ -19,7 +19,6 @@
 
 from azure.mgmt.compute.models import VirtualMachineExtensionInstanceView
 from assertpy import assert_that, soft_assertions
-from datetime import datetime
 from random import choice
 import uuid
 
@@ -175,7 +174,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension install scenario*******")
 
             # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
 
             # Create DcrTestExtension with version 1.1.5
             dcr_test_ext_id_1_1 = VmExtensionIdentifier(
@@ -224,7 +223,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension enable scenario*******")
 
             # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
 
             # Enable test extension on the VM
             dcr_ext.modify_ext_settings_and_enable()
@@ -281,7 +280,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension uninstall scenario*******")
 
             # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
 
             # Remove the test extension on the VM
             log.info("Delete %s from VM", dcr_test_ext_client)
@@ -306,7 +305,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension update with install scenario*******")
 
             # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
 
             # Version 1.2.0 of the test extension has the same functionalities as 1.1.5 with
             # "updateMode": "UpdateWithInstall" in HandlerManifest.json to test update case
@@ -373,7 +372,7 @@ class ExtensionWorkflow(AgentVmTest):
             log.info("*******Verifying the extension update without install scenario*******")
 
             # Record the time we start the test
-            start_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+            start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
 
             # Version 1.3.0 of the test extension has the same functionalities as 1.1.5 with
             # "updateMode": "UpdateWithoutInstall" in HandlerManifest.json to test update case
