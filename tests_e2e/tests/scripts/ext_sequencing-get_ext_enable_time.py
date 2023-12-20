@@ -51,6 +51,23 @@ def main():
     ext_status_file = open(latest_ext_status_path, 'r')
     ext_status = json.loads(ext_status_file.read())
 
+    # Example status file
+    # [
+    #     {
+    #         "status": {
+    #             "status": "success",
+    #             "formattedMessage": {
+    #                 "lang": "en-US",
+    #                 "message": "Enable succeeded"
+    #             },
+    #             "operation": "Enable",
+    #             "code": "0",
+    #             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent"
+    #         },
+    #         "version": "1.0",
+    #         "timestampUTC": "2023-12-12T23:14:45Z"
+    #     }
+    # ]
     msg = ""
     if len(ext_status) == 0 or not ext_status[0]['status']:
         msg = "Extension {0} did not report a status".format(args.ext)
