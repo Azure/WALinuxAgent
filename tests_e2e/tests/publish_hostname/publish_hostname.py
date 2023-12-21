@@ -45,7 +45,6 @@ class PublishHostname(AgentVmTest):
 
     def run(self):
         hostname_change_ctr = 0
-
         while hostname_change_ctr < 3:
             try:
                 hostname = "lisa-hostname-monitor-{0}".format(hostname_change_ctr)
@@ -56,10 +55,15 @@ class PublishHostname(AgentVmTest):
                 timeout = datetime.datetime.now() + datetime.timedelta(minutes=1)
                 hostname_detected = ""
                 while datetime.datetime.now() <= timeout:
-                    hostname_detected = self._ssh_client.run_command("grep -n {0} /var/log/waagent.log".format(hostname), use_sudo=True)
-                    if hostname_detected:
-                        log.info("Agent detected hostname change: {0}".format(hostname_detected))
-                        break
+                    try:
+                        hostname_detected = self._ssh_client.run_command("grep -n {0} /var/log/waagent.log".format(hostname), use_sudo=True)
+                        if hostname_detected:
+                            log.info("Agent detected hostname change: {0}".format(hostname_detected))
+                            break
+                    except CommandError as e:
+                        # Exit code 1 indicates grep did not find a match. Sleep if exit code is 1, otherwise raise.
+                        if e.exit_code != 1:
+                            raise
                     sleep(15)
 
                 if not hostname_detected:
@@ -88,6 +92,14 @@ class PublishHostname(AgentVmTest):
                 hostname_change_ctr += 1
 
             except CommandError as e:
+                # If command failed to due to ssh issue, we should confirm it is not the agent's operations on the
+                # network which are causing ssh issues. The following steps can be taken to determine if the network
+                # is down:
+                # 1. Go to test Vm in portal
+                # 2. Add password to VM via portal
+                # 3. Use serial console in portal to run 'cat /sys/class/net/eth0/operstate'
+                # 4. If contents are 'down', then the network interface is down, and we should investigate if that was
+                # caused by the agent.
                 if e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr):
                     fail("Cannot ssh to VM. To confirm this is a transient SSH issue, and not caused by the agent "
                          "doing network operations, take the following steps:\n1. Go to portal for this VM (vm: {0}, "

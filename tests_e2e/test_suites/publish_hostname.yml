@@ -6,4 +6,4 @@ name: "PublishHostname"
 tests:
   - "publish_hostname/publish_hostname.py"
 images:
-  - "centos_82"
+  - "centos_79"
