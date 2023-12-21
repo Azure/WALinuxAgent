@@ -1,0 +1,9 @@
+#
+# Changes hostname and checks that the agent published the updated hostname to dns. Also checks that the primary network
+# is up after updating hostname.
+#
+name: "PublishHostname"
+tests:
+  - "publish_hostname/publish_hostname.py"
+images:
+  - "centos_79"
