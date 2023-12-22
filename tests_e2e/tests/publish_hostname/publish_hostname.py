@@ -30,7 +30,6 @@ import re
 from assertpy import fail
 from time import sleep
 
-from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
