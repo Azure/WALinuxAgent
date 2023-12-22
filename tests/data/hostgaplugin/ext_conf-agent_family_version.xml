@@ -4,6 +4,8 @@
     <GAFamily>
       <Name>Prod</Name>
       <Version>9.9.9.10</Version>
+      <IsVersionFromRSM>true</IsVersionFromRSM>
+      <IsVMEnabledForRSMUpgrades>true</IsVMEnabledForRSMUpgrades>
       <Uris>
         <Uri>https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
         <Uri>https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Prod_uscentraleuap_manifest.xml</Uri>
@@ -12,6 +14,8 @@
     <GAFamily>
       <Name>Test</Name>
       <Version>9.9.9.10</Version>
+      <IsVersionFromRSM>true</IsVersionFromRSM>
+      <IsVMEnabledForRSMUpgrades>true</IsVMEnabledForRSMUpgrades>
       <Uris>
         <Uri>https://zrdfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml</Uri>
         <Uri>https://ardfepirv2cdm03prdstr01a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_uscentraleuap_manifest.xml</Uri>
