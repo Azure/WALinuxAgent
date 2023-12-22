@@ -20,10 +20,10 @@
 #
 
 import argparse
-import re
+import json
+import os
 import sys
 
-from datetime import datetime
 from pathlib import Path
 
 
@@ -32,55 +32,57 @@ def main():
     Returns the timestamp of when the provided extension was enabled
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ext_type", dest='ext_type', required=True)
-    parser.add_argument("--start_time", dest='start_time', required=True)
+    parser.add_argument("--ext", dest='ext', required=True)
     args, _ = parser.parse_known_args()
 
-    # Extension enabled time is in extension CommandExecution.log
-    command_exec_log_path = Path('/var/log/azure/' + args.ext_type + '/CommandExecution.log')
-    command_exec_log = open(command_exec_log_path, 'r')
-    enabled_match = None
-    for line in command_exec_log.readlines():
-        line = line.rstrip()
-        if args.ext_type == "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent":
-            # AMA logs enable succeeded and its timestamp to the command execution log:
-            # 2023-11-01T23:22:53.124603Z INFO ExtHandler [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.28.11] Command: ./shim.sh -enable
-            # [stdout]
-            # 2023/09/26 04:07:33 [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.28.5] Enable,success,0,Enable succeeded
-            enable_pattern = r'.*(?P<timestamp>\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}) \[Microsoft\.Azure\.Monitor\.AzureMonitorLinuxAgent\-.*] .*Enable succeeded.*'
-            match = re.match(enable_pattern, line)
-            if match:
-                enabled_match = match
-        else:
-            # For RC and CSE, we can determine when enable succeeded from the stdout of the enable command execution from
-            # the command execution log:
-            # 2023-09-26T04:07:39.042948Z INFO ExtHandler [Microsoft.CPlat.Core.RunCommandLinux-1.0.5] Command: bin/run-command-shim enable
-            # [stdout]
-            # ...
-            # time=2023-09-26T04:07:37Z version=v1.0.4/git@b3be41d-dirty operation=enable seq=0 event=enabledevent=enabled
-            enable_pattern = r'time=(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z).*event=enabled'
-            match = re.match(enable_pattern, line)
-            if match:
-                enabled_match = match
-
-    if not enabled_match:
-        # Try to get enabled time from extension command execution logs
-        print("Agent log does not show extension was enabled", file=sys.stderr)
+    # Extension enabled time is in extension extension status file
+    ext_dirs = [item for item in os.listdir(Path('/var/lib/waagent')) if item.startswith(args.ext)]
+    if not ext_dirs:
+        print("Extension {0} directory does not exist".format(args.ext), file=sys.stderr)
         sys.exit(1)
-
-    if args.ext_type == "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent":
-        enable_time = datetime.strptime(enabled_match.group('timestamp'), u'%Y/%m/%d %H:%M:%S')
-    else:
-        enable_time = datetime.strptime(enabled_match.group('timestamp'), u'%Y-%m-%dT%H:%M:%SZ')
-
-    start_time = datetime.strptime(args.start_time, u'%Y-%m-%d %H:%M:%S.%f')
-    if enable_time < start_time:
-        print("Agent log does not show extension was enabled after this test case started. Last enabled time was {0}. This test case started at {1}".format(enable_time, start_time), file=sys.stderr)
+    ext_status_path = Path('/var/lib/waagent/' + ext_dirs[0] + '/status')
+    ext_status_files = os.listdir(ext_status_path)
+    ext_status_files.sort()
+    if not ext_status_files:
+        # Extension did not report a status
+        print("Extension {0} did not report a status".format(args.ext), file=sys.stderr)
         sys.exit(1)
-    else:
-        print(enable_time)
+    latest_ext_status_path = os.path.join(ext_status_path, ext_status_files[-1])
+    ext_status_file = open(latest_ext_status_path, 'r')
+    ext_status = json.loads(ext_status_file.read())
 
-    sys.exit(0)
+    # Example status file
+    # [
+    #     {
+    #         "status": {
+    #             "status": "success",
+    #             "formattedMessage": {
+    #                 "lang": "en-US",
+    #                 "message": "Enable succeeded"
+    #             },
+    #             "operation": "Enable",
+    #             "code": "0",
+    #             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent"
+    #         },
+    #         "version": "1.0",
+    #         "timestampUTC": "2023-12-12T23:14:45Z"
+    #     }
+    # ]
+    msg = ""
+    if len(ext_status) == 0 or not ext_status[0]['status']:
+        msg = "Extension {0} did not report a status".format(args.ext)
+    elif not ext_status[0]['status']['operation'] or ext_status[0]['status']['operation'] != 'Enable':
+        msg = "Extension {0} did not report a status for enable operation".format(args.ext)
+    elif ext_status[0]['status']['status'] != 'success':
+        msg = "Extension {0} did not report success for the enable operation".format(args.ext)
+    elif not ext_status[0]['timestampUTC']:
+        msg = "Extension {0} did not report the time the enable operation succeeded".format(args.ext)
+    else:
+        print(ext_status[0]['timestampUTC'])
+        sys.exit(0)
+
+    print(msg, file=sys.stderr)
+    sys.exit(1)
 
 
 if __name__ == "__main__":

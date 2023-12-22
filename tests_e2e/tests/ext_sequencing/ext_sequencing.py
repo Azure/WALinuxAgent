@@ -95,11 +95,14 @@ class ExtSequencing(AgentVmssTest):
         for ext in extensions:
             # Only check extensions which succeeded provisioning
             if "succeeded" in ext.statuses_summary[0].code:
-                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext_type '{extension_full_names[ext.name]}' --start_time '{str(test_case_start)}'", use_sudo=True)
+                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext '{extension_full_names[ext.name]}'", use_sudo=True)
+                formatted_time = datetime.strptime(enabled_time.strip(), u'%Y-%m-%dT%H:%M:%SZ')
+                if formatted_time < test_case_start:
+                    fail("Extension {0} was not enabled".format(extension_full_names[ext.name]))
                 enabled_times.append(
                     {
                         "name": ext.name,
-                        "enabled_time": datetime.strptime(enabled_time.strip(), u'%Y-%m-%d %H:%M:%S')
+                        "enabled_time": formatted_time
                      }
                 )
 
