@@ -174,7 +174,7 @@ class VirtualMachineClient(AzureSdkClient):
                         return
                     log.info("The VM has not rebooted yet. Restart time: %s. Boot time: %s", before_restart, boot_time)
                 except CommandError as e:
-                    if (e.exit_code == 255 and "Connection refused" in str(e)) or "Unprivileged users are not permitted to log in yet" in str(e):
+                    if (e.exit_code == 255 and ("Connection refused" in str(e) or "Connection timed out" in str(e))) or "Unprivileged users are not permitted to log in yet" in str(e):
                         log.info("VM %s is not yet accepting SSH connections", self)
                     else:
                         raise
