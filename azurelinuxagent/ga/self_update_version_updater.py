@@ -80,6 +80,12 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
             next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
                                                            conf.get_self_update_regular_frequency(), now)
 
+        if self._version > CURRENT_VERSION:
+            message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
+                upgrade_type, self._version, datetime.datetime.utcfromtimestamp(next_update_time).strftime(logger.Logger.LogTimeFormatInUTC))
+            logger.info(message)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
+
         if next_update_time <= now:
             # Update the last upgrade check time even if no new agent is available for upgrade
             self._last_attempted_self_update_time = now
@@ -161,7 +167,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         """
         This function logs the update message after we check version allowed to update.
         """
-        msg = "Self-update discovered new agent version:{0} in agent manifest for goal state {1}, will update the agent before processing the goal state.".format(
+        msg = "Self-update discovered new agent version:{0} in agent manifest for goal state {1}, will update the agent now before processing the goal state.".format(
             str(self._version), self._gs_id)
         logger.info(msg)
         add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
