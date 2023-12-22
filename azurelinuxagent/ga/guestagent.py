@@ -18,15 +18,6 @@ AGENT_MANIFEST_FILE = "HandlerManifest.json"
 MAX_FAILURE = 3  # Max failure allowed for agent before declare bad agent
 
 
-class GAUpdateReportState(object):
-    """
-    This class is primarily used to maintain the in-memory persistent state for the agent updates.
-    This state will be persisted throughout the current service run and might be modified by external classes.
-    """
-    report_error_msg = ""
-    report_expected_version = FlexibleVersion("0.0.0.0")
-
-
 class GuestAgent(object):
     def __init__(self, path, pkg, protocol, is_fast_track_goal_state):
         """
@@ -74,8 +65,6 @@ class GuestAgent(object):
             msg = u"Agent {0} install failed with exception:".format(
                 self.name)
             detailed_msg = '{0} {1}'.format(msg, textutil.format_exception(e))
-            if "Missing requested version" not in GAUpdateReportState.report_error_msg:
-                GAUpdateReportState.report_error_msg = detailed_msg  # capture the download errors to report back
             add_event(
                 AGENT_NAME,
                 version=self.version,

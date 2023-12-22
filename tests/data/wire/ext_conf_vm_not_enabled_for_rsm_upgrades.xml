@@ -3,6 +3,8 @@
     <GAFamily>
       <Name>Prod</Name>
       <Version>9.9.9.10</Version>
+      <IsVersionFromRSM>False</IsVersionFromRSM>
+      <IsVMEnabledForRSMUpgrades>False</IsVMEnabledForRSMUpgrades>
       <Uris>
           <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
       </Uris>
@@ -10,6 +12,8 @@
     <GAFamily>
       <Name>Test</Name>
       <Version>9.9.9.10</Version>
+      <IsVersionFromRSM>False</IsVersionFromRSM>
+      <IsVMEnabledForRSMUpgrades>False</IsVMEnabledForRSMUpgrades>
       <Uris>
           <Uri>http://mock-goal-state/manifest_of_ga.xml</Uri>
         </Uris>
