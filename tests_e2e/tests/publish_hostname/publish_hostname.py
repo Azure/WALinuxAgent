@@ -26,10 +26,11 @@
 
 import datetime
 import re
-from time import sleep
 
 from assertpy import fail
+from time import sleep
 
+from azurelinuxagent.common.utils import shellutil
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
@@ -43,16 +44,51 @@ class PublishHostname(AgentVmTest):
         self._ssh_client = context.create_ssh_client()
         self._private_ip = context.private_ip_address
 
+    def check_and_install_tools(self):
+        lookup_cmd = "dig -x {0}".format(self._private_ip)
+        dns_regex = r"[\S\s]*;; ANSWER SECTION:\s.*PTR\s*(?P<hostname>.*).internal.cloudapp.net.[\S\s]*"
+
+        # Not all distros come with dig. Install dig if not on machine
+        try:
+            self._ssh_client.run_command("dig -v")
+        except CommandError as e:
+            if "dig: command not found" in e.stderr:
+                distro = self._ssh_client.run_command("cat /etc/*-release", use_sudo=True)
+                if "Debian GNU/Linux 9" in distro:
+                    # Debian 9 hostname look up needs to be done with "host" instead of dig
+                    lookup_cmd = "host {0}".format(self._private_ip)
+                    dns_regex = r".*pointer\s(?P<hostname>.*).internal.cloudapp.net."
+                elif "Debian" in distro:
+                    self._ssh_client.run_command("apt install -y dnsutils", use_sudo=True)
+                elif "AlmaLinux" in distro or "Rocky" in distro:
+                    self._ssh_client.run_command("dnf install -y bind-utils", use_sudo=True)
+                else:
+                    raise
+            else:
+                raise
+
+        return lookup_cmd, dns_regex
+
     def run(self):
+        # Enable agent hostname monitoring
+        log.info("Executing script update-waagent-conf to enable agent hostname monitoring")
+        result = self._ssh_client.run_command("update-waagent-conf Provisioning.MonitorHostName=y Provisioning.MonitorHostNamePeriod=30", use_sudo=True)
+        log.info("Successfully enabled agent hostname monitoring config flag: {0}".format(result))
+
+        # This test looksup what hostname is published to dns. Check that the tools necessary to get hostname are
+        # installed, and if not install them.
+        lookup_cmd, dns_regex = self.check_and_install_tools()
+
         hostname_change_ctr = 0
+        # Update the hostname 3 times
         while hostname_change_ctr < 3:
             try:
                 hostname = "lisa-hostname-monitor-{0}".format(hostname_change_ctr)
                 log.info("Update hostname to {0}".format(hostname))
                 self._ssh_client.run_command("hostnamectl set-hostname {0}".format(hostname), use_sudo=True)
 
-                # Wait for the agent to detect the hostname change
-                timeout = datetime.datetime.now() + datetime.timedelta(minutes=1)
+                # Wait for the agent to detect the hostname change for up to 2 minutes
+                timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
                 hostname_detected = ""
                 while datetime.datetime.now() <= timeout:
                     try:
@@ -71,19 +107,24 @@ class PublishHostname(AgentVmTest):
 
                 # Check that the expected hostname is published with 2 minute timeout
                 timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
-                dns_regex = r"[\S\s]*;; ANSWER SECTION:\s.*PTR\s*(?P<hostname>.*).internal.cloudapp.net.[\S\s]*"
                 published_hostname = ""
                 while datetime.datetime.now() <= timeout:
-                    dns_info = self._ssh_client.run_command("dig -x {0}".format(self._private_ip))
-                    actual_hostname = re.match(dns_regex, dns_info)
-                    if actual_hostname:
-                        # Compare published hostname to expected hostname
-                        published_hostname = actual_hostname.group('hostname')
-                        if hostname == published_hostname:
-                            log.info("SUCCESS Hostname {0} was published successfully".format(hostname))
-                            break
-                    else:
-                        log.info("Unable to parse the dns info: {0}".format(dns_info))
+                    try:
+                        dns_info = self._ssh_client.run_command(lookup_cmd)
+                        actual_hostname = re.match(dns_regex, dns_info)
+                        if actual_hostname:
+                            # Compare published hostname to expected hostname
+                            published_hostname = actual_hostname.group('hostname')
+                            if hostname == published_hostname:
+                                log.info("SUCCESS Hostname {0} was published successfully".format(hostname))
+                                break
+                        else:
+                            log.info("Unable to parse the dns info: {0}".format(dns_info))
+                    except CommandError as e:
+                        if "NXDOMAIN" in e.stdout:
+                            log.info("DNS Lookup could not find domain. Will try again.")
+                        else:
+                            raise
                     sleep(30)
 
                 if published_hostname == "" or published_hostname != hostname:
