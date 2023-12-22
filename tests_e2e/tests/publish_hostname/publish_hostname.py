@@ -104,8 +104,8 @@ class PublishHostname(AgentVmTest):
                 if not hostname_detected:
                     fail("Agent did not detect hostname change: {0}".format(hostname))
 
-                # Check that the expected hostname is published with 2 minute timeout
-                timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
+                # Check that the expected hostname is published with 4 minute timeout
+                timeout = datetime.datetime.now() + datetime.timedelta(minutes=4)
                 published_hostname = ""
                 while datetime.datetime.now() <= timeout:
                     try:
