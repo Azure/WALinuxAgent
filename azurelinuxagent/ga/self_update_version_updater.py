@@ -82,7 +82,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
 
         if self._version > CURRENT_VERSION:
             message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
-                upgrade_type, self._version, datetime.datetime.utcfromtimestamp(next_update_time).strftime(logger.Logger.LogTimeFormatInUTC))
+                upgrade_type, str(self._version), datetime.datetime.utcfromtimestamp(next_update_time.timestamp()).strftime(logger.Logger.LogTimeFormatInUTC))
             logger.info(message)
             add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
 
