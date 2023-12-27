@@ -5,4 +5,4 @@ name: "PublishHostname"
 tests:
   - "publish_hostname/publish_hostname.py"
 images:
-  - "endorsed"
+  - "alma_9"

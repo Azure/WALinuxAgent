@@ -42,8 +42,18 @@ class PublishHostname(AgentVmTest):
         self._context = context
         self._ssh_client = context.create_ssh_client()
         self._private_ip = context.private_ip_address
+        self._vm_password = ""
 
-    def check_and_install_tools(self):
+    def add_vm_password(self):
+        # Add password to VM to help with debugging in case of failure
+        # REMOVE PWD FROM LOGS IF WE EVER MAKE THESE RUNS/LOGS PUBLIC
+        username = self._ssh_client.username
+        pwd = self._ssh_client.run_command("openssl rand -base64 32 | tr : .").rstrip()
+        self._vm_password = pwd
+        log.info("VM Username: {0}; VM Password: {1}".format(username, pwd))
+        self._ssh_client.run_command("echo '{0}:{1}' | sudo -S chpasswd".format(username, pwd))
+
+    def check_and_install_dns_tools(self):
         lookup_cmd = "dig -x {0}".format(self._private_ip)
         dns_regex = r"[\S\s]*;; ANSWER SECTION:\s.*PTR\s*(?P<hostname>.*).internal.cloudapp.net.[\S\s]*"
 
@@ -52,6 +62,7 @@ class PublishHostname(AgentVmTest):
             self._ssh_client.run_command("dig -v")
         except CommandError as e:
             if "dig: command not found" in e.stderr:
+                # Using /etc/*-release to get distro and distro version
                 distro = self._ssh_client.run_command("cat /etc/*-release", use_sudo=True)
                 if "Debian GNU/Linux 9" in distro:
                     # Debian 9 hostname look up needs to be done with "host" instead of dig
@@ -68,15 +79,61 @@ class PublishHostname(AgentVmTest):
 
         return lookup_cmd, dns_regex
 
+    def check_agent_reports_status(self):
+        status_updated = False
+        last_agent_status_time = self._context.vm.get_instance_view().vm_agent.statuses[0].time
+        log.info("Agent reported status at {0}".format(last_agent_status_time))
+        retries = 3
+
+        while retries > 0 and not status_updated:
+            agent_status_time = self._context.vm.get_instance_view().vm_agent.statuses[0].time
+            if agent_status_time != last_agent_status_time:
+                status_updated = True
+                log.info("Agent reported status at {0}".format(last_agent_status_time))
+            else:
+                retries -= 1
+                sleep(60)
+
+        if not status_updated:
+            fail("Agent hasn't reported status since {0} and ssh connection failed. Use the serial console in portal "
+                 "to check the contents of '/sys/class/net/eth0/operstate'. If the contents of this file are 'up', "
+                 "no further action is needed. If contents are 'down', that indicates the network interface is down "
+                 "and more debugging needs to be done to confirm this is not caused by the agent.\n VM: {1}\n RG: {2}"
+                 "\nSubscriptionId: {3}\nUsername: {4}\nPassword: {5}".format(last_agent_status_time,
+                                                                              self._context.vm,
+                                                                              self._context.vm.resource_group,
+                                                                              self._context.vm.subscription,
+                                                                              self._context.username,
+                                                                              self._vm_password))
+
+    def retry_ssh_if_connection_reset(self, command: str, use_sudo=False):
+        # The agent may bring the network down and back up to publish the hostname, which can reset the ssh connection.
+        # Adding retry here for connection reset.
+        retries = 3
+        while retries > 0:
+            try:
+                return self._ssh_client.run_command(command, use_sudo=use_sudo)
+            except CommandError as e:
+                retries -= 1
+                retryable = e.exit_code == 255 and "Connection reset by peer" in e.stderr
+                if not retryable or retries == 0:
+                    raise
+                log.warning("The SSH operation failed, retrying in 30 secs")
+                sleep(30)
+
     def run(self):
+        # Add password to VM and log. This allows us to debug with serial console if necessary
+        self.add_vm_password()
+
+        # This test looks up what hostname is published to dns. Check that the tools necessary to get hostname are
+        # installed, and if not install them.
+        lookup_cmd, dns_regex = self.check_and_install_dns_tools()
+
         # Enable agent hostname monitoring
         log.info("Executing script update-waagent-conf to enable agent hostname monitoring")
-        result = self._ssh_client.run_command("update-waagent-conf Provisioning.MonitorHostName=y Provisioning.MonitorHostNamePeriod=30", use_sudo=True)
+        result = self._ssh_client.run_command("update-waagent-conf Provisioning.MonitorHostName=y "
+                                              "Provisioning.MonitorHostNamePeriod=30", use_sudo=True)
         log.info("Successfully enabled agent hostname monitoring config flag: {0}".format(result))
-
-        # This test looksup what hostname is published to dns. Check that the tools necessary to get hostname are
-        # installed, and if not install them.
-        lookup_cmd, dns_regex = self.check_and_install_tools()
 
         hostname_change_ctr = 0
         # Update the hostname 3 times
@@ -84,14 +141,14 @@ class PublishHostname(AgentVmTest):
             try:
                 hostname = "lisa-hostname-monitor-{0}".format(hostname_change_ctr)
                 log.info("Update hostname to {0}".format(hostname))
-                self._ssh_client.run_command("hostnamectl set-hostname {0}".format(hostname), use_sudo=True)
+                self.retry_ssh_if_connection_reset("hostnamectl set-hostname {0}".format(hostname), use_sudo=True)
 
                 # Wait for the agent to detect the hostname change for up to 2 minutes
                 timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
                 hostname_detected = ""
                 while datetime.datetime.now() <= timeout:
                     try:
-                        hostname_detected = self._ssh_client.run_command("grep -n {0} /var/log/waagent.log".format(hostname), use_sudo=True)
+                        hostname_detected = self.retry_ssh_if_connection_reset("grep -n {0} /var/log/waagent.log".format(hostname), use_sudo=True)
                         if hostname_detected:
                             log.info("Agent detected hostname change: {0}".format(hostname_detected))
                             break
@@ -109,7 +166,7 @@ class PublishHostname(AgentVmTest):
                 published_hostname = ""
                 while datetime.datetime.now() <= timeout:
                     try:
-                        dns_info = self._ssh_client.run_command(lookup_cmd)
+                        dns_info = self.retry_ssh_if_connection_reset(lookup_cmd)
                         actual_hostname = re.match(dns_regex, dns_info)
                         if actual_hostname:
                             # Compare published hostname to expected hostname
@@ -132,22 +189,11 @@ class PublishHostname(AgentVmTest):
                 hostname_change_ctr += 1
 
             except CommandError as e:
-                # If command failed to due to ssh issue, we should confirm it is not the agent's operations on the
-                # network which are causing ssh issues. The following steps can be taken to determine if the network
-                # is down:
-                # 1. Go to test Vm in portal
-                # 2. Add password to VM via portal
-                # 3. Use serial console in portal to run 'cat /sys/class/net/eth0/operstate'
-                # 4. If contents are 'down', then the network interface is down, and we should investigate if that was
-                # caused by the agent.
+                # If failure is ssh issue, we should confirm that the VM did not lose network connectivity due to the
+                # agent's operations on the network. If agent reports status after this failure, then we know the
+                # network is up.
                 if e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr):
-                    fail("Cannot ssh to VM. To confirm this is a transient SSH issue, and not caused by the agent "
-                         "doing network operations, take the following steps:\n1. Go to portal for this VM (vm: {0}, "
-                         "rg: {1}, sub: {2}.\n2. Add password to VM via portal.\n3. Use serial console via portal to "
-                         "check contents of '/sys/class/net/eth0/operstate'. If the contents of this file are 'up', "
-                         "no further action is needed. If contents are 'down', that indicates the network interface is "
-                         "down and more debugging needs to be done to confirm this is not caused by the agent. "
-                         .format(self._context.vm, self._context.vm.resource_group, self._context.vm.subscription))
+                    self.check_agent_reports_status()
                 raise
 
 
