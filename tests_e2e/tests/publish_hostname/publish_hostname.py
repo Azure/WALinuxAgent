@@ -62,15 +62,14 @@ class PublishHostname(AgentVmTest):
             self._ssh_client.run_command("dig -v")
         except CommandError as e:
             if "dig: command not found" in e.stderr:
-                # Using /etc/*-release to get distro and distro version
-                distro = self._ssh_client.run_command("cat /etc/*-release", use_sudo=True)
-                if "Debian GNU/Linux 9" in distro:
+                distro = self._ssh_client.run_command("get_distro.py").rstrip().lower()
+                if "debian_9" in distro:
                     # Debian 9 hostname look up needs to be done with "host" instead of dig
                     lookup_cmd = "host {0}".format(self._private_ip)
                     dns_regex = r".*pointer\s(?P<hostname>.*).internal.cloudapp.net."
-                elif "Debian" in distro:
+                elif "debian" in distro:
                     self._ssh_client.run_command("apt install -y dnsutils", use_sudo=True)
-                elif "AlmaLinux" in distro or "Rocky" in distro:
+                elif "alma" in distro or "rocky" in distro:
                     self._ssh_client.run_command("dnf install -y bind-utils", use_sudo=True)
                 else:
                     raise
