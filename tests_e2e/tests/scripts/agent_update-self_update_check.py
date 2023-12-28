@@ -16,6 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# Script verifies agent update was done by test agent
+#
 import argparse
 import re
 
@@ -44,7 +46,7 @@ def verify_agent_update_from_log(latest_version, current_version) -> bool:
     return False
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('-l', '--latest-version', required=True)
     parser.add_argument('-c', '--current-version', required=True)
