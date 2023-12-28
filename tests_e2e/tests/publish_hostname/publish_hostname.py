@@ -128,6 +128,10 @@ class PublishHostname(AgentVmTest):
         # installed, and if not install them.
         lookup_cmd, dns_regex = self.check_and_install_dns_tools()
 
+        # Check if this distro monitors hostname changes. If it does, we should check that the agent detects the change
+        # and publishes the host name. If it doesn't, we should check that the hostname is automatically published.
+        monitors_hostname = self._ssh_client.run_command("get-waagent-conf-value Provisioning.MonitorHostName", use_sudo=True).rstrip().lower()
+
         hostname_change_ctr = 0
         # Update the hostname 3 times
         while hostname_change_ctr < 3:
@@ -136,23 +140,27 @@ class PublishHostname(AgentVmTest):
                 log.info("Update hostname to {0}".format(hostname))
                 self.retry_ssh_if_connection_reset("hostnamectl set-hostname {0}".format(hostname), use_sudo=True)
 
-                # Wait for the agent to detect the hostname change for up to 2 minutes
-                timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
-                hostname_detected = ""
-                while datetime.datetime.now() <= timeout:
-                    try:
-                        hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
-                        if hostname_detected:
-                            log.info("Agent detected hostname change: {0}".format(hostname_detected))
-                            break
-                    except CommandError as e:
-                        # Exit code 1 indicates grep did not find a match. Sleep if exit code is 1, otherwise raise.
-                        if e.exit_code != 1:
-                            raise
-                    sleep(15)
+                # Wait for the agent to detect the hostname change for up to 2 minutes if hostname monitoring is enabled
+                if monitors_hostname == "y" or monitors_hostname == "yes":
+                    log.info("Agent hostname monitoring is enabled")
+                    timeout = datetime.datetime.now() + datetime.timedelta(minutes=2)
+                    hostname_detected = ""
+                    while datetime.datetime.now() <= timeout:
+                        try:
+                            hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
+                            if hostname_detected:
+                                log.info("Agent detected hostname change: {0}".format(hostname_detected))
+                                break
+                        except CommandError as e:
+                            # Exit code 1 indicates grep did not find a match. Sleep if exit code is 1, otherwise raise.
+                            if e.exit_code != 1:
+                                raise
+                        sleep(15)
 
-                if not hostname_detected:
-                    fail("Agent did not detect hostname change: {0}".format(hostname))
+                    if not hostname_detected:
+                        fail("Agent did not detect hostname change: {0}".format(hostname))
+                else:
+                    log.info("Agent hostname monitoring is disabled")
 
                 # Check that the expected hostname is published with 4 minute timeout
                 timeout = datetime.datetime.now() + datetime.timedelta(minutes=4)
