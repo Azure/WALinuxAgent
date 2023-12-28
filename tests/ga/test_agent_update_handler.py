@@ -98,7 +98,7 @@ class TestAgentUpdate(UpdateTestCase):
                              mock_telemetry.call_args_list))
 
     def _assert_agent_exit_process_telemetry_emitted(self, message):
-        self.assertIn("Agent completed all update checks, exiting current process", message)
+        self.assertIn("Current Agent {0} completed all update checks, exiting current process".format(CURRENT_VERSION), message)
 
     def test_it_should_not_update_when_autoupdate_disabled(self):
         self.prepare_agents(count=1)

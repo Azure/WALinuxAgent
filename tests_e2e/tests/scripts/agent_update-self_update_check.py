@@ -36,7 +36,7 @@ def verify_agent_update_from_log(latest_version, current_version) -> bool:
     agentlog = AgentLog()
 
     for record in agentlog.read():
-        update_match = re.match(_UPDATE_PATTERN, record.text)
+        update_match = re.match(_UPDATE_PATTERN, record.message)
         if update_match:
             log.info('found the agent update log: %s', record.text)
             if update_match.groups()[0] == current_version and update_match.groups()[2] == latest_version:
@@ -46,8 +46,8 @@ def verify_agent_update_from_log(latest_version, current_version) -> bool:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-l', '--latest-version', dest="latest_version", required=True)
-    parser.add_argument('-c', '--current-version', dest="current_version", required=True)
+    parser.add_argument('-l', '--latest-version', required=True)
+    parser.add_argument('-c', '--current-version', required=True)
     args = parser.parse_args()
 
     found: bool = retry_if_false(lambda: verify_agent_update_from_log(args.latest_version, args.current_version))
@@ -55,5 +55,5 @@ def main():
         fail('agent update was not found in the logs for latest version {0} from current version {1}'.format(args.latest_version, args.current_version))
 
 
-if main == '__main__':
+if __name__ == "__main__":
     main()

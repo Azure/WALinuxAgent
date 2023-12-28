@@ -97,7 +97,7 @@ class SelfUpdateBvt(AgentVmTest):
         latest_version: str = self._ssh_client.run_command("agent_update-self_update_latest_version.py", use_sudo=True).rstrip()
         self._verify_guest_agent_update(latest_version)
         # Verify agent updated to latest version by custom test agent
-        self._ssh_client.run_command("agent_update-self_update_check.py --latest_version {0} --current_version {1}".format(latest_version, self._test_version))
+        self._ssh_client.run_command("agent_update-self_update_check.py --latest-version {0} --current-version {1}".format(latest_version, self._test_version))
 
     def _verify_guest_agent_update(self, latest_version: str) -> None:
         """
@@ -121,10 +121,3 @@ class SelfUpdateBvt(AgentVmTest):
         waagent_version: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info(
             f"Successfully verified agent updated to latest version. Current agent version running:\n {waagent_version}")
-
-    def _verify_update_done_by_test_agent(self, largest_version: str) -> None:
-        """
-        Verifies the agent updated to latest version by custom test agent.
-        """
-        latest_version: str = self._ssh_client.run_command("agent_update-self_update_latest_version.py", use_sudo=True)
-        self._verify_guest_agent_update(latest_version)
