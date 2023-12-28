@@ -188,5 +188,5 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
             # In case of an upgrade, we don't need to exclude anything as the daemon will automatically
             # start the next available highest version which would be the target version
             raise AgentUpgradeExitException(
-                "Agent completed all update checks, exiting current process to upgrade to the new Agent version {0}".format(
+                "Current Agent {0} completed all update checks, exiting current process to upgrade to the new Agent version {0}".format(CURRENT_VERSION,
                     self._version))
