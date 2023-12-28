@@ -41,7 +41,7 @@ class PublishHostname(AgentVmTest):
         super().__init__(context)
         self._context = context
         self._ssh_client = context.create_ssh_client()
-        self._private_ip = context.private_ip_address
+        self._private_ip = context.vm.get_private_ip_address()
         self._vm_password = ""
 
     def add_vm_password(self):
@@ -128,17 +128,11 @@ class PublishHostname(AgentVmTest):
         # installed, and if not install them.
         lookup_cmd, dns_regex = self.check_and_install_dns_tools()
 
-        # Enable agent hostname monitoring
-        log.info("Executing script update-waagent-conf to enable agent hostname monitoring")
-        result = self._ssh_client.run_command("update-waagent-conf Provisioning.MonitorHostName=y "
-                                              "Provisioning.MonitorHostNamePeriod=30", use_sudo=True)
-        log.info("Successfully enabled agent hostname monitoring config flag: {0}".format(result))
-
         hostname_change_ctr = 0
         # Update the hostname 3 times
         while hostname_change_ctr < 3:
             try:
-                hostname = "lisa-hostname-monitor-{0}".format(hostname_change_ctr)
+                hostname = "hostname-monitor-{0}".format(hostname_change_ctr)
                 log.info("Update hostname to {0}".format(hostname))
                 self.retry_ssh_if_connection_reset("hostnamectl set-hostname {0}".format(hostname), use_sudo=True)
 
@@ -147,7 +141,7 @@ class PublishHostname(AgentVmTest):
                 hostname_detected = ""
                 while datetime.datetime.now() <= timeout:
                     try:
-                        hostname_detected = self.retry_ssh_if_connection_reset("grep -n {0} /var/log/waagent.log".format(hostname), use_sudo=True)
+                        hostname_detected = self.retry_ssh_if_connection_reset("grep -n 'Detected hostname change:.*-> {0}' /var/log/waagent.log".format(hostname), use_sudo=True)
                         if hostname_detected:
                             log.info("Agent detected hostname change: {0}".format(hostname_detected))
                             break

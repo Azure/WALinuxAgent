@@ -65,7 +65,6 @@ class AgentVmTestContext(AgentTestContext):
         super().__init__(working_directory, username, identity_file, ssh_port)
         self.vm: VirtualMachineClient = vm
         self.ip_address: str = ip_address
-        self.private_ip_address: str = self.vm.get_private_ip_address()
 
     def create_ssh_client(self) -> SshClient:
         """
