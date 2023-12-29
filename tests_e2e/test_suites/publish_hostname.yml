@@ -1,0 +1,8 @@
+#
+# Changes hostname and checks that the agent published the updated hostname to dns. 
+#
+name: "PublishHostname"
+tests:
+  - "publish_hostname/publish_hostname.py"
+images:
+  - "endorsed"
