@@ -31,13 +31,11 @@ fi
 PYTHON=$(get-agent-python)
 waagent_conf=$($PYTHON -c 'from azurelinuxagent.common.osutil import get_osutil; print(get_osutil().agent_conf_file_path)')
 
-found_setting=false
 cat $waagent_conf | while read line
 do
   if [[ $line == $1* ]]; then
     IFS='=' read -a values <<< "$line"
     echo ${values[1]}
-    found_setting=true
     exit 0
   fi
 done
