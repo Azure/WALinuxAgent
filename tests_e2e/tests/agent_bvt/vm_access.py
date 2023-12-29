@@ -39,7 +39,7 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 class VmAccessBvt(AgentVmTest):
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
-        if not VmExtensionIds.VmAccess.supports_distro(ssh_client.run_command("uname -a")):
+        if not VmExtensionIds.VmAccess.supports_distro(ssh_client.run_command("get_distro.py").rstrip()):
             raise TestSkipped("Currently VMAccess is not supported on this distro")
 
         # Try to use a unique username for each test run (note that we truncate to 32 chars to
