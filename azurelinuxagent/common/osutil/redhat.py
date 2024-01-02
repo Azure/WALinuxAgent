@@ -118,21 +118,24 @@ class RedhatOSUtil(Redhat6xOSUtil):
             DefaultOSUtil.set_hostname(self, hostname)
 
     def get_nm_controlled(self):
-        # NM_CONTROLLED=y by default in redhat 7.*
+        ifname = self.get_if_name()
+        filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
+        nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
         try:
-            ifname = self.get_if_name()
-            filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
-            nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
             result = shellutil.run_command(nm_controlled_cmd, log_error=False).rstrip()
 
             if result and len(result.split('=')) > 1:
                 value = result.split('=')[1]
                 if "n" in value:
                     return False
-        except shellutil.CommandError:
-            # Command might fail because NM_CONTROLLED value is not in interface config file. In this case
-            # NM_CONTROLLED=y by default.
-            return True
+        except shellutil.CommandError as e:
+            # Command might fail because NM_CONTROLLED value is not in interface config file (exit code 1).
+            # Log warning for any other exit code.
+            # NM_CONTROLLED=y by default if not specified.
+            if e.returncode != 1:
+                logger.warn("[{0}] failed: {1}.\nAgent will continue to publish hostname with NM_CONTROLLED=y".format(' '.join(nm_controlled_cmd), e))
+        except Exception as e:
+            logger.warn("Unexpected error while retrieving value of NM_CONTROLLED in {0}: {1}.\nAgent will continue to publish hostname with NM_CONTROLLED=y".format(filepath, e))
 
         return True
 
