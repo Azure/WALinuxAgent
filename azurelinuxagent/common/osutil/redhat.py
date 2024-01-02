@@ -119,9 +119,27 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
     def publish_hostname(self, hostname):
         """
-        Restart NetworkManager first before publishing hostname
+        Restart NetworkManager first before publishing hostname, only if the network interface is not controlled by the
+        NetworkManager service (as determined by NM_CONTROLLED=n in the interface configuration). If the NetworkManager
+        service is restarted before the agent publishes the hostname, and NM_controlled=y, a race condition may happen
+        between the NetworkManager service and the Guest Agent making changes to the network interface configuration
+        simultaneously.
         """
-        shellutil.run("service NetworkManager restart")
+        # NM_CONTROLLED=y by default in redhat 7.*
+        nm_controlled = True
+        try:
+            ifname = self.get_if_name()
+            filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
+            nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
+            result = shellutil.run_command(nm_controlled_cmd, log_error=False)
+            if "n" in result:
+                nm_controlled = False
+        except shellutil.CommandError:
+            # If attempt to get NM_controlled value fails, assume NM_CONTROLLED=y (this is the default value for Redhat 7.*
+            nm_controlled = True
+
+        if not nm_controlled:
+            shellutil.run("service NetworkManager restart")
         super(RedhatOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
