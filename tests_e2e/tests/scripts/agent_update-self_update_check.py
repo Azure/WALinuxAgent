@@ -28,7 +28,8 @@ from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 
 
-_UPDATE_PATTERN = re.compile(r'Current Agent (\S*) completed all update checks, exiting current process to (\S*) to the new Agent version (\S*)')
+#2023-12-28T04:34:23.535652Z INFO ExtHandler ExtHandler Current Agent 2.8.9.9 completed all update checks, exiting current process to upgrade to the new Agent version 2.10.0.7
+_UPDATE_PATTERN = re.compile(r'Current Agent (\S*) completed all update checks, exiting current process to upgrade to the new Agent version (\S*)')
 
 
 def verify_agent_update_from_log(latest_version, current_version) -> bool:
@@ -41,7 +42,7 @@ def verify_agent_update_from_log(latest_version, current_version) -> bool:
         update_match = re.match(_UPDATE_PATTERN, record.message)
         if update_match:
             log.info('found the agent update log: %s', record.text)
-            if update_match.groups()[0] == current_version and update_match.groups()[2] == latest_version:
+            if update_match.groups()[0] == current_version and update_match.groups()[1] == latest_version:
                 return True
     return False
 
