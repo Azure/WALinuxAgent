@@ -71,7 +71,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         """
         This method ensure that update is allowed only once per (hotfix/Regular) upgrade frequency
         """
-        now = datetime.datetime.now()
+        now = datetime.datetime.utcnow()
         upgrade_type = self._get_agent_upgrade_type(self._version)
         if upgrade_type == SelfUpdateType.Hotfix:
             next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
@@ -79,6 +79,12 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         else:
             next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
                                                            conf.get_self_update_regular_frequency(), now)
+
+        if self._version > CURRENT_VERSION:
+            message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
+                upgrade_type, str(self._version), next_update_time.strftime(logger.Logger.LogTimeFormatInUTC))
+            logger.info(message)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
 
         if next_update_time <= now:
             # Update the last upgrade check time even if no new agent is available for upgrade
@@ -92,7 +98,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         the agent has not attempted to download the manifest in the last 1 hour
         If we allow update, we update the last attempted manifest download time
         """
-        now = datetime.datetime.now()
+        now = datetime.datetime.utcnow()
 
         if self._last_attempted_manifest_download_time != datetime.datetime.min:
             next_attempt_time = self._last_attempted_manifest_download_time + datetime.timedelta(
@@ -161,7 +167,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         """
         This function logs the update message after we check version allowed to update.
         """
-        msg = "Self-update discovered new agent version:{0} in agent manifest for goal state {1}, will update the agent before processing the goal state.".format(
+        msg = "Self-update is ready to upgrade the new agent: {0} now before processing the goal state: {1}".format(
             str(self._version), self._gs_id)
         logger.info(msg)
         add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
