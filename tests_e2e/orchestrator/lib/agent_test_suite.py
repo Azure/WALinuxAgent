@@ -35,7 +35,7 @@ from lisa import (  # pylint: disable=E0401
     simple_requirement,
     TestCaseMetadata,
     TestSuite as LisaTestSuite,
-    TestSuiteMetadata
+    TestSuiteMetadata,
 )
 from lisa.environment import EnvironmentStatus  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
