@@ -32,23 +32,27 @@ class UpdateArmTemplate(ABC):
         """
 
     @staticmethod
-    def _get_resource(resources: List[Dict[str, Any]], type_name: str) -> Any:
+    def get_resource(resources: List[Dict[str, Any]], type_name: str) -> Any:
         """
         Returns the first resource of the specified type in the given 'resources' list.
+
+        Raises KeyError if no resource of the specified type is found.
         """
         for item in resources:
             if item["type"] == type_name:
                 return item
-        raise Exception(f"Cannot find a resource of type {type_name} in the ARM template")
+        raise KeyError(f"Cannot find a resource of type {type_name} in the ARM template")
 
     @staticmethod
-    def _get_resource_by_name(resources: List[Dict[str, Any]], resource_name: str, type_name: str) -> Any:
+    def get_resource_by_name(resources: List[Dict[str, Any]], resource_name: str, type_name: str) -> Any:
         """
         Returns the first resource of the specified type and name in the given 'resources' list.
+
+        Raises KeyError if no resource of the specified type and name is found.
         """
         for item in resources:
             if item["type"] == type_name and item["name"] == resource_name:
                 return item
-        raise Exception(f"Cannot find a resource {resource_name} of type {type_name} in the ARM template")
+        raise KeyError(f"Cannot find a resource {resource_name} of type {type_name} in the ARM template")
 
 

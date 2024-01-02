@@ -19,26 +19,57 @@ import json
 
 from typing import Any, Dict, List
 
-from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.retry import retry
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
-# Name of the security group added by this class
-NETWORK_SECURITY_GROUP: str = "waagent-nsg"
 
-
-class AddNetworkSecurityGroup(UpdateArmTemplate):
+class NetworkSecurityRule:
     """
-    Updates the ARM template to add a network security group allowing SSH access from the current machine.
-    """
-    def update(self, template: Dict[str, Any], is_lisa_template: bool) -> None:
-        resources: List[Dict[str, Any]] = template["resources"]
+    Provides methods to add network security rules to the given ARM template.
 
-        # Append the NSG to the list of resources
+    The security rules are added under _NETWORK_SECURITY_GROUP, which is also added to the template.
+    """
+    def __init__(self, template: Dict[str, Any], is_lisa_template: bool):
+        self._template = template
+        self._is_lisa_template = is_lisa_template
+
+    _NETWORK_SECURITY_GROUP: str = "waagent-nsg"
+
+    def add_allow_ssh_rule(self, ip_address: str) -> None:
+        self.add_security_rule(
+            json.loads(f"""{{
+                "name": "waagent-ssh",
+                "properties": {{
+                    "description": "Allows inbound SSH connections from the orchestrator machine.",
+                    "protocol": "Tcp",
+                    "sourcePortRange": "*",
+                    "destinationPortRange": "22",
+                    "sourceAddressPrefix": "{ip_address}",
+                    "destinationAddressPrefix": "*",
+                    "access": "Allow",
+                    "priority": 100,
+                    "direction": "Inbound"
+                }}
+            }}"""))
+
+    def add_security_rule(self, security_rule: Dict[str, Any]) -> None:
+        self._get_network_security_group()["properties"]["securityRules"].append(security_rule)
+
+    def _get_network_security_group(self) -> Dict[str, Any]:
+        resources: List[Dict[str, Any]] = self._template["resources"]
+        #
+        # If the NSG already exists, just return it
+        #
+        try:
+            return UpdateArmTemplate.get_resource_by_name(resources, self._NETWORK_SECURITY_GROUP, "Microsoft.Network/networkSecurityGroups")
+        except KeyError:
+            pass
+
+        #
+        # Otherwise, create it and append it to the list of resources
+        #
         network_security_group = json.loads(f"""{{
             "type": "Microsoft.Network/networkSecurityGroups",
-            "name": "{NETWORK_SECURITY_GROUP}",
+            "name": "{self._NETWORK_SECURITY_GROUP}",
             "location": "[resourceGroup().location]",
             "apiVersion": "2020-05-01",
             "properties": {{
@@ -47,31 +78,12 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
         }}""")
         resources.append(network_security_group)
 
-        # Add the SSH rule, but if anything fails just go ahead without it
-        try:
-            network_security_group["properties"]["securityRules"].append(json.loads(f"""{{
-                "name": "waagent-ssh",
-                "properties": {{
-                    "description": "Allows inbound SSH connections from the orchestrator machine.",
-                    "protocol": "Tcp",
-                    "sourcePortRange": "*",
-                    "destinationPortRange": "22",
-                    "sourceAddressPrefix": "{self._my_ip_address}",
-                    "destinationAddressPrefix": "*",
-                    "access": "Allow",
-                    "priority": 100,
-                    "direction": "Inbound"
-                }}
-            }}"""))
-        except Exception as e:
-            log.warning("******** Waagent: Failed to create Allow security rule for SSH, skipping rule: %s", e)
-
         #
         # Add a dependency on the NSG to the virtual network
         #
-        network_resource = self._get_resource(resources, "Microsoft.Network/virtualNetworks")
+        network_resource = UpdateArmTemplate.get_resource(resources, "Microsoft.Network/virtualNetworks")
         network_resource_dependencies = network_resource.get("dependsOn")
-        nsg_reference = f"[resourceId('Microsoft.Network/networkSecurityGroups', '{NETWORK_SECURITY_GROUP}')]"
+        nsg_reference = f"[resourceId('Microsoft.Network/networkSecurityGroups', '{self._NETWORK_SECURITY_GROUP}')]"
         if network_resource_dependencies is None:
             network_resource["dependsOn"] = [nsg_reference]
         else:
@@ -82,11 +94,11 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
         #
         nsg_reference = json.loads(f"""{{
           "networkSecurityGroup": {{
-            "id": "[resourceId('Microsoft.Network/networkSecurityGroups', '{NETWORK_SECURITY_GROUP}')]"
+            "id": "[resourceId('Microsoft.Network/networkSecurityGroups', '{self._NETWORK_SECURITY_GROUP}')]"
           }}
         }}""")
 
-        if is_lisa_template:
+        if self._is_lisa_template:
             # The subnets are a copy property of the virtual network in LISA's ARM template:
             #
             #     {
@@ -167,18 +179,4 @@ class AddNetworkSecurityGroup(UpdateArmTemplate):
             else:
                 subnets_properties.update(nsg_reference)
 
-    @property
-    def _my_ip_address(self) -> str:
-        """
-        Gets the IP address of the current machine.
-        """
-        if self.__my_ip_address is None:
-            def get_my_address():
-                # Forcing -4 option to fetch the ipv4 address
-                cmd = ["curl", "-4", "ifconfig.io/ip"]
-                stdout = shellutil.run_command(cmd)
-                return stdout.strip()
-            self.__my_ip_address = retry(get_my_address, attempts=3, delay=10)
-        return self.__my_ip_address
-
-    __my_ip_address: str = None
+        return network_security_group

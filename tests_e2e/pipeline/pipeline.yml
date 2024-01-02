@@ -46,7 +46,7 @@ parameters:
   - name: collect_lisa_logs
     displayName: Collect LISA logs
     type: boolean
-    default: true
+    default: false
 
   - name: keep_environment
     displayName: Keep the test VMs (do not delete them)
@@ -58,7 +58,7 @@ parameters:
     - no
 
 pool:
-  vmImage: ubuntu-latest
+  name: waagent-pool
 
 jobs:
   - job: "ExecuteTests"

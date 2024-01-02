@@ -103,6 +103,13 @@ variable:
     is_case_visible: true
 
   #
+  # Takes an IP address as value; if not empty, it adds a Network Security Rule allowing SSH access from the specified IP address to any test VMs created by the runbook execution.
+  #
+  - name: allow_ssh
+    value: ""
+    is_case_visible: true
+
+  #
   # These variables are handled by LISA to use an SSH proxy when executing the runbook
   #
   - name: proxy
@@ -177,6 +184,7 @@ platform: $(c_platform)
 
 combinator:
   type: agent_test_suites
+  allow_ssh: $(allow_ssh)
   cloud: $(cloud)
   identity_file: $(identity_file)
   image: $(image)
