@@ -159,7 +159,7 @@ class ExtSequencing(AgentVmssTest):
         for instance in instances_ip_address:
             ssh_clients[instance.instance_name] = SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file)
 
-        if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(next(iter(ssh_clients.values())).run_command("uname -a")):
+        if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(next(iter(ssh_clients.values())).run_command("get_distro.py").rstrip()):
             raise TestSkipped("Currently AzureMonitorLinuxAgent is not supported on this distro")
 
         # This is the base ARM template that's used for deploying extensions for this scenario

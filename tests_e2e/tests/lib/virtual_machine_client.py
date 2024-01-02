@@ -65,6 +65,18 @@ class VirtualMachineClient(AzureSdkClient):
             public_ip_address_name=nic.ip_configurations[0].public_ip_address.id.split('/')[-1])  # the name of the ip address is the last component of the id
         return public_ip.ip_address
 
+    def get_private_ip_address(self) -> str:
+        """
+        Retrieves the private IP address of the virtual machine
+        """
+        vm_model = self.get_model()
+        nic: NetworkInterface = self._network_client.network_interfaces.get(
+            resource_group_name=self.resource_group,
+            network_interface_name=vm_model.network_profile.network_interfaces[0].id.split('/')[
+                -1])  # the name of the interface is the last component of the id
+        private_ip = nic.ip_configurations[0].private_ip_address
+        return private_ip
+
     def get_model(self) -> VirtualMachine:
         """
         Retrieves the model of the virtual machine.
@@ -174,7 +186,7 @@ class VirtualMachineClient(AzureSdkClient):
                         return
                     log.info("The VM has not rebooted yet. Restart time: %s. Boot time: %s", before_restart, boot_time)
                 except CommandError as e:
-                    if (e.exit_code == 255 and "Connection refused" in str(e)) or "Unprivileged users are not permitted to log in yet" in str(e):
+                    if (e.exit_code == 255 and ("Connection refused" in str(e) or "Connection timed out" in str(e))) or "Unprivileged users are not permitted to log in yet" in str(e):
                         log.info("VM %s is not yet accepting SSH connections", self)
                     else:
                         raise
