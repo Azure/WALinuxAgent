@@ -55,7 +55,7 @@ class PublishHostname(AgentVmTest):
 
     def check_and_install_dns_tools(self):
         lookup_cmd = "dig -x {0}".format(self._private_ip)
-        dns_regex = r"[\S\s]*;; ANSWER SECTION:\s.*PTR\s*(?P<hostname>.*).internal.*[\S\s]*"
+        dns_regex = r"[\S\s]*;; ANSWER SECTION:\s.*PTR\s*(?P<hostname>.*).internal.(cloudapp.net|chinacloudapp.cn|usgovcloudapp.net).*[\S\s]*"
 
         # Not all distros come with dig. Install dig if not on machine
         try:
@@ -66,7 +66,7 @@ class PublishHostname(AgentVmTest):
                 if "debian_9" in distro:
                     # Debian 9 hostname look up needs to be done with "host" instead of dig
                     lookup_cmd = "host {0}".format(self._private_ip)
-                    dns_regex = r".*pointer\s(?P<hostname>.*).internal.*"
+                    dns_regex = r".*pointer\s(?P<hostname>.*).internal.(cloudapp.net|chinacloudapp.cn|usgovcloudapp.net).*"
                 elif "debian" in distro:
                     self._ssh_client.run_command("apt install -y dnsutils", use_sudo=True)
                 elif "alma" in distro or "rocky" in distro:
