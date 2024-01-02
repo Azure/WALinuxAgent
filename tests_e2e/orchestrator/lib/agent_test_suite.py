@@ -599,6 +599,11 @@ class AgentTestSuite(LisaTestSuite):
                     self._clean_up(test_suite_success and not unexpected_error)
                     if unexpected_error:
                         self._mark_log_as_failed()
+
+                    # Check if any test failures or unexpected errors occurred. If so, raise an Exception here so that
+                    # lisa marks the environment as failed. Otherwise, lisa would mark this environment as passed and
+                    # clean up regardless of the value of 'keep_environment'. This should be the last thing that
+                    # happens during suite execution.
                     if not test_suite_success or unexpected_error:
                         raise TestFailedException(self._environment_name, failed_cases)
 
