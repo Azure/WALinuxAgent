@@ -83,7 +83,7 @@ class TestAgentUpdate(UpdateTestCase):
 
     def _assert_update_discovered_from_agent_manifest(self, mock_telemetry, inc=1, version="9.9.9.10"):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                              'Self-update discovered new agent version:{0} in agent manifest for goal state incarnation_{1}'.format(version, inc) in kwarg['message'] and kwarg[
+                              'Self-update is ready to upgrade the new agent: {0} now before processing the goal state: incarnation_{1}'.format(version, inc) in kwarg['message'] and kwarg[
                                   'op'] == WALAEventOperation.AgentUpgrade]
         self.assertEqual(1, len(upgrade_event_msgs),
                          "Did not find the event indicating that the new version found. Got: {0}".format(
