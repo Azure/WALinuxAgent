@@ -1478,7 +1478,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def __assert_upgrade_telemetry_emitted(self, mock_telemetry, upgrade=True, version="9.9.9.10"):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                              'Agent completed all update checks, exiting current process to {0} to the new Agent version {1}'.format(
+                              'Current Agent {0} completed all update checks, exiting current process to {1} to the new Agent version {2}'.format(CURRENT_VERSION,
                                   "upgrade" if upgrade else "downgrade", version) in kwarg['message'] and kwarg[
                                   'op'] == WALAEventOperation.AgentUpgrade]
         self.assertEqual(1, len(upgrade_event_msgs),
