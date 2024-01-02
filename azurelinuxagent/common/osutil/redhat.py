@@ -117,6 +117,25 @@ class RedhatOSUtil(Redhat6xOSUtil):
             logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 
+    def get_nm_controlled(self):
+        # NM_CONTROLLED=y by default in redhat 7.*
+        try:
+            ifname = self.get_if_name()
+            filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
+            nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
+            result = shellutil.run_command(nm_controlled_cmd, log_error=False).rstrip()
+
+            if result and len(result.split('=')) > 1:
+                value = result.split('=')[1]
+                if "n" in value:
+                    return False
+        except shellutil.CommandError:
+            # Command might fail because NM_CONTROLLED value is not in interface config file. In this case
+            # NM_CONTROLLED=y by default.
+            return True
+
+        return True
+
     def publish_hostname(self, hostname):
         """
         Restart NetworkManager first before publishing hostname, only if the network interface is not controlled by the
@@ -125,20 +144,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
         between the NetworkManager service and the Guest Agent making changes to the network interface configuration
         simultaneously.
         """
-        # NM_CONTROLLED=y by default in redhat 7.*
-        nm_controlled = True
-        try:
-            ifname = self.get_if_name()
-            filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
-            nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
-            result = shellutil.run_command(nm_controlled_cmd, log_error=False)
-            if "n" in result:
-                nm_controlled = False
-        except shellutil.CommandError:
-            # If attempt to get NM_controlled value fails, assume NM_CONTROLLED=y (this is the default value for Redhat 7.*
-            nm_controlled = True
-
-        if not nm_controlled:
+        if not self.get_nm_controlled():
             shellutil.run("service NetworkManager restart")
         super(RedhatOSUtil, self).publish_hostname(hostname)
 
