@@ -133,9 +133,9 @@ class RedhatOSUtil(Redhat6xOSUtil):
             # Log warning for any other exit code.
             # NM_CONTROLLED=y by default if not specified.
             if e.returncode != 1:
-                logger.warn("[{0}] failed: {1}.\nAgent will continue to publish hostname with NM_CONTROLLED=y".format(' '.join(nm_controlled_cmd), e))
+                logger.warn("[{0}] failed: {1}.\nAgent will continue to publish hostname without NetworkManager restart".format(' '.join(nm_controlled_cmd), e))
         except Exception as e:
-            logger.warn("Unexpected error while retrieving value of NM_CONTROLLED in {0}: {1}.\nAgent will continue to publish hostname with NM_CONTROLLED=y".format(filepath, e))
+            logger.warn("Unexpected error while retrieving value of NM_CONTROLLED in {0}: {1}.\nAgent will continue to publish hostname without NetworkManager restart".format(filepath, e))
 
         return True
 
