@@ -142,6 +142,5 @@ class RSMVersionUpdater(GAVersionUpdater):
             # start the next available highest version which would be the target version
             prefix = "upgrade"
         raise AgentUpgradeExitException(
-            "Agent completed all update checks, exiting current process to {0} to the new Agent version {1}".format(
-                prefix,
-                self._version))
+            "Current Agent {0} completed all update checks, exiting current process to {1} to the new Agent version {2}".format(CURRENT_VERSION,
+                prefix, self._version))
