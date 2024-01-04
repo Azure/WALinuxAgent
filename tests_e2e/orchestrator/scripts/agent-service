@@ -43,11 +43,13 @@ if command -v systemctl &> /dev/null; then
   service-stop()   { systemctl stop $1; }
   service-restart()  { systemctl restart $1; }
   service-start()  { systemctl start $1; }
+  service-disable() { systemctl disable $1; }
 else
   service-status() { service $1 status; }
   service-stop()   { service $1 stop; }
   service-restart()   { service $1 restart; }
   service-start()  { service $1 start; }
+  service-disable() { service $1 disable; }
 fi
 
 python=$(get-agent-python)
@@ -82,4 +84,9 @@ fi
 if [[ "$cmd" == "status" ]]; then
     echo "Service status..."
     service-status $service_name
+fi
+
+if [[ "$cmd" == "disable" ]]; then
+    echo "Disabling service..."
+    service-disable $service_name
 fi

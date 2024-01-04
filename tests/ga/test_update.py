@@ -21,7 +21,7 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import current_thread
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, \
-    AGENT_ERROR_FILE, GAUpdateReportState
+    AGENT_ERROR_FILE
 from tests.common.osutil.test_default import TestOSUtil
 import azurelinuxagent.common.osutil.default as osutil
 
@@ -1268,12 +1268,11 @@ class TestUpdate(UpdateTestCase):
                             protocol.aggregate_status = json.loads(args[0])
                             return MockHttpResponse(status=201)
 
-                        def update_goal_state_and_run_handler(autoupdate_enabled = True):
+                        def update_goal_state_and_run_handler(autoupdate_enabled=True):
                             protocol.incarnation += 1
                             protocol.mock_wire_data.set_incarnation(protocol.incarnation)
                             self._add_write_permission_to_goal_state_files()
                             with _get_update_handler(iterations=1, protocol=protocol, autoupdate_enabled=autoupdate_enabled) as (update_handler, _):
-                                GAUpdateReportState.report_error_msg = ""
                                 update_handler.run(debug=True)
                             self.assertEqual(0, update_handler.get_exit_code(),
                                              "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
@@ -1281,20 +1280,19 @@ class TestUpdate(UpdateTestCase):
 
                         protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
 
-                        # Case 1: Requested version removed in GS; report missing requested version errr
-                        protocol.mock_wire_data.set_extension_config("wire/ext_conf.xml")
-                        protocol.mock_wire_data.reload()
+                        # Case 1: rsm version missing in GS when vm opt-in for rsm upgrades; report missing rsm version error
+                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_version_missing_in_agent_family.xml")
                         update_goal_state_and_run_handler()
                         self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
                                          "updateStatus should be reported")
                         update_status = protocol.aggregate_status['aggregateStatus']['guestAgentStatus']["updateStatus"]
                         self.assertEqual(VMAgentUpdateStatuses.Error, update_status['status'], "Status should be an error")
                         self.assertEqual(update_status['code'], 1, "incorrect code reported")
-                        self.assertIn("Missing requested version", update_status['formattedMessage']['message'], "incorrect message reported")
+                        self.assertIn("missing version property. So, skipping agent update", update_status['formattedMessage']['message'], "incorrect message reported")
 
-                        # Case 2: Requested version in GS == Current Version; updateStatus should be Success
-                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
-                        protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+                        # Case 2: rsm version in GS == Current Version; updateStatus should be Success
+                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_rsm_version.xml")
+                        protocol.mock_wire_data.set_version_in_agent_family(str(CURRENT_VERSION))
                         update_goal_state_and_run_handler()
                         self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
                                         "updateStatus should be reported if asked in GS")
@@ -1303,9 +1301,9 @@ class TestUpdate(UpdateTestCase):
                         self.assertEqual(update_status['expectedVersion'], str(CURRENT_VERSION), "incorrect version reported")
                         self.assertEqual(update_status['code'], 0, "incorrect code reported")
 
-                        # Case 3: Requested version in GS != Current Version; update fail and report error
-                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_requested_version.xml")
-                        protocol.mock_wire_data.set_extension_config_requested_version("5.2.0.1")
+                        # Case 3: rsm version in GS != Current Version; update fail and report error
+                        protocol.mock_wire_data.set_extension_config("wire/ext_conf_rsm_version.xml")
+                        protocol.mock_wire_data.set_version_in_agent_family("5.2.0.1")
                         update_goal_state_and_run_handler()
                         self.assertTrue("updateStatus" in protocol.aggregate_status['aggregateStatus']['guestAgentStatus'],
                                         "updateStatus should be in status blob. Warns: {0}".format(patch_warn.call_args_list))
@@ -1436,8 +1434,8 @@ class TestAgentUpgrade(UpdateTestCase):
         # Disabling extension processing to speed up tests as this class deals with testing agent upgrades
         with patch("azurelinuxagent.common.conf.get_extensions_enabled", return_value=False):
             with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
-                with patch("azurelinuxagent.common.conf.get_hotfix_upgrade_frequency", return_value=hotfix_frequency):
-                    with patch("azurelinuxagent.common.conf.get_normal_upgrade_frequency", return_value=normal_frequency):
+                with patch("azurelinuxagent.common.conf.get_self_update_hotfix_frequency", return_value=hotfix_frequency):
+                    with patch("azurelinuxagent.common.conf.get_self_update_regular_frequency", return_value=normal_frequency):
                         with patch("azurelinuxagent.common.conf.get_autoupdate_gafamily", return_value="Prod"):
                             with patch("azurelinuxagent.common.conf.get_enable_ga_versioning", return_value=True):
                                 yield
@@ -1480,7 +1478,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def __assert_upgrade_telemetry_emitted(self, mock_telemetry, upgrade=True, version="9.9.9.10"):
         upgrade_event_msgs = [kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                              'Agent update found, exiting current process to {0} to the new Agent version {1}'.format(
+                              'Current Agent {0} completed all update checks, exiting current process to {1} to the new Agent version {2}'.format(CURRENT_VERSION,
                                   "upgrade" if upgrade else "downgrade", version) in kwarg['message'] and kwarg[
                                   'op'] == WALAEventOperation.AgentUpgrade]
         self.assertEqual(1, len(upgrade_event_msgs),
@@ -1507,7 +1505,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def test_it_should_upgrade_agent_on_process_start_if_auto_upgrade_enabled(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
         with self.__get_update_handler(test_data=data_file, iterations=10) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
 
@@ -1516,16 +1514,17 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_agent_directories_available(versions=["9.9.9.10"])
             self.__assert_upgrade_telemetry_emitted(mock_telemetry)
 
-    def test_it_should_not_update_agent_if_last_update_time_not_permitted(self):
+    def test_it_should_not_update_agent_with_rsm_if_gs_not_updated_in_next_attempts(self):
         no_of_iterations = 10
         data_file = DATA_FILE.copy()
-        data_file['ext_conf'] = "wire/ext_conf_requested_version.xml"
+        data_file['ext_conf'] = "wire/ext_conf_rsm_version.xml"
 
         self.prepare_agents(1)
         test_frequency = 10
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file,
                                        autoupdate_frequency=test_frequency) as (update_handler, _):
-            update_handler._protocol.mock_wire_data.set_ga_manifest_version_version("5.2.0.1")
+            # Given version which will fail on first attempt, then rsm shouldn't make any futher attempts since GS is not updated
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family("5.2.1.0")
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1533,6 +1532,8 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertEqual(no_of_iterations, update_handler.get_iterations(), "Update handler should've run its course")
             self.assertFalse(os.path.exists(self.agent_dir("5.2.0.1")),
                              "New agent directory should not be found")
+            self.assertGreaterEqual(update_handler._protocol.mock_wire_data.call_counts["manifest_of_ga.xml"], 1,
+                             "only 1 agent manifest call should've been made - 1 per incarnation")
 
     def test_it_should_not_auto_upgrade_if_auto_update_disabled(self):
         with self.__get_update_handler(iterations=10) as (update_handler, _):
@@ -1544,9 +1545,9 @@ class TestAgentUpgrade(UpdateTestCase):
                 self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
                                  "New agent directory should not be found")
 
-    def test_it_should_download_only_requested_version_if_available(self):
+    def test_it_should_download_only_rsm_version_if_available(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
 
@@ -1556,7 +1557,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     def test_it_should_download_largest_version_if_ga_versioning_disabled(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             with patch.object(conf, "get_enable_ga_versioning", return_value=False):
                 update_handler.run(debug=True)
@@ -1565,9 +1566,9 @@ class TestAgentUpgrade(UpdateTestCase):
         self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="99999.0.0.0")
         self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0"])
 
-    def test_it_should_cleanup_all_agents_except_requested_version_and_current_version(self):
+    def test_it_should_cleanup_all_agents_except_rsm_version_and_current_version(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
 
         # Set the test environment by adding 20 random agents to the agent directory
         self.prepare_agents()
@@ -1580,10 +1581,10 @@ class TestAgentUpgrade(UpdateTestCase):
         self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="9.9.9.10")
         self.__assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
 
-    def test_it_should_not_update_if_requested_version_not_found_in_manifest(self):
+    def test_it_should_not_update_if_rsm_version_not_found_in_manifest(self):
         self.prepare_agents(1)
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version_missing_in_manifest.xml"
+        data_file["ext_conf"] = "wire/ext_conf_version_missing_in_manifest.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
             update_handler.run(debug=True)
 
@@ -1592,18 +1593,18 @@ class TestAgentUpgrade(UpdateTestCase):
         agent_msgs = [kwarg for _, kwarg in mock_telemetry.call_args_list if
                       kwarg['op'] in (WALAEventOperation.AgentUpgrade, WALAEventOperation.Download)]
         # This will throw if corresponding message not found so not asserting on that
-        requested_version_found = next(kwarg for kwarg in agent_msgs if
-                                       "discovered new agent version:5.2.1.0 in agent manifest for goal state incarnation_1, will update the agent before processing the goal state" in kwarg['message'])
-        self.assertTrue(requested_version_found['is_success'],
-                        "The requested version found op should be reported as a success")
+        rsm_version_found = next(kwarg for kwarg in agent_msgs if
+                                       "New agent version:5.2.1.0 requested by RSM in Goal state incarnation_1, will update the agent before processing the goal state" in kwarg['message'])
+        self.assertTrue(rsm_version_found['is_success'],
+                        "The rsm version found op should be reported as a success")
 
         skipping_update = next(kwarg for kwarg in agent_msgs if
-                               "No matching package found in the agent manifest for requested version: 5.2.1.0 in goal state incarnation: incarnation_1, skipping agent update" in kwarg['message'])
+                               "No matching package found in the agent manifest for version: 5.2.1.0 in goal state incarnation: incarnation_1, skipping agent update" in kwarg['message'])
         self.assertEqual(skipping_update['version'], str(CURRENT_VERSION),
                          "The not found message should be reported from current agent version")
         self.assertFalse(skipping_update['is_success'], "The not found op should be reported as a failure")
 
-    def test_it_should_try_downloading_requested_version_on_new_incarnation(self):
+    def test_it_should_try_downloading_rsm_version_on_new_incarnation(self):
         no_of_iterations = 1000
 
         # Set the test environment by adding 20 random agents to the agent directory
@@ -1620,8 +1621,8 @@ class TestAgentUpgrade(UpdateTestCase):
                 # Ensure we didn't try to download any agents except during the incarnation change
                 self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
 
-                # Update the requested version to "99999.0.0.0"
-                update_handler._protocol.mock_wire_data.set_extension_config_requested_version("99999.0.0.0")
+                # Update the rsm version to "99999.0.0.0"
+                update_handler._protocol.mock_wire_data.set_version_in_agent_family("99999.0.0.0")
                 reload_conf.call_count += 1
                 self._add_write_permission_to_goal_state_files()
                 reload_conf.incarnation += 1
@@ -1631,9 +1632,9 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.incarnation = 2
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
-            update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family(str(CURRENT_VERSION))
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1646,7 +1647,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertGreaterEqual(update_handler._protocol.mock_wire_data.call_counts["manifest_of_ga.xml"], 1,
                              "only 1 agent manifest call should've been made - 1 per incarnation")
 
-    def test_it_should_update_to_largest_version_if_requested_version_not_available(self):
+    def test_it_should_update_to_largest_version_if_rsm_version_not_available(self):
         no_of_iterations = 100
 
         # Set the test environment by adding 20 random agents to the agent directory
@@ -1661,12 +1662,12 @@ class TestAgentUpgrade(UpdateTestCase):
              "goalstate"] >= 5:
                 reload_conf.call_count += 1
 
-                # By this point, the GS with requested version should've been executed. Verify that
+                # By this point, the GS with rsm version should've been executed. Verify that
                 self.__assert_agent_directories_available(versions=[str(CURRENT_VERSION)])
 
-                # Update the ext-conf and incarnation and remove requested versions from GS,
-                # this should download all versions requested in config
-                mock_wire_data.data_files["ext_conf"] = "wire/ext_conf.xml"
+                # Update the ga_manifest and incarnation to send largest version manifest
+                # this should download largest version requested in config
+                mock_wire_data.data_files["ga_manifest"] = "wire/ga_manifest.xml"
                 mock_wire_data.reload()
                 self._add_write_permission_to_goal_state_files()
                 reload_conf.incarnation += 1
@@ -1676,9 +1677,9 @@ class TestAgentUpgrade(UpdateTestCase):
         reload_conf.incarnation = 2
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf.xml"
+        data_file["ga_manifest"] = "wire/ga_manifest_no_upgrade.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
-            update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1766,16 +1767,16 @@ class TestAgentUpgrade(UpdateTestCase):
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="99999.0.0.0")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
 
-    def test_it_should_not_download_anything_if_requested_version_is_current_version(self):
+    def test_it_should_not_download_anything_if_rsm_version_is_current_version(self):
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
 
         # Set the test environment by adding 20 random agents to the agent directory
         self.prepare_agents()
         self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
 
         with self.__get_update_handler(test_data=data_file) as (update_handler, _):
-            update_handler._protocol.mock_wire_data.set_extension_config_requested_version(str(CURRENT_VERSION))
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family(str(CURRENT_VERSION))
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1783,7 +1784,7 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
                              "New agent directory should not be found")
 
-    def test_it_should_skip_wait_to_update_if_requested_version_available(self):
+    def test_it_should_skip_wait_to_update_if_rsm_version_available(self):
         no_of_iterations = 100
 
         def reload_conf(url, protocol):
@@ -1796,8 +1797,8 @@ class TestAgentUpgrade(UpdateTestCase):
                 # Assert GA version from status to ensure agent is running fine from the current version
                 self.__assert_ga_version_in_status(protocol.aggregate_status)
 
-                # Update the ext-conf and incarnation and add requested version from GS
-                mock_wire_data.data_files["ext_conf"] = "wire/ext_conf_requested_version.xml"
+                # Update the ext-conf and incarnation and add rsm version from GS
+                mock_wire_data.data_files["ext_conf"] = "wire/ext_conf_rsm_version.xml"
                 data_file['ga_manifest'] = "wire/ga_manifest.xml"
                 mock_wire_data.reload()
                 self._add_write_permission_to_goal_state_files()
@@ -1814,7 +1815,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
             self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
             self.assertLess(update_handler.get_iterations(), no_of_iterations,
-                            "The code should've exited as soon as requested version was found")
+                            "The code should've exited as soon as rsm version was found")
             self.__assert_exit_code_successful(update_handler)
             self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="9.9.9.10")
 
@@ -1827,9 +1828,9 @@ class TestAgentUpgrade(UpdateTestCase):
         downgraded_version = "2.5.0"
 
         data_file = wire_protocol_data.DATA_FILE.copy()
-        data_file["ext_conf"] = "wire/ext_conf_requested_version.xml"
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
         with self.__get_update_handler(test_data=data_file) as (update_handler, mock_telemetry):
-            update_handler._protocol.mock_wire_data.set_extension_config_requested_version(downgraded_version)
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family(downgraded_version)
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1842,6 +1843,43 @@ class TestAgentUpgrade(UpdateTestCase):
                                                          "suggesting that we really don't want to execute any extensions using this version".format(CURRENT_VERSION),
                              "Invalid reason specified for blacklisting agent")
             self.__assert_agent_directories_exist_and_others_dont_exist(versions=[downgraded_version, str(CURRENT_VERSION)])
+
+    def test_it_should_do_self_update_if_vm_opt_out_rsm_upgrades_later(self):
+        no_of_iterations = 100
+
+        # Set the test environment by adding 20 random agents to the agent directory
+        self.prepare_agents()
+        self.assertEqual(20, self.agent_count(), "Agent directories not set properly")
+        def reload_conf(url, protocol):
+            mock_wire_data = protocol.mock_wire_data
+
+            # This function reloads the conf mid-run to mimic an actual customer scenario
+            if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts["goalstate"] >= 5:
+                reload_conf.call_count += 1
+
+                # Assert GA version from status to ensure agent is running fine from the current version
+                self.__assert_ga_version_in_status(protocol.aggregate_status)
+
+                # Update is_vm_enabled_for_rsm_upgrades flag to False
+                update_handler._protocol.mock_wire_data.set_extension_config_is_vm_enabled_for_rsm_upgrades("False")
+                self._add_write_permission_to_goal_state_files()
+                mock_wire_data.set_incarnation(2)
+
+        reload_conf.call_count = 0
+
+        data_file = wire_protocol_data.DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf_rsm_version.xml"
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
+            update_handler._protocol.mock_wire_data.set_version_in_agent_family(str(CURRENT_VERSION))
+            update_handler._protocol.mock_wire_data.set_incarnation(20)
+            update_handler.run(debug=True)
+
+            self.assertGreater(reload_conf.call_count, 0, "Reload conf not updated")
+            self.assertLess(update_handler.get_iterations(), no_of_iterations,
+                            "The code should've exited as soon as version was found")
+            self.__assert_exit_code_successful(update_handler)
+            self.__assert_upgrade_telemetry_emitted(mock_telemetry, version="99999.0.0.0")
+            self.__assert_agent_directories_exist_and_others_dont_exist(versions=["99999.0.0.0", str(CURRENT_VERSION)])
 
 
 @patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler')

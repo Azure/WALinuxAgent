@@ -1,7 +1,13 @@
+# Scenario validates RSM and Self-updates paths
+# RSM update: If vm enrolled into RSM, it will validate agent uses RSM to update to target version
+# Self-update: If vm not enrolled into RSM, it will validate agent uses self-update to update to latest version published
 name: "AgentUpdate"
 tests:
-  - "agent_update/rsm_update.py"
-images: "random(endorsed, 10)"
+#  - "agent_update/rsm_update.py"  will enable this test once we have a new test version published
+   - "agent_update/self_update.py"
+images:
+    - "random(endorsed, 10)"
+    - "random(endorsed-arm64, 2)"
 locations: "AzureCloud:eastus2euap"
 owns_vm: true
 skip_on_clouds:

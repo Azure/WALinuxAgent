@@ -90,7 +90,7 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
 
 class Ubuntu18OSUtil(Ubuntu16OSUtil):
     """
-    Ubuntu 18.04, 18.10, 19.04, 19.10, 20.04
+    Ubuntu >=18.04 and <=24.04
     """
     def __init__(self):
         super(Ubuntu18OSUtil, self).__init__()

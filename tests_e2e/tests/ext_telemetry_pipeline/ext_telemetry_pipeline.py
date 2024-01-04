@@ -42,7 +42,7 @@ class ExtTelemetryPipeline(AgentVmTest):
 
         # Extensions we will create events for
         extensions = ["Microsoft.Azure.Extensions.CustomScript"]
-        if VmExtensionIds.VmAccess.supports_distro(ssh_client.run_command("uname -a")):
+        if VmExtensionIds.VmAccess.supports_distro(ssh_client.run_command("get_distro.py").rstrip()):
             extensions.append("Microsoft.OSTCExtensions.VMAccessForLinux")
 
         # Set the etp collection period to 30 seconds instead of default 5 minutes

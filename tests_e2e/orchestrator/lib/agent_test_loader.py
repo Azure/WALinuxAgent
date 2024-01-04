@@ -65,6 +65,8 @@ class TestSuiteInfo(object):
     template: str
     # skip test suite if the test not supposed to run on specific clouds
     skip_on_clouds: List[str]
+    # skip test suite if test suite not suppose to run on specific images
+    skip_on_images: List[str]
 
     def __str__(self):
         return self.name
@@ -168,6 +170,12 @@ class AgentTestLoader(object):
                 if suite_skip_cloud not in ["AzureCloud", "AzureChinaCloud", "AzureUSGovernment"]:
                     raise Exception(f"Invalid cloud {suite_skip_cloud} for in {suite.name}")
 
+            # if the suite specifies skip images, validate that images used in our tests
+            for suite_skip_image in suite.skip_on_images:
+                if suite_skip_image not in self.images:
+                    raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {suite_skip_image} in images.yml")
+
+
     @staticmethod
     def _load_test_suites(test_suites: str) -> List[TestSuiteInfo]:
         #
@@ -205,6 +213,8 @@ class AgentTestLoader(object):
             owns_vm: true
             install_test_agent: true
             template: "bvts/template.py"
+            skip_on_clouds: "AzureChinaCloud"
+            skip_on_images: "ubuntu_2004"
 
         * name     - A string used to identify the test suite
         * tests    - A list of the tests in the suite. Each test can be specified by a string (the path for its source code relative to
@@ -231,7 +241,9 @@ class AgentTestLoader(object):
         * skip_on_clouds - [Optional; string or list of strings] If given, the test suite will be skipped in the specified cloud(e.g. "AzureCloud").
                     If not specified, the test suite will be executed in all the clouds that we use. This is useful
                     if you want to skip a test suite validation in a particular cloud when certain feature is not available in that cloud.
-
+        # skip_on_images - [Optional; string or list of strings] If given, the test suite will be skipped on the specified images or image sets(e.g. "ubuntu_2004").
+                    If not specified, the test suite will be executed on all the images that we use. This is useful
+                    if you want to skip a test suite validation on a particular images or image sets when certain feature is not available on that image.
         """
         test_suite: Dict[str, Any] = AgentTestLoader._load_file(description_file)
 
@@ -285,6 +297,15 @@ class AgentTestLoader(object):
                 test_suite_info.skip_on_clouds = skip_on_clouds
         else:
             test_suite_info.skip_on_clouds = []
+
+        skip_on_images = test_suite.get("skip_on_images")
+        if skip_on_images is not None:
+            if isinstance(skip_on_images, str):
+                test_suite_info.skip_on_images = [skip_on_images]
+            else:
+                test_suite_info.skip_on_images = skip_on_images
+        else:
+            test_suite_info.skip_on_images = []
 
         return test_suite_info
 
