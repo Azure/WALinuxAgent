@@ -122,11 +122,12 @@ class RedhatOSUtil(Redhat6xOSUtil):
         filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
         nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
         try:
-            result = shellutil.run_command(nm_controlled_cmd, log_error=False).rstrip()
+            result = shellutil.run_command(nm_controlled_cmd, log_error=False, encode_output=False).rstrip()
 
             if result and len(result.split('=')) > 1:
-                value = result.split('=')[1]
-                if "n" in value:
+                # Remove trailing white space and ' or " characters
+                value = result.split('=')[1].replace("'", '').replace('"', '').rstrip()
+                if value == "n" or value == "no":
                     return False
         except shellutil.CommandError as e:
             # Command might fail because NM_CONTROLLED value is not in interface config file (exit code 1).
