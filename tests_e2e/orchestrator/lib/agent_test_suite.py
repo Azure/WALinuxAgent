@@ -104,6 +104,14 @@ class KeepEnvironment(object):
     No = 'no'           # Always delete resources created by the test suite
 
 
+class TestFailedException(Exception):
+    def __init__(self, env_name: str, test_cases: List[str]):
+        msg = "Test suite {0} failed.".format(env_name)
+        if test_cases:
+            msg += " Failed tests: " + ','.join(test_cases)
+        super().__init__(msg)
+
+
 class _TestNode(object):
     """
     Name and IP address of a test VM
@@ -543,6 +551,7 @@ class AgentTestSuite(LisaTestSuite):
             log_path: Path = self._log_path / f"env-{self._environment_name}.log"
             with set_current_thread_log(log_path):
                 start_time: datetime.datetime = datetime.datetime.now()
+                failed_cases = []
 
                 try:
                     # Log the environment's name and the variables received from the runbook (note that we need to expand the names of the test suites)
@@ -567,7 +576,10 @@ class AgentTestSuite(LisaTestSuite):
                         for suite in self._test_suites:
                             log.info("Executing test suite %s", suite.name)
                             self._lisa_log.info("Executing Test Suite %s", suite.name)
-                            test_suite_success = self._execute_test_suite(suite, test_context) and test_suite_success
+                            case_success = self._execute_test_suite(suite, test_context)
+                            test_suite_success = case_success and test_suite_success
+                            if not case_success:
+                                failed_cases.append(suite.name)
 
                     finally:
                         if self._collect_logs == CollectLogs.Always or self._collect_logs == CollectLogs.Failed and not test_suite_success:
@@ -591,6 +603,13 @@ class AgentTestSuite(LisaTestSuite):
                     self._clean_up(test_suite_success and not unexpected_error)
                     if unexpected_error:
                         self._mark_log_as_failed()
+
+                    # Check if any test failures or unexpected errors occurred. If so, raise an Exception here so that
+                    # lisa marks the environment as failed. Otherwise, lisa would mark this environment as passed and
+                    # clean up regardless of the value of 'keep_environment'. This should be the last thing that
+                    # happens during suite execution.
+                    if not test_suite_success or unexpected_error:
+                        raise TestFailedException(self._environment_name, failed_cases)
 
     def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext) -> bool:
         """
