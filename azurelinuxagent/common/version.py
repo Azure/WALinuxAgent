@@ -134,6 +134,9 @@ def get_distro():
     if os.path.exists("/etc/UnionTech-release"):
         osinfo[0] = "uos"
 
+    if os.path.exists("/etc/anolis-release"):
+        osinfo[0] = "anolis"
+
     if os.path.exists("/etc/mariner-release"):
         osinfo[0] = "mariner"
 
