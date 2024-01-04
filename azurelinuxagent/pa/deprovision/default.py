@@ -131,6 +131,10 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_files,
                                          ["/var/lib/NetworkManager/dhclient-*.lease"]))
 
+        # For Ubuntu >= 18.04, using systemd-networkd
+        actions.append(DeprovisionAction(fileutil.rm_files,
+                                         ["/run/systemd/netif/leases/*"]))
+
     def del_ext_handler_files(self, warnings, actions):  # pylint: disable=W0613
         ext_dirs = [d for d in os.listdir(conf.get_lib_dir())
                     if os.path.isdir(os.path.join(conf.get_lib_dir(), d))

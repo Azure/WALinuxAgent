@@ -298,7 +298,7 @@ class TestOSUtil(AgentTestCase):
     def test_dhcp_lease_default(self):
         self.assertTrue(osutil.DefaultOSUtil().get_dhcp_lease_endpoint() is None)
 
-    def test_dhcp_lease_ubuntu(self):
+    def test_dhcp_lease_older_ubuntu(self):
         with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
             with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases"))):
                 endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
@@ -310,6 +310,20 @@ class TestOSUtil(AgentTestCase):
                 self.assertEqual(endpoint, "168.63.129.16")
 
                 endpoint = get_osutil(distro_name='ubuntu', distro_version='14.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is not None)
+                self.assertEqual(endpoint, "168.63.129.16")
+
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='18.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is None)
+
+    def test_dhcp_lease_newer_ubuntu(self):
+        with patch.object(glob, "glob", return_value=['/run/systemd/netif/leases/2']):
+            with patch(open_patch(), mock.mock_open(read_data=load_data("2"))):
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='18.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is not None)
+                self.assertEqual(endpoint, "168.63.129.16")
+
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='20.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
