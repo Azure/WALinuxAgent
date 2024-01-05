@@ -21,7 +21,7 @@ import json
 
 from typing import Any, Dict
 
-from tests_e2e.tests.lib.add_network_security_group import NETWORK_SECURITY_GROUP
+from tests_e2e.tests.lib.network_security_rule import NetworkSecurityRule
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
 
@@ -30,32 +30,18 @@ class DenyOutboundConnections(UpdateArmTemplate):
     Updates the ARM template to add a security rule that denies all outbound connections.
     """
     def update(self, template: Dict[str, Any], is_lisa_template: bool) -> None:
-        if not is_lisa_template:
-            raise Exception('This test can only customize LISA ARM templates.')
-
-        resources = template["resources"]
-        nsg = self._get_resource_by_name(resources, NETWORK_SECURITY_GROUP, "Microsoft.Network/networkSecurityGroups")
-        properties = nsg.get("properties")
-
-        if properties is None:
-            raise Exception("Cannot find the properties of the Network Security Group in the ARM template")
-
-        security_rules = properties.get("securityRules")
-        if security_rules is None:
-            raise Exception("Cannot find the security rules of the Network Security Group in the ARM template")
-
-        security_rules.append(json.loads("""{
-            "name": "waagent-no-outbound",
-            "properties": {
-                "description": "Denies all outbound connections.",
-                "protocol": "*",
-                "sourcePortRange": "*",
-                "destinationPortRange": "*",
-                "sourceAddressPrefix": "*",
-                "destinationAddressPrefix": "Internet",
-                "access": "Deny",
-                "priority": 200,
-                "direction": "Outbound"
-            }
-        }"""))
-
+        NetworkSecurityRule(template, is_lisa_template).add_security_rule(
+            json.loads("""{
+                "name": "waagent-no-outbound",
+                "properties": {
+                    "description": "Denies all outbound connections.",
+                    "protocol": "*",
+                    "sourcePortRange": "*",
+                    "destinationPortRange": "*",
+                    "sourceAddressPrefix": "*",
+                    "destinationAddressPrefix": "Internet",
+                    "access": "Deny",
+                    "priority": 200,
+                    "direction": "Outbound"
+                }
+            }"""))

@@ -2,6 +2,9 @@
 
 set -euxo pipefail
 
+echo "Hostname: $(hostname)"
+echo "\$USER: $USER"
+
 #
 # UID of 'waagent' in the Docker container
 #
@@ -10,7 +13,7 @@ WAAGENT_UID=1000
 #
 # Set the correct mode and owner for the private SSH key and generate the public key.
 #
-cd "$HOME"
+cd "$AGENT_TEMPDIRECTORY"
 mkdir ssh
 cp "$DOWNLOADSSHKEY_SECUREFILEPATH" ssh
 chmod 700 ssh/id_rsa
@@ -26,10 +29,16 @@ chmod a+w "$BUILD_SOURCESDIRECTORY"
 #
 # Create the directory where the Docker container will create the test logs and give ownership to 'waagent'
 #
-LOGS_DIRECTORY="$HOME/logs"
+LOGS_DIRECTORY="$AGENT_TEMPDIRECTORY/logs"
 echo "##vso[task.setvariable variable=logs_directory]$LOGS_DIRECTORY"
 mkdir "$LOGS_DIRECTORY"
 sudo chown "$WAAGENT_UID" "$LOGS_DIRECTORY"
+
+#
+# Give the current user access to the Docker daemon
+#
+sudo usermod -aG docker $USER
+newgrp docker < /dev/null
 
 #
 # Pull the container image used to execute the tests
@@ -55,9 +64,14 @@ if [[ $VM_SIZE == "-" ]]; then
     VM_SIZE=""
 fi
 
+#
+# Get the external IP address of the VM.
+#
+IP_ADDRESS=$(curl -4 ifconfig.io/ip)
+
 docker run --rm \
     --volume "$BUILD_SOURCESDIRECTORY:/home/waagent/WALinuxAgent" \
-    --volume "$HOME"/ssh:/home/waagent/.ssh \
+    --volume "$AGENT_TEMPDIRECTORY"/ssh:/home/waagent/.ssh \
     --volume "$LOGS_DIRECTORY":/home/waagent/logs \
     --env AZURE_CLIENT_ID \
     --env AZURE_CLIENT_SECRET \
@@ -77,4 +91,5 @@ docker run --rm \
           -v image:\"$IMAGE\" \
           -v location:\"$LOCATION\" \
           -v vm_size:\"$VM_SIZE\" \
+          -v allow_ssh:\"$IP_ADDRESS\" \
           $TEST_SUITES"
