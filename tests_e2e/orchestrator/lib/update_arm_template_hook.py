@@ -30,7 +30,7 @@ from lisa.sut_orchestrator.azure.platform_ import AzurePlatformSchema
 # pylint: enable=E0401
 
 import tests_e2e
-from tests_e2e.tests.lib.add_network_security_group import AddNetworkSecurityGroup
+from tests_e2e.tests.lib.network_security_rule import NetworkSecurityRule
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
 
@@ -42,17 +42,20 @@ class UpdateArmTemplateHook:
     def azure_update_arm_template(self, template: Any, environment: Environment) -> None:
         log: logging.Logger = logging.getLogger("lisa")
 
+        azure_runbook: AzurePlatformSchema = environment.platform.runbook.get_extended_runbook(AzurePlatformSchema)
+        vm_tags = azure_runbook.vm_tags
+
         #
-        # Add the network security group for the test VM. This group includes a rule allowing SSH access from the current machine.
+        # Add the allow SSH security rule if requested by the runbook
         #
-        log.info("******** Waagent: Adding network security rule to the ARM template")
-        AddNetworkSecurityGroup().update(template, is_lisa_template=True)
+        allow_ssh: str = vm_tags.get("allow_ssh")
+        if allow_ssh is not None:
+            log.info("******** Waagent: Adding network security rule to allow SSH connections from %s", allow_ssh)
+            NetworkSecurityRule(template, is_lisa_template=True).add_allow_ssh_rule(allow_ssh)
 
         #
         # Apply any template customizations provided by the tests.
         #
-        azure_runbook: AzurePlatformSchema = environment.platform.runbook.get_extended_runbook(AzurePlatformSchema)
-        vm_tags = azure_runbook.vm_tags
         # The "templates" tag is a comma-separated list of the template customizations provided by the tests
         test_templates = vm_tags.get("templates")
         if test_templates is not None:
