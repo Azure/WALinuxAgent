@@ -23,7 +23,7 @@ parameters:
       - azuremanagement.government
 
 pool:
-  vmImage: ubuntu-latest
+  name: waagent-pool
 
 steps:
   - ${{ each service_connection in parameters.service_connections }}:
