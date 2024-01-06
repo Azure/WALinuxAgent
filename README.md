@@ -84,7 +84,9 @@ Waagent depends on some system packages in order to function properly:
 
 ## Installation
 
-Installation via your distribution's package repository is preferred.
+Installation via your distribution's package repository is the **supported** method. 
+Make sure `AutoUpdate.Enabled=Y` in `/etc/waagent.conf` to allow the Azure Linux Agent to automatically update which is its default settings.
+
 You can also customize your own RPM or DEB packages using the configuration
 samples provided (see deb and rpm sections below).
 
