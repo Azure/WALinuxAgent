@@ -47,17 +47,16 @@ from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disab
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
 
-from tests_e2e.tests.lib.add_network_security_group import AddNetworkSecurityGroup
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
 
 import tests_e2e
 from tests_e2e.orchestrator.lib.agent_test_loader import TestSuiteInfo
-from tests_e2e.tests.lib.agent_log import AgentLog
+from tests_e2e.tests.lib.agent_log import AgentLog, AgentLogRecord
 from tests_e2e.tests.lib.agent_test import TestSkipped, RemoteTestError
 from tests_e2e.tests.lib.agent_test_context import AgentTestContext, AgentVmTestContext, AgentVmssTestContext
 from tests_e2e.tests.lib.logging import log, set_thread_name, set_current_thread_log
-from tests_e2e.tests.lib.agent_log import AgentLogRecord
+from tests_e2e.tests.lib.network_security_rule import NetworkSecurityRule
 from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
 from tests_e2e.tests.lib.shell import run_command, CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -161,6 +160,9 @@ class AgentTestSuite(LisaTestSuite):
         self._user: str
         self._identity_file: str
 
+        # If not empty, adds a Network Security Rule allowing SSH access from the specified IP address to any test VMs created by the test suite.
+        self._allow_ssh: str
+
         self._skip_setup: bool  # If True, skip the setup of the test VMs
         self._collect_logs: str  # Whether to collect logs from the test VMs (one of 'always', 'failed', or 'no')
         self._keep_environment: str  # Whether to skip deletion of the resources created by the test suite (one of 'always', 'failed', or 'no')
@@ -217,6 +219,8 @@ class AgentTestSuite(LisaTestSuite):
 
         self._user = variables["user"]
         self._identity_file = variables["identity_file"]
+
+        self._allow_ssh = variables["allow_ssh"]
 
         self._skip_setup = variables["skip_setup"]
         self._keep_environment = variables["keep_environment"]
@@ -923,7 +927,8 @@ class AgentTestSuite(LisaTestSuite):
                         "publisher": "[parameters('publisher')]"
                     }
 
-        AddNetworkSecurityGroup().update(template, is_lisa_template=False)
+        if self._allow_ssh != '':
+            NetworkSecurityRule(template, is_lisa_template=False).add_allow_ssh_rule(self._allow_ssh)
 
         return template, {
             "username": {"value": self._user},

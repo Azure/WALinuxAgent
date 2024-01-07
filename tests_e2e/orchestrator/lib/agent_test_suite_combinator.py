@@ -37,6 +37,7 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     The runbook is a static document and always passes all these parameters to the combinator, so they are all
     marked as required. Optional parameters can pass an empty value to indicate that they are not specified.
     """
+    allow_ssh: str = field(default_factory=str, metadata=field_metadata(required=True))
     cloud: str = field(default_factory=str, metadata=field_metadata(required=True))
     identity_file: str = field(default_factory=str, metadata=field_metadata(required=True))
     image: str = field(default_factory=str, metadata=field_metadata(required=True))
@@ -332,14 +333,16 @@ class AgentTestSuitesCombinator(Combinator):
     def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
         #
         # Custom ARM templates (to create the test VMs) require special handling. These templates are processed by the azure_update_arm_template
-        # hook, which does not have access to the runbook variables. Instead, we use a dummy VM tag named "template" and pass the
+        # hook, which does not have access to the runbook variables. Instead, we use a dummy VM tag named "templates" and pass the
         # names of the custom templates in its value. The hook can then retrieve the value from the Platform object (see wiki for more details).
         # We also use a dummy item, "vm_tags" in the environment dictionary in order to concatenate templates from multiple test suites when they
-        # share the same test environment.
+        # share the same test environment. Similarly, we use a dummy VM tag named "allow_ssh" to pass the value of the "allow_ssh" runbook parameter.
         #
         vm_tags = {}
         if test_suite_info.template != '':
             vm_tags["templates"] = test_suite_info.template
+        if self.runbook.allow_ssh != '':
+            vm_tags["allow_ssh"] = self.runbook.allow_ssh
         return {
             "c_platform": [
                 {

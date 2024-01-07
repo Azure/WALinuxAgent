@@ -5,9 +5,8 @@ image-sets:
    # Endorsed distros that are tested on the daily runs
    endorsed:
 #
-# TODO: Add CentOS 6.10 and Debian 8
+# TODO: Add Debian 8
 #
-#      - "centos_610"
 #      - "debian_8"
 #
       - "alma_9"
@@ -45,6 +44,12 @@ image-sets:
       - "ubuntu_1604"
       - "ubuntu_1804"
       - "ubuntu_2004"
+
+   # These distros use Python 2.6. Currently they are not tested on the daily runs; this image set is here just for reference.
+   python-26:
+      - "centos_610"
+      - "oracle_610"
+      - "rhel_610"
 
 #
 # An image can be specified by a string giving its urn, as in
@@ -115,13 +120,8 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   rocky_9:
-      urn: "erockyenterprisesoftwarefoundationinc1653071250513 rockylinux-9 rockylinux-9 latest"
-      locations:
-         AzureChinaCloud: []
-         AzureUSGovernment: []
-   suse_12: "SUSE sles-12-sp5-basic gen1 latest"
-   suse_15: "SUSE sles-15-sp2-basic gen2 latest"
+   oracle_610: "Oracle Oracle-Linux 6.10 latest"
+   rhel_610: "RedHat RHEL 6.10 latest"
    rhel_79:
       urn: "RedHat RHEL 7_9 latest"
       locations:
@@ -142,6 +142,13 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
+   rocky_9:
+      urn: "erockyenterprisesoftwarefoundationinc1653071250513 rockylinux-9 rockylinux-9 latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: []
+   suse_12: "SUSE sles-12-sp5-basic gen1 latest"
+   suse_15: "SUSE sles-15-sp2-basic gen2 latest"
    ubuntu_1604: "Canonical UbuntuServer 16.04-LTS latest"
    ubuntu_1804: "Canonical UbuntuServer 18.04-LTS latest"
    ubuntu_2004: "Canonical 0001-com-ubuntu-server-focal 20_04-lts latest"
