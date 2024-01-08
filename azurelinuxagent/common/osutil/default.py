@@ -48,7 +48,7 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.pa.provision.cloudinitdetect import cloud_init_is_enabled
+# from azurelinuxagent.pa.provision.cloudinitdetect import cloud_init_is_enabled
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
                    "/etc/udev/rules.d/70-persistent-net.rules"]
@@ -1325,20 +1325,23 @@ class DefaultOSUtil(object):
         return socket.gethostname()
 
     def provisioned_by_cloud_init(self):
-        provisioning_agent = conf.get_provisioning_agent()
+        # provisioning_agent = conf.get_provisioning_agent()
+        #
+        # if provisioning_agent == 'cloud-init' or (
+        #         provisioning_agent == 'auto' and
+        #         cloud_init_is_enabled()):
+        #     return True
 
-        if provisioning_agent == 'cloud-init' or (
-                provisioning_agent == 'auto' and
-                cloud_init_is_enabled()):
-            return True
+        # return False
 
-        return False
+        return True
 
     def get_hostname_record(self):
         provisioned_by_cloud_init = self.provisioned_by_cloud_init()
         hostname_record = conf.get_published_hostname()
 
         if provisioned_by_cloud_init:
+            # When provisioning is done by cloud-init the hostname is written to set-hostname
             hostname = self._get_cloud_init_hostname()
             if hostname is None:
                 hostname = self.get_hostname_from_socket()
@@ -1349,8 +1352,8 @@ class DefaultOSUtil(object):
 
             self.set_hostname_record(hostname)
         else:
-            # Provisioning was done by the agent, so a published hostname record should exist. If not, log a warning
-            # and get hostname from socket
+            # Older agents (but newer or equal to 2.2.3) create published_hostname record during provisioning; If the
+            # record does not exist, log a warning and get hostname from socket
             if not os.path.exists(hostname_record):
                 logger.warn("Provisioning was done by the agent, but the published hostname record does not exist")
 
