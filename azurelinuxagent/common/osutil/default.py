@@ -48,8 +48,7 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
-
-from azurelinuxagent.pa.provision.factory import cloud_init_should_do_provisioning
+from azurelinuxagent.pa.provision.cloudinitdetect import cloud_init_is_enabled
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
                    "/etc/udev/rules.d/70-persistent-net.rules"]
@@ -1325,8 +1324,18 @@ class DefaultOSUtil(object):
         logger.info("Retrieving hostname using socket.gethostname()")
         return socket.gethostname()
 
+    def provisioned_by_cloud_init(self):
+        provisioning_agent = conf.get_provisioning_agent()
+
+        if provisioning_agent == 'cloud-init' or (
+                provisioning_agent == 'auto' and
+                cloud_init_is_enabled()):
+            return True
+
+        return False
+
     def get_hostname_record(self):
-        provisioned_by_cloud_init = cloud_init_should_do_provisioning()
+        provisioned_by_cloud_init = self.provisioned_by_cloud_init()
         hostname_record = conf.get_published_hostname()
 
         if provisioned_by_cloud_init:
