@@ -38,7 +38,6 @@ import array
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils import textutil
@@ -1337,24 +1336,18 @@ class DefaultOSUtil(object):
 
             if not os.path.exists(hostname_record):
                 # Create published hostname record with hostname provided by cloud-init
-                msg = "Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(hostname_record, hostname)
-                logger.info(msg)
-                add_event(op=WALAEventOperation.HostnameMonitoring, message=msg)
+                logger.info("Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(hostname_record, hostname))
 
             self.set_hostname_record(hostname)
         else:
             # Provisioning was done by the agent, so a published hostname record should exist. If not, log a warning
             # and get hostname from socket
             if not os.path.exists(hostname_record):
-                msg = "Provisioning was done by the agent, but the published hostname record does not exist"
-                logger.warn(msg)
-                add_event(op=WALAEventOperation.HostnameMonitoring, is_success=False, message=msg)
+                logger.warn("Provisioning was done by the agent, but the published hostname record does not exist")
 
                 hostname = self.get_hostname_from_socket()
-                msg = "Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(
-                    hostname_record, hostname)
-                logger.info(msg)
-                add_event(op=WALAEventOperation.HostnameMonitoring, message=msg)
+                logger.info("Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(
+                    hostname_record, hostname))
                 self.set_hostname_record(hostname)
 
         record = fileutil.read_file(hostname_record)
@@ -1385,9 +1378,7 @@ class DefaultOSUtil(object):
                 with open(hostname_file, 'w') as file_:
                     file_.write(json.dumps(hostname_info))
         except Exception as exception:
-            msg = "Error updating cloud-init hostname record: {0}".format(ustr(exception))
-            logger.warn(msg)
-            add_event(op=WALAEventOperation.HostnameMonitoring, is_success=False, message=msg)
+            logger.warn("Error updating cloud-init hostname record: {0}".format(ustr(exception)))
         return None
 
     def _get_cloud_init_hostname(self):
@@ -1413,9 +1404,7 @@ class DefaultOSUtil(object):
                 if "hostname" in hostname_info:
                     return hostname_info["hostname"]
         except Exception as exception:
-            msg = "Error retrieving hostname from cloud-init: {0}".format(ustr(exception))
-            logger.warn(msg)
-            add_event(op=WALAEventOperation.HostnameMonitoring, is_success=False, message=msg)
+            logger.warn("Error retrieving hostname from cloud-init: {0}".format(ustr(exception)))
         return None
 
     def del_account(self, username):
