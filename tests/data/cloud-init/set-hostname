@@ -1,1 +1,4 @@
-{"fqdn": "a-sample-set-hostname.domain.com", "hostname": "a-sample-set-hostname"}
+{
+ "fqdn": "a-sample-set-hostname.domain.com",
+ "hostname": "a-sample-set-hostname"
+}
