@@ -53,11 +53,4 @@ steps:
             --output json \
             --query value \
           | jq --arg date "$date" '.[] | select (.createdTime < $date).name | match("'${pattern}'"; "g").string' \
-          | xargs -l -t -r az group delete --subscription "${subscription_id}" --no-wait -y -n \
-          | tee deleted
-
-          if [ ! -s deleted ]
-          then
-            echo "No resource groups found to delete"
-          fi
-
+          | xargs -l -t -r az group delete --subscription "${subscription_id}" --no-wait -y -n
