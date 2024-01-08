@@ -1086,7 +1086,7 @@ class TestGetPublishedHostname(AgentTestCase):
             return file_.read()
 
     def test_get_hostname_record_should_create_published_hostname(self):
-        actual = osutil.DefaultOSUtil().get_hostname_record()
+        actual = osutil.DefaultOSUtil().get_hostname_record(provisioned_by_cloud_init=True)
 
         expected = socket.gethostname()
         self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
