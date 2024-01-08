@@ -33,6 +33,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
+from azurelinuxagent.pa.provision.factory import cloud_init_should_provision
 
 CACHE_PATTERNS = [
     re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),  # pylint: disable=W1401
@@ -162,7 +163,7 @@ class MonitorHostNameChanges(PeriodicOperation):
     def __init__(self, osutil):
         super(MonitorHostNameChanges, self).__init__(conf.get_monitor_hostname_period())
         self._osutil = osutil
-        self._hostname = self._osutil.get_hostname_record()
+        self._hostname = self._osutil.get_hostname_record(provisioned_by_cloud_init=cloud_init_should_provision())
 
     def _operation(self):
         curr_hostname = socket.gethostname()
