@@ -1335,14 +1335,12 @@ class DefaultOSUtil(object):
             if not os.path.exists(hostname_record):
                 # Create published hostname record with hostname provided by cloud-init
                 logger.info('Published hostname record does not exist, creating [{0}] with hostname [{1}]', hostname_record, hostname)
-
             self.set_hostname_record(hostname)
         else:
             # Older agents (but newer or equal to 2.2.3) create published_hostname record during provisioning; If the
             # record does not exist, log a warning and get hostname from socket
             if not os.path.exists(hostname_record):
                 logger.warn("Provisioning was done by the agent, but the published hostname record does not exist")
-
                 hostname = self.get_hostname_from_socket()
                 logger.info('Published hostname record does not exist, creating [{0}] with hostname [{1}]', hostname_record, hostname)
                 self.set_hostname_record(hostname)
