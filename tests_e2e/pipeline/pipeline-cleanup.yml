@@ -56,4 +56,8 @@ steps:
           | xargs -l -t -r az group delete --subscription "${subscription_id}" --no-wait -y -n \
           | tee deleted
 
-          [ -s deleted ] || echo "No resource groups found to delete"
+          if [ ! -s deleted ]
+          then
+            echo "No resource groups found to delete"
+          fi
+
