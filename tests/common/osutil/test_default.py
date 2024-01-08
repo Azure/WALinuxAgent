@@ -1094,22 +1094,33 @@ class TestGetPublishedHostname(AgentTestCase):
         self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
 
     def test_get_hostname_record_should_use_existing_published_hostname(self):
-        expected = "a-sample-hostname-used-for-testing"
-        with open(self.__published_hostname, "w") as file_:
-            file_.write(expected)
+        with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.provisioned_by_cloud_init", return_value=False):
+            expected = "a-sample-hostname-used-for-testing"
+            with open(self.__published_hostname, "w") as file_:
+                file_.write(expected)
 
-        actual = osutil.DefaultOSUtil().get_hostname_record()
+            # If provisioning is done by the agent, get_hostname_record should return the record from the published
+            # hostname record, regardless of if a cloud-init file exists
+            with MockEnvironment(self.tmp_dir, files=[
+                ('/var/lib/cloud/data/set-hostname', os.path.join(data_dir, "cloud-init", "set-hostname"))]):
+                actual = osutil.DefaultOSUtil().get_hostname_record()
 
-        self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
-        self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+            self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
+            self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
 
     def test_get_hostname_record_should_initialize_the_host_name_using_cloud_init_info(self):
-        with MockEnvironment(self.tmp_dir, files=[('/var/lib/cloud/data/set-hostname', os.path.join(data_dir, "cloud-init", "set-hostname"))]):
-            actual = osutil.DefaultOSUtil().get_hostname_record()
+        with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.provisioned_by_cloud_init", return_value=True):
+            # If provisioning is done by cloud-init, get_hostname_record should return the record from the cloud-init
+            # file, regardless of if a published hostname record already exists.
+            with open(self.__published_hostname, "w") as file_:
+                file_.write("a-sample-hostname-used-for-testing")
 
-        expected = "a-sample-set-hostname"
-        self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
-        self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+            with MockEnvironment(self.tmp_dir, files=[('/var/lib/cloud/data/set-hostname', os.path.join(data_dir, "cloud-init", "set-hostname"))]):
+                actual = osutil.DefaultOSUtil().get_hostname_record()
+
+            expected = "a-sample-set-hostname"
+            self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
+            self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
 
 
 if __name__ == '__main__':
