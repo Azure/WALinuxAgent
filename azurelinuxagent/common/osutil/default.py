@@ -1336,7 +1336,7 @@ class DefaultOSUtil(object):
 
             if not os.path.exists(hostname_record):
                 # Create published hostname record with hostname provided by cloud-init
-                logger.info("Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(hostname_record, hostname))
+                logger.info('Published hostname record does not exist, creating [{0}] with hostname [{1}]', hostname_record, hostname)
 
             self.set_hostname_record(hostname)
         else:
@@ -1346,8 +1346,7 @@ class DefaultOSUtil(object):
                 logger.warn("Provisioning was done by the agent, but the published hostname record does not exist")
 
                 hostname = self.get_hostname_from_socket()
-                logger.info("Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(
-                    hostname_record, hostname))
+                logger.info('Published hostname record does not exist, creating [{0}] with hostname [{1}]', hostname_record, hostname)
                 self.set_hostname_record(hostname)
 
         record = fileutil.read_file(hostname_record)
@@ -1404,7 +1403,7 @@ class DefaultOSUtil(object):
                 if "hostname" in hostname_info:
                     return hostname_info["hostname"]
         except Exception as exception:
-            logger.warn("Error retrieving hostname from cloud-init: {0}".format(ustr(exception)))
+            logger.warn("Error retrieving hostname from cloud-init: {0}", ustr(exception))
         return None
 
     def del_account(self, username):
