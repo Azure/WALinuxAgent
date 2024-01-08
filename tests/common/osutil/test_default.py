@@ -1085,12 +1085,29 @@ class TestGetPublishedHostname(AgentTestCase):
         with open(self.__published_hostname, "r") as file_:
             return file_.read()
 
-    def test_get_hostname_record_should_create_published_hostname(self):
+    def test_get_hostname_record_should_create_published_hostname_when_cloud_init_provisioned(self):
         actual = osutil.DefaultOSUtil().get_hostname_record(provisioned_by_cloud_init=True)
 
         expected = socket.gethostname()
         self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
         self.assertTrue(os.path.exists(self.__published_hostname), "The published_hostname file was not created")
+        self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+
+    def test_get_hostname_record_should_create_published_hostname_if_missing_when_agent_provisioned(self):
+        actual = osutil.DefaultOSUtil().get_hostname_record(provisioned_by_cloud_init=False)
+
+        expected = socket.gethostname()
+        self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
+        self.assertTrue(os.path.exists(self.__published_hostname), "The published_hostname file was not created")
+        self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+
+    def test_get_hostname_record_should_use_socket_if_set_hostname_is_invalid(self):
+        with MockEnvironment(self.tmp_dir, files=[
+            ('/var/lib/cloud/data/set-hostname', os.path.join(data_dir, "cloud-init", "set-hostname-no-hostname"))]):
+            actual = osutil.DefaultOSUtil().get_hostname_record(provisioned_by_cloud_init=True)
+
+        expected = socket.gethostname()
+        self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
         self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
 
     def test_get_hostname_record_should_use_existing_published_hostname(self):
