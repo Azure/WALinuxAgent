@@ -38,6 +38,7 @@ import array
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils import textutil
@@ -48,6 +49,8 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard, AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
+
+from azurelinuxagent.pa.provision.factory import cloud_init_should_do_provisioning
 
 __RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
                    "/etc/udev/rules.d/70-persistent-net.rules"]
@@ -1313,28 +1316,86 @@ class DefaultOSUtil(object):
 
     def set_hostname_record(self, hostname):
         fileutil.write_file(conf.get_published_hostname(), contents=hostname)
+        # If cloud init hostname file exists, update the file with the hostname. During service initialization, if
+        # provisioning was done by cloud-init the hostname will be set to whatever value is in the cloud init hostname
+        # file, so we should keep it updated with each hostname change.
+        if os.path.exists(self._get_cloud_init_hostname_path()):
+            self._set_cloud_init_hostname(hostname)
+
+    def get_hostname_from_socket(self):
+        logger.info("Retrieving hostname using socket.gethostname()")
+        return socket.gethostname()
 
     def get_hostname_record(self):
+        provisioned_by_cloud_init = cloud_init_should_do_provisioning()
         hostname_record = conf.get_published_hostname()
-        if not os.path.exists(hostname_record):
-            # older agents (but newer or equal to 2.2.3) create published_hostname during provisioning; when provisioning is done
-            # by cloud-init the hostname is written to set-hostname
+
+        if provisioned_by_cloud_init:
             hostname = self._get_cloud_init_hostname()
             if hostname is None:
-                logger.info("Retrieving hostname using socket.gethostname()")
-                hostname = socket.gethostname()
-            logger.info('Published hostname record does not exist, creating [{0}] with hostname [{1}]', hostname_record, hostname)
+                hostname = self.get_hostname_from_socket()
+
+            if not os.path.exists(hostname_record):
+                # Create published hostname record with hostname provided by cloud-init
+                msg = "Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(hostname_record, hostname)
+                logger.info(msg)
+                add_event(op=WALAEventOperation.HostnameMonitoring, message=msg)
+
             self.set_hostname_record(hostname)
+        else:
+            # Provisioning was done by the agent, so a published hostname record should exist. If not, log a warning
+            # and get hostname from socket
+            if not os.path.exists(hostname_record):
+                msg = "Provisioning was done by the agent, but the published hostname record does not exist"
+                logger.warn(msg)
+                add_event(op=WALAEventOperation.HostnameMonitoring, is_success=False, message=msg)
+
+                hostname = self.get_hostname_from_socket()
+                msg = "Published hostname record does not exist, creating [{0}] with hostname [{1}]".format(
+                    hostname_record, hostname)
+                logger.info(msg)
+                add_event(op=WALAEventOperation.HostnameMonitoring, message=msg)
+                self.set_hostname_record(hostname)
+
         record = fileutil.read_file(hostname_record)
         return record
 
     @staticmethod
-    def _get_cloud_init_hostname():
+    def _get_cloud_init_hostname_path():
+        return '/var/lib/cloud/data/set-hostname'
+
+    def _set_cloud_init_hostname(self, hostname):
+        hostname_file = self._get_cloud_init_hostname_path()
+        try:
+            if os.path.exists(hostname_file):
+                #
+                # The format is similar to
+                #
+                #     $ cat /var/lib/cloud/data/set-hostname
+                #     {
+                #      "fqdn": "nam-u18",
+                #      "hostname": "nam-u18"
+                #     }
+                #
+                logger.info("Updating hostname in {0}", hostname_file)
+                with open(hostname_file, 'r') as file_:
+                    hostname_info = json.load(file_)
+                    hostname_info["hostname"] = hostname
+
+                with open(hostname_file, 'w') as file_:
+                    file_.write(json.dumps(hostname_info))
+        except Exception as exception:
+            msg = "Error updating cloud-init hostname record: {0}".format(ustr(exception))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.HostnameMonitoring, is_success=False, message=msg)
+        return None
+
+    def _get_cloud_init_hostname(self):
         """
         Retrieves the hostname set by cloud-init; returns None if cloud-init did not set the hostname or if there is an
         error retrieving it.
         """
-        hostname_file = '/var/lib/cloud/data/set-hostname'
+        hostname_file = self._get_cloud_init_hostname_path()
         try:
             if os.path.exists(hostname_file):
                 #
@@ -1352,7 +1413,9 @@ class DefaultOSUtil(object):
                 if "hostname" in hostname_info:
                     return hostname_info["hostname"]
         except Exception as exception:
-            logger.warn("Error retrieving hostname: {0}", ustr(exception))
+            msg = "Error retrieving hostname from cloud-init: {0}".format(ustr(exception))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.HostnameMonitoring, is_success=False, message=msg)
         return None
 
     def del_account(self, username):

@@ -23,15 +23,23 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
 from .default import ProvisionHandler
 from .cloudinit import CloudInitProvisionHandler, cloud_init_is_enabled
 
-def get_provision_handler(distro_name=DISTRO_NAME,  # pylint: disable=W0613
-                            distro_version=DISTRO_VERSION,  # pylint: disable=W0613
-                            distro_full_name=DISTRO_FULL_NAME):  # pylint: disable=W0613
 
+def cloud_init_should_do_provisioning():
     provisioning_agent = conf.get_provisioning_agent()
 
     if provisioning_agent == 'cloud-init' or (
             provisioning_agent == 'auto' and
             cloud_init_is_enabled()):
+        return True
+
+    return False
+
+
+def get_provision_handler(distro_name=DISTRO_NAME,  # pylint: disable=W0613
+                            distro_version=DISTRO_VERSION,  # pylint: disable=W0613
+                            distro_full_name=DISTRO_FULL_NAME):  # pylint: disable=W0613
+
+    if cloud_init_should_do_provisioning():
         logger.info('Using cloud-init for provisioning')
         return CloudInitProvisionHandler()
 
