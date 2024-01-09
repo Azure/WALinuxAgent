@@ -45,12 +45,12 @@ steps:
 
           rest_endpoint=$(az cloud show --query "endpoints.resourceManager" -o tsv)
           
+          pattern="${{ parameters.name_pattern }}"
+          
           az rest --method GET \
             --url "${rest_endpoint}/subscriptions/${subscription_id}/resourcegroups" \
             --url-parameters api-version=2021-04-01 \$expand=createdTime \
             --output json \
             --query value \
-          | jq --arg date "$date" '.[] | select (.createdTime < $date).name' \
-          | grep -i '${{ parameters.name_pattern }}' \
-          | xargs -l -t -r az group delete --no-wait -y -n \
-          || echo "No resource groups found to delete"
+          | jq --arg date "$date" '.[] | select (.createdTime < $date).name | match("'${pattern}'"; "g").string' \
+          | xargs -l -t -r az group delete --subscription "${subscription_id}" --no-wait -y -n
