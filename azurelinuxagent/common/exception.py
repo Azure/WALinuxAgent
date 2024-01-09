@@ -80,8 +80,9 @@ class AgentUpdateError(AgentError):
     When agent failed to update.
     """
 
-    def __init__(self, msg=None, inner=None):
+    def __init__(self, msg=None, inner=None, log_error=True):
         super(AgentUpdateError, self).__init__(msg, inner)
+        self.log_error = log_error
 
 
 class CGroupsException(AgentError):

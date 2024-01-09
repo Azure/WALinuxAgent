@@ -30,14 +30,6 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN
 from azurelinuxagent.ga.guestagent import GuestAgent
 
 
-class RSMUpdates(object):
-    """
-    Enum for switching between RSM updates and self updates
-    """
-    Enabled = "Enabled"
-    Disabled = "Disabled"
-
-
 class GAVersionUpdater(object):
 
     def __init__(self, gs_id):
@@ -53,15 +45,14 @@ class GAVersionUpdater(object):
         """
         raise NotImplementedError
 
-    def check_and_switch_updater_if_changed(self, agent_family, gs_id, ext_gs_updated):
+    def is_gs_requested_rsm_update(self, agent_family, gs_id, ext_gs_updated):
         """
-        checks and raise the updater exception if we need to switch to self-update from rsm update or vice versa
+        return True if we need to switch to RSM-update from self-update and vice versa.
         @param agent_family: agent family
         @param gs_id: incarnation of the goal state
         @param ext_gs_updated: True if extension goal state updated else False
-        @return: RSMUpdates.Disabled: return when agent need to stop rsm updates and switch to self-update
-                 RSMUpdates.Enabled: return when agent need to switch to rsm update
-                 None: return when no need to switch
+        @return: False when agent need to stop rsm updates
+                 True: when agent need to switch to rsm update
         """
         raise NotImplementedError
 

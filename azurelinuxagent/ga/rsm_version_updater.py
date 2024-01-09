@@ -24,7 +24,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME
-from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater, RSMUpdates
+from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater
 from azurelinuxagent.ga.guestagent import GuestAgent
 
 
@@ -49,24 +49,24 @@ class RSMVersionUpdater(GAVersionUpdater):
         """
         return ext_gs_updated
 
-    def check_and_switch_updater_if_changed(self, agent_family, gs_id, ext_gs_updated):
+    def is_gs_requested_rsm_update(self, agent_family, gs_id, ext_gs_updated):
         """
         Checks if there is a new goal state and decide if we need to continue with rsm update or switch to self-update.
-        Firstly it checks agent supports GA versioning or not. If not, we return rsm updates disabled to switch to self-update.
-        if vm is enabled for RSM updates and continue with rsm update, otherwise we return rsm updates disabled to switch to self-update.
+        Firstly it checks agent supports GA versioning or not. If not, we return false to switch to self-update.
+        if vm is enabled for RSM updates and continue with rsm update, otherwise we return false to switch to self-update.
         if either isVersionFromRSM or isVMEnabledForRSMUpgrades or version is missing in the goal state, we ignore the update as we consider it as invalid goal state.
         """
         if ext_gs_updated:
             self._gs_id = gs_id
             if not conf.get_enable_ga_versioning():
-                return RSMUpdates.Disabled
+                return False
 
             if agent_family.is_vm_enabled_for_rsm_upgrades is None:
                 raise AgentUpdateError(
                     "Received invalid goal state:{0}, missing isVMEnabledForRSMUpgrades property. So, skipping agent update".format(
                         self._gs_id))
             elif not agent_family.is_vm_enabled_for_rsm_upgrades:
-                return RSMUpdates.Disabled
+                return False
             else:
                 if agent_family.is_version_from_rsm is None:
                     raise AgentUpdateError(
@@ -77,7 +77,7 @@ class RSMVersionUpdater(GAVersionUpdater):
                         "Received invalid goal state:{0}, missing version property. So, skipping agent update".format(
                             self._gs_id))
 
-        return None
+        return True
 
     def retrieve_agent_version(self, agent_family, goal_state):
         """

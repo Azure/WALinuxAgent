@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-import datetime
 import os
 
 from azurelinuxagent.common import conf, logger
@@ -26,7 +25,6 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAge
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import get_daemon_version
-from azurelinuxagent.ga.ga_version_updater import RSMUpdates
 from azurelinuxagent.ga.rsm_version_updater import RSMVersionUpdater
 from azurelinuxagent.ga.self_update_version_updater import SelfUpdateVersionUpdater
 
@@ -67,7 +65,7 @@ class AgentUpdateHandler(object):
 
         # restore the state of rsm update. Default to self-update if last update is not with RSM.
         if not self._get_is_last_update_with_rsm():
-            self._updater = SelfUpdateVersionUpdater(self._gs_id, datetime.datetime.min)
+            self._updater = SelfUpdateVersionUpdater(self._gs_id)
         else:
             self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version)
 
@@ -113,11 +111,11 @@ class AgentUpdateHandler(object):
         """
         return os.path.exists(self._get_rsm_update_state_file())
 
-    def _get_agent_family_manifest(self, goal_state):
+    def _get_agent_family_manifest(self, goal_state, ext_gs_updated):
         """
         Get the agent_family from last GS for the given family
         Returns: first entry of Manifest
-                 Exception if no manifests found in the last GS
+                 Exception if no manifests found in the last GS and log it only on new goal state
         """
         family = self._ga_family_type
         agent_families = goal_state.extensions_goal_state.agent_families
@@ -130,12 +128,12 @@ class AgentUpdateHandler(object):
                     agent_family_manifests.append(m)
 
         if not family_found:
-            raise AgentUpdateError(u"Agent family: {0} not found in the goal state: {1}, skipping agent update".format(family, self._gs_id))
+            raise AgentUpdateError(u"Agent family: {0} not found in the goal state: {1}, skipping agent update".format(family, self._gs_id), log_error=ext_gs_updated)
 
         if len(agent_family_manifests) == 0:
             raise AgentUpdateError(
                 u"No manifest links found for agent family: {0} for goal state: {1}, skipping agent update".format(
-                    family, self._gs_id))
+                    family, self._gs_id), log_error=ext_gs_updated)
         return agent_family_manifests[0]
 
     def run(self, goal_state, ext_gs_updated):
@@ -145,29 +143,33 @@ class AgentUpdateHandler(object):
             if not conf.get_autoupdate_enabled() or not conf.get_download_new_agents():
                 return
 
-            # verify if agent update is allowed this time (RSM checks new goal state; self-update checks manifest download interval)
-            if not self._updater.is_update_allowed_this_time(ext_gs_updated):
-                return
-
             self._gs_id = goal_state.extensions_goal_state.id
-            agent_family = self._get_agent_family_manifest(goal_state)
+            agent_family = self._get_agent_family_manifest(goal_state, ext_gs_updated)
 
-            # updater will return RSM enabled or disabled if we need to switch to self-update or rsm update
-            updater_mode = self._updater.check_and_switch_updater_if_changed(agent_family, self._gs_id, ext_gs_updated)
+            # updater will return True or False if we need to switch the updater
+            # If self-update receives RSM update request, it will switch to RSM updater
+            # if RSM updater stopped receiving RSM request, it will switch to self-update
+            # No change in updater if GS not updated
+            switch_to_rsm_updater = self._updater.is_gs_requested_rsm_update(agent_family, self._gs_id, ext_gs_updated)
 
-            if updater_mode == RSMUpdates.Disabled:
+            if not switch_to_rsm_updater and isinstance(self._updater, RSMVersionUpdater):
                 msg = "VM not enabled for RSM updates, switching to self-update mode"
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
-                self._updater = SelfUpdateVersionUpdater(self._gs_id, datetime.datetime.now())
+                self._updater = SelfUpdateVersionUpdater(self._gs_id)
                 self._remove_rsm_update_state()
 
-            if updater_mode == RSMUpdates.Enabled:
+            if switch_to_rsm_updater and isinstance(self._updater, SelfUpdateVersionUpdater):
                 msg = "VM enabled for RSM updates, switching to RSM update mode"
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
                 self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version)
                 self._save_rsm_update_state()
+
+            # If updater is changed in previous step, we allow update as it consider as first attempt. If not, it checks below condition
+            # RSM checks new goal state; self-update checks manifest download interval
+            if not self._updater.is_update_allowed_this_time(ext_gs_updated):
+                return
 
             self._updater.retrieve_agent_version(agent_family, goal_state)
 
@@ -183,14 +185,17 @@ class AgentUpdateHandler(object):
             self._updater.proceed_with_update()
 
         except Exception as err:
+            log_error = True
             if isinstance(err, AgentUpgradeExitException):
                 raise err
             elif isinstance(err, AgentUpdateError):
+                log_error = err.log_error
                 error_msg = ustr(err)
             else:
                 error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
-            logger.warn(error_msg)
-            add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=error_msg, log_event=False)
+            if log_error:
+                logger.warn(error_msg)
+                add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=error_msg, log_event=False)
             self._last_attempted_update_error_msg = error_msg
 
     def get_vmagent_update_status(self):

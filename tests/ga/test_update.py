@@ -1784,13 +1784,14 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
                              "New agent directory should not be found")
 
-    def test_it_should_skip_wait_to_update_if_rsm_version_available(self):
+    def test_it_should_skip_wait_to_update_immediately_if_rsm_version_available(self):
         no_of_iterations = 100
 
         def reload_conf(url, protocol):
             mock_wire_data = protocol.mock_wire_data
 
             # This function reloads the conf mid-run to mimic an actual customer scenario
+            # Setting the rsm request to be sent after some iterations
             if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts["goalstate"] >= 5:
                 reload_conf.call_count += 1
 
@@ -1808,7 +1809,8 @@ class TestAgentUpgrade(UpdateTestCase):
 
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
-        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
+        # Setting the prod frequency to mimic a real scenario
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf, autoupdate_frequency=6000) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_ga_manifest_version_version(str(CURRENT_VERSION))
             update_handler._protocol.mock_wire_data.set_incarnation(20)
             update_handler.run(debug=True)
