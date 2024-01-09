@@ -189,7 +189,7 @@ class AgentUpdateHandler(object):
             if isinstance(err, AgentUpgradeExitException):
                 raise err
             elif isinstance(err, AgentUpdateError):
-                log_error = err.log_error
+                log_error = err.log_error  # pylint: disable=no-member
                 error_msg = ustr(err)
             else:
                 error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
