@@ -146,9 +146,9 @@ class AgentUpdateHandler(object):
             self._gs_id = goal_state.extensions_goal_state.id
             agent_family = self._get_agent_family_manifest(goal_state, ext_gs_updated)
 
-            # updater will return True or False if we need to switch the updater
+            # Updater will return True or False if we need to switch the updater
             # If self-update receives RSM update request, it will switch to RSM updater
-            # if RSM updater stopped receiving RSM request, it will switch to self-update
+            # If RSM updater stopped receiving RSM request, it will switch to self-update
             # No change in updater if GS not updated
             switch_to_rsm_updater = self._updater.is_gs_requested_rsm_update(agent_family, self._gs_id, ext_gs_updated)
 
