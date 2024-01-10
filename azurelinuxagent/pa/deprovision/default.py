@@ -159,7 +159,8 @@ class DeprovisionHandler(object):
             'Protocol',
             'SharedConfig.xml',
             'WireServerEndpoint',
-            'published_hostname'
+            'published_hostname',
+            'fast_track.json'
         ]
         known_files_glob = [
             'Extensions.*.xml',
