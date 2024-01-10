@@ -24,10 +24,10 @@
 # restart which caused the primary interface to go down.
 #
 
+import datetime
 import re
 
 from assertpy import fail
-from datetime import datetime
 from time import sleep
 
 from tests_e2e.tests.lib.shell import CommandError
@@ -43,7 +43,7 @@ class PublishHostname(AgentVmTest):
         self._ssh_client = context.create_ssh_client()
         self._private_ip = context.vm.get_private_ip_address()
         self._vm_password = ""
-        self._scenario_start = datetime.now()
+        self._scenario_start = datetime.datetime.now()
 
     def add_vm_password(self):
         # Add password to VM to help with debugging in case of failure
