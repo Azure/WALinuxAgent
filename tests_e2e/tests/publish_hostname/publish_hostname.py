@@ -24,10 +24,10 @@
 # restart which caused the primary interface to go down.
 #
 
-import datetime
 import re
 
 from assertpy import fail
+from datetime import datetime
 from time import sleep
 
 from tests_e2e.tests.lib.shell import CommandError
