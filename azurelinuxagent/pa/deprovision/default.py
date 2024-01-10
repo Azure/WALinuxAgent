@@ -161,7 +161,8 @@ class DeprovisionHandler(object):
             'WireServerEndpoint',
             'published_hostname',
             'fast_track.json',
-            'initial_goal_state'
+            'initial_goal_state',
+            'rsm_update.json'
         ]
         known_files_glob = [
             'Extensions.*.xml',
