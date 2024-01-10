@@ -1051,7 +1051,7 @@ class ExtHandlerInstance(object):
 
     def __set_command_execution_log(self, extension, execution_log_max_size):
         try:
-            fileutil.mkdir(self.get_log_dir(), mode=0o755)
+            fileutil.mkdir(self.get_log_dir(), mode=0o755, reset_mode_and_owner=False)
         except IOError as e:
             self.logger.error(u"Failed to create extension log dir: {0}", e)
         else:

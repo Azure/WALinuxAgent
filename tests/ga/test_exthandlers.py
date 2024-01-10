@@ -287,6 +287,28 @@ class TestExtHandlers(AgentTestCase):
         with open(log_file_path) as truncated_log_file:
             self.assertEqual(truncated_log_file.read(), "{second_line}\n".format(second_line=second_line))
 
+    def test_set_logger_should_not_reset_the_mode_of_the_log_directory(self):
+        ext_log_dir = os.path.join(self.tmp_dir, "log_directory")
+
+        with patch("azurelinuxagent.common.conf.get_ext_log_dir", return_value=ext_log_dir):
+            ext_handler = Extension(name='foo')
+            ext_handler.version = "1.2.3"
+            ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+            ext_handler_log_dir = os.path.join(ext_log_dir, ext_handler.name)
+
+            # Double-check the initial mode
+            get_mode = lambda f: os.stat(f).st_mode & 0o777
+            mode = get_mode(ext_handler_log_dir)
+            if mode != 0o755:
+                raise Exception("The initial mode of the log directory should be 0o755, got 0{0:o}".format(mode))
+
+            new_mode = 0o700
+            os.chmod(ext_handler_log_dir, new_mode)
+            ext_handler_instance.set_logger()
+
+            mode = get_mode(ext_handler_log_dir)
+            self.assertEqual(new_mode, mode, "The mode of the log directory should not have changed")
+
     def test_it_should_report_the_message_in_the_hearbeat(self):
         def heartbeat_with_message():
             return {'code': 0, 'formattedMessage': {'lang': 'en-US', 'message': 'This is a heartbeat message'},
