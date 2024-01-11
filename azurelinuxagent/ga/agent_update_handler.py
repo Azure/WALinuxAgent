@@ -128,11 +128,13 @@ class AgentUpdateHandler(object):
                     agent_family_manifests.append(m)
 
         if not family_found:
-            raise AgentFamilyMissingError(u"Agent family: {0} not found in the goal state: {1}, skipping agent update".format(family, self._gs_id))
+            raise AgentFamilyMissingError(u"Agent family: {0} not found in the goal state: {1}, skipping agent update \n"
+                                          u"[Note: This error is permanent for this goal state and Will not log same error until we receive new goal state]".format(family, self._gs_id))
 
         if len(agent_family_manifests) == 0:
             raise AgentFamilyMissingError(
-                u"No manifest links found for agent family: {0} for goal state: {1}, skipping agent update".format(
+                u"No manifest links found for agent family: {0} for goal state: {1}, skipping agent update \n"
+                u"[Note: This error is permanent for this goal state and will not log same error until we receive new goal state]".format(
                     family, self._gs_id))
         return agent_family_manifests[0]
 
