@@ -19,7 +19,7 @@ import os
 
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError
+from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpdateError, AgentFamilyMissingError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses, VMAgentUpdateStatus, VERSION_0
 from azurelinuxagent.common.utils import textutil
@@ -111,7 +111,7 @@ class AgentUpdateHandler(object):
         """
         return os.path.exists(self._get_rsm_update_state_file())
 
-    def _get_agent_family_manifest(self, goal_state, ext_gs_updated):
+    def _get_agent_family_manifest(self, goal_state):
         """
         Get the agent_family from last GS for the given family
         Returns: first entry of Manifest
@@ -128,12 +128,12 @@ class AgentUpdateHandler(object):
                     agent_family_manifests.append(m)
 
         if not family_found:
-            raise AgentUpdateError(u"Agent family: {0} not found in the goal state: {1}, skipping agent update".format(family, self._gs_id), log_error=ext_gs_updated)
+            raise AgentFamilyMissingError(u"Agent family: {0} not found in the goal state: {1}, skipping agent update".format(family, self._gs_id))
 
         if len(agent_family_manifests) == 0:
-            raise AgentUpdateError(
+            raise AgentFamilyMissingError(
                 u"No manifest links found for agent family: {0} for goal state: {1}, skipping agent update".format(
-                    family, self._gs_id), log_error=ext_gs_updated)
+                    family, self._gs_id))
         return agent_family_manifests[0]
 
     def run(self, goal_state, ext_gs_updated):
@@ -143,23 +143,27 @@ class AgentUpdateHandler(object):
             if not conf.get_autoupdate_enabled() or not conf.get_download_new_agents():
                 return
 
-            self._gs_id = goal_state.extensions_goal_state.id
-            agent_family = self._get_agent_family_manifest(goal_state, ext_gs_updated)
+            # Update the state only on new goal state
+            if ext_gs_updated:
+                self._gs_id = goal_state.extensions_goal_state.id
+                self._updater.sync_new_gs_id(self._gs_id)
+
+            agent_family = self._get_agent_family_manifest(goal_state)
 
             # Updater will return True or False if we need to switch the updater
             # If self-update receives RSM update request, it will switch to RSM updater
             # If RSM updater stopped receiving RSM request, it will switch to self-update
             # No change in updater if GS not updated
-            switch_to_rsm_updater = self._updater.is_gs_requested_rsm_update(agent_family, self._gs_id, ext_gs_updated)
+            is_rsm_update_enabled = self._updater.is_rsm_update_enabled(agent_family, ext_gs_updated)
 
-            if not switch_to_rsm_updater and isinstance(self._updater, RSMVersionUpdater):
+            if not is_rsm_update_enabled and isinstance(self._updater, RSMVersionUpdater):
                 msg = "VM not enabled for RSM updates, switching to self-update mode"
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
                 self._updater = SelfUpdateVersionUpdater(self._gs_id)
                 self._remove_rsm_update_state()
 
-            if switch_to_rsm_updater and isinstance(self._updater, SelfUpdateVersionUpdater):
+            if is_rsm_update_enabled and isinstance(self._updater, SelfUpdateVersionUpdater):
                 msg = "VM enabled for RSM updates, switching to RSM update mode"
                 logger.info(msg)
                 add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
@@ -189,8 +193,11 @@ class AgentUpdateHandler(object):
             if isinstance(err, AgentUpgradeExitException):
                 raise err
             elif isinstance(err, AgentUpdateError):
-                log_error = err.log_error  # pylint: disable=no-member
                 error_msg = ustr(err)
+            elif isinstance(err, AgentFamilyMissingError):
+                error_msg = ustr(err)
+                # Agent family missing error is permanent in the given goal state, so we don't want to log it on every iteration of main loop if there is no new goal state
+                log_error = ext_gs_updated
             else:
                 error_msg = "Unable to update Agent: {0}".format(textutil.format_exception(err))
             if log_error:

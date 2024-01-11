@@ -119,14 +119,13 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
             return False
         return True
 
-    def is_gs_requested_rsm_update(self, agent_family, gs_id, ext_gs_updated):
+    def is_rsm_update_enabled(self, agent_family, ext_gs_updated):
         """
         Checks if there is a new goal state and decide if we need to continue with self-update or switch to rsm update.
         if vm is not enabled for RSM updates or agent not supports GA versioning then we continue with self update, otherwise we return true to switch to rsm update.
         if isVersionFromRSM is missing but isVMEnabledForRSMUpgrades is present in the goal state, we ignore the update as we consider it as invalid goal state.
         """
         if ext_gs_updated:
-            self._gs_id = gs_id
             if conf.get_enable_ga_versioning() and agent_family.is_vm_enabled_for_rsm_upgrades is not None and agent_family.is_vm_enabled_for_rsm_upgrades:
                 if agent_family.is_version_from_rsm is None:
                     raise AgentUpdateError(

@@ -45,11 +45,10 @@ class GAVersionUpdater(object):
         """
         raise NotImplementedError
 
-    def is_gs_requested_rsm_update(self, agent_family, gs_id, ext_gs_updated):
+    def is_rsm_update_enabled(self, agent_family, ext_gs_updated):
         """
         return True if we need to switch to RSM-update from self-update and vice versa.
         @param agent_family: agent family
-        @param gs_id: incarnation of the goal state
         @param ext_gs_updated: True if extension goal state updated else False
         @return: False when agent need to stop rsm updates
                  True: when agent need to switch to rsm update
@@ -97,6 +96,13 @@ class GAVersionUpdater(object):
         Return version
         """
         return self._version
+
+    def sync_new_gs_id(self, gs_id):
+        """
+        Update gs_id
+        @param gs_id: goal state id
+        """
+        self._gs_id = gs_id
 
     def download_and_get_new_agent(self, protocol, agent_family, goal_state):
         """
