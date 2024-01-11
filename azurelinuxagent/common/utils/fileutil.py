@@ -99,13 +99,15 @@ def get_line_startingwith(prefix, filepath):
     return None
 
 
-def mkdir(dirpath, mode=None, owner=None):
+def mkdir(dirpath, mode=None, owner=None, reset_mode_and_owner=True):
     if not os.path.isdir(dirpath):
         os.makedirs(dirpath)
-    if mode is not None:
-        chmod(dirpath, mode)
-    if owner is not None:
-        chowner(dirpath, owner)
+        reset_mode_and_owner = True  # force setting the mode and owner
+    if reset_mode_and_owner:
+        if mode is not None:
+            chmod(dirpath, mode)
+        if owner is not None:
+            chowner(dirpath, owner)
 
 
 def chowner(path, owner):

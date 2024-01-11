@@ -158,7 +158,11 @@ class DeprovisionHandler(object):
             'partition',
             'Protocol',
             'SharedConfig.xml',
-            'WireServerEndpoint'
+            'WireServerEndpoint',
+            'published_hostname',
+            'fast_track.json',
+            'initial_goal_state',
+            'rsm_update.json'
         ]
         known_files_glob = [
             'Extensions.*.xml',
