@@ -43,7 +43,6 @@ class PublishHostname(AgentVmTest):
         self._ssh_client = context.create_ssh_client()
         self._private_ip = context.vm.get_private_ip_address()
         self._vm_password = ""
-        self._scenario_start = datetime.datetime.now()
 
     def add_vm_password(self):
         # Add password to VM to help with debugging in case of failure
@@ -202,10 +201,6 @@ class PublishHostname(AgentVmTest):
                 if e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr):
                     self.check_agent_reports_status()
                 raise
-
-    def get_ignore_errors_before_timestamp(self) -> datetime:
-        # Ignore errors in the agent log before the first test case starts
-        return self._scenario_start
 
 
 if __name__ == "__main__":

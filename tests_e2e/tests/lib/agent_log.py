@@ -360,6 +360,23 @@ class AgentLog(object):
                 'message': r"Fetch failed:.*GET.*vmSettings.*timed out",
                 'if': lambda r: r.prefix == 'LogCollector' and self.agent_log_contains("LogCollector Log collection successfully completed", after_timestamp=r.timestamp)
             },
+            #
+            # Ignore TelemetryEventsCollector Warnings which are affecting shared VMs because of events created by the ETP scenario.
+            # TODO: Improve the ETP scenario to ensure all its test events have been processed by the Agent.
+            #
+            #     	2024-01-11T09:39:15.578825Z WARNING TelemetryEventsCollector ExtHandler Dropped events for Extension: Microsoft.OSTCExtensions.VMAccessForLinux; Details:
+            # 			Reason: [InvalidExtensionEventError] EmptyMessageError: Message should not be empty; Dropped Count: 10
+            # 			Reason: [InvalidExtensionEventError] OversizeEventError: max event size allowed: 6144; Dropped Count: 7
+            # 			Reason: [InvalidExtensionEventError] MissingKeyError: eventlevel not found; Dropped Count: 3
+            # 			Reason: [InvalidExtensionEventError] MissingKeyError: eventpid not found; Dropped Count: 2
+            # 			Reason: [InvalidExtensionEventError] MissingKeyError: version not found; Dropped Count: 1
+            # 			Reason: [InvalidExtensionEventError] MissingKeyError: eventtid not found; Dropped Count: 1
+            # 			Reason: [InvalidExtensionEventError] MissingKeyError: taskname not found; Dropped Count: 1
+            #
+            {
+                'message': r"Dropped events for Extension:.*; Details:\s*Reason: \[InvalidExtensionEventError\][\s\S]*",
+                'if': lambda r: r.thread == 'TelemetryEventsCollector'
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
