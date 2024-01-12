@@ -55,6 +55,9 @@ class AgentJUnit(JUnit):
             if "Unexpected error in AgentTestSuite" in message.message:
                 # Ignore these errors, they are already reported as AgentTestResultMessages
                 return
+            if "TestFailedException" in message.message:
+                # Ignore these errors, they are already reported as test failures
+                return
             # Change the suite name to "_Runbook_" for LISA messages in order to separate them
             # from actual test results.
             message.suite_full_name = "_Runbook_"
