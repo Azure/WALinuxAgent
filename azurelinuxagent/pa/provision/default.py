@@ -172,9 +172,11 @@ class ProvisionHandler(object):
         s = fileutil.read_file(ProvisionHandler.provisioned_file_path()).strip()
         if not self.osutil.is_current_instance_id(s):
             if len(s) > 0:
-                logger.warn("VM is provisioned, "
-                            "but the VM unique identifier has changed -- "
-                            "clearing cached state")
+                msg = "VM is provisioned, but the VM unique identifier has changed. This indicates the VM may be " \
+                      "created from an image that was not properly deprovisioned or generalized, which can result in " \
+                      "unexpected behavior from the guest agent -- clearing cached state"
+                logger.warn(msg)
+                self.report_event(msg)
                 from azurelinuxagent.pa.deprovision \
                     import get_deprovision_handler
                 deprovision_handler = get_deprovision_handler()
