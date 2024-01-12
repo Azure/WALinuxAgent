@@ -283,9 +283,27 @@ for managing extensions and reporting VM status. The core functionality of the a
 is contained in the Extension Handler, and we encourage users to enable this option 
 in order to maintain an up to date version.
 
+_Note_: Setting this option to 'n' will not only disable updates to the latest version but also revert the current version of the Extension Handler back to the version that was shipped with the image.
+
 On most distros the default value is 'y'.
 
 For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output).
+
+#### __AutoUpdate.UpdateToLatestVersion__
+
+_Type: Boolean_
+_Default: y_
+
+Enables automatic updates of the Extension Handler to the latest version published by Microsoft.
+If this option is set to 'n', the Extension Handler will remain pinned to the current version that was on the VM, and future updates will not be received.
+We recommend users enable this option to ensure they have the latest version.
+
+_Note_:
+1. Applies only when AutoUpdate.Enabled is set to 'y'.
+2. Switching this option from 'y' to 'n' will not roll back the Extension Handler to the version shipped with the image.
+3. Changing this option requires a service restart to pick up the updated setting.
+4. New VMs created from marketplace images will come with the latest Extension Handler version, regardless of this option.
+5. Waagent has a built-in mechanism; if the current version running is unstable, it will roll back to previous versions. There is a chance that those rollback versions _may_ not support this option, and they will not honor this setting.
 
 #### __Provisioning.Agent__
 
