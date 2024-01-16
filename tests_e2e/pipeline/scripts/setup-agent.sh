@@ -18,7 +18,7 @@
 #
 
 #
-# Script to setup the agent VM for the Azure Pipelines agent pool; it simply installs the Azure CLI and the Docker Engine.
+# Script to setup the agent VM for the Azure Pipelines agent pool; it simply installs the Azure CLI, the Docker Engine and jq.
 #
 
 set -euox pipefail
@@ -48,3 +48,7 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 
 # Verify that Docker Engine is installed correctly by running the hello-world image.
 sudo docker run hello-world
+
+# Install jq; it is used by the cleanup pipeline to parse the JSON output of the Azure CLI
+sudo apt-get install -y jq
+
