@@ -128,6 +128,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwap": False,
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
+    "AutoUpdate.UpdateToLatestVersion": True,
     "EnableOverProvisioning": True,
     #
     # "Debug" options are experimental and may be removed in later
@@ -136,7 +137,6 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
-    "Debug.DownloadNewAgents": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True
@@ -503,15 +503,14 @@ def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
 
 
-def get_download_new_agents(conf=__conf__):
+def get_agent_update_to_latest_version(conf=__conf__):
     """
-    If True, the agent go through update logic to look for new agents to download otherwise it will stop agent updates.
-    NOTE: AutoUpdate.Enabled controls whether the Agent downloads new update and also whether any downloaded updates are started or not, while DownloadNewAgents controls only the former.
-    AutoUpdate.Enabled == false -> Agent preinstalled on the image will process extensions and will not update (regardless of DownloadNewAgents flag)
-    AutoUpdate.Enabled == true and DownloadNewAgents == true, any update already downloaded will be started, and agent look for future updates
-    AutoUpdate.Enabled == true and DownloadNewAgents == false, any update already downloaded will be started, but the agent will not look for future updates
+    If set to True, agent will update to the latest version
+    NOTE:
+        when turned on, both AutoEnabled.Enabled and UpdateToLatestVersion same meaning: update to latest version
+        when turned off, AutoEnabled.Enabled: reverts to pre-installed agent, UpdateToLatestVersion: uses latest version installed on the vm
     """
-    return conf.get_switch("Debug.DownloadNewAgents", True)
+    return conf.get_switch("AutoUpdate.UpdateToLatestVersion", True)
 
 
 def get_cgroup_check_period(conf=__conf__):

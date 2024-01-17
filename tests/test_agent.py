@@ -28,6 +28,7 @@ from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
 EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True
 AutoUpdate.GAFamily = Prod
+AutoUpdate.UpdateToLatestVersion = True
 Autoupdate.Frequency = 3600
 DVD.MountPoint = /mnt/cdrom/secure
 Debug.AgentCpuQuota = 50
@@ -41,7 +42,6 @@ Debug.CgroupDisableOnQuotaCheckFailure = True
 Debug.CgroupLogMetrics = False
 Debug.CgroupMonitorExpiryTime = 2022-03-31
 Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
-Debug.DownloadNewAgents = True
 Debug.EnableAgentMemoryUsageCheck = False
 Debug.EnableFastTrack = True
 Debug.EnableGAVersioning = True

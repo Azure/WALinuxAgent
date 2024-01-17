@@ -459,3 +459,14 @@ class TestAgentUpdate(UpdateTestCase):
                 agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
 
             self.assertFalse(os.path.exists(state_file), "The rsm file should be removed (file: {0})".format(state_file))
+
+    def test_it_should_not_update_to_latest_if_flag_is_disabled(self):
+        self.prepare_agents(count=1)
+
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf.xml"
+        with self._get_agent_update_handler(test_data=data_file) as (agent_update_handler, _):
+            with patch("azurelinuxagent.common.conf.get_agent_update_to_latest_version", return_value=False):
+                agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+
+            self._assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
