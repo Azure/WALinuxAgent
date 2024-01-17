@@ -366,6 +366,16 @@ class TestAgentUpdate(UpdateTestCase):
                                          'message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "Agent manifest should not be in GS")
 
+            # making multiple agent update attempts and assert only one time logged
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), False)
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), False)
+
+            self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                     "No manifest links found for agent family" in kwarg[
+                                         'message'] and kwarg[
+                                         'op'] == WALAEventOperation.AgentUpgrade]),
+                             "Agent manifest error should be logged once if it's same goal state")
+
     def test_it_should_report_update_status_with_success(self):
         data_file = DATA_FILE.copy()
         data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
