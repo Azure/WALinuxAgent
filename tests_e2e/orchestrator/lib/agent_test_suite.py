@@ -621,6 +621,7 @@ class AgentTestSuite(LisaTestSuite):
         suite_name = suite.name
         suite_full_name = f"{suite_name}-{self._environment_name}"
         suite_start_time: datetime.datetime = datetime.datetime.now()
+        check_log_start_time_override = datetime.datetime.max  # tests can override the timestamp for the agent log check with the get_ignore_errors_before_timestamp() method
 
         with set_thread_name(suite_full_name):  # The thread name is added to the LISA log
             log_path: Path = self._log_path / f"{suite_full_name}.log"
@@ -711,7 +712,7 @@ class AgentTestSuite(LisaTestSuite):
                         # Note that if multiple tests in the suite provide an override, we'll use the earliest timestamp.
                         test_check_log_start_time = test_instance.get_ignore_errors_before_timestamp()
                         if test_check_log_start_time != datetime.datetime.min:
-                            check_log_start_time = min(check_log_start_time, test_check_log_start_time)
+                            check_log_start_time_override = min(check_log_start_time_override, test_check_log_start_time)
 
                         if not test_success and test.blocks_suite:
                             log.warning("%s failed and blocks the suite. Stopping suite execution.", test.name)
@@ -738,7 +739,7 @@ class AgentTestSuite(LisaTestSuite):
                         self._mark_log_as_failed()
 
                 next_check_log_start_time = datetime.datetime.utcnow()
-                suite_success = suite_success and self._check_agent_log_on_test_nodes(ignore_error_rules, check_log_start_time)
+                suite_success = suite_success and self._check_agent_log_on_test_nodes(ignore_error_rules, check_log_start_time_override if check_log_start_time_override != datetime.datetime.max else check_log_start_time)
 
                 return suite_success, next_check_log_start_time
 
