@@ -140,6 +140,30 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
         return True
 
+    def check_and_recover_nic_state(self):
+        ifname = self.get_if_name()
+        filepath = "/sys/class/net/{0}/operstate".format(ifname)
+        try:
+            if not os.path.isfile(filepath):
+                logger.warn("Unable to determine primary network interface state, because state file does not exist: "
+                            "{0}".format(filepath))
+            else:
+                content = fileutil.read_file(filepath)
+                if content == "down" or content == "unknown":
+                    logger.warn("The primary network interface {0} is in '{1}' state after being restarted. Restarting "
+                                "the Network Manager service to recover the network interface".format(ifname, content))
+                    self.restart_network_manager()
+                else:
+                    logger.info(
+                        "The primary network interface {0} is in '{1}' state after being restarted.".format(ifname,
+                                                                                                            content))
+        except Exception as e:
+            logger.warn(
+                "Unexpected error whiself.check_and_recover_nic_state()le determining or recovering the primary network interface state".format(e))
+
+    def restart_network_manager(self):
+        shellutil.run("service NetworkManager restart")
+
     def publish_hostname(self, hostname):
         """
         Restart NetworkManager first before publishing hostname, only if the network interface is not controlled by the
@@ -149,8 +173,9 @@ class RedhatOSUtil(Redhat6xOSUtil):
         simultaneously.
         """
         if not self.get_nm_controlled():
-            shellutil.run("service NetworkManager restart")
+            self.restart_network_manager()
         super(RedhatOSUtil, self).publish_hostname(hostname)
+        self.check_and_recover_nic_state()
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
