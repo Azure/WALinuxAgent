@@ -573,10 +573,12 @@ class AgentTestSuite(LisaTestSuite):
                                 test_suite_success = False
                                 raise
 
+                        check_log_start_time = datetime.datetime.min
+
                         for suite in self._test_suites:
                             log.info("Executing test suite %s", suite.name)
                             self._lisa_log.info("Executing Test Suite %s", suite.name)
-                            case_success = self._execute_test_suite(suite, test_context)
+                            case_success, check_log_start_time = self._execute_test_suite(suite, test_context, check_log_start_time)
                             test_suite_success = case_success and test_suite_success
                             if not case_success:
                                 failed_cases.append(suite.name)
@@ -611,13 +613,15 @@ class AgentTestSuite(LisaTestSuite):
                     if not test_suite_success or unexpected_error:
                         raise TestFailedException(self._environment_name, failed_cases)
 
-    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext) -> bool:
+    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext, check_log_start_time: datetime.datetime) -> Tuple[bool, datetime.datetime]:
         """
-        Executes the given test suite and returns True if all the tests in the suite succeeded.
+        Executes the given test suite and returns a tuple of a bool indicating whether all the tests in the suite succeeded, and the timestamp that should be used
+        for the next check of the agent log.
         """
         suite_name = suite.name
         suite_full_name = f"{suite_name}-{self._environment_name}"
         suite_start_time: datetime.datetime = datetime.datetime.now()
+        check_log_start_time_override = datetime.datetime.max  # tests can override the timestamp for the agent log check with the get_ignore_errors_before_timestamp() method
 
         with set_thread_name(suite_full_name):  # The thread name is added to the LISA log
             log_path: Path = self._log_path / f"{suite_full_name}.log"
@@ -631,7 +635,6 @@ class AgentTestSuite(LisaTestSuite):
 
                     summary: List[str] = []
                     ignore_error_rules: List[Dict[str, Any]] = []
-                    before_timestamp = datetime.datetime.min
 
                     for test in suite.tests:
                         test_full_name = f"{suite_name}-{test.name}"
@@ -705,13 +708,11 @@ class AgentTestSuite(LisaTestSuite):
 
                         ignore_error_rules.extend(test_instance.get_ignore_error_rules())
 
-                        # If the test has a timestamp before which errors should be ignored in the agent log, use that timestamp
-                        # if multiple tests have this setting, use the earliest timestamp
-                        if test_instance.get_ignore_errors_before_timestamp() != datetime.datetime.min:
-                            if before_timestamp != datetime.datetime.min:
-                                before_timestamp = min(before_timestamp, test_instance.get_ignore_errors_before_timestamp())
-                            else:
-                                before_timestamp = test_instance.get_ignore_errors_before_timestamp()
+                        # Check if the test is requesting to override the timestamp for the agent log check.
+                        # Note that if multiple tests in the suite provide an override, we'll use the earliest timestamp.
+                        test_check_log_start_time = test_instance.get_ignore_errors_before_timestamp()
+                        if test_check_log_start_time != datetime.datetime.min:
+                            check_log_start_time_override = min(check_log_start_time_override, test_check_log_start_time)
 
                         if not test_success and test.blocks_suite:
                             log.warning("%s failed and blocks the suite. Stopping suite execution.", test.name)
@@ -737,11 +738,12 @@ class AgentTestSuite(LisaTestSuite):
                     if not suite_success:
                         self._mark_log_as_failed()
 
-                suite_success = suite_success and self._check_agent_log_on_test_nodes(ignore_error_rules, before_timestamp)
+                next_check_log_start_time = datetime.datetime.utcnow()
+                suite_success = suite_success and self._check_agent_log_on_test_nodes(ignore_error_rules, check_log_start_time_override if check_log_start_time_override != datetime.datetime.max else check_log_start_time)
 
-                return suite_success
+                return suite_success, next_check_log_start_time
 
-    def _check_agent_log_on_test_nodes(self, ignore_error_rules: List[Dict[str, Any]], before_timestamp: datetime) -> bool:
+    def _check_agent_log_on_test_nodes(self, ignore_error_rules: List[Dict[str, Any]], check_log_start_time: datetime.datetime) -> bool:
         """
         Checks the agent log on the test nodes for errors; returns true on success (no errors in the logs)
         """
@@ -759,22 +761,15 @@ class AgentTestSuite(LisaTestSuite):
             start_time: datetime.datetime = datetime.datetime.now()
 
             try:
-                self._lisa_log.info("Checking agent log on the test node %s", node_name)
-                log.info("Checking agent log on the test node %s", node_name)
+                message = f"Checking agent log on test node {node_name}, starting at {check_log_start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
+                self._lisa_log.info(message)
+                log.info(message)
 
                 output = ssh_client.run_command("check-agent-log.py -j")
                 errors = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
 
-                # Individual tests may have rules to ignore known errors; filter those out
-                if len(ignore_error_rules) > 0:
-                    new = []
-                    for e in errors:
-                        # Ignore errors that occurred before the timestamp
-                        if e.timestamp < before_timestamp:
-                            continue
-                        if not AgentLog.matches_ignore_rule(e, ignore_error_rules):
-                            new.append(e)
-                    errors = new
+                # Filter out errors that occurred before the starting timestamp or that match an ignore rule
+                errors = [e for e in errors if e.timestamp >= check_log_start_time and (len(ignore_error_rules) == 0 or not AgentLog.matches_ignore_rule(e, ignore_error_rules))]
 
                 if len(errors) == 0:
                     # If no errors, we are done; don't create a log or test result.
