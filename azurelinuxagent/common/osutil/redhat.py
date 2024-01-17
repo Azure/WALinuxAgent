@@ -159,7 +159,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
                                                                                                             content))
         except Exception as e:
             logger.warn(
-                "Unexpected error whiself.check_and_recover_nic_state()le determining or recovering the primary network interface state".format(e))
+                "Unexpected error while determining or recovering the primary network interface state".format(e))
 
     def restart_network_manager(self):
         shellutil.run("service NetworkManager restart")
