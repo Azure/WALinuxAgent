@@ -212,7 +212,12 @@ class ProvisionHandler(object):
             self.osutil.set_hostname(ovfenv.hostname)
 
             logger.info("Publish hostname [{0}]".format(ovfenv.hostname))
-            self.osutil.publish_hostname(ovfenv.hostname)
+            try:
+                self.osutil.publish_hostname(ovfenv.hostname)
+            except Exception as e:
+                msg = "Error while publishing the hostname: {0}".format(e)
+                add_event(AGENT_NAME, op=WALAEventOperation.HostnamePublishing, is_success=False, message=msg,
+                          log_event=False)
 
             self.config_user_account(ovfenv)
 

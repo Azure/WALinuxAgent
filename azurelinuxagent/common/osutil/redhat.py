@@ -139,26 +139,55 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
         return True
 
-    def check_and_recover_nic_state(self, ifname):
+    def get_nic_operstate(self, ifname):
+        """
+        Returns the contents of /sys/class/net/{ifname}/operstate which gives the state of the network interface.
+        Raises an exception if the network interface state cannot be determined.
+        """
         filepath = "/sys/class/net/{0}/operstate".format(ifname)
+        if not os.path.isfile(filepath):
+            msg = "Unable to determine primary network interface {0} state, because state file does not exist: {1}".format(ifname, filepath)
+            logger.warn(msg)
+            raise Exception(msg)
+
         try:
-            if not os.path.isfile(filepath):
-                logger.warn("Unable to determine primary network interface state, because state file does not exist: "
-                            "{0}".format(filepath))
+            nic_state = fileutil.read_file(filepath).rstrip().lower()
+            if nic_state != "up":
+                logger.warn("The primary network interface {0} is in '{1}' state.".format(ifname, nic_state))
             else:
-                content = fileutil.read_file(filepath).rstrip().encode('utf-8')
-                down_states = ["down", "unknown"]
-                if content in down_states:
-                    logger.warn("The primary network interface {0} is in '{1}' state after being restarted. Restarting "
-                                "the Network Manager service to recover the network interface".format(ifname, content))
-                    self.restart_network_manager()
-                else:
-                    logger.info(
-                        "The primary network interface {0} is in '{1}' state after being restarted.".format(ifname,
-                                                                                                            content))
+                logger.info("The primary network interface {0} is in '{1}' state.".format(ifname, nic_state))
+            return nic_state
         except Exception as e:
-            logger.warn(
-                "Unexpected error while determining or recovering the primary network interface state: {0}".format(e))
+            msg = "Unexpected error while determining the primary network interface state: {0}".format(e)
+            logger.warn(msg)
+            raise Exception(msg)
+
+    def check_and_recover_nic_state(self, ifname):
+        """
+        Checks if the provided network interface is in an 'up' state. If the network interface is in a 'down' state,
+        attempt to recover the interface by restarting the Network Manager service.
+
+        Raises an exception if an attempt to bring the interface into an 'up' state fails, or if the state
+         of the network interface cannot be determined.
+        """
+        nic_state = self.get_nic_operstate(ifname)
+        if nic_state == "down":
+            logger.info("Restarting the Network Manager service to recover network interface {0}".format(ifname))
+            self.restart_network_manager()
+            # Interface does not come up immediately after NetworkManager restart. Wait 1 second before checking
+            # network interface state.
+            time.sleep(1)
+            nic_state = self.get_nic_operstate(ifname)
+            if nic_state != "up":
+                msg = "Network Manager restart failed to bring network interface {0} into 'up' state".format(ifname)
+                logger.warn(msg)
+                raise Exception(msg)
+            else:
+                logger.info("Network Manager restart successfully brought the network interface {0} into 'up' state".format(ifname))
+        elif nic_state != "up":
+            # We already logged a warning with the network interface state in get_nic_operstate(). Raise an exception
+            # for the env thread to send to telemetry.
+            raise Exception("The primary network interface {0} is in '{1}' state.".format(ifname, nic_state))
 
     def restart_network_manager(self):
         shellutil.run("service NetworkManager restart")
@@ -170,6 +199,12 @@ class RedhatOSUtil(Redhat6xOSUtil):
         service is restarted before the agent publishes the hostname, and NM_controlled=y, a race condition may happen
         between the NetworkManager service and the Guest Agent making changes to the network interface configuration
         simultaneously.
+
+        Note: check_and_recover_nic_state(ifname) raises an Exception if an attempt to recover the network interface
+        fails, or if the network interface state cannot be determined. Callers should handle this exception by sending
+        an event to telemetry.
+
+        TODO: Improve failure reporting and add success reporting to telemetry for hostname changes. Right now we are only reporting failures to telemetry by raising an Exception in publish_hostname for the calling thread to handle by reporting the failure to telemetry.
         """
         ifname = self.get_if_name()
         if not self.get_nm_controlled(ifname):
