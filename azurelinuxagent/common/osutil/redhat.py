@@ -169,6 +169,8 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
         Raises an exception if an attempt to bring the interface into an 'up' state fails, or if the state
          of the network interface cannot be determined.
+
+         TODO: We should call check_and_recover_nic_state() for all distros where we reset the network during publishing hostname, not only RedhatOSUtil
         """
         nic_state = self.get_nic_operstate(ifname)
         if nic_state == "down":
