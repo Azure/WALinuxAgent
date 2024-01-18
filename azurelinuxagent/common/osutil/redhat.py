@@ -117,8 +117,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
             logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 
-    def get_nm_controlled(self):
-        ifname = self.get_if_name()
+    def get_nm_controlled(self, ifname):
         filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
         nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
         try:
@@ -140,16 +139,17 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
         return True
 
-    def check_and_recover_nic_state(self):
-        ifname = self.get_if_name()
+    def check_and_recover_nic_state(self, ifname):
         filepath = "/sys/class/net/{0}/operstate".format(ifname)
         try:
             if not os.path.isfile(filepath):
                 logger.warn("Unable to determine primary network interface state, because state file does not exist: "
                             "{0}".format(filepath))
             else:
-                content = fileutil.read_file(filepath)
-                if content == "down" or content == "unknown":
+                content = fileutil.read_file(filepath, encoding='utf-8').rstrip()
+                # read_file encodes result, so encode state strings for comparison
+                down_states = [ustr("down", 'utf-8'), ustr("unknown", 'utf-8')]
+                if content in down_states:
                     logger.warn("The primary network interface {0} is in '{1}' state after being restarted. Restarting "
                                 "the Network Manager service to recover the network interface".format(ifname, content))
                     self.restart_network_manager()
@@ -172,10 +172,11 @@ class RedhatOSUtil(Redhat6xOSUtil):
         between the NetworkManager service and the Guest Agent making changes to the network interface configuration
         simultaneously.
         """
-        if not self.get_nm_controlled():
+        ifname = self.get_if_name()
+        if not self.get_nm_controlled(ifname):
             self.restart_network_manager()
         super(RedhatOSUtil, self).publish_hostname(hostname)
-        self.check_and_recover_nic_state()
+        self.check_and_recover_nic_state(ifname)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
