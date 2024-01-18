@@ -146,9 +146,8 @@ class RedhatOSUtil(Redhat6xOSUtil):
                 logger.warn("Unable to determine primary network interface state, because state file does not exist: "
                             "{0}".format(filepath))
             else:
-                content = fileutil.read_file(filepath, encoding='utf-8').rstrip()
-                # read_file encodes result, so encode state strings for comparison
-                down_states = [ustr("down", 'utf-8'), ustr("unknown", 'utf-8')]
+                content = fileutil.read_file(filepath).rstrip().encode('utf-8')
+                down_states = ["down", "unknown"]
                 if content in down_states:
                     logger.warn("The primary network interface {0} is in '{1}' state after being restarted. Restarting "
                                 "the Network Manager service to recover the network interface".format(ifname, content))
