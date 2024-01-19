@@ -1190,16 +1190,21 @@ class DefaultOSUtil(object):
             else:
                 logger.warn("exceeded restart retries")
 
-    def publish_hostname(self, hostname, recover_nic=False):     # pylint: disable=W0613
+    def check_and_recover_nic_state(self, ifname):
+        # TODO: This should be implemented for all distros where we reset the network during publishing hostname. Currently it is only implemented in RedhatOSUtil.
+        pass
+
+    def publish_hostname(self, hostname, recover_nic=False):
         """
         Publishes the provided hostname. Currently, recover_nic property is only referenced in RedHatOSUtil. If true,
         check the state of the nic after publishing hostname and recover if down.
-        TODO: We should call check_and_recover_nic_state() for all distros where we reset the network during publishing hostname, not only RedhatOSUtil. Remove pylint disable on this method once we do this.
         """
         self.set_dhcp_hostname(hostname)
         self.set_hostname_record(hostname)
         ifname = self.get_if_name()
         self.restart_if(ifname)
+        if recover_nic:
+            self.check_and_recover_nic_state(ifname)
 
     def set_scsi_disks_timeout(self, timeout):
         for dev in os.listdir("/sys/block"):
