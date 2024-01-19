@@ -202,7 +202,7 @@ class GaiaOSUtil(DefaultOSUtil):
     def set_dhcp_hostname(self, hostname):
         logger.warn('set_dhcp_hostname is ignored on GAiA')
 
-    def publish_hostname(self, hostname):
+    def publish_hostname(self, hostname, recover_nic=False):
         logger.warn('publish_hostname is ignored on GAiA')
 
     def del_account(self, username):

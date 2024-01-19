@@ -139,24 +139,30 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
         return True
 
-    def get_nic_operstate(self, ifname):
+    def get_nic_operational_and_general_states(self, ifname):
         """
-        Returns the contents of /sys/class/net/{ifname}/operstate which gives the state of the network interface.
+        Checks the contents of /sys/class/net/{ifname}/operstate and the results of 'nmcli -g general.state device show {ifname}' to determine the state of the provided interface.
         Raises an exception if the network interface state cannot be determined.
         """
         filepath = "/sys/class/net/{0}/operstate".format(ifname)
+        nic_general_state_cmd = ['nmcli', '-g', 'general.state', 'device', 'show', ifname]
         if not os.path.isfile(filepath):
             msg = "Unable to determine primary network interface {0} state, because state file does not exist: {1}".format(ifname, filepath)
             logger.warn(msg)
             raise Exception(msg)
 
         try:
-            nic_state = fileutil.read_file(filepath).rstrip().lower()
-            if nic_state != "up":
-                logger.warn("The primary network interface {0} is in '{1}' state.".format(ifname, nic_state))
+            nic_operstate = fileutil.read_file(filepath).rstrip().lower()
+            nic_general_state = shellutil.run_command(nic_general_state_cmd, log_error=True).rstrip().lower()
+            if nic_operstate != "up":
+                logger.warn("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_operstate))
             else:
-                logger.info("The primary network interface {0} is in '{1}' state.".format(ifname, nic_state))
-            return nic_state
+                logger.info("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_operstate))
+            if nic_general_state != "100 (connected)":
+                logger.warn("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
+            else:
+                logger.info("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
+            return nic_operstate, nic_general_state
         except Exception as e:
             msg = "Unexpected error while determining the primary network interface state: {0}".format(e)
             logger.warn(msg)
@@ -169,32 +175,30 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
         Raises an exception if an attempt to bring the interface into an 'up' state fails, or if the state
          of the network interface cannot be determined.
-
-         TODO: We should call check_and_recover_nic_state() for all distros where we reset the network during publishing hostname, not only RedhatOSUtil
         """
-        nic_state = self.get_nic_operstate(ifname)
-        if nic_state == "down":
+        nic_operstate, nic_general_state = self.get_nic_operational_and_general_states(ifname)
+        if nic_operstate == "down" or "disconnected" in nic_general_state:
             logger.info("Restarting the Network Manager service to recover network interface {0}".format(ifname))
             self.restart_network_manager()
             # Interface does not come up immediately after NetworkManager restart. Wait 1 second before checking
             # network interface state.
             time.sleep(1)
-            nic_state = self.get_nic_operstate(ifname)
-            if nic_state != "up":
-                msg = "Network Manager restart failed to bring network interface {0} into 'up' state".format(ifname)
+            nic_operstate, nic_general_state = self.get_nic_operational_and_general_states(ifname)
+            if nic_operstate != "up" or nic_general_state != "100 (connected)":
+                msg = "Network Manager restart failed to bring network interface {0} into 'up' and 'connected' state".format(ifname)
                 logger.warn(msg)
                 raise Exception(msg)
             else:
-                logger.info("Network Manager restart successfully brought the network interface {0} into 'up' state".format(ifname))
-        elif nic_state != "up":
+                logger.info("Network Manager restart successfully brought the network interface {0} into 'up' and 'connected' state".format(ifname))
+        elif nic_operstate != "up" or nic_general_state != "100 (connected)":
             # We already logged a warning with the network interface state in get_nic_operstate(). Raise an exception
             # for the env thread to send to telemetry.
-            raise Exception("The primary network interface {0} is in '{1}' state.".format(ifname, nic_state))
+            raise Exception("The primary network interface {0} operational state is '{1}' and general state is '{2}'.".format(ifname, nic_operstate, nic_general_state))
 
     def restart_network_manager(self):
         shellutil.run("service NetworkManager restart")
 
-    def publish_hostname(self, hostname):
+    def publish_hostname(self, hostname, recover_nic=False):
         """
         Restart NetworkManager first before publishing hostname, only if the network interface is not controlled by the
         NetworkManager service (as determined by NM_CONTROLLED=n in the interface configuration). If the NetworkManager
@@ -212,7 +216,8 @@ class RedhatOSUtil(Redhat6xOSUtil):
         if not self.get_nm_controlled(ifname):
             self.restart_network_manager()
         super(RedhatOSUtil, self).publish_hostname(hostname)
-        self.check_and_recover_nic_state(ifname)
+        if recover_nic:
+            self.check_and_recover_nic_state(ifname)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)

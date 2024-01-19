@@ -172,7 +172,7 @@ class MonitorHostNameChanges(PeriodicOperation):
                         curr_hostname)
             self._osutil.set_hostname(curr_hostname)
             try:
-                self._osutil.publish_hostname(curr_hostname)
+                self._osutil.publish_hostname(curr_hostname, recover_nic=True)
             except Exception as e:
                 msg = "Error while publishing the hostname: {0}".format(e)
                 add_event(AGENT_NAME, op=WALAEventOperation.HostnamePublishing, is_success=False, message=msg, log_event=False)
