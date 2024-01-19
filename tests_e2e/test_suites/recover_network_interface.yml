@@ -1,0 +1,8 @@
+#
+# Brings the primary network interface down and checks that the agent can recover the network.
+#
+name: "RecoverNetworkInterface"
+tests:
+  - "recover_network_interface/recover_network_interface.py"
+images:
+  - "centos_79"
