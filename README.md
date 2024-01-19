@@ -306,8 +306,8 @@ _Note_:
 2. Applies only when AutoUpdate.Enabled is set to 'y'.
 3. Switching this option from 'y' to 'n' will not roll back the Extension Handler to the version shipped with the image.
 4. Changing this option requires a service restart to pick up the updated setting.
-5. If AutoUpdate.Enabled is set to 'y', new VMs created from marketplace images will promptly update to the latest Extension Handler version, irrespective of this option.
-6. Waagent has a built-in mechanism; if the current version running is unstable, it will roll back to previous versions. There is a chance that those rollback versions _may_ not support this option, and they will not honor this setting.
+5. If AutoUpdate.Enabled is set to 'y', new VMs created from marketplace images(if they ship with lower version than 2.10.0.8) will promptly update to the latest Extension Handler version, irrespective of this option.
+6. Waagent has a built-in mechanism; if the current version running is unstable, it will roll back to previous versions. If those rollback versions are lower than 2.10.0.8, then they _may_ not support this option, and they will not honor this setting
 
 For more information on the agent update, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#how-auto-update-works-for-extension-handler).
 
