@@ -32,6 +32,4 @@ echo "Agent's Python: $PYTHON"
 # some distros return .pyc byte file instead source file .py. So, I retrieve parent directory first.
 version_file_dir=$($PYTHON -c 'import azurelinuxagent.common.version as v; import os; print(os.path.dirname(v.__file__))')
 version_file_full_path="$version_file_dir/version.py"
-sed -E -i "s/AGENT_VERSION\s+=\s+'[0-9.]+'/AGENT_VERSION = '$version'/" $version_file_full_path
-echo "Restarting service..."
-agent-service restart
+sed -E -i "s/^AGENT_VERSION\s+=\s+'[0-9.]+'/AGENT_VERSION = '$version'/" $version_file_full_path
