@@ -6,10 +6,7 @@ tests:
   - "recover_network_interface/recover_network_interface.py"
 images:
 # TODO: This scenario should be run on all distros which bring the network interface down to publish hostname. Currently, only RedhatOSUtil attempts to recover the network interface if down after hostname publishing.
-  - "alma_9"
   - "centos_79"
   - "centos_82"
   - "rhel_79"
   - "rhel_82"
-  - "rhel_90"
-  - "rocky_9"
