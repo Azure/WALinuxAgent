@@ -1191,13 +1191,15 @@ class DefaultOSUtil(object):
                 logger.warn("exceeded restart retries")
 
     def check_and_recover_nic_state(self, ifname):
+        """
+        Check the state of the network interface and attempt to recover if down.
+        """
         # TODO: This should be implemented for all distros where we reset the network during publishing hostname. Currently it is only implemented in RedhatOSUtil.
         pass
 
     def publish_hostname(self, hostname, recover_nic=False):
         """
-        Publishes the provided hostname. Currently, recover_nic property is only referenced in RedHatOSUtil. If true,
-        check the state of the nic after publishing hostname and recover if down.
+        Publishes the provided hostname.
         """
         self.set_dhcp_hostname(hostname)
         self.set_hostname_record(hostname)
