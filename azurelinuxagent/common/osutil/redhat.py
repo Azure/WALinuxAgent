@@ -215,7 +215,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
         ifname = self.get_if_name()
         if not self.get_nm_controlled(ifname):
             self.restart_network_manager()
-        super(RedhatOSUtil, self).publish_hostname(hostname)
+        super(RedhatOSUtil, self).publish_hostname(hostname, recover_nic)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)

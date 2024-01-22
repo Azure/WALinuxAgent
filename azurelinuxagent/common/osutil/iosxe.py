@@ -63,7 +63,7 @@ class IosxeOSUtil(DefaultOSUtil):
         Restart NetworkManager first before publishing hostname
         """
         shellutil.run("service NetworkManager restart")
-        super(IosxeOSUtil, self).publish_hostname(hostname)
+        super(IosxeOSUtil, self).publish_hostname(hostname, recover_nic)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)
