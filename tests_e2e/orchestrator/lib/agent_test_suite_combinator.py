@@ -159,15 +159,25 @@ class AgentTestSuitesCombinator(Combinator):
             for image in images_info:
                 if image in skip_images_info:
                     continue
-                # 'image.urn' can actually be the URL to a VHD if the runbook provided it in the 'image' parameter
+                # 'image.urn' can actually be the URL to a VHD or an image from a gallery if the runbook provided it in the 'image' parameter
                 if self._is_vhd(image.urn):
                     marketplace_image = ""
                     vhd = image.urn
                     image_name = urllib.parse.urlparse(vhd).path.split('/')[-1]  # take the last fragment of the URL's path (e.g. "RHEL_8_Standard-8.3.202006170423.vhd")
+                    shared_gallery = ""
+                elif self._is_image_from_gallery(image.urn):
+                    marketplace_image = ""
+                    vhd = ""
+                    image_name = self._get_name_of_image_from_gallery(image.urn)
+                    shared_gallery = image.urn
                 else:
                     marketplace_image = image.urn
                     vhd = ""
                     image_name = self._get_image_name(image.urn)
+                    shared_gallery = ""
+
+                if test_suite_info.executes_on_scale_set and (vhd != "" or shared_gallery != ""):
+                    raise Exception("VHDS and images from galleries are currently not supported on scale sets.")
 
                 location: str = self._get_location(test_suite_info, image)
                 if location is None:
@@ -194,6 +204,7 @@ class AgentTestSuitesCombinator(Combinator):
                             env_name=f"{image_name}-{test_suite_info.name}",
                             marketplace_image=marketplace_image,
                             vhd=vhd,
+                            shared_gallery=shared_gallery,
                             location=location,
                             vm_size=vm_size,
                             test_suite_info=test_suite_info)
@@ -206,9 +217,6 @@ class AgentTestSuitesCombinator(Combinator):
                         env["c_test_suites"].append(test_suite_info)
                     else:
                         if test_suite_info.executes_on_scale_set:
-                            # TODO: Add support for VHDs
-                            if vhd != "":
-                                raise Exception("VHDS are currently not supported on scale sets.")
                             env = self.create_vmss_environment(
                                 env_name=env_name,
                                 marketplace_image=marketplace_image,
@@ -220,18 +228,18 @@ class AgentTestSuitesCombinator(Combinator):
                                 env_name=env_name,
                                 marketplace_image=marketplace_image,
                                 vhd=vhd,
+                                shared_gallery=shared_gallery,
                                 location=location,
                                 vm_size=vm_size,
                                 test_suite_info=test_suite_info)
                         shared_environments[env_name] = env
 
-                    if test_suite_info.template != '':
-                        vm_tags = env.get("vm_tags")
-                        if vm_tags is not None:
-                            if "templates" not in vm_tags:
-                                vm_tags["templates"] = test_suite_info.template
-                            else:
-                                vm_tags["templates"] += "," + test_suite_info.template
+                if test_suite_info.template != '':
+                    vm_tags = env["vm_tags"]
+                    if "templates" not in vm_tags:
+                        vm_tags["templates"] = test_suite_info.template
+                    else:
+                        vm_tags["templates"] += "," + test_suite_info.template
 
         environments.extend(shared_environments.values())
 
@@ -330,7 +338,7 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-    def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
+    def create_vm_environment(self, env_name: str, marketplace_image: str, vhd: str, shared_gallery: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
         #
         # Custom ARM templates (to create the test VMs) require special handling. These templates are processed by the azure_update_arm_template
         # hook, which does not have access to the runbook variables. Instead, we use a dummy VM tag named "templates" and pass the
@@ -339,11 +347,9 @@ class AgentTestSuitesCombinator(Combinator):
         # share the same test environment. Similarly, we use a dummy VM tag named "allow_ssh" to pass the value of the "allow_ssh" runbook parameter.
         #
         vm_tags = {}
-        if test_suite_info.template != '':
-            vm_tags["templates"] = test_suite_info.template
         if self.runbook.allow_ssh != '':
             vm_tags["allow_ssh"] = self.runbook.allow_ssh
-        return {
+        environment = {
             "c_platform": [
                 {
                     "type": "azure",
@@ -366,6 +372,7 @@ class AgentTestSuitesCombinator(Combinator):
                         "azure": {
                             "marketplace": marketplace_image,
                             "vhd": vhd,
+                            "shared_gallery": shared_gallery,
                             "location": location,
                             "vm_size": vm_size
                         }
@@ -382,6 +389,18 @@ class AgentTestSuitesCombinator(Combinator):
             "c_is_vhd": vhd != "",
             "vm_tags": vm_tags
         }
+
+        if shared_gallery != '':
+            # Currently all the images in our shared gallery require secure boot
+            environment['c_platform'][0]['requirement']["features"] = {
+                "items": [
+                    {
+                        "type": "Security_Profile",
+                        "security_profile": "secureboot"
+                    }
+                ]
+            }
+        return environment
 
     def create_vmss_environment(self, env_name: str, marketplace_image: str, location: str, vm_size: str, test_suite_info: TestSuiteInfo) -> Dict[str, Any]:
         return {
@@ -406,7 +425,8 @@ class AgentTestSuitesCombinator(Combinator):
             "c_location": location,
             "c_image": marketplace_image,
             "c_is_vhd": False,
-            "c_vm_size": vm_size
+            "c_vm_size": vm_size,
+            "vm_tags": {}
         }
 
     def _get_runbook_images(self, loader: AgentTestLoader) -> List[VmImageInfo]:
@@ -420,12 +440,12 @@ class AgentTestSuitesCombinator(Combinator):
         if images is not None:
             return images
 
-        # If it is not image or image set, it must be a URN or VHD
-        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image):
-            raise Exception(f"The 'image' parameter must be an image, an image set name, a urn, or a vhd: {self.runbook.image}")
+        # If it is not image or image set, it must be a URN, VHD, or an image from a gallery
+        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image) and not self._is_image_from_gallery(self.runbook.image):
+            raise Exception(f"The 'image' parameter must be an image, image set name, urn, vhd, or an image from a shared gallery: {self.runbook.image}")
 
         i = VmImageInfo()
-        i.urn = self.runbook.image  # Note that this could be a URN or the URI for a VHD
+        i.urn = self.runbook.image  # Note that this could be a URN or the URI for a VHD, or an image from a shared gallery
         i.locations = []
         i.vm_sizes = []
 
@@ -535,6 +555,20 @@ class AgentTestSuitesCombinator(Combinator):
         # VHDs are given as URIs to storage; do some basic validation, not intending to be exhaustive.
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
+
+    # Images from a gallery are given as  "<image_gallery>/<image_definition>/<image_version>".
+    _IMAGE_FROM_GALLERY = re.compile(r"(?P<gallery>[^/]+)/(?P<image>[^/]+)/(?P<version>[^/]+)")
+
+    @staticmethod
+    def _is_image_from_gallery(image: str) -> bool:
+        return AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image) is not None
+
+    @staticmethod
+    def _get_name_of_image_from_gallery(image: str) -> bool:
+        match = AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image)
+        if match is None:
+            raise Exception(f"Invalid image from gallery: {image}")
+        return match.group('image')
 
     @staticmethod
     def _report_test_result(

@@ -32,18 +32,11 @@ class DisableAgentProvisioning(UpdateArmTemplate):
 
         #
         # NOTE: LISA's template uses this function to generate the value for osProfile.linuxConfiguration. The function is
-        #       under the 'lisa' namespace.
+        #       under the 'lisa' namespace. We set 'provisionVMAgent' to False.
         #
         #     "getLinuxConfiguration": {
         #         "parameters": [
-        #             {
-        #                 "name": "keyPath",
-        #                 "type": "string"
-        #             },
-        #             {
-        #                 "name": "publicKeyData",
-        #                 "type": "string"
-        #             }
+        #             ...
         #         ],
         #         "output": {
         #             "type": "object",
@@ -62,31 +55,9 @@ class DisableAgentProvisioning(UpdateArmTemplate):
         #         }
         #     }
         #
-        # The code below sets template['functions'][i]['members']['getLinuxConfiguration']['output']['value']['provisionVMAgent'] to True,
-        # where template['functions'][i] is the 'lisa' namespace.
-        #
-        functions = template.get("functions")
-        if functions is None:
-            raise Exception('Cannot find "functions" in the LISA template.')
-        for namespace in functions:
-            name = namespace.get("namespace")
-            if name is None:
-                raise Exception(f'Cannot find "namespace" in the LISA template: {namespace}')
-            if name == "lisa":
-                members = namespace.get('members')
-                if members is None:
-                    raise Exception(f'Cannot find the members of the lisa namespace in the LISA template: {namespace}')
-                get_linux_configuration = members.get('getLinuxConfiguration')
-                if get_linux_configuration is None:
-                    raise Exception(f'Cannot find the "getLinuxConfiguration" function the lisa namespace in the LISA template: {namespace}')
-                output = get_linux_configuration.get('output')
-                if output is None:
-                    raise Exception(f'Cannot find the "output" of the getLinuxConfiguration function in the LISA template: {get_linux_configuration}')
-                value = output.get('value')
-                if value is None:
-                    raise Exception(f"Cannot find the output's value of the getLinuxConfiguration function in the LISA template: {get_linux_configuration}")
-                value['provisionVMAgent'] = False
-                break
-        else:
-            raise Exception(f'Cannot find the "lisa" namespace in the LISA template: {functions}')
+        get_linux_configuration = self.get_lisa_function(template, 'getLinuxConfiguration')
+        output = self.get_function_output(get_linux_configuration)
+        if output.get('customData') is not None:
+            raise Exception(f"The getOSProfile function already has a 'customData'. Won't override it. Definition: {get_linux_configuration}")
+        output['provisionVMAgent'] = False
 
