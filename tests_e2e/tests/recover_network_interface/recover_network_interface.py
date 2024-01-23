@@ -117,7 +117,7 @@ class RecoverNetworkInterface(AgentVmTest):
         self.check_agent_reports_status()
 
         log.info("")
-        log.info("The primary network was successfully recovered by the agent.")
+        log.info("The primary network interface was successfully recovered by the agent.")
 
 
 if __name__ == "__main__":
