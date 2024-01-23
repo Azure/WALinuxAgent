@@ -192,3 +192,15 @@ class RedhatOSModernUtil(RedhatOSUtil):
                 time.sleep(wait)
             else:
                 logger.warn("exceeded restart retries")
+
+    def set_dhcp_hostname(self, hostname):
+        """
+        Recent RHEL distributions use network manager instead of sysconfig files
+        to configure network interfaces
+        """
+        ifname = self.get_if_name()
+
+        return_code = shellutil.run("nmcli device modify {0} ipv4.dhcp-hostname {1} ipv6.dhcp-hostname {1}".format(ifname, hostname))
+
+        if return_code != 0:
+            logger.error("failed to set DHCP hostname for interface {0}: return code {1}".format(ifname, return_code))
