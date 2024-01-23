@@ -752,7 +752,12 @@ class UpdateHandler(object):
             log_if_op_disabled("OS.EnableFirewall", conf.enable_firewall())
             log_if_op_disabled("Extensions.Enabled", conf.get_extensions_enabled())
             log_if_op_disabled("AutoUpdate.Enabled", conf.get_autoupdate_enabled())
-            log_if_op_disabled("AutoUpdate.UpdateToLatestVersion", conf.get_agent_update_to_latest_version())
+            log_if_op_disabled("AutoUpdate.UpdateToLatestVersion", conf.get_auto_update_to_latest_version())
+
+            if not conf.get_autoupdate_enabled():
+                msg = "AutoUpdate.Enabled property is **Deprecated** but it was used and set to False. Please switch to using AutoUpdate.UpdateToLatestVersion instead."
+                logger.warn(msg)
+                add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)
 
             if conf.enable_firewall():
                 log_if_int_changed_from_default("OS.EnableFirewallPeriod", conf.get_enable_firewall_period())

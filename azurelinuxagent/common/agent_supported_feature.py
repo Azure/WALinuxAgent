@@ -84,7 +84,7 @@ class _GAVersioningGovernanceFeature(AgentSupportedFeature):
 
     __NAME = SupportedFeatureNames.GAVersioningGovernance
     __VERSION = "1.0"
-    __SUPPORTED = conf.get_autoupdate_enabled() and conf.get_agent_update_to_latest_version()
+    __SUPPORTED = conf.get_auto_update_to_latest_version()
 
     def __init__(self):
         super(_GAVersioningGovernanceFeature, self).__init__(name=self.__NAME,

@@ -141,8 +141,8 @@ class AgentUpdateHandler(object):
     def run(self, goal_state, ext_gs_updated):
 
         try:
-            # Ignore new agents if update is disabled.
-            if not conf.get_autoupdate_enabled() or not conf.get_agent_update_to_latest_version():
+            # If auto update is disabled, we don't proceed with update
+            if not conf.get_auto_update_to_latest_version():
                 return
 
             # Update the state only on new goal state

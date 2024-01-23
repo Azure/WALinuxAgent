@@ -503,13 +503,17 @@ def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
 
 
-def get_agent_update_to_latest_version(conf=__conf__):
+def get_auto_update_to_latest_version(conf=__conf__):
     """
     If set to True, agent will update to the latest version
     NOTE:
         when turned on, both AutoEnabled.Enabled and UpdateToLatestVersion same meaning: update to latest version
         when turned off, AutoEnabled.Enabled: reverts to pre-installed agent, UpdateToLatestVersion: uses latest version installed on the vm
+        Since we are deprecating AutoEnabled.Enabled, we need to honor if existing flag explicitly set to 'n' for backward compatibility.
     """
+    auto_update_enabled = get_autoupdate_enabled()
+    if not auto_update_enabled:
+        return auto_update_enabled
     return conf.get_switch("AutoUpdate.UpdateToLatestVersion", True)
 
 
