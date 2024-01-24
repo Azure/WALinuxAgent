@@ -257,3 +257,7 @@ class RedhatOSModernUtil(RedhatOSUtil):
                 time.sleep(wait)
             else:
                 logger.warn("exceeded restart retries")
+
+    def check_and_recover_nic_state(self, ifname):
+        # TODO: Implement and test a way to recover the network interface for RedhatOSModernUtil
+        pass
