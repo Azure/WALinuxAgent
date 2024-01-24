@@ -198,4 +198,4 @@ class RedhatOSModernUtil(RedhatOSUtil):
         # NetworkManager restart and the agent restarting the network interface during publish_hostname. Keeping the
         # NetworkManager restart in RedhatOSModernUtil because the issue was not reproduced on these versions.
         shellutil.run("service NetworkManager restart")
-        super(RedhatOSUtil, self).publish_hostname(hostname)
+        DefaultOSUtil.publish_hostname(self, hostname)
