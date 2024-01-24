@@ -1398,7 +1398,7 @@ class TestUpdateWaitForCloudInit(AgentTestCase):
                         update_handler._wait_for_cloud_init()
                     call_args = [args for args, _ in mock_logger.call_args_list if "An error occurred while waiting for cloud-init" in args[0]]
                     self.assertTrue(
-                        len(call_args) == 1 and len(call_args[0]) == 2 and "command timeout" in call_args[0][1],
+                        len(call_args) == 1 and len(call_args[0]) == 1 and "command timeout" in call_args[0][0],
                         "Expected a timeout waiting for cloud-init. Log calls: {0}".format(mock_logger.call_args_list))
 
     def test_update_handler_should_wait_for_cloud_init_after_agent_update_and_before_extension_processing(self):

@@ -462,12 +462,18 @@ class UpdateHandler(object):
 
     def _wait_for_cloud_init(self):
         if conf.get_wait_for_cloud_init() and not self._cloud_init_completed:
-            logger.info("Waiting for cloud-init to complete...")
+            message = "Waiting for cloud-init to complete..."
+            logger.info(message)
+            add_event(op=WALAEventOperation.CloudInit, message=message)
             try:
                 output = shellutil.run_command(["cloud-init", "status", "--wait"], timeout=conf.get_wait_for_cloud_init_timeout())
-                logger.info("cloud-init completed\n{0}", output)
+                message = "cloud-init completed\n{0}".format(output)
+                logger.info(message)
+                add_event(op=WALAEventOperation.CloudInit, message=message)
             except Exception as e:
-                logger.error("An error occurred while waiting for cloud-init; will proceed to execute VM extensions. Extensions that have conflicts with cloud-init may fail.\n{0}", ustr(e))
+                message = "An error occurred while waiting for cloud-init; will proceed to execute VM extensions. Extensions that have conflicts with cloud-init may fail.\n{0}".format(ustr(e))
+                logger.error(message)
+                add_event(op=WALAEventOperation.CloudInit, message=message, is_success=False, log_event=False)
             self._cloud_init_completed = True  # Mark as completed even on error since we will proceed to execute extensions
 
     def _get_vm_size(self, protocol):
