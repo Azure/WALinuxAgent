@@ -182,12 +182,26 @@ class AgentUpdateHandler(object):
             if not self._updater.is_retrieved_version_allowed_to_update(agent_family):
                 return
             self._updater.log_new_agent_update_message()
-            self._updater.purge_extra_agents_from_disk()
             agent = self._updater.download_and_get_new_agent(self._protocol, agent_family, goal_state)
-            if agent.is_blacklisted or not agent.is_downloaded:
-                msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
-                    str(agent.version))
+
+            # We are not updating the agent if it is not downloaded properly or agent is blacklisted and already attempted 3 times.
+            # For some reason, if agent is blackslisted in previous attempts(<3), we clear the error state to make agent as good agent.
+            # If we allow to update, we increment the update attempt count.
+            if not agent.is_downloaded:
+                msg = "Agent: {0} is not downloaded properly, skipping agent update".format(str(agent.version))
                 raise AgentUpdateError(msg)
+            elif agent.get_update_attempt_count() >= 3 and agent.is_blacklisted:
+                msg = "Did {0} update attempts previously for version: {1} but still agent not recovered from bad state. So, skipping agent update".format(
+                    agent.get_update_attempt_count(), str(agent.version))
+                raise AgentUpdateError(msg)
+            else:
+                agent.clear_error()
+                agent.inc_update_attempt_count()
+                msg = "Agent update attempt count: {0} for version: {1}".format(agent.get_update_attempt_count(), str(agent.version))
+                logger.info(msg)
+                add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+
+            self._updater.purge_extra_agents_from_disk()
             self._updater.proceed_with_update()
 
         except Exception as err:

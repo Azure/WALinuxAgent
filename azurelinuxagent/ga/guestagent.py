@@ -16,6 +16,7 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest
 AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
 MAX_FAILURE = 3  # Max failure allowed for agent before declare bad agent
+AGENT_UPDATE_COUNT_FILE = "update_attempt.json"  # File for tracking agent update attempt count
 
 
 class GuestAgent(object):
@@ -51,6 +52,9 @@ class GuestAgent(object):
 
         self.error = GuestAgentError(self.get_agent_error_file())
         self.error.load()
+
+        self.update_attempt_data = GuestAgentUpdateAttempt(self.get_agent_update_count_file())
+        self.update_attempt_data.load()
 
         try:
             self._ensure_downloaded()
@@ -99,6 +103,9 @@ class GuestAgent(object):
     def get_agent_error_file(self):
         return os.path.join(conf.get_lib_dir(), self.name, AGENT_ERROR_FILE)
 
+    def get_agent_update_count_file(self):
+        return os.path.join(conf.get_lib_dir(), self.name, AGENT_UPDATE_COUNT_FILE)
+
     def get_agent_manifest_path(self):
         return os.path.join(self.get_agent_dir(), AGENT_MANIFEST_FILE)
 
@@ -135,6 +142,16 @@ class GuestAgent(object):
                           version=self.version)
         except Exception as e:
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
+
+    def inc_update_attempt_count(self):
+        try:
+            self.update_attempt_data.inc_count()
+            self.update_attempt_data.save()
+        except Exception as e:
+            logger.warn(u"Agent {0} failed recording update attempt: {1}", self.name, ustr(e))
+
+    def get_update_attempt_count(self):
+        return self.update_attempt_data.count
 
     def _ensure_downloaded(self):
         logger.verbose(u"Ensuring Agent {0} is downloaded", self.name)
@@ -303,3 +320,52 @@ class GuestAgentError(object):
             self.failure_count,
             self.was_fatal,
             self.reason)
+
+
+class GuestAgentUpdateAttempt(object):
+    def __init__(self, path):
+        self.count = 0
+        if path is None:
+            raise UpdateError(u"GuestAgentUpdateAttempt requires a path")
+        self.path = path
+
+        self.clear()
+
+    def inc_count(self):
+        self.count += 1
+
+    def clear(self):
+        self.count = 0
+
+    def load(self):
+        if self.path is not None and os.path.isfile(self.path):
+            try:
+                with open(self.path, 'r') as f:
+                    self.from_json(json.load(f))
+            except Exception as error:
+                # The update_attempt.json file is only supposed to be written only by the agent.
+                # If for whatever reason the file is malformed, just delete it to reset state of the errors.
+                logger.warn(
+                    "Ran into error when trying to load error file {0}, deleting it to clean state. Error: {1}".format(
+                        self.path, textutil.format_exception(error)))
+                try:
+                    os.remove(self.path)
+                except Exception:
+                    # We try best case efforts to delete the file, ignore error if we're unable to do so
+                    pass
+
+    def save(self):
+        if os.path.isdir(os.path.dirname(self.path)):
+            with open(self.path, 'w') as f:
+                json.dump(self.to_json(), f)
+
+    def from_json(self, data):
+        self.count = data.get(u"count", 0)
+
+    def to_json(self):
+        data = {
+            u"count": self.count
+        }
+        return data
+
+

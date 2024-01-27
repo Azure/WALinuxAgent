@@ -26,7 +26,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_VERSION
 from azurelinuxagent.ga.guestagent import GuestAgent
 
 
@@ -77,12 +77,6 @@ class GAVersionUpdater(object):
         """
         raise NotImplementedError
 
-    def purge_extra_agents_from_disk(self):
-        """
-        Method remove the extra agents from disk.
-        """
-        raise NotImplementedError
-
     def proceed_with_update(self):
         """
         performs upgrade/downgrade
@@ -118,6 +112,13 @@ class GAVersionUpdater(object):
         is_fast_track_goal_state = goal_state.extensions_goal_state.source == GoalStateSource.FastTrack
         agent = GuestAgent.from_agent_package(package_to_download, protocol, is_fast_track_goal_state)
         return agent
+
+    def purge_extra_agents_from_disk(self):
+        """
+        Remove the agents from disk except current version and new agent version
+        """
+        known_agents = [CURRENT_VERSION, self._version]
+        self._purge_unknown_agents_from_disk(known_agents)
 
     def _get_agent_package_to_download(self, agent_manifest, version):
         """

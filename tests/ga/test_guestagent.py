@@ -1,10 +1,12 @@
+import contextlib
 import json
 import os
+import tempfile
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import UpdateError
 from azurelinuxagent.ga.guestagent import GuestAgent, AGENT_MANIFEST_FILE, AGENT_ERROR_FILE, GuestAgentError, \
-    MAX_FAILURE
+    MAX_FAILURE, GuestAgentUpdateAttempt
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.restapi import ExtHandlerPackage
 from azurelinuxagent.common.version import AGENT_NAME
@@ -101,6 +103,22 @@ class TestGuestAgent(UpdateTestCase):
         agent.mark_failure(is_fatal=True)
         self.assertEqual(2, agent.error.failure_count)
         self.assertTrue(agent.is_blacklisted)
+
+    def test_inc_update_attempt_count(self):
+        agent = GuestAgent.from_installed_agent(self.agent_path)
+        agent.inc_update_attempt_count()
+        self.assertEqual(1, agent.update_attempt_data.count)
+
+        agent.inc_update_attempt_count()
+        self.assertEqual(2, agent.update_attempt_data.count)
+
+    def test_get_update_count(self):
+        agent = GuestAgent.from_installed_agent(self.agent_path)
+        agent.inc_update_attempt_count()
+        self.assertEqual(1, agent.get_update_attempt_count())
+
+        agent.inc_update_attempt_count()
+        self.assertEqual(2, agent.get_update_attempt_count())
 
     def test_load_manifest(self):
         self.expand_agents()
@@ -308,3 +326,69 @@ class TestGuestAgentError(UpdateTestCase):
             WITH_ERROR["reason"])
         self.assertEqual(s, str(err))
         return
+
+
+UPDATE_ATTEMPT = {
+    "count": 2
+}
+
+NO_ATTEMPT = {
+    "count": 0
+}
+
+
+class TestGuestAgentUpdateAttempt(UpdateTestCase):
+    @contextlib.contextmanager
+    def get_attempt_count_file(self, attempt_count=None):
+        if attempt_count is None:
+            attempt_count = NO_ATTEMPT
+        with tempfile.NamedTemporaryFile(mode="w") as fp:
+            json.dump(attempt_count, fp)
+            fp.seek(0)
+            yield fp
+
+    def test_creation(self):
+        self.assertRaises(TypeError, GuestAgentUpdateAttempt)
+        self.assertRaises(UpdateError, GuestAgentUpdateAttempt, None)
+
+        with self.get_attempt_count_file(UPDATE_ATTEMPT) as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+            self.assertEqual(path.name, update_data.path)
+        self.assertNotEqual(None, update_data)
+
+        self.assertEqual(UPDATE_ATTEMPT["count"], update_data.count)
+
+    def test_clear(self):
+        with self.get_attempt_count_file(UPDATE_ATTEMPT) as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+            self.assertEqual(path.name, update_data.path)
+        self.assertNotEqual(None, update_data)
+
+        update_data.clear()
+        self.assertEqual(NO_ATTEMPT["count"], update_data.count)
+
+    def test_save(self):
+        with self.get_attempt_count_file(UPDATE_ATTEMPT) as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+        update_data.inc_count()
+        update_data.save()
+
+        with self.get_attempt_count_file(update_data.to_json()) as path:
+            new_data = GuestAgentUpdateAttempt(path.name)
+            new_data.load()
+
+        self.assertEqual(update_data.count, new_data.count)
+
+    def test_inc_count(self):
+        with self.get_attempt_count_file() as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+
+        self.assertEqual(0, update_data.count)
+        update_data.inc_count()
+        self.assertEqual(1, update_data.count)
+        update_data.inc_count()
+        self.assertEqual(2, update_data.count)
