@@ -414,3 +414,18 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
                                                                    mock_popen=self.__mock_network_setup_service_enabled)
             self.assertNotIn(test_ver, fileutil.read_file(handler.get_service_file_path()),
                              "Test version found incorrectly")
+
+    def test_it_should_reset_service_unit_file_if_python_version_changes(self):
+        with self._get_persist_firewall_rules_handler() as handler:
+            # 1st step - Setup the service with some python Version
+            python_ver = "test_python"
+            with patch("sys.executable", python_ver):
+                self.__setup_and_assert_network_service_setup_scenario(handler)
+                self.assertIn(python_ver, fileutil.read_file(handler.get_service_file_path()), "Python version not found")
+
+            # 2nd step - Re-run the setup and ensure the service file set up again even if service enabled
+            self.__executed_commands = []
+            self.__setup_and_assert_network_service_setup_scenario(handler,
+                                                                   mock_popen=self.__mock_network_setup_service_enabled)
+            self.assertNotIn(python_ver, fileutil.read_file(handler.get_service_file_path()),
+                             "Python version found incorrectly")
