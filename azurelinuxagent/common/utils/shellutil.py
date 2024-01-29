@@ -268,7 +268,8 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
                 process.kill()
                 try:
                     command_stdout, command_stderr = process.communicate()
-                except:
+                # W0702: No exception type(s) specified (bare-except)
+                except:  # pylint: disable=W0702
                     command_stdout, command_stderr = '', ''
             except Exception as exception:
                 if log_error:
