@@ -266,10 +266,13 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
                 logger.error(u"Command [{0}] timed out", __format_command(command))
             try:
                 process.kill()
+                try:
+                    command_stdout, command_stderr = process.communicate()
+                except:
+                    command_stdout, command_stderr = '', ''
             except Exception as exception:
                 if log_error:
                     logger.error(u"Can't terminate timed out process: {0}", ustr(exception))
-            command_stdout, command_stderr = process.communicate()
             raise CommandError(command=__format_command(command), return_code=-1, stdout=command_stdout, stderr="command timeout\n{0}".format(command_stderr))
 
         if track_process:
