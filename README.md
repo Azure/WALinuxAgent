@@ -273,9 +273,9 @@ _Note_: setting up this parameter to more than a few minutes can make the state 
 the VM be reported as unresponsive/unavailable on the Azure portal. Also, this 
 setting affects how fast the agent starts executing extensions. 
 
-#### __AutoUpdate.Enabled__
+#### __AutoUpdate.UpdateToLatestVersion__
 
-_Type: Boolean_  
+_Type: Boolean_
 _Default: y_
 
 Enables auto-update of the Extension Handler. The Extension Handler is responsible 
@@ -283,33 +283,28 @@ for managing extensions and reporting VM status. The core functionality of the a
 is contained in the Extension Handler, and we encourage users to enable this option 
 in order to maintain an up to date version.
 
-_Note_: 
-1. Setting this option to 'n' will not only disable updates to the latest version but also revert the current version of the Extension Handler back to the version that was shipped with the image.
-2. We introduced a new option, AutoUpdate.UpdateToLatestVersion, to control agent updates. This option is available starting from version 2.10.0.8 and higher. We strongly encourage users to utilize the new option instead of AutoUpdate.Enabled.
-3. The AutoUpdate.Enabled flag is retained for legacy purposes. If an image comes with a pre-installed agent version below 2.10.0.8, this flag will be used for the first agent update. Once the agent is updated to version 2.10.0.8 or higher, the new flag AutoUpdate.UpdateToLatestVersion takes effect
-
-On most distros the default value is 'y'.
-
-For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output).
-
-#### __AutoUpdate.UpdateToLatestVersion__
-
-_Type: Boolean_
-_Default: y_
-
-Enables automatic updates of the Extension Handler to the latest version published by Microsoft.
-If this option is set to 'n', the Extension Handler will remain pinned to the latest installed version that was on the VM, and future updates will not be received.
-We recommend users enable this option to ensure they have the latest version.
-
 _Note_:
 1. This option becomes effective from version 2.10.0.8 onwards.
-2. Applies only when AutoUpdate.Enabled is set to 'y'.
-3. Switching this option from 'y' to 'n' will not roll back the Extension Handler to the version shipped with the image.
-4. Changing this option requires a service restart to pick up the updated setting.
+2. If AutoUpdate.UpdateToLatestVersion is present, it overrides any value set for AutoUpdate.Enabled (if present).
+3. If AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior. Refer to the definition of _AutoUpdate.Enabled_ for additional details.
+4. If AutoUpdate.UpdateToLatestVersion is set to 'n', it will use the most recent version that has already been installed on the VM.
 5. If AutoUpdate.Enabled is set to 'y', new VMs created from marketplace images(if they ship with lower version than 2.10.0.8) will promptly update to the latest Extension Handler version, irrespective of this option.
 6. Waagent has a built-in mechanism; if the current version running is unstable, it will roll back to previous versions. If those rollback versions are lower than 2.10.0.8, then they _may_ not support this option, and they will not honor this setting
+7. Changing config option requires a service restart to pick up the updated setting.
 
-For more information on the agent update, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#how-auto-update-works-for-extension-handler).
+For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output). <br/>
+For more information on the agent update, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#how-auto-update-works-for-extension-handler). <br/>
+For more information on the AutoUpdate.UpdateToLatestVersion vs AutoUpdate.Enabled, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#autoupdateenabled-vs-autoupdateupdatetolatestversion). <br/>
+
+#### __AutoUpdate.Enabled__
+
+_Type: Boolean_  
+_Default: y_
+
+Enables auto-update of the Extension Handler. This flag is supported for legacy reasons and we strongly recommend using AutoUpdate.UpdateToLatestVersion instead. 
+The difference between these 2 flags is that, when set to 'n', AutoUpdate.Enabled will use the version of the Extension Handler that is pre-installed on the image, while AutoUpdate.UpdateToLatestVersion will use the most recent version that has already been installed on the VM (via auto-update).
+
+On most distros the default value is 'y'.
 
 #### __Provisioning.Agent__
 
