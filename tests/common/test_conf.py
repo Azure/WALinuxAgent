@@ -63,6 +63,7 @@ class TestConf(AgentTestCase):
         "OS.CheckRdmaDriver": False,
         "AutoUpdate.Enabled": True,
         "AutoUpdate.GAFamily": "Prod",
+        "AutoUpdate.UpdateToLatestVersion": False,
         "EnableOverProvisioning": True,
         "OS.AllowHTTP": False,
         "OS.EnableFirewall": False
@@ -144,3 +145,6 @@ class TestConf(AgentTestCase):
 
     def test_get_extensions_enabled(self):
         self.assertTrue(conf.get_extensions_enabled(self.conf))
+
+    def test_get_get_auto_update_to_latest_version(self):
+        self.assertFalse(conf.get_auto_update_to_latest_version(self.conf))

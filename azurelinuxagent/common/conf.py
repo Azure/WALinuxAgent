@@ -475,8 +475,8 @@ def get_autoupdate_gafamily(conf=__conf__):
     return conf.get("AutoUpdate.GAFamily", "Prod")
 
 
-def get_autoupdate_enabled(conf=__conf__):
-    return conf.get_switch("AutoUpdate.Enabled", True)
+def get_autoupdate_enabled(conf=__conf__, default=True):
+    return conf.get_switch("AutoUpdate.Enabled", default)
 
 
 def get_autoupdate_frequency(conf=__conf__):
@@ -507,14 +507,15 @@ def get_auto_update_to_latest_version(conf=__conf__):
     """
     If set to True, agent will update to the latest version
     NOTE:
-        when turned on, both AutoEnabled.Enabled and UpdateToLatestVersion same meaning: update to latest version
-        when turned off, AutoEnabled.Enabled: reverts to pre-installed agent, UpdateToLatestVersion: uses latest version installed on the vm
-        Since we are deprecating AutoEnabled.Enabled, we need to honor if existing flag explicitly set to 'n' for backward compatibility.
+        when both turned on, both AutoUpdate.Enabled and AutoUpdate.UpdateToLatestVersion same meaning: update to latest version
+        when turned off, AutoUpdate.Enabled: reverts to pre-installed agent, AutoUpdate.UpdateToLatestVersion: uses latest version already installed on the vm and does not download new agents
+        Even we are deprecating AutoUpdate.Enabled, we still need to support if users explicitly setting it instead new flag.
+        If AutoUpdate.UpdateToLatestVersion is present, it overrides any value set for AutoUpdate.Enabled (if present).
+        If AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior
+        if both not present, we default to True.
     """
-    auto_update_enabled = get_autoupdate_enabled()
-    if not auto_update_enabled:
-        return auto_update_enabled
-    return conf.get_switch("AutoUpdate.UpdateToLatestVersion", True)
+    default = get_autoupdate_enabled()
+    return conf.get_switch("AutoUpdate.UpdateToLatestVersion", default)
 
 
 def get_cgroup_check_period(conf=__conf__):
