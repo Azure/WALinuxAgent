@@ -360,6 +360,14 @@ class AgentLog(object):
                 'message': r"Fetch failed:.*GET.*vmSettings.*timed out",
                 'if': lambda r: r.prefix == 'LogCollector' and self.agent_log_contains("LogCollector Log collection successfully completed", after_timestamp=r.timestamp)
             },
+            #
+            # In tests, we use both autoupdate flags to install test agent with different value and changing it depending on the scenario. So, we can ignore this warning.
+            #
+            # 2024-01-30T22:22:37.299911Z WARNING ExtHandler ExtHandler AutoUpdate.Enabled property is **Deprecated** now but it's set to different value from AutoUpdate.UpdateToLatestVersion. Please consider removing it if added by mistake
+            {
+                'message': r"AutoUpdate.Enabled property is \*\*Deprecated\*\* now but it's set to different value from AutoUpdate.UpdateToLatestVersion",
+                'if': lambda r: r.prefix == 'ExtHandler' and r.thread == 'ExtHandler'
+            }
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
