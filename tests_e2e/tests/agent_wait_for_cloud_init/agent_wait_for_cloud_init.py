@@ -65,15 +65,13 @@ class AgentWaitForCloudInit(AgentVmTest):
         log.info("The Agent has started to process extensions")
 
         output = ssh_client.run_command(
-            "grep -E 'INFO ExtHandler ExtHandler Waiting for cloud-init to complete|" +
-                "^>>>|" +
+            "grep -E '^>>>|" +
                 "INFO ExtHandler ExtHandler cloud-init completed|" +
                 "INFO ExtHandler ExtHandler ProcessExtensionsGoalState started' /var/log/waagent.log")
 
         output = output.rstrip().splitlines()
 
         expected = [
-            'Waiting for cloud-init to complete',
             'cloud-init script begin',
             'The Agent is waiting for cloud-init, will pause for a couple of minutes',
             'cloud-init script end',
