@@ -264,13 +264,17 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
         except TimeoutExpired:
             if log_error:
                 logger.error(u"Command [{0}] timed out", __format_command(command))
+
+            command_stdout, command_stderr = '', ''
+
             try:
                 process.kill()
+                # try to get any output from the command, but ignore any errors if we can't
                 try:
                     command_stdout, command_stderr = process.communicate()
                 # W0702: No exception type(s) specified (bare-except)
                 except:  # pylint: disable=W0702
-                    command_stdout, command_stderr = '', ''
+                    pass
             except Exception as exception:
                 if log_error:
                     logger.error(u"Can't terminate timed out process: {0}", ustr(exception))
