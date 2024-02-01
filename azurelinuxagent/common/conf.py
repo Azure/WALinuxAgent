@@ -511,7 +511,7 @@ def get_auto_update_to_latest_version(conf=__conf__):
         when turned off, AutoUpdate.Enabled: reverts to pre-installed agent, AutoUpdate.UpdateToLatestVersion: uses latest version already installed on the vm and does not download new agents
         Even we are deprecating AutoUpdate.Enabled, we still need to support if users explicitly setting it instead new flag.
         If AutoUpdate.UpdateToLatestVersion is present, it overrides any value set for AutoUpdate.Enabled (if present).
-        If AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior
+        If AutoUpdate.UpdateToLatestVersion is not present but AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior
         if both not present, we default to True.
     """
     default = get_autoupdate_enabled()
