@@ -286,7 +286,7 @@ in order to maintain an up to date version.
 _Note_:
 1. This option becomes effective from version 2.10.0.8 onwards.
 2. If AutoUpdate.UpdateToLatestVersion is present, it overrides any value set for AutoUpdate.Enabled (if present).
-3. If AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior. Refer to the definition of _AutoUpdate.Enabled_ for additional details.
+3. If AutoUpdate.UpdateToLatestVersion is not present but AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior. Refer to the definition of _AutoUpdate.Enabled_ for additional details.
 4. If AutoUpdate.UpdateToLatestVersion is set to 'n', it will use the most recent version that has already been installed on the VM.
 5. If AutoUpdate.Enabled is set to 'y', new VMs created from marketplace images(if they ship with lower version than 2.10.0.8) will promptly update to the latest Extension Handler version, irrespective of this option.
 6. Waagent has a built-in mechanism; if the current version running is unstable, it will roll back to previous versions. If those rollback versions are lower than 2.10.0.8, then they _may_ not support this option, and they will not honor this setting
