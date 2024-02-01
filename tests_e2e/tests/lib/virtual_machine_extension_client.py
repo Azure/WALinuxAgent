@@ -134,7 +134,14 @@ class VirtualMachineExtensionClient(AzureSdkClient):
         If 'assert_function' is provided, it is invoked passing as parameter the instance view. This function can be used to perform
         additional validations.
         """
+        # Sometimes we get incomplete instance view with only 'name' property which causes issues during assertions.
+        # Retry attempt to get instance view if only 'name' property is populated.
+        attempt = 1
         instance_view = self.get_instance_view()
+        while instance_view.name is not None and instance_view.type_handler_version is None and instance_view.statuses is None and attempt < 3:
+            log.info("Instance view is incomplete: %s\nRetrying attempt to get instance view...", instance_view.serialize())
+            instance_view = self.get_instance_view()
+            attempt += 1
         log.info("Instance view:\n%s", instance_view.serialize())
 
         with soft_assertions():
