@@ -278,19 +278,19 @@ setting affects how fast the agent starts executing extensions.
 _Type: Boolean_
 _Default: y_
 
-Enables auto-update of the Extension Handler. The Extension Handler is responsible 
+Enables auto-update of the Extension Handler. The Extension Handler is responsible
 for managing extensions and reporting VM status. The core functionality of the agent
-is contained in the Extension Handler, and we encourage users to enable this option 
+is contained in the Extension Handler, and we encourage users to enable this option
 in order to maintain an up to date version.
+ 
+When this option is enabled, the Agent will install new versions when they become
+available. When disabled, the Agent will not install any new versions, but it will use
+the most recent version already installed on the VM.
 
-_Note_:
-1. This option becomes effective from version 2.10.0.8 onwards.
-2. If AutoUpdate.UpdateToLatestVersion is present, it overrides any value set for AutoUpdate.Enabled (if present).
-3. If AutoUpdate.UpdateToLatestVersion is not present but AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior. Refer to the definition of _AutoUpdate.Enabled_ for additional details.
-4. If AutoUpdate.UpdateToLatestVersion is set to 'n', it will use the most recent version that has already been installed on the VM.
-5. If AutoUpdate.Enabled is set to 'y', new VMs created from marketplace images(if they ship with lower version than 2.10.0.8) will promptly update to the latest Extension Handler version, irrespective of this option.
-6. Waagent has a built-in mechanism; if the current version running is unstable, it will roll back to previous versions. If those rollback versions are lower than 2.10.0.8, then they _may_ not support this option, and they will not honor this setting
-7. Changing config option requires a service restart to pick up the updated setting.
+_Notes_:
+1. This option was added on version 2.10.0.8 of the Agent. For previous versions, see AutoUpdate.Enabled.
+2. If both options are specified in waagent.conf, AutoUpdate.UpdateToLatestVersion overrides the value set for AutoUpdate.Enabled.
+3. Changing config option requires a service restart to pick up the updated setting.
 
 For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output). <br/>
 For more information on the agent update, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#how-auto-update-works-for-extension-handler). <br/>
