@@ -261,6 +261,30 @@ without the agent. In order to do that, the `provisionVMAgent` flag must be set 
 provisioning time, via whichever API is being used. We will provide more details on
 this on our wiki when it is generally available. 
 
+#### __Extensions.WaitForCloudInit__
+
+_Type: Boolean_  
+_Default: n_
+
+Waits for cloud-init to complete (cloud-init status --wait) before executing VM extensions.
+
+Both cloud-init and VM extensions are common ways to customize a VM during initial deployment. By
+default, the agent will start executing extensions while cloud-init may still be in the 'config' 
+stage and won't wait for the 'final' stage to complete. Cloud-init and extensions may execute operations
+that conflict with each other (for example, both of them may try to install packages). Setting this option
+to 'y' ensures that VM extensions are executed only after cloud-init has completed all its stages.
+
+Note that using this option requires creating a custom image with the value of this option set to 'y', in
+order to ensure that the wait is performed during the initial deployment of the VM.
+
+#### __Extensions.WaitForCloudInitTimeout__
+
+_Type: Integer_  
+_Default: 3600_
+
+Timeout in seconds for the Agent to wait on cloud-init. If the timeout elapses, the Agent will continue 
+executing VM extensions. See Extensions.WaitForCloudInit for more details. 
+
 #### __Extensions.GoalStatePeriod__
 
 _Type: Integer_  
