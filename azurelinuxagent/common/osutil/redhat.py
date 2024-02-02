@@ -121,7 +121,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
         filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
         nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
         try:
-            result = shellutil.run_command(nm_controlled_cmd, log_error=False, encode_output=False).rstrip()
+            result = shellutil.run_command(nm_controlled_cmd, log_error=False).rstrip()
 
             if result and len(result.split('=')) > 1:
                 # Remove trailing white space and ' or " characters
@@ -152,17 +152,17 @@ class RedhatOSUtil(Redhat6xOSUtil):
             raise Exception(msg)
 
         try:
-            nic_operstate = fileutil.read_file(filepath).rstrip().lower()
+            nic_oper_state = fileutil.read_file(filepath).rstrip().lower()
             nic_general_state = shellutil.run_command(nic_general_state_cmd, log_error=True).rstrip().lower()
-            if nic_operstate != "up":
-                logger.warn("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_operstate))
+            if nic_oper_state != "up":
+                logger.warn("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_oper_state))
             else:
-                logger.info("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_operstate))
+                logger.info("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_oper_state))
             if nic_general_state != "100 (connected)":
                 logger.warn("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
             else:
                 logger.info("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
-            return nic_operstate, nic_general_state
+            return nic_oper_state, nic_general_state
         except Exception as e:
             msg = "Unexpected error while determining the primary network interface state: {0}".format(e)
             logger.warn(msg)
@@ -180,10 +180,12 @@ class RedhatOSUtil(Redhat6xOSUtil):
         if nic_operstate == "down" or "disconnected" in nic_general_state:
             logger.info("Restarting the Network Manager service to recover network interface {0}".format(ifname))
             self.restart_network_manager()
-            # Interface does not come up immediately after NetworkManager restart. Wait 1 second before checking
+            # Interface does not come up immediately after NetworkManager restart. Wait 5 seconds before checking
             # network interface state.
-            time.sleep(1)
+            time.sleep(5)
             nic_operstate, nic_general_state = self.get_nic_operational_and_general_states(ifname)
+            # It is possible for network interface to be in an unknown or unmanaged state. Log warning if state is not
+            # down, disconnected, up, or connected
             if nic_operstate != "up" or nic_general_state != "100 (connected)":
                 msg = "Network Manager restart failed to bring network interface {0} into 'up' and 'connected' state".format(ifname)
                 logger.warn(msg)
@@ -213,9 +215,11 @@ class RedhatOSUtil(Redhat6xOSUtil):
         TODO: Improve failure reporting and add success reporting to telemetry for hostname changes. Right now we are only reporting failures to telemetry by raising an Exception in publish_hostname for the calling thread to handle by reporting the failure to telemetry.
         """
         ifname = self.get_if_name()
-        if not self.get_nm_controlled(ifname):
+        nm_controlled = self.get_nm_controlled(ifname)
+        if not nm_controlled:
             self.restart_network_manager()
-        super(RedhatOSUtil, self).publish_hostname(hostname, recover_nic)
+        # TODO: Current recover logic is only effective when the NetworkManager manages the network interface. Update the recover logic so it is effective even when NM_CONTROLLED=n
+        super(RedhatOSUtil, self).publish_hostname(hostname, recover_nic and nm_controlled)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)

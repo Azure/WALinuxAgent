@@ -24,11 +24,12 @@
 #
 
 import json
+from typing import List, Dict, Any
 
 from assertpy import fail, assert_that
 from time import sleep
 
-from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test import AgentVmTest, TestSkipped
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
@@ -77,14 +78,20 @@ class RecoverNetworkInterface(AgentVmTest):
         log.info("Adding password to the VM to use for debugging in case necessary...")
         self.add_vm_password()
 
+        # Skip the test if NM_CONTROLLED=n. The current recover logic does not work in this case
+        result = self._ssh_client.run_command("recover_network_interface-get_nm_controlled.py", use_sudo=True)
+        if "Interface is NOT NM controlled" in result:
+            raise TestSkipped("Current recover method will not work on interfaces where NM_Controlled=n")
+
         # Get the primary network interface name
-        ifname = self._ssh_client.run_command("pypy3 -c 'from azurelinuxagent.common.osutil.redhat import RedhatOSUtil; print(RedhatOSUtil().get_if_name())'").rstrip()
+        ifname = self._ssh_client.run_command("PYTHON=$(get-agent-python); $PYTHON -c 'from azurelinuxagent.common.osutil.redhat import RedhatOSUtil; print(RedhatOSUtil().get_if_name())'").rstrip()
         # The interface name needs to be in double quotes for the pypy portion of the script
         formatted_ifname = f'"{ifname}"'
 
         # The script should bring the primary network interface down and use the agent to recover the interface. These
         # commands will bring the network down, so they should be executed on the machine using CSE instead of ssh.
         script = f"""
+        set -euxo pipefail
         ifdown {ifname};
         nic_state=$(nmcli -g general.state device show {ifname})
         echo Primary network interface state before recovering: $nic_state
@@ -118,6 +125,18 @@ class RecoverNetworkInterface(AgentVmTest):
 
         log.info("")
         log.info("The primary network interface was successfully recovered by the agent.")
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            #
+            # We may see temporary network unreachable warnings since we are bringing the network interface down
+            # 2024-02-01T23:40:03.563499Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: ac21bdd7-1a7a-4bba-b307-b9d5bc30da33 eTag: 941323814975149980]: Request failed: [Errno 101] Network is unreachable
+            #
+            {
+                'message': r"Error fetching the goal state: \[ProtocolError\] GET vmSettings.*Request failed: \[Errno 101\] Network is unreachable"
+            }
+        ]
+        return ignore_rules
 
 
 if __name__ == "__main__":
