@@ -181,7 +181,6 @@ class AgentTestCase(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
         self.test_file = 'test_file'
 
-        conf.get_autoupdate_enabled = Mock(return_value=True)
         conf.get_lib_dir = Mock(return_value=self.tmp_dir)
 
         ext_log_dir = os.path.join(self.tmp_dir, "azure")

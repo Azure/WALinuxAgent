@@ -28,7 +28,7 @@ from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
 EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True
 AutoUpdate.GAFamily = Prod
-AutoUpdate.UpdateToLatestVersion = False
+AutoUpdate.UpdateToLatestVersion = True
 Autoupdate.Frequency = 3600
 DVD.MountPoint = /mnt/cdrom/secure
 Debug.AgentCpuQuota = 50

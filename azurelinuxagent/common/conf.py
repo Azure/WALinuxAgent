@@ -228,6 +228,11 @@ def get_switch_default_value(option):
     raise ValueError("{0} is not a valid configuration parameter.".format(option))
 
 
+def get_switch_no_default_value(key, conf=__conf__):
+    # If specified, return the value else return None
+    return conf.get_switch(key, None)
+
+
 def enable_firewall(conf=__conf__):
     return conf.get_switch("OS.EnableFirewall", False)
 
@@ -475,8 +480,8 @@ def get_autoupdate_gafamily(conf=__conf__):
     return conf.get("AutoUpdate.GAFamily", "Prod")
 
 
-def get_autoupdate_enabled(conf=__conf__, default=True):
-    return conf.get_switch("AutoUpdate.Enabled", default)
+def get_autoupdate_enabled(conf=__conf__):
+    return conf.get_switch("AutoUpdate.Enabled", True)
 
 
 def get_autoupdate_frequency(conf=__conf__):
@@ -514,7 +519,7 @@ def get_auto_update_to_latest_version(conf=__conf__):
         If AutoUpdate.UpdateToLatestVersion is not present but AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior
         if both not present, we default to True.
     """
-    default = get_autoupdate_enabled()
+    default = get_autoupdate_enabled(conf=conf)
     return conf.get_switch("AutoUpdate.UpdateToLatestVersion", default)
 
 

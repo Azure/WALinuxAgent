@@ -754,7 +754,8 @@ class UpdateHandler(object):
             log_if_op_disabled("AutoUpdate.Enabled", conf.get_autoupdate_enabled())
             log_if_op_disabled("AutoUpdate.UpdateToLatestVersion", conf.get_auto_update_to_latest_version())
 
-            if conf.get_autoupdate_enabled(default=None) is not None and conf.get_autoupdate_enabled() != conf.get_auto_update_to_latest_version():
+            auto_update_enabled = conf.get_switch_no_default_value("AutoUpdate.Enabled")
+            if auto_update_enabled is not None and auto_update_enabled != conf.get_auto_update_to_latest_version():
                 msg = "AutoUpdate.Enabled property is **Deprecated** now but it's set to different value from AutoUpdate.UpdateToLatestVersion. Please consider removing it if added by mistake"
                 logger.warn(msg)
                 add_event(AGENT_NAME, op=WALAEventOperation.ConfigurationChange, message=msg)

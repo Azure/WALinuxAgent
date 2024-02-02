@@ -686,12 +686,13 @@ class TestUpdate(UpdateTestCase):
     def test_run_latest(self):
         self.prepare_agents()
 
-        agent = self.update_handler.get_latest_agent_greater_than_daemon()
-        args, kwargs = self._test_run_latest()
-        args = args[0]
-        cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
-        if cmds[0].lower() == "python":
-            cmds[0] = sys.executable
+        with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
+            agent = self.update_handler.get_latest_agent_greater_than_daemon()
+            args, kwargs = self._test_run_latest()
+            args = args[0]
+            cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
+            if cmds[0].lower() == "python":
+                cmds[0] = sys.executable
 
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)
@@ -801,7 +802,8 @@ class TestUpdate(UpdateTestCase):
         verify_string = "Force blacklisting: {0}".format(str(uuid.uuid4()))
 
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent_greater_than_daemon', return_value=latest_agent):
-            self._test_run_latest(mock_child=ChildMock(side_effect=Exception(verify_string)))
+            with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=True):
+                self._test_run_latest(mock_child=ChildMock(side_effect=Exception(verify_string)))
 
         self.assertFalse(latest_agent.is_available)
         self.assertTrue(latest_agent.error.is_blacklisted)
