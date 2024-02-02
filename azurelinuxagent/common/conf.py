@@ -87,6 +87,9 @@ class ConfigurationProvider(object):
         except ValueError:
             return self._get_default(default_value)
 
+    def is_present(self, key):
+        return self.values.get(key) is not None
+
 
 __conf__ = ConfigurationProvider()
 
@@ -228,9 +231,8 @@ def get_switch_default_value(option):
     raise ValueError("{0} is not a valid configuration parameter.".format(option))
 
 
-def get_switch_no_default_value(key, conf=__conf__):
-    # If specified, return the value else return None
-    return conf.get_switch(key, None)
+def is_present(key, conf=__conf__):
+    return conf.is_present(key)
 
 
 def enable_firewall(conf=__conf__):
