@@ -18,8 +18,16 @@
 #
 import os
 import subprocess
+import sys
 import tempfile
 import threading
+
+if sys.version_info[0] == 2:
+    # TimeoutExpired was introduced on Python 3; define a dummy class for Python 2
+    class TimeoutExpired(Exception):
+        pass
+else:
+    from subprocess import TimeoutExpired
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
@@ -206,7 +214,7 @@ def __run_command(command_action, command, log_error, encode_output):
 
 
 # W0622: Redefining built-in 'input'  -- disabled: the parameter name mimics subprocess.communicate()
-def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True, track_process=True):  # pylint:disable=W0622
+def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, log_error=False, encode_input=True, encode_output=True, track_process=True, timeout=None):  # pylint:disable=W0622
     """
         Executes the given command and returns its stdout.
 
@@ -227,7 +235,9 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
              value for these parameters is anything other than the default (subprocess.PIPE)), then the corresponding
              values returned by this function or the CommandError exception will be empty strings.
 
-        Note: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
+        NOTE: The 'timeout' parameter is ignored on Python 2
+
+        NOTE: This is the preferred method to execute shell commands over `azurelinuxagent.common.utils.shellutil.run` function.
     """
     if input is not None and stdin is not None:
         raise ValueError("The input and stdin arguments are mutually exclusive")
@@ -246,7 +256,30 @@ def run_command(command, input=None, stdin=None, stdout=subprocess.PIPE, stderr=
         else:
             process = subprocess.Popen(command, stdin=popen_stdin, stdout=stdout, stderr=stderr, shell=False)
 
-        command_stdout, command_stderr = process.communicate(input=communicate_input)
+        try:
+            if sys.version_info[0] == 2:  # communicate() doesn't support timeout on Python 2
+                command_stdout, command_stderr = process.communicate(input=communicate_input)
+            else:
+                command_stdout, command_stderr = process.communicate(input=communicate_input, timeout=timeout)
+        except TimeoutExpired:
+            if log_error:
+                logger.error(u"Command [{0}] timed out", __format_command(command))
+
+            command_stdout, command_stderr = '', ''
+
+            try:
+                process.kill()
+                # try to get any output from the command, but ignore any errors if we can't
+                try:
+                    command_stdout, command_stderr = process.communicate()
+                # W0702: No exception type(s) specified (bare-except)
+                except:  # pylint: disable=W0702
+                    pass
+            except Exception as exception:
+                if log_error:
+                    logger.error(u"Can't terminate timed out process: {0}", ustr(exception))
+            raise CommandError(command=__format_command(command), return_code=-1, stdout=command_stdout, stderr="command timeout\n{0}".format(command_stderr))
+
         if track_process:
             _on_command_completed(process.pid)
 

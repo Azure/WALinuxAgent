@@ -27,6 +27,8 @@ class TestConf(AgentTestCase):
     # -- These values *MUST* match those from data/test_waagent.conf
     EXPECTED_CONFIGURATION = {
         "Extensions.Enabled": True,
+        "Extensions.WaitForCloudInit": False,
+        "Extensions.WaitForCloudInitTimeout": 3600,
         "Provisioning.Agent": "auto",
         "Provisioning.DeleteRootPassword": True,
         "Provisioning.RegenerateSshHostKeyPair": True,

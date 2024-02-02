@@ -55,4 +55,87 @@ class UpdateArmTemplate(ABC):
                 return item
         raise KeyError(f"Cannot find a resource {resource_name} of type {type_name} in the ARM template")
 
+    @staticmethod
+    def get_lisa_function(template: Dict[str, Any], function_name: str) -> Dict[str, Any]:
+        """
+        Looks for the given function name in the LISA namespace and returns its definition. Raises KeyError if the function is not found.
+        """
+        #
+        # NOTE: LISA's functions are in the "lisa" namespace, for example:
+        #
+        # "functions": [
+        #     {
+        #         "namespace": "lisa",
+        #         "members": {
+        #             "getOSProfile": {
+        #                 "parameters": [
+        #                     {
+        #                         "name": "computername",
+        #                         "type": "string"
+        #                     },
+        #                     etc.
+        #                 ],
+        #                 "output": {
+        #                     "type": "object",
+        #                     "value": {
+        #                         "computername": "[parameters('computername')]",
+        #                         "adminUsername": "[parameters('admin_username')]",
+        #                         "adminPassword": "[if(parameters('has_password'), parameters('admin_password'), json('null'))]",
+        #                         "linuxConfiguration": "[if(parameters('has_linux_configuration'), parameters('linux_configuration'), json('null'))]"
+        #                     }
+        #                 }
+        #             },
+        #         }
+        #     }
+        # ]
+        functions = template.get("functions")
+        if functions is None:
+            raise Exception('Cannot find "functions" in the LISA template.')
 
+        for namespace in functions:
+            name = namespace.get("namespace")
+            if name is None:
+                raise Exception(f'Cannot find "namespace" in the LISA template: {namespace}')
+            if name == "lisa":
+                lisa_functions = namespace.get('members')
+                if lisa_functions is None:
+                    raise Exception(f'Cannot find the members of the lisa namespace in the LISA template: {namespace}')
+                function_definition = lisa_functions.get(function_name)
+                if function_definition is None:
+                    raise KeyError(f'Cannot find function {function_name} in the lisa namespace in the LISA template: {namespace}')
+                return function_definition
+        raise Exception(f'Cannot find the "lisa" namespace in the LISA template: {functions}')
+
+    @staticmethod
+    def get_function_output(function: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Returns the "value" property of the output for the given function.
+
+        Sample function:
+
+            {
+                "parameters": [
+                    {
+                        "name": "computername",
+                        "type": "string"
+                    },
+                    etc.
+                ],
+                "output": {
+                    "type": "object",
+                    "value": {
+                        "computername": "[parameters('computername')]",
+                        "adminUsername": "[parameters('admin_username')]",
+                        "adminPassword": "[if(parameters('has_password'), parameters('admin_password'), json('null'))]",
+                        "linuxConfiguration": "[if(parameters('has_linux_configuration'), parameters('linux_configuration'), json('null'))]"
+                    }
+                }
+            }
+        """
+        output = function.get('output')
+        if output is None:
+            raise Exception(f'Cannot find the "output" of the given function: {function}')
+        value = output.get('value')
+        if value is None:
+            raise Exception(f"Cannot find the output's value of the given function: {function}")
+        return value
