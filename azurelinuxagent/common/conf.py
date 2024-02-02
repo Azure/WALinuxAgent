@@ -88,6 +88,9 @@ class ConfigurationProvider(object):
             return self._get_default(default_value)
 
     def is_present(self, key):
+        """
+        Returns True if the given flag present in the configuration file, False otherwise.
+        """
         return self.values.get(key) is not None
 
 
@@ -232,6 +235,9 @@ def get_switch_default_value(option):
 
 
 def is_present(key, conf=__conf__):
+    """
+    Returns True if the given flag present in the configuration file, False otherwise.
+    """
     return conf.is_present(key)
 
 
