@@ -192,3 +192,10 @@ class RedhatOSModernUtil(RedhatOSUtil):
                 time.sleep(wait)
             else:
                 logger.warn("exceeded restart retries")
+
+    def publish_hostname(self, hostname):
+        # RedhatOSUtil was updated to conditionally run NetworkManager restart in response to a race condition between
+        # NetworkManager restart and the agent restarting the network interface during publish_hostname. Keeping the
+        # NetworkManager restart in RedhatOSModernUtil because the issue was not reproduced on these versions.
+        shellutil.run("service NetworkManager restart")
+        DefaultOSUtil.publish_hostname(self, hostname)
