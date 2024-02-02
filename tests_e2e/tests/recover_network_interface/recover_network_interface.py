@@ -84,7 +84,7 @@ class RecoverNetworkInterface(AgentVmTest):
             raise TestSkipped("Current recover method will not work on interfaces where NM_Controlled=n")
 
         # Get the primary network interface name
-        ifname = self._ssh_client.run_command("PYTHON=$(get-agent-python); $PYTHON -c 'from azurelinuxagent.common.osutil.redhat import RedhatOSUtil; print(RedhatOSUtil().get_if_name())'").rstrip()
+        ifname = self._ssh_client.run_command("pypy3 -c 'from azurelinuxagent.common.osutil.redhat import RedhatOSUtil; print(RedhatOSUtil().get_if_name())'").rstrip()
         # The interface name needs to be in double quotes for the pypy portion of the script
         formatted_ifname = f'"{ifname}"'
 
