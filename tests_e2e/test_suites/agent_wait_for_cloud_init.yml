@@ -1,0 +1,13 @@
+#
+# This test verifies that the Agent waits for cloud-init to complete before it starts processing extensions.
+#
+# NOTE: This test is not fully automated. It requires a custom image where the test Agent has been installed and Extensions.WaitForCloudInit is enabled in waagent.conf.
+#       To execute it manually, create a custom image and use the 'image' runbook parameter, for example: "-v: image:gallery/wait-cloud-init/1.0.1".
+#
+name: "AgentWaitForCloudInit"
+tests:
+  - "agent_wait_for_cloud_init/agent_wait_for_cloud_init.py"
+template: "agent_wait_for_cloud_init/add_cloud_init_script.py"
+install_test_agent: false
+# Dummy image, since the parameter is required. The actual image needs to be passed as a parameter to the runbook.
+images: "ubuntu_2204"

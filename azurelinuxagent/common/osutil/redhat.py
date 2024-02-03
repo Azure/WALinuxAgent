@@ -265,3 +265,10 @@ class RedhatOSModernUtil(RedhatOSUtil):
     def check_and_recover_nic_state(self, ifname):
         # TODO: Implement and test a way to recover the network interface for RedhatOSModernUtil
         pass
+
+    def publish_hostname(self, hostname):
+        # RedhatOSUtil was updated to conditionally run NetworkManager restart in response to a race condition between
+        # NetworkManager restart and the agent restarting the network interface during publish_hostname. Keeping the
+        # NetworkManager restart in RedhatOSModernUtil because the issue was not reproduced on these versions.
+        shellutil.run("service NetworkManager restart")
+        DefaultOSUtil.publish_hostname(self, hostname)
