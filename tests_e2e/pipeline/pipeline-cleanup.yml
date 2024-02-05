@@ -13,7 +13,7 @@ parameters:
   - name: older_than
     displayName: Delete resources older than (use the syntax of the "date -d" command)
     type: string
-    default: 1 day ago
+    default: 12 hours ago
 
   - name: service_connections
     type: object

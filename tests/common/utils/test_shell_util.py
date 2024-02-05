@@ -18,13 +18,14 @@
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
 
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.shellutil as shellutil
-from tests.lib.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch, skip_if_predicate_true
 from tests.lib.miscellaneous_tools import wait_for, format_processes
 
 
@@ -224,6 +225,12 @@ exit({0})
     def test_run_command_should_raise_an_exception_when_it_cannot_execute_the_command(self):
         self.__it_should_raise_an_exception_when_it_cannot_execute_the_command(
             lambda: shellutil.run_command("nonexistent_command"))
+
+    @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
+    def test_run_command_should_raise_an_exception_when_the_command_times_out(self):
+        with self.assertRaises(shellutil.CommandError) as context:
+            shellutil.run_command(["sleep", "5"], timeout=1)
+        self.assertIn("command timeout", context.exception.stderr, "The command did not time out")
 
     def test_run_pipe_should_raise_an_exception_when_it_cannot_execute_the_pipe(self):
         self.__it_should_raise_an_exception_when_it_cannot_execute_the_command(

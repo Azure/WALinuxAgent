@@ -135,6 +135,7 @@ class VirtualMachineExtensionClient(AzureSdkClient):
         additional validations.
         """
         instance_view = self.get_instance_view()
+        log.info("Instance view:\n%s", instance_view.serialize())
 
         with soft_assertions():
             if expected_version is not None:

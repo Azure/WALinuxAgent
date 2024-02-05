@@ -38,7 +38,7 @@ from azurelinuxagent.common.protocol.restapi import VMAgentFamily, \
     ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
     VMAgentUpdateStatuses
 from azurelinuxagent.common.protocol.util import ProtocolUtil
-from azurelinuxagent.common.utils import fileutil, textutil, timeutil
+from azurelinuxagent.common.utils import fileutil, textutil, timeutil, shellutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
@@ -980,7 +980,6 @@ class TestUpdate(UpdateTestCase):
                         match_unexpected_errors() # Match on errors first, they can provide more info.
                         match_expected_info()
 
-
     def test_it_should_recreate_handler_env_on_service_startup(self):
         iterations = 5
 
@@ -1359,6 +1358,64 @@ class TestUpdate(UpdateTestCase):
             # Ensure none of the agents are blacklisted
             for agent in self.agents():
                 self.assertFalse(agent.is_blacklisted, "Legacy Agent should not be blacklisted")
+
+
+class TestUpdateWaitForCloudInit(AgentTestCase):
+    @staticmethod
+    @contextlib.contextmanager
+    def create_mock_run_command(delay=None):
+        def run_command_mock(cmd, *args, **kwargs):
+            if cmd == ["cloud-init", "status", "--wait"]:
+                if delay is not None:
+                    original_run_command(['sleep', str(delay)], *args, **kwargs)
+                return "cloud-init completed"
+            return original_run_command(cmd, *args, **kwargs)
+        original_run_command = shellutil.run_command
+
+        with patch("azurelinuxagent.ga.update.shellutil.run_command", side_effect=run_command_mock) as run_command_patch:
+            yield run_command_patch
+
+    def test_it_should_not_wait_for_cloud_init_by_default(self):
+        update_handler = UpdateHandler()
+        with self.create_mock_run_command() as run_command_patch:
+            update_handler._wait_for_cloud_init()
+            self.assertTrue(run_command_patch.call_count == 0, "'cloud-init status --wait' should not be called by default")
+
+    def test_it_should_wait_for_cloud_init_when_requested(self):
+        update_handler = UpdateHandler()
+        with patch("azurelinuxagent.ga.update.conf.get_wait_for_cloud_init", return_value=True):
+            with self.create_mock_run_command() as run_command_patch:
+                update_handler._wait_for_cloud_init()
+                self.assertEqual(1, run_command_patch.call_count, "'cloud-init status --wait' should have be called once")
+
+    @skip_if_predicate_true(lambda: sys.version_info[0] == 2, "Timeouts are not supported on Python 2")
+    def test_it_should_enforce_timeout_waiting_for_cloud_init(self):
+        update_handler = UpdateHandler()
+        with patch("azurelinuxagent.ga.update.conf.get_wait_for_cloud_init", return_value=True):
+            with patch("azurelinuxagent.ga.update.conf.get_wait_for_cloud_init_timeout", return_value=1):
+                with self.create_mock_run_command(delay=5):
+                    with patch("azurelinuxagent.ga.update.logger.error") as mock_logger:
+                        update_handler._wait_for_cloud_init()
+                    call_args = [args for args, _ in mock_logger.call_args_list if "An error occurred while waiting for cloud-init" in args[0]]
+                    self.assertTrue(
+                        len(call_args) == 1 and len(call_args[0]) == 1 and "command timeout" in call_args[0][0],
+                        "Expected a timeout waiting for cloud-init. Log calls: {0}".format(mock_logger.call_args_list))
+
+    def test_update_handler_should_wait_for_cloud_init_after_agent_update_and_before_extension_processing(self):
+        method_calls = []
+
+        agent_update_handler = Mock()
+        agent_update_handler.run = lambda *_, **__: method_calls.append("AgentUpdateHandler.run()")
+
+        exthandlers_handler = Mock()
+        exthandlers_handler.run = lambda *_, **__: method_calls.append("ExtHandlersHandler.run()")
+
+        with mock_wire_protocol(DATA_FILE) as protocol:
+            with mock_update_handler(protocol, iterations=1, agent_update_handler=agent_update_handler, exthandlers_handler=exthandlers_handler) as update_handler:
+                with patch('azurelinuxagent.ga.update.UpdateHandler._wait_for_cloud_init', side_effect=lambda *_, **__: method_calls.append("UpdateHandler._wait_for_cloud_init()")):
+                    update_handler.run()
+
+        self.assertListEqual(["AgentUpdateHandler.run()", "UpdateHandler._wait_for_cloud_init()", "ExtHandlersHandler.run()"], method_calls, "Wait for cloud-init should happen after agent update and before extension processing")
 
 
 class UpdateHandlerRunTestCase(AgentTestCase):
@@ -1784,13 +1841,14 @@ class TestAgentUpgrade(UpdateTestCase):
             self.assertFalse(os.path.exists(self.agent_dir("99999.0.0.0")),
                              "New agent directory should not be found")
 
-    def test_it_should_skip_wait_to_update_if_rsm_version_available(self):
+    def test_it_should_skip_wait_to_update_immediately_if_rsm_version_available(self):
         no_of_iterations = 100
 
         def reload_conf(url, protocol):
             mock_wire_data = protocol.mock_wire_data
 
             # This function reloads the conf mid-run to mimic an actual customer scenario
+            # Setting the rsm request to be sent after some iterations
             if HttpRequestPredicates.is_goal_state_request(url) and mock_wire_data.call_counts["goalstate"] >= 5:
                 reload_conf.call_count += 1
 
@@ -1808,7 +1866,8 @@ class TestAgentUpgrade(UpdateTestCase):
 
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
-        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf) as (update_handler, mock_telemetry):
+        # Setting the prod frequency to mimic a real scenario
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf, autoupdate_frequency=6000) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_ga_manifest_version_version(str(CURRENT_VERSION))
             update_handler._protocol.mock_wire_data.set_incarnation(20)
             update_handler.run(debug=True)
