@@ -43,7 +43,7 @@ def main():
 
         # Example: Agent WALinuxAgent-2.2.47.2 is running as the goal state agent
         agent_started_regex = r"Azure Linux Agent \(Goal State Agent version [0-9.]+\)"
-        gs_completed_regex = r"ProcessExtensionsGoalState completed\s\[(?P<id>[a-z_\d]{13,14})\s(?P<duration>\d+)\sms\]"
+        gs_completed_regex = r"ProcessExtensionsGoalState completed\s\[(?P<id>[a-z]+_\d+)\s(?P<duration>\d+)\sms\]"
 
         verified_atleast_one_log_line = False
         verified_atleast_one_agent_started_log_line = False
