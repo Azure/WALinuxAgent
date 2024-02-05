@@ -261,6 +261,30 @@ without the agent. In order to do that, the `provisionVMAgent` flag must be set 
 provisioning time, via whichever API is being used. We will provide more details on
 this on our wiki when it is generally available. 
 
+#### __Extensions.WaitForCloudInit__
+
+_Type: Boolean_  
+_Default: n_
+
+Waits for cloud-init to complete (cloud-init status --wait) before executing VM extensions.
+
+Both cloud-init and VM extensions are common ways to customize a VM during initial deployment. By
+default, the agent will start executing extensions while cloud-init may still be in the 'config' 
+stage and won't wait for the 'final' stage to complete. Cloud-init and extensions may execute operations
+that conflict with each other (for example, both of them may try to install packages). Setting this option
+to 'y' ensures that VM extensions are executed only after cloud-init has completed all its stages.
+
+Note that using this option requires creating a custom image with the value of this option set to 'y', in
+order to ensure that the wait is performed during the initial deployment of the VM.
+
+#### __Extensions.WaitForCloudInitTimeout__
+
+_Type: Integer_  
+_Default: 3600_
+
+Timeout in seconds for the Agent to wait on cloud-init. If the timeout elapses, the Agent will continue 
+executing VM extensions. See Extensions.WaitForCloudInit for more details. 
+
 #### __Extensions.GoalStatePeriod__
 
 _Type: Integer_  
@@ -273,19 +297,38 @@ _Note_: setting up this parameter to more than a few minutes can make the state 
 the VM be reported as unresponsive/unavailable on the Azure portal. Also, this 
 setting affects how fast the agent starts executing extensions. 
 
+#### __AutoUpdate.UpdateToLatestVersion__
+
+_Type: Boolean_
+_Default: y_
+
+Enables auto-update of the Extension Handler. The Extension Handler is responsible
+for managing extensions and reporting VM status. The core functionality of the agent
+is contained in the Extension Handler, and we encourage users to enable this option
+in order to maintain an up to date version.
+ 
+When this option is enabled, the Agent will install new versions when they become
+available. When disabled, the Agent will not install any new versions, but it will use
+the most recent version already installed on the VM.
+
+_Notes_:
+1. This option was added on version 2.10.0.8 of the Agent. For previous versions, see AutoUpdate.Enabled.
+2. If both options are specified in waagent.conf, AutoUpdate.UpdateToLatestVersion overrides the value set for AutoUpdate.Enabled.
+3. Changing config option requires a service restart to pick up the updated setting.
+
+For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output). <br/>
+For more information on the agent update, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#how-auto-update-works-for-extension-handler). <br/>
+For more information on the AutoUpdate.UpdateToLatestVersion vs AutoUpdate.Enabled, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#autoupdateenabled-vs-autoupdateupdatetolatestversion). <br/>
+
 #### __AutoUpdate.Enabled__
 
 _Type: Boolean_  
 _Default: y_
 
-Enables auto-update of the Extension Handler. The Extension Handler is responsible 
-for managing extensions and reporting VM status. The core functionality of the agent
-is contained in the Extension Handler, and we encourage users to enable this option 
-in order to maintain an up to date version.
+Enables auto-update of the Extension Handler. This flag is supported for legacy reasons and we strongly recommend using AutoUpdate.UpdateToLatestVersion instead. 
+The difference between these 2 flags is that, when set to 'n', AutoUpdate.Enabled will use the version of the Extension Handler that is pre-installed on the image, while AutoUpdate.UpdateToLatestVersion will use the most recent version that has already been installed on the VM (via auto-update).
 
 On most distros the default value is 'y'.
-
-For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output).
 
 #### __Provisioning.Agent__
 

@@ -86,9 +86,9 @@ def mock_update_handler(protocol,
 
     try:
         with patch("azurelinuxagent.ga.exthandlers.get_exthandlers_handler", return_value=exthandlers_handler):
-            with patch("azurelinuxagent.ga.agent_update_handler.get_agent_update_handler", return_value=agent_update_handler):
+            with patch("azurelinuxagent.ga.update.get_agent_update_handler", return_value=agent_update_handler):
                 with patch("azurelinuxagent.ga.remoteaccess.get_remote_access_handler", return_value=remote_access_handler):
-                    with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
+                    with patch("azurelinuxagent.ga.update.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
                         with patch.object(UpdateHandler, "is_running", PropertyMock(side_effect=is_running)):
                             with patch('azurelinuxagent.ga.update.time.sleep', side_effect=lambda _: mock_sleep(0.001)) as sleep:
                                 with patch('sys.exit', side_effect=lambda _: 0) as mock_exit:

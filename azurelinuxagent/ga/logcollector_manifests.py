@@ -122,6 +122,6 @@ echo,### Gathering Disk Info ###
 diskinfo,
 
 echo,### Gathering Guest ProxyAgent Log Files ###
-copy,/var/log/proxyagent/*
+copy,/var/log/azure-proxy-agent/*
 echo,
 """

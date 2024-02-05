@@ -75,6 +75,7 @@ class WALAEventOperation:
     CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsDisabled = "CGroupsDisabled"
     CGroupsInfo = "CGroupsInfo"
+    CloudInit = "CloudInit"
     CollectEventErrors = "CollectEventErrors"
     CollectEventUnicodeErrors = "CollectEventUnicodeErrors"
     ConfigurationChange = "ConfigurationChange"

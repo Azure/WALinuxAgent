@@ -149,6 +149,8 @@ class UpdateHandler(object):
         self._last_check_memory_usage_time = time.time()
         self._check_memory_usage_last_error_report = datetime.min
 
+        self._cloud_init_completed = False  # Only used when Extensions.WaitForCloudInit is enabled; note that this variable is always reset on service start.
+
         # VM Size is reported via the heartbeat, default it here.
         self._vm_size = None
 
@@ -458,6 +460,22 @@ class UpdateHandler(object):
                     logger.info("The current Fabric goal state is older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}",
                         egs.created_on_timestamp, last_fast_track_timestamp)
 
+    def _wait_for_cloud_init(self):
+        if conf.get_wait_for_cloud_init() and not self._cloud_init_completed:
+            message = "Waiting for cloud-init to complete..."
+            logger.info(message)
+            add_event(op=WALAEventOperation.CloudInit, message=message)
+            try:
+                output = shellutil.run_command(["cloud-init", "status", "--wait"], timeout=conf.get_wait_for_cloud_init_timeout())
+                message = "cloud-init completed\n{0}".format(output)
+                logger.info(message)
+                add_event(op=WALAEventOperation.CloudInit, message=message)
+            except Exception as e:
+                message = "An error occurred while waiting for cloud-init; will proceed to execute VM extensions. Extensions that have conflicts with cloud-init may fail.\n{0}".format(ustr(e))
+                logger.error(message)
+                add_event(op=WALAEventOperation.CloudInit, message=message, is_success=False, log_event=False)
+            self._cloud_init_completed = True  # Mark as completed even on error since we will proceed to execute extensions
+
     def _get_vm_size(self, protocol):
         """
         Including VMSize is meant to capture the architecture of the VM (i.e. arm64 VMs will
@@ -561,6 +579,8 @@ class UpdateHandler(object):
 
         # check for agent updates
         agent_update_handler.run(self._goal_state, self._processing_new_extensions_goal_state())
+
+        self._wait_for_cloud_init()
 
         try:
             if self._processing_new_extensions_goal_state():
