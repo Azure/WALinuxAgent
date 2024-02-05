@@ -117,6 +117,7 @@ __SWITCH_OPTIONS__ = {
     "Logs.Console": True,
     "Logs.Collect": True,
     "Extensions.Enabled": True,
+    "Extensions.WaitForCloudInit": False,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
     "Provisioning.DeleteRootPassword": False,
@@ -170,6 +171,7 @@ __STRING_OPTIONS__ = {
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
     "Extensions.InitialGoalStatePeriod": 6,
+    "Extensions.WaitForCloudInitTimeout": 3600,
     "OS.EnableFirewallPeriod": 300,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
@@ -370,6 +372,14 @@ def get_ssh_host_keypair_mode(conf=__conf__):
 
 def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
+
+
+def get_wait_for_cloud_init(conf=__conf__):
+    return conf.get_switch("Extensions.WaitForCloudInit", False)
+
+
+def get_wait_for_cloud_init_timeout(conf=__conf__):
+    return conf.get_switch("Extensions.WaitForCloudInitTimeout", 3600)
 
 
 def get_goal_state_period(conf=__conf__):
