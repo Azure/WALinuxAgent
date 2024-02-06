@@ -143,7 +143,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info(
             'Executing update-waagent-conf remote script to update agent update config flags to allow and download test versions')
         output: str = self._ssh_client.run_command(
-                              "update-waagent-conf Debug.DownloadNewAgents=y Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
+                              "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
         log.info('Successfully updated agent update config \n %s', output)
 
     @staticmethod
