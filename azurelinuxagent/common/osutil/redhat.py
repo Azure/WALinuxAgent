@@ -117,12 +117,11 @@ class RedhatOSUtil(Redhat6xOSUtil):
             logger.warn("[{0}] failed, attempting fallback".format(' '.join(hostnamectl_cmd)))
             DefaultOSUtil.set_hostname(self, hostname)
 
-    def get_nm_controlled(self):
-        ifname = self.get_if_name()
+    def get_nm_controlled(self, ifname):
         filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
         nm_controlled_cmd = ['grep', 'NM_CONTROLLED=', filepath]
         try:
-            result = shellutil.run_command(nm_controlled_cmd, log_error=False, encode_output=False).rstrip()
+            result = shellutil.run_command(nm_controlled_cmd, log_error=False).rstrip()
 
             if result and len(result.split('=')) > 1:
                 # Remove trailing white space and ' or " characters
@@ -140,17 +139,87 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
         return True
 
-    def publish_hostname(self, hostname):
+    def get_nic_operational_and_general_states(self, ifname):
+        """
+        Checks the contents of /sys/class/net/{ifname}/operstate and the results of 'nmcli -g general.state device show {ifname}' to determine the state of the provided interface.
+        Raises an exception if the network interface state cannot be determined.
+        """
+        filepath = "/sys/class/net/{0}/operstate".format(ifname)
+        nic_general_state_cmd = ['nmcli', '-g', 'general.state', 'device', 'show', ifname]
+        if not os.path.isfile(filepath):
+            msg = "Unable to determine primary network interface {0} state, because state file does not exist: {1}".format(ifname, filepath)
+            logger.warn(msg)
+            raise Exception(msg)
+
+        try:
+            nic_oper_state = fileutil.read_file(filepath).rstrip().lower()
+            nic_general_state = shellutil.run_command(nic_general_state_cmd, log_error=True).rstrip().lower()
+            if nic_oper_state != "up":
+                logger.warn("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_oper_state))
+            else:
+                logger.info("The primary network interface {0} operational state is '{1}'.".format(ifname, nic_oper_state))
+            if nic_general_state != "100 (connected)":
+                logger.warn("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
+            else:
+                logger.info("The primary network interface {0} general state is '{1}'.".format(ifname, nic_general_state))
+            return nic_oper_state, nic_general_state
+        except Exception as e:
+            msg = "Unexpected error while determining the primary network interface state: {0}".format(e)
+            logger.warn(msg)
+            raise Exception(msg)
+
+    def check_and_recover_nic_state(self, ifname):
+        """
+        Checks if the provided network interface is in an 'up' state. If the network interface is in a 'down' state,
+        attempt to recover the interface by restarting the Network Manager service.
+
+        Raises an exception if an attempt to bring the interface into an 'up' state fails, or if the state
+         of the network interface cannot be determined.
+        """
+        nic_operstate, nic_general_state = self.get_nic_operational_and_general_states(ifname)
+        if nic_operstate == "down" or "disconnected" in nic_general_state:
+            logger.info("Restarting the Network Manager service to recover network interface {0}".format(ifname))
+            self.restart_network_manager()
+            # Interface does not come up immediately after NetworkManager restart. Wait 5 seconds before checking
+            # network interface state.
+            time.sleep(5)
+            nic_operstate, nic_general_state = self.get_nic_operational_and_general_states(ifname)
+            # It is possible for network interface to be in an unknown or unmanaged state. Log warning if state is not
+            # down, disconnected, up, or connected
+            if nic_operstate != "up" or nic_general_state != "100 (connected)":
+                msg = "Network Manager restart failed to bring network interface {0} into 'up' and 'connected' state".format(ifname)
+                logger.warn(msg)
+                raise Exception(msg)
+            else:
+                logger.info("Network Manager restart successfully brought the network interface {0} into 'up' and 'connected' state".format(ifname))
+        elif nic_operstate != "up" or nic_general_state != "100 (connected)":
+            # We already logged a warning with the network interface state in get_nic_operstate(). Raise an exception
+            # for the env thread to send to telemetry.
+            raise Exception("The primary network interface {0} operational state is '{1}' and general state is '{2}'.".format(ifname, nic_operstate, nic_general_state))
+
+    def restart_network_manager(self):
+        shellutil.run("service NetworkManager restart")
+
+    def publish_hostname(self, hostname, recover_nic=False):
         """
         Restart NetworkManager first before publishing hostname, only if the network interface is not controlled by the
         NetworkManager service (as determined by NM_CONTROLLED=n in the interface configuration). If the NetworkManager
         service is restarted before the agent publishes the hostname, and NM_controlled=y, a race condition may happen
         between the NetworkManager service and the Guest Agent making changes to the network interface configuration
         simultaneously.
+
+        Note: check_and_recover_nic_state(ifname) raises an Exception if an attempt to recover the network interface
+        fails, or if the network interface state cannot be determined. Callers should handle this exception by sending
+        an event to telemetry.
+
+        TODO: Improve failure reporting and add success reporting to telemetry for hostname changes. Right now we are only reporting failures to telemetry by raising an Exception in publish_hostname for the calling thread to handle by reporting the failure to telemetry.
         """
-        if not self.get_nm_controlled():
-            shellutil.run("service NetworkManager restart")
-        super(RedhatOSUtil, self).publish_hostname(hostname)
+        ifname = self.get_if_name()
+        nm_controlled = self.get_nm_controlled(ifname)
+        if not nm_controlled:
+            self.restart_network_manager()
+        # TODO: Current recover logic is only effective when the NetworkManager manages the network interface. Update the recover logic so it is effective even when NM_CONTROLLED=n
+        super(RedhatOSUtil, self).publish_hostname(hostname, recover_nic and nm_controlled)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
@@ -193,7 +262,11 @@ class RedhatOSModernUtil(RedhatOSUtil):
             else:
                 logger.warn("exceeded restart retries")
 
-    def publish_hostname(self, hostname):
+    def check_and_recover_nic_state(self, ifname):
+        # TODO: Implement and test a way to recover the network interface for RedhatOSModernUtil
+        pass
+
+    def publish_hostname(self, hostname, recover_nic=False):
         # RedhatOSUtil was updated to conditionally run NetworkManager restart in response to a race condition between
         # NetworkManager restart and the agent restarting the network interface during publish_hostname. Keeping the
         # NetworkManager restart in RedhatOSModernUtil because the issue was not reproduced on these versions.

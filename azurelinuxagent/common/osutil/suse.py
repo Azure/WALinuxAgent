@@ -72,7 +72,7 @@ class SUSEOSUtil(SUSE11OSUtil):
         super(SUSEOSUtil, self).__init__()
         self.dhclient_name = 'wickedd-dhcp4'
 
-    def publish_hostname(self, hostname):
+    def publish_hostname(self, hostname, recover_nic=False):
         self.set_dhcp_hostname(hostname)
         self.set_hostname_record(hostname)
         ifname = self.get_if_name()

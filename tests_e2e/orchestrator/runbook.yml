@@ -29,7 +29,7 @@ variable:
   # Test suites to execute
   #
   - name: test_suites
-    value: "agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, fips, agent_ext_workflow, agent_status, multi_config_ext, agent_cgroups, ext_cgroups, agent_firewall, ext_telemetry_pipeline, ext_sequencing, agent_persist_firewall, publish_hostname, agent_update"
+    value: "agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, fips, agent_ext_workflow, agent_status, multi_config_ext, agent_cgroups, ext_cgroups, agent_firewall, ext_telemetry_pipeline, ext_sequencing, agent_persist_firewall, publish_hostname, agent_update, recover_network_interface"
 
   #
   # Parameters used to create test VMs

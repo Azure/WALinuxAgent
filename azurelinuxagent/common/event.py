@@ -95,6 +95,7 @@ class WALAEventOperation:
     HealthCheck = "HealthCheck"
     HealthObservation = "HealthObservation"
     HeartBeat = "HeartBeat"
+    HostnamePublishing = "HostnamePublishing"
     HostPlugin = "HostPlugin"
     HostPluginHeartbeat = "HostPluginHeartbeat"
     HostPluginHeartbeatExtended = "HostPluginHeartbeatExtended"

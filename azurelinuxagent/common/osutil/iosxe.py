@@ -58,12 +58,12 @@ class IosxeOSUtil(DefaultOSUtil):
             logger.warn("[{0}] failed with error: {1}, attempting fallback".format(' '.join(hostnamectl_cmd), ustr(e)))
             DefaultOSUtil.set_hostname(self, hostname)
 
-    def publish_hostname(self, hostname):
+    def publish_hostname(self, hostname, recover_nic=False):
         """
         Restart NetworkManager first before publishing hostname
         """
         shellutil.run("service NetworkManager restart")
-        super(IosxeOSUtil, self).publish_hostname(hostname)
+        super(IosxeOSUtil, self).publish_hostname(hostname, recover_nic)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)
