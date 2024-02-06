@@ -103,11 +103,7 @@ class RecoverNetworkInterface(AgentVmTest):
         log.info("")
         log.info("Using CSE to bring the primary network interface down and call the OSUtil to bring the interface back up. Command to execute: {0}".format(script))
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
-        custom_script.enable(
-            protected_settings={
-                'commandToExecute': script
-            }
-        )
+        custom_script.enable(settings={'commandToExecute': script})
 
         # Check that the interface was down and brought back up in instance view
         log.info("")
