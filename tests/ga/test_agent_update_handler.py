@@ -509,7 +509,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertTrue(agent.is_blacklisted, "Agent should be blacklisted")
             self.assertEqual(3, agent.get_update_attempt_count(), "Agent update attempts should be 3")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "Attempted enough retries for version: {0} but still agent not recovered from bad state".format(latest_version) in kwarg[
+                                     "Attempted enough update retries for version: {0} but still agent not recovered from bad state".format(latest_version) in kwarg[
                                          'message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]),
                              "Update is not allowed after 3 attempts")

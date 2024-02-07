@@ -17,7 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import glob
-import logging
 import os
 import shutil
 
@@ -119,7 +118,7 @@ class GAVersionUpdater(object):
         if not os.path.isfile(agent_handler_manifest_file):
             try:
                 # Clean up the agent directory if the manifest file is missing
-                logging.info("Agent handler manifest file is missing, cleaning up the agent directory: {0}".format(agent_dir))
+                logger.info("Agent handler manifest file is missing, cleaning up the agent directory: {0}".format(agent_dir))
                 if os.path.isdir(agent_dir):
                     shutil.rmtree(agent_dir, ignore_errors=True)
             except Exception as err:

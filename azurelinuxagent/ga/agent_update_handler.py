@@ -189,7 +189,7 @@ class AgentUpdateHandler(object):
             # Otherewise we allow the update by increment the update attempt count and clear the bad state to make good agent
             # [Note: As a result, it is breaking contract between RSM and agent, we may NOT honor the RSM retries for that version]
             if agent.get_update_attempt_count() >= 3:
-                msg = "Attempted enough retries for version: {0} but still agent not recovered from bad state. So, we stop updating to this version".format(str(agent.version))
+                msg = "Attempted enough update retries for version: {0} but still agent not recovered from bad state. So, we stop updating to this version".format(str(agent.version))
                 raise AgentUpdateError(msg)
             else:
                 agent.clear_error()
