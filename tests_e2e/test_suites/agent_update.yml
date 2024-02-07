@@ -3,7 +3,7 @@
 # Self-update: If vm not enrolled into RSM, it will validate agent uses self-update to update to latest version published
 name: "AgentUpdate"
 tests:
-#  - "agent_update/rsm_update.py"  TODO: will enable this test once we have a new test version published
+   - "agent_update/rsm_update.py"
    - "agent_update/self_update.py"
 images:
     - "random(endorsed, 10)"
