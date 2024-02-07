@@ -87,6 +87,12 @@ class ConfigurationProvider(object):
         except ValueError:
             return self._get_default(default_value)
 
+    def is_present(self, key):
+        """
+        Returns True if the given flag present in the configuration file, False otherwise.
+        """
+        return self.values.get(key) is not None
+
 
 __conf__ = ConfigurationProvider()
 
@@ -129,6 +135,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwap": False,
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
+    "AutoUpdate.UpdateToLatestVersion": True,
     "EnableOverProvisioning": True,
     #
     # "Debug" options are experimental and may be removed in later
@@ -137,7 +144,6 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupLogMetrics": False,
     "Debug.CgroupDisableOnProcessCheckFailure": True,
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
-    "Debug.DownloadNewAgents": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True
@@ -228,6 +234,13 @@ def get_switch_default_value(option):
     if option in __SWITCH_OPTIONS__:
         return __SWITCH_OPTIONS__[option]
     raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
+def is_present(key, conf=__conf__):
+    """
+    Returns True if the given flag present in the configuration file, False otherwise.
+    """
+    return conf.is_present(key)
 
 
 def enable_firewall(conf=__conf__):
@@ -513,15 +526,19 @@ def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
 
 
-def get_download_new_agents(conf=__conf__):
+def get_auto_update_to_latest_version(conf=__conf__):
     """
-    If True, the agent go through update logic to look for new agents to download otherwise it will stop agent updates.
-    NOTE: AutoUpdate.Enabled controls whether the Agent downloads new update and also whether any downloaded updates are started or not, while DownloadNewAgents controls only the former.
-    AutoUpdate.Enabled == false -> Agent preinstalled on the image will process extensions and will not update (regardless of DownloadNewAgents flag)
-    AutoUpdate.Enabled == true and DownloadNewAgents == true, any update already downloaded will be started, and agent look for future updates
-    AutoUpdate.Enabled == true and DownloadNewAgents == false, any update already downloaded will be started, but the agent will not look for future updates
+    If set to True, agent will update to the latest version
+    NOTE:
+        when both turned on, both AutoUpdate.Enabled and AutoUpdate.UpdateToLatestVersion same meaning: update to latest version
+        when turned off, AutoUpdate.Enabled: reverts to pre-installed agent, AutoUpdate.UpdateToLatestVersion: uses latest version already installed on the vm and does not download new agents
+        Even we are deprecating AutoUpdate.Enabled, we still need to support if users explicitly setting it instead new flag.
+        If AutoUpdate.UpdateToLatestVersion is present, it overrides any value set for AutoUpdate.Enabled (if present).
+        If AutoUpdate.UpdateToLatestVersion is not present but AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior
+        if both not present, we default to True.
     """
-    return conf.get_switch("Debug.DownloadNewAgents", True)
+    default = get_autoupdate_enabled(conf=conf)
+    return conf.get_switch("AutoUpdate.UpdateToLatestVersion", default)
 
 
 def get_cgroup_check_period(conf=__conf__):
