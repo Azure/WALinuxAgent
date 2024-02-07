@@ -35,7 +35,7 @@ def get_requested_version(gs: GoalState) -> str:
         raise Exception(
             u"No manifest links found for agent family Test, skipping agent update verification")
     manifest = agent_family_manifests[0]
-    if manifest.is_requested_version_specified and manifest.version is not None:
+    if manifest.version is not None:
         return str(manifest.version)
     return ""
 

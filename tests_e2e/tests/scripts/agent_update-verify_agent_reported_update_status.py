@@ -36,8 +36,7 @@ def check_agent_reported_update_status(expected_version: str) -> bool:
         with open(file, 'r') as f:
             data = json.load(f)
             log.info("Agent status file is %s and it's content %s", file, data)
-            status = data["__status__"]
-            guest_agent_status = status["aggregateStatus"]["guestAgentStatus"]
+            guest_agent_status = data["aggregateStatus"]["guestAgentStatus"]
             if "updateStatus" in guest_agent_status.keys():
                 if guest_agent_status["updateStatus"]["expectedVersion"] == expected_version:
                     log.info("we found the expected version %s in agent status file", expected_version)
