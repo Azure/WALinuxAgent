@@ -276,7 +276,8 @@ class AgentTestSuitesCombinator(Combinator):
             "c_env_name": self.runbook.vm_name,
             "c_platform": [
                 {
-                    "type": "ready"
+                    "type": "ready",
+                    "capture_vm_information": False
                 }
             ],
             "c_environment": {
@@ -331,7 +332,8 @@ class AgentTestSuitesCombinator(Combinator):
             },
             "c_platform": [
                 {
-                    "type": "ready"
+                    "type": "ready",
+                    "capture_vm_information": False
                 }
             ],
             "c_location": self.runbook.location,
@@ -356,6 +358,7 @@ class AgentTestSuitesCombinator(Combinator):
                     "admin_username": self.runbook.user,
                     "admin_private_key_file": self.runbook.identity_file,
                     "keep_environment": self.runbook.keep_environment,
+                    "capture_vm_information": False,
                     "azure": {
                         "deploy": True,
                         "cloud": self.runbook.cloud,
@@ -406,7 +409,8 @@ class AgentTestSuitesCombinator(Combinator):
         return {
             "c_platform": [
                 {
-                    "type": "ready"
+                    "type": "ready",
+                    "capture_vm_information": False
                 }
             ],
 
