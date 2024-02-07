@@ -28,7 +28,7 @@ class TestAgentUpdate(UpdateTestCase):
         clear_singleton_instances(ProtocolUtil)
 
     @contextlib.contextmanager
-    def _get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, protocol_get_error=False):
+    def _get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, protocol_get_error=False, mock_get_header=None, mock_put_header=None):
         # Default to DATA_FILE of test_data parameter raises the pylint warning
         # W0102: Dangerous default value DATA_FILE (builtins.dict) as argument (dangerous-default-value)
         test_data = DATA_FILE if test_data is None else test_data
@@ -52,7 +52,10 @@ class TestAgentUpdate(UpdateTestCase):
                 protocol.aggregate_status = json.loads(args[0])
                 return MockHttpResponse(status=201)
 
-            protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
+            http_get_handler = mock_get_header if mock_get_header else get_handler
+            http_put_handler = mock_put_header if mock_put_header else put_handler
+
+            protocol.set_http_handlers(http_get_handler=http_get_handler, http_put_handler=http_put_handler)
 
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
@@ -402,7 +405,7 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
             self.assertEqual(1, vm_agent_update_status.code)
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
-            self.assertIn("Agent: 9.9.9.10 is not downloaded properly", vm_agent_update_status.message)
+            self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
 
     def test_it_should_report_update_status_with_missing_rsm_version_error(self):
         data_file = DATA_FILE.copy()
@@ -506,7 +509,28 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertTrue(agent.is_blacklisted, "Agent should be blacklisted")
             self.assertEqual(3, agent.get_update_attempt_count(), "Agent update attempts should be 3")
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
-                                     "Did 3 update attempts previously for version: {0} but still agent not recovered from bad state".format(latest_version) in kwarg[
+                                     "Attempted enough retries for version: {0} but still agent not recovered from bad state".format(latest_version) in kwarg[
                                          'message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]),
                              "Update is not allowed after 3 attempts")
+
+    def test_it_should_fail_the_update_if_agent_pkg_is_invalid(self):
+        agent_uri = 'https://foo.blob.core.windows.net/bar/OSTCExtensions.WALinuxAgent__9.9.9.10'
+
+        def http_get_handler(uri, *_, **__):
+            if uri in (agent_uri, 'http://168.63.129.16:32526/extensionArtifact'):
+                response = load_bin_data("ga/WALinuxAgent-9.9.9.10-no_manifest.zip")
+                return MockHttpResponse(status=httpclient.OK, body=response)
+            return None
+        self.prepare_agents(count=1)
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+        with self._get_agent_update_handler(test_data=data_file, mock_get_header=http_get_handler) as (agent_update_handler, mock_telemetry):
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family("9.9.9.10")
+            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
+            agent_update_handler._protocol.client.update_goal_state()
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            self._assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION)])
+            self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
+                                     "Downloaded agent package: WALinuxAgent-9.9.9.10 is missing agent handler manifest file" in kwarg['message'] and kwarg[
+                                         'op'] == WALAEventOperation.AgentUpgrade]), "Agent update should fail")

@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import glob
+import logging
 import os
 import shutil
 
@@ -27,7 +28,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_DIR_PATTERN, CURRENT_VERSION
-from azurelinuxagent.ga.guestagent import GuestAgent
+from azurelinuxagent.ga.guestagent import GuestAgent, AGENT_MANIFEST_FILE
 
 
 class GAVersionUpdater(object):
@@ -98,6 +99,33 @@ class GAVersionUpdater(object):
         """
         self._gs_id = gs_id
 
+    @staticmethod
+    def download_new_agent_pkg(package_to_download, protocol, is_fast_track_goal_state):
+        """
+        Function downloads the new agent.
+        @param package_to_download: package to download
+        @param protocol: protocol object
+        @param is_fast_track_goal_state: True if goal state is fast track else False
+        """
+        agent_name = "{0}-{1}".format(AGENT_NAME, package_to_download.version)
+        agent_dir = os.path.join(conf.get_lib_dir(), agent_name)
+        agent_pkg_path = ".".join((os.path.join(conf.get_lib_dir(), agent_name), "zip"))
+        agent_handler_manifest_file = os.path.join(agent_dir, AGENT_MANIFEST_FILE)
+        if not os.path.exists(agent_dir) or not os.path.isfile(agent_handler_manifest_file):
+            protocol.client.download_zip_package("agent package", package_to_download.uris, agent_pkg_path, agent_dir, use_verify_header=is_fast_track_goal_state)
+        else:
+            logger.info("Agent {0} was previously downloaded - skipping download", agent_name)
+
+        if not os.path.isfile(agent_handler_manifest_file):
+            try:
+                # Clean up the agent directory if the manifest file is missing
+                logging.info("Agent handler manifest file is missing, cleaning up the agent directory: {0}".format(agent_dir))
+                if os.path.isdir(agent_dir):
+                    shutil.rmtree(agent_dir, ignore_errors=True)
+            except Exception as err:
+                logger.warn("Unable to delete Agent directory: {0}".format(err))
+            raise AgentUpdateError("Downloaded agent package: {0} is missing agent handler manifest file: {1}".format(agent_name, agent_handler_manifest_file))
+
     def download_and_get_new_agent(self, protocol, agent_family, goal_state):
         """
         Function downloads the new agent and returns the downloaded version.
@@ -110,7 +138,8 @@ class GAVersionUpdater(object):
             self._agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
         package_to_download = self._get_agent_package_to_download(self._agent_manifest, self._version)
         is_fast_track_goal_state = goal_state.extensions_goal_state.source == GoalStateSource.FastTrack
-        agent = GuestAgent.from_agent_package(package_to_download, protocol, is_fast_track_goal_state)
+        self.download_new_agent_pkg(package_to_download, protocol, is_fast_track_goal_state)
+        agent = GuestAgent.from_agent_package(package_to_download)
         return agent
 
     def purge_extra_agents_from_disk(self):

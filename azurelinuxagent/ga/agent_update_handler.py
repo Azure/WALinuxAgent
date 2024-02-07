@@ -184,15 +184,12 @@ class AgentUpdateHandler(object):
             self._updater.log_new_agent_update_message()
             agent = self._updater.download_and_get_new_agent(self._protocol, agent_family, goal_state)
 
-            # We are not updating the agent if it is not downloaded properly or agent is blacklisted and already attempted 3 times.
-            # For some reason, if agent is blackslisted in previous attempts(<3), we clear the error state to make agent as good agent.
-            # If we allow to update, we increment the update attempt count.
-            if not agent.is_downloaded:
-                msg = "Agent: {0} is not downloaded properly, skipping agent update".format(str(agent.version))
-                raise AgentUpdateError(msg)
-            elif agent.get_update_attempt_count() >= 3 and agent.is_blacklisted:
-                msg = "Did {0} update attempts previously for version: {1} but still agent not recovered from bad state. So, skipping agent update".format(
-                    agent.get_update_attempt_count(), str(agent.version))
+            # Below condition is to break the update loop if new agent is in bad state in previous attempts
+            # If the bad agent update already attempted 3 times, we don't want to continue with update anymore.
+            # Otherewise we allow the update by increment the update attempt count and clear the bad state to make good agent
+            # [Note: As a result, it is breaking contract between RSM and agent, we may NOT honor the RSM retries for that version]
+            if agent.get_update_attempt_count() >= 3:
+                msg = "Attempted enough retries for version: {0} but still agent not recovered from bad state. So, we stop updating to this version".format(str(agent.version))
                 raise AgentUpdateError(msg)
             else:
                 agent.clear_error()

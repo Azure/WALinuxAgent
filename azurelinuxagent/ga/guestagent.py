@@ -10,7 +10,7 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.exception import UpdateError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_DIR_PATTERN, AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.common.version import AGENT_DIR_PATTERN, AGENT_NAME
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 
 AGENT_ERROR_FILE = "error.json"  # File name for agent error record
@@ -20,20 +20,16 @@ AGENT_UPDATE_COUNT_FILE = "update_attempt.json"  # File for tracking agent updat
 
 
 class GuestAgent(object):
-    def __init__(self, path, pkg, protocol, is_fast_track_goal_state):
+    def __init__(self, path, pkg):
         """
         If 'path' is given, the object is initialized to the version installed under that path.
 
         If 'pkg' is given, the version specified in the package information is downloaded and the object is
         initialized to that version.
 
-        'is_fast_track_goal_state' and 'protocol' are used only when a package is downloaded.
-
         NOTE: Prefer using the from_installed_agent and from_agent_package methods instead of calling __init__ directly
         """
-        self._is_fast_track_goal_state = is_fast_track_goal_state
         self.pkg = pkg
-        self._protocol = protocol
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
@@ -57,10 +53,9 @@ class GuestAgent(object):
         self.update_attempt_data.load()
 
         try:
-            self._ensure_downloaded()
             self._ensure_loaded()
         except Exception as e:
-            # If we're unable to download/unpack the agent, delete the Agent directory
+            # If we're unable to unpack the agent, delete the Agent directory
             try:
                 if os.path.isdir(self.get_agent_dir()):
                     shutil.rmtree(self.get_agent_dir(), ignore_errors=True)
@@ -81,14 +76,14 @@ class GuestAgent(object):
         """
         Creates an instance of GuestAgent using the agent installed in the given 'path'.
         """
-        return GuestAgent(path, None, None, False)
+        return GuestAgent(path, None)
 
     @staticmethod
-    def from_agent_package(package, protocol, is_fast_track_goal_state):
+    def from_agent_package(package):
         """
         Creates an instance of GuestAgent using the information provided in the 'package'; if that version of the agent is not installed it, it installs it.
         """
-        return GuestAgent(None, package, protocol, is_fast_track_goal_state)
+        return GuestAgent(None, package)
 
     @property
     def name(self):
@@ -153,44 +148,9 @@ class GuestAgent(object):
     def get_update_attempt_count(self):
         return self.update_attempt_data.count
 
-    def _ensure_downloaded(self):
-        logger.verbose(u"Ensuring Agent {0} is downloaded", self.name)
-
-        if self.is_downloaded:
-            logger.verbose(u"Agent {0} was previously downloaded - skipping download", self.name)
-            return
-
-        if self.pkg is None:
-            raise UpdateError(u"Agent {0} is missing package and download URIs".format(
-                self.name))
-
-        self._download()
-
-        msg = u"Agent {0} downloaded successfully".format(self.name)
-        logger.verbose(msg)
-        add_event(
-            AGENT_NAME,
-            version=self.version,
-            op=WALAEventOperation.Install,
-            is_success=True,
-            message=msg)
-
     def _ensure_loaded(self):
         self._load_manifest()
         self._load_error()
-
-    def _download(self):
-        try:
-            self._protocol.client.download_zip_package("agent package", self.pkg.uris, self.get_agent_pkg_path(), self.get_agent_dir(), use_verify_header=self._is_fast_track_goal_state)
-        except Exception as exception:
-            msg = "Unable to download Agent {0}: {1}".format(self.name, ustr(exception))
-            add_event(
-                AGENT_NAME,
-                op=WALAEventOperation.Download,
-                version=CURRENT_VERSION,
-                is_success=False,
-                message=msg)
-            raise UpdateError(msg)
 
     def _load_error(self):
         try:
