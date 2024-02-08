@@ -37,6 +37,7 @@ from lisa.messages import (  # pylint: disable=E0401
 @dataclass
 class AgentJUnitSchema(schema.Notifier):
     path: str = "agent.junit.xml"
+    include_subtest: bool = True
 
 
 class AgentJUnit(JUnit):
