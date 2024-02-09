@@ -182,12 +182,23 @@ class AgentUpdateHandler(object):
             if not self._updater.is_retrieved_version_allowed_to_update(agent_family):
                 return
             self._updater.log_new_agent_update_message()
-            self._updater.purge_extra_agents_from_disk()
             agent = self._updater.download_and_get_new_agent(self._protocol, agent_family, goal_state)
-            if agent.is_blacklisted or not agent.is_downloaded:
-                msg = "Downloaded agent version is in bad state : {0} , skipping agent update".format(
-                    str(agent.version))
+
+            # Below condition is to break the update loop if new agent is in bad state in previous attempts
+            # If the bad agent update already attempted 3 times, we don't want to continue with update anymore.
+            # Otherewise we allow the update by increment the update attempt count and clear the bad state to make good agent
+            # [Note: As a result, it is breaking contract between RSM and agent, we may NOT honor the RSM retries for that version]
+            if agent.get_update_attempt_count() >= 3:
+                msg = "Attempted enough update retries for version: {0} but still agent not recovered from bad state. So, we stop updating to this version".format(str(agent.version))
                 raise AgentUpdateError(msg)
+            else:
+                agent.clear_error()
+                agent.inc_update_attempt_count()
+                msg = "Agent update attempt count: {0} for version: {1}".format(agent.get_update_attempt_count(), str(agent.version))
+                logger.info(msg)
+                add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
+
+            self._updater.purge_extra_agents_from_disk()
             self._updater.proceed_with_update()
 
         except Exception as err:
