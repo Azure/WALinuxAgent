@@ -372,7 +372,6 @@ class UpdateHandler(object):
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
             self._add_accept_tcp_firewall_rule_if_not_enabled(dst_ip=protocol.get_endpoint())
-            self._reset_legacy_blacklisted_agents()
             self._cleanup_legacy_goal_state_history()
 
             # Get all thread handlers
@@ -1199,16 +1198,3 @@ class UpdateHandler(object):
         except Exception as e:
             msg = "Error while checking ip table rules:{0}".format(ustr(e))
             logger.error(msg)
-
-    def _reset_legacy_blacklisted_agents(self):
-        # Reset the state of all blacklisted agents that were blacklisted by legacy agents (i.e. not during auto-update)
-
-        # Filter legacy agents which are blacklisted but do not contain a `reason` in their error.json files
-        # (this flag signifies that this agent was blacklisted by the newer agents).
-        try:
-            legacy_blacklisted_agents = [agent for agent in self._load_agents() if
-                                         agent.is_blacklisted and agent.error.reason == '']
-            for agent in legacy_blacklisted_agents:
-                agent.clear_error()
-        except Exception as err:
-            logger.warn("Unable to reset legacy blacklisted agents due to: {0}".format(err))

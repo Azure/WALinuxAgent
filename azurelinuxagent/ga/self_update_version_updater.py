@@ -171,13 +171,6 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         logger.info(msg)
         add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
-    def purge_extra_agents_from_disk(self):
-        """
-        Remove the agents from disk except current version and new agent version if exists
-        """
-        known_agents = [CURRENT_VERSION, self._version]
-        self._purge_unknown_agents_from_disk(known_agents)
-
     def proceed_with_update(self):
         """
         upgrade to largest version. Downgrade is not supported.

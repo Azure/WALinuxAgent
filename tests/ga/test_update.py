@@ -1340,27 +1340,6 @@ class TestUpdate(UpdateTestCase):
                      "Fetching the goal state recovered from previous errors." in args[0]]
         self.assertTrue(len(info_msgs) > 0, "Agent should've logged a message when recovered from GS errors")
 
-    def test_it_should_reset_legacy_blacklisted_agents_on_process_start(self):
-        # Add some good agents
-        self.prepare_agents(count=10)
-        good_agents = [agent.name for agent in self.agents()]
-
-        # Add a set of blacklisted agents
-        self.prepare_agents(count=20, is_available=False)
-        for agent in self.agents():
-            # Assert the test environment is correctly set
-            if agent.name not in good_agents:
-                self.assertTrue(agent.is_blacklisted, "Agent {0} should be blacklisted".format(agent.name))
-            else:
-                self.assertFalse(agent.is_blacklisted, "Agent {0} should not be blacklisted".format(agent.name))
-
-        with _get_update_handler(autoupdate_enabled=False) as (update_handler, _):
-            update_handler.run(debug=True)
-            self.assertEqual(20, self.agent_count(), "All agents should be available on disk")
-            # Ensure none of the agents are blacklisted
-            for agent in self.agents():
-                self.assertFalse(agent.is_blacklisted, "Legacy Agent should not be blacklisted")
-
 
 class TestUpdateWaitForCloudInit(AgentTestCase):
     @staticmethod
