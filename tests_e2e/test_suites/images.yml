@@ -28,6 +28,7 @@ image-sets:
       - "ubuntu_1804"
       - "ubuntu_2004"
       - "ubuntu_2204"
+      - "ubuntu_2404"
 
    # Endorsed distros (ARM64) that are tested on the daily runs
    endorsed-arm64:
@@ -122,9 +123,20 @@ images:
          AzureChinaCloud: []
          AzureUSGovernment: []
    oracle_610: "Oracle Oracle-Linux 6.10 latest"
-   oracle_75: "Oracle Oracle-Linux 7.5 latest"
-   oracle_79: "Oracle Oracle-Linux ol79-gen2 latest"
-   oracle_82: "Oracle Oracle-Linux ol82-gen2 latest"
+   oracle_75:
+      urn: "Oracle Oracle-Linux 7.5 latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: []
+   oracle_79:
+      urn: "Oracle Oracle-Linux ol79-gen2 latest"
+      locations:
+         AzureChinaCloud: []
+   oracle_82:
+      urn: "Oracle Oracle-Linux ol82-gen2 latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: []
    rhel_610: "RedHat RHEL 6.10 latest"
    rhel_75:
       urn: "RedHat RHEL 7.5 latest"
@@ -163,6 +175,12 @@ images:
    ubuntu_2204: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts latest"
    ubuntu_2204_arm64:
       urn: "Canonical 0001-com-ubuntu-server-jammy 22_04-lts-arm64 latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: []
+   ubuntu_2404:
+      # TODO: Currently using the daily build, update to the release build once it is available
+      urn: "Canonical 0001-com-ubuntu-server-noble-daily 24_04-daily-lts-gen2 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []

@@ -56,12 +56,12 @@ class ExtTelemetryPipeline(AgentVmTest):
         log.info("")
         log.info("Add CSE to the test VM...")
         cse = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
-        cse.enable(settings={'commandToExecute': "echo 'enable'"})
+        cse.enable(settings={'commandToExecute': "echo 'enable'"}, protected_settings={})
         cse.assert_instance_view()
 
         log.info("")
         log.info("Add CSE to the test VM again...")
-        cse.enable(settings={'commandToExecute': "echo 'enable again'"})
+        cse.enable(settings={'commandToExecute': "echo 'enable again'"}, protected_settings={})
         cse.assert_instance_view()
 
         # Check agent log to verify ETP is enabled

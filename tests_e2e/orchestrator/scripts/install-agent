@@ -132,6 +132,17 @@ if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
 fi
 
 #
+# TODO: Remove this block once the symlink is created in the Flatcar image
+#
+# Currently, the Agent looks for /usr/share/oem/waagent.conf, but new Flatcar images use /etc/waagent.conf. Flatcar will create
+# this symlink in new images, but we need to create it for now.
+if [[ $(uname -a) == *"flatcar"* ]]; then
+  if [[ ! -f /usr/share/oem/waagent.conf ]]; then
+    ln -s "$waagent_conf_path" /usr/share/oem/waagent.conf
+  fi
+fi
+
+#
 # Restart the service
 #
 echo "Restarting service..."

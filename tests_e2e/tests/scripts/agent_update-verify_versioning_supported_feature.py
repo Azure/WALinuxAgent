@@ -33,8 +33,7 @@ def check_agent_supports_versioning() -> bool:
         with open(file, 'r') as f:
             data = json.load(f)
             log.info("Agent status file is %s and it's content %s", file, data)
-            status = data["__status__"]
-            supported_features = status["supportedFeatures"]
+            supported_features = data["supportedFeatures"]
             for supported_feature in supported_features:
                 if supported_feature["Key"] == "VersioningGovernance":
                     return True
