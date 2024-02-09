@@ -1,17 +1,14 @@
+import contextlib
 import json
 import os
+import tempfile
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import UpdateError
 from azurelinuxagent.ga.guestagent import GuestAgent, AGENT_MANIFEST_FILE, AGENT_ERROR_FILE, GuestAgentError, \
-    MAX_FAILURE
-from azurelinuxagent.common.future import httpclient
-from azurelinuxagent.common.protocol.restapi import ExtHandlerPackage
+    MAX_FAILURE, GuestAgentUpdateAttempt
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.ga.test_update import UpdateTestCase, EMPTY_MANIFEST, WITH_ERROR, NO_ERROR
-from tests.lib import wire_protocol_data
-from tests.lib.mock_wire_protocol import MockHttpResponse, mock_wire_protocol
-from tests.lib.tools import load_bin_data, patch
 
 
 class TestGuestAgent(UpdateTestCase):
@@ -102,6 +99,22 @@ class TestGuestAgent(UpdateTestCase):
         self.assertEqual(2, agent.error.failure_count)
         self.assertTrue(agent.is_blacklisted)
 
+    def test_inc_update_attempt_count(self):
+        agent = GuestAgent.from_installed_agent(self.agent_path)
+        agent.inc_update_attempt_count()
+        self.assertEqual(1, agent.update_attempt_data.count)
+
+        agent.inc_update_attempt_count()
+        self.assertEqual(2, agent.update_attempt_data.count)
+
+    def test_get_update_count(self):
+        agent = GuestAgent.from_installed_agent(self.agent_path)
+        agent.inc_update_attempt_count()
+        self.assertEqual(1, agent.get_update_attempt_count())
+
+        agent.inc_update_attempt_count()
+        self.assertEqual(2, agent.get_update_attempt_count())
+
     def test_load_manifest(self):
         self.expand_agents()
         agent = GuestAgent.from_installed_agent(self.agent_path)
@@ -139,94 +152,6 @@ class TestGuestAgent(UpdateTestCase):
 
         agent._load_error()
         self.assertTrue(agent.error is not None)
-
-    def test_download(self):
-        self.remove_agents()
-        self.assertFalse(os.path.isdir(self.agent_path))
-
-        agent_uri = 'https://foo.blob.core.windows.net/bar/OSTCExtensions.WALinuxAgent__1.0.0'
-
-        def http_get_handler(uri, *_, **__):
-            if uri == agent_uri:
-                response = load_bin_data(self._get_agent_file_name(), self._agent_zip_dir)
-                return MockHttpResponse(status=httpclient.OK, body=response)
-            return None
-
-        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(agent_uri)
-
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-            agent = GuestAgent.from_agent_package(pkg, protocol, False)
-
-        self.assertTrue(os.path.isdir(agent.get_agent_dir()))
-        self.assertTrue(agent.is_downloaded)
-
-    def test_download_fail(self):
-        self.remove_agents()
-        self.assertFalse(os.path.isdir(self.agent_path))
-
-        agent_uri = 'https://foo.blob.core.windows.net/bar/OSTCExtensions.WALinuxAgent__1.0.0'
-
-        def http_get_handler(uri, *_, **__):
-            if uri in (agent_uri, 'http://168.63.129.16:32526/extensionArtifact'):
-                return MockHttpResponse(status=httpclient.SERVICE_UNAVAILABLE)
-            return None
-
-        agent_version = self._get_agent_version()
-        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(agent_uri)
-
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-            with patch("azurelinuxagent.ga.guestagent.add_event") as add_event:
-                agent = GuestAgent.from_agent_package(pkg, protocol, False)
-
-        self.assertFalse(os.path.isfile(self.agent_path))
-
-        messages = [kwargs['message'] for _, kwargs in add_event.call_args_list if kwargs['op'] == 'Install' and kwargs['is_success'] == False]
-        self.assertEqual(1, len(messages), "Expected exactly 1 install error/ Got: {0}".format(add_event.call_args_list))
-        self.assertIn(str.format('[UpdateError] Unable to download Agent WALinuxAgent-{0}', agent_version), messages[0], "The install error does not include the expected message")
-
-        self.assertFalse(agent.is_blacklisted, "Download failures should not blacklist the Agent")
-
-    def test_invalid_agent_package_does_not_blacklist_the_agent(self):
-        agent_uri = 'https://foo.blob.core.windows.net/bar/OSTCExtensions.WALinuxAgent__9.9.9.9'
-
-        def http_get_handler(uri, *_, **__):
-            if uri in (agent_uri, 'http://168.63.129.16:32526/extensionArtifact'):
-                response = load_bin_data("ga/WALinuxAgent-9.9.9.9-no_manifest.zip")
-                return MockHttpResponse(status=httpclient.OK, body=response)
-            return None
-
-        pkg = ExtHandlerPackage(version="9.9.9.9")
-        pkg.uris.append(agent_uri)
-
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-            agent = GuestAgent.from_agent_package(pkg, protocol, False)
-
-        self.assertFalse(agent.is_blacklisted, "The agent should not be blacklisted if unable to unpack/download")
-        self.assertFalse(os.path.exists(agent.get_agent_dir()), "Agent directory should be cleaned up")
-
-    @patch("azurelinuxagent.ga.update.GuestAgent._download")
-    def test_ensure_download_skips_blacklisted(self, mock_download):
-        agent = GuestAgent.from_installed_agent(self.agent_path)
-        self.assertEqual(0, mock_download.call_count)
-
-        agent.clear_error()
-        agent.mark_failure(is_fatal=True)
-        self.assertTrue(agent.is_blacklisted)
-
-        pkg = ExtHandlerPackage(version=str(self._get_agent_version()))
-        pkg.uris.append(None)
-        # _download is mocked so there will be no http request; passing a None protocol
-        agent = GuestAgent.from_agent_package(pkg, None, False)
-
-        self.assertEqual(1, agent.error.failure_count)
-        self.assertTrue(agent.error.was_fatal)
-        self.assertTrue(agent.is_blacklisted)
-        self.assertEqual(0, mock_download.call_count)
 
 
 class TestGuestAgentError(UpdateTestCase):
@@ -308,3 +233,69 @@ class TestGuestAgentError(UpdateTestCase):
             WITH_ERROR["reason"])
         self.assertEqual(s, str(err))
         return
+
+
+UPDATE_ATTEMPT = {
+    "count": 2
+}
+
+NO_ATTEMPT = {
+    "count": 0
+}
+
+
+class TestGuestAgentUpdateAttempt(UpdateTestCase):
+    @contextlib.contextmanager
+    def get_attempt_count_file(self, attempt_count=None):
+        if attempt_count is None:
+            attempt_count = NO_ATTEMPT
+        with tempfile.NamedTemporaryFile(mode="w") as fp:
+            json.dump(attempt_count, fp)
+            fp.seek(0)
+            yield fp
+
+    def test_creation(self):
+        self.assertRaises(TypeError, GuestAgentUpdateAttempt)
+        self.assertRaises(UpdateError, GuestAgentUpdateAttempt, None)
+
+        with self.get_attempt_count_file(UPDATE_ATTEMPT) as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+            self.assertEqual(path.name, update_data.path)
+        self.assertNotEqual(None, update_data)
+
+        self.assertEqual(UPDATE_ATTEMPT["count"], update_data.count)
+
+    def test_clear(self):
+        with self.get_attempt_count_file(UPDATE_ATTEMPT) as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+            self.assertEqual(path.name, update_data.path)
+        self.assertNotEqual(None, update_data)
+
+        update_data.clear()
+        self.assertEqual(NO_ATTEMPT["count"], update_data.count)
+
+    def test_save(self):
+        with self.get_attempt_count_file(UPDATE_ATTEMPT) as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+        update_data.inc_count()
+        update_data.save()
+
+        with self.get_attempt_count_file(update_data.to_json()) as path:
+            new_data = GuestAgentUpdateAttempt(path.name)
+            new_data.load()
+
+        self.assertEqual(update_data.count, new_data.count)
+
+    def test_inc_count(self):
+        with self.get_attempt_count_file() as path:
+            update_data = GuestAgentUpdateAttempt(path.name)
+            update_data.load()
+
+        self.assertEqual(0, update_data.count)
+        update_data.inc_count()
+        self.assertEqual(1, update_data.count)
+        update_data.inc_count()
+        self.assertEqual(2, update_data.count)

@@ -104,14 +104,6 @@ class RSMVersionUpdater(GAVersionUpdater):
         logger.info(msg)
         add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
-    def purge_extra_agents_from_disk(self):
-        """
-        Remove the agents( including rsm version if exists) from disk except current version. There is a chance that rsm version could exist and/or blacklisted
-        on previous update attempts. So we should remove it from disk in order to honor current rsm version update.
-        """
-        known_agents = [CURRENT_VERSION]
-        self._purge_unknown_agents_from_disk(known_agents)
-
     def proceed_with_update(self):
         """
         upgrade/downgrade to the new version.
