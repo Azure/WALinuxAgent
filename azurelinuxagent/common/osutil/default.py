@@ -1127,7 +1127,7 @@ class DefaultOSUtil(object):
         Add specified route 
         """
         try:
-            cmd = ["ip", "route", "add", net, "via", gateway]
+            cmd = ["ip", "route", "add", str(net), "via", gateway]
             return shellutil.run_command(cmd)
         except CommandError:
             return ""
