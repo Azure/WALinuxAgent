@@ -253,9 +253,11 @@ class ExtSequencing(AgentVmssTest):
 
             log.info("------")
 
+        log.info("Test passed")
+
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
-        return self._scenario_start
+        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S')
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
