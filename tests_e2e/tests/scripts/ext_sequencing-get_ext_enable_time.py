@@ -20,68 +20,42 @@
 #
 
 import argparse
-import json
-import os
+import re
 import sys
+from datetime import datetime
 
-from pathlib import Path
+from tests_e2e.tests.lib.agent_log import AgentLog
 
 
 def main():
     """
-    Returns the timestamp of when the provided extension was enabled
+    Searches the agent log after the provided timestamp to determine when the agent enabled the provided extension.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--ext", dest='ext', required=True)
+    parser.add_argument("--after_time", dest='after_time', required=True)
     args, _ = parser.parse_known_args()
 
-    # Extension enabled time is in extension extension status file
-    ext_dirs = [item for item in os.listdir(Path('/var/lib/waagent')) if item.startswith(args.ext)]
-    if not ext_dirs:
-        print("Extension {0} directory does not exist".format(args.ext), file=sys.stderr)
-        sys.exit(1)
-    ext_status_path = Path('/var/lib/waagent/' + ext_dirs[0] + '/status')
-    ext_status_files = os.listdir(ext_status_path)
-    ext_status_files.sort()
-    if not ext_status_files:
-        # Extension did not report a status
-        print("Extension {0} did not report a status".format(args.ext), file=sys.stderr)
-        sys.exit(1)
-    latest_ext_status_path = os.path.join(ext_status_path, ext_status_files[-1])
-    ext_status_file = open(latest_ext_status_path, 'r')
-    ext_status = json.loads(ext_status_file.read())
+    # Only search the agent log after the provided timestamp: args.after_time
+    after_time = datetime.strptime(args.after_time, u'%Y-%m-%d %H:%M:%S')
+    # Agent logs for extension enable: 2024-02-09T09:29:08.943529Z INFO ExtHandler [Microsoft.Azure.Extensions.CustomScript-2.1.10] Enable extension: [bin/custom-script-shim enable]
+    enable_log_regex = r"\[{0}-[.\d]+\] Enable extension: .*".format(args.ext)
 
-    # Example status file
-    # [
-    #     {
-    #         "status": {
-    #             "status": "success",
-    #             "formattedMessage": {
-    #                 "lang": "en-US",
-    #                 "message": "Enable succeeded"
-    #             },
-    #             "operation": "Enable",
-    #             "code": "0",
-    #             "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent"
-    #         },
-    #         "version": "1.0",
-    #         "timestampUTC": "2023-12-12T23:14:45Z"
-    #     }
-    # ]
-    msg = ""
-    if len(ext_status) == 0 or not ext_status[0]['status']:
-        msg = "Extension {0} did not report a status".format(args.ext)
-    elif not ext_status[0]['status']['operation'] or ext_status[0]['status']['operation'] != 'Enable':
-        msg = "Extension {0} did not report a status for enable operation".format(args.ext)
-    elif ext_status[0]['status']['status'] != 'success':
-        msg = "Extension {0} did not report success for the enable operation".format(args.ext)
-    elif not ext_status[0]['timestampUTC']:
-        msg = "Extension {0} did not report the time the enable operation succeeded".format(args.ext)
-    else:
-        print(ext_status[0]['timestampUTC'])
-        sys.exit(0)
+    agent_log = AgentLog()
+    try:
+        for agent_record in agent_log.read():
+            if agent_record.timestamp >= after_time:
+                # The agent_record prefix for enable logs is the extension name, for example: [Microsoft.Azure.Extensions.CustomScript-2.1.10]
+                if agent_record.prefix:
+                    ext_enabled = re.match(enable_log_regex, " ".join([agent_record.prefix, agent_record.message]))
 
-    print(msg, file=sys.stderr)
+                    if ext_enabled is not None:
+                        print(agent_record.when)
+                        sys.exit(0)
+    except IOError as e:
+        print("Error when parsing agent log: {0}".format(str(e)))
+
+    print("Extension {0} was not enabled after {1}".format(args.ext, args.after_time), file=sys.stderr)
     sys.exit(1)
 
 
