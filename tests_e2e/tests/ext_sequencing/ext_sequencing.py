@@ -253,8 +253,6 @@ class ExtSequencing(AgentVmssTest):
 
             log.info("------")
 
-        log.info("Test passed")
-
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
         if self._scenario_start == datetime.min:
