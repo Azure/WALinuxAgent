@@ -46,7 +46,7 @@ def main():
         for agent_record in agent_log.read():
             if agent_record.timestamp >= after_time:
                 # The agent_record prefix for enable logs is the extension name, for example: [Microsoft.Azure.Extensions.CustomScript-2.1.10]
-                if agent_record.prefix:
+                if agent_record.prefix is not None:
                     ext_enabled = re.match(enable_log_regex, " ".join([agent_record.prefix, agent_record.message]))
 
                     if ext_enabled is not None:
