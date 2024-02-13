@@ -1849,7 +1849,7 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file['ga_manifest'] = "wire/ga_manifest_no_upgrade.xml"
         # Setting the prod frequency to mimic a real scenario
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf, autoupdate_frequency=6000) as (update_handler, mock_telemetry):
-            update_handler._protocol.mock_wire_data.set_ga_manifest_version_version(str(CURRENT_VERSION))
+            update_handler._protocol.mock_wire_data.set_version_in_ga_manifest(str(CURRENT_VERSION))
             update_handler._protocol.mock_wire_data.set_incarnation(20)
             update_handler.run(debug=True)
 
