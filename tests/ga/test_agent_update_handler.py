@@ -494,6 +494,7 @@ class TestAgentUpdate(UpdateTestCase):
                 with self.assertRaises(AgentUpgradeExitException):
                     agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(
                         str(latest_version))
+                    agent_update_handler._protocol.mock_wire_data.set_version_in_ga_manifest(str(latest_version))
                     agent_update_handler._protocol.mock_wire_data.set_incarnation(i+2)
                     agent_update_handler._protocol.client.update_goal_state()
                     agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
