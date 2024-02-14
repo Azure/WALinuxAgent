@@ -22,6 +22,7 @@
 # validates they are enabled in order of dependencies.
 #
 import copy
+import random
 import re
 import uuid
 from datetime import datetime
@@ -95,10 +96,8 @@ class ExtSequencing(AgentVmssTest):
         for ext in extensions:
             # Only check extensions which succeeded provisioning
             if "succeeded" in ext.statuses_summary[0].code:
-                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext '{extension_full_names[ext.name]}'", use_sudo=True)
-                formatted_time = datetime.strptime(enabled_time.strip(), u'%Y-%m-%dT%H:%M:%SZ')
-                if formatted_time < test_case_start:
-                    fail("Extension {0} was not enabled".format(extension_full_names[ext.name]))
+                enabled_time = ssh_client.run_command(f"ext_sequencing-get_ext_enable_time.py --ext '{extension_full_names[ext.name]}' --after_time '{test_case_start}'", use_sudo=True)
+                formatted_time = datetime.strptime(enabled_time.strip(), u'%Y-%m-%dT%H:%M:%S.%fZ')
                 enabled_times.append(
                     {
                         "name": ext.name,
@@ -184,7 +183,7 @@ class ExtSequencing(AgentVmssTest):
         }
 
         for case in self._test_cases:
-            test_case_start = datetime.now()
+            test_case_start = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
             if self._scenario_start == datetime.min:
                 self._scenario_start = test_case_start
 
@@ -201,6 +200,7 @@ class ExtSequencing(AgentVmssTest):
             # test out
             log.info("")
             log.info("Test case: {0}".format(case.__name__.replace('_', ' ')))
+            log.info("Test case start time: {0}".format(test_case_start))
             ext_template = copy.deepcopy(base_extension_template)
             ext_template['resources'][0]['properties']['virtualMachineProfile']['extensionProfile'][
                 'extensions'] = extensions
@@ -255,7 +255,9 @@ class ExtSequencing(AgentVmssTest):
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
-        return self._scenario_start
+        if self._scenario_start == datetime.min:
+            return self._scenario_start
+        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S')
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
