@@ -34,7 +34,7 @@ class CpuConsumer(threading.Thread):
         self._stopped = False
 
     def run(self):
-        threading.current_thread().setName("*Stress*")
+        threading.current_thread().setName("*Stress*")  # pylint: disable=deprecated-method
 
         while not self._stopped:
             try:
@@ -47,15 +47,15 @@ class CpuConsumer(threading.Thread):
                 while i < 30 and not self._stopped:
                     time.sleep(1)
                     i += 1
-            except Exception as exception:
-                logger.error("{0}:\n{1}", exception, traceback.format_exc())
+            except Exception as run_exception:
+                logger.error("{0}:\n{1}", run_exception, traceback.format_exc())
 
     def stop(self):
         self._stopped = True
 
 
 try:
-    threading.current_thread().setName("*StartService*")
+    threading.current_thread().setName("*StartService*")  # pylint: disable=deprecated-method
     logger.set_prefix("E2ETest")
     logger.add_logger_appender(logger.AppenderType.FILE, logger.LogLevel.INFO, "/var/log/waagent.log")
 

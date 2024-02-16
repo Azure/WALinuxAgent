@@ -14,8 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python-version: 2.6
-          - python-version: 3.4
+          - python-version: "2.6"
+          - python-version: "3.4"
 
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-20.04
@@ -42,7 +42,7 @@ jobs:
 
     - name: Test with nosetests
       run: |
-        if [[ ${{ matrix.python-version }} == 2.6 ]]; then
+        if [[ ${{ matrix.python-version }} == "2.6" ]]; then
           source /home/waagent/virtualenv/python2.6.9/bin/activate
         else
           source /home/waagent/virtualenv/python3.4.8/bin/activate
@@ -86,21 +86,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python-version: 3.5
+          - python-version: "3.5"
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e,makepkg.py"
 
-          - python-version: 3.6
+          - python-version: "3.6"
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
-          - python-version: 3.7
+          - python-version: "3.7"
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
-          - python-version: 3.8
+          - python-version: "3.8"
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
 
-          - python-version: 3.9
+          - python-version: "3.9"
             PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
+
+          - python-version: "3.10"
+            PYLINTOPTS: "--rcfile=ci/3.10.pylintrc --ignore=tests"
 
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-20.04
@@ -133,13 +136,13 @@ jobs:
         pylint $PYLINTOPTS --jobs=0 $PYLINTFILES
 
     - name: Test with nosetests
-      if: success() || (failure() && steps.install-dependencies.outcome == 'success')
+      if: matrix.python-version != '3.10' && (success() || (failure() && steps.install-dependencies.outcome == 'success'))
       run: |
         ./ci/nosetests.sh
         exit $?
 
     - name: Compile Coverage
-      if: matrix.python-version == 3.9
+      if: matrix.python-version == '3.9'
       run: |
         echo looking for coverage files :
         ls -alh | grep -i coverage
@@ -148,7 +151,7 @@ jobs:
         sudo env "PATH=$PATH" coverage report
 
     - name: Upload Coverage
-      if: matrix.python-version == 3.9
+      if: matrix.python-version ==  '3.9'
       uses: codecov/codecov-action@v3
       with:
         file: ./coverage.xml

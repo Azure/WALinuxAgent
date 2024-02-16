@@ -682,8 +682,8 @@ class WireClient(object):
             if os.path.exists(target_directory):
                 try:
                     shutil.rmtree(target_directory)
-                except Exception as exception:
-                    logger.warn("Cannot delete {0}: {1}", target_directory, ustr(exception))
+                except Exception as rmtree_exception:
+                    logger.warn("Cannot delete {0}: {1}", target_directory, ustr(rmtree_exception))
             raise
         finally:
             try:
@@ -886,11 +886,11 @@ class WireClient(object):
                              message=msg,
                              log_event=True)
                 return ret
-            except (ResourceGoneError, InvalidContainerError) as error:
+            except (ResourceGoneError, InvalidContainerError) as host_error:
                 msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
                       "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
                       "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
-                                                    new_role_config_name, type(error).__name__)
+                                                    new_role_config_name, type(host_error).__name__)
                 add_periodic(delta=logger.EVERY_SIX_HOURS,
                              name=AGENT_NAME,
                              version=CURRENT_VERSION,

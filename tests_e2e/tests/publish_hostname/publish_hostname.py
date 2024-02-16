@@ -105,7 +105,7 @@ class PublishHostname(AgentVmTest):
                                                                               self._context.username,
                                                                               self._vm_password))
 
-    def retry_ssh_if_connection_reset(self, command: str, use_sudo=False):
+    def retry_ssh_if_connection_reset(self, command: str, use_sudo=False):  # pylint: disable=inconsistent-return-statements
         # The agent may bring the network down and back up to publish the hostname, which can reset the ssh connection.
         # Adding retry here for connection reset.
         retries = 3
