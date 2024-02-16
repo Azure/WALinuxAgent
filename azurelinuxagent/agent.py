@@ -131,7 +131,7 @@ class Agent(object):
         """
         set_daemon_version(AGENT_VERSION)
         logger.set_prefix("Daemon")
-        threading.current_thread().setName("Daemon")  # pylint: disable=deprecated-method
+        threading.current_thread().name = "Daemon"
         child_args = None \
             if self.conf_file_path is None \
                 else "-configuration-path:{0}".format(self.conf_file_path)
@@ -171,7 +171,7 @@ class Agent(object):
         Run the update and extension handler
         """
         logger.set_prefix("ExtHandler")
-        threading.current_thread().setName("ExtHandler")  # pylint: disable=deprecated-method
+        threading.current_thread().name = "ExtHandler"
 
         #
         # Agents < 2.2.53 used to echo the log to the console. Since the extension handler could have been started by

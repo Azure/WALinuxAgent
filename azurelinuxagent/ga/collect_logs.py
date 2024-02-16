@@ -116,8 +116,8 @@ class CollectLogsHandler(ThreadHandlerInterface):
 
     def start(self):
         self.event_thread = threading.Thread(target=self.daemon)
-        self.event_thread.setDaemon(True)  # pylint: disable=deprecated-method
-        self.event_thread.setName(self.get_thread_name())  # pylint: disable=deprecated-method
+        self.event_thread.daemon = True
+        self.event_thread.name = self.get_thread_name()
         self.event_thread.start()
 
     def join(self):
@@ -303,8 +303,8 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
 
     def start(self):
         self.event_thread = threading.Thread(target=self.daemon)
-        self.event_thread.setDaemon(True)  # pylint: disable=deprecated-method
-        self.event_thread.setName(self.get_thread_name())  # pylint: disable=deprecated-method
+        self.event_thread.daemon = True
+        self.event_thread.name = self.get_thread_name()
         self.event_thread.start()
 
     def daemon(self):
