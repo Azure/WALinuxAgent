@@ -282,7 +282,7 @@ def _encode_message(op, message):
 
 
 def _log_event(name, op, message, duration, is_success=True):
-    global _EVENT_MSG  # pylint: disable=W0603
+    global _EVENT_MSG  # pylint: disable=W0602, W0603
 
     if not is_success:
         logger.error(_EVENT_MSG, name, op, message, duration)
@@ -604,7 +604,7 @@ class EventLogger(object):
                          TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventTid, threading.current_thread().ident),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventPid, os.getpid()),
-                         TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName())]
+                         TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName())]  # pylint: disable=deprecated-method
 
         if event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID:
             # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping

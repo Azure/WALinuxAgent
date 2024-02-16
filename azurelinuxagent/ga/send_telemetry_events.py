@@ -70,8 +70,8 @@ class SendTelemetryEventsHandler(ThreadHandlerInterface):
 
     def start(self):
         self._thread = threading.Thread(target=self._process_telemetry_thread)
-        self._thread.setDaemon(True)
-        self._thread.setName(self.get_thread_name())
+        self._thread.setDaemon(True)  # pylint: disable=deprecated-method
+        self._thread.setName(self.get_thread_name())  # pylint: disable=deprecated-method
         self._thread.start()
 
     def stop(self):

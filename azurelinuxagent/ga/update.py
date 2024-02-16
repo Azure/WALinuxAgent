@@ -411,7 +411,7 @@ class UpdateHandler(object):
             logger.warn(textutil.format_exception(error))
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
-            return
+            return  # pylint: disable=unreachable
 
         self._shutdown()
         sys.exit(0)

@@ -137,7 +137,7 @@ class Logger(object):
             msg = msg_format
         time = datetime.utcnow().strftime(Logger.LogTimeFormatInUTC)
         level_str = LogLevel.STRINGS[level]
-        thread_name = currentThread().getName()
+        thread_name = currentThread().getName()  # pylint: disable=deprecated-method
         if self.prefix is not None:
             log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, msg)
         else:

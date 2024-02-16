@@ -150,7 +150,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             route_header_line = output_lines.index("Internet:") + 1
             # Parse the file structure and left justify the routes
             route_start_line = route_header_line + 1
-            route_line_length = max([len(line) for line in output_lines[route_header_line:]])
+            route_line_length = max(len(line) for line in output_lines[route_header_line:])
             netstat_route_list = [line.ljust(route_line_length) for line in output_lines[route_start_line:]]
             # Parse the headers
             _route_headers = output_lines[route_header_line].split()

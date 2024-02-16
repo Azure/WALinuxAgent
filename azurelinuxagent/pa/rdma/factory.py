@@ -15,8 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module, import-error
-
+from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module, import-error, deprecated-module
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.pa.rdma.rdma import RDMAHandler
 from azurelinuxagent.common.version import DISTRO_FULL_NAME, DISTRO_VERSION
