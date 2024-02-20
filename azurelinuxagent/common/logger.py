@@ -19,7 +19,7 @@ Log utils
 """
 import sys
 from datetime import datetime, timedelta
-from threading import currentThread
+from threading import current_thread
 
 from azurelinuxagent.common.future import ustr
 
@@ -137,7 +137,7 @@ class Logger(object):
             msg = msg_format
         time = datetime.utcnow().strftime(Logger.LogTimeFormatInUTC)
         level_str = LogLevel.STRINGS[level]
-        thread_name = currentThread().getName()  # pylint: disable=deprecated-method
+        thread_name = current_thread().name
         if self.prefix is not None:
             log_item = u"{0} {1} {2} {3} {4}\n".format(time, level_str, thread_name, self.prefix, msg)
         else:

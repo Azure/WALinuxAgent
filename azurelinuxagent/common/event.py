@@ -604,7 +604,7 @@ class EventLogger(object):
                          TelemetryEventParam(CommonTelemetryEventSchema.OpcodeName, event_timestamp.strftime(logger.Logger.LogTimeFormatInUTC)),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventTid, threading.current_thread().ident),
                          TelemetryEventParam(CommonTelemetryEventSchema.EventPid, os.getpid()),
-                         TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().getName())]  # pylint: disable=deprecated-method
+                         TelemetryEventParam(CommonTelemetryEventSchema.TaskName, threading.current_thread().name)]
 
         if event.eventId == TELEMETRY_EVENT_EVENT_ID and event.providerId == TELEMETRY_EVENT_PROVIDER_ID:
             # Currently only the GuestAgentExtensionEvents has these columns, the other tables dont have them so skipping

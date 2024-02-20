@@ -542,8 +542,8 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
 
     def start(self):
         self.thread = threading.Thread(target=self.daemon)
-        self.thread.setDaemon(True)  # pylint: disable=deprecated-method
-        self.thread.setName(CollectTelemetryEventsHandler.get_thread_name())  # pylint: disable=deprecated-method
+        self.thread.daemon = True
+        self.thread.name = CollectTelemetryEventsHandler.get_thread_name()
         self.thread.start()
 
     def stop(self):
