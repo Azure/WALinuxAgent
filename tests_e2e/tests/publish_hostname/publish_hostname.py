@@ -26,6 +26,7 @@
 
 import datetime
 import re
+from typing import List, Dict, Any
 
 from assertpy import fail
 from time import sleep
@@ -203,6 +204,19 @@ class PublishHostname(AgentVmTest):
                 if e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr):
                     self.check_agent_reports_status()
                 raise
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            #
+            # We may see temporary network unreachable warnings since we are bringing the network interface down
+            # 2024-02-16T09:27:14.114569Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [HttpError] [HTTP Failed] GET http://168.63.129.16:32526/health -- IOError [Errno 101] Network is unreachable -- 1 attempts made --- [NOTE: Will not log the same error for the next hour]
+            #
+            {
+                'message': r"SendHostPluginHeartbeat:.*GET http://168.63.129.16:32526/health -- IOError [Errno 101] Network is unreachable",
+                'if': lambda r: r.level == "WARNING"
+            }
+        ]
+        return ignore_rules
 
 
 if __name__ == "__main__":
