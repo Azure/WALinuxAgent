@@ -70,7 +70,7 @@ class ExtSequencing(AgentVmssTest):
 
     @staticmethod
     def _get_dependency_map(extensions: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-        dependency_map: Dict[str, Dict[str, Any]] = dict()
+        dependency_map: Dict[str, Dict[str, Any]] = {}
 
         for ext in extensions:
             ext_name = ext['name']
@@ -115,7 +115,7 @@ class ExtSequencing(AgentVmssTest):
 
     @staticmethod
     def _validate_extension_sequencing(dependency_map: Dict[str, Dict[str, Any]], sorted_extension_names: List[str], relax_check: bool):
-        installed_ext = dict()
+        installed_ext = {}
 
         # Iterate through the extensions in the enabled order and validate if their depending extensions are already
         # enabled prior to that.
@@ -154,7 +154,7 @@ class ExtSequencing(AgentVmssTest):
 
     def run(self):
         instances_ip_address: List[VmssInstanceIpAddress] = self._context.vmss.get_instances_ip_address()
-        ssh_clients: Dict[str, SshClient] = dict()
+        ssh_clients: Dict[str, SshClient] = {}
         for instance in instances_ip_address:
             ssh_clients[instance.instance_name] = SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file)
 

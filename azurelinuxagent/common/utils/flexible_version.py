@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils import version  # pylint: disable=no-name-in-module
+from distutils import version  # pylint: disable=no-name-in-module, disable=deprecated-module
 import re
 
 

@@ -73,7 +73,7 @@ class HealthService(object):
         self.api = HealthService.API
         self.version = HealthService.VERSION
         self.source = HealthService.OBSERVER_NAME
-        self.observations = list()
+        self.observations = []
 
     @property
     def as_json(self):

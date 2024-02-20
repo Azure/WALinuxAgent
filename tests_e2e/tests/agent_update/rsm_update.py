@@ -197,7 +197,7 @@ class RsmUpdateBvt(AgentVmTest):
         }
 
         log.info("Attempting rsm upgrade post request to endpoint: {0} with data: {1}".format(url, data))
-        response = requests.post(url, data=json.dumps(data), headers=headers)
+        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=300)
         if response.status_code == 202:
             log.info("RSM upgrade request accepted")
         else:
