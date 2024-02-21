@@ -28,6 +28,9 @@ Every version number class implements the following interface:
 
 import re
 
+# E1101: Instance of 'Version' has no '_cmp' member (no-member)
+# pylint: disable=no-member
+
 
 class Version:
     """Abstract base class for version numbering classes.  Just provides
@@ -154,6 +157,10 @@ class Version:
 # would be a snap to fix the test suite to say, "Yep, LooseVersion does
 # the Right Thing" (ie. the code matches the conception).  But I'd rather
 # have a conception that matches common notions about version numbers.
+
+# W0231: __init__ method from base class 'Version' is not called (super-init-not-called)
+# R1710: Either all return statements in a function should return an expression, or none of them should. (inconsistent-return-statements)
+# pylint: disable=super-init-not-called, inconsistent-return-statements
 
 class LooseVersion (Version):
 
