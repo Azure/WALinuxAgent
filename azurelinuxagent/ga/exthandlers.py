@@ -27,7 +27,7 @@ import stat
 import tempfile
 import time
 import zipfile
-from distutils.version import LooseVersion
+from distutils.version import LooseVersion  # pylint: disable=deprecated-module
 from collections import defaultdict
 from functools import partial
 

@@ -7,6 +7,6 @@ tests:
 images:
   - "random(endorsed, 10)"
   - "random(endorsed-arm64, 2)"
-locations: "AzureCloud:centraluseuap"
+locations: "AzureCloud:eastus2euap"
 owns_vm: true
 install_test_agent: false

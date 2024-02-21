@@ -213,8 +213,8 @@ class EnvHandler(ThreadHandlerInterface):
 
     def start(self):
         self.env_thread = threading.Thread(target=self.daemon)
-        self.env_thread.setDaemon(True)
-        self.env_thread.setName(self.get_thread_name())
+        self.env_thread.daemon = True
+        self.env_thread.name = self.get_thread_name()
         self.env_thread.start()
 
     def daemon(self):

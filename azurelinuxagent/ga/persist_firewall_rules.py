@@ -34,7 +34,8 @@ class PersistFirewallRulesHandler(object):
 # This unit file (Version={version}) was created by the Azure VM Agent.
 # Do not edit.
 [Unit]
-Description=Setup network rules for WALinuxAgent 
+Description=Setup network rules for WALinuxAgent
+After=local-fs.target 
 Before=network-pre.target
 Wants=network-pre.target
 DefaultDependencies=no
@@ -69,7 +70,7 @@ if __name__ == '__main__':
 
     # The current version of the unit file; Update it whenever the unit file is modified to ensure Agent can dynamically
     # modify the unit file on VM too
-    _UNIT_VERSION = "1.3"
+    _UNIT_VERSION = "1.4"
 
     @staticmethod
     def get_service_file_path():
@@ -184,7 +185,7 @@ if __name__ == '__main__':
         self.__setup_binary_file()
 
         network_service_enabled = self.__verify_network_setup_service_enabled()
-        if network_service_enabled and not self.__unit_file_version_modified():
+        if network_service_enabled and not self.__should_update_unit_file():
             logger.info("Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
             self.__log_network_setup_service_logs()
 
@@ -314,17 +315,29 @@ if __name__ == '__main__':
 
         return match.group(1).strip()
 
-    def __unit_file_version_modified(self):
+    def __get_unit_exec_start(self):
+        if not os.path.exists(self.get_service_file_path()):
+            raise OSError("{0} not found".format(self.get_service_file_path()))
+
+        match = fileutil.findre_in_file(self.get_service_file_path(),
+                                        line_re="ExecStart=(.*)")
+        if match is None:
+            raise ValueError("ExecStart tag not found in the unit file")
+
+        return match.group(1).strip()
+
+    def __should_update_unit_file(self):
         """
-        Check if the unit file version changed from the expected version
-        :return: True if unit file version changed else False
+        Check if the unit file version changed from the expected version or if the exec-start changed from the expected exec-start
+        :return: True if unit file need update else False
         """
 
         try:
             unit_file_version = self.__get_unit_file_version()
+            unit_exec_start = self.__get_unit_exec_start()
         except Exception as error:
-            logger.info("Unable to determine version of unit file: {0}, overwriting unit file".format(ustr(error)))
-            # Since we can't determine the version, marking the file as modified to overwrite the unit file
+            logger.info("Unable to read content of unit file: {0}, overwriting unit file".format(ustr(error)))
+            # Since we can't determine the version or exec start, marking the file as modified to overwrite the unit file
             return True
 
         if unit_file_version != self._UNIT_VERSION:
@@ -332,7 +345,14 @@ if __name__ == '__main__':
                 "Unit file version: {0} does not match with expected version: {1}, overwriting unit file".format(
                     unit_file_version, self._UNIT_VERSION))
             return True
+        binary_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)
+        expected_exec_start = "{0} {1}".format(sys.executable, binary_path)
+        if unit_exec_start != expected_exec_start:
+            logger.info(
+                "Unit file exec-start: {0} does not match with expected exec-start: {1}, overwriting unit file".format(
+                    unit_exec_start, expected_exec_start))
+            return True
 
         logger.info(
-            "Unit file version matches with expected version: {0}, not overwriting unit file".format(unit_file_version))
+            "Unit file matches with expected version: {0} and exec start: {1}, not overwriting unit file".format(unit_file_version, unit_exec_start))
         return False

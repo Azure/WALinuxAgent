@@ -22,7 +22,8 @@ from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 
 
-def execute_with_retry(operation: Callable[[], Any]) -> Any:
+# R1710: Either all return statements in a function should return an expression, or none of them should. (inconsistent-return-statements)
+def execute_with_retry(operation: Callable[[], Any]) -> Any:  # pylint: disable=inconsistent-return-statements
     """
     Some Azure errors (e.g. throttling) are retryable; this method attempts the given operation retrying a few times
     (after a short delay) if the error includes the string "RetryableError"
@@ -79,7 +80,8 @@ def retry_if_false(operation: Callable[[], bool], attempts: int = 5, delay: int 
     return success
 
 
-def retry(operation: Callable[[], Any], attempts: int = 5, delay: int = 30) -> Any:
+# R1710: Either all return statements in a function should return an expression, or none of them should. (inconsistent-return-statements)
+def retry(operation: Callable[[], Any], attempts: int = 5, delay: int = 30) -> Any:  # pylint: disable=inconsistent-return-statements
     """
     This method attempts the given operation retrying a few times on exceptions. Returns the value returned by the operation.
     """

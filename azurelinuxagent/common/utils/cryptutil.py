@@ -132,7 +132,7 @@ class CryptUtil(object):
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
             return ustr(b"ssh-rsa " +  keydata_base64 + b"\n",
                         encoding='utf-8')
-        except ImportError as e:
+        except ImportError:
             raise CryptError("Failed to load pyasn1.codec.der")
 
     def num_to_bytes(self, num):

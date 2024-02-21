@@ -281,8 +281,8 @@ class MonitorHandler(ThreadHandlerInterface):
 
     def start(self):
         self.monitor_thread = threading.Thread(target=self.daemon)
-        self.monitor_thread.setDaemon(True)
-        self.monitor_thread.setName(self.get_thread_name())
+        self.monitor_thread.daemon = True
+        self.monitor_thread.name = self.get_thread_name()
         self.monitor_thread.start()
 
     def daemon(self):
