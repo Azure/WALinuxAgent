@@ -18,7 +18,7 @@
 import hashlib
 import os
 import unittest
-from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module,import-error
+from azurelinuxagent.common.future import LooseVersion as Version
 
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.future import ustr

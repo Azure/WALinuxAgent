@@ -15,7 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module, import-error, deprecated-module
+from azurelinuxagent.common.future import LooseVersion as Version
 
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 from .arch import ArchDeprovisionHandler
