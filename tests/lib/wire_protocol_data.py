@@ -469,5 +469,5 @@ class WireProtocolData(object):
     def set_extension_config_is_vm_enabled_for_rsm_upgrades(self, is_vm_enabled_for_rsm_upgrades):
         self.ext_conf = WireProtocolData.replace_xml_element_value(self.ext_conf, "IsVMEnabledForRSMUpgrades", is_vm_enabled_for_rsm_upgrades)
 
-    def set_ga_manifest_version_version(self, version):
+    def set_version_in_ga_manifest(self, version):
         self.ga_manifest = WireProtocolData.replace_xml_element_value(self.ga_manifest, "Version", version)
