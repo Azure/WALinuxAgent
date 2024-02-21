@@ -102,7 +102,7 @@ def verify_agent_cgroups_tracked():
             if not any(AGENT_SERVICE_NAME in cgroup_path and controller in cgroup_path for cgroup_path in tracked_cgroups):
                 return False
         return True
-
+    # Test check can happen before agent starts tracking cgroups. So, retrying the check for few times
     found = retry_if_false(is_agent_tracking_cgroup)
     if not found:
         fail('Agent {0} is not being tracked. Tracked cgroups:{1}'.format(AGENT_CONTROLLERS, tracked_cgroups))
