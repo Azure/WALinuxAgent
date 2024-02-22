@@ -28,7 +28,7 @@ from azurelinuxagent.ga.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdR
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil, systemd
+from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.ga.extensionprocessutil import handle_process_completion
@@ -184,10 +184,6 @@ class CGroupConfigurator(object):
 
                 _log_cgroup_info("systemd version: {0}", systemd.get_version())
 
-                # This is temporarily disabled while we analyze telemetry. Likely it will be removed.
-                # self.__collect_azure_unit_telemetry()
-                # self.__collect_agent_unit_files_telemetry()
-
                 if not self.__check_no_legacy_cgroups():
                     return
 
@@ -223,65 +219,6 @@ class CGroupConfigurator(object):
                 _log_cgroup_warning("Error initializing cgroups: {0}", ustr(exception))
             finally:
                 self._initialized = True
-
-        @staticmethod
-        def __collect_azure_unit_telemetry():
-            azure_units = []
-
-            try:
-                units = shellutil.run_command(['systemctl', 'list-units', 'azure*', '-all'])
-                for line in units.split('\n'):
-                    match = re.match(r'\s?(azure[^\s]*)\s?', line, re.IGNORECASE)
-                    if match is not None:
-                        azure_units.append((match.group(1), line))
-            except shellutil.CommandError as command_error:
-                _log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
-
-            for unit_name, unit_description in azure_units:
-                unit_slice = "Unknown"
-                try:
-                    unit_slice = systemd.get_unit_property(unit_name, "Slice")
-                except Exception as exception:
-                    _log_cgroup_warning("Failed to query Slice for {0}: {1}", unit_name, ustr(exception))
-
-                _log_cgroup_info("Found an Azure unit under slice {0}: {1}", unit_slice, unit_description)
-
-            if len(azure_units) == 0:
-                try:
-                    cgroups = shellutil.run_command('systemd-cgls')
-                    for line in cgroups.split('\n'):
-                        if re.match(r'[^\x00-\xff]+azure\.slice\s*', line, re.UNICODE):
-                            logger.info(ustr("Found a cgroup for azure.slice\n{0}").format(cgroups))
-                            # Don't add the output of systemd-cgls to the telemetry, since currently it does not support Unicode
-                            add_event(op=WALAEventOperation.CGroupsInfo, message="Found a cgroup for azure.slice")
-                except shellutil.CommandError as command_error:
-                    _log_cgroup_warning("Failed to list systemd units: {0}", ustr(command_error))
-
-        @staticmethod
-        def __collect_agent_unit_files_telemetry():
-            agent_unit_files = []
-            agent_service_name = get_osutil().get_service_name()
-            try:
-                fragment_path = systemd.get_unit_property(agent_service_name, "FragmentPath")
-                if fragment_path != systemd.get_agent_unit_file():
-                    agent_unit_files.append(fragment_path)
-            except Exception as exception:
-                _log_cgroup_warning("Failed to query the agent's FragmentPath: {0}", ustr(exception))
-
-            try:
-                drop_in_paths = systemd.get_unit_property(agent_service_name, "DropInPaths")
-                for path in drop_in_paths.split():
-                    agent_unit_files.append(path)
-            except Exception as exception:
-                _log_cgroup_warning("Failed to query the agent's DropInPaths: {0}", ustr(exception))
-
-            for unit_file in agent_unit_files:
-                try:
-                    with open(unit_file, "r") as file_object:
-                        _log_cgroup_info("Found a custom unit file for the agent: {0}\n{1}", unit_file,
-                                         file_object.read())
-                except Exception as exception:
-                    _log_cgroup_warning("Can't read {0}: {1}", unit_file, ustr(exception))
 
         def __check_no_legacy_cgroups(self):
             """

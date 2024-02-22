@@ -35,7 +35,7 @@ class ConfigurationProvider(object):
     """
 
     def __init__(self):
-        self.values = dict()
+        self.values = {}
 
     def load(self, content):
         if not content:

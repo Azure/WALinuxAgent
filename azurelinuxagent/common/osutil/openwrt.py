@@ -25,15 +25,16 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils.networkutil import NetworkInterfaceCard
 
-class OpenWRTOSUtil(DefaultOSUtil):
 
+class OpenWRTOSUtil(DefaultOSUtil):
     def __init__(self):
         super(OpenWRTOSUtil, self).__init__()
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.dhclient_name = 'udhcpc'
-        self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')  # pylint: disable=W1401
         self.jit_enabled = True
-        
+
+    _ip_command_output = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
+
     def eject_dvd(self, chk_err=True):
         logger.warn('eject is not supported on OpenWRT')
 
@@ -79,18 +80,18 @@ class OpenWRTOSUtil(DefaultOSUtil):
             return {}
 
         for entry in output.splitlines():
-            result = self.ip_command_output.match(entry)
+            result = OpenWRTOSUtil._ip_command_output.match(entry)
             if result:
                 name = result.group(1)
                 state[name] = NetworkInterfaceCard(name, result.group(2))
-
 
         self._update_nic_state(state, "ip -o -f inet address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
         self._update_nic_state(state, "ip -o -f inet6 address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
 
         return state
 
-    def _update_nic_state(self, state, ip_command, handler, description):
+    @staticmethod
+    def _update_nic_state(state, ip_command, handler, description):
         """
         Update the state of NICs based on the output of a specified ip subcommand.
 
@@ -104,7 +105,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
             return
 
         for entry in output.splitlines():
-            result = self.ip_command_output.match(entry)
+            result = OpenWRTOSUtil._ip_command_output.match(entry)
             if result:
                 interface_name = result.group(1)
                 if interface_name in state:

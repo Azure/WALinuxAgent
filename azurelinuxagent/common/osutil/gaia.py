@@ -179,7 +179,7 @@ class GaiaOSUtil(DefaultOSUtil):
         return socket.inet_ntoa(struct.pack("!I", addr))
 
     def _get_prefix(self, mask):
-        return str(sum([bin(int(x)).count('1') for x in mask.split('.')]))
+        return str(sum(bin(int(x)).count('1') for x in mask.split('.')))
 
     def route_add(self, net, mask, gateway):
         logger.info('route_add {0} {1} {2}', net, mask, gateway)

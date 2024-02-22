@@ -499,7 +499,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
         :param event: Extension event to trim.
         :return: Trimmed extension event; containing only extension-specific parameters.
         """
-        params_to_keep = dict().fromkeys([
+        params_to_keep = dict.fromkeys([
             GuestAgentExtensionEventsSchema.Name,
             GuestAgentExtensionEventsSchema.Version,
             GuestAgentExtensionEventsSchema.Operation,
@@ -542,8 +542,8 @@ class CollectTelemetryEventsHandler(ThreadHandlerInterface):
 
     def start(self):
         self.thread = threading.Thread(target=self.daemon)
-        self.thread.setDaemon(True)
-        self.thread.setName(CollectTelemetryEventsHandler.get_thread_name())
+        self.thread.daemon = True
+        self.thread.name = CollectTelemetryEventsHandler.get_thread_name()
         self.thread.start()
 
     def stop(self):
