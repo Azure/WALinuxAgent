@@ -16,7 +16,7 @@
 #
 
 
-from distutils.version import LooseVersion as Version  # pylint: disable=no-name-in-module, import-error, disable=deprecated-module
+from azurelinuxagent.common.future import LooseVersion as Version
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
