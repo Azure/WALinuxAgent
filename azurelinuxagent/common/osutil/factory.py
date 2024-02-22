@@ -89,7 +89,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name in ("flatcar", "coreos") or distro_code_name in ("flatcar", "coreos"):
         return CoreOSUtil()
 
-    if distro_name in ("suse", "sle_hpc", "sles", "opensuse"):
+    if distro_name in ("suse", "sle-micro", "sle_hpc", "sles", "opensuse"):
         if distro_full_name == 'SUSE Linux Enterprise Server' \
                 and Version(distro_version) < Version('12') \
                 or distro_full_name == 'openSUSE' and Version(distro_version) < Version('13.2'):
