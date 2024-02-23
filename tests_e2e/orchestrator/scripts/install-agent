@@ -154,6 +154,10 @@ if [[ $(uname -a) == *"flatcar"* ]]; then
     echo -e "[Unit]\nUpholds=" > /etc/systemd/system/$target_name.d/10-waagent-sysext.conf
     systemctl daemon-reload
   fi
+  # Flatcar images does automatic reboot without user input, so stopping the service which trigger the reboot
+  # Broadcast message from locksmithd at 2024-02-23 19:48:55.478412272 +0000 UTC m=
+  # System reboot in 5 minutes!
+  systemctl stop locksmithd
 fi
 
 #
