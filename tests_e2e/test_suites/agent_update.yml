@@ -13,7 +13,7 @@ owns_vm: true
 skip_on_clouds:
   - "AzureChinaCloud"
   - "AzureUSGovernment"
-# Since Flatcar read-only tests, we can't edit the version file. This test relies on the version file to be updated.
+# Since Flatcar read-only filesystem, we can't edit the version file. This test relies on the version to be updated in version file.
 # TODO: Enable once we find workaround for this
 skip_on_images:
   - "flatcar"
