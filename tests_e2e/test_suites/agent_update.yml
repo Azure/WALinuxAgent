@@ -13,8 +13,8 @@ owns_vm: true
 skip_on_clouds:
   - "AzureChinaCloud"
   - "AzureUSGovernment"
-# Systemctl stop functionality changed and service doing restart on stop cmd in flatcar images. Thus breaking our tests.
-# TODO: Enable once it is fixed
+# Since Flatcar read-only tests, we can't edit the version file. This test relies on the version file to be updated.
+# TODO: Enable once we find workaround for this
 skip_on_images:
   - "flatcar"
   - "flatcar_arm64"
