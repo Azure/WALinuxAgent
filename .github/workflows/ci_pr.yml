@@ -150,6 +150,9 @@ jobs:
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use"
         fi
 
+        echo "PYLINT_OPTIONS: $PYLINT_OPTIONS"
+        echo "PYLINT_FILES: $PYLINT_FILES"
+
         pylint $PYLINT_OPTIONS $PYLINT_FILES
 
     - name: Test with nosetests
