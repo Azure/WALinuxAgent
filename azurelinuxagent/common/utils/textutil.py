@@ -17,7 +17,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import base64
-import crypt
+# W4901: Deprecated module 'crypt' (deprecated-module)
+import crypt  # pylint: disable=deprecated-module
 import hashlib
 import random
 import re

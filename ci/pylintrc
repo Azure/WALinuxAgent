@@ -16,7 +16,6 @@ disable=C, # (C) convention, for programming standard violation
     no-else-continue, # R1724: *Unnecessary "%s" after "continue"*
     no-else-raise, # R1720: *Unnecessary "%s" after "raise"*
     no-else-return, # R1705: *Unnecessary "%s" after "return"*
-    no-self-use, # R0201: Method could be a function
     protected-access, # W0212: Access to a protected member of a client class
     raise-missing-from, # W0707: *Consider explicitly re-raising using the 'from' keyword*
     redundant-u-string-prefix, # The u prefix for strings is no longer necessary in Python >=3.0
