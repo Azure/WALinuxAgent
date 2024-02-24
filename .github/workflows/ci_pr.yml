@@ -135,7 +135,7 @@ jobs:
         # * "unused-private-member" is not implemented on 3.5 and will produce "E0012: Bad option value 'unused-private-member' (bad-option-value)"
         #   so we suppress "bad-option-value".
         # * 3.9 will produce "no-member" for several properties/methods that are added to the mocks used by the unit tests (e.g
-        #   "E1101: Instance of 'WireProtocol' has no 'aggregate_status' member") so we add them as generated members.
+        #   "E1101: Instance of 'WireProtocol' has no 'aggregate_status' member") so we suppress that warning.
         # * 'no-self-use' ("R0201: Method could be a function") was moved to an optional extension on 3.9 and is no longer used by default. It needs
         #    to be suppressed for previous versions (3.0-3.8), though.
         #
@@ -144,7 +144,7 @@ jobs:
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=bad-option-value"
         fi
         if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
-          PYLINT_OPTIONS="$PYLINT_OPTIONS --generated-member=WireProtocol.aggregate_status,WireProtocol.incarnation,UpdateHandler._fail_gs_count,UpdateHandler._protocol"
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member
         fi
         if [[ "${{ matrix.python-version }}" =~ ^3\.[0-8]$ ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use"
