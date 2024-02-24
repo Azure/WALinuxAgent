@@ -144,7 +144,7 @@ jobs:
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=bad-option-value"
         fi
         if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
-          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member"
         fi
         if [[ "${{ matrix.python-version }}" =~ ^3\.[0-8]$ ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use"
