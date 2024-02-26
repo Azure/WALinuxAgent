@@ -350,8 +350,9 @@ class CGroupConfigurator(object):
             except Exception as exception:
                 _log_cgroup_warning("daemon-reload failed (create azure slice): {0}", ustr(exception))
 
+        # W0238: Unused private member `_Impl.__create_unit_file(path, contents)` (unused-private-member)
         @staticmethod
-        def __create_unit_file(path, contents):
+        def __create_unit_file(path, contents):  # pylint: disable=unused-private-member
             parent, _ = os.path.split(path)
             if not os.path.exists(parent):
                 fileutil.mkdir(parent, mode=0o755)
@@ -359,8 +360,9 @@ class CGroupConfigurator(object):
             fileutil.write_file(path, contents)
             _log_cgroup_info("{0} {1}", "Updated" if exists else "Created", path)
 
+        # W0238: Unused private member `_Impl.__cleanup_unit_file(path)` (unused-private-member)
         @staticmethod
-        def __cleanup_unit_file(path):
+        def __cleanup_unit_file(path):  # pylint: disable=unused-private-member
             if os.path.exists(path):
                 try:
                     os.remove(path)
@@ -522,8 +524,9 @@ class CGroupConfigurator(object):
                 _log_cgroup_info('CPUQuota: {0}',
                                  systemd.get_unit_property(systemd.get_agent_unit_name(), "CPUQuotaPerSecUSec"))
 
+        # W0238: Unused private member `_Impl.__try_set_cpu_quota(quota)` (unused-private-member)
         @staticmethod
-        def __try_set_cpu_quota(quota):
+        def __try_set_cpu_quota(quota):  # pylint: disable=unused-private-member
             try:
                 drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
                 contents = _DROP_IN_FILE_CPU_QUOTA_CONTENTS_FORMAT.format(quota)

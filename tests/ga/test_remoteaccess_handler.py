@@ -75,15 +75,14 @@ def mock_add_event(name, op, is_success, version, message):
 
 
 class TestRemoteAccessHandler(AgentTestCase):
-    eventing_data = [()]
+    eventing_data = ()
 
     def setUp(self):
         super(TestRemoteAccessHandler, self).setUp()
         # Since ProtocolUtil is a singleton per thread, we need to clear it to ensure that the test cases do not
         # reuse a previous state
         clear_singleton_instances(ProtocolUtil)
-        for data in TestRemoteAccessHandler.eventing_data:
-            del data
+        TestRemoteAccessHandler.eventing_data = ()
 
     # add_user tests
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret', return_value="]aPPEv}uNg1FPnl?")

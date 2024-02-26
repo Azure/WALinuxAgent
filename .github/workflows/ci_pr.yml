@@ -9,7 +9,7 @@ on:
 
 jobs:
   test-python-2_6-and-3_4-versions:
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -87,32 +87,19 @@ jobs:
       matrix:
         include:
           - python-version: "3.5"
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e,makepkg.py"
-
           - python-version: "3.6"
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
-
           - python-version: "3.7"
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
-
           - python-version: "3.8"
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc --ignore=tests_e2e"
-
           - python-version: "3.9"
-            PYLINTOPTS: "--rcfile=ci/3.6.pylintrc"
             additional-nose-opts: "--with-coverage --cover-erase --cover-inclusive --cover-branches --cover-package=azurelinuxagent"
-
           - python-version: "3.10"
-            PYLINTOPTS: "--rcfile=ci/3.10.pylintrc --ignore=tests"
+          - python-version: "3.11"
 
     name: "Python ${{ matrix.python-version }} Unit Tests"
     runs-on: ubuntu-20.04
 
     env:
-      PYLINTOPTS: ${{ matrix.PYLINTOPTS }}
-      PYLINTFILES: "azurelinuxagent setup.py makepkg.py tests tests_e2e"
       NOSEOPTS: "--with-timer ${{ matrix.additional-nose-opts }}"
-      PYTHON_VERSION: ${{ matrix.python-version }}
 
     steps:
 
@@ -130,13 +117,46 @@ jobs:
         sudo env "PATH=$PATH" python -m pip install --upgrade pip
         sudo env "PATH=$PATH" pip install -r requirements.txt
         sudo env "PATH=$PATH" pip install -r test-requirements.txt
+        sudo env "PATH=$PATH" pip install --upgrade pylint
 
     - name: Run pylint
       run: |
-        pylint $PYLINTOPTS --jobs=0 $PYLINTFILES
+        #
+        # List of files/directories to be checked by pylint.
+        # The end-to-end tests run only on Python 3.9 and we lint them only on that version.
+        #
+        PYLINT_FILES="azurelinuxagent setup.py makepkg.py tests"
+        if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
+          PYLINT_FILES="$PYLINT_FILES tests_e2e"
+        fi
+
+        #
+        # Command-line options for pylint.
+        # * "unused-private-member" is not implemented on 3.5 and will produce "E0012: Bad option value 'unused-private-member' (bad-option-value)"
+        #   so we suppress "bad-option-value".
+        # * 3.9 will produce "no-member" for several properties/methods that are added to the mocks used by the unit tests (e.g
+        #   "E1101: Instance of 'WireProtocol' has no 'aggregate_status' member") so we suppress that warning.
+        # * 'no-self-use' ("R0201: Method could be a function") was moved to an optional extension on 3.9 and is no longer used by default. It needs
+        #    to be suppressed for previous versions (3.0-3.8), though.
+        #
+        PYLINT_OPTIONS="--rcfile=ci/pylintrc --jobs=0"
+        if [[ "${{ matrix.python-version }}" == "3.5" ]]; then
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=bad-option-value"
+        fi
+        if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member"
+        fi
+        if [[ "${{ matrix.python-version }}" =~ ^3\.[0-8]$ ]]; then
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use"
+        fi
+
+        echo "PYLINT_OPTIONS: $PYLINT_OPTIONS"
+        echo "PYLINT_FILES: $PYLINT_FILES"
+
+        pylint $PYLINT_OPTIONS $PYLINT_FILES
 
     - name: Test with nosetests
-      if: matrix.python-version != '3.10' && (success() || (failure() && steps.install-dependencies.outcome == 'success'))
+      if: contains(fromJSON('["3.10", "3.11"]'), matrix.python-version) == false && (success() || (failure() && steps.install-dependencies.outcome == 'success'))
       run: |
         ./ci/nosetests.sh
         exit $?

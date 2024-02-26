@@ -60,7 +60,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
         self.event_dir = os.path.join(self.tmp_dir, EVENTS_DIRECTORY)
         EventLoggerTools.initialize_event_logger(self.event_dir)
-        threading.current_thread().setName("TestEventThread")
+        threading.current_thread().name = "TestEventThread"
         osutil = get_osutil()
 
         self.expected_common_parameters = {
@@ -70,7 +70,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.ContainerId: AgentGlobals.get_container_id(),
             CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
             CommonTelemetryEventSchema.EventPid: os.getpid(),
-            CommonTelemetryEventSchema.TaskName: threading.current_thread().getName(),
+            CommonTelemetryEventSchema.TaskName: threading.current_thread().name,
             CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine()}),
             # common parameters computed from the OS platform
             CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),

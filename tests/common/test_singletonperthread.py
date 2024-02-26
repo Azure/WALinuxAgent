@@ -1,6 +1,6 @@
 import uuid
 from multiprocessing import Queue
-from threading import Thread, currentThread
+from threading import Thread, current_thread
 
 from azurelinuxagent.common.singletonperthread import SingletonPerThread
 from tests.lib.tools import AgentTestCase, clear_singleton_instances
@@ -32,7 +32,7 @@ class TestClassToTestSingletonPerThread(SingletonPerThread):
 
     def __init__(self):
         # Set the name of the object to the current thread name
-        self.name = currentThread().getName()
+        self.name = current_thread().name
         # Unique identifier for a class object
         self.uuid = str(uuid.uuid4())
 
@@ -53,8 +53,8 @@ class TestSingletonPerThread(AgentTestCase):
 
         t1 = Thread(target=func1, args=args1)
         t2 = Thread(target=func2, args=args2)
-        t1.setName(t1_name if t1_name else self.THREAD_NAME_1)
-        t2.setName(t2_name if t2_name else self.THREAD_NAME_2)
+        t1.name = t1_name if t1_name else self.THREAD_NAME_1
+        t2.name = t2_name if t2_name else self.THREAD_NAME_2
         t1.start()
         t2.start()
         t1.join()
