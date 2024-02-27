@@ -42,7 +42,7 @@ from azurelinuxagent.common.exception import OSUtilError
 if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
     try:
         from legacycrypt import crypt
-    except (ImportError, ModuleNotFoundError):
+    except ImportError:
         def crypt(password, salt):
             raise OSUtilError("Please install the legacycrypt Python module to use this feature.")
 else:
