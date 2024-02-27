@@ -29,7 +29,6 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 
 
 class GaiaOSUtil(DefaultOSUtil):
@@ -64,7 +63,7 @@ class GaiaOSUtil(DefaultOSUtil):
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         logger.info('chpasswd')
-        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
+        passwd_hash = DefaultOSUtil.gen_password_hash(password, crypt_id, salt_len)
         ret, out = self._run_clish(
             'set user admin password-hash ' + passwd_hash)
         if ret != 0:

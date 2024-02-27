@@ -77,7 +77,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
-        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
+        passwd_hash = DefaultOSUtil.gen_password_hash(password, crypt_id, salt_len)
         self._run_command_raising_OSUtilError(['pw', 'usermod', username, '-H', '0'], cmd_input=passwd_hash,
                                               err_msg="Failed to set password for {0}".format(username))
 
