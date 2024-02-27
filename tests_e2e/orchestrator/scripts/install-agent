@@ -140,6 +140,25 @@ if [[ $(uname -a) == *"flatcar"* ]]; then
   if [[ ! -f /usr/share/oem/waagent.conf ]]; then
     ln -s "$waagent_conf_path" /usr/share/oem/waagent.conf
   fi
+
+  # New flatcar images set the uphold property for agent service that is causing automatic restart on stop cmd
+  # [Upholds= dependency on it has a continuous effect, constantly restarting the unit if necessary]
+  # Resetting the uphold property as workaround for now
+  uphold_target=$(systemctl show waagent --property=UpheldBy)
+  # example output: UpheldBy=multi-user.target
+  if [[ $uphold_target == *".target"* ]]; then
+    target_name="${uphold_target#*=}"
+    if [[ ! -d /etc/systemd/system/$target_name.d ]]; then
+      mkdir -p /etc/systemd/system/$target_name.d
+    fi
+    echo -e "[Unit]\nUpholds=" > /etc/systemd/system/$target_name.d/10-waagent-sysext.conf
+    systemctl daemon-reload
+  fi
+  # Flatcar images does automatic reboot without user input, so turning it off
+  # Broadcast message from locksmithd at 2024-02-23 19:48:55.478412272 +0000 UTC m=
+  # System reboot in 5 minutes!
+  echo "REBOOT_STRATEGY=off" > /etc/flatcar/update.conf
+  systemctl restart locksmithd
 fi
 
 #
