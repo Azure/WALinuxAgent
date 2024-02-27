@@ -136,8 +136,8 @@ jobs:
         #   so we suppress "bad-option-value".
         # * 3.9 will produce "no-member" for several properties/methods that are added to the mocks used by the unit tests (e.g
         #   "E1101: Instance of 'WireProtocol' has no 'aggregate_status' member") so we suppress that warning.
-        # * 'no-self-use' ("R0201: Method could be a function") was moved to an optional extension on 3.9 and is no longer used by default. It needs
-        #    to be suppressed for previous versions (3.0-3.8), though.
+        # * 'no-self-use' ("R0201: Method could be a function") was moved to an optional extension on 3.8 and is no longer used by default. It needs
+        #    to be suppressed for previous versions (3.0-3.7), though.
         #
         PYLINT_OPTIONS="--rcfile=ci/pylintrc --jobs=0"
         if [[ "${{ matrix.python-version }}" == "3.5" ]]; then
@@ -146,7 +146,7 @@ jobs:
         if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member"
         fi
-        if [[ "${{ matrix.python-version }}" =~ ^3\.[0-8]$ ]]; then
+        if [[ "${{ matrix.python-version }}" =~ ^3\.[0-7]$ ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use"
         fi
 
