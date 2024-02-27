@@ -29,6 +29,7 @@ from tests_e2e.tests.lib.cgroup_helpers import verify_if_distro_supports_cgroup,
     print_cgroups
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
+from tests_e2e.tests.lib.retry import retry_if_false
 
 
 def verify_custom_script_cgroup_assigned_correctly():
@@ -218,7 +219,7 @@ try:
     run_remote_test(main)
 except Exception as e:
     # It is possible that  agent cgroup can be disabled due to UNKNOWN process or throttled before we run this check, in that case, we should ignore the validation
-    if check_agent_quota_disabled() and check_cgroup_disabled_with_unknown_process():
+    if check_cgroup_disabled_with_unknown_process() and retry_if_false(check_agent_quota_disabled()):
         log.info("Cgroup is disabled due to UNKNOWN process, ignoring ext cgroups validations")
     else:
         raise
