@@ -17,11 +17,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils import version  # pylint: disable=no-name-in-module, disable=deprecated-module
+from azurelinuxagent.common.future import Version
 import re
 
 
-class FlexibleVersion(version.Version):
+class FlexibleVersion(Version):
     """
     A more flexible implementation of distutils.version.StrictVersion
 
@@ -41,7 +41,7 @@ class FlexibleVersion(version.Version):
     """
 
     def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):
-        version.Version.__init__(self) 
+        Version.__init__(self)
 
         if sep is None:
             sep = '.'

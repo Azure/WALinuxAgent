@@ -24,7 +24,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.pa.rdma.rdma import RDMAHandler
 from azurelinuxagent.common.version import DISTRO_VERSION
 
-from distutils.version import LooseVersion as Version  # pylint: disable=deprecated-module
+from azurelinuxagent.common.future import LooseVersion as Version
 
 
 class SUSERDMAHandler(RDMAHandler):

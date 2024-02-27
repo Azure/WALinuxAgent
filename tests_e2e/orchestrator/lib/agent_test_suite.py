@@ -491,7 +491,7 @@ class AgentTestSuite(LisaTestSuite):
                 break
             except CommandError as error:
                 # Check for "System is booting up. Unprivileged users are not permitted to log in yet. Please come back later. For technical details, see pam_nologin(8)."
-                if not any(m in error.stderr for m in ["Unprivileged users are not permitted to log in yet", "Permission denied"]):
+                if not any(m in error.stderr for m in ["Unprivileged users are not permitted to log in yet", "Permission denied", "Connection reset by peer"]):
                     raise
                 if attempt >= max_attempts - 1:
                     raise Exception(f"SSH connectivity check failed after {max_attempts} attempts, giving up [{error}]")

@@ -29,7 +29,7 @@ import tempfile
 import time
 import unittest
 from functools import wraps
-from threading import currentThread
+from threading import current_thread
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -543,6 +543,6 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
 def clear_singleton_instances(cls):
     # Adding this lock to avoid any race conditions
     with cls._lock:
-        obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
+        obj_name = "%s__%s" % (cls.__name__, current_thread().name)  # Object Name = className__threadName
         if obj_name in cls._instances:
             del cls._instances[obj_name]
