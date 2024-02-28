@@ -210,10 +210,10 @@ class PublishHostname(AgentVmTest):
             #
             # We may see temporary network unreachable warnings since we are bringing the network interface down
             # 2024-02-16T09:27:14.114569Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [HttpError] [HTTP Failed] GET http://168.63.129.16:32526/health -- IOError [Errno 101] Network is unreachable -- 1 attempts made --- [NOTE: Will not log the same error for the next hour]
+            # 2024-02-28T05:37:55.562065Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 28de1093-ecb5-4515-ba8e-2ed0c7778e34 eTag: 4648629460326038775]: Request failed: [Errno 101] Network is unreachable
             #
             {
-                'message': r"SendHostPluginHeartbeat:.*GET http://168.63.129.16:32526/health -- IOError [Errno 101] Network is unreachable",
-                'if': lambda r: r.level == "WARNING"
+                'message': r"GET (http://168.63.129.16:32526/health|vmSettings).*\[Errno 101\] Network is unreachable",
             }
         ]
         return ignore_rules
