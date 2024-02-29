@@ -113,7 +113,7 @@ def verify_agent_cgroup_assigned_correctly():
         return is_active and is_cgroup_assigned
 
     if not retry_if_false(check_agent_service_cgroup):
-        fail('walinuxagent service was not assigned to the expected cgroup:{0}. Current agent status'.format(cgroup_mount_path, service_status))
+        fail('walinuxagent service was not assigned to the expected cgroup:{0}. Current agent status:{1}'.format(cgroup_mount_path, service_status))
 
     log.info("Successfully verified the agent cgroup assigned correctly by systemd\n")
 
