@@ -8,6 +8,7 @@ from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.retry import retry_if_false
 
 BASE_CGROUP = '/sys/fs/cgroup'
 AGENT_CGROUP_NAME = 'WALinuxAgent'
@@ -93,23 +94,26 @@ def verify_agent_cgroup_assigned_correctly():
     This method checks agent is running and assigned to the correct cgroup using service status output
     """
     log.info("===== Verifying the daemon and the agent are assigned to the same correct cgroup using systemd")
-    service_status = shellutil.run_command(["systemctl", "status", systemd.get_agent_unit_name()])
-    log.info("Agent service status output:\n%s", service_status)
-    is_active = False
-    is_cgroup_assigned = False
     cgroup_mount_path = get_agent_cgroup_mount_path()
-    is_active_pattern = re.compile(r".*Active:\s+active.*")
+    service_status = ""
 
-    for line in service_status.splitlines():
-        if re.match(is_active_pattern, line):
-            is_active = True
-        elif cgroup_mount_path in line:
-            is_cgroup_assigned = True
+    def check_agent_service_cgroup():
+        is_active = False
+        is_cgroup_assigned = False
+        service_status = shellutil.run_command(["systemctl", "status", systemd.get_agent_unit_name()])
+        log.info("Agent service status output:\n%s", service_status)
+        is_active_pattern = re.compile(r".*Active:\s+active.*")
 
-    if not is_active:
-        fail('walinuxagent service was not active/running. Service status:{0}'.format(service_status))
-    if not is_cgroup_assigned:
-        fail('walinuxagent service was not assigned to the expected cgroup:{0}'.format(cgroup_mount_path))
+        for line in service_status.splitlines():
+            if re.match(is_active_pattern, line):
+                is_active = True
+            elif cgroup_mount_path in line:
+                is_cgroup_assigned = True
+
+        return is_active and is_cgroup_assigned
+
+    if not retry_if_false(check_agent_service_cgroup):
+        fail('walinuxagent service was not assigned to the expected cgroup:{0}. Current agent status'.format(cgroup_mount_path, service_status))
 
     log.info("Successfully verified the agent cgroup assigned correctly by systemd\n")
 
