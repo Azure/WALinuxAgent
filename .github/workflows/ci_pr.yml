@@ -145,7 +145,7 @@ jobs:
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=bad-option-value"
         fi
         if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
-          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member --ignore=azurelinuxagent/daemon/main.py"
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member --ignore=main.py"
         fi
         if [[ "${{ matrix.python-version }}" =~ ^3\.[0-7]$ ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use"
