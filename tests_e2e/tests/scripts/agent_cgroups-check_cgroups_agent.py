@@ -79,6 +79,7 @@ def verify_agent_cgroup_created_on_file_system():
                 verified_agent_cgroup_controllers_path.append(agent_controller_path)
         return all_controllers_path_exist
 
+    # Test check can happen before agent setup cgroup configuration. So, retrying the check for few times
     if not retry_if_false(is_agent_cgroup_controllers_path_exist):
         fail("Agent's cgroup paths couldn't be found on file system. Missing agent cgroups path :{0}.\n Verified agent cgroups path:{1}".format(missing_agent_cgroup_controllers_path, verified_agent_cgroup_controllers_path))
 

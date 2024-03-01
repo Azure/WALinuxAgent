@@ -112,6 +112,7 @@ def verify_agent_cgroup_assigned_correctly():
 
         return is_active and is_cgroup_assigned
 
+    # Test check can happen before correct cgroup assigned and relfected in service status. So, retrying the check for few times
     if not retry_if_false(check_agent_service_cgroup):
         fail('walinuxagent service was not assigned to the expected cgroup:{0}. Current agent status:{1}'.format(cgroup_mount_path, service_status))
 
