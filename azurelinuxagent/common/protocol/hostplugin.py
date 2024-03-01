@@ -20,6 +20,7 @@ import base64
 import datetime
 import json
 import os.path
+import threading
 import uuid
 
 from azurelinuxagent.common import logger, conf
@@ -423,19 +424,24 @@ class HostPluginProtocol(object):
         # This file keeps the timestamp of the most recent goal state if it was retrieved via Fast Track
         return os.path.join(conf.get_lib_dir(), "fast_track.json")
 
+    # Multiple threads create instances of HostPluginProtocol; we use this lock to protect access to the state file for Fast Track
+    _fast_track_state_lock = threading.RLock()
+
     @staticmethod
     def _save_fast_track_state(timestamp):
         try:
-            with open(HostPluginProtocol._get_fast_track_state_file(), "w") as file_:
-                json.dump({"timestamp": timestamp}, file_)
+            with HostPluginProtocol._fast_track_state_lock:
+                with open(HostPluginProtocol._get_fast_track_state_file(), "w") as file_:
+                    json.dump({"timestamp": timestamp}, file_)
         except Exception as e:
             logger.warn("Error updating the Fast Track state ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(), ustr(e))
 
     @staticmethod
     def clear_fast_track_state():
         try:
-            if os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
-                os.remove(HostPluginProtocol._get_fast_track_state_file())
+            with HostPluginProtocol._fast_track_state_lock:
+                if os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
+                    os.remove(HostPluginProtocol._get_fast_track_state_file())
         except Exception as e:
             logger.warn("Error clearing the current state for Fast Track ({0}): {1}", HostPluginProtocol._get_fast_track_state_file(),
                         ustr(e))
@@ -446,16 +452,17 @@ class HostPluginProtocol(object):
         Returns the timestamp of the most recent FastTrack goal state retrieved by fetch_vm_settings(), or None if the most recent
         goal state was Fabric or fetch_vm_settings() has not been invoked.
         """
-        if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
-            return timeutil.create_timestamp(datetime.datetime.min)
+        with HostPluginProtocol._fast_track_state_lock:
+            if not os.path.exists(HostPluginProtocol._get_fast_track_state_file()):
+                return timeutil.create_timestamp(datetime.datetime.min)
 
-        try:
-            with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
-                return json.load(file_)["timestamp"]
-        except Exception as e:
-            logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}",
-                    HostPluginProtocol._get_fast_track_state_file(), ustr(e))
-        return timeutil.create_timestamp(datetime.datetime.utcnow())
+            try:
+                with open(HostPluginProtocol._get_fast_track_state_file(), "r") as file_:
+                    return json.load(file_)["timestamp"]
+            except Exception as e:
+                logger.warn("Can't retrieve the timestamp for the most recent Fast Track goal state ({0}), will assume the current time. Error: {1}",
+                        HostPluginProtocol._get_fast_track_state_file(), ustr(e))
+            return timeutil.create_timestamp(datetime.datetime.utcnow())
 
     def fetch_vm_settings(self, force_update=False):
         """
