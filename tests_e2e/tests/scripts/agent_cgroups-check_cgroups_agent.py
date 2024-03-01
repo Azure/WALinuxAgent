@@ -61,22 +61,26 @@ def verify_agent_cgroup_created_on_file_system():
     """
     log.info("===== Verifying the agent cgroup paths exist on file system")
     agent_cgroup_mount_path = get_agent_cgroup_mount_path()
-    all_agent_cgroup_controllers_path_exist = True
+    log.info("expected agent cgroup mount path: %s", agent_cgroup_mount_path)
+
     missing_agent_cgroup_controllers_path = []
     verified_agent_cgroup_controllers_path = []
 
-    log.info("expected agent cgroup mount path: %s", agent_cgroup_mount_path)
+    def is_agent_cgroup_controllers_path_exist():
+        all_controllers_path_exist = True
 
-    for controller in AGENT_CONTROLLERS:
-        agent_controller_path = os.path.join(BASE_CGROUP, controller, agent_cgroup_mount_path[1:])
+        for controller in AGENT_CONTROLLERS:
+            agent_controller_path = os.path.join(BASE_CGROUP, controller, agent_cgroup_mount_path[1:])
 
-        if not os.path.exists(agent_controller_path):
-            all_agent_cgroup_controllers_path_exist = False
-            missing_agent_cgroup_controllers_path.append(agent_controller_path)
-        else:
-            verified_agent_cgroup_controllers_path.append(agent_controller_path)
+            if not os.path.exists(agent_controller_path):
+                all_controllers_path_exist = False
+                missing_agent_cgroup_controllers_path.append(agent_controller_path)
+            else:
+                verified_agent_cgroup_controllers_path.append(agent_controller_path)
+        return all_controllers_path_exist
 
-    if not all_agent_cgroup_controllers_path_exist:
+    # Test check can happen before agent setup cgroup configuration. So, retrying the check for few times
+    if not retry_if_false(is_agent_cgroup_controllers_path_exist):
         fail("Agent's cgroup paths couldn't be found on file system. Missing agent cgroups path :{0}.\n Verified agent cgroups path:{1}".format(missing_agent_cgroup_controllers_path, verified_agent_cgroup_controllers_path))
 
     log.info('Verified all agent cgroup paths are present.\n {0}'.format(verified_agent_cgroup_controllers_path))
