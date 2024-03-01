@@ -19,6 +19,11 @@
 # Helper script which tries to access Wireserver on system reboot. Also prints out iptable rules if non-root and still
 # able to access Wireserver
 
+if [[ $# -ne 1 ]]; then
+    echo "Usage: agent_persist_firewall-access_wireserver <test-user>"
+    exit 1
+fi
+TEST_USER=$1
 USER=$(whoami)
 echo "$(date --utc +%FT%T.%3NZ): Running as user: $USER"
 
@@ -27,12 +32,25 @@ function check_online
     ping 8.8.8.8 -c 1 -i .2 -t 30 > /dev/null 2>&1 && echo 0 || echo 1
 }
 
+function ping_localhost
+{
+    ping 127.0.0.1 -c 1 -i .2 -t 30 > /dev/null 2>&1 && echo 0 || echo 1
+}
+
+function socket_connection
+{
+    output=$(python3 /home/"$TEST_USER"/bin/agent_persist_firewall-check_connectivity.py 2>&1)
+    echo $output
+}
+
 # Check more, sleep less
 MAX_CHECKS=10
 # Initial starting value for checks
 CHECKS=0
 IS_ONLINE=$(check_online)
 
+echo "Checking network connectivity..."
+echo "Running ping to 8.8.8.8 option"
 # Loop while we're not online.
 while [ "$IS_ONLINE" -eq 1 ]; do
 
@@ -48,6 +66,19 @@ while [ "$IS_ONLINE" -eq 1 ]; do
 
 done
 
+# logging other options output to compare and evaluate which option is more stable when ping to 8.8.8.8 failed
+if [ "$IS_ONLINE" -eq 1 ]; then
+    echo "Checking other options to see if network is accessible"
+    echo "Running ping to localhost option"
+    PING_LOCAL=$(ping_localhost)
+    if [ "$PING_LOCAL" -eq 1 ]; then
+        echo "Ping to localhost failed"
+    else
+        echo "Ping to localhost succeeded"
+    fi
+    echo "Running socket connection to wireserver:53 option"
+    socket_connection
+fi
 if [ "$IS_ONLINE" -eq 1 ]; then
     # We will never be able to get online. Kill script.
     echo "Unable to connect to network, exiting now"
@@ -60,7 +91,7 @@ echo "Trying to contact Wireserver as $USER to see if accessible"
 
 echo ""
 echo "IPTables before accessing Wireserver"
-sudo iptables -t security -L -nxv
+sudo iptables -t security -L -nxv -w
 echo ""
 
 WIRE_IP=$(cat /var/lib/waagent/WireServerEndpoint 2>/dev/null || echo '168.63.129.16' | tr -d '[:space:]')
