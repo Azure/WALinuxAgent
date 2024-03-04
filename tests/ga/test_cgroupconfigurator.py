@@ -647,6 +647,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 command = command.replace('systemd-run', 'systemd-run syntax_error')
             elif isinstance(command, list) and command[0] == 'systemd-run':
                 command = ['systemd-run', 'syntax_error'] + command[1:]
+            elif command == ['systemctl', 'daemon-reload']:
+                command = ['echo', 'systemctl', 'daemon-reload']
 
             return original_popen(command, *args, **kwargs)
 
