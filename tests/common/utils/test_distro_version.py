@@ -1,4 +1,5 @@
 import os
+import sys
 import unittest
 
 from tests.lib.tools import AgentTestCase, data_dir
@@ -111,9 +112,12 @@ class TestDistroVersion(AgentTestCase):
         self.assertTrue(DistroVersion("FFFF") < DistroVersion("h"))
         self.assertTrue(DistroVersion("None") < DistroVersion("n/a"))
 
-        # TypeError: '<' not supported between instances of 'int' and 'str'
-        with self.assertRaises(TypeError):
-            _ = DistroVersion("3.11.2-rc.1") < DistroVersion("3.11.2-rc.a")
+        if sys.version_info[0] == 2:
+            self.assertTrue(DistroVersion("3.11.2-rc.1") < DistroVersion("3.11.2-rc.a"))
+        else:
+            # TypeError: '<' not supported between instances of 'int' and 'str'
+            with self.assertRaises(TypeError):
+                _ = DistroVersion("3.11.2-rc.1") < DistroVersion("3.11.2-rc.a")
 
         # AttributeError: 'FlexibleVersion' object has no attribute '_fragments'
         with self.assertRaises(AttributeError):
