@@ -68,16 +68,6 @@ elif sys.version_info[0] == 2:
 else:
     raise ImportError("Unknown python version: {0}".format(sys.version_info))
 
-#
-# distutils has been removed from Python >= 3.12; use the copy from azurelinuxagent instead
-#
-if sys.version_info[0] == 3 and sys.version_info[1] >= 12:
-    from azurelinuxagent.distutils import version
-else:
-    from distutils import version  # pylint: disable=deprecated-module
-Version = version.Version
-LooseVersion = version.LooseVersion
-
 
 def get_linux_distribution(get_full_name, supported_dists):
     """Abstract platform.linux_distribution() call which is deprecated as of

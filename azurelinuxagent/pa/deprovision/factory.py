@@ -15,9 +15,9 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.future import LooseVersion as Version
 
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+from azurelinuxagent.common.utils.distro_version import DistroVersion
 from .arch import ArchDeprovisionHandler
 from .clearlinux import ClearLinuxDeprovisionHandler
 from .coreos import CoreOSDeprovisionHandler
@@ -31,7 +31,7 @@ def get_deprovision_handler(distro_name=DISTRO_NAME,
     if distro_name == "arch":
         return ArchDeprovisionHandler()
     if distro_name == "ubuntu":
-        if Version(distro_version) >= Version('18.04'):
+        if DistroVersion(distro_version) >= DistroVersion('18.04'):
             return Ubuntu1804DeprovisionHandler()
         else:
             return UbuntuDeprovisionHandler()

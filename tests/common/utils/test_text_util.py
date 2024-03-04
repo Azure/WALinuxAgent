@@ -17,7 +17,6 @@
 
 import hashlib
 import unittest
-from azurelinuxagent.common.future import LooseVersion as Version
 
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.future import ustr
@@ -67,23 +66,6 @@ class TestTextUtil(AgentTestCase):
         data = u"  "
         data = textutil.remove_bom(data)
         self.assertEqual(u"  ", data)
-
-    def test_version_compare(self):
-        self.assertTrue(Version("1.0") < Version("1.1"))
-        self.assertTrue(Version("1.9") < Version("1.10"))
-        self.assertTrue(Version("1.9.9") < Version("1.10.0"))
-        self.assertTrue(Version("1.0.0.0") < Version("1.2.0.0"))
-
-        self.assertTrue(Version("1.0") <= Version("1.1"))
-        self.assertTrue(Version("1.1") > Version("1.0"))
-        self.assertTrue(Version("1.1") >= Version("1.0"))
-
-        self.assertTrue(Version("1.0") == Version("1.0"))
-        self.assertTrue(Version("1.0") >= Version("1.0"))
-        self.assertTrue(Version("1.0") <= Version("1.0"))
-
-        self.assertTrue(Version("1.9") < "1.10")
-        self.assertTrue("1.9" < Version("1.10"))
 
     def test_get_bytes_from_pem(self):
         content = ("-----BEGIN CERTIFICATE-----\n"

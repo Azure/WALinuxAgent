@@ -23,8 +23,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.pa.rdma.rdma import RDMAHandler
 from azurelinuxagent.common.version import DISTRO_VERSION
-
-from azurelinuxagent.common.future import LooseVersion as Version
+from azurelinuxagent.common.utils.distro_version import DistroVersion
 
 
 class SUSERDMAHandler(RDMAHandler):
@@ -32,7 +31,7 @@ class SUSERDMAHandler(RDMAHandler):
     def install_driver(self):  # pylint: disable=R1710
         """Install the appropriate driver package for the RDMA firmware"""
 
-        if Version(DISTRO_VERSION) >= Version('15'):
+        if DistroVersion(DISTRO_VERSION) >= DistroVersion('15'):
             msg = 'SLE 15 and later only supports PCI pass through, no '
             msg += 'special driver needed for IB interface'
             logger.info(msg)
