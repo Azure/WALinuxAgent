@@ -87,6 +87,10 @@ class TestDistroVersion(AgentTestCase):
         self.assertTrue(DistroVersion("1.0") <= DistroVersion("1.0"))
 
     def test_uncommon_versions(self):
+        """
+        The comparisons in these tests may occur in prod, and they not always produce a result that makes sense.
+        More than expressing the desired behavior, these tests are meant to document the current behavior.
+        """
         self.assertTrue(DistroVersion("2") != DistroVersion("2.0"))
         self.assertTrue(DistroVersion("2") < DistroVersion("2.0"))
 
