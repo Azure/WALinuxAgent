@@ -415,7 +415,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self.assertEqual(len(event_list), 1)
         self.assertEqual(TestEvent._get_event_message(event_list[0]), u'World\u05e2\u05d9\u05d5\u05ea \u05d0\u05d7\u05e8\u05d5\u05ea\u0906\u091c')
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     def test_collect_events_should_ignore_invalid_event_files(self):
         self._create_test_event_file("custom_script_1.tld")  # a valid event
         self._create_test_event_file("custom_script_utf-16.tld")

@@ -1037,7 +1037,7 @@ class TestUpdate(UpdateTestCase):
             "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
             patch_info.call_args_list), "Info not logged properly, got: {0}".format(patch_info.call_args_list))
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
         executed_commands = []
