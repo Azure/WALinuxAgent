@@ -15,10 +15,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.future import LooseVersion as Version
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.pa.rdma.rdma import RDMAHandler
 from azurelinuxagent.common.version import DISTRO_FULL_NAME, DISTRO_VERSION
+from azurelinuxagent.common.utils.distro_version import DistroVersion
 from .centos import CentOSRDMAHandler
 from .suse import SUSERDMAHandler
 from .ubuntu import UbuntuRDMAHandler
@@ -33,7 +33,7 @@ def get_rdma_handler(
             (distro_full_name == 'SUSE Linux Enterprise Server' or
              distro_full_name == 'SLES' or
              distro_full_name == 'SLE_HPC') and
-            Version(distro_version) > Version('11')
+            DistroVersion(distro_version) > DistroVersion('11')
     ):
         return SUSERDMAHandler()
 
