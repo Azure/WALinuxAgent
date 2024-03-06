@@ -36,7 +36,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.lib.mock_environment import MockCommand
 from tests.lib.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
-from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir, is_python_version_26_or_34, skip_if_predicate_true
 from tests.lib.miscellaneous_tools import format_processes, wait_for
 
 
@@ -523,6 +523,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                         self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
 
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_capture_only_the_last_subprocess_output(self, _):
         with self._get_cgroup_configurator() as configurator:
