@@ -17,6 +17,8 @@
 
 import os.path
 
+import azurelinuxagent.common.logger as logger
+
 from azurelinuxagent.agent import parse_args, Agent, usage, AgentCommands
 from azurelinuxagent.common import conf
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
@@ -101,6 +103,11 @@ ResourceDisk.SwapSizeMB = 0""".split('\n')
 
 
 class TestAgent(AgentTestCase):
+    def tearDown(self):
+        # These tests instantiate the Agent class, which has the side effect
+        # of initializing the global logger and conf objects; reset them.
+        logger.DEFAULT_LOGGER = logger.Logger()
+        conf.__conf__.values = {}
 
     def test_accepts_configuration_path(self):
         conf_path = os.path.join(data_dir, "test_waagent.conf")

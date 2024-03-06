@@ -156,11 +156,14 @@ jobs:
 
         pylint $PYLINT_OPTIONS $PYLINT_FILES
 
-    - name: Test with nosetests
-      if: contains(fromJSON('["3.10", "3.11"]'), matrix.python-version) == false && (success() || (failure() && steps.install-dependencies.outcome == 'success'))
+    - name: Execute Unit Tests
+      if: success() || (failure() && steps.install-dependencies.outcome == 'success')
       run: |
-        ./ci/nosetests.sh
-        exit $?
+        if [[ "${{ matrix.python-version }}" =~ ^3\.[1-9][0-9]+$ ]]; then
+          ./ci/pytest.sh
+        else
+          ./ci/nosetests.sh
+        fi
 
     - name: Compile Coverage
       if: matrix.python-version == '3.9'
