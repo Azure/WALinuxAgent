@@ -16,10 +16,9 @@
 #
 
 
-from azurelinuxagent.common.future import LooseVersion as Version
-
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+from azurelinuxagent.common.utils.distro_version import DistroVersion
 from .alpine import AlpineOSUtil
 from .arch import ArchUtil
 from .bigip import BigIpOSUtil
@@ -66,14 +65,14 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         return ClearLinuxUtil()
 
     if distro_name == "ubuntu":
-        ubuntu_version = Version(distro_version)
-        if ubuntu_version in [Version("12.04"), Version("12.10")]:
+        ubuntu_version = DistroVersion(distro_version)
+        if ubuntu_version in [DistroVersion("12.04"), DistroVersion("12.10")]:
             return Ubuntu12OSUtil()
-        if ubuntu_version in [Version("14.04"), Version("14.10")]:
+        if ubuntu_version in [DistroVersion("14.04"), DistroVersion("14.10")]:
             return Ubuntu14OSUtil()
-        if ubuntu_version in [Version('16.04'), Version('16.10'), Version('17.04')]:
+        if ubuntu_version in [DistroVersion('16.04'), DistroVersion('16.10'), DistroVersion('17.04')]:
             return Ubuntu16OSUtil()
-        if Version('18.04') <= ubuntu_version <= Version('24.04'):
+        if DistroVersion('18.04') <= ubuntu_version <= DistroVersion('24.04'):
             return Ubuntu18OSUtil()
         if distro_full_name == "Snappy Ubuntu Core":
             return UbuntuSnappyOSUtil()
@@ -91,14 +90,14 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
 
     if distro_name in ("suse", "sle-micro", "sle_hpc", "sles", "opensuse"):
         if distro_full_name == 'SUSE Linux Enterprise Server' \
-                and Version(distro_version) < Version('12') \
-                or distro_full_name == 'openSUSE' and Version(distro_version) < Version('13.2'):
+                and DistroVersion(distro_version) < DistroVersion('12') \
+                or distro_full_name == 'openSUSE' and DistroVersion(distro_version) < DistroVersion('13.2'):
             return SUSE11OSUtil()
 
         return SUSEOSUtil()
 
     if distro_name == "debian":
-        if "sid" in distro_version or Version(distro_version) > Version("7"):
+        if "sid" in distro_version or DistroVersion(distro_version) > DistroVersion("7"):
             return DebianOSModernUtil()
 
         return DebianOSBaseUtil()
@@ -109,16 +108,15 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     # to distinguish between debian and devuan. The new distro.linux_distribution module
     # is able to distinguish between the two.
 
-    if distro_name == "devuan" and Version(distro_version) >= Version("4"):
+    if distro_name == "devuan" and DistroVersion(distro_version) >= DistroVersion("4"):
         return DevuanOSUtil()
         
-
     if distro_name in ("redhat", "rhel", "centos", "oracle", "almalinux",
                        "cloudlinux", "rocky"):
-        if Version(distro_version) < Version("7"):
+        if DistroVersion(distro_version) < DistroVersion("7"):
             return Redhat6xOSUtil()
 
-        if Version(distro_version) >= Version("8.6"):
+        if DistroVersion(distro_version) >= DistroVersion("8.6"):
             return RedhatOSModernUtil()
 
         return RedhatOSUtil()

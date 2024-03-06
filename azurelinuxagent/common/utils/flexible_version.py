@@ -17,13 +17,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.future import Version
 import re
 
 
-class FlexibleVersion(Version):
+class FlexibleVersion(object):
     """
-    A more flexible implementation of distutils.version.StrictVersion
+    A more flexible implementation of distutils.version.StrictVersion.
+
+    NOTE: Use this class for generic version comparisons, e.g. extension and Agent
+          versions. Distro versions can be very arbitrary and should be handled
+          using the DistroVersion class.
 
     The implementation allows to specify:
     - an arbitrary number of version numbers:
@@ -41,8 +44,6 @@ class FlexibleVersion(Version):
     """
 
     def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):
-        Version.__init__(self)
-
         if sep is None:
             sep = '.'
         if prerel_tags is None:
