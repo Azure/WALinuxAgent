@@ -328,7 +328,7 @@ def parse_args(sys_args):
         if arg == "":
             # Don't parse an empty parameter
             continue
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)  # pylint: disable=W1401
+        m = re.match(r"^(?:[-/]*)configuration-path:([\w/\.\-_]+)", arg)
         if not m is None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):

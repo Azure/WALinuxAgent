@@ -896,7 +896,7 @@ class UpdateHandler(object):
         pid_file = conf.get_agent_pid_file_path()
         pid_dir = os.path.dirname(pid_file)
         pid_name = os.path.basename(pid_file)
-        pid_re = re.compile("(\d+)_{0}".format(re.escape(pid_name)))  # pylint: disable=W1401
+        pid_re = re.compile(r"(\d+)_{0}".format(re.escape(pid_name)))
         return pid_dir, pid_name, pid_re
 
     def _get_pid_files(self):

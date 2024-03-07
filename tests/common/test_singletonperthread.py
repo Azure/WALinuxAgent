@@ -6,7 +6,7 @@ from azurelinuxagent.common.singletonperthread import SingletonPerThread
 from tests.lib.tools import AgentTestCase, clear_singleton_instances
 
 
-class TestClassToTestSingletonPerThread(SingletonPerThread):
+class Singleton(SingletonPerThread):
     """
     Since these tests deal with testing in a multithreaded environment,
     we employ the use of multiprocessing.Queue() to ensure that the data is consistent.
@@ -47,7 +47,7 @@ class TestSingletonPerThread(AgentTestCase):
         # In a multi-threaded environment, exceptions thrown in the child thread will not be propagated to the parent
         # thread. In order to achieve that, adding all exceptions to a Queue and then checking that in parent thread.
         self.errors = Queue()
-        clear_singleton_instances(TestClassToTestSingletonPerThread)
+        clear_singleton_instances(Singleton)
 
     def _setup_multithread_and_execute(self, func1, args1, func2, args2, t1_name=None, t2_name=None):
 
@@ -69,7 +69,7 @@ class TestSingletonPerThread(AgentTestCase):
     @staticmethod
     def _get_test_class_instance(q, err):
         try:
-            obj = TestClassToTestSingletonPerThread()
+            obj = Singleton()
             q.put(obj)
         except Exception as e:
             err.put(str(e))
@@ -91,8 +91,8 @@ class TestSingletonPerThread(AgentTestCase):
         return t1_object, t2_object
 
     def test_it_should_have_only_one_instance_for_same_thread(self):
-        obj1 = TestClassToTestSingletonPerThread()
-        obj2 = TestClassToTestSingletonPerThread()
+        obj1 = Singleton()
+        obj2 = Singleton()
 
         self.assertEqual(obj1.uuid, obj2.uuid)
 
@@ -137,7 +137,7 @@ class TestSingletonPerThread(AgentTestCase):
         t1_name = str(uuid.uuid4())
         t2_name = str(uuid.uuid4())
 
-        test_class_obj_name = lambda t_name: "%s__%s" % (TestClassToTestSingletonPerThread.__name__, t_name)
+        test_class_obj_name = lambda t_name: "%s__%s" % (Singleton.__name__, t_name)
 
         self._setup_multithread_and_execute(func1=self._get_test_class_instance,
                                             args1=(instances, self.errors),
@@ -146,7 +146,7 @@ class TestSingletonPerThread(AgentTestCase):
                                             t1_name=t1_name,
                                             t2_name=t2_name)
 
-        singleton_instances = TestClassToTestSingletonPerThread._instances  # pylint: disable=no-member
+        singleton_instances = Singleton._instances  # pylint: disable=no-member
 
         # Assert instance names are consistent with the thread names
         self.assertIn(test_class_obj_name(t1_name), singleton_instances)

@@ -196,7 +196,7 @@ class FlexibleVersion(object):
         if self.prerel_tags:
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
             self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
-            release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(  # pylint: disable=W1401
+            release_re = r'(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
                         prerel_sep=self._re_prerel_sep, 
                         tags=tags, 
                         tn=self._nn_prerel_tag, 
