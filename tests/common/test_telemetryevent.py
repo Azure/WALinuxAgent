@@ -19,23 +19,23 @@ from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEvent
 from tests.lib.tools import AgentTestCase
 
 
-def get_test_event(name="DummyExtension", op="Unknown", is_success=True, duration=0, version="foo", evt_type="", is_internal=False,
-                      message="DummyMessage", eventId=1):
-    event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, is_internal))
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, is_success))
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, duration))
-    event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, evt_type))
-    return event
-
-
 class TestTelemetryEvent(AgentTestCase):
+    @staticmethod
+    def _get_test_event(name="DummyExtension", op="Unknown", is_success=True, duration=0, version="foo", evt_type="", is_internal=False,
+                       message="DummyMessage", eventId=1):
+        event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Name, name))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Version, str(version)))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.IsInternal, is_internal))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Operation, op))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.OperationSuccess, is_success))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Message, message))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, duration))
+        event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.ExtensionType, evt_type))
+        return event
+
     def test_contains_works_for_TelemetryEvent(self):
-        test_event = get_test_event(message="Dummy Event")
+        test_event = TestTelemetryEvent._get_test_event(message="Dummy Event")
 
         self.assertTrue(GuestAgentExtensionEventsSchema.Name in test_event)
         self.assertTrue(GuestAgentExtensionEventsSchema.Version in test_event)
