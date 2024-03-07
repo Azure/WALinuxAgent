@@ -156,8 +156,6 @@ class AgentTestCase(unittest.TestCase):
             cls.assertIsNone = cls.emulate_assertIsNone
         if not hasattr(cls, "assertIsNotNone"):
             cls.assertIsNotNone = cls.emulate_assertIsNotNone
-        if hasattr(cls, "assertRaisesRegexp"):
-            cls.assertRaisesRegex = cls.assertRaisesRegexp
         if not hasattr(cls, "assertRaisesRegex"):
             cls.assertRaisesRegex = cls.emulate_raises_regex
         if not hasattr(cls, "assertListEqual"):
