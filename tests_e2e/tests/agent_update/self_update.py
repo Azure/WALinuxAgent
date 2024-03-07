@@ -123,13 +123,12 @@ class SelfUpdateBvt(AgentVmTest):
             else:
                 return False
 
-        waagent_version: str = ""
         log.info("Verifying agent updated to latest version: {0}".format(latest_version))
         success: bool = retry_if_false(lambda: _check_agent_version(latest_version), delay=60)
+        waagent_version: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         if not success:
             fail("Guest agent didn't update to latest version {0} but found \n {1}".format(
                 latest_version, waagent_version))
-        waagent_version: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
         log.info(
             f"Successfully verified agent updated to latest version. Current agent version running:\n {waagent_version}")
 
