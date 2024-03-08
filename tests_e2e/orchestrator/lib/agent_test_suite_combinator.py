@@ -46,6 +46,7 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     resource_group_name: str = field(default_factory=str, metadata=field_metadata(required=True))
     subscription_id: str = field(default_factory=str, metadata=field_metadata(required=True))
     test_suites: str = field(default_factory=str, metadata=field_metadata(required=True))
+    default_test_suites: List[str] = field(default_factory=list, metadata=field_metadata(required=True))
     user: str = field(default_factory=str, metadata=field_metadata(required=True))
     vm_name: str = field(default_factory=str, metadata=field_metadata(required=True))
     vm_size: str = field(default_factory=str, metadata=field_metadata(required=True))
@@ -81,20 +82,25 @@ class AgentTestSuitesCombinator(Combinator):
             if self.runbook.resource_group_name == '':
                 raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, a 'resource_group_name' must be specified.")
 
+        if self.runbook.test_suites != "":
+            test_suites = [t.strip() for t in self.runbook.test_suites.split(',')]
+        else:
+            test_suites = self.runbook.default_test_suites
+
         self._log: logging.Logger = logging.getLogger("lisa")
 
         with set_thread_name("AgentTestSuitesCombinator"):
             if self.runbook.vm_name != '':
-                self._environments = [self.create_existing_vm_environment()]
+                self._environments = [self.create_existing_vm_environment(test_suites)]
             elif self.runbook.vmss_name != '':
-                self._environments = [self.create_existing_vmss_environment()]
+                self._environments = [self.create_existing_vmss_environment(test_suites)]
             else:
-                self._environments = self.create_environment_list()
+                self._environments = self.create_environment_list(test_suites)
             self._index = 0
 
     @classmethod
     def type_name(cls) -> str:
-        return "agent_test_suites"
+        return "agent_test_suite_combinator"
 
     @classmethod
     def type_schema(cls) -> Type[schema.TypedSchema]:
@@ -125,7 +131,7 @@ class AgentTestSuitesCombinator(Combinator):
         "AzureUSGovernment": "usgovarizona",
     }
 
-    def create_environment_list(self) -> List[Dict[str, Any]]:
+    def create_environment_list(self, test_suites: List[str]) -> List[Dict[str, Any]]:
         """
         Examines the test_suites specified in the runbook and returns a list of the environments (i.e. test VMs or scale sets) that need to be
         created in order to execute these suites.
@@ -136,7 +142,7 @@ class AgentTestSuitesCombinator(Combinator):
         environments: List[Dict[str, Any]] = []
         shared_environments: Dict[str, Dict[str, Any]] = {}  # environments shared by multiple test suites
 
-        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
+        loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
         runbook_images = self._get_runbook_images(loader)
 
@@ -260,8 +266,8 @@ class AgentTestSuitesCombinator(Combinator):
 
         return environments
 
-    def create_existing_vm_environment(self) -> Dict[str, Any]:
-        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
+    def create_existing_vm_environment(self, test_suites: List[str]) -> Dict[str, Any]:
+        loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
         vm: VirtualMachineClient = VirtualMachineClient(
             cloud=self.runbook.cloud,
@@ -300,8 +306,8 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-    def create_existing_vmss_environment(self) -> Dict[str, Any]:
-        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
+    def create_existing_vmss_environment(self, test_suites: List[str]) -> Dict[str, Any]:
+        loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
         vmss = VirtualMachineScaleSetClient(
             cloud=self.runbook.cloud,
