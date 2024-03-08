@@ -37,7 +37,7 @@ class UbuntuRDMAHandler(RDMAHandler):
             logger.error("RDMA: Could not determine firmware version. No driver will be installed")
             return
         #replace . with _, we are looking for number like 144_0
-        nd_version = re.sub('\.', '_', nd_version)  # pylint: disable=W1401
+        nd_version = re.sub(r'\.', '_', nd_version)
 
         #Check to see if we need to reconfigure driver
         status,module_name = shellutil.run_get_output('modprobe -R hv_network_direct', chk_err=False)
@@ -79,13 +79,13 @@ class UbuntuRDMAHandler(RDMAHandler):
         status,output = shellutil.run_get_output('apt-cache show --no-all-versions linux-azure')
         if status != 0:
             return
-        r = re.search('Version: (\S+)', output)  # pylint: disable=W1401
+        r = re.search(r'Version: (\S+)', output)
         if not r:
             logger.error("RDMA: version not found in package linux-azure.")
             return
         package_version = r.groups()[0]
         #Remove the ending .<upload number> after <ABI number>
-        package_version = re.sub("\.\d+$", "", package_version)  # pylint: disable=W1401
+        package_version = re.sub(r"\.\d+$", "", package_version)
 
         logger.info('RDMA: kernel_version=%s package_version=%s' % (kernel_version, package_version))
         kernel_version_array = [ int(x) for x in kernel_version.split('.') ]
@@ -111,9 +111,9 @@ class UbuntuRDMAHandler(RDMAHandler):
             with open(modprobed_file, 'r') as f:
                 lines = f.read()
 
-        r = re.search('alias hv_network_direct hv_network_direct_\S+', lines)  # pylint: disable=W1401
+        r = re.search(r'alias hv_network_direct hv_network_direct_\S+', lines)
         if r:
-            lines = re.sub('alias hv_network_direct hv_network_direct_\S+', 'alias hv_network_direct hv_network_direct_%s' % nd_version, lines)  # pylint: disable=W1401
+            lines = re.sub(r'alias hv_network_direct hv_network_direct_\S+', 'alias hv_network_direct hv_network_direct_%s' % nd_version, lines)
         else:
             lines += '\nalias hv_network_direct hv_network_direct_%s\n' % nd_version
         with open('/etc/modprobe.d/vmbus-rdma.conf', 'w') as f:

@@ -62,8 +62,8 @@ def get_f5_platform():
     the version and product information is contained in the /VERSION file.
     """
     result = [None, None, None, None]
-    f5_version = re.compile("^Version: (\d+\.\d+\.\d+)")  # pylint: disable=W1401
-    f5_product = re.compile("^Product: ([\w-]+)")  # pylint: disable=W1401
+    f5_version = re.compile(r"^Version: (\d+\.\d+\.\d+)")
+    f5_product = re.compile(r"^Product: ([\w-]+)")
 
     with open('/VERSION', 'r') as fh:
         content = fh.readlines()
@@ -105,15 +105,15 @@ def get_checkpoint_platform():
 def get_distro():
 
     if 'FreeBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
+        release = re.sub(r'\-.*\Z', '', ustr(platform.release()))
         osinfo = ['freebsd', release, '', 'freebsd']
     elif 'OpenBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
+        release = re.sub(r'\-.*\Z', '', ustr(platform.release()))
         osinfo = ['openbsd', release, '', 'openbsd']
     elif 'Linux' in platform.system():
         osinfo = get_linux_distribution(0, 'alpine')
     elif 'NS-BSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))  # pylint: disable=W1401
+        release = re.sub(r'\-.*\Z', '', ustr(platform.release()))
         osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
@@ -222,13 +222,13 @@ AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
 
 AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
-AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")  # pylint: disable=W1401
+AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+r"\.zip")
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
 # The execution mode of the VM - IAAS or PAAS. Linux VMs are only executed in IAAS mode.
 AGENT_EXECUTION_MODE = "IAAS"
 
-EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"  # pylint: disable=W1401
+EXT_HANDLER_PATTERN = br".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
 
 __distro__ = get_distro()

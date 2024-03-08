@@ -246,7 +246,7 @@ class RDMADeviceHandler(object):
             return
         retcode, out = shellutil.run_get_output("modinfo %s" % module_name)
         if retcode == 0:
-            version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)  # pylint: disable=W1401
+            version = re.search(r"version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
             if version:
                 v1 = int(version.groups(0)[0])
                 v2 = int(version.groups(0)[1])
@@ -473,7 +473,7 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def replace_dat_conf_contents(cfg, ipv4_addr):
-        old = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\S+ 0\""  # pylint: disable=W1401
+        old = r"ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\S+ 0\""
         new = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"{0} 0\"".format(
             ipv4_addr)
         return re.sub(old, new, cfg)

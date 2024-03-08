@@ -69,7 +69,7 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-_IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")  # pylint: disable=W1401
+_IPTABLES_VERSION_PATTERN = re.compile(r"^[^\d\.]*([\d\.]+).*$")
 _IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
 
@@ -117,7 +117,7 @@ def get_firewall_delete_conntrack_drop_command(wait, destination):
                       "--ctstate", "INVALID,NEW", "-j", "DROP"])
 
 
-PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
+PACKET_PATTERN = r"^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
 ALL_MEMS_REGEX = re.compile('^Mem.*')
 
@@ -134,7 +134,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')  # pylint: disable=W1401
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
