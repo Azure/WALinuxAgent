@@ -88,7 +88,7 @@ class AgentTestLoader(object):
     """
     Loads a given set of test suites from the YAML configuration files.
     """
-    def __init__(self, test_suites: str, cloud: str):
+    def __init__(self, test_suites: List[str], cloud: str):
         """
         Loads the specified 'test_suites', which are given as a string of comma-separated suite names or a YAML description
         of a single test_suite.
@@ -175,25 +175,9 @@ class AgentTestLoader(object):
                 if suite_skip_image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {suite_skip_image} in images.yml")
 
-
     @staticmethod
-    def _load_test_suites(test_suites: str) -> List[TestSuiteInfo]:
-        #
-        # Attempt to parse 'test_suites' as the YML description of a single suite
-        #
-        parsed = yaml.safe_load(test_suites)
-
-        #
-        # A comma-separated list (e.g. "foo", "foo, bar", etc.) is valid YAML, but it is parsed as a string. An actual test suite would
-        # be parsed as a dictionary. If it is a dict, take is as the YML description of a single test suite
-        #
-        if isinstance(parsed, dict):
-            return [AgentTestLoader._load_test_suite(parsed)]
-
-        #
-        # If test_suites is not YML, then it should be a comma-separated list of description files
-        #
-        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/f"{t.strip()}.yml" for t in test_suites.split(',')]
+    def _load_test_suites(test_suites: List[str]) -> List[TestSuiteInfo]:
+        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/f"{t}.yml" for t in test_suites]
         return [AgentTestLoader._load_test_suite(f) for f in description_files]
 
     @staticmethod

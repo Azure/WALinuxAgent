@@ -26,10 +26,33 @@ variable:
     is_case_visible: true
 
   #
-  # Test suites to execute
+  # Test suites to execute.
+  #
+  # Use "test_suites" to specify from the command-line the test suites to execute. If not specifies, the "default_test_suites" are executed.
   #
   - name: test_suites
-    value: "agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, fips, agent_ext_workflow, agent_status, multi_config_ext, agent_cgroups, ext_cgroups, agent_firewall, ext_telemetry_pipeline, ext_sequencing, agent_persist_firewall, publish_hostname, agent_update, recover_network_interface"
+    value: ""
+
+  - name: default_test_suites
+    value:
+      - agent_bvt
+      - agent_cgroups
+      - agent_ext_workflow
+      - agent_firewall
+      - agent_not_provisioned
+      - agent_persist_firewall
+      - agent_status
+      - agent_update
+      - ext_cgroups
+      - extensions_disabled
+      - ext_sequencing
+      - ext_telemetry_pipeline
+      - fips
+      - keyvault_certificates
+      - multi_config_ext
+      - no_outbound_connections
+      - publish_hostname
+      - recover_network_interface
 
   #
   # Parameters used to create test VMs
@@ -183,7 +206,7 @@ environment: $(c_environment)
 platform: $(c_platform)
 
 combinator:
-  type: agent_test_suites
+  type: agent_test_suite_combinator
   allow_ssh: $(allow_ssh)
   cloud: $(cloud)
   identity_file: $(identity_file)
@@ -193,6 +216,7 @@ combinator:
   resource_group_name: $(resource_group_name)
   subscription_id: $(subscription_id)
   test_suites: $(test_suites)
+  default_test_suites: $(default_test_suites)
   user: $(user)
   vm_name: $(vm_name)
   vm_size: $(vm_size)
