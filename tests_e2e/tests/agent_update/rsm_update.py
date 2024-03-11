@@ -23,28 +23,22 @@
 # The test verifies agent update for rsm workflow. This test covers three scenarios downgrade, upgrade and no update.
 # For each scenario, we initiate the rsm request with target version and then verify agent updated to that target version.
 #
-import json
 import re
 from typing import List, Dict, Any
 
-import requests
 from assertpy import assert_that, fail
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.compute.models import VirtualMachine
-from msrestazure.azure_cloud import Cloud
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.azure_clouds import AZURE_CLOUDS
+from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
-from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 
 
 class RsmUpdateBvt(AgentVmTest):
 
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._ssh_client = self._context.create_ssh_client()
         self._installed_agent_version = "9.9.9.9"
         self._downgrade_version = "9.9.9.9"
@@ -81,7 +75,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         self._downgrade_version: str = "2.3.15.0"
         log.info("Attempting downgrade version %s", self._downgrade_version)
-        self._request_rsm_update(self._downgrade_version)
+        request_rsm_update(self._downgrade_version, self._context.vm)
         self._check_rsm_gs(self._downgrade_version)
         self._prepare_agent()
         # Verify downgrade scenario
@@ -94,7 +88,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         upgrade_version: str = "2.3.15.1"
         log.info("Attempting upgrade version %s", upgrade_version)
-        self._request_rsm_update(upgrade_version)
+        request_rsm_update(upgrade_version, self._context.vm)
         self._check_rsm_gs(upgrade_version)
         self._verify_guest_agent_update(upgrade_version)
         self._verify_agent_reported_update_status(upgrade_version)
@@ -105,7 +99,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         current_version: str = "2.3.15.1"
         log.info("Attempting update version same as current version %s", current_version)
-        self._request_rsm_update(current_version)
+        request_rsm_update(current_version, self._context.vm)
         self._check_rsm_gs(current_version)
         self._verify_guest_agent_update(current_version)
         self._verify_agent_reported_update_status(current_version)
@@ -117,7 +111,7 @@ class RsmUpdateBvt(AgentVmTest):
         log.info("Current agent version running on the vm before update is \n%s", stdout)
         version: str = "1.5.0.0"
         log.info("Attempting requested version %s", version)
-        self._request_rsm_update(version)
+        request_rsm_update(version, self._context.vm)
         self._check_rsm_gs(version)
         self._verify_no_guest_agent_update(version)
         self._verify_agent_reported_update_status(version)
@@ -145,64 +139,6 @@ class RsmUpdateBvt(AgentVmTest):
         output: str = self._ssh_client.run_command(
                               "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
         log.info('Successfully updated agent update config \n %s', output)
-
-    @staticmethod
-    def _verify_agent_update_flag_enabled(vm: VirtualMachineClient) -> bool:
-        result: VirtualMachine = vm.get_model()
-        flag: bool = result.os_profile.linux_configuration.enable_vm_agent_platform_updates
-        if flag is None:
-            return False
-        return flag
-
-    def _enable_agent_update_flag(self, vm: VirtualMachineClient) -> None:
-        osprofile = {
-            "location": self._context.vm.location,  # location is required field
-            "properties": {
-                "osProfile": {
-                    "linuxConfiguration": {
-                        "enableVMAgentPlatformUpdates": True
-                    }
-                }
-            }
-        }
-        log.info("updating the vm with osProfile property:\n%s", osprofile)
-        vm.update(osprofile)
-
-    def _request_rsm_update(self, requested_version: str) -> None:
-        """
-        This method is to simulate the rsm request.
-        First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
-        """
-        if not self._verify_agent_update_flag_enabled(self._context.vm):
-            # enable the flag
-            log.info("Attempting vm update to set the enableVMAgentPlatformUpdates flag")
-            self._enable_agent_update_flag(self._context.vm)
-            log.info("Updated the enableVMAgentPlatformUpdates flag to True")
-        else:
-            log.info("Already enableVMAgentPlatformUpdates flag set to True")
-
-        cloud: Cloud = AZURE_CLOUDS[self._context.vm.cloud]
-        credential: DefaultAzureCredential = DefaultAzureCredential(authority=cloud.endpoints.active_directory)
-        token = credential.get_token(cloud.endpoints.resource_manager + "/.default")
-        headers = {'Authorization': 'Bearer ' + token.token, 'Content-Type': 'application/json'}
-        # Later this api call will be replaced by azure-python-sdk wrapper
-        base_url = cloud.endpoints.resource_manager
-        url = base_url + "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Compute/virtualMachines/{2}/" \
-                         "UpgradeVMAgent?api-version=2022-08-01".format(self._context.vm.subscription,
-                                                                        self._context.vm.resource_group,
-                                                                        self._context.vm.name)
-        data = {
-            "target": "Microsoft.OSTCLinuxAgent.Test",
-            "targetVersion": requested_version
-        }
-
-        log.info("Attempting rsm upgrade post request to endpoint: {0} with data: {1}".format(url, data))
-        response = requests.post(url, data=json.dumps(data), headers=headers, timeout=300)
-        if response.status_code == 202:
-            log.info("RSM upgrade request accepted")
-        else:
-            raise Exception("Error occurred while making RSM upgrade request. Status code : {0} and msg: {1}".format(
-                response.status_code, response.content))
 
     def _verify_guest_agent_update(self, requested_version: str) -> None:
         """

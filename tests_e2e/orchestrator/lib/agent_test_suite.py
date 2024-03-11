@@ -149,6 +149,8 @@ class AgentTestSuite(LisaTestSuite):
 
         self._test_suites: List[AgentTestSuite]  # Test suites to execute in the environment
 
+        self._test_args: Dict[str, str]  # Additional arguments pass to the test suite
+
         self._cloud: str  # Azure cloud where test VMs are located
         self._subscription_id: str  # Azure subscription where test VMs are located
         self._location: str  # Azure location (region) where test VMs are located
@@ -209,6 +211,7 @@ class AgentTestSuite(LisaTestSuite):
         self._environment_name = variables["c_env_name"]
 
         self._test_suites = variables["c_test_suites"]
+        self._test_args = variables["test_args"]
 
         self._cloud = variables["cloud"]
         self._subscription_id = variables["subscription_id"]
@@ -565,6 +568,7 @@ class AgentTestSuite(LisaTestSuite):
 
                     try:
                         test_context = self._create_test_context()
+                        test_args = self._get_test_args()
 
                         if not self._skip_setup:
                             try:
@@ -578,7 +582,7 @@ class AgentTestSuite(LisaTestSuite):
                         for suite in self._test_suites:
                             log.info("Executing test suite %s", suite.name)
                             self._lisa_log.info("Executing Test Suite %s", suite.name)
-                            case_success, check_log_start_time = self._execute_test_suite(suite, test_context, check_log_start_time)
+                            case_success, check_log_start_time = self._execute_test_suite(suite, test_context, test_args, check_log_start_time)
                             test_suite_success = case_success and test_suite_success
                             if not case_success:
                                 failed_cases.append(suite.name)
@@ -613,7 +617,7 @@ class AgentTestSuite(LisaTestSuite):
                     if not test_suite_success or unexpected_error:
                         raise TestFailedException(self._environment_name, failed_cases)
 
-    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext, check_log_start_time: datetime.datetime) -> Tuple[bool, datetime.datetime]:
+    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext, test_args: Dict[str, str], check_log_start_time: datetime.datetime) -> Tuple[bool, datetime.datetime]:
         """
         Executes the given test suite and returns a tuple of a bool indicating whether all the tests in the suite succeeded, and the timestamp that should be used
         for the next check of the agent log.
@@ -645,7 +649,7 @@ class AgentTestSuite(LisaTestSuite):
 
                         test_success: bool = True
 
-                        test_instance = test.test_class(test_context)
+                        test_instance = test.test_class(test_context, test_args)
                         try:
                             test_instance.run()
                             summary.append(f"[Passed]  {test.name}")
@@ -841,6 +845,18 @@ class AgentTestSuite(LisaTestSuite):
                 vmss=scale_set,
                 username=self._user,
                 identity_file=self._identity_file)
+
+    def _get_test_args(self) -> Dict[str, str]:
+        """
+        Returns the arguments to be passed to the test classes
+        """
+        test_args: Dict[str, str] = {}
+        if self._test_args == "":
+            return test_args
+        for arg in self._test_args.split(','):
+            key, value = arg.split('=')
+            test_args[key] = value
+        return test_args
 
     @staticmethod
     def _mark_log_as_failed():

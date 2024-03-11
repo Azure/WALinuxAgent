@@ -55,6 +55,12 @@ variable:
       - recover_network_interface
 
   #
+  # Additional arguments pass to the test suites
+  #
+  - name: test_args
+    value: ""
+    is_case_visible: true
+
   # Parameters used to create test VMs
   #
   - name: subscription_id

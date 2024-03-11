@@ -9,8 +9,8 @@ class AgentCPUQuota(AgentVmTest):
     """
     The test verify that the agent detects when it is throttled for using too much CPU, that it detects processes that do belong to the agent's cgroup, and that resource metrics are generated.
     """
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):

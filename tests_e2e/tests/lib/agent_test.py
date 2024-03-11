@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import argparse
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -49,8 +49,9 @@ class AgentTest(ABC):
     """
     Abstract base class for Agent tests
     """
-    def __init__(self, context: AgentTestContext):
+    def __init__(self, context: AgentTestContext, test_args: Dict[str, str]):
         self._context: AgentTestContext = context
+        self._test_args: Dict[str, str] = test_args
 
     @abstractmethod
     def run(self):
@@ -76,9 +77,9 @@ class AgentTest(ABC):
         """
         try:
             if issubclass(cls, AgentVmTest):
-                cls(AgentVmTestContext.from_args()).run()
+                cls(AgentVmTestContext.from_args(), cls._cmd_line_test_args()).run()
             elif issubclass(cls, AgentVmssTest):
-                cls(AgentVmssTestContext.from_args()).run()
+                cls(AgentVmssTestContext.from_args(), cls._cmd_line_test_args()).run()
             else:
                 raise Exception(f"Class {cls.__name__} is not a valid test class")
         except SystemExit:  # Bad arguments
@@ -91,6 +92,7 @@ class AgentTest(ABC):
             sys.exit(1)
 
         sys.exit(0)
+
 
     def _run_remote_test(self, ssh_client: SshClient, command: str, use_sudo: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
@@ -107,6 +109,22 @@ class AgentTest(ABC):
     @staticmethod
     def _indent(text: str, indent: str = " " * 8):
         return "\n".join(f"{indent}{line}" for line in text.splitlines())
+
+    @staticmethod
+    def _cmd_line_test_args() -> Dict[str, str]:
+        """
+        A method to read the test case arguments from command-line.
+        """
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-test-args', '--test-args', required=False, help="Test case arguments", default="")
+        args = parser.parse_args()
+        test_args: Dict[str, str] = {}
+        if args.test_args == "":
+            return test_args
+        for arg in args.test_args.split(","):
+            key, value = arg.split("=")
+            test_args[key] = value
+        return test_args
 
 
 class AgentVmTest(AgentTest):

@@ -26,8 +26,8 @@ class AgentCgroups(AgentVmTest):
     This test verifies that the agent is running in the expected cgroups.
     """
 
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):

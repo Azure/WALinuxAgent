@@ -27,8 +27,8 @@ class AgentPersistFirewallTest(AgentVmTest):
     This test verifies agent setup persist firewall rules using custom network setup service or firewalld service. Ensure those rules are added on boot and working as expected.
     """
 
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._ssh_client: SshClient = self._context.create_ssh_client()
 
     def run(self):

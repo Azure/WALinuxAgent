@@ -37,8 +37,8 @@ from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 
 
 class RecoverNetworkInterface(AgentVmTest):
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._context = context
         self._ssh_client = context.create_ssh_client()
         self._private_ip = context.vm.get_private_ip_address()

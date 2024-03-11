@@ -45,8 +45,8 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 
 class ExtSequencing(AgentVmssTest):
 
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._scenario_start = datetime.min
 
     # Cases to test different dependency scenarios

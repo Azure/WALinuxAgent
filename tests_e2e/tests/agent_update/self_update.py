@@ -36,8 +36,8 @@ class SelfUpdateBvt(AgentVmTest):
     This test case is to verify that the agent can update itself to the latest version using self-update path when vm not enrolled to RSM updates
     """
 
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._ssh_client = self._context.create_ssh_client()
         self._test_version = "2.8.9.9"
         self._test_pkg_name = f"WALinuxAgent-{self._test_version}.zip"

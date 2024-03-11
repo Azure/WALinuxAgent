@@ -58,8 +58,8 @@ class ExtensionWorkflow(AgentVmTest):
         - Match the operation sequence as per the test and make sure they are in the correct chronological order
         - Restart the agent and verify if the correct operation sequence is followed
     """
-    def __init__(self, context: AgentVmTestContext):
-        super().__init__(context)
+    def __init__(self, context: AgentVmTestContext, test_args: dict):
+        super().__init__(context, test_args)
         self._ssh_client = context.create_ssh_client()
 
     # This class represents the GuestAgentDcrTestExtension running on the test VM

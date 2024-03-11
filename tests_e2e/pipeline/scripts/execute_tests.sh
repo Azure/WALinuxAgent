@@ -54,6 +54,9 @@ if [[ $TEST_SUITES == "-" ]]; then
 else
     TEST_SUITES="-v test_suites:\"$TEST_SUITES\""
 fi
+if [[ $TEST_ARGS == "-" ]]; then
+    TEST_ARGS=""
+fi
 if [[ $IMAGE == "-" ]]; then
     IMAGE=""
 fi
@@ -92,4 +95,5 @@ docker run --rm \
           -v location:\"$LOCATION\" \
           -v vm_size:\"$VM_SIZE\" \
           -v allow_ssh:\"$IP_ADDRESS\" \
+          -v test_args:\"$TEST_ARGS\" \
           $TEST_SUITES"
