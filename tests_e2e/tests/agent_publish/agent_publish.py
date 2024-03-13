@@ -90,15 +90,22 @@ class AgentPublishTest(AgentVmTest):
         """
         This method prepares the agent for the RSM update
         """
+        # First we update the agent to latest version like prod
+        # Next send RSM update request for new published test version
         log.info(
             'Updating agent config flags to allow and download test versions')
         output: str = self._ssh_client.run_command(
-                              "update-waagent-conf AutoUpdate.UpdateToLatestVersion=y Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
+                              "update-waagent-conf AutoUpdate.Enabled=y AutoUpdate.UpdateToLatestVersion=y", use_sudo=True)
         log.info('Successfully updated agent update config \n %s', output)
 
         self._verify_agent_reported_supported_feature_flag()
-        request_rsm_update(self._published_version, self._context.vm)
+        arch_type = self._ssh_client.get_architecture()
+        request_rsm_update(self._published_version, self._context.vm, arch_type)
         self._check_rsm_gs(self._published_version)
+
+        output: str = self._ssh_client.run_command(
+                              "update-waagent-conf Debug.EnableGAVersioning=y AutoUpdate.GAFamily=Test", use_sudo=True)
+        log.info('Successfully enabled rsm updates \n %s', output)
 
     def _prepare_agent_for_self_update(self) -> None:
         """

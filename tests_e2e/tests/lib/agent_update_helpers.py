@@ -50,7 +50,7 @@ def enable_agent_update_flag(vm: VirtualMachineClient) -> None:
     vm.update(osprofile)
 
 
-def request_rsm_update(requested_version: str, vm: VirtualMachineClient) -> None:
+def request_rsm_update(requested_version: str, vm: VirtualMachineClient, arch_type) -> None:
     """
     This method is to simulate the rsm request.
     First we ensure the PlatformUpdates enabled in the vm and then make a request using rest api
@@ -73,10 +73,16 @@ def request_rsm_update(requested_version: str, vm: VirtualMachineClient) -> None
                      "UpgradeVMAgent?api-version=2022-08-01".format(vm.subscription,
                                                                     vm.resource_group,
                                                                     vm.name)
-    data = {
-        "target": "Microsoft.OSTCLinuxAgent.Test",
-        "targetVersion": requested_version
-    }
+    if arch_type == "aarch64":
+        data = {
+            "target": "Microsoft.OSTCLinuxAgent.ARM64Test",
+            "targetVersion": requested_version
+        }
+    else:
+        data = {
+            "target": "Microsoft.OSTCLinuxAgent.Test",
+            "targetVersion": requested_version,
+        }
 
     log.info("Attempting rsm upgrade post request to endpoint: {0} with data: {1}".format(url, data))
     response = requests.post(url, data=json.dumps(data), headers=headers, timeout=300)
