@@ -149,7 +149,7 @@ class AgentTestSuite(LisaTestSuite):
 
         self._test_suites: List[AgentTestSuite]  # Test suites to execute in the environment
 
-        self._test_args: Dict[str, str]  # Additional arguments pass to the test suite
+        self._test_args: str  # Additional arguments pass to the test suite
 
         self._cloud: str  # Azure cloud where test VMs are located
         self._subscription_id: str  # Azure subscription where test VMs are located
