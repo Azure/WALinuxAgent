@@ -52,5 +52,5 @@ steps:
             --url-parameters api-version=2021-04-01 \$expand=createdTime \
             --output json \
             --query value \
-          | jq --arg date "$date" '.[] | select (.createdTime < $date).name | match("'${pattern}'"; "g").string' \
+          | jq --arg date "$date" '.[] | select (.createdTime < $date).name | match("'${pattern}'"; "i").string' \
           | xargs -l -t -r az group delete --subscription "${subscription_id}" --no-wait -y -n
