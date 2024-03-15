@@ -85,19 +85,19 @@ echo "Agent Version:"
 $python "$waagent" --version
 echo "Service Status:"
 
-# Sometimes the service can take a while to start; give it a few minutes,
+# Sometimes the service can take a while to start and provision completed; give it a few minutes,
 started=false
 for i in {1..6}
 do
-  if service-status $service_name; then
+  if [[ -f /var/lib/waagent/provisioned ]]; then
     started=true
     break
   fi
-  echo "Waiting for service to start..."
+  echo "Waiting for service to complete provision..."
   sleep 30
 done
 if [ $started == false ]; then
-  echo "Service failed to start."
+  echo "Service failed to complete provision."
   exit 1
 fi
 
