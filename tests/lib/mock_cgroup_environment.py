@@ -20,29 +20,11 @@ import os
 from tests.lib.tools import patch, data_dir
 from tests.lib.mock_environment import MockEnvironment, MockCommand
 
-_MOCKED_COMMANDS = [
+# Mocked commands which are common between v1 and v2
+_MOCKED_COMMANDS_COMMON = [
    MockCommand(r"^systemctl --version$",
 '''systemd 237
 +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD -IDN2 +IDN -PCRE2 default-hierarchy=hybrid
-'''),
-
-    MockCommand(r"^mount -t cgroup$",
-'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
-cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
-cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
-'''),
-
-    MockCommand(r"^mount -t cgroup2$",
-'''cgroup on /sys/fs/cgroup/unified type cgroup2 (rw,nosuid,nodev,noexec,relatime) 
 '''),
 
     MockCommand(r"^systemctl show walinuxagent\.service --property Slice",
@@ -77,15 +59,91 @@ Thu 28 May 2020 07:25:55 AM PDT
 
 ]
 
-_MOCKED_FILES = [
-    ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
-    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
-    ("/sys/fs/cgroup/unified/cgroup.controllers", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers'))
+_MOCKED_COMMANDS_V1 = [
+    MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/misc             cgroup cgroup rw,nosuid,nodev,noexec,relatime,misc
+/sys/fs/cgroup/cpu,cpuacct      cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpu,cpuacct
+/sys/fs/cgroup/memory           cgroup cgroup rw,nosuid,nodev,noexec,relatime,memory
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
+'''),
+
+    MockCommand(r"^findmnt -t cgroup2 --noheadings$",
+'''/sys/fs/cgroup/unified cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate
+'''),
+
+]
+
+_MOCKED_COMMANDS_V2 = [
+    MockCommand(r"^findmnt -t cgroup2 --noheadings$",
+'''/sys/fs/cgroup cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot
+'''),
+
+    MockCommand(r"^findmnt -t cgroup --noheadings$", ''),
+
+]
+
+# Mocked commands when memory controller is in v2, but all other controllers are in v1
+_MOCKED_COMMANDS_V1_AND_V2 = [
+    MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/misc             cgroup cgroup rw,nosuid,nodev,noexec,relatime,misc
+/sys/fs/cgroup/cpu,cpuacct      cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpu,cpuacct
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
+'''),
+
+    MockCommand(r"^findmnt -t cgroup2 --noheadings$",
+'''/sys/fs/cgroup cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot
+'''),
+
+]
+
+_MOCKED_FILES_V1 = [
+    ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_self_cgroup')),
+    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_pid_cgroup')),
+    ("/sys/fs/cgroup/unified/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v1', 'sys_fs_cgroup_cgroup.subtree_control'))
+]
+
+_MOCKED_FILES_V2 = [
+    ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v2', 'proc_self_cgroup')),
+    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v2', 'proc_pid_cgroup')),
+    ("/sys/fs/cgroup/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control')),
+    ("/sys/fs/cgroup/azure.slice/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control')),
+    ("/sys/fs/cgroup/azure.slice/walinuxagent.service/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control_empty'))
+]
+
+# Mocked files when memory controller is in v2, but all other controllers are in v1
+_MOCKED_FILES_V1_AND_V2 = [
+    ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v1_and_v2', 'proc_self_cgroup')),
+    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1_and_v2', 'proc_pid_cgroup')),
+    ("/sys/fs/cgroup/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v1_and_v2', 'sys_fs_cgroup_cgroup.subtree_control'))
 ]
 
 _MOCKED_PATHS = [
     r"^(/lib/systemd/system)",
     r"^(/etc/systemd/system)"
+]
+
+_MOCKED_PATHS_V2 = [
+    r"^(/sys/fs/cgroup/azure.slice/walinuxagent.service)",
+    r"^(/sys/fs/cgroup/system.slice/walinuxagent.service)",
+    r"^(/sys/fs/cgroup/system.slice/extension.service)"
 ]
 
 
@@ -106,11 +164,12 @@ class UnitFilePaths:
 
 
 @contextlib.contextmanager
-def mock_cgroup_environment(tmp_dir):
+def mock_cgroup_v1_environment(tmp_dir):
     """
-    Creates a mocks environment used by the tests related to cgroups (currently it only provides support for systemd platforms).
-    The command output used in __MOCKED_COMMANDS comes from an Ubuntu 18 system.
-   """
+    Creates a mock environment for cgroups v1 hierarchy used by the tests related to cgroups (currently it only
+    provides support for systemd platforms).
+    The command output used in __MOCKED_COMMANDS comes from an Ubuntu 20 system.
+    """
     data_files = [
         (os.path.join(data_dir, 'init', 'walinuxagent.service'), UnitFilePaths.walinuxagent),
         (os.path.join(data_dir, 'init', 'azure.slice'), UnitFilePaths.azure),
@@ -119,5 +178,41 @@ def mock_cgroup_environment(tmp_dir):
 
     with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
         with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS, paths=_MOCKED_PATHS, files=_MOCKED_FILES, data_files=data_files) as mock:
+            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V1, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V1, data_files=data_files) as mock:
+                yield mock
+
+@contextlib.contextmanager
+def mock_cgroup_v2_environment(tmp_dir):
+    """
+    Creates a mock environment for cgroups v2 hierarchy used by the tests related to cgroups (currently it only
+    provides support for systemd platforms).
+    The command output used in __MOCKED_COMMANDS comes from an Ubuntu 22 system.
+    """
+    data_files = [
+        (os.path.join(data_dir, 'init', 'walinuxagent.service'), UnitFilePaths.walinuxagent),
+        (os.path.join(data_dir, 'init', 'azure.slice'), UnitFilePaths.azure),
+        (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
+    ]
+
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+        with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
+            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V2, paths=_MOCKED_PATHS + _MOCKED_PATHS_V2, files=_MOCKED_FILES_V2, data_files=data_files) as mock:
+                yield mock
+
+@contextlib.contextmanager
+def mock_cgroup_v1_and_v2_environment(tmp_dir):
+    """
+    Creates a mock environment for machine which has controllers in cgroups v1 and v2 hierarchies used by the tests
+    related to cgroups (currently it only provides support for systemd platforms). The agent does not currently support
+    this scenario.
+    """
+    data_files = [
+        (os.path.join(data_dir, 'init', 'walinuxagent.service'), UnitFilePaths.walinuxagent),
+        (os.path.join(data_dir, 'init', 'azure.slice'), UnitFilePaths.azure),
+        (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
+    ]
+
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+        with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
+            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V1_AND_V2, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V1_AND_V2, data_files=data_files) as mock:
                 yield mock

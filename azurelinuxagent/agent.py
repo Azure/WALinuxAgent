@@ -30,7 +30,8 @@ import sys
 import threading
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroup import AGENT_LOG_COLLECTOR, CpuCgroup, MemoryCgroup
-from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api
+from azurelinuxagent.ga.cgroupstelemetry import log_cgroup_warning
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -206,18 +207,29 @@ class Agent(object):
 
         # Check the cgroups unit
         log_collector_monitor = None
-        cgroups_api = SystemdCgroupsApi()
-        cpu_cgroup_path, memory_cgroup_path = cgroups_api.get_process_cgroup_paths("self")
+        cgroups_api = get_cgroup_api()
+        cpu_cgroup_path = None
+        memory_cgroup_path = None
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
-            cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
-            memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
+            if cgroups_api is None:
+                log_cgroup_warning("Unable to determine what version of cgroups to use for log collector resource "
+                                   "monitoring and enforcement.")
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
+
+            cpu_cgroup_path, memory_cgroup_path = cgroups_api.get_process_cgroup_paths("self")
+            cpu_slice_matches = False
+            memory_slice_matches = False
+            if cpu_cgroup_path is not None:
+                cpu_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in cpu_cgroup_path)
+            if memory_cgroup_path is not None:
+                memory_slice_matches = (cgroupconfigurator.LOGCOLLECTOR_SLICE in memory_cgroup_path)
 
             if not cpu_slice_matches or not memory_slice_matches:
-                logger.info("The Log Collector process is not in the proper cgroups:")
+                log_cgroup_warning("The Log Collector process is not in the proper cgroups:", send_event=False)
                 if not cpu_slice_matches:
-                    logger.info("\tunexpected cpu slice")
+                    log_cgroup_warning("\tunexpected cpu slice", send_event=False)
                 if not memory_slice_matches:
-                    logger.info("\tunexpected memory slice")
+                    log_cgroup_warning("\tunexpected memory slice", send_event=False)
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 

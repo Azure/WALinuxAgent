@@ -21,10 +21,10 @@ import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.agent import parse_args, Agent, usage, AgentCommands
 from azurelinuxagent.common import conf
-from azurelinuxagent.ga import logcollector, cgroupconfigurator
-from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
+from azurelinuxagent.ga import logcollector, cgroupconfigurator, cgroupapi
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
+from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, mock_cgroup_v1_and_v2_environment
 from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
@@ -240,46 +240,105 @@ class TestAgent(AgentTestCase):
         self.assertFalse(full_mode)
 
     @patch("azurelinuxagent.agent.LogCollector")
-    def test_calls_collect_logs_on_valid_cgroups(self, mock_log_collector):
+    def test_calls_collect_logs_on_valid_cgroups_v1(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
 
+            # Mock cgroup paths so process is in the log collector slice
             def mock_cgroup_paths(*args, **kwargs):
                 if args and args[0] == "self":
                     relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
-                    return (cgroupconfigurator.LOGCOLLECTOR_SLICE, relative_path)
-                return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
+                    return (relative_path, relative_path)
+                return cgroupapi.get_cgroup_api().get_process_cgroup_relative_paths(*args, **kwargs)
 
-            with patch("azurelinuxagent.agent.SystemdCgroupsApi.get_process_cgroup_paths", side_effect=mock_cgroup_paths):
-                agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
-                agent.collect_logs(is_full_mode=True)
-                
-                mock_log_collector.assert_called_once()
+            with mock_cgroup_v1_environment(self.tmp_dir):
+                with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupsApiv1.get_process_cgroup_paths",
+                           side_effect=mock_cgroup_paths):
+                    agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+                    agent.collect_logs(is_full_mode=True)
+
+                    mock_log_collector.assert_called_once()
+
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
 
     @patch("azurelinuxagent.agent.LogCollector")
-    def test_doesnt_call_collect_logs_on_invalid_cgroups(self, mock_log_collector):
+    def test_doesnt_call_collect_logs_when_cgroup_api_cannot_be_determined(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
 
-            def mock_cgroup_paths(*args, **kwargs):
-                if args and args[0] == "self":
-                    return ("NOT_THE_CORRECT_PATH", "NOT_THE_CORRECT_PATH")
-                return SystemdCgroupsApi.get_process_cgroup_relative_paths(*args, **kwargs)
+            def raise_on_sys_exit(*args):
+                raise RuntimeError(args[0] if args else "Exiting")
 
-            with patch("azurelinuxagent.agent.SystemdCgroupsApi.get_process_cgroup_paths", side_effect=mock_cgroup_paths):
+            with patch("azurelinuxagent.agent.get_cgroup_api", return_value=None):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
-                exit_error = RuntimeError("Exiting")
-                with patch("sys.exit", return_value=exit_error) as mock_exit:
+                with patch("sys.exit", side_effect=raise_on_sys_exit) as mock_exit:
                     try:
                         agent.collect_logs(is_full_mode=True)
                     except RuntimeError as re:
+                        self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
+                    mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
+        finally:
+            CollectLogsHandler.disable_monitor_cgroups_check()
+
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_doesnt_call_collect_logs_on_invalid_cgroups_v1(self, mock_log_collector):
+        try:
+            CollectLogsHandler.enable_monitor_cgroups_check()
+            mock_log_collector.run = Mock()
+
+            # Mock cgroup paths so process is in incorrect slice
+            def mock_cgroup_paths(*args, **kwargs):
+                if args and args[0] == "self":
+                    return ("NOT_THE_CORRECT_PATH", "NOT_THE_CORRECT_PATH")
+                return cgroupapi.get_cgroup_api().get_process_cgroup_relative_paths(*args, **kwargs)
+
+            def raise_on_sys_exit(*args):
+                raise RuntimeError(args[0] if args else "Exiting")
+
+            with mock_cgroup_v1_environment(self.tmp_dir):
+                with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupsApiv1.get_process_cgroup_paths", side_effect=mock_cgroup_paths):
+                    agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+                    with patch("sys.exit", side_effect=raise_on_sys_exit) as mock_exit:
+                        try:
+                            agent.collect_logs(is_full_mode=True)
+                        except RuntimeError as re:
+                            self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
                         mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
-                        self.assertEqual(exit_error, re)
+        finally:
+            CollectLogsHandler.disable_monitor_cgroups_check()
+
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_doesnt_call_collect_logs_when_controllers_mounted_in_different_hierarchies(self, mock_log_collector):
+        try:
+            CollectLogsHandler.enable_monitor_cgroups_check()
+            mock_log_collector.run = Mock()
+
+            # Mock cgroup paths so process is in the log collector slice and cpu is not mounted
+            def mock_cgroup_paths(*args, **kwargs):
+                if args and args[0] == "self":
+                    relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
+                    return (None, relative_path)
+                return cgroupapi.get_cgroup_api().get_process_cgroup_relative_paths(*args, **kwargs)
+
+            def raise_on_sys_exit(*args):
+                raise RuntimeError(args[0] if args else "Exiting")
+
+            with mock_cgroup_v1_and_v2_environment(self.tmp_dir):
+                with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupsApiv1.get_process_cgroup_paths",
+                           side_effect=mock_cgroup_paths):
+                    agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+                    with patch("sys.exit", side_effect=raise_on_sys_exit) as mock_exit:
+                        try:
+                            agent.collect_logs(is_full_mode=True)
+                        except RuntimeError as re:
+                            self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
+                        mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
         

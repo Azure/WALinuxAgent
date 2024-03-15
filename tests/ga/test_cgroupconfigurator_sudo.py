@@ -25,7 +25,7 @@ from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
-from tests.lib.mock_cgroup_environment import mock_cgroup_environment
+from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment
 from tests.lib.tools import AgentTestCase, patch, mock_sleep, i_am_root, is_python_version_26_or_34, skip_if_predicate_true
 
 
@@ -40,7 +40,7 @@ class CGroupConfiguratorSystemdTestCaseSudo(AgentTestCase):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
-        with mock_cgroup_environment(self.tmp_dir) as mock_environment:
+        with mock_cgroup_v1_environment(self.tmp_dir) as mock_environment:
             if mock_commands is not None:
                 for command in mock_commands:
                     mock_environment.add_command(command)

@@ -1,0 +1,10 @@
+#
+# The test suite verifies that the agent does not enable resource enforcement and monitoring on machines which are
+# using cgroups v2. This suite will be removed once cgroups v2 is supported.
+#
+name: "Cgroupsv2Disabled"
+tests:
+  - "cgroups_v2_disabled/cgroups_v2_disabled.py"
+images:
+  - "ubuntu_2204"
+  - "ubuntu_2404"
