@@ -53,6 +53,7 @@ variable:
       - no_outbound_connections
       - publish_hostname
       - recover_network_interface
+      - cgroups_v2_disabled
 
   #
   # Parameters used to create test VMs
