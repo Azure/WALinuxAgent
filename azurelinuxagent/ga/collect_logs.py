@@ -171,12 +171,11 @@ class CollectLogsHandler(ThreadHandlerInterface):
     def _collect_logs(self):
         logger.info("Starting log collection...")
 
-        # Invoke the command line tool in the agent to collect logs, with resource limits on CPU.
-        # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the logcollector slice
-        # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in logcollector Cgroup
-
+        # Changing both CPUAccounting and  MemoryAccounting to yes and adding CPUWeight so that cpu,cpuacct and memory controllers are enabled.
+        # According to this https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers some values in cpu.stat are only available if cpu controller
+        # is enabled
         systemd_cmd = [
-            "systemd-run", "--property=CPUAccounting=no", "--property=MemoryAccounting=no",
+            "systemd-run", "--property=CPUAccounting=yes", "--property=CPUWeight=100", "--property=MemoryAccounting=yes",
             "--unit={0}".format(logcollector.CGROUPS_UNIT),
             "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
         ]
