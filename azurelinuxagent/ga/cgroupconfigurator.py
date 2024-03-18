@@ -519,13 +519,13 @@ class CGroupConfigurator(object):
                             return True  # no need to update the file; return here to avoid doing a daemon-reload
                 CGroupConfigurator._Impl.__create_unit_file(drop_in_file, contents)
             except Exception as exception:
-                log_cgroup_warning('Failed to set CPUQuota: {0}', ustr(exception))
+                log_cgroup_warning('Failed to set CPUQuota: {0}'.format(ustr(exception)))
                 return False
             try:
                 log_cgroup_info("Executing systemctl daemon-reload...", send_event=False)
                 shellutil.run_command(["systemctl", "daemon-reload"])
             except Exception as exception:
-                log_cgroup_warning("daemon-reload failed (set quota): {0}", ustr(exception))
+                log_cgroup_warning("daemon-reload failed (set quota): {0}".format(ustr(exception)))
                 return False
             return True
 
@@ -863,8 +863,8 @@ class CGroupConfigurator(object):
                                                                       cpu_quota=cpu_quota)
                     CGroupConfigurator._Impl.__create_unit_file(extension_slice_path, slice_contents)
                 except Exception as exception:
-                    log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}", extension_name,
-                                        ustr(exception))
+                    log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}".format(extension_name,
+                                        ustr(exception)))
                     CGroupConfigurator._Impl.__cleanup_unit_file(extension_slice_path)
 
         def remove_extension_slice(self, extension_name):
@@ -939,7 +939,7 @@ class CGroupConfigurator(object):
                                 files_to_create.append((drop_in_file_cpu_quota, cpu_quota_contents))
                             self.__create_all_files(files_to_create)
                 except Exception as exception:
-                    log_cgroup_warning('Failed to reset CPUQuota for {0} : {1}', service_name, ustr(exception))
+                    log_cgroup_warning('Failed to reset CPUQuota for {0} : {1}'.format(service_name, ustr(exception)))
 
         def remove_extension_services_drop_in_files(self, services_list):
             """
