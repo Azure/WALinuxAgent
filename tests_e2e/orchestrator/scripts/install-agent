@@ -85,7 +85,7 @@ echo "Agent Version:"
 $python "$waagent" --version
 echo "Service Status:"
 
-# Sometimes the service can take a while to start and provision completed; give it a few minutes,
+# We need to wait for the provisioning code to complete before stopping the agent's service to do the test setup
 started=false
 for i in {1..6}
 do
@@ -93,11 +93,11 @@ do
     started=true
     break
   fi
-  echo "Waiting for service to complete provision..."
+  echo "Waiting for agent to complete provisioning."
   sleep 30
 done
 if [ $started == false ]; then
-  echo "Service failed to complete provision."
+  echo "Provisioning did not complete within the given timeout (cannot find /var/lib/waagent/provisioned)"
   exit 1
 fi
 
