@@ -371,7 +371,8 @@ class LogCollector(object):
                         archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
                         compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
                     except Exception as e:
-                        if isinstance(e, IOError) and e.errno == 2:     # [Errno 2] No such file or directory
+                        # [Errno 2] No such file or directory
+                        if isinstance(e, IOError) and e.errno == 2:     # pylint: disable=E1101
                             _LOGGER.warning("File %s does not exist, skipping collection for this file", file_to_collect)
                         else:
                             error_count += 1
