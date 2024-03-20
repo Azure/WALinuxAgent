@@ -361,7 +361,7 @@ class LogCollector(object):
 
             compressed_archive = None
 
-            def handle_add_file_to_archive_error(error_count, max_errors, exception):
+            def handle_add_file_to_archive_error(error_count, max_errors, file_to_collect, exception):
                 error_count += 1
                 if error_count >= max_errors:
                     raise Exception("Too many errors, giving up. Last error: {0}".format(ustr(exception)))
@@ -384,9 +384,9 @@ class LogCollector(object):
                             _LOGGER.warning("File %s does not exist, skipping collection for this file",
                                             file_to_collect)
                         else:
-                            error_count = handle_add_file_to_archive_error(error_count, max_errors, e)
+                            error_count = handle_add_file_to_archive_error(error_count, max_errors, file_to_collect, e)
                     except Exception as e:
-                        error_count = handle_add_file_to_archive_error(error_count, max_errors, e)
+                        error_count = handle_add_file_to_archive_error(error_count, max_errors, file_to_collect, e)
 
                 compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. Compressed archive size is %s b", compressed_archive_size)
