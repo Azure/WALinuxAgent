@@ -149,7 +149,7 @@ class AgentTestSuite(LisaTestSuite):
 
         self._test_suites: List[AgentTestSuite]  # Test suites to execute in the environment
 
-        self._test_args: str  # Additional arguments pass to the test suite
+        self._test_args: Dict[str, str]  # Additional arguments pass to the test suite
 
         self._cloud: str  # Azure cloud where test VMs are located
         self._subscription_id: str  # Azure subscription where test VMs are located
@@ -211,7 +211,7 @@ class AgentTestSuite(LisaTestSuite):
         self._environment_name = variables["c_env_name"]
 
         self._test_suites = variables["c_test_suites"]
-        self._test_args = variables["test_args"]
+        self._test_args = self._get_test_args(variables["test_args"])
 
         self._cloud = variables["cloud"]
         self._subscription_id = variables["subscription_id"]
@@ -568,7 +568,6 @@ class AgentTestSuite(LisaTestSuite):
 
                     try:
                         test_context = self._create_test_context()
-                        test_args = self._get_test_args()
 
                         if not self._skip_setup:
                             try:
@@ -582,7 +581,7 @@ class AgentTestSuite(LisaTestSuite):
                         for suite in self._test_suites:
                             log.info("Executing test suite %s", suite.name)
                             self._lisa_log.info("Executing Test Suite %s", suite.name)
-                            case_success, check_log_start_time = self._execute_test_suite(suite, test_context, test_args, check_log_start_time)
+                            case_success, check_log_start_time = self._execute_test_suite(suite, test_context, check_log_start_time)
                             test_suite_success = case_success and test_suite_success
                             if not case_success:
                                 failed_cases.append(suite.name)
@@ -617,7 +616,7 @@ class AgentTestSuite(LisaTestSuite):
                     if not test_suite_success or unexpected_error:
                         raise TestFailedException(self._environment_name, failed_cases)
 
-    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext, test_args: Dict[str, str], check_log_start_time: datetime.datetime) -> Tuple[bool, datetime.datetime]:
+    def _execute_test_suite(self, suite: TestSuiteInfo, test_context: AgentTestContext, check_log_start_time: datetime.datetime) -> Tuple[bool, datetime.datetime]:
         """
         Executes the given test suite and returns a tuple of a bool indicating whether all the tests in the suite succeeded, and the timestamp that should be used
         for the next check of the agent log.
@@ -649,7 +648,7 @@ class AgentTestSuite(LisaTestSuite):
 
                         test_success: bool = True
 
-                        test_instance = test.test_class(test_context, test_args)
+                        test_instance = test.test_class(test_context)
                         try:
                             test_instance.run()
                             summary.append(f"[Passed]  {test.name}")
@@ -816,12 +815,15 @@ class AgentTestSuite(LisaTestSuite):
                 subscription=self._subscription_id,
                 resource_group=self._resource_group_name,
                 name=self._vm_name)
-            return AgentVmTestContext(
+            vm_test_context = AgentVmTestContext(
                 working_directory=self._working_directory,
                 vm=vm,
                 ip_address=self._vm_ip_address,
                 username=self._user,
                 identity_file=self._identity_file)
+            for key in self._test_args:
+                setattr(vm_test_context, key, self._test_args[key])
+            return vm_test_context
         else:
             log.info("Creating test context for scale set")
             if self._create_scale_set:
@@ -840,21 +842,25 @@ class AgentTestSuite(LisaTestSuite):
             if self._create_scale_set:
                 self._test_nodes = [_TestNode(name=i.instance_name, ip_address=i.ip_address) for i in scale_set.get_instances_ip_address()]
 
-            return AgentVmssTestContext(
+            vmss_test_context = AgentVmssTestContext(
                 working_directory=self._working_directory,
                 vmss=scale_set,
                 username=self._user,
                 identity_file=self._identity_file)
+            for key in self._test_args:
+                setattr(vmss_test_context, key, self._test_args[key])
+            return vmss_test_context
 
-    def _get_test_args(self) -> Dict[str, str]:
+    @staticmethod
+    def _get_test_args(arg_str) -> Dict[str, str]:
         """
         Returns the arguments to be passed to the test classes
         """
         test_args: Dict[str, str] = {}
-        if self._test_args == "":
+        if arg_str == "":
             return test_args
-        for arg in self._test_args.split(','):
-            key, value = arg.split('=')
+        for arg in arg_str.split(','):
+            key, value = map(str.strip, arg.split('='))
             test_args[key] = value
         return test_args
 

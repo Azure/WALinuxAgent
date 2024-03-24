@@ -37,8 +37,8 @@ from tests_e2e.tests.lib.retry import retry_if_false
 
 class RsmUpdateBvt(AgentVmTest):
 
-    def __init__(self, context: AgentVmTestContext, test_args: dict):
-        super().__init__(context, test_args)
+    def __init__(self, context: AgentVmTestContext):
+        super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
         self._installed_agent_version = "9.9.9.9"
         self._downgrade_version = "9.9.9.9"

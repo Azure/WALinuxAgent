@@ -26,8 +26,8 @@ class AgentFirewall(AgentVmTest):
     This test verifies the agent firewall rules are added properly. It checks each firewall rule is present and working as expected.
     """
 
-    def __init__(self, context: AgentVmTestContext, test_args: dict):
-        super().__init__(context, test_args)
+    def __init__(self, context: AgentVmTestContext):
+        super().__init__(context)
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
