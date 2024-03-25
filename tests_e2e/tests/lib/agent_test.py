@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse
+
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -73,6 +73,8 @@ class AgentTest(ABC):
         """
         Convenience method to execute the test when it is being invoked directly from the command line (as opposed as
         being invoked from a test framework or library.)
+
+        Todo: Need to implement for reading test specific arguments from command line
         """
         try:
             if issubclass(cls, AgentVmTest):
@@ -91,7 +93,6 @@ class AgentTest(ABC):
             sys.exit(1)
 
         sys.exit(0)
-
 
     def _run_remote_test(self, ssh_client: SshClient, command: str, use_sudo: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """

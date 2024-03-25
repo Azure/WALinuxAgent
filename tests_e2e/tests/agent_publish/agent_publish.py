@@ -71,8 +71,7 @@ class AgentPublishTest(AgentVmTest):
 
     def _get_published_version(self):
         """
-        Get the published version that needs to be validated
-        Read from test_args if provided, else use the release version from version.py
+        Returns version from test_args if provided, else use the release version from version.py
         """
         if hasattr(self._context, "published_version"):
             return self._context.published_version
