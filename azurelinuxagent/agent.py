@@ -28,10 +28,11 @@ import re
 import subprocess
 import sys
 import threading
+
+from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroup import AGENT_LOG_COLLECTOR, CpuCgroup, MemoryCgroup
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api
-from azurelinuxagent.ga.cgroupstelemetry import log_cgroup_warning
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -207,16 +208,16 @@ class Agent(object):
 
         # Check the cgroups unit
         log_collector_monitor = None
-        cgroups_api = get_cgroup_api()
         cpu_cgroup_path = None
         memory_cgroup_path = None
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
-            if cgroups_api is None:
-                log_cgroup_warning("Unable to determine what version of cgroups to use for log collector resource "
-                                   "monitoring and enforcement.")
+            try:
+                cgroup_api = get_cgroup_api()
+            except CGroupsException as e:
+                log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-            cpu_cgroup_path, memory_cgroup_path = cgroups_api.get_process_cgroup_paths("self")
+            cpu_cgroup_path, memory_cgroup_path = cgroup_api.get_process_cgroup_paths("self")
             cpu_slice_matches = False
             memory_slice_matches = False
             if cpu_cgroup_path is not None:

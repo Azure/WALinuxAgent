@@ -76,9 +76,9 @@ _MOCKED_COMMANDS_V1 = [
 /sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 '''),
 
-    MockCommand(r"^findmnt -t cgroup2 --noheadings$",
-'''/sys/fs/cgroup/unified cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate
-'''),
+    MockCommand(r"^findmnt -t cgroup2 --noheadings$", ''),
+
+    MockCommand(r"^stat -f --format=%T /sys/fs/cgroup$", 'tmpfs'),
 
 ]
 
@@ -89,10 +89,12 @@ _MOCKED_COMMANDS_V2 = [
 
     MockCommand(r"^findmnt -t cgroup --noheadings$", ''),
 
+    MockCommand(r"^stat -f --format=%T /sys/fs/cgroup$", 'cgroup2fs'),
+
 ]
 
 # Mocked commands when memory controller is in v2, but all other controllers are in v1
-_MOCKED_COMMANDS_V1_AND_V2 = [
+_MOCKED_COMMANDS_HYBRID = [
     MockCommand(r"^findmnt -t cgroup --noheadings$",
 '''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
 /sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
@@ -103,21 +105,25 @@ _MOCKED_COMMANDS_V1_AND_V2 = [
 /sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
 /sys/fs/cgroup/misc             cgroup cgroup rw,nosuid,nodev,noexec,relatime,misc
 /sys/fs/cgroup/cpu,cpuacct      cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpu,cpuacct
+/sys/fs/cgroup/memory           cgroup cgroup rw,nosuid,nodev,noexec,relatime,memory
 /sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
 /sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
 /sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 '''),
 
     MockCommand(r"^findmnt -t cgroup2 --noheadings$",
-'''/sys/fs/cgroup cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot
+'''/sys/fs/cgroup/unified cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate
 '''),
+
+    MockCommand(r"^stat -f --format=%T /sys/fs/cgroup$", 'tmpfs'),
+
+    MockCommand(r"^stat -f --format=%T /sys/fs/cgroup/unified$", 'cgroup2fs'),
 
 ]
 
 _MOCKED_FILES_V1 = [
     ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_self_cgroup')),
-    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_pid_cgroup')),
-    ("/sys/fs/cgroup/unified/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v1', 'sys_fs_cgroup_cgroup.subtree_control'))
+    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_pid_cgroup'))
 ]
 
 _MOCKED_FILES_V2 = [
@@ -129,21 +135,15 @@ _MOCKED_FILES_V2 = [
 ]
 
 # Mocked files when memory controller is in v2, but all other controllers are in v1
-_MOCKED_FILES_V1_AND_V2 = [
-    ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v1_and_v2', 'proc_self_cgroup')),
-    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1_and_v2', 'proc_pid_cgroup')),
-    ("/sys/fs/cgroup/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v1_and_v2', 'sys_fs_cgroup_cgroup.subtree_control'))
+_MOCKED_FILES_HYBRID = [
+    ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_self_cgroup')),
+    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_pid_cgroup')),
+    ("/sys/fs/cgroup/unified/cgroup.controllers", os.path.join(data_dir, 'cgroups', 'hybrid', 'sys_fs_cgroup_cgroup.controllers'))
 ]
 
 _MOCKED_PATHS = [
     r"^(/lib/systemd/system)",
     r"^(/etc/systemd/system)"
-]
-
-_MOCKED_PATHS_V2 = [
-    r"^(/sys/fs/cgroup/azure.slice/walinuxagent.service)",
-    r"^(/sys/fs/cgroup/system.slice/walinuxagent.service)",
-    r"^(/sys/fs/cgroup/system.slice/extension.service)"
 ]
 
 
@@ -176,7 +176,7 @@ def mock_cgroup_v1_environment(tmp_dir):
         (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
     ]
 
-    with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=True):
         with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
             with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V1, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V1, data_files=data_files) as mock:
                 yield mock
@@ -194,17 +194,16 @@ def mock_cgroup_v2_environment(tmp_dir):
         (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
     ]
 
-    with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=True):
         with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V2, paths=_MOCKED_PATHS + _MOCKED_PATHS_V2, files=_MOCKED_FILES_V2, data_files=data_files) as mock:
+            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V2, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V2, data_files=data_files) as mock:
                 yield mock
 
 @contextlib.contextmanager
-def mock_cgroup_v1_and_v2_environment(tmp_dir):
+def mock_cgroup_hybrid_environment(tmp_dir):
     """
-    Creates a mock environment for machine which has controllers in cgroups v1 and v2 hierarchies used by the tests
-    related to cgroups (currently it only provides support for systemd platforms). The agent does not currently support
-    this scenario.
+    Creates a mock environment for machine which uses cgroup hybrid mode used by the tests related to cgroups (currently
+     it only provides support for systemd platforms).
     """
     data_files = [
         (os.path.join(data_dir, 'init', 'walinuxagent.service'), UnitFilePaths.walinuxagent),
@@ -212,7 +211,7 @@ def mock_cgroup_v1_and_v2_environment(tmp_dir):
         (os.path.join(data_dir, 'init', 'azure-vmextensions.slice'), UnitFilePaths.vmextensions)
     ]
 
-    with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=True):
+    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=True):
         with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V1_AND_V2, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V1_AND_V2, data_files=data_files) as mock:
+            with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_HYBRID, paths=_MOCKED_PATHS, files=_MOCKED_FILES_HYBRID, data_files=data_files) as mock:
                 yield mock

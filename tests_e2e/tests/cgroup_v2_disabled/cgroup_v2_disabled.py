@@ -27,11 +27,11 @@ from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
 
 
-class Cgroupsv2Disabled(AgentVmTest):
+class Cgroupv2Disabled(AgentVmTest):
     """
     The test verifies that the agent does not enable resource enforcement and monitoring on machines which are using
-    cgroups v2. It also checks that the agent correctly determined the controller mount points. This test will be
-    removed once cgroups v2 is supported.
+    cgroup v2. It also checks that the agent correctly determined the controller mount points. This test will be
+    removed once cgroup v2 is supported.
     """
 
     def __init__(self, context: AgentVmTestContext):
@@ -60,25 +60,25 @@ class Cgroupsv2Disabled(AgentVmTest):
 
         # Verify that the agent chose v2 for resource enforcement and monitoring
         log.info("")
-        log.info("Checking that the agent chose cgroups v2 api for resource enforcement and monitoring...")
-        self.check_agent_log_contains('Using cgroups v2 for resource enforcement and monitoring', 'The agent should choose v2 for api resource enforcement and monitoring')
+        log.info("Checking that the agent chose cgroup v2 api for resource enforcement and monitoring...")
+        self.check_agent_log_contains('Using cgroup v2 for resource enforcement and monitoring', 'The agent should choose v2 for api resource enforcement and monitoring')
 
         # Verify that the agent determined the correct mount point for each controller
         log.info("")
-        log.info("Checking that the agent determined the correct mount point for each controller...")
-        self.check_agent_log_contains('The CPU cgroup controller is mounted at /sys/fs/cgroup',
-                                      'The agent should identify the cpu controller to be mounted at /sys/fs/cgroup')
-        self.check_agent_log_contains('The memory cgroup controller is mounted at /sys/fs/cgroup',
-                                      'The agent should identify the memory controller to be mounted at /sys/fs/cgroup')
+        log.info("Checking that the agent determined the correct root paths for each controller...")
+        self.check_agent_log_contains('The CPU cgroup controller root path is /sys/fs/cgroup',
+                                      'The agent should identify the cpu controller to be at /sys/fs/cgroup')
+        self.check_agent_log_contains('The memory cgroup controller root path is /sys/fs/cgroup',
+                                      'The agent should identify the memory controller to be at /sys/fs/cgroup')
 
-        # Verify that the agent does not support cgroups v2
+        # Verify that the agent does not support cgroup v2
         log.info("")
-        log.info("Checking that the agent does not use cgroups v2 for resource enforcement and monitoring...")
-        self.check_agent_log_contains('Agent and extensions resource monitoring is not currently supported on cgroups v2',
-                                      'The agent should not attempt to use cgroups v2 for resource enforcement and monitoring')
+        log.info("Checking that the agent does not use cgroup v2 for resource enforcement and monitoring...")
+        self.check_agent_log_contains('Agent and extensions resource monitoring is not currently supported on cgroup v2',
+                                      'The agent should not attempt to use cgroup v2 for resource enforcement and monitoring')
         self.check_agent_log_contains('Agent cgroups enabled: False',
                                       'The agent should not enable cgroups when system is using v2')
 
 
 if __name__ == "__main__":
-    Cgroupsv2Disabled.run_from_command_line()
+    Cgroupv2Disabled.run_from_command_line()

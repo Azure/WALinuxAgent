@@ -24,9 +24,8 @@ import threading
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.ga.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
-from azurelinuxagent.ga.cgroupapi import CGroupsApi, SystemdCgroupsApi, SystemdRunError, EXTENSION_SLICE_PREFIX, \
-    get_cgroup_api, SystemdCgroupsApiv2
-from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry, log_cgroup_info, log_cgroup_warning
+from azurelinuxagent.ga.cgroupapi import SystemdRunError, EXTENSION_SLICE_PREFIX, CGroupUtil, SystemdCgroupApiv2, log_cgroup_info, log_cgroup_warning, get_cgroup_api
+from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import systemd
@@ -139,8 +138,10 @@ class CGroupConfigurator(object):
             try:
                 if self._initialized:
                     return
-                # This check is to reset the quotas if agent goes from cgroup supported to unsupported distros later in time.
-                if not CGroupsApi.cgroups_supported():
+                # check whether cgroup monitoring is supported on the current distro
+                self._cgroups_supported = CGroupUtil.cgroups_supported()
+                if not self._cgroups_supported:
+                    # This check is to reset the quotas if agent goes from cgroup supported to unsupported distros later in time.
                     agent_drop_in_path = systemd.get_agent_drop_in_path()
                     try:
                         if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
@@ -155,20 +156,11 @@ class CGroupConfigurator(object):
                                                      agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
                             self.__cleanup_all_files(files_to_cleanup)
                             self.__reload_systemd_config()
-                            log_cgroup_info("Agent reset the quotas if distro: {0} goes from supported to unsupported list".format(get_distro()), send_event=False)
+                            log_cgroup_info("Agent reset the quotas if distro: {0} goes from supported to unsupported list".format(get_distro()), send_event=True)
                     except Exception as err:
-                        logger.warn("[CGW] Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
+                        logger.warn("Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
 
-                # check whether cgroup monitoring is supported on the current distro
-                self._cgroups_supported = CGroupsApi.cgroups_supported()
-                if not self._cgroups_supported:
-                    log_cgroup_info("Cgroup monitoring is not supported on {0}".format(get_distro()), send_event=False)
-                    return
-
-                # Determine which version of the Cgroup API should be used. If the correct version can't be determined,
-                # do not enable resource monitoring/enforcement.
-                self._cgroups_api = get_cgroup_api()
-                if self._cgroups_api is None:
+                    log_cgroup_info("Cgroup monitoring is not supported on {0}".format(get_distro()), send_event=True)
                     return
 
                 # check that systemd is detected correctly
@@ -177,6 +169,14 @@ class CGroupConfigurator(object):
                     return
 
                 log_cgroup_info("systemd version: {0}".format(systemd.get_version()))
+
+                # Determine which version of the Cgroup API should be used. If the correct version can't be determined,
+                # do not enable resource monitoring/enforcement.
+                try:
+                    self._cgroups_api = get_cgroup_api()
+                except CGroupsException as e:
+                    log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
+                    return
 
                 if not self.__check_no_legacy_cgroups():
                     return
@@ -189,13 +189,13 @@ class CGroupConfigurator(object):
 
                 self.__setup_azure_slice()
 
-                cpu_controller_root, memory_controller_root = self.__get_cgroup_controllers_mount_points()
+                cpu_controller_root, memory_controller_root = self.__get_cgroup_controller_roots()
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroup_paths(agent_slice,
                                                                                                        cpu_controller_root,
                                                                                                        memory_controller_root)
 
                 if self.cgroup_v2_enabled():
-                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroups v2")
+                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
                     return
 
                 if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
@@ -223,24 +223,24 @@ class CGroupConfigurator(object):
             Older versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent. When running
             under systemd this could produce invalid resource usage data. Cgroups should not be enabled under this condition.
             """
-            legacy_cgroups = self._cgroups_api.cleanup_legacy_cgroups()
+            legacy_cgroups = CGroupUtil.cleanup_legacy_cgroups()
             if legacy_cgroups > 0:
                 log_cgroup_warning("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
                 return False
             return True
 
-        def __get_cgroup_controllers_mount_points(self):
-            cpu_controller_root, memory_controller_root = self._cgroups_api.get_cgroup_mount_points()
+        def __get_cgroup_controller_roots(self):
+            cpu_controller_root, memory_controller_root = self._cgroups_api.get_controller_root_paths()
 
             if cpu_controller_root is not None:
-                log_cgroup_info("The CPU cgroup controller is mounted at {0}".format(cpu_controller_root), send_event=False)
+                log_cgroup_info("The CPU cgroup controller root path is {0}".format(cpu_controller_root), send_event=False)
             else:
-                log_cgroup_warning("The CPU cgroup controller is not mounted")
+                log_cgroup_warning("The CPU cgroup controller is not mounted or enabled")
 
             if memory_controller_root is not None:
-                log_cgroup_info("The memory cgroup controller is mounted at {0}".format(memory_controller_root), send_event=False)
+                log_cgroup_info("The memory cgroup controller root path is {0}".format(memory_controller_root), send_event=False)
             else:
-                log_cgroup_warning("The memory cgroup controller is not mounted")
+                log_cgroup_warning("The memory cgroup controller is not mounted or enabled")
 
             return cpu_controller_root, memory_controller_root
 
@@ -381,13 +381,13 @@ class CGroupConfigurator(object):
 
         def is_extension_resource_limits_setup_completed(self, extension_name, cpu_quota=None):
             unit_file_install_path = systemd.get_unit_file_install_path()
-            old_extension_slice_path = os.path.join(unit_file_install_path, SystemdCgroupsApi.get_extension_slice_name(extension_name, old_slice=True))
+            old_extension_slice_path = os.path.join(unit_file_install_path, CGroupUtil.get_extension_slice_name(extension_name, old_slice=True))
             # clean up the old slice from the disk
             if os.path.exists(old_extension_slice_path):
                 CGroupConfigurator._Impl.__cleanup_unit_file(old_extension_slice_path)
 
             extension_slice_path = os.path.join(unit_file_install_path,
-                                                SystemdCgroupsApi.get_extension_slice_name(extension_name))
+                                                CGroupUtil.get_extension_slice_name(extension_name))
             cpu_quota = str(
                 cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
             slice_contents = _EXTENSION_SLICE_CONTENTS.format(extension_name=extension_name,
@@ -452,7 +452,7 @@ class CGroupConfigurator(object):
             return self._extensions_cgroups_enabled
 
         def cgroup_v2_enabled(self):
-            return isinstance(self._cgroups_api, SystemdCgroupsApiv2)
+            return isinstance(self._cgroups_api, SystemdCgroupApiv2)
 
         def enable(self):
             if not self.supported():
@@ -581,7 +581,7 @@ class CGroupConfigurator(object):
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands = set()
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
-                agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+                agent_cgroup = self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
                 # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
@@ -744,12 +744,12 @@ class CGroupConfigurator(object):
                 cpu_cgroup_path, memory_cgroup_path = self._cgroups_api.get_unit_cgroup_paths(unit_name)
 
                 if cpu_cgroup_path is None:
-                    log_cgroup_info("The CPU controller is not mounted; will not track resource usage", send_event=False)
+                    log_cgroup_info("The CPU controller is not mounted or enabled; will not track resource usage", send_event=False)
                 else:
                     CGroupsTelemetry.track_cgroup(CpuCgroup(unit_name, cpu_cgroup_path))
 
                 if memory_cgroup_path is None:
-                    log_cgroup_info("The Memory controller is not mounted; will not track resource usage", send_event=False)
+                    log_cgroup_info("The Memory controller is not mounted or enabled; will not track resource usage", send_event=False)
                 else:
                     CGroupsTelemetry.track_cgroup(MemoryCgroup(unit_name, memory_cgroup_path))
 
@@ -777,13 +777,13 @@ class CGroupConfigurator(object):
             TODO: remove extension Memory cgroups from tracked list
             """
             try:
-                extension_slice_name = SystemdCgroupsApi.get_extension_slice_name(extension_name)
+                extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
                 cgroup_relative_path = os.path.join(_AZURE_VMEXTENSIONS_SLICE,
                                                     extension_slice_name)
 
-                cpu_cgroup_mountpoint, memory_cgroup_mountpoint = self._cgroups_api.get_cgroup_mount_points()
-                cpu_cgroup_path = os.path.join(cpu_cgroup_mountpoint, cgroup_relative_path)
-                memory_cgroup_path = os.path.join(memory_cgroup_mountpoint, cgroup_relative_path)
+                cpu_root_path, memory_root_path = self._cgroups_api.get_controller_root_paths()
+                cpu_cgroup_path = os.path.join(cpu_root_path, cgroup_relative_path)
+                memory_cgroup_path = os.path.join(memory_root_path, cgroup_relative_path)
 
                 if cpu_cgroup_path is not None:
                     CGroupsTelemetry.stop_tracking(CpuCgroup(extension_name, cpu_cgroup_path))
@@ -819,12 +819,6 @@ class CGroupConfigurator(object):
                         extension_name, ustr(exception))
                     self.disable(reason, DisableCgroups.ALL)
                     # fall-through and re-invoke the extension
-                except CGroupsException as exception:
-                    reason = 'Failed to start {0} using cgroups, will try invoking the extension directly. Error: {1}'.format(
-                        extension_name, ustr(exception))
-                    self.disable(reason, DisableCgroups.ALL)
-                    # fall-through and re-invoke the extension
-
 
             # subprocess-popen-preexec-fn<W1509> Disabled: code is not multi-threaded
             process = subprocess.Popen(command, shell=shell, cwd=cwd, env=env, stdout=stdout, stderr=stderr, preexec_fn=os.setsid)  # pylint: disable=W1509
@@ -852,7 +846,7 @@ class CGroupConfigurator(object):
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
                 extension_slice_path = os.path.join(unit_file_install_path,
-                                                    SystemdCgroupsApi.get_extension_slice_name(extension_name))
+                                                    CGroupUtil.get_extension_slice_name(extension_name))
                 try:
                     cpu_quota = str(cpu_quota) + "%" if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
                     if cpu_quota == "":
@@ -874,7 +868,7 @@ class CGroupConfigurator(object):
             """
             if self.enabled():
                 unit_file_install_path = systemd.get_unit_file_install_path()
-                extension_slice_name = SystemdCgroupsApi.get_extension_slice_name(extension_name)
+                extension_slice_name = CGroupUtil.get_extension_slice_name(extension_name)
                 extension_slice_path = os.path.join(unit_file_install_path, extension_slice_name)
                 if os.path.exists(extension_slice_path):
                     self.stop_tracking_extension_cgroups(extension_name)

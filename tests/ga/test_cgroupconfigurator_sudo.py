@@ -139,7 +139,7 @@ class CGroupConfiguratorSystemdTestCaseSudo(AgentTestCase):
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch("azurelinuxagent.ga.extensionprocessutil.wait_for_process_completion_or_timeout",
                            return_value=[True, None, 0]):
-                    with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
+                    with patch("azurelinuxagent.ga.cgroupapi._SystemdCgroupApi._is_systemd_failure",
                                return_value=False):
                         with self.assertRaises(ExtensionError) as context_manager:
                             configurator.start_extension_command(
