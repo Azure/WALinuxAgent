@@ -573,7 +573,7 @@ installed, then enabling this option will cause all OpenSSL commands to fail._
 _Type: Boolean_  
 _Default: n (set to 'y' in waagent.conf)_
 
-Creates the firewall rules needed to protect communication of the Agent with the VM Host.
+Creates firewall rules to allow communication with the VM Host only by the Agent.  
 
 #### __OS.MonitorDhcpClientRestartPeriod__
 
