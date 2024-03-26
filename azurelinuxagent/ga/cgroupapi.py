@@ -468,3 +468,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                 cpu_path = path
 
         return cpu_path, memory_path
+
+    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
+                                error_code=ExtensionErrorCodes.PluginUnknownFailure):
+        raise NotImplementedError()
