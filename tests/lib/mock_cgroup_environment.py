@@ -20,7 +20,7 @@ import os
 from tests.lib.tools import patch, data_dir
 from tests.lib.mock_environment import MockEnvironment, MockCommand
 
-# Mocked commands which are common between v1 and v2
+# Mocked commands which are common between v1, v2, and hybrid cgroup environments
 _MOCKED_COMMANDS_COMMON = [
    MockCommand(r"^systemctl --version$",
 '''systemd 237
@@ -93,7 +93,6 @@ _MOCKED_COMMANDS_V2 = [
 
 ]
 
-# Mocked commands when memory controller is in v2, but all other controllers are in v1
 _MOCKED_COMMANDS_HYBRID = [
     MockCommand(r"^findmnt -t cgroup --noheadings$",
 '''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
@@ -134,7 +133,6 @@ _MOCKED_FILES_V2 = [
     ("/sys/fs/cgroup/azure.slice/walinuxagent.service/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control_empty'))
 ]
 
-# Mocked files when memory controller is in v2, but all other controllers are in v1
 _MOCKED_FILES_HYBRID = [
     ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_self_cgroup')),
     (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_pid_cgroup')),
@@ -166,7 +164,7 @@ class UnitFilePaths:
 @contextlib.contextmanager
 def mock_cgroup_v1_environment(tmp_dir):
     """
-    Creates a mock environment for cgroups v1 hierarchy used by the tests related to cgroups (currently it only
+    Creates a mock environment for cgroup v1 hierarchy used by the tests related to cgroups (currently it only
     provides support for systemd platforms).
     The command output used in __MOCKED_COMMANDS comes from an Ubuntu 20 system.
     """
@@ -181,10 +179,11 @@ def mock_cgroup_v1_environment(tmp_dir):
             with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V1, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V1, data_files=data_files) as mock:
                 yield mock
 
+
 @contextlib.contextmanager
 def mock_cgroup_v2_environment(tmp_dir):
     """
-    Creates a mock environment for cgroups v2 hierarchy used by the tests related to cgroups (currently it only
+    Creates a mock environment for cgroup v2 hierarchy used by the tests related to cgroups (currently it only
     provides support for systemd platforms).
     The command output used in __MOCKED_COMMANDS comes from an Ubuntu 22 system.
     """
@@ -199,11 +198,12 @@ def mock_cgroup_v2_environment(tmp_dir):
             with MockEnvironment(tmp_dir, commands=_MOCKED_COMMANDS_COMMON + _MOCKED_COMMANDS_V2, paths=_MOCKED_PATHS, files=_MOCKED_FILES_V2, data_files=data_files) as mock:
                 yield mock
 
+
 @contextlib.contextmanager
 def mock_cgroup_hybrid_environment(tmp_dir):
     """
-    Creates a mock environment for machine which uses cgroup hybrid mode used by the tests related to cgroups (currently
-     it only provides support for systemd platforms).
+    Creates a mock environment for cgroup hybrid hierarchy used by the tests related to cgroups (currently it only
+    provides support for systemd platforms).
     """
     data_files = [
         (os.path.join(data_dir, 'init', 'walinuxagent.service'), UnitFilePaths.walinuxagent),

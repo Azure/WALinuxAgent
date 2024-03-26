@@ -99,6 +99,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
     def test_get_cgroup_api_raises_exception_when_hybrid_in_use_and_controllers_available_in_unified_hierarchy(self):
         with mock_cgroup_hybrid_environment(self.tmp_dir):
+            # Mock /sys/fs/cgroup/unified/cgroup.controllers file to have available controllers
             with patch("os.path.exists", return_value=True):
                 with patch('azurelinuxagent.common.utils.fileutil.read_file', return_value="cpu memory"):
                     with self.assertRaises(CGroupsException) as context:

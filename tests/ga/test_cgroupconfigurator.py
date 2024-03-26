@@ -487,7 +487,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_not_use_systemd_when_using_cgroup_v2(self, _):
+    def test_start_extension_command_should_not_use_systemd_when_cgroup_v2_enabled(self, _):
         with self._get_cgroup_configurator_v2() as configurator:
             self.assertFalse(configurator.enabled())
 

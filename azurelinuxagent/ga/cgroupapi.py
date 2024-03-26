@@ -207,13 +207,13 @@ class _SystemdCgroupApi(object):
         # Ex: ControlGroup=/azure.slice/walinuxagent.service
         #     controlgroup_path[1:] = azure.slice/walinuxagent.service
         controlgroup_path = systemd.get_unit_property(unit_name, "ControlGroup")
-        cpu_mount_point, memory_mount_point = self.get_controller_root_paths()
+        cpu_root_path, memory_root_path = self.get_controller_root_paths()
 
-        cpu_cgroup_path = os.path.join(cpu_mount_point, controlgroup_path[1:]) \
-            if cpu_mount_point is not None else None
+        cpu_cgroup_path = os.path.join(cpu_root_path, controlgroup_path[1:]) \
+            if cpu_root_path is not None else None
 
-        memory_cgroup_path = os.path.join(memory_mount_point, controlgroup_path[1:]) \
-            if memory_mount_point is not None else None
+        memory_cgroup_path = os.path.join(memory_root_path, controlgroup_path[1:]) \
+            if memory_root_path is not None else None
 
         return cpu_cgroup_path, memory_cgroup_path
 
@@ -225,23 +225,22 @@ class _SystemdCgroupApi(object):
         """
         cpu_cgroup_relative_path, memory_cgroup_relative_path = self.get_process_cgroup_relative_paths(process_id)
 
-        cpu_mount_point, memory_mount_point = self.get_controller_root_paths()
+        cpu_root_path, memory_root_path = self.get_controller_root_paths()
 
-        cpu_cgroup_path = os.path.join(cpu_mount_point, cpu_cgroup_relative_path) \
-            if cpu_mount_point is not None and cpu_cgroup_relative_path is not None else None
+        cpu_cgroup_path = os.path.join(cpu_root_path, cpu_cgroup_relative_path) \
+            if cpu_root_path is not None and cpu_cgroup_relative_path is not None else None
 
-        memory_cgroup_path = os.path.join(memory_mount_point, memory_cgroup_relative_path) \
-            if memory_mount_point is not None and memory_cgroup_relative_path is not None else None
+        memory_cgroup_path = os.path.join(memory_root_path, memory_cgroup_relative_path) \
+            if memory_root_path is not None and memory_cgroup_relative_path is not None else None
 
         return cpu_cgroup_path, memory_cgroup_path
 
     def get_process_cgroup_relative_paths(self, process_id):  # pylint: disable=W0613
         """
         Cgroup version specific. Returns a tuple with the path of the cpu and memory cgroups for the given process
-        (relative to the mount point of the corresponding controller).
+        (relative to the root path of the corresponding controller).
         The 'process_id' can be a numeric PID or the string "self" for the current process.
-        The values returned can be None if the process is not in a cgroup for that controller (e.g. the controller is
-        not mounted).
+        The values returned can be None if the controller is not mounted or enabled.
         """
         raise NotImplementedError()
 
@@ -328,8 +327,7 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
                 # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the extension slice
                 # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in extension Cgroup
                 # since slice unit file configured with accounting enabled.
-                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(
-                    scope, extension_slice_name, command),
+                "systemd-run --property=CPUAccounting=no --property=MemoryAccounting=no --unit={0} --scope --slice={1} {2}".format(scope, extension_slice_name, command),
                 shell=shell,
                 cwd=cwd,
                 stdout=stdout,
@@ -366,10 +364,8 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
 
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
-                log_cgroup_info("The extension command already completed; will not track resource usage",
-                                send_event=False)
-            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)),
-                            send_event=False)
+                log_cgroup_info("The extension command already completed; will not track resource usage", send_event=False)
+            log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
         except Exception as e:
             log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(e)), send_event=False)
 
@@ -472,6 +468,3 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                 cpu_path = path
 
         return cpu_path, memory_path
-
-    def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr, error_code=ExtensionErrorCodes.PluginUnknownFailure):   # pylint: disable=W0613
-        raise NotImplementedError()

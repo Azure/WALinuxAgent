@@ -1,6 +1,6 @@
 #
 # The test suite verifies that the agent does not enable resource enforcement and monitoring on machines which are
-# using cgroups v2. This suite will be removed once cgroups v2 is supported.
+# using cgroup v2. This suite will be removed once cgroup v2 is supported.
 #
 name: "Cgroupv2Disabled"
 tests:
