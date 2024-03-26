@@ -28,7 +28,9 @@ image-sets:
       - "ubuntu_1804"
       - "ubuntu_2004"
       - "ubuntu_2204"
+      - "ubuntu_2204_minimal"
       - "ubuntu_2404"
+      - "ubuntu_2404_minimal"
 
    # Endorsed distros (ARM64) that are tested on the daily runs
    endorsed-arm64:
@@ -178,9 +180,16 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
+   ubuntu_2204_minimal: "Canonical 0001-com-ubuntu-minimal-jammy minimal-22_04-lts-gen2 latest",
    ubuntu_2404:
       # TODO: Currently using the daily build, update to the release build once it is available
       urn: "Canonical 0001-com-ubuntu-server-noble-daily 24_04-daily-lts-gen2 latest"
+      locations:
+         AzureChinaCloud: []
+         AzureUSGovernment: []
+   ubuntu_2404_minimal:
+      # TODO: Currently using the daily build, update to the release build once it is available
+      urn: "Canonical ubuntu-24_04-lts-daily minimal latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
