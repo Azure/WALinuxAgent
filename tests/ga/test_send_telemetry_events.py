@@ -42,11 +42,11 @@ from azurelinuxagent.common.version import CURRENT_VERSION, DISTRO_NAME, DISTRO_
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 from tests.ga.test_monitor import random_generator
-from tests.protocol.mocks import MockHttpResponse, mock_wire_protocol
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE
-from tests.tools import AgentTestCase, clear_singleton_instances, mock_sleep
-from tests.utils.event_logger_tools import EventLoggerTools
+from tests.lib.mock_wire_protocol import MockHttpResponse, mock_wire_protocol
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE
+from tests.lib.tools import AgentTestCase, clear_singleton_instances, mock_sleep
+from tests.lib.event_logger_tools import EventLoggerTools
 
 
 class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
@@ -368,13 +368,13 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="EventTid" Value="{4}" T="mt:uint64" />' \
                              '<Param Name="EventPid" Value="{5}" T="mt:uint64" />' \
                              '<Param Name="TaskName" Value="{6}" T="mt:wstr" />' \
-                             '<Param Name="KeywordName" Value="" T="mt:wstr" />' \
                              '<Param Name="ExtensionType" Value="json" T="mt:wstr" />' \
                              '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
                              '<Param Name="OSVersion" Value="{7}" T="mt:wstr" />' \
                              '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
                              '<Param Name="RAM" Value="{8}" T="mt:uint64" />' \
                              '<Param Name="Processors" Value="{9}" T="mt:uint64" />' \
+                             '<Param Name="KeywordName" Value=\'{10}\' T="mt:wstr" />' \
                              '<Param Name="TenantName" Value="db00a7755a5e4e8a8fe4b19bc3b330c3" T="mt:wstr" />' \
                              '<Param Name="RoleName" Value="MachineRole" T="mt:wstr" />' \
                              '<Param Name="RoleInstanceName" Value="b61f93d0-e1ed-40b2-b067-22c243233448.MachineRole_IN_0" T="mt:wstr" />' \
@@ -385,7 +385,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
                              '<Param Name="ImageOrigin" Value="2468" T="mt:uint64" />' \
                              ']]></Event>'.format(AGENT_VERSION, TestSendTelemetryEventsHandler._TEST_EVENT_OPERATION, CURRENT_AGENT, test_opcodename, test_eventtid,
                                                   test_eventpid, test_taskname, osversion, int(osutil.get_total_mem()),
-                                                  osutil.get_processor_cores()).encode('utf-8')
+                                                  osutil.get_processor_cores(), json.dumps({"CpuArchitecture": platform.machine()})).encode('utf-8')
 
             self.assertIn(sample_message, collected_event)
 

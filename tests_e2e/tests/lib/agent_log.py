@@ -64,7 +64,21 @@ class AgentLogRecord:
 
     @property
     def timestamp(self) -> datetime:
+        # Extension logs may follow different timestamp formats
+        # 2023/07/10 20:50:13.459260
+        ext_timestamp_regex_1 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}[.\d]+"
+        # 2023/07/10 20:50:13
+        ext_timestamp_regex_2 = r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}"
+
+        if re.match(ext_timestamp_regex_1, self.when):
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S.%f')
+        elif re.match(ext_timestamp_regex_2, self.when):
+            return datetime.strptime(self.when, u'%Y/%m/%d %H:%M:%S')
+        # Logs from agent follow this format: 2023-07-10T20:50:13.038599Z
         return datetime.strptime(self.when, u'%Y-%m-%dT%H:%M:%S.%fZ')
+
+    def __str__(self):
+        return self.text
 
 
 class AgentLog(object):
@@ -92,19 +106,6 @@ class AgentLog(object):
             #
             # NOTE: This list was taken from the older agent tests and needs to be cleaned up. Feel free to un-comment rules as new tests are added.
             #
-            # # This warning is expected on CentOS/RedHat 7.4, 7.8 and Redhat 7.6
-            # {
-            #     'message': r"Move rules file 70-persistent-net.rules to /var/lib/waagent/70-persistent-net.rules",
-            #     'if': lambda r:
-            #     re.match(r"(((centos|redhat)7\.[48])|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE) is not None
-            #     and r.level == "WARNING"
-            #     and r.prefix == "ExtHandler" and r.thread in ("", "EnvHandler")
-            # },
-            # # This warning is expected on SUSE 12
-            # {
-            #     'message': r"WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules",
-            #     'if': lambda _: re.match(r"((sles15\.2)|suse12)\D*", DISTRO_NAME, flags=re.IGNORECASE) is not None
-            # },
             # # The following message is expected to log an error if systemd is not enabled on it
             # {
             #     'message': r"Did not detect Systemd, unable to set wa(|linux)agent-network-setup.service",
@@ -146,15 +147,14 @@ class AgentLog(object):
             #     and r.level == "ERROR"
             #     and r.prefix == "Daemon"
             # },
-            # #
-            # # 2022-01-20T06:52:21.515447Z WARNING Daemon Daemon Fetch failed: [HttpError] [HTTP Failed] GET https://dcrgajhx62.blob.core.windows.net/$system/edprpwqbj6.5c2ddb5b-d6c3-4d73-9468-54419ca87a97.vmSettings -- IOError timed out -- 6 attempts made
-            # #
-            # # The daemon does not need the artifacts profile blob, but the request is done as part of protocol initialization. This timeout can be ignored, if the issue persist the log would include additional instances.
-            # #
-            # {
-            #     'message': r"\[HTTP Failed\] GET https://.*\.vmSettings -- IOError timed out",
-            #     'if': lambda r: r.level == "WARNING" and r.prefix == "Daemon"
-            # },
+            #
+            # 2023-06-28T09:31:38.903835Z WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules
+            #  The environment thread performs this operation periodically
+            #
+            {
+                'message': r"Move rules file (70|75)-persistent.*.rules to /var/lib/waagent/(70|75)-persistent.*.rules",
+                'if': lambda r: r.level == "WARNING"
+            },
             #
             # Probably the agent should log this as INFO, but for now it is a warning
             # e.g.
@@ -207,6 +207,24 @@ class AgentLog(object):
             {
                 'message': r"\[CGW\]\s*(The (CPU|memory) cgroup controller is not mounted)|(The agent's process is not within a (CPU|memory) cgroup)",
                 'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION >= '22.00'
+            },
+            #
+            # Old daemons can produce this message
+            #
+            #    2023-05-24T18:04:27.467009Z WARNING Daemon Daemon Could not mount cgroups: [Errno 1] Operation not permitted: '/sys/fs/cgroup/cpu,cpuacct' -> '/sys/fs/cgroup/cpu'
+            #
+            {
+                'message': r"Could not mount cgroups: \[Errno 1\] Operation not permitted",
+                'if': lambda r: r.prefix == 'Daemon'
+            },
+            #
+            # The daemon does not need the artifacts profile blob, but the request is done as part of protocol initialization. This timeout can be ignored, if the issue persist the log would include additional instances.
+            #
+            # 2022-01-20T06:52:21.515447Z WARNING Daemon Daemon Fetch failed: [HttpError] [HTTP Failed] GET https://dcrgajhx62.blob.core.windows.net/$system/edprpwqbj6.5c2ddb5b-d6c3-4d73-9468-54419ca87a97.vmSettings -- IOError timed out -- 6 attempts made
+            #
+            {
+                'message': r"\[HTTP Failed\] GET https://.*\.vmSettings -- IOError timed out",
+                'if': lambda r: r.level == "WARNING" and r.prefix == "Daemon"
             },
             #
             # 2022-02-09T04:50:37.384810Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 2bed9b62-188e-4668-b1a8-87c35cfa4927 eTag: 7031887032544600793]: [Internal error in HostGAPlugin] [HTTP Failed] [502: Bad Gateway] b'{  "errorCode": "VMArtifactsProfileBlobContentNotFound",  "message": "VM artifacts profile blob has no content in it.",  "details": ""}'
@@ -289,12 +307,21 @@ class AgentLog(object):
                 'message': r"SendHostPluginHeartbeat:.*ResourceGoneError.*410",
                 'if': lambda r: r.level == "WARNING" and self._increment_counter("SendHostPluginHeartbeat-ResourceGoneError-410") < 2  # ignore unless there are 2 or more instances
             },
+            #
             # 2023-01-18T02:58:25.589492Z ERROR SendTelemetryHandler ExtHandler Event: name=WALinuxAgent, op=ReportEventErrors, message=DroppedEventsCount: 1
             # Reasons (first 5 errors): [ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] URI http://168.63.129.16/machine?comp=telemetrydata  [HTTP Failed] Status Code 400: Traceback (most recent call last):
             #
             {
-                'message': r"(?s)SendTelemetryHandler.*http://168.63.129.16/machine\?comp=telemetrydata.*Status Code 400",
-                'if': lambda _: self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 400") < 2  # ignore unless there are 2 or more instances
+                'message': r"(?s)\[ProtocolError\].*http://168.63.129.16/machine\?comp=telemetrydata.*Status Code 400",
+                'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 400") < 2  # ignore unless there are 2 or more instances
+            },
+            #
+            # 2023-07-26T22:05:42.841692Z ERROR SendTelemetryHandler ExtHandler Event: name=WALinuxAgent, op=ReportEventErrors, message=DroppedEventsCount: 1
+            # Reasons (first 5 errors): [ProtocolError] Failed to send events:[ResourceGoneError] [HTTP Failed] [410: Gone] b'<?xml version="1.0" encoding="utf-8"?>\n<Error xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">\n    <Code>ResourceNotAvailable</Code>\n    <Message>The resource requested is no longer available. Please refresh your cache.</Message>\n    <Details></Details>\n</Error>': Traceback (most recent call last):
+            #
+            {
+                'message': r"(?s)\[ProtocolError\].*Failed to send events.*\[410: Gone\]",
+                'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 410") < 2  # ignore unless there are 2 or more instances
             },
             #
             # Ignore these errors in flatcar:
@@ -324,7 +351,23 @@ class AgentLog(object):
             {
                 'message': r"Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent.*op=Install.*Non-zero exit code: 56,",
             },
-
+            #
+            # Ignore LogCollector failure to fetch vmSettings if it recovers
+            #
+            #     2023-08-27T08:13:42.520557Z WARNING MainThread LogCollector Fetch failed: [HttpError] [HTTP Failed] GET https://md-hdd-tkst3125n3x0.blob.core.chinacloudapi.cn/$system/lisa-WALinuxAgent-20230827-080144-029-e0-n0.cb9a406f-584b-4702-98bb-41a3ad5e334f.vmSettings -- IOError timed out -- 6 attempts made
+            #
+            {
+                'message': r"Fetch failed:.*GET.*vmSettings.*timed out",
+                'if': lambda r: r.prefix == 'LogCollector' and self.agent_log_contains("LogCollector Log collection successfully completed", after_timestamp=r.timestamp)
+            },
+            #
+            # In tests, we use both autoupdate flags to install test agent with different value and changing it depending on the scenario. So, we can ignore this warning.
+            #
+            # 2024-01-30T22:22:37.299911Z WARNING ExtHandler ExtHandler AutoUpdate.Enabled property is **Deprecated** now but it's set to different value from AutoUpdate.UpdateToLatestVersion. Please consider removing it if added by mistake
+            {
+                'message': r"AutoUpdate.Enabled property is \*\*Deprecated\*\* now but it's set to different value from AutoUpdate.UpdateToLatestVersion",
+                'if': lambda r: r.prefix == 'ExtHandler' and r.thread == 'ExtHandler'
+            }
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
@@ -353,6 +396,19 @@ class AgentLog(object):
             errors.append(primary_interface_error)
 
         return errors
+
+    def agent_log_contains(self, data: str, after_timestamp: str = datetime.min):
+        """
+        This function looks for the specified test data string in the WALinuxAgent logs and returns if found or not.
+        :param data: The string to look for in the agent logs
+        :param after_timestamp: A timestamp
+        appears after this timestamp
+        :return: True if test data string found in the agent log after after_timestamp and False if not.
+       """
+        for record in self.read():
+            if data in record.text and record.timestamp > after_timestamp:
+                return True
+        return False
 
     @staticmethod
     def _is_systemd():
@@ -390,12 +446,15 @@ class AgentLog(object):
     #
     #     Older Agent: 2021/03/30 19:35:35.971742 INFO Daemon Azure Linux Agent Version:2.2.45
     #
+    #     Oldest Agent: 2023/06/07 08:04:35.336313 WARNING Disabling guest agent in accordance with ovf-env.xml
+    #
     #     Extension: 2021/03/30 19:45:31 Azure Monitoring Agent for Linux started to handle.
     #                2021/03/30 19:45:31 [Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0] cwd is /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.7.0
     #
-    _NEWER_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>\S+)\s(?P<prefix>(Daemon)|(ExtHandler)|(\[\S+\]))\s(?P<message>.*)')
+    _NEWER_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>\S+)\s(?P<prefix>(Daemon)|(ExtHandler)|(LogCollector)|(\[\S+\]))\s(?P<message>.*)')
     _2_2_46_AGENT_RECORD = re.compile(r'(?P<when>[\d-]+T[\d:.]+Z)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>Daemon|ExtHandler|\[\S+\])\s(?P<message>.*)')
-    _OLDER_AGENT_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>\S*)\s(?P<message>.*)')
+    _OLDER_AGENT_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>Daemon|ExtHandler)\s(?P<message>.*)')
+    _OLDEST_AGENT_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>VERBOSE|INFO|WARNING|ERROR)\s(?P<thread>)(?P<prefix>)(?P<message>.*)')
     _EXTENSION_RECORD = re.compile(r'(?P<when>[\d/]+\s[\d:.]+)\s(?P<level>)(?P<thread>)((?P<prefix>\[[^\]]+\])\s)?(?P<message>.*)')
 
     def read(self) -> Iterable[AgentLogRecord]:
@@ -412,7 +471,7 @@ class AgentLog(object):
             raise IOError('{0} does not exist'.format(self._path))
 
         def match_record():
-            for regex in [self._NEWER_AGENT_RECORD, self._2_2_46_AGENT_RECORD, self._OLDER_AGENT_RECORD]:
+            for regex in [self._NEWER_AGENT_RECORD, self._2_2_46_AGENT_RECORD, self._OLDER_AGENT_RECORD, self._OLDEST_AGENT_RECORD]:
                 m = regex.match(line)
                 if m is not None:
                     return m

@@ -58,13 +58,33 @@ The information flow from the platform to the agent occurs via two channels:
 * A TCP endpoint exposing a REST API used to obtain deployment and topology
   configuration.
 
-The agent will use an HTTP proxy if provided via the `http_proxy` (for `http` requests) or
-`https_proxy` (for `https` requests) environment variables. The `HttpProxy.Host` and
-`HttpProxy.Port` configuration variables (see below), if used, will override the environment
-settings. Due to limitations of Python, the agent *does not* support HTTP proxies requiring
-authentication. Note that when the agent service is managed by systemd, environment variables 
-such as `http_proxy` and `https_proxy` should be defined using one the mechanisms provided by 
-systemd (e.g. by using Environment or EnvironmentFile in the service file).
+### HTTP Proxy
+The Agent will use an HTTP proxy if provided via the `http_proxy` (for `http` requests) or
+`https_proxy` (for `https` requests) environment variables. Due to limitations of Python, 
+the agent *does not* support HTTP proxies requiring authentication. 
+
+Similarly, the Agent will bypass the proxy if the environment variable `no_proxy` is set.
+
+Note that the way to define those environment variables for the Agent service varies across different distros. For distros
+that use systemd, a common approach is to use Environment or EnvironmentFile in the [Service] section of the service 
+definition, for example using an override or a drop-in file (see "systemctl edit" for overrides).
+
+Example
+```bash
+    # cat /etc/systemd/system/walinuxagent.service.d/http-proxy.conf
+    [Service]
+    Environment="http_proxy=http://proxy.example.com:80/"
+    Environment="https_proxy=http://proxy.example.com:80/"
+    #
+```
+
+The Agent passes its environment to the VM Extensions it executes, including `http_proxy` and `https_proxy`, so defining
+a proxy for the Agent will also define it for the VM Extensions.
+
+
+The [`HttpProxy.Host` and `HttpProxy.Port`](#httpproxyhost-httpproxyport) configuration variables, if used, override 
+the environment settings. Note that this configuration variables are local to the Agent process and are not passed to
+VM Extensions.
 
 ## Requirements
 
@@ -84,11 +104,13 @@ Waagent depends on some system packages in order to function properly:
 
 ## Installation
 
-Installation via your distribution's package repository is preferred.
-You can also customize your own RPM or DEB packages using the configuration
-samples provided (see deb and rpm sections below).
+Installing via your distribution's package repository is the only method that is supported.
 
-For more advanced installation options, such as installing to custom locations or prefixes, you can use **setuptools** to install from source by running:
+You can install from source for more advanced options, such as installing to a custom location or creating 
+custom images. Installing from source, though, may override customizations done to the Agent by your 
+distribution, and is meant only for advanced users. We provide very limited support for this method.
+
+To install from source, you can use **setuptools**:
 
 ```bash
     sudo python setup.py install --register-service
@@ -108,11 +130,18 @@ You can view more installation options by running:
 
 The agent's log file is kept at `/var/log/waagent.log`.
 
+Lastly, you can also customize your own RPM or DEB packages using the configuration
+samples provided in the deb and rpm sections below. This method is also meant for advanced users and we
+provide very limited support for it.
+
+
 ## Upgrade
 
-Upgrading via your distribution's package repository is strongly preferred.
+Upgrading via your distribution's package repository or using automatic updates are the only supported
+methods. More information can be found here: [Update Linux Agent](https://learn.microsoft.com/en-us/azure/virtual-machines/extensions/update-linux-agent) 
 
-If upgrading manually, same with installation above by running:
+To upgrade the Agent from source, you can use **setuptools**. Upgrading from source is meant for advanced 
+users and we provide very limited support for it.
 
 ```bash
     sudo python setup.py install --force
@@ -232,6 +261,30 @@ without the agent. In order to do that, the `provisionVMAgent` flag must be set 
 provisioning time, via whichever API is being used. We will provide more details on
 this on our wiki when it is generally available. 
 
+#### __Extensions.WaitForCloudInit__
+
+_Type: Boolean_  
+_Default: n_
+
+Waits for cloud-init to complete (cloud-init status --wait) before executing VM extensions.
+
+Both cloud-init and VM extensions are common ways to customize a VM during initial deployment. By
+default, the agent will start executing extensions while cloud-init may still be in the 'config' 
+stage and won't wait for the 'final' stage to complete. Cloud-init and extensions may execute operations
+that conflict with each other (for example, both of them may try to install packages). Setting this option
+to 'y' ensures that VM extensions are executed only after cloud-init has completed all its stages.
+
+Note that using this option requires creating a custom image with the value of this option set to 'y', in
+order to ensure that the wait is performed during the initial deployment of the VM.
+
+#### __Extensions.WaitForCloudInitTimeout__
+
+_Type: Integer_  
+_Default: 3600_
+
+Timeout in seconds for the Agent to wait on cloud-init. If the timeout elapses, the Agent will continue 
+executing VM extensions. See Extensions.WaitForCloudInit for more details. 
+
 #### __Extensions.GoalStatePeriod__
 
 _Type: Integer_  
@@ -244,19 +297,38 @@ _Note_: setting up this parameter to more than a few minutes can make the state 
 the VM be reported as unresponsive/unavailable on the Azure portal. Also, this 
 setting affects how fast the agent starts executing extensions. 
 
+#### __AutoUpdate.UpdateToLatestVersion__
+
+_Type: Boolean_
+_Default: y_
+
+Enables auto-update of the Extension Handler. The Extension Handler is responsible
+for managing extensions and reporting VM status. The core functionality of the agent
+is contained in the Extension Handler, and we encourage users to enable this option
+in order to maintain an up to date version.
+ 
+When this option is enabled, the Agent will install new versions when they become
+available. When disabled, the Agent will not install any new versions, but it will use
+the most recent version already installed on the VM.
+
+_Notes_:
+1. This option was added on version 2.10.0.8 of the Agent. For previous versions, see AutoUpdate.Enabled.
+2. If both options are specified in waagent.conf, AutoUpdate.UpdateToLatestVersion overrides the value set for AutoUpdate.Enabled.
+3. Changing config option requires a service restart to pick up the updated setting.
+
+For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output). <br/>
+For more information on the agent update, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#how-auto-update-works-for-extension-handler). <br/>
+For more information on the AutoUpdate.UpdateToLatestVersion vs AutoUpdate.Enabled, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#autoupdateenabled-vs-autoupdateupdatetolatestversion). <br/>
+
 #### __AutoUpdate.Enabled__
 
 _Type: Boolean_  
 _Default: y_
 
-Enables auto-update of the Extension Handler. The Extension Handler is responsible 
-for managing extensions and reporting VM status. The core functionality of the agent
-is contained in the Extension Handler, and we encourage users to enable this option 
-in order to maintain an up to date version.
+Enables auto-update of the Extension Handler. This flag is supported for legacy reasons and we strongly recommend using AutoUpdate.UpdateToLatestVersion instead. 
+The difference between these 2 flags is that, when set to 'n', AutoUpdate.Enabled will use the version of the Extension Handler that is pre-installed on the image, while AutoUpdate.UpdateToLatestVersion will use the most recent version that has already been installed on the VM (via auto-update).
 
 On most distros the default value is 'y'.
-
-For more information on the agent version, see our [FAQ](https://github.com/Azure/WALinuxAgent/wiki/FAQ#what-does-goal-state-agent-mean-in-waagent---version-output).
 
 #### __Provisioning.Agent__
 
@@ -555,7 +627,7 @@ directory.
 _Type: String_  
 _Default: None_
 
-If set, the agent will use this proxy server to access the internet. These values
+If set, the agent will use this proxy server for HTTP/HTTPS requests. These values
 *will* override the `http_proxy` or `https_proxy` environment variables. Lastly,
 `HttpProxy.Host` is required (if to be used) and `HttpProxy.Port` is optional.
 

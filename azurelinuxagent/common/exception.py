@@ -75,6 +75,24 @@ class AgentNetworkError(AgentError):
         super(AgentNetworkError, self).__init__(msg, inner)
 
 
+class AgentUpdateError(AgentError):
+    """
+    When agent failed to update.
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(AgentUpdateError, self).__init__(msg, inner)
+
+
+class AgentFamilyMissingError(AgentError):
+    """
+    When agent family is missing.
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(AgentFamilyMissingError, self).__init__(msg, inner)
+
+
 class CGroupsException(AgentError):
     """
     Exception to classify any cgroups related issue.

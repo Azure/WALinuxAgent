@@ -70,39 +70,88 @@ if service-status walinuxagent > /dev/null 2>&1;then
 else
     service_name="waagent"
 fi
-echo "Service name: $service_name"
 
 #
 # Output the initial version of the agent
+
 #
 python=$(get-agent-python)
 waagent=$(get-agent-bin-path)
-echo "Agent's path: $waagent"
+
+echo "========== Initial Status =========="
+echo "Service Name: $service_name"
+echo "Agent Path: $waagent"
+echo "Agent Version:"
 $python "$waagent" --version
-printf "\n"
+echo "Service Status:"
+
+# Sometimes the service can take a while to start; give it a few minutes,
+started=false
+for i in {1..6}
+do
+  if service-status $service_name; then
+    started=true
+    break
+  fi
+  echo "Waiting for service to start..."
+  sleep 30
+done
+if [ $started == false ]; then
+  echo "Service failed to start."
+  exit 1
+fi
 
 #
 # Install the package
 #
+echo "========== Installing Agent =========="
 echo "Installing $package as version $version..."
 unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
-# Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar, don't have a waagent.conf
-# but AutoUpdate defaults to True so there is no need to do anything in that case.
-if [[ -e /etc/waagent.conf ]]; then
-  sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' /etc/waagent.conf
+python=$(get-agent-python)
+# Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar have a waagent.conf in different path
+waagent_conf_path=$($python -c 'from azurelinuxagent.common.osutil import get_osutil; osutil=get_osutil(); print(osutil.agent_conf_file_path)')
+echo "Agent's conf path: $waagent_conf_path"
+sed -i 's/AutoUpdate.Enabled=n/AutoUpdate.Enabled=y/g' "$waagent_conf_path"
+# By default UpdateToLatestVersion flag set to True, so that agent go through update logic to look for new agents.
+# But in e2e tests this flag needs to be off in test version 9.9.9.9 to stop the agent updates, so that our scenarios run on 9.9.9.9.
+sed -i '$a AutoUpdate.UpdateToLatestVersion=n' "$waagent_conf_path"
+# Logging and exiting tests if Extensions.Enabled flag is disabled for other distros than debian
+if grep -q "Extensions.Enabled=n" $waagent_conf_path; then
+  pypy_get_distro=$(pypy3 -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
+  python_get_distro=$($python -c 'from azurelinuxagent.common.version import get_distro; print(get_distro())')
+  # As we know debian distros disable extensions by default, so we need to enable them to verify agent extension scenarios
+  # If rest of the distros disable extensions, then we exit the test setup to fail the test.
+  if [[ $pypy_get_distro == *"debian"* ]] || [[ $python_get_distro == *"debian"* ]]; then
+      echo "Extensions.Enabled flag is disabled and this is expected in debian distro, so enabling it"
+      update-waagent-conf Extensions.Enabled=y
+  else
+      echo "Extensions.Enabled flag is disabled which is unexpected in this distro, so exiting test setup to fail the test"
+      exit 1
+  fi
+fi
+
+#
+# TODO: Remove this block once the symlink is created in the Flatcar image
+#
+# Currently, the Agent looks for /usr/share/oem/waagent.conf, but new Flatcar images use /etc/waagent.conf. Flatcar will create
+# this symlink in new images, but we need to create it for now.
+if [[ $(uname -a) == *"flatcar"* ]]; then
+  if [[ ! -f /usr/share/oem/waagent.conf ]]; then
+    ln -s "$waagent_conf_path" /usr/share/oem/waagent.conf
+  fi
 fi
 
 #
 # Restart the service
 #
 echo "Restarting service..."
-service-stop $service_name
+agent-service stop
 
 # Rename the previous log to ensure the new log starts with the agent we just installed
 mv /var/log/waagent.log /var/log/waagent."$(date --iso-8601=seconds)".log
 
-service-start $service_name
+agent-service start
 
 #
 # Verify that the new agent is running and output its status.
@@ -111,9 +160,10 @@ service-start $service_name
 echo "Verifying agent installation..."
 
 check-version() {
-  for i in {0..5}
+  # We need to wait for the extension handler to start, give it a couple of minutes
+  for i in {1..12}
   do
-    if $python "$waagent" --version | grep -E "Goal state agent:\s+$version" > /dev/null; then
+    if waagent-version | grep -E "Goal state agent:\s+$version" > /dev/null; then
       return 0
     fi
     sleep 10
@@ -123,15 +173,19 @@ check-version() {
 }
 
 if check-version "$version"; then
-  printf "\nThe agent was installed successfully\n"
+  printf "The agent was installed successfully\n"
   exit_code=0
 else
-  printf "\nFailed to install agent.\n"
+  printf "************************************\n"
+  printf " * ERROR: Failed to install agent. *\n"
+  printf "************************************\n"
   exit_code=1
 fi
 
+printf "\n"
+echo "========== Final Status =========="
 $python "$waagent" --version
 printf "\n"
-service-status $service_name
+agent-service status
 
 exit $exit_code

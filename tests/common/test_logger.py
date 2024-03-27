@@ -24,7 +24,7 @@ from azurelinuxagent.common.event import __event_logger__, add_log_event, MAX_NU
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
-from tests.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
+from tests.lib.tools import AgentTestCase, MagicMock, patch, skip_if_predicate_true
 
 _MSG_INFO = "This is our test info logging message {0} {1}"
 _MSG_WARN = "This is our test warn logging message {0} {1}"

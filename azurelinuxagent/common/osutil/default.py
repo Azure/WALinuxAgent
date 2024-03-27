@@ -149,6 +149,14 @@ class DefaultOSUtil(object):
     def get_agent_bin_path():
         return "/usr/sbin"
 
+    @staticmethod
+    def get_vm_arch():
+        try:
+            return platform.machine()
+        except Exception as e:
+            logger.warn("Unable to determine cpu architecture: {0}", ustr(e))
+            return "unknown"
+
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603
@@ -373,6 +381,9 @@ class DefaultOSUtil(object):
             return pwd.getpwnam(username)
         except KeyError:
             return None
+
+    def get_root_username(self):
+        return "root"
 
     def is_sys_user(self, username):
         """
@@ -1179,11 +1190,20 @@ class DefaultOSUtil(object):
             else:
                 logger.warn("exceeded restart retries")
 
-    def publish_hostname(self, hostname):
+    def check_and_recover_nic_state(self, ifname):
+        # TODO: This should be implemented for all distros where we reset the network during publishing hostname. Currently it is only implemented in RedhatOSUtil.
+        pass
+
+    def publish_hostname(self, hostname, recover_nic=False):
+        """
+        Publishes the provided hostname.
+        """
         self.set_dhcp_hostname(hostname)
         self.set_hostname_record(hostname)
         ifname = self.get_if_name()
         self.restart_if(ifname)
+        if recover_nic:
+            self.check_and_recover_nic_state(ifname)
 
     def set_scsi_disks_timeout(self, timeout):
         for dev in os.listdir("/sys/block"):

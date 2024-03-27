@@ -28,7 +28,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation, add_event
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -171,7 +171,11 @@ class MonitorHostNameChanges(PeriodicOperation):
                         self._hostname,
                         curr_hostname)
             self._osutil.set_hostname(curr_hostname)
-            self._osutil.publish_hostname(curr_hostname)
+            try:
+                self._osutil.publish_hostname(curr_hostname, recover_nic=True)
+            except Exception as e:
+                msg = "Error while publishing the hostname: {0}".format(e)
+                add_event(AGENT_NAME, op=WALAEventOperation.HostnamePublishing, is_success=False, message=msg, log_event=False)
             self._hostname = curr_hostname
 
 

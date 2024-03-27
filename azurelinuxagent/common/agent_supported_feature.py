@@ -14,6 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+from azurelinuxagent.common import conf
 
 
 class SupportedFeatureNames(object):
@@ -23,6 +24,7 @@ class SupportedFeatureNames(object):
     MultiConfig = "MultipleExtensionsPerHandler"
     ExtensionTelemetryPipeline = "ExtensionTelemetryPipeline"
     FastTrack = "FastTrack"
+    GAVersioningGovernance = "VersioningGovernance"  # Guest Agent Versioning
 
 
 class AgentSupportedFeature(object):
@@ -72,9 +74,28 @@ class _ETPFeature(AgentSupportedFeature):
                                           supported=self.__SUPPORTED)
 
 
+class _GAVersioningGovernanceFeature(AgentSupportedFeature):
+    """
+    CRP would drive the RSM update if agent reports that it does support RSM upgrades with this flag otherwise CRP fallback to largest version.
+    Agent doesn't report supported feature flag if auto update is disabled or old version of agent running that doesn't understand GA versioning.
+
+    Note: Especially Windows need this flag to report to CRP that GA doesn't support the updates. So linux adopted same flag to have a common solution.
+    """
+
+    __NAME = SupportedFeatureNames.GAVersioningGovernance
+    __VERSION = "1.0"
+    __SUPPORTED = conf.get_auto_update_to_latest_version()
+
+    def __init__(self):
+        super(_GAVersioningGovernanceFeature, self).__init__(name=self.__NAME,
+                                                             version=self.__VERSION,
+                                                             supported=self.__SUPPORTED)
+
+
 # This is the list of features that Agent supports and we advertise to CRP
 __CRP_ADVERTISED_FEATURES = {
-    SupportedFeatureNames.MultiConfig: _MultiConfigFeature()
+    SupportedFeatureNames.MultiConfig: _MultiConfigFeature(),
+    SupportedFeatureNames.GAVersioningGovernance: _GAVersioningGovernanceFeature()
 }
 
 

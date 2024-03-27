@@ -26,11 +26,11 @@ import sys
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common import version
-from azurelinuxagent.common.cgroupconfigurator import _AGENT_DROP_IN_FILE_SLICE, _DROP_IN_FILE_CPU_ACCOUNTING, \
+from azurelinuxagent.ga.cgroupconfigurator import _AGENT_DROP_IN_FILE_SLICE, _DROP_IN_FILE_CPU_ACCOUNTING, \
     _DROP_IN_FILE_CPU_QUOTA, _DROP_IN_FILE_MEMORY_ACCOUNTING, LOGCOLLECTOR_SLICE
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil, systemd
-from azurelinuxagent.common.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.ga.exthandlers import HANDLER_COMPLETE_NAME_PATTERN
 
@@ -131,6 +131,10 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_files,
                                          ["/var/lib/NetworkManager/dhclient-*.lease"]))
 
+        # For Ubuntu >= 18.04, using systemd-networkd
+        actions.append(DeprovisionAction(fileutil.rm_files,
+                                         ["/run/systemd/netif/leases/*"]))
+
     def del_ext_handler_files(self, warnings, actions):  # pylint: disable=W0613
         ext_dirs = [d for d in os.listdir(conf.get_lib_dir())
                     if os.path.isdir(os.path.join(conf.get_lib_dir(), d))
@@ -154,7 +158,11 @@ class DeprovisionHandler(object):
             'partition',
             'Protocol',
             'SharedConfig.xml',
-            'WireServerEndpoint'
+            'WireServerEndpoint',
+            'published_hostname',
+            'fast_track.json',
+            'initial_goal_state',
+            'rsm_update.json'
         ]
         known_files_glob = [
             'Extensions.*.xml',

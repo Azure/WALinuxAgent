@@ -21,7 +21,7 @@ import glob
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 
-from azurelinuxagent.common.rdma import RDMAHandler
+from azurelinuxagent.pa.rdma.rdma import RDMAHandler
 from azurelinuxagent.common.version import DISTRO_VERSION
 
 from distutils.version import LooseVersion as Version

@@ -1,0 +1,15 @@
+# Scenario validates RSM and Self-updates paths
+# RSM update: If vm enrolled into RSM, it will validate agent uses RSM to update to target version
+# Self-update: If vm not enrolled into RSM, it will validate agent uses self-update to update to latest version published
+name: "AgentUpdate"
+tests:
+   - "agent_update/rsm_update.py"
+   - "agent_update/self_update.py"
+images:
+    - "random(endorsed, 10)"
+#    - "random(endorsed-arm64, 2)"  TODO: HGPA not deployed on some arm64 hosts(so agent stuck on Vmesttings calls as per contract) and will enable once HGPA deployed there
+locations: "AzureCloud:eastus2euap"
+owns_vm: true
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"

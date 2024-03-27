@@ -1,0 +1,16 @@
+#
+# FIPS should not affect extension processing. The test enables FIPS and then executes an extension.
+#
+# NOTE: Enabling FIPS is very specific to the distro. This test is only executed on Mariner 2.
+#
+# TODO: Add other distros.
+#
+# NOTE: FIPS can be enabled on RHEL9 using these instructions: see https://access.redhat.com/solutions/137833#rhel9),
+#       but extensions with protected settings do not work end-to-end, since the Agent can't decrypt the tenant
+#       certificate.
+#
+name: "FIPS"
+tests:
+  - source: "fips/fips.py"
+images: "mariner_2"
+owns_vm: true

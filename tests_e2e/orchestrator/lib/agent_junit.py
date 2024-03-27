@@ -29,6 +29,7 @@ from lisa import schema  # pylint: disable=E0401
 from lisa.messages import (  # pylint: disable=E0401
     MessageBase,
     TestResultMessage,
+    TestStatus
 )
 
 
@@ -36,6 +37,7 @@ from lisa.messages import (  # pylint: disable=E0401
 @dataclass
 class AgentJUnitSchema(schema.Notifier):
     path: str = "agent.junit.xml"
+    include_subtest: bool = True
 
 
 class AgentJUnit(JUnit):
@@ -48,19 +50,27 @@ class AgentJUnit(JUnit):
         return AgentJUnitSchema
 
     def _received_message(self, message: MessageBase) -> None:
-        # The Agent sends its own TestResultMessage and marks them as "AgentTestResultMessage"; for the
-        # test results sent by LISA itself, we change the suite name to "_Runbook_" in order to separate them
-        # from actual test results.
+        # The Agent sends its own TestResultMessages setting their type as "AgentTestResultMessage".
+        # Any other message types are sent by LISA.
         if isinstance(message, TestResultMessage) and message.type != "AgentTestResultMessage":
             if "Unexpected error in AgentTestSuite" in message.message:
                 # Ignore these errors, they are already reported as AgentTestResultMessages
                 return
+            if "TestFailedException" in message.message:
+                # Ignore these errors, they are already reported as test failures
+                return
+            # Change the suite name to "_Runbook_" for LISA messages in order to separate them
+            # from actual test results.
             message.suite_full_name = "_Runbook_"
             message.suite_name = message.suite_full_name
             image = message.information.get('image')
             if image is not None:
-                # NOTE: message.information['environment'] is similar to "[generated_2]" and can be correlated
+                # NOTE: The value of message.information['environment'] is similar to "[generated_2]" and can be correlated
                 # with the main LISA log to find the specific VM for the message.
                 message.full_name = f"{image} [{message.information['environment']}]"
                 message.name = message.full_name
+            # LISA silently skips tests on situations that should be errors (e.g. trying to create a test VM using an image that is not available).
+            # Mark these messages as failed so that the JUnit report shows them as errors.
+            if message.status == TestStatus.SKIPPED:
+                message.status = TestStatus.FAILED
         super()._received_message(message)

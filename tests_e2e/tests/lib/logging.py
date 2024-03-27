@@ -20,6 +20,8 @@
 # for logging.
 #
 import contextlib
+import sys
+
 from logging import FileHandler, Formatter, Handler, Logger, StreamHandler, INFO
 from pathlib import  Path
 from threading import current_thread
@@ -46,7 +48,7 @@ class _AgentLoggingHandler(Handler):
     def __init__(self):
         super().__init__()
         self.formatter: Formatter = Formatter('%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s', datefmt="%Y-%m-%dT%H:%M:%SZ")
-        self.default_handler = StreamHandler()
+        self.default_handler = StreamHandler(sys.stdout)
         self.default_handler.setFormatter(self.formatter)
         self.per_thread_handlers: Dict[int, FileHandler] = {}
 
@@ -153,3 +155,18 @@ def set_current_thread_log(log_file: Path):
         log.close_current_thread_log()
         if initial_value is not None:
             log.set_current_thread_log(initial_value)
+
+
+@contextlib.contextmanager
+def set_thread_name(name: str):
+    """
+    Context Manager to change the name of the current thread temporarily
+    """
+    initial_name = current_thread().name
+    current_thread().name = name
+    try:
+        yield
+    finally:
+        current_thread().name = initial_name
+
+

@@ -5,18 +5,20 @@
   #
 
 parameters:
+    #
     # See the test wiki for a description of the parameters
-  - name: test_suites
-    displayName: Test Suites
-    type: string
-    default: agent_bvt
-
+    #
     # NOTES:
     #         * 'image', 'location' and 'vm_size' override any values in the test suites/images definition
     #            files. Those parameters are useful for 1-off tests, like testing a VHD or checking if
     #            an image is supported in a particular location.
     #         * Azure Pipelines do not allow empty string for the parameter value, using "-" instead.
     #
+  - name: test_suites
+    displayName: Test Suites (comma-separated list of test suites to run)
+    type: string
+    default: "-"
+
   - name: image
     displayName: Image (image/image set name, URN, or VHD)
     type: string
@@ -41,25 +43,26 @@ parameters:
     - failed
     - no
 
+  - name: collect_lisa_logs
+    displayName: Collect LISA logs
+    type: boolean
+    default: false
+
   - name: keep_environment
     displayName: Keep the test VMs (do not delete them)
     type: string
-    default: no
+    default: failed
     values:
     - always
     - failed
     - no
 
-trigger:
-  - develop
-
-pr: none
-
 pool:
-  vmImage: ubuntu-latest
+  name: waagent-pool
 
 jobs:
   - job: "ExecuteTests"
+    timeoutInMinutes: 90
 
     steps:
       - task: UsePythonVersion@0
@@ -69,9 +72,24 @@ jobs:
           addToPath: true
           architecture: 'x64'
 
-      # Extract the Azure cloud from the "connection_info" variable and store it in the "cloud" variable.
-      # The cloud name is used as a suffix of the value for "connection_info" and comes after the last '-'.
-      - bash: echo "##vso[task.setvariable variable=cloud]$(echo $CONNECTION_INFO | sed 's/^.*-//')"
+      # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
+      # 'public', 'china', or 'government' as a suffix (the suffix comes after the last '-').
+      - bash: |
+          case $(echo $CONNECTION_INFO | sed 's/^.*-//') in
+              public)
+                  echo "##vso[task.setvariable variable=cloud]AzureCloud"
+                  ;;
+              china)
+                  echo "##vso[task.setvariable variable=cloud]AzureChinaCloud"
+                  ;;
+              government)
+                  echo "##vso[task.setvariable variable=cloud]AzureUSGovernment"
+                  ;;
+              *)
+                  echo "Invalid CONNECTION_INFO: $CONNECTION_INFO" >&2
+                  exit 1
+                  ;;
+          esac
         displayName: "Set Cloud type"
 
       - task: DownloadSecureFile@1
@@ -105,12 +123,21 @@ jobs:
           TEST_SUITES: ${{ parameters.test_suites }}
           VM_SIZE: ${{ parameters.vm_size }}
 
+      - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/collect_artifacts.sh
+        displayName: "Collect test artifacts"
+        # Collect artifacts even if the previous step is cancelled (e.g. timeout)
+        condition: always()
+        env:
+          COLLECT_LISA_LOGS: ${{ parameters.collect_lisa_logs }}
+
       - publish: $(Build.ArtifactStagingDirectory)
         artifact: 'artifacts'
         displayName: 'Publish test artifacts'
+        condition: always()
 
       - task: PublishTestResults@2
         displayName: 'Publish test results'
+        condition: always()
         inputs:
           testResultsFormat: 'JUnit'
           testResultsFiles: 'runbook_logs/agent.junit.xml'

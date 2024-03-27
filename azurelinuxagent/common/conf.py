@@ -87,6 +87,12 @@ class ConfigurationProvider(object):
         except ValueError:
             return self._get_default(default_value)
 
+    def is_present(self, key):
+        """
+        Returns True if the given flag present in the configuration file, False otherwise.
+        """
+        return self.values.get(key) is not None
+
 
 __conf__ = ConfigurationProvider()
 
@@ -117,6 +123,7 @@ __SWITCH_OPTIONS__ = {
     "Logs.Console": True,
     "Logs.Collect": True,
     "Extensions.Enabled": True,
+    "Extensions.WaitForCloudInit": False,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
     "Provisioning.DeleteRootPassword": False,
@@ -128,6 +135,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwap": False,
     "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
+    "AutoUpdate.UpdateToLatestVersion": True,
     "EnableOverProvisioning": True,
     #
     # "Debug" options are experimental and may be removed in later
@@ -138,7 +146,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
-    "Debug.EnableGAVersioning": False
+    "Debug.EnableGAVersioning": True
 }
 
 
@@ -169,6 +177,7 @@ __STRING_OPTIONS__ = {
 __INTEGER_OPTIONS__ = {
     "Extensions.GoalStatePeriod": 6,
     "Extensions.InitialGoalStatePeriod": 6,
+    "Extensions.WaitForCloudInitTimeout": 3600,
     "OS.EnableFirewallPeriod": 300,
     "OS.RemovePersistentNetRulesPeriod": 30,
     "OS.RootDeviceScsiTimeoutPeriod": 30,
@@ -225,6 +234,13 @@ def get_switch_default_value(option):
     if option in __SWITCH_OPTIONS__:
         return __SWITCH_OPTIONS__[option]
     raise ValueError("{0} is not a valid configuration parameter.".format(option))
+
+
+def is_present(key, conf=__conf__):
+    """
+    Returns True if the given flag present in the configuration file, False otherwise.
+    """
+    return conf.is_present(key)
 
 
 def enable_firewall(conf=__conf__):
@@ -371,6 +387,14 @@ def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
 
 
+def get_wait_for_cloud_init(conf=__conf__):
+    return conf.get_switch("Extensions.WaitForCloudInit", False)
+
+
+def get_wait_for_cloud_init_timeout(conf=__conf__):
+    return conf.get_switch("Extensions.WaitForCloudInitTimeout", 3600)
+
+
 def get_goal_state_period(conf=__conf__):
     return conf.get_int("Extensions.GoalStatePeriod", 6)
 
@@ -502,6 +526,21 @@ def get_monitor_network_configuration_changes(conf=__conf__):
     return conf.get_switch("Monitor.NetworkConfigurationChanges", False)
 
 
+def get_auto_update_to_latest_version(conf=__conf__):
+    """
+    If set to True, agent will update to the latest version
+    NOTE:
+        when both turned on, both AutoUpdate.Enabled and AutoUpdate.UpdateToLatestVersion same meaning: update to latest version
+        when turned off, AutoUpdate.Enabled: reverts to pre-installed agent, AutoUpdate.UpdateToLatestVersion: uses latest version already installed on the vm and does not download new agents
+        Even we are deprecating AutoUpdate.Enabled, we still need to support if users explicitly setting it instead new flag.
+        If AutoUpdate.UpdateToLatestVersion is present, it overrides any value set for AutoUpdate.Enabled (if present).
+        If AutoUpdate.UpdateToLatestVersion is not present but AutoUpdate.Enabled is present and set to 'n', we adhere to AutoUpdate.Enabled flag's behavior
+        if both not present, we default to True.
+    """
+    default = get_autoupdate_enabled(conf=conf)
+    return conf.get_switch("AutoUpdate.UpdateToLatestVersion", default)
+
+
 def get_cgroup_check_period(conf=__conf__):
     """
     How often to perform checks on cgroups (are the processes in the cgroups as expected,
@@ -610,26 +649,25 @@ def get_etp_collection_period(conf=__conf__):
     return conf.get_int("Debug.EtpCollectionPeriod", 300)
 
 
-def get_hotfix_upgrade_frequency(conf=__conf__):
+def get_self_update_hotfix_frequency(conf=__conf__):
     """
-    Determines the frequency to check for Hotfix upgrades (<Patch>.<Build> version changed in new upgrades).
+    Determines the frequency to check for Hotfix upgrades (<Build> version changed in new upgrades).
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AutoUpdateHotfixFrequency", 4 * 60 * 60)
+    return conf.get_int("Debug.SelfUpdateHotfixFrequency", 4 * 60 * 60)
 
 
-def get_normal_upgrade_frequency(conf=__conf__):
+def get_self_update_regular_frequency(conf=__conf__):
     """
-    Determines the frequency to check for Normal upgrades (<Major>.<Minor> version changed in new upgrades).
+    Determines the frequency to check for regular upgrades (<Major>.<Minor>.<patch> version changed in new upgrades).
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_int("Debug.AutoUpdateNormalFrequency", 24 * 60 * 60)
+    return conf.get_int("Debug.SelfUpdateRegularFrequency", 24 * 60 * 60)
 
 
 def get_enable_ga_versioning(conf=__conf__):
     """
-    If True, the agent uses GA Versioning for auto-updating the agent vs automatically auto-updating to the highest version.
-
+    If True, the agent looks for rsm updates(checking requested version in GS) otherwise it will fall back to self-update and finds the highest version from PIR.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableGAVersioning", False)

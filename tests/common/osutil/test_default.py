@@ -34,8 +34,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import AddFirewallRules
-from tests.common.mock_environment import MockEnvironment
-from tests.tools import AgentTestCase, patch, open_patch, load_data, data_dir, is_python_version_26_or_34, skip_if_predicate_true
+from tests.lib.mock_environment import MockEnvironment
+from tests.lib.tools import AgentTestCase, patch, open_patch, load_data, data_dir, is_python_version_26_or_34, skip_if_predicate_true
 
 actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
 
@@ -298,7 +298,7 @@ class TestOSUtil(AgentTestCase):
     def test_dhcp_lease_default(self):
         self.assertTrue(osutil.DefaultOSUtil().get_dhcp_lease_endpoint() is None)
 
-    def test_dhcp_lease_ubuntu(self):
+    def test_dhcp_lease_older_ubuntu(self):
         with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
             with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases"))):
                 endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
@@ -310,6 +310,20 @@ class TestOSUtil(AgentTestCase):
                 self.assertEqual(endpoint, "168.63.129.16")
 
                 endpoint = get_osutil(distro_name='ubuntu', distro_version='14.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is not None)
+                self.assertEqual(endpoint, "168.63.129.16")
+
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='18.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is None)
+
+    def test_dhcp_lease_newer_ubuntu(self):
+        with patch.object(glob, "glob", return_value=['/run/systemd/netif/leases/2']):
+            with patch(open_patch(), mock.mock_open(read_data=load_data("2"))):
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='18.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
+                self.assertTrue(endpoint is not None)
+                self.assertEqual(endpoint, "168.63.129.16")
+
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='20.04').get_dhcp_lease_endpoint()  # pylint: disable=assignment-from-none
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
@@ -687,7 +701,7 @@ Match host 192.168.1.2\n\
             return mock_popen.original(command, *args, **kwargs)
         mock_popen.original = subprocess.Popen
 
-        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patcher:
+        with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen) as popen_patcher:
             with patch('os.getuid', return_value=uid):
                 popen_patcher.wait = wait
                 popen_patcher.destination = destination
@@ -910,7 +924,7 @@ Match host 192.168.1.2\n\
                     return mock_popen.original(command, *args, **kwargs)
                 mock_popen.original = subprocess.Popen
 
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                     success = osutil.DefaultOSUtil().remove_firewall(mock_iptables.destination, mock_iptables.uid, mock_iptables.wait)
 
                     delete_conntrack_accept_command = TestOSUtil._command_to_string(osutil.get_firewall_delete_conntrack_accept_command(mock_iptables.wait, mock_iptables.destination))

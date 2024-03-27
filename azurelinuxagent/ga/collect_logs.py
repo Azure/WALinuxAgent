@@ -21,16 +21,16 @@ import os
 import sys
 import threading
 import time
-from azurelinuxagent.common import cgroupconfigurator, logcollector
+from azurelinuxagent.ga import logcollector, cgroupconfigurator
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import MetricsCounter
+from azurelinuxagent.ga.cgroup import MetricsCounter
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.interfaces import ThreadHandlerInterface
-from azurelinuxagent.common.logcollector import COMPRESSED_ARCHIVE_PATH, GRACEFUL_KILL_ERRCODE
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, LOGCOLLECTOR_MEMORY_LIMIT
+from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
+from azurelinuxagent.ga.logcollector import COMPRESSED_ARCHIVE_PATH, GRACEFUL_KILL_ERRCODE
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, LOGCOLLECTOR_MEMORY_LIMIT
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -83,16 +83,16 @@ class CollectLogsHandler(ThreadHandlerInterface):
         return CollectLogsHandler._THREAD_NAME
 
     @staticmethod
-    def enable_cgroups_validation():
+    def enable_monitor_cgroups_check():
         os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE] = "1"
 
     @staticmethod
-    def disable_cgroups_validation():
+    def disable_monitor_cgroups_check():
         if CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE in os.environ:
             del os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE]
 
     @staticmethod
-    def should_validate_cgroups():
+    def is_enabled_monitor_cgroups_check():
         if CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE in os.environ:
             return os.environ[CollectLogsHandler.__CGROUPS_FLAG_ENV_VARIABLE] == "1"
         return False
@@ -147,7 +147,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
         time.sleep(_INITIAL_LOG_COLLECTION_DELAY)
 
         try:
-            CollectLogsHandler.enable_cgroups_validation()
+            CollectLogsHandler.enable_monitor_cgroups_check()
             if self.protocol_util is None or self.protocol is None:
                 self.init_protocols()
 
@@ -162,7 +162,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
         except Exception as e:
             logger.error("An error occurred in the log collection thread; will exit the thread.\n{0}", ustr(e))
         finally:
-            CollectLogsHandler.disable_cgroups_validation()
+            CollectLogsHandler.disable_monitor_cgroups_check()
 
     def collect_and_send_logs(self):
         if self._collect_logs():

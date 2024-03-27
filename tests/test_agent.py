@@ -18,15 +18,17 @@
 import os.path
 
 from azurelinuxagent.agent import parse_args, Agent, usage, AgentCommands
-from azurelinuxagent.common import cgroupconfigurator, conf, logcollector
-from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
+from azurelinuxagent.common import conf
+from azurelinuxagent.ga import logcollector, cgroupconfigurator
+from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
-from tests.tools import AgentTestCase, data_dir, Mock, patch
+from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True
 AutoUpdate.GAFamily = Prod
+AutoUpdate.UpdateToLatestVersion = True
 Autoupdate.Frequency = 3600
 DVD.MountPoint = /mnt/cdrom/secure
 Debug.AgentCpuQuota = 50
@@ -42,7 +44,7 @@ Debug.CgroupMonitorExpiryTime = 2022-03-31
 Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
 Debug.EnableAgentMemoryUsageCheck = False
 Debug.EnableFastTrack = True
-Debug.EnableGAVersioning = False
+Debug.EnableGAVersioning = True
 Debug.EtpCollectionPeriod = 300
 Debug.FirewallRulesLogPeriod = 86400
 DetectScvmmEnv = False
@@ -51,6 +53,8 @@ Extension.LogDir = /var/log/azure
 Extensions.Enabled = True
 Extensions.GoalStatePeriod = 6
 Extensions.InitialGoalStatePeriod = 6
+Extensions.WaitForCloudInit = False
+Extensions.WaitForCloudInitTimeout = 3600
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
@@ -231,7 +235,7 @@ class TestAgent(AgentTestCase):
     @patch("azurelinuxagent.agent.LogCollector")
     def test_calls_collect_logs_on_valid_cgroups(self, mock_log_collector):
         try:
-            CollectLogsHandler.enable_cgroups_validation()
+            CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
@@ -246,12 +250,12 @@ class TestAgent(AgentTestCase):
                 
                 mock_log_collector.assert_called_once()
         finally:
-            CollectLogsHandler.disable_cgroups_validation()
+            CollectLogsHandler.disable_monitor_cgroups_check()
 
     @patch("azurelinuxagent.agent.LogCollector")
     def test_doesnt_call_collect_logs_on_invalid_cgroups(self, mock_log_collector):
         try:
-            CollectLogsHandler.enable_cgroups_validation()
+            CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.run = Mock()
 
             def mock_cgroup_paths(*args, **kwargs):
@@ -270,7 +274,7 @@ class TestAgent(AgentTestCase):
                         mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
                         self.assertEqual(exit_error, re)
         finally:
-            CollectLogsHandler.disable_cgroups_validation()
+            CollectLogsHandler.disable_monitor_cgroups_check()
         
     def test_it_should_parse_setup_firewall_properly(self):
 

@@ -40,20 +40,55 @@ def execute_with_retry(operation: Callable[[], Any]) -> Any:
         time.sleep(30)
 
 
-def retry_ssh_run(operation: Callable[[], Any]) -> Any:
+def retry_ssh_run(operation: Callable[[], Any], attempts: int, attempt_delay: int) -> Any:
     """
     This method attempts to retry ssh run command a few times if operation failed with connection time out
     """
-    attempts = 3
+    i = 0
+    while True:
+        i += 1
+        try:
+            return operation()
+        except CommandError as e:
+            retryable = ((e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr)) or
+                         "Unprivileged users are not permitted to log in yet" in e.stderr)
+            if not retryable or i >= attempts:
+                raise
+            log.warning("The SSH operation failed, retrying in %s secs [Attempt %s/%s].\n%s", attempt_delay, i, attempts, e)
+        time.sleep(attempt_delay)
+
+
+def retry_if_false(operation: Callable[[], bool], attempts: int = 5, delay: int = 30) -> bool:
+    """
+    This method attempts the given operation retrying a few times
+    (after a short delay)
+    Note: Method used for operations which are return True or False
+    """
+    success: bool = False
+    while attempts > 0 and not success:
+        attempts -= 1
+        try:
+            success = operation()
+        except Exception as e:
+            log.warning("Error in operation: %s", e)
+            if attempts == 0:
+                raise
+        if not success and attempts != 0:
+            log.info("Current operation failed, retrying in %s secs.", delay)
+            time.sleep(delay)
+    return success
+
+
+def retry(operation: Callable[[], Any], attempts: int = 5, delay: int = 30) -> Any:
+    """
+    This method attempts the given operation retrying a few times on exceptions. Returns the value returned by the operation.
+    """
     while attempts > 0:
         attempts -= 1
         try:
             return operation()
         except Exception as e:
-            # We raise CommandError on !=0 exit codes in the called method
-            if isinstance(e, CommandError):
-                # Instance of 'Exception' has no 'exit_code' member (no-member) - Disabled: e is actually an CommandError
-                if e.exit_code != 255 or attempts == 0:  # pylint: disable=no-member
-                    raise
-            log.warning("The operation failed with %s, retrying in 30 secs.", e)
-        time.sleep(30)
+            if attempts == 0:
+                raise
+            log.warning("Error in operation, retrying in %s secs: %s", delay, e)
+            time.sleep(delay)

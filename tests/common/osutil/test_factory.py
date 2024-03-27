@@ -34,7 +34,7 @@ from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
 from azurelinuxagent.common.osutil.suse import SUSEOSUtil, SUSE11OSUtil
 from azurelinuxagent.common.osutil.ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
     UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
-from tests.tools import AgentTestCase, patch
+from tests.lib.tools import AgentTestCase, patch
 
 
 class TestOsUtilFactory(AgentTestCase):
@@ -94,6 +94,13 @@ class TestOsUtilFactory(AgentTestCase):
         ret = _get_osutil(distro_name="ubuntu",
                           distro_code_name="focal",
                           distro_version="20.04",
+                          distro_full_name="")
+        self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
+        self.assertEqual(ret.get_service_name(), "walinuxagent")
+
+        ret = _get_osutil(distro_name="ubuntu",
+                          distro_code_name="focal",
+                          distro_version="24.04",
                           distro_full_name="")
         self.assertTrue(isinstance(ret, Ubuntu18OSUtil))
         self.assertEqual(ret.get_service_name(), "walinuxagent")

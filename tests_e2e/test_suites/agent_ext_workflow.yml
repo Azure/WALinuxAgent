@@ -1,0 +1,14 @@
+name: "AgentExtWorkflow"
+tests:
+  - "agent_ext_workflow/extension_workflow.py"
+images:
+  - "centos_79"
+  - "suse_12"
+  - "rhel_79"
+  - "ubuntu_1604"
+  - "ubuntu_1804"
+# This test suite uses the DCR Test Extension, which is only published in southcentralus region in public cloud
+locations: "AzureCloud:southcentralus"
+skip_on_clouds:
+  - "AzureChinaCloud"
+  - "AzureUSGovernment"

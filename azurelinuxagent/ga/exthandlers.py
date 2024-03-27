@@ -33,11 +33,12 @@ from functools import partial
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -52,8 +53,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, ExtensionSu
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, \
-    PY_VERSION_MAJOR, PY_VERSION_MICRO, PY_VERSION_MINOR
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -299,7 +299,7 @@ class ExtHandlersHandler(object):
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
             self.ext_handlers = copy.deepcopy(egs.extensions)
 
-            if not self._extension_processing_allowed():
+            if self._extensions_on_hold():
                 return
 
             utc_start = datetime.datetime.utcnow()
@@ -433,17 +433,15 @@ class ExtHandlersHandler(object):
                 except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def _extension_processing_allowed(self):
-        if not conf.get_extensions_enabled():
-            logger.verbose("Extension handling is disabled")
-            return False
-
+    def _extensions_on_hold(self):
         if conf.get_enable_overprovisioning():
             if self.protocol.get_goal_state().extensions_goal_state.on_hold:
-                logger.info("Extension handling is on hold")
-                return False
+                msg = "Extension handling is on hold"
+                logger.info(msg)
+                add_event(op=WALAEventOperation.ExtensionProcessing, message=msg)
+                return True
 
-        return True
+        return False
 
     @staticmethod
     def __get_dependency_level(tup):
@@ -478,9 +476,29 @@ class ExtHandlersHandler(object):
         max_dep_level = self.__get_dependency_level(all_extensions[-1]) if any(all_extensions) else 0
 
         depends_on_err_msg = None
+        extensions_enabled = conf.get_extensions_enabled()
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
+            # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
+            # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
+            # here with an error message.
+            if not extensions_enabled:
+                agent_conf_file_path = get_osutil().agent_conf_file_path
+                msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
+                      "processing, set Extensions.Enabled=y in '{0}'".format(agent_conf_file_path)
+                ext_full_name = handler_i.get_extension_full_name(extension)
+                logger.info('')
+                logger.info("{0}: {1}".format(ext_full_name, msg))
+                add_event(op=WALAEventOperation.ExtensionProcessing, message="{0}: {1}".format(ext_full_name, msg))
+                handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
+                handler_i.create_status_file_if_not_exist(extension,
+                                                          status=ExtensionStatusValue.error,
+                                                          code=-1,
+                                                          operation=handler_i.operation,
+                                                          message=msg)
+                continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
             # But CRP is still waiting for some status back for the skipped extensions. In order to propagate the status back to CRP,
@@ -945,33 +963,6 @@ class ExtHandlersHandler(object):
                       message=msg)
             return None
 
-    def get_ext_handlers_status_debug_info(self, vm_status):
-        status_blob_text = self.protocol.get_status_blob_data()
-        if status_blob_text is None:
-            status_blob_text = ""
-
-        support_multi_config = {}
-        vm_status_data = get_properties(vm_status)
-        vm_handler_statuses = vm_status_data.get('vmAgent', {}).get('extensionHandlers')
-        for handler_status in vm_handler_statuses:
-            if handler_status.get('name') is not None:
-                support_multi_config[handler_status.get('name')] = handler_status.get('supports_multi_config')
-
-        debug_text = json.dumps({
-            "agentName": AGENT_NAME,
-            "daemonVersion": str(version.get_daemon_version()),
-            "pythonVersion": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO),
-            "extensionSupportedFeatures": [name for name, _ in get_agent_supported_features_list_for_extensions().items()],
-            "supportsMultiConfig": support_multi_config
-        })
-
-        return '''{{
-    "__comment__": "The __status__ property is the actual status reported to CRP",
-    "__status__": {0},
-    "__debug__": {1}
-}}
-'''.format(status_blob_text, debug_text)
-
     def report_ext_handler_status(self, vm_status, ext_handler, goal_state_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
@@ -991,7 +982,9 @@ class ExtHandlersHandler(object):
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config:
+        # We also need to report extension status for an uninstalled handler if extensions are disabled because CRP
+        # waits for extension runtime status before failing the extension operation.
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
@@ -1058,7 +1051,7 @@ class ExtHandlerInstance(object):
 
     def __set_command_execution_log(self, extension, execution_log_max_size):
         try:
-            fileutil.mkdir(self.get_log_dir(), mode=0o755)
+            fileutil.mkdir(self.get_log_dir(), mode=0o755, reset_mode_and_owner=False)
         except IOError as e:
             self.logger.error(u"Failed to create extension log dir: {0}", e)
         else:

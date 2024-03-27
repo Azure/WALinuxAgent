@@ -20,6 +20,7 @@ from __future__ import print_function
 
 import json
 import os
+import platform
 import re
 import shutil
 import threading
@@ -41,11 +42,11 @@ from azurelinuxagent.common.telemetryevent import CommonTelemetryEventSchema, Gu
     GuestAgentExtensionEventsSchema, GuestAgentPerfCounterEventsSchema
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 from azurelinuxagent.ga.collect_telemetry_events import _CollectAndEnqueueEvents
-from tests.protocol import mockwiredata
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true, is_python_version_26_or_34
-from tests.utils.event_logger_tools import EventLoggerTools
+from tests.lib import wire_protocol_data
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.tools import AgentTestCase, data_dir, load_data, patch, skip_if_predicate_true, is_python_version_26_or_34
+from tests.lib.event_logger_tools import EventLoggerTools
 
 
 class TestEvent(HttpRequestPredicates, AgentTestCase):
@@ -70,7 +71,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             CommonTelemetryEventSchema.EventTid: threading.current_thread().ident,
             CommonTelemetryEventSchema.EventPid: os.getpid(),
             CommonTelemetryEventSchema.TaskName: threading.current_thread().getName(),
-            CommonTelemetryEventSchema.KeywordName: '',
+            CommonTelemetryEventSchema.KeywordName: json.dumps({"CpuArchitecture": platform.machine()}),
             # common parameters computed from the OS platform
             CommonTelemetryEventSchema.OSVersion: EventLoggerTools.get_expected_os_version(),
             CommonTelemetryEventSchema.ExecutionMode: AGENT_EXECUTION_MODE,
@@ -155,7 +156,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
             self.fail("Could not find Contained ID on event")
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             contained_id = create_event_and_return_container_id()
             # The expect value comes from DATA_FILE
             self.assertEqual(contained_id, 'c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2', "Incorrect container ID")
@@ -787,7 +788,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             return None
         http_post_handler.request_body = None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_post_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
             event_file_path = self._create_test_event_file("event_with_callstack.waagent.tld")
             expected_message = get_event_message_from_event_file(event_file_path)
 
@@ -807,7 +808,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             return None
         http_post_handler.request_body = None
 
-        with mock_wire_protocol(mockwiredata.DATA_FILE, http_post_handler=http_post_handler) as protocol:
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
             test_messages = [
                 'Non-English message -  此文字不是英文的',
                 "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",

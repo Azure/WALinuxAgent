@@ -13,12 +13,12 @@ from azurelinuxagent.common.protocol.restapi import ExtensionRequestedState, Ext
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, ExtensionStatusValue, ExtCommandEnvVariable, \
     GoalStateStatus, ExtHandlerInstance
-from tests.ga.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
+from tests.lib.extension_emulator import enable_invocations, extension_emulator, ExtensionCommandNames, Actions, \
     extract_extension_info_from_command
-from tests.protocol.mocks import mock_wire_protocol, MockHttpResponse
-from tests.protocol.HttpRequestPredicates import HttpRequestPredicates
-from tests.protocol.mockwiredata import DATA_FILE, WireProtocolData
-from tests.tools import AgentTestCase, mock_sleep, patch
+from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
+from tests.lib.http_request_predicates import HttpRequestPredicates
+from tests.lib.wire_protocol_data import DATA_FILE, WireProtocolData
+from tests.lib.tools import AgentTestCase, mock_sleep, patch
 
 
 class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
@@ -761,7 +761,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 # Case 1: Check normal scenario - Install/Enable
                 mc_handlers, sc_handler = self.__run_and_assert_generic_case(exthandlers_handler, protocol,
                                                                              no_of_extensions)
@@ -924,7 +924,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_multi_config_no_dependencies.xml")
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
                 self.assertEqual(no_of_extensions,
@@ -1209,7 +1209,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
             return original_popen(cmd, *_, **kwargs)
 
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
-            with patch('azurelinuxagent.common.cgroupapi.subprocess.Popen', side_effect=mock_popen):
+            with patch('azurelinuxagent.ga.cgroupapi.subprocess.Popen', side_effect=mock_popen):
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 

@@ -24,7 +24,7 @@ import time  # pylint: disable=W0611
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.rdma import RDMAHandler
+from azurelinuxagent.pa.rdma.rdma import RDMAHandler
 
 
 class UbuntuRDMAHandler(RDMAHandler):

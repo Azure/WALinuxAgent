@@ -1,0 +1,12 @@
+#
+# This test is used to verify that the agent will be updated after publishing a new version to the agent update channel.
+#
+name: "AgentPublish"
+tests:
+  - "agent_publish/agent_publish.py"
+images:
+  - "random(endorsed, 10)"
+  - "random(endorsed-arm64, 2)"
+locations: "AzureCloud:centraluseuap"
+owns_vm: true
+install_test_agent: false

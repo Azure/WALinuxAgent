@@ -10,13 +10,16 @@ logs_file_name="/tmp/waagent-logs.tgz"
 
 echo "Collecting logs to $logs_file_name ..."
 
+PYTHON=$(get-agent-python)
+waagent_conf=$($PYTHON -c 'from azurelinuxagent.common.osutil import get_osutil; print(get_osutil().agent_conf_file_path)')
+
 tar --exclude='journal/*' --exclude='omsbundle' --exclude='omsagent' --exclude='mdsd' --exclude='scx*' \
     --exclude='*.so' --exclude='*__LinuxDiagnostic__*' --exclude='*.zip' --exclude='*.deb' --exclude='*.rpm' \
     --warning=no-file-changed \
     -czf "$logs_file_name" \
     /var/log \
     /var/lib/waagent/ \
-    /etc/waagent.conf
+    $waagent_conf
 
 set -euxo pipefail
 
