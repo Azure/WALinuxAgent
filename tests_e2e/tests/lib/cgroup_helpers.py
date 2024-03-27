@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 
@@ -146,10 +147,17 @@ def check_cgroup_disabled_with_unknown_process():
     """
     Returns True if the cgroup is disabled with unknown process
     """
+    return check_log_message("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN")
+
+
+def check_log_message(message, after_timestamp=datetime.datetime.min):
+    """
+    Check if the log message is present after the given timestamp(if provided) in the agent log
+    """
+    log.info("Checking log message: {0}".format(message))
     for record in AgentLog().read():
-        match = re.search("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN",
-                          record.message, flags=re.DOTALL)
-        if match is not None:
+        match = re.search(message, record.message, flags=re.DOTALL)
+        if match is not None and record.timestamp > after_timestamp:
             log.info("Found message:\n\t%s", record.text.replace("\n", "\n\t"))
             return True
     return False
