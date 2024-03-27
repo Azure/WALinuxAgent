@@ -180,7 +180,7 @@ images:
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
-   ubuntu_2204_minimal: "Canonical 0001-com-ubuntu-minimal-jammy minimal-22_04-lts-gen2 latest",
+   ubuntu_2204_minimal: "Canonical 0001-com-ubuntu-minimal-jammy minimal-22_04-lts-gen2 latest"
    ubuntu_2404:
       # TODO: Currently using the daily build, update to the release build once it is available
       urn: "Canonical 0001-com-ubuntu-server-noble-daily 24_04-daily-lts-gen2 latest"
