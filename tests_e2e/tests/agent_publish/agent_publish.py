@@ -70,7 +70,7 @@ class AgentPublishTest(AgentVmTest):
 
     def _get_published_version(self):
         """
-        Returns version from test_args if provided, else use the release version from source code version.py
+        Gets version from test_args if provided, else use the release version from source code version.py
         """
         if hasattr(self._context, "published_version"):
             return self._context.published_version
