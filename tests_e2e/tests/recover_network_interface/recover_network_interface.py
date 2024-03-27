@@ -103,7 +103,15 @@ class RecoverNetworkInterface(AgentVmTest):
         log.info("")
         log.info("Using CSE to bring the primary network interface down and call the OSUtil to bring the interface back up. Command to execute: {0}".format(script))
         custom_script = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript, resource_name="CustomScript")
-        custom_script.enable(protected_settings={'commandToExecute': script}, settings={})
+        try:
+            custom_script.enable(protected_settings={'commandToExecute': script}, settings={})
+        except TimeoutError:
+            # Custom script may timeout if attempt to recover the network interface was not successful. The agent won't
+            # be able to report status for the extension if network is down. Reboot the VM to bring the network back up
+            # so logs can be collected.
+            log.info("Custom script did not complete within the timeout. Rebooting the VM in attempt to bring the network interface back up...")
+            self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
+            fail("Custom script did not complete within the timoeut, which indicates the agent may be unable to report status due to network issues.")
 
         # Check that the interface was down and brought back up in instance view
         log.info("")
