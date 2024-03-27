@@ -21,7 +21,6 @@ from datetime import datetime
 
 from assertpy import fail
 
-from azurelinuxagent.common.version import AGENT_VERSION
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update
@@ -71,11 +70,13 @@ class AgentPublishTest(AgentVmTest):
 
     def _get_published_version(self):
         """
-        Returns version from test_args if provided, else use the release version from version.py
+        Returns version from test_args if provided, else use the release version from source code version.py
         """
         if hasattr(self._context, "published_version"):
             return self._context.published_version
-        return AGENT_VERSION
+
+        version = self._ssh_client.run_command("pypy3 -c 'from azurelinuxagent.common.version import AGENT_VERSION; print(AGENT_VERSION)'").rstrip()
+        return version
 
     def _get_agent_info(self) -> None:
         stdout: str = self._ssh_client.run_command("waagent-version", use_sudo=True)
