@@ -32,6 +32,12 @@ variable:
     value: "agent_bvt, no_outbound_connections, extensions_disabled, agent_not_provisioned, fips, agent_ext_workflow, agent_status, multi_config_ext, agent_cgroups, ext_cgroups, agent_firewall, ext_telemetry_pipeline, ext_sequencing, agent_persist_firewall, publish_hostname, agent_update, recover_network_interface"
 
   #
+  # Additional arguments pass to the test suites
+  #
+  - name: test_args
+    value: ""
+    is_case_visible: true
+
   # Parameters used to create test VMs
   #
   - name: subscription_id
