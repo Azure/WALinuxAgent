@@ -53,6 +53,7 @@ variable:
       - no_outbound_connections
       - publish_hostname
       - recover_network_interface
+      - cgroup_v2_disabled
 
   #
   # Additional arguments pass to the test suites
