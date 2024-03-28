@@ -149,6 +149,8 @@ class AgentTestSuite(LisaTestSuite):
 
         self._test_suites: List[AgentTestSuite]  # Test suites to execute in the environment
 
+        self._test_args: Dict[str, str]  # Additional arguments pass to the test suite
+
         self._cloud: str  # Azure cloud where test VMs are located
         self._subscription_id: str  # Azure subscription where test VMs are located
         self._location: str  # Azure location (region) where test VMs are located
@@ -209,6 +211,7 @@ class AgentTestSuite(LisaTestSuite):
         self._environment_name = variables["c_env_name"]
 
         self._test_suites = variables["c_test_suites"]
+        self._test_args = self._get_test_args(variables["test_args"])
 
         self._cloud = variables["cloud"]
         self._subscription_id = variables["subscription_id"]
@@ -812,12 +815,15 @@ class AgentTestSuite(LisaTestSuite):
                 subscription=self._subscription_id,
                 resource_group=self._resource_group_name,
                 name=self._vm_name)
-            return AgentVmTestContext(
+            vm_test_context = AgentVmTestContext(
                 working_directory=self._working_directory,
                 vm=vm,
                 ip_address=self._vm_ip_address,
                 username=self._user,
                 identity_file=self._identity_file)
+            for key in self._test_args:
+                setattr(vm_test_context, key, self._test_args[key])
+            return vm_test_context
         else:
             log.info("Creating test context for scale set")
             if self._create_scale_set:
@@ -836,11 +842,27 @@ class AgentTestSuite(LisaTestSuite):
             if self._create_scale_set:
                 self._test_nodes = [_TestNode(name=i.instance_name, ip_address=i.ip_address) for i in scale_set.get_instances_ip_address()]
 
-            return AgentVmssTestContext(
+            vmss_test_context = AgentVmssTestContext(
                 working_directory=self._working_directory,
                 vmss=scale_set,
                 username=self._user,
                 identity_file=self._identity_file)
+            for key in self._test_args:
+                setattr(vmss_test_context, key, self._test_args[key])
+            return vmss_test_context
+
+    @staticmethod
+    def _get_test_args(arg_str) -> Dict[str, str]:
+        """
+        Returns the arguments to be passed to the test classes
+        """
+        test_args: Dict[str, str] = {}
+        if arg_str == "":
+            return test_args
+        for arg in arg_str.split(','):
+            key, value = map(str.strip, arg.split('='))
+            test_args[key] = value
+        return test_args
 
     @staticmethod
     def _mark_log_as_failed():
