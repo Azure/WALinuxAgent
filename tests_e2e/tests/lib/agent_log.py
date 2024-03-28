@@ -367,7 +367,19 @@ class AgentLog(object):
             {
                 'message': r"AutoUpdate.Enabled property is \*\*Deprecated\*\* now but it's set to different value from AutoUpdate.UpdateToLatestVersion",
                 'if': lambda r: r.prefix == 'ExtHandler' and r.thread == 'ExtHandler'
-            }
+            },
+            #
+            # TODO: Currently Ubuntu minimal does not include the 'iptables' command. Remove this rule once this has been addressed.
+            #
+            # We don't have an easy way to distinguish Ubuntu minimal, so this rule suppresses for any Ubuntu. This is OK; if 'iptables' was missing from the regular Ubuntu images, the firewall tests would fail.
+            #
+            # 2024-03-27T16:12:35.666460Z ERROR ExtHandler ExtHandler Unable to setup the persistent firewall rules: Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
+            # 2024-03-27T16:12:35.667253Z WARNING ExtHandler ExtHandler Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
+            #
+            {
+                'message': r"Unable to determine version of iptables: \[Errno 2\] No such file or directory: 'iptables'",
+                'if': lambda r: DISTRO_NAME == 'ubuntu'
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
