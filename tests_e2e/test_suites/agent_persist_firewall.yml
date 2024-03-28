@@ -14,6 +14,8 @@ owns_vm: true  # This vm cannot be shared with other tests because it modifies t
 # so skipping the test run on flatcar distro.
 # (2023-11-14T19:04:13.738695Z ERROR ExtHandler ExtHandler Unable to setup the persistent firewall rules: [Errno 30] Read-only file system: '/lib/systemd/system/waagent-network-setup.service)
 skip_on_images:
+  - "debian_9"  # TODO: Reboot is slow on debian_9. Need to investigate further.
   - "flatcar"
   - "flatcar_arm64"
-  - "debian_9"  # TODO: Reboot is slow on debian_9. Need to investigate further.
+  - "ubuntu_2204_minimal" # TODO: Currently Ubuntu minimal does not include the 'iptables' command. Remove it once this has been addressed.
+  - "ubuntu_2404_minimal"
