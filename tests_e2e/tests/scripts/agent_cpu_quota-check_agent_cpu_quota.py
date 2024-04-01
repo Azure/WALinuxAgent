@@ -185,6 +185,7 @@ def cleanup_test_setup():
         log.info("Removing %s...", drop_in_file)
         os.remove(drop_in_file)
         shellutil.run_command(["systemctl", "daemon-reload"])
+    shellutil.run_command(["agent-service", "restart"])
 
 
 def main():
