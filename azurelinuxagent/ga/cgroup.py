@@ -220,16 +220,25 @@ class CpuCgroup(CGroup):
             with open(os.path.join(self.path, 'cpu.stat')) as cpu_stat:
                 #
                 # Sample file:
-                #
+                #   In CGroup v1
                 #   # cat /sys/fs/cgroup/cpuacct/azure.slice/walinuxagent.service/cpu.stat
                 #   nr_periods  51660
                 #   nr_throttled 19461
                 #   throttled_time 1529590856339
+                #   In CGroup v2
+                #   # cat /sys/fs/cgroup/azure.slice/walinuxagent.service/cpu.stat
+                #   nr_periods  51660
+                #   nr_throttled 19461
+                #   throttled_usec 152959085
                 #
                 for line in cpu_stat:
                     match = re.match(r'throttled_time\s+(\d+)', line)
+                    multiplier = 1
+                    if match is None:
+                        match = re.match(r'throttled_usec\s+(\d+)', line)
+                        multiplier = 100
                     if match is not None:
-                        return int(match.groups()[0])
+                        return int(match.groups()[0] * multiplier)
                 raise Exception("Cannot find throttled_time")
         except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:

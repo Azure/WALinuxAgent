@@ -80,7 +80,7 @@ Thu 28 May 2020 07:25:55 AM PDT
 _MOCKED_FILES = [
     ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'proc_self_cgroup')),
     (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'proc_pid_cgroup')),
-    ("/sys/fs/cgroup/unified/cgroup.controllers", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers'))
+    ("/sys/fs/cgroup/unified/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'sys_fs_cgroup_unified_cgroup.controllers'))
 ]
 
 _MOCKED_PATHS = [
