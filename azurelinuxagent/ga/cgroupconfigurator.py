@@ -173,24 +173,23 @@ class CGroupConfigurator(object):
                 if not self.__check_no_legacy_cgroups():
                     return
 
-                cpu_controller_root, memory_controller_root = self.__get_cgroup_controllers()
                 agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
-
-                if conf.get_cgroup_disable_on_process_check_failure() and self._check_processes_in_agent_cgroup_before_enable(agent_slice, cpu_controller_root, memory_controller_root):
-                    reason = "Found unexpected processes in the agent cgroup before agent enable cgroups."
-                    self.disable(reason, DisableCgroups.ALL)
-                    return
-
                 if agent_slice not in (AZURE_SLICE, "system.slice"):
                     _log_cgroup_warning("The agent is within an unexpected slice: {0}", agent_slice)
                     return
 
                 self.__setup_azure_slice()
 
+                cpu_controller_root, memory_controller_root = self.__get_cgroup_controllers()
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroups(agent_slice,
                                                                                                        cpu_controller_root,
                                                                                                        memory_controller_root)
+
+                if conf.get_cgroup_disable_on_process_check_failure() and self._check_processes_in_agent_cgroup_before_enable(agent_slice):
+                    reason = "Found unexpected processes in the agent cgroup before agent enable cgroups."
+                    self.disable(reason, DisableCgroups.ALL)
+                    return
 
                 if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
                     self.enable()
@@ -557,7 +556,7 @@ class CGroupConfigurator(object):
                 return False
             return True
 
-        def _check_processes_in_agent_cgroup_before_enable(self, agent_slice, cpu_root_cgroup_path, memory_root_cgroup_path):
+        def _check_processes_in_agent_cgroup_before_enable(self, agent_slice):
             """
             This check ensures that before we enable the agent's cgroups, there are no unexpected processes in the agent's cgroup already.
 
@@ -568,18 +567,13 @@ class CGroupConfigurator(object):
             """
             if agent_slice not in AZURE_SLICE:
                 return False
-            cpu_cgroup_relative_path, memory_cgroup_relative_path = self._cgroups_api.get_process_cgroup_paths("self")
-            agent_cpu_cgroup_path = os.path.join(cpu_root_cgroup_path, cpu_cgroup_relative_path)
-            agent_memory_cgroup_path = os.path.join(memory_root_cgroup_path, memory_cgroup_relative_path)
 
-            check_cgroup_path = agent_cpu_cgroup_path if agent_cpu_cgroup_path is not None else agent_memory_cgroup_path
-
-            if check_cgroup_path is None:
+            if self._agent_cpu_cgroup_path is None:
                 return False
 
             try:
                 _log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
-                self._check_processes_in_agent_cgroup(check_cgroup_path)
+                self._check_processes_in_agent_cgroup()
             except CGroupsException as exception:
                 _log_cgroup_warning(ustr(exception))
                 return True
@@ -619,7 +613,7 @@ class CGroupConfigurator(object):
             finally:
                 self._check_cgroups_lock.release()
 
-        def _check_processes_in_agent_cgroup(self, cgroup_path=None):
+        def _check_processes_in_agent_cgroup(self):
             """
             Verifies that the agent's cgroup includes only the current process, its parent, commands started using shellutil and instances of systemd-run
             (those processes correspond, respectively, to the extension handler, the daemon, commands started by the extension handler, and the systemd-run
@@ -631,7 +625,6 @@ class CGroupConfigurator(object):
             """
             unexpected = []
             agent_cgroup_proc_names = []
-            check_cgroup_path = cgroup_path if cgroup_path is not None else self._agent_cpu_cgroup_path
             try:
                 daemon = os.getppid()
                 extension_handler = os.getpid()
@@ -639,7 +632,7 @@ class CGroupConfigurator(object):
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands = set()
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
-                agent_cgroup = CGroupsApi.get_processes_in_cgroup(check_cgroup_path)
+                agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
                 # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
