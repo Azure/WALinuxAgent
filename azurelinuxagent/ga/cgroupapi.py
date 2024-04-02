@@ -144,15 +144,21 @@ def get_cgroup_api():
     Determines which version of Cgroup should be used for resource enforcement and monitoring by the Agent and returns
     the corresponding Api.
 
-    Uses 'stat -f --format=%T /sys/fs/cgroups' to get the cgroup hierarchy in use.
+    Uses 'stat -f --format=%T /sys/fs/cgroup' to get the cgroup hierarchy in use.
         If the result is 'cgroup2fs', cgroup v2 is being used.
         If the result is 'tmpfs', cgroup v1 or a hybrid mode is being used.
             If the result of 'stat -f --format=%T /sys/fs/cgroup/unified' is 'cgroup2fs', then hybrid mode is being used.
 
-    Raises exception if an unknown mode is detected. Also raises exception if hybrid mode is detected and there are
-    controllers available to be enabled in the unified hierarchy (the agent does not support cgroups if there are
-    controllers simultaneously attached to v1 and v2 hierarchies).
+    Raises exception if cgroup filesystem mountpoint is not '/sys/fs/cgroup', or an unknown mode is detected. Also
+    raises exception if hybrid mode is detected and there are controllers available to be enabled in the unified
+    hierarchy (the agent does not support cgroups if there are controllers simultaneously attached to v1 and v2
+    hierarchies).
     """
+    if not os.path.exists(CGROUP_FILE_SYSTEM_ROOT):
+        v1_mount_point = shellutil.run_command(['findmnt', '-t', 'cgroup', '--noheadings'])
+        v2_mount_point = shellutil.run_command(['findmnt', '-t', 'cgroup2', '--noheadings'])
+        raise CGroupsException("Expected cgroup filesystem to be mounted at '/sys/fs/cgroup', but it is not.\n v1 mount point: {0}\n v2 mount point: {1}".format(v1_mount_point, v2_mount_point))
+
     root_hierarchy_mode = shellutil.run_command(["stat", "-f", "--format=%T", CGROUP_FILE_SYSTEM_ROOT]).rstrip()
 
     if root_hierarchy_mode == "cgroup2fs":
@@ -270,33 +276,35 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
     """
     def __init__(self):
         super(SystemdCgroupApiv1, self).__init__()
-        self._cgroup_mountpoints = {}
+        self._cgroup_mountpoints = self._get_controller_mountpoints()
+
+    def _get_controller_mountpoints(self):
+        """
+        In v1, each controller is mounted at a different path. Use findmnt to get each path.
+
+            the output of findmnt is similar to
+                $ findmnt -t cgroup --noheadings
+                /sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
+                /sys/fs/cgroup/memory           cgroup cgroup rw,nosuid,nodev,noexec,relatime,memory
+                /sys/fs/cgroup/cpu,cpuacct      cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpu,cpuacct
+                etc
+
+        Returns a dictionary of the controller-path mappings.
+        """
+        mount_points = {}
+        for line in shellutil.run_command(['findmnt', '-t', 'cgroup', '--noheadings']).splitlines():
+            match = re.search(r'(?P<path>\S+\/(?P<controller>\S+))\s+cgroup', line)
+            if match is not None:
+                path = match.group('path')
+                controller = match.group('controller')
+                if controller is not None and path is not None:
+                    mount_points[controller] = path
+        return mount_points
 
     def get_controller_root_paths(self):
-        # In v1, each controller is mounted at a different path. Use findmnt to get each path and return cpu and memory
-        # mount points as a tuple.
-        #
-        # the output of findmnt is similar to
-        #     $ findmnt -t cgroup --noheadings
-        #     /sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
-        #     /sys/fs/cgroup/memory           cgroup cgroup rw,nosuid,nodev,noexec,relatime,memory
-        #     /sys/fs/cgroup/cpu,cpuacct      cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpu,cpuacct
-        #     etc
-        #
-        if len(self._cgroup_mountpoints) == 0:
-            cpu = None
-            memory = None
-            for line in shellutil.run_command(['findmnt', '-t', 'cgroup', '--noheadings']).splitlines():
-                match = re.search(r'(?P<path>/\S+(memory|cpuacct))\s', line)
-                if match is not None:
-                    path = match.group('path')
-                    if 'cpu,cpuacct' in path:
-                        cpu = path
-                    else:
-                        memory = path
-            self._cgroup_mountpoints = {'cpu': cpu, 'memory': memory}
-
-        return self._cgroup_mountpoints['cpu'], self._cgroup_mountpoints['memory']
+        # Return a tuple representing the mountpoints for cpu and memory. Either should be None if the corresponding
+        # controller is not mounted.
+        return self._cgroup_mountpoints.get('cpu,cpuacct'), self._cgroup_mountpoints.get('memory')
 
     def get_process_cgroup_relative_paths(self, process_id):
         # The contents of the file are similar to
@@ -404,54 +412,59 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
     """
     def __init__(self):
         super(SystemdCgroupApiv2, self).__init__()
-        self._root_cgroup_path = None
-        self._controllers_enabled_at_root = []
+        self._root_cgroup_path = self._get_root_cgroup_path()
+        self._controllers_enabled_at_root = self._get_controllers_enabled_at_root()
 
-    def is_controller_enabled_at_root(self, controller):
+    @staticmethod
+    def _get_root_cgroup_path():
         """
-        Returns True if the provided controller is enabled at the root cgroup. The cgroup.subtree_control file at the
-        root shows a space separated list of the controllers which are enabled to control resource distribution from
-        the root cgroup to its children. If a controller is listed here, then that controller is available to enable in
-        children cgroups.
+        In v2, there is a unified mount point shared by all controllers. Use findmnt to get the unified mount point.
+
+          The output of findmnt is similar to
+              $ findmnt -t cgroup2 --noheadings
+              /sys/fs/cgroup cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot
+
+        Returns None if the root cgroup cannot be determined from the output above.
+        """
+        #
+        for line in shellutil.run_command(['findmnt', '-t', 'cgroup2', '--noheadings']).splitlines():
+            match = re.search(r'(?P<path>/\S+)\s+cgroup2', line)
+            if match is not None:
+                root_cgroup_path = match.group('path')
+                if root_cgroup_path is not None:
+                    return root_cgroup_path
+        return None
+
+    def _get_controllers_enabled_at_root(self):
+        """
+        Returns a list of the controllers enabled at the root cgroup. The cgroup.subtree_control file at the root shows
+        a space separated list of the controllers which are enabled to control resource distribution from the root
+        cgroup to its children. If a controller is listed here, then that controller is available to enable in children
+        cgroups.
 
                 $ cat /sys/fs/cgroup/cgroup.subtree_control
                 cpuset cpu io memory hugetlb pids rdma misc
         """
+        controllers_enabled_at_root = []
         if self._root_cgroup_path is not None:
             enabled_controllers_file = os.path.join(self._root_cgroup_path, 'cgroup.subtree_control')
             if os.path.exists(enabled_controllers_file):
-                enabled_controllers = fileutil.read_file(enabled_controllers_file).rstrip().split(" ")
-                if controller in enabled_controllers:
-                    return True
-
-        return False
+                controllers_enabled_at_root = fileutil.read_file(enabled_controllers_file).rstrip().split(" ")
+        return controllers_enabled_at_root
 
     def get_controller_root_paths(self):
-        # In v2, there is a unified mount point shared by all controllers. Use findmnt to get the unified mount point,
-        # and check if cpu and memory are enabled at the root. Return a tuple representing the root cgroups for cpu and
-        # memory. Either should be None if the corresponding controller is not enabled at the root.
-        #
-        # The output of findmnt is similar to
-        #     $ findmnt -t cgroup2 --noheadings
-        #     /sys/fs/cgroup cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime,nsdelegate,memory_recursiveprot
-        #
-        # This check is necessary because all non-root "cgroup.subtree_control" files can only contain controllers
-        # which are enabled in the parent's "cgroup.subtree_control" file.
+        # Return a tuple representing the root cgroups for cpu and memory. Either should be None if the corresponding
+        # controller is not enabled at the root. This check is necessary because all non-root "cgroup.subtree_control"
+        # files can only contain controllers which are enabled in the parent's "cgroup.subtree_control" file.
 
-        if self._root_cgroup_path is None:
-            for line in shellutil.run_command(['findmnt', '-t', 'cgroup2', '--noheadings']).splitlines():
-                match = re.search(r'(?P<path>/\S+)\s+cgroup2', line)
-                if match is not None:
-                    root_cgroup_path = match.group('path')
-                    if root_cgroup_path is not None:
-                        self._root_cgroup_path = root_cgroup_path
-                        if self.is_controller_enabled_at_root('cpu'):
-                            self._controllers_enabled_at_root.append('cpu')
-                        if self.is_controller_enabled_at_root('memory'):
-                            self._controllers_enabled_at_root.append('memory')
+        root_cpu_path = None
+        root_memory_path = None
+        if self._root_cgroup_path is not None:
+            if 'cpu' in self._controllers_enabled_at_root:
+                root_cpu_path = self._root_cgroup_path
+            if 'memory' in self._controllers_enabled_at_root:
+                root_memory_path = self._root_cgroup_path
 
-        root_cpu_path = self._root_cgroup_path if 'cpu' in self._controllers_enabled_at_root else None
-        root_memory_path = self._root_cgroup_path if 'memory' in self._controllers_enabled_at_root else None
         return root_cpu_path, root_memory_path
 
     def get_process_cgroup_relative_paths(self, process_id):

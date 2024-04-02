@@ -141,25 +141,6 @@ class CGroupConfigurator(object):
                 # check whether cgroup monitoring is supported on the current distro
                 self._cgroups_supported = CGroupUtil.cgroups_supported()
                 if not self._cgroups_supported:
-                    # This check is to reset the quotas if agent goes from cgroup supported to unsupported distros later in time.
-                    agent_drop_in_path = systemd.get_agent_drop_in_path()
-                    try:
-                        if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
-                            files_to_cleanup = []
-                            agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
-                            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
-                                                                             _DROP_IN_FILE_CPU_ACCOUNTING)
-                            agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
-                                                                                _DROP_IN_FILE_MEMORY_ACCOUNTING)
-                            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
-                            files_to_cleanup.extend([agent_drop_in_file_slice, agent_drop_in_file_cpu_accounting,
-                                                     agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
-                            self.__cleanup_all_files(files_to_cleanup)
-                            self.__reload_systemd_config()
-                            log_cgroup_info("Agent reset the quotas if distro: {0} goes from supported to unsupported list".format(get_distro()), send_event=True)
-                    except Exception as err:
-                        logger.warn("Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
-
                     log_cgroup_info("Cgroup monitoring is not supported on {0}".format(get_distro()), send_event=True)
                     return
 
@@ -170,7 +151,7 @@ class CGroupConfigurator(object):
 
                 log_cgroup_info("systemd version: {0}".format(systemd.get_version()))
 
-                # Determine which version of the Cgroup API should be used. If the correct version can't be determined,
+                # Determine which version of the Cgroup Api should be used. If the correct version can't be determined,
                 # do not enable resource monitoring/enforcement.
                 try:
                     self._cgroups_api = get_cgroup_api()
@@ -189,14 +170,14 @@ class CGroupConfigurator(object):
 
                 self.__setup_azure_slice()
 
+                if self.cgroup_v2_enabled():
+                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
+                    return
+
                 cpu_controller_root, memory_controller_root = self.__get_cgroup_controller_roots()
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroup_paths(agent_slice,
                                                                                                        cpu_controller_root,
                                                                                                        memory_controller_root)
-
-                if self.cgroup_v2_enabled():
-                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
-                    return
 
                 if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
                     self.enable()
@@ -211,11 +192,13 @@ class CGroupConfigurator(object):
                     self._agent_memory_cgroup = MemoryCgroup(AGENT_NAME_TELEMETRY, self._agent_memory_cgroup_path)
                     CGroupsTelemetry.track_cgroup(self._agent_memory_cgroup)
 
-
             except Exception as exception:
                 log_cgroup_warning("Error initializing cgroups: {0}".format(ustr(exception)))
             finally:
                 log_cgroup_info('Agent cgroups enabled: {0}'.format(self._agent_cgroups_enabled))
+                if not self._agent_cgroups_enabled:
+                    log_cgroup_info("Agent will reset the quotas in case cgroups went from enabled to disabled")
+                    self._reset_agent_cgroup_setup()
                 self._initialized = True
 
         def __check_no_legacy_cgroups(self):
@@ -327,6 +310,24 @@ class CGroupConfigurator(object):
                     return
 
                 CGroupConfigurator._Impl.__reload_systemd_config()
+
+        def _reset_agent_cgroup_setup(self):
+            try:
+                agent_drop_in_path = systemd.get_agent_drop_in_path()
+                if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
+                    files_to_cleanup = []
+                    agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
+                    agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
+                                                                     _DROP_IN_FILE_CPU_ACCOUNTING)
+                    agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
+                                                                        _DROP_IN_FILE_MEMORY_ACCOUNTING)
+                    agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                    files_to_cleanup.extend([agent_drop_in_file_slice, agent_drop_in_file_cpu_accounting,
+                                             agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
+                    self.__cleanup_all_files(files_to_cleanup)
+                    self.__reload_systemd_config()
+            except Exception as err:
+                logger.warn("Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
 
         @staticmethod
         def __reload_systemd_config():

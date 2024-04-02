@@ -63,14 +63,6 @@ class Cgroupv2Disabled(AgentVmTest):
         log.info("Checking that the agent chose cgroup v2 api for resource enforcement and monitoring...")
         self.check_agent_log_contains('Using cgroup v2 for resource enforcement and monitoring', 'The agent should choose v2 for api resource enforcement and monitoring')
 
-        # Verify that the agent determined the correct mount point for each controller
-        log.info("")
-        log.info("Checking that the agent determined the correct root paths for each controller...")
-        self.check_agent_log_contains('The CPU cgroup controller root path is /sys/fs/cgroup',
-                                      'The agent should identify the cpu controller to be at /sys/fs/cgroup')
-        self.check_agent_log_contains('The memory cgroup controller root path is /sys/fs/cgroup',
-                                      'The agent should identify the memory controller to be at /sys/fs/cgroup')
-
         # Verify that the agent does not support cgroup v2
         log.info("")
         log.info("Checking that the agent does not use cgroup v2 for resource enforcement and monitoring...")
