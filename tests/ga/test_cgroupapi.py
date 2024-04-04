@@ -129,7 +129,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         with patch('azurelinuxagent.common.utils.shellutil.run_command', return_value=unknown_cgroup_type):
             with self.assertRaises(CGroupsException) as context:
                 get_cgroup_api()
-            self.assertTrue("Detected unknown cgroup mode: {0}".format(unknown_cgroup_type) in str(context.exception))
+            self.assertTrue("/sys/fs/cgroup has an unexpected file type: {0}".format(unknown_cgroup_type) in str(context.exception))
 
     def test_get_systemd_version_should_return_a_version_number(self):
         # We expect same behavior for v1 and v2
@@ -357,13 +357,13 @@ class SystemdCgroupsApiv2TestCase(AgentTestCase):
     def test_get_controllers_enabled_at_root_should_return_list_of_enabled_controllers(self):
         with mock_cgroup_v2_environment(self.tmp_dir):
             cgroup_api = get_cgroup_api()
-            self.assertEqual(cgroup_api._get_controllers_enabled_at_root(), ['cpuset', 'cpu', 'io', 'memory', 'pids'])
+            self.assertEqual(cgroup_api._get_controllers_enabled_at_root('/sys/fs/cgroup'), ['cpuset', 'cpu', 'io', 'memory', 'pids'])
 
     def test_get_controllers_enabled_at_root_should_return_empty_list_if_root_cgroup_path_is_None(self):
         with mock_cgroup_v2_environment(self.tmp_dir):
             with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2._get_root_cgroup_path', return_value=None):
                 cgroup_api = get_cgroup_api()
-                self.assertEqual(cgroup_api._get_controllers_enabled_at_root(), [])
+                self.assertEqual(cgroup_api._controllers_enabled_at_root, [])
 
     def test_get_root_cgroup_path_should_return_v2_cgroup_root(self):
         with mock_cgroup_v2_environment(self.tmp_dir):

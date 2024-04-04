@@ -157,6 +157,9 @@ class CGroupConfigurator(object):
 
                 log_cgroup_info("systemd version: {0}".format(systemd.get_version()))
 
+                if not self.__check_no_legacy_cgroups():
+                    return
+
                 # Determine which version of the Cgroup Api should be used. If the correct version can't be determined,
                 # do not enable resource monitoring/enforcement.
                 try:
@@ -174,7 +177,8 @@ class CGroupConfigurator(object):
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                     return
 
-                if not self.__check_no_legacy_cgroups():
+                if self.using_cgroup_v2():
+                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
                     return
 
                 agent_unit_name = systemd.get_agent_unit_name()
@@ -184,10 +188,6 @@ class CGroupConfigurator(object):
                     return
 
                 self.__setup_azure_slice()
-
-                if self.cgroup_v2_enabled():
-                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
-                    return
 
                 cpu_controller_root, memory_controller_root = self.__get_cgroup_controller_roots()
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroup_paths(agent_slice,
@@ -469,7 +469,7 @@ class CGroupConfigurator(object):
         def extensions_enabled(self):
             return self._extensions_cgroups_enabled
 
-        def cgroup_v2_enabled(self):
+        def using_cgroup_v2(self):
             return isinstance(self._cgroups_api, SystemdCgroupApiv2)
 
         def enable(self):
@@ -624,7 +624,7 @@ class CGroupConfigurator(object):
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands = set()
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
-                agent_cgroup = self._cgroups_api.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+                agent_cgroup = self._cgroups_api.get_processes_in_cgroup(cgroup_path)
                 # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())

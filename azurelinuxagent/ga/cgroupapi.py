@@ -194,7 +194,7 @@ def get_cgroup_api():
         log_cgroup_info("Using cgroup v1 for resource enforcement and monitoring")
         return cgroup_api
 
-    raise CGroupsException("Detected unknown cgroup mode: {0}".format(root_hierarchy_mode))
+    raise CGroupsException("{0} has an unexpected file type: {1}".format(CGROUP_FILE_SYSTEM_ROOT, root_hierarchy_mode))
 
 
 class _SystemdCgroupApi(object):
@@ -256,7 +256,7 @@ class _SystemdCgroupApi(object):
 
         return cpu_cgroup_path, memory_cgroup_path
 
-    def get_process_cgroup_relative_paths(self, process_id):  # pylint: disable=W0613
+    def get_process_cgroup_relative_paths(self, process_id):
         """
         Cgroup version specific. Returns a tuple with the path of the cpu and memory cgroups for the given process
         (relative to the root path of the corresponding controller).
@@ -330,9 +330,9 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
         """
         cpu_mountpoint = self._cgroup_mountpoints.get('cpu,cpuacct')
         memory_mountpoint = self._cgroup_mountpoints.get('memory')
-        if cpu_mountpoint is not None and cpu_mountpoint != '/sys/fs/cgroup/cpu,cpuacct':
+        if cpu_mountpoint is not None and cpu_mountpoint != os.path.join(CGROUP_FILE_SYSTEM_ROOT, 'cpu,cpuacct'):
             return False
-        if memory_mountpoint is not None and memory_mountpoint != '/sys/fs/cgroup/memory':
+        if memory_mountpoint is not None and memory_mountpoint != os.path.join(CGROUP_FILE_SYSTEM_ROOT, 'memory'):
             return False
         return True
 
@@ -448,7 +448,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
     def __init__(self):
         super(SystemdCgroupApiv2, self).__init__()
         self._root_cgroup_path = self._get_root_cgroup_path()
-        self._controllers_enabled_at_root = self._get_controllers_enabled_at_root()
+        self._controllers_enabled_at_root = self._get_controllers_enabled_at_root(self._root_cgroup_path) if self._root_cgroup_path is not None else []
 
     @staticmethod
     def _get_root_cgroup_path():
@@ -472,7 +472,8 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                     return root_cgroup_path
         return None
 
-    def _get_controllers_enabled_at_root(self):
+    @staticmethod
+    def _get_controllers_enabled_at_root(root_cgroup_path):
         """
         Returns a list of the controllers enabled at the root cgroup. The cgroup.subtree_control file at the root shows
         a space separated list of the controllers which are enabled to control resource distribution from the root
@@ -483,10 +484,9 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                 cpuset cpu io memory hugetlb pids rdma misc
         """
         controllers_enabled_at_root = []
-        if self._root_cgroup_path is not None:
-            enabled_controllers_file = os.path.join(self._root_cgroup_path, 'cgroup.subtree_control')
-            if os.path.exists(enabled_controllers_file):
-                controllers_enabled_at_root = fileutil.read_file(enabled_controllers_file).rstrip().split(" ")
+        enabled_controllers_file = os.path.join(root_cgroup_path, 'cgroup.subtree_control')
+        if os.path.exists(enabled_controllers_file):
+            controllers_enabled_at_root = fileutil.read_file(enabled_controllers_file).rstrip().split()
         return controllers_enabled_at_root
 
     def get_controller_root_paths(self):
@@ -511,7 +511,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
         cpu_path = None
         memory_path = None
         for line in fileutil.read_file("/proc/{0}/cgroup".format(process_id)).splitlines():
-            match = re.match(r'\d+::(?P<path>\S+)', line)
+            match = re.match(r'0::(?P<path>\S+)', line)
             if match is not None:
                 path = match.group('path').lstrip('/') if match.group('path') != '/' else None
                 memory_path = path
