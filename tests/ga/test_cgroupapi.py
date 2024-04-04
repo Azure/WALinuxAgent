@@ -23,12 +23,14 @@ import subprocess
 import tempfile
 
 from azurelinuxagent.common.exception import CGroupsException
-from azurelinuxagent.ga.cgroupapi import SystemdCgroupApiv1, SystemdCgroupApiv2, CGroupUtil, get_cgroup_api
+from azurelinuxagent.ga.cgroupapi import SystemdCgroupApiv1, SystemdCgroupApiv2, CGroupUtil, get_cgroup_api, \
+    InvalidCgroupMountpointException
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import fileutil
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, mock_cgroup_v2_environment, \
     mock_cgroup_hybrid_environment
+from tests.lib.mock_environment import MockCommand
 from tests.lib.tools import AgentTestCase, patch, mock_sleep
 from tests.lib.cgroups_tools import CGroupsTools
 
@@ -83,18 +85,17 @@ class CGroupUtilTestCase(AgentTestCase):
 
                 
 class SystemdCgroupsApiTestCase(AgentTestCase):
-    def test_get_cgroup_api_is_v1_when_v1_in_use(self):
+    def test_get_cgroup_api_raises_exception_when_systemd_mount_point_does_not_exist(self):
         with mock_cgroup_v1_environment(self.tmp_dir):
-            self.assertIsInstance(get_cgroup_api(), SystemdCgroupApiv1)
+            # Mock os.path.exists to return False for the os.path.exists(CGROUP_FILE_SYSTEM_ROOT) check
+            with patch("os.path.exists", return_value=False):
+                with self.assertRaises(InvalidCgroupMountpointException) as context:
+                    get_cgroup_api()
+                self.assertTrue("Expected cgroup filesystem to be mounted at '/sys/fs/cgroup', but it is not" in str(context.exception))
 
     def test_get_cgroup_api_is_v2_when_v2_in_use(self):
         with mock_cgroup_v2_environment(self.tmp_dir):
             self.assertIsInstance(get_cgroup_api(), SystemdCgroupApiv2)
-
-    def test_get_cgroup_api_is_v1_when_hybrid_in_use(self):
-        with mock_cgroup_hybrid_environment(self.tmp_dir):
-            with patch("os.path.exists", return_value=True):
-                self.assertIsInstance(get_cgroup_api(), SystemdCgroupApiv1)
 
     def test_get_cgroup_api_raises_exception_when_hybrid_in_use_and_controllers_available_in_unified_hierarchy(self):
         with mock_cgroup_hybrid_environment(self.tmp_dir):
@@ -104,6 +105,24 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                     with self.assertRaises(CGroupsException) as context:
                         get_cgroup_api()
                     self.assertTrue("Detected hybrid cgroup mode, but there are controllers available to be enabled in unified hierarchy: cpu memory" in str(context.exception))
+
+    def test_get_cgroup_api_raises_exception_when_v1_in_use_and_controllers_have_non_sytemd_mountpoints(self):
+        with mock_cgroup_v1_environment(self.tmp_dir):
+            # Mock /sys/fs/cgroup/unified/cgroup.controllers file to have available controllers
+            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1.are_mountpoints_systemd_created', return_value=False):
+                with self.assertRaises(InvalidCgroupMountpointException) as context:
+                    get_cgroup_api()
+                self.assertTrue("Expected cgroup controllers to be mounted at '/sys/fs/cgroup', but at least one is not." in str(context.exception))
+
+    def test_get_cgroup_api_is_v1_when_v1_in_use(self):
+        with mock_cgroup_v1_environment(self.tmp_dir):
+            self.assertIsInstance(get_cgroup_api(), SystemdCgroupApiv1)
+
+    def test_get_cgroup_api_is_v1_when_hybrid_in_use(self):
+        with mock_cgroup_hybrid_environment(self.tmp_dir):
+            # Mock os.path.exists to return True for the os.path.exists('/sys/fs/cgroup/cgroup.controllers') check
+            with patch("os.path.exists", return_value=True):
+                self.assertIsInstance(get_cgroup_api(), SystemdCgroupApiv1)
 
     def test_get_cgroup_api_raises_exception_when_cgroup_mode_cannot_be_determined(self):
         unknown_cgroup_type = "unknown_cgroup_type"
@@ -231,6 +250,29 @@ class SystemdCgroupsApiv1TestCase(AgentTestCase):
                 'pids': '/sys/fs/cgroup/pids',
             }, "The controller mountpoints are not correct")
 
+    def test_are_mountpoints_systemd_created_should_return_False_if_cpu_or_memory_are_not_systemd_mountpoints(self):
+        with mock_cgroup_v1_environment(self.tmp_dir):
+            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_controller_mountpoints', return_value={'cpu,cpuacct': '/custom/mountpoint/path', 'memory': '/custom/mountpoint/path'}):
+                self.assertFalse(SystemdCgroupApiv1().are_mountpoints_systemd_created())
+
+            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_controller_mountpoints', return_value={'cpu,cpuacct': '/custom/mountpoint/path'}):
+                self.assertFalse(SystemdCgroupApiv1().are_mountpoints_systemd_created())
+
+            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_controller_mountpoints', return_value={'memory': '/custom/mountpoint/path'}):
+                self.assertFalse(SystemdCgroupApiv1().are_mountpoints_systemd_created())
+
+    def test_are_mountpoints_systemd_created_should_return_True_if_cpu_and_memory_are_systemd_mountpoints(self):
+        with mock_cgroup_v1_environment(self.tmp_dir):
+            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_controller_mountpoints', return_value={'cpu,cpuacct': '/sys/fs/cgroup', 'memory': '/sys/fs/cgroup'}):
+                self.assertFalse(SystemdCgroupApiv1().are_mountpoints_systemd_created())
+
+            # are_mountpoints_systemd_created should only check controllers which are mounted
+            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_controller_mountpoints', return_value={'cpu,cpuacct': '/sys/fs/cgroup'}):
+                self.assertFalse(SystemdCgroupApiv1().are_mountpoints_systemd_created())
+
+            with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1._get_controller_mountpoints', return_value={'memory': '/sys/fs/cgroup'}):
+                self.assertFalse(SystemdCgroupApiv1().are_mountpoints_systemd_created())
+
     def test_get_cpu_and_memory_cgroup_relative_paths_for_process_should_return_the_cgroup_v1_relative_paths(self):
         with mock_cgroup_v1_environment(self.tmp_dir):
             cpu, memory = get_cgroup_api().get_process_cgroup_relative_paths('self')
@@ -325,6 +367,17 @@ class SystemdCgroupsApiv2TestCase(AgentTestCase):
 
     def test_get_root_cgroup_path_should_return_v2_cgroup_root(self):
         with mock_cgroup_v2_environment(self.tmp_dir):
+            cgroup_api = get_cgroup_api()
+            self.assertEqual(cgroup_api._get_root_cgroup_path(), '/sys/fs/cgroup')
+
+    def test_get_root_cgroup_path_should_only_match_systemd_mountpoint(self):
+        with mock_cgroup_v2_environment(self.tmp_dir) as env:
+            # Mock an environment which has multiple v2 mountpoints
+            env.add_command(MockCommand(r"^findmnt -t cgroup2 --noheadings$",
+'''/custom/mountpoint/path1 cgroup2 cgroup2 rw,relatime
+/sys/fs/cgroup           cgroup2 cgroup2 rw,nosuid,nodev,noexec,relatime
+/custom/mountpoint/path2 none    cgroup2 rw,relatime
+'''))
             cgroup_api = get_cgroup_api()
             self.assertEqual(cgroup_api._get_root_cgroup_path(), '/sys/fs/cgroup')
 

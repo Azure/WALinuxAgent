@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-
+import json
 import os
 import re
 import shutil
@@ -139,6 +139,15 @@ class SystemdRunError(CGroupsException):
         super(SystemdRunError, self).__init__(msg)
 
 
+class InvalidCgroupMountpointException(CGroupsException):
+    """
+    Raised when the cgroup mountpoint is invalid.
+    """
+
+    def __init__(self, msg=None):
+        super(InvalidCgroupMountpointException, self).__init__(msg)
+
+
 def get_cgroup_api():
     """
     Determines which version of Cgroup should be used for resource enforcement and monitoring by the Agent and returns
@@ -157,7 +166,7 @@ def get_cgroup_api():
     if not os.path.exists(CGROUP_FILE_SYSTEM_ROOT):
         v1_mount_point = shellutil.run_command(['findmnt', '-t', 'cgroup', '--noheadings'])
         v2_mount_point = shellutil.run_command(['findmnt', '-t', 'cgroup2', '--noheadings'])
-        raise CGroupsException("Expected cgroup filesystem to be mounted at '/sys/fs/cgroup', but it is not.\n v1 mount point: {0}\n v2 mount point: {1}".format(v1_mount_point, v2_mount_point))
+        raise InvalidCgroupMountpointException("Expected cgroup filesystem to be mounted at '{0}', but it is not.\n v1 mount point: \n{1}\n v2 mount point: \n{2}".format(CGROUP_FILE_SYSTEM_ROOT, v1_mount_point, v2_mount_point))
 
     root_hierarchy_mode = shellutil.run_command(["stat", "-f", "--format=%T", CGROUP_FILE_SYSTEM_ROOT]).rstrip()
 
@@ -176,8 +185,14 @@ def get_cgroup_api():
                 if available_unified_controllers != "":
                     raise CGroupsException("Detected hybrid cgroup mode, but there are controllers available to be enabled in unified hierarchy: {0}".format(available_unified_controllers))
 
+        cgroup_api = SystemdCgroupApiv1()
+        # Previously the agent supported users mounting cgroup v1 controllers in locations other than the systemd
+        # default ('/sys/fs/cgroup'). The agent no longer supports this scenario. If either the cpu or memory
+        # controller is mounted in a location other than the systemd default, raise Exception.
+        if not cgroup_api.are_mountpoints_systemd_created():
+            raise InvalidCgroupMountpointException("Expected cgroup controllers to be mounted at '{0}', but at least one is not. v1 mount points: \n{1}".format(CGROUP_FILE_SYSTEM_ROOT, json.dumps(cgroup_api.get_controller_root_paths())))
         log_cgroup_info("Using cgroup v1 for resource enforcement and monitoring")
-        return SystemdCgroupApiv1()
+        return cgroup_api
 
     raise CGroupsException("Detected unknown cgroup mode: {0}".format(root_hierarchy_mode))
 
@@ -293,6 +308,9 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
         """
         mount_points = {}
         for line in shellutil.run_command(['findmnt', '-t', 'cgroup', '--noheadings']).splitlines():
+            # In v2, we match only the systemd default mountpoint ('/sys/fs/cgroup'). In v1, we match any path. This
+            # is because the agent previously supported users mounting controllers at locations other than the systemd
+            # default in v1.
             match = re.search(r'(?P<path>\S+\/(?P<controller>\S+))\s+cgroup', line)
             if match is not None:
                 path = match.group('path')
@@ -300,6 +318,23 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
                 if controller is not None and path is not None:
                     mount_points[controller] = path
         return mount_points
+
+    def are_mountpoints_systemd_created(self):
+        """
+        Systemd mounts each controller at '/sys/fs/cgroup/<controller>'. Returns True if both cpu and memory
+        mountpoints match this pattern, False otherwise.
+
+        The agent does not support cgroup usage if the default root systemd mountpoint (/sys/fs/cgroup) is not used.
+        This method is used to check if any users are using non-systemd mountpoints. If they are, the agent drop-in
+        files will be cleaned up in cgroupconfigurator.
+        """
+        cpu_mountpoint = self._cgroup_mountpoints.get('cpu,cpuacct')
+        memory_mountpoint = self._cgroup_mountpoints.get('memory')
+        if cpu_mountpoint is not None and cpu_mountpoint != '/sys/fs/cgroup/cpu,cpuacct':
+            return False
+        if memory_mountpoint is not None and memory_mountpoint != '/sys/fs/cgroup/memory':
+            return False
+        return True
 
     def get_controller_root_paths(self):
         # Return a tuple representing the mountpoints for cpu and memory. Either should be None if the corresponding
@@ -428,7 +463,9 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
         """
         #
         for line in shellutil.run_command(['findmnt', '-t', 'cgroup2', '--noheadings']).splitlines():
-            match = re.search(r'(?P<path>/\S+)\s+cgroup2', line)
+            # Systemd mounts the cgroup filesystem at '/sys/fs/cgroup'. The agent does not support cgroups if the
+            # filesystem is mounted elsewhere, so search specifically for '/sys/fs/cgroup' in the findmnt output.
+            match = re.search(r'(?P<path>\/sys\/fs\/cgroup)\s+cgroup2', line)
             if match is not None:
                 root_cgroup_path = match.group('path')
                 if root_cgroup_path is not None:

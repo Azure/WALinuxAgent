@@ -24,7 +24,8 @@ import threading
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.ga.cgroup import CpuCgroup, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryCgroup
-from azurelinuxagent.ga.cgroupapi import SystemdRunError, EXTENSION_SLICE_PREFIX, CGroupUtil, SystemdCgroupApiv2, log_cgroup_info, log_cgroup_warning, get_cgroup_api
+from azurelinuxagent.ga.cgroupapi import SystemdRunError, EXTENSION_SLICE_PREFIX, CGroupUtil, SystemdCgroupApiv2, \
+    log_cgroup_info, log_cgroup_warning, get_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
@@ -142,6 +143,11 @@ class CGroupConfigurator(object):
                 self._cgroups_supported = CGroupUtil.cgroups_supported()
                 if not self._cgroups_supported:
                     log_cgroup_info("Cgroup monitoring is not supported on {0}".format(get_distro()), send_event=True)
+                    # If a distro is not supported, attempt to clean up any existing drop in files in case it was
+                    # previously supported. It is necessary to cleanup in this scenario in case the OS hits any bugs on
+                    # the kernel related to cgroups.
+                    log_cgroup_info("Agent will reset the quotas in case distro: {0} went from supported to unsupported".format(get_distro()), send_event=False)
+                    self._cleanup_agent_cgroup_drop_in_files()
                     return
 
                 # check that systemd is detected correctly
@@ -155,6 +161,15 @@ class CGroupConfigurator(object):
                 # do not enable resource monitoring/enforcement.
                 try:
                     self._cgroups_api = get_cgroup_api()
+                except InvalidCgroupMountpointException as e:
+                    # Systemd mounts the cgroup file system at '/sys/fs/cgroup'. Previously, the agent supported cgroup
+                    # usage if a user mounted the cgroup filesystem elsewhere. The agent no longer supports that
+                    # scenario. Cleanup any existing drop in files in case the agent previously supported cgroups on
+                    # this machine.
+                    log_cgroup_warning("The agent does not support cgroups if the default systemd mountpoint is not being used: {0}".format(ustr(e)), send_event=True)
+                    log_cgroup_info("Agent will reset the quotas in case cgroup usage went from enabled to disabled")
+                    self._cleanup_agent_cgroup_drop_in_files()
+                    return
                 except CGroupsException as e:
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                     return
@@ -196,9 +211,6 @@ class CGroupConfigurator(object):
                 log_cgroup_warning("Error initializing cgroups: {0}".format(ustr(exception)))
             finally:
                 log_cgroup_info('Agent cgroups enabled: {0}'.format(self._agent_cgroups_enabled))
-                if not self._agent_cgroups_enabled:
-                    log_cgroup_info("Agent will reset the quotas in case cgroups went from enabled to disabled")
-                    self._reset_agent_cgroup_setup()
                 self._initialized = True
 
         def __check_no_legacy_cgroups(self):
@@ -311,7 +323,7 @@ class CGroupConfigurator(object):
 
                 CGroupConfigurator._Impl.__reload_systemd_config()
 
-        def _reset_agent_cgroup_setup(self):
+        def _cleanup_agent_cgroup_drop_in_files(self):
             try:
                 agent_drop_in_path = systemd.get_agent_drop_in_path()
                 if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
