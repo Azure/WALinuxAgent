@@ -25,8 +25,9 @@ import datetime
 from assertpy import fail
 
 from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
 from tests_e2e.tests.lib.cgroup_helpers import get_agent_cgroup_mount_path, \
-    BASE_CGROUP, check_agent_quota_disabled, check_log_message
+    BASE_CGROUP, check_agent_quota_disabled, check_log_message, get_unit_cgroup_paths, AGENT_SERVICE_NAME
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 
@@ -46,7 +47,7 @@ def prepare_agent():
 
 def creating_dummy_process():
     log.info("Creating dummy process to add to agent's cgroup")
-    dd_command = ["dd", "if=/dev/zero", "of=/dev/null"]
+    dd_command = ["sleep", "60m"]
     proc = subprocess.Popen(dd_command)
     return proc.pid
 
@@ -62,11 +63,18 @@ def disable_agent_cgroups_with_unknown_process(pid):
 
     Note: System may kick the added process out of the cgroups, keeps adding until agent detect that process
     """
-    def unknown_process_found():
-        cgroup_procs_path = os.path.join(BASE_CGROUP, "cpu,cpuacct" + get_agent_cgroup_mount_path(), "cgroup.procs")
+
+    def unknown_process_found(cpu_cgroup):
+        cgroup_procs_path = os.path.join(cpu_cgroup, "cgroup.procs")
         log.info("Adding dummy process %s to cgroup.procs file %s", pid, cgroup_procs_path)
-        process = subprocess.Popen(f"echo {pid} > {cgroup_procs_path}", shell=True)
-        process.communicate()
+        try:
+            with open(cgroup_procs_path, 'a') as f:
+                f.write("\n")
+                f.write(str(pid))
+                f.close()
+        except Exception as e:
+            log.warning("Error while adding process to cgroup.procs file: {0}".format(e))
+            return False
 
         # The log message indicating the check failed is similar to
         #     2021-03-29T23:33:15.603530Z INFO MonitorHandler ExtHandler Disabling resource usage monitoring. Reason: Check on cgroups failed:
@@ -76,7 +84,9 @@ def disable_agent_cgroups_with_unknown_process(pid):
                 pid)), attempts=3)
         return found and retry_if_false(check_agent_quota_disabled, attempts=3)
 
-    found: bool = retry_if_false(unknown_process_found, attempts=3)
+    cpu_cgroup, _ = get_unit_cgroup_paths(AGENT_SERVICE_NAME)
+
+    found: bool = retry_if_false(lambda: unknown_process_found(cpu_cgroup), attempts=3)
     if not found:
         fail("The agent did not detect unknown process: {0}".format(pid))
 

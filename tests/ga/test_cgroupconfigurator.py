@@ -911,7 +911,7 @@ exit 0
 
     @patch('azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl._check_processes_in_agent_cgroup', side_effect=CGroupsException("Test"))
     @patch('azurelinuxagent.ga.cgroupconfigurator.add_event')
-    def test_agent_not_enable_cgroups_if_unexpected_process_already_in_agent_cgroups(self, add_event, _):
+    def test_agent_should_not_enable_cgroups_if_unexpected_process_already_in_agent_cgroups(self, add_event, _):
         command_mocks = [MockCommand(r"^systemctl show walinuxagent\.service --property Slice",
 '''Slice=azure.slice
 ''')]

@@ -30,7 +30,7 @@ from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.ga.cgroupconfigurator import _DROP_IN_FILE_CPU_QUOTA
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, \
-    get_agent_cpu_quota
+    get_agent_cpu_quota, check_log_message
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -185,7 +185,13 @@ def cleanup_test_setup():
         log.info("Removing %s...", drop_in_file)
         os.remove(drop_in_file)
         shellutil.run_command(["systemctl", "daemon-reload"])
+
+    check_time = datetime.datetime.utcnow()
     shellutil.run_command(["agent-service", "restart"])
+
+    found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))
+    if not found:
+        fail("Agent cgroups not enabled yet")
 
 
 def main():

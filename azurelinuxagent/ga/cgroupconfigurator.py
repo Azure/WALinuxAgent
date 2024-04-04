@@ -186,7 +186,7 @@ class CGroupConfigurator(object):
                                                                                                        cpu_controller_root,
                                                                                                        memory_controller_root)
 
-                if conf.get_cgroup_disable_on_process_check_failure() and self._check_processes_in_agent_cgroup_before_enable(agent_slice):
+                if conf.get_cgroup_disable_on_process_check_failure() and self._check_fails_if_processes_found_in_agent_cgroup_before_enable(agent_slice):
                     reason = "Found unexpected processes in the agent cgroup before agent enable cgroups."
                     self.disable(reason, DisableCgroups.ALL)
                     return
@@ -556,21 +556,17 @@ class CGroupConfigurator(object):
                 return False
             return True
 
-        def _check_processes_in_agent_cgroup_before_enable(self, agent_slice):
+        def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self, agent_slice):
             """
             This check ensures that before we enable the agent's cgroups, there are no unexpected processes in the agent's cgroup already.
 
             The issue we observed that long running extension processes may be in agent cgroups if agent goes this cycle enabled(1)->disabled(2)->enabled(3).
             1. Agent cgroups enabled in some version
-            2. Disabled agent cgroups due to check_cgroups regular check, now extension runs will be in agent cgroups.
+            2. Disabled agent cgroups due to check_cgroups regular check. Once we disable the cgroups we don't run the extensions in it's own slice, so they will be in agent cgroups.
             3. When ext_hanlder restart and enable the cgroups again, already running processes from step 2 still be in agent cgroups. This may cause the extensions run with agent limit.
             """
-            if agent_slice not in AZURE_SLICE:
+            if agent_slice != AZURE_SLICE:
                 return False
-
-            if self._agent_cpu_cgroup_path is None:
-                return False
-
             try:
                 _log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
                 self._check_processes_in_agent_cgroup()
@@ -625,6 +621,11 @@ class CGroupConfigurator(object):
             """
             unexpected = []
             agent_cgroup_proc_names = []
+            # Now _check_processes_in_agent_cgroup called before we enable the cgroups, So agent cgroup paths can be none and also,
+            # It's possible that any one of the controller is not mounted, so we need to check both.
+            cgroup_path = self._agent_cpu_cgroup_path if self._agent_cpu_cgroup_path is not None else self._agent_memory_cgroup_path
+            if cgroup_path is None:
+                return
             try:
                 daemon = os.getppid()
                 extension_handler = os.getpid()
@@ -632,7 +633,7 @@ class CGroupConfigurator(object):
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands = set()
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
-                agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+                agent_cgroup = CGroupsApi.get_processes_in_cgroup(cgroup_path)
                 # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
