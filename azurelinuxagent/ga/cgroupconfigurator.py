@@ -147,7 +147,7 @@ class CGroupConfigurator(object):
                     # previously supported. It is necessary to cleanup in this scenario in case the OS hits any bugs on
                     # the kernel related to cgroups.
                     log_cgroup_info("Agent will reset the quotas in case distro: {0} went from supported to unsupported".format(get_distro()), send_event=False)
-                    self._cleanup_agent_cgroup_drop_in_files()
+                    self._reset_agent_cgroup_setup()
                     return
 
                 # check that systemd is detected correctly
@@ -168,7 +168,7 @@ class CGroupConfigurator(object):
                     # this machine.
                     log_cgroup_warning("The agent does not support cgroups if the default systemd mountpoint is not being used: {0}".format(ustr(e)), send_event=True)
                     log_cgroup_info("Agent will reset the quotas in case cgroup usage went from enabled to disabled")
-                    self._cleanup_agent_cgroup_drop_in_files()
+                    self._reset_agent_cgroup_setup()
                     return
                 except CGroupsException as e:
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
@@ -193,6 +193,11 @@ class CGroupConfigurator(object):
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroup_paths(agent_slice,
                                                                                                        cpu_controller_root,
                                                                                                        memory_controller_root)
+
+                if conf.get_cgroup_disable_on_process_check_failure() and self._check_fails_if_processes_found_in_agent_cgroup_before_enable(agent_slice):
+                    reason = "Found unexpected processes in the agent cgroup before agent enable cgroups."
+                    self.disable(reason, DisableCgroups.ALL)
+                    return
 
                 if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
                     self.enable()
@@ -323,7 +328,7 @@ class CGroupConfigurator(object):
 
                 CGroupConfigurator._Impl.__reload_systemd_config()
 
-        def _cleanup_agent_cgroup_drop_in_files(self):
+        def _reset_agent_cgroup_setup(self):
             try:
                 agent_drop_in_path = systemd.get_agent_drop_in_path()
                 if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
@@ -542,6 +547,26 @@ class CGroupConfigurator(object):
                 return False
             return True
 
+        def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self, agent_slice):
+            """
+            This check ensures that before we enable the agent's cgroups, there are no unexpected processes in the agent's cgroup already.
+
+            The issue we observed that long running extension processes may be in agent cgroups if agent goes this cycle enabled(1)->disabled(2)->enabled(3).
+            1. Agent cgroups enabled in some version
+            2. Disabled agent cgroups due to check_cgroups regular check. Once we disable the cgroups we don't run the extensions in it's own slice, so they will be in agent cgroups.
+            3. When ext_hanlder restart and enable the cgroups again, already running processes from step 2 still be in agent cgroups. This may cause the extensions run with agent limit.
+            """
+            if agent_slice != AZURE_SLICE:
+                return False
+            try:
+                _log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
+                self._check_processes_in_agent_cgroup()
+            except CGroupsException as exception:
+                _log_cgroup_warning(ustr(exception))
+                return True
+
+            return False
+
         def check_cgroups(self, cgroup_metrics):
             self._check_cgroups_lock.acquire()
             try:
@@ -587,6 +612,11 @@ class CGroupConfigurator(object):
             """
             unexpected = []
             agent_cgroup_proc_names = []
+            # Now we call _check_processes_in_agent_cgroup before we enable the cgroups or any one of the controller is not mounted, agent cgroup paths can be None.
+            # so we need to check both.
+            cgroup_path = self._agent_cpu_cgroup_path if self._agent_cpu_cgroup_path is not None else self._agent_memory_cgroup_path
+            if cgroup_path is None:
+                return
             try:
                 daemon = os.getppid()
                 extension_handler = os.getpid()

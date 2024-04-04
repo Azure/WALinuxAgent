@@ -19,6 +19,11 @@ parameters:
     type: string
     default: "-"
 
+  - name: test_args
+    displayName: Test Args (additional arguments pass to the test suites. Comma-separated list of key=value pairs)
+    type: string
+    default: "-"
+
   - name: image
     displayName: Image (image/image set name, URN, or VHD)
     type: string
@@ -121,6 +126,7 @@ jobs:
           KEEP_ENVIRONMENT: ${{ parameters.keep_environment }}
           LOCATION: ${{ parameters.location }}
           TEST_SUITES: ${{ parameters.test_suites }}
+          TEST_ARGS: ${{ parameters.test_args }}
           VM_SIZE: ${{ parameters.vm_size }}
 
       - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/collect_artifacts.sh

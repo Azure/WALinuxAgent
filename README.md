@@ -100,7 +100,7 @@ Waagent depends on some system packages in order to function properly:
 * Filesystem utilities: sfdisk, fdisk, mkfs, parted
 * Password tools: chpasswd, sudo
 * Text processing tools: sed, grep
-* Network tools: ip-route
+* Network tools: ip-route, iptables
 
 ## Installation
 
@@ -567,6 +567,13 @@ If set, the agent will emit into the environment "OPENSSL_FIPS=1" when executing
 OpenSSL commands. This signals OpenSSL to use any installed FIPS-compliant libraries.
 Note that the agent itself has no FIPS-specific code. _If no FIPS-compliant certificates are
 installed, then enabling this option will cause all OpenSSL commands to fail._
+
+#### __OS.EnableFirewall__
+
+_Type: Boolean_  
+_Default: n (set to 'y' in waagent.conf)_
+
+Creates firewall rules to allow communication with the VM Host only by the Agent.  
 
 #### __OS.MonitorDhcpClientRestartPeriod__
 

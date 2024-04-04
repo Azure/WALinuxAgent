@@ -30,7 +30,7 @@ from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.ga.cgroupconfigurator import _DROP_IN_FILE_CPU_QUOTA
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, \
-    get_agent_cpu_quota
+    get_agent_cpu_quota, check_log_message
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -146,45 +146,18 @@ def wait_for_log_message(message, timeout=datetime.timedelta(minutes=5)):
     fail("The agent did not find [{0}] in its log within the allowed timeout".format(message))
 
 
-def verify_process_check_on_agent_cgroups():
-    """
-    This method checks agent detect unexpected processes in its cgroup and disables the CPUQuota
-    """
-    log.info("***Verifying process check on  agent cgroups")
-    log.info("Ensuring agent CPUQuota is enabled and backup the drop-in file to restore later in further tests")
-    if check_agent_quota_disabled():
-        fail("The agent's CPUQuota is not enabled: {0}".format(get_agent_cpu_quota()))
-    quota_drop_in = os.path.join(systemd.get_agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
-    quota_drop_in_backup = quota_drop_in + ".bk"
-    log.info("Backing up %s to %s...", quota_drop_in, quota_drop_in_backup)
-    shutil.copy(quota_drop_in, quota_drop_in_backup)
-    #
-    # Re-enable Process checks on cgroups and verify that the agent detects unexpected processes in its cgroup and disables the CPUQuota wehen
-    # that happens
-    #
-    shellutil.run_command(["update-waagent-conf", "Debug.CgroupDisableOnProcessCheckFailure=y"])
-
-    # The log message indicating the check failed is similar to
-    #     2021-03-29T23:33:15.603530Z INFO MonitorHandler ExtHandler Disabling resource usage monitoring. Reason: Check on cgroups failed:
-    #     [CGroupsException] The agent's cgroup includes unexpected processes: ['[PID: 25826] python3\x00/home/nam/Compute-Runtime-Tux-Pipeline/dungeon_crawler/s']
-    wait_for_log_message(
-        "Disabling resource usage monitoring. Reason: Check on cgroups failed:.+The agent's cgroup includes unexpected processes")
-    disabled: bool = retry_if_false(check_agent_quota_disabled)
-    if not disabled:
-        fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))
-
-
 def verify_throttling_time_check_on_agent_cgroups():
     """
     This method checks agent disables its CPUQuota when it exceeds its throttling limit
     """
     log.info("***Verifying CPU throttling check on  agent cgroups")
     # Now disable the check on unexpected processes and enable the check on throttledtime and verify that the agent disables its CPUQuota when it exceeds its throttling limit
-    log.info("Re-enabling CPUQuota...")
+    if check_agent_quota_disabled():
+        fail("The agent's CPUQuota is not enabled: {0}".format(get_agent_cpu_quota()))
     quota_drop_in = os.path.join(systemd.get_agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
     quota_drop_in_backup = quota_drop_in + ".bk"
-    log.info("Restoring %s from %s...", quota_drop_in, quota_drop_in_backup)
-    shutil.copy(quota_drop_in_backup, quota_drop_in)
+    log.info("Backing up %s to %s...", quota_drop_in, quota_drop_in_backup)
+    shutil.copy(quota_drop_in, quota_drop_in_backup)
     shellutil.run_command(["systemctl", "daemon-reload"])
     shellutil.run_command(["update-waagent-conf", "Debug.CgroupDisableOnProcessCheckFailure=n", "Debug.CgroupDisableOnQuotaCheckFailure=y", "Debug.AgentCpuThrottledTimeThreshold=5"])
 
@@ -205,11 +178,27 @@ def verify_throttling_time_check_on_agent_cgroups():
         fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))
 
 
+def cleanup_test_setup():
+    log.info("Cleaning up test setup")
+    drop_in_file = os.path.join(systemd.get_agent_drop_in_path(), "99-ExecStart.conf")
+    if os.path.exists(drop_in_file):
+        log.info("Removing %s...", drop_in_file)
+        os.remove(drop_in_file)
+        shellutil.run_command(["systemctl", "daemon-reload"])
+
+    check_time = datetime.datetime.utcnow()
+    shellutil.run_command(["agent-service", "restart"])
+
+    found: bool = retry_if_false(lambda: check_log_message(" Agent cgroups enabled: True", after_timestamp=check_time))
+    if not found:
+        fail("Agent cgroups not enabled yet")
+
+
 def main():
     prepare_agent()
     verify_agent_reported_metrics()
-    verify_process_check_on_agent_cgroups()
     verify_throttling_time_check_on_agent_cgroups()
+    cleanup_test_setup()
 
 
 run_remote_test(main)
