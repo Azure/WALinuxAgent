@@ -559,10 +559,10 @@ class CGroupConfigurator(object):
             if agent_slice != AZURE_SLICE:
                 return False
             try:
-                _log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
+                log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
                 self._check_processes_in_agent_cgroup()
             except CGroupsException as exception:
-                _log_cgroup_warning(ustr(exception))
+                log_cgroup_warning(ustr(exception))
                 return True
 
             return False
