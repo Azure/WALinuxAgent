@@ -24,7 +24,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment
 from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
@@ -315,6 +315,28 @@ class TestAgent(AgentTestCase):
                         except RuntimeError as re:
                             self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
                         mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
+        finally:
+            CollectLogsHandler.disable_monitor_cgroups_check()
+
+    @patch('azurelinuxagent.agent.get_cgroup_api', side_effect=InvalidCgroupMountpointException("Test"))
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_doesnt_call_collect_logs_on_non_systemd_cgroups_v1_mountpoints(self, mock_log_collector, _):
+        try:
+            CollectLogsHandler.enable_monitor_cgroups_check()
+            mock_log_collector.run = Mock()
+
+            def raise_on_sys_exit(*args):
+                raise RuntimeError(args[0] if args else "Exiting")
+
+            with mock_cgroup_v1_environment(self.tmp_dir):
+                agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+                with patch("sys.exit", side_effect=raise_on_sys_exit) as mock_exit:
+                    try:
+                        agent.collect_logs(is_full_mode=True)
+                    except RuntimeError as re:
+                        self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
+                    mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
 

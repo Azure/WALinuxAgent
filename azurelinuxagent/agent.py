@@ -32,7 +32,7 @@ import threading
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroup import AGENT_LOG_COLLECTOR, CpuCgroup, MemoryCgroup
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning, InvalidCgroupMountpointException
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -213,6 +213,9 @@ class Agent(object):
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
             try:
                 cgroup_api = get_cgroup_api()
+            except InvalidCgroupMountpointException as e:
+                log_cgroup_warning("The agent does not support cgroups if the default systemd mountpoint is not being used: {0}".format(ustr(e)), send_event=True)
+                sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
             except CGroupsException as e:
                 log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
