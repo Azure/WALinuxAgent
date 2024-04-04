@@ -621,8 +621,8 @@ class CGroupConfigurator(object):
             """
             unexpected = []
             agent_cgroup_proc_names = []
-            # Now _check_processes_in_agent_cgroup called before we enable the cgroups, So agent cgroup paths can be none and also,
-            # It's possible that any one of the controller is not mounted, so we need to check both.
+            # Now we call _check_processes_in_agent_cgroup before we enable the cgroups or any one of the controller is not mounted, agent cgroup paths can be None.
+            # so we need to check both.
             cgroup_path = self._agent_cpu_cgroup_path if self._agent_cpu_cgroup_path is not None else self._agent_memory_cgroup_path
             if cgroup_path is None:
                 return

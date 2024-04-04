@@ -25,9 +25,7 @@ import datetime
 from assertpy import fail
 
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
-from tests_e2e.tests.lib.cgroup_helpers import get_agent_cgroup_mount_path, \
-    BASE_CGROUP, check_agent_quota_disabled, check_log_message, get_unit_cgroup_paths, AGENT_SERVICE_NAME
+from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, check_log_message, get_unit_cgroup_paths, AGENT_SERVICE_NAME
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 
@@ -71,7 +69,6 @@ def disable_agent_cgroups_with_unknown_process(pid):
             with open(cgroup_procs_path, 'a') as f:
                 f.write("\n")
                 f.write(str(pid))
-                f.close()
         except Exception as e:
             log.warning("Error while adding process to cgroup.procs file: {0}".format(e))
             return False
