@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 
@@ -6,6 +7,7 @@ from assertpy import assert_that, fail
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.ga.cgroupapi import SystemdCgroupsApi
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -146,10 +148,25 @@ def check_cgroup_disabled_with_unknown_process():
     """
     Returns True if the cgroup is disabled with unknown process
     """
+    return check_log_message("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN")
+
+
+def check_log_message(message, after_timestamp=datetime.datetime.min):
+    """
+    Check if the log message is present after the given timestamp(if provided) in the agent log
+    """
+    log.info("Checking log message: {0}".format(message))
     for record in AgentLog().read():
-        match = re.search("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN",
-                          record.message, flags=re.DOTALL)
-        if match is not None:
+        match = re.search(message, record.message, flags=re.DOTALL)
+        if match is not None and record.timestamp > after_timestamp:
             log.info("Found message:\n\t%s", record.text.replace("\n", "\n\t"))
             return True
     return False
+
+
+def get_unit_cgroup_paths(unit_name):
+    """
+    Returns the cgroup paths for the given unit
+    """
+    cgroups_api = SystemdCgroupsApi()
+    return cgroups_api.get_unit_cgroup_paths(unit_name)

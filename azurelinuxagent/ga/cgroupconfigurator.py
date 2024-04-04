@@ -152,23 +152,9 @@ class CGroupConfigurator(object):
                     return
                 # This check is to reset the quotas if agent goes from cgroup supported to unsupported distros later in time.
                 if not CGroupsApi.cgroups_supported():
-                    agent_drop_in_path = systemd.get_agent_drop_in_path()
-                    try:
-                        if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
-                            files_to_cleanup = []
-                            agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
-                            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
-                                                                             _DROP_IN_FILE_CPU_ACCOUNTING)
-                            agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
-                                                                                _DROP_IN_FILE_MEMORY_ACCOUNTING)
-                            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
-                            files_to_cleanup.extend([agent_drop_in_file_slice, agent_drop_in_file_cpu_accounting,
-                                                     agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
-                            self.__cleanup_all_files(files_to_cleanup)
-                            self.__reload_systemd_config()
-                            logger.info("Agent reset the quotas if distro: {0} goes from supported to unsupported list", get_distro())
-                    except Exception as err:
-                        logger.warn("Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
+                    logger.info("Agent reset the quotas if distro: {0} goes from supported to unsupported list",
+                                get_distro())
+                    self._reset_agent_cgroup_setup()
 
                 # check whether cgroup monitoring is supported on the current distro
                 self._cgroups_supported = CGroupsApi.cgroups_supported()
@@ -199,6 +185,11 @@ class CGroupConfigurator(object):
                 self._agent_cpu_cgroup_path, self._agent_memory_cgroup_path = self.__get_agent_cgroups(agent_slice,
                                                                                                        cpu_controller_root,
                                                                                                        memory_controller_root)
+
+                if conf.get_cgroup_disable_on_process_check_failure() and self._check_fails_if_processes_found_in_agent_cgroup_before_enable(agent_slice):
+                    reason = "Found unexpected processes in the agent cgroup before agent enable cgroups."
+                    self.disable(reason, DisableCgroups.ALL)
+                    return
 
                 if self._agent_cpu_cgroup_path is not None or self._agent_memory_cgroup_path is not None:
                     self.enable()
@@ -340,6 +331,25 @@ class CGroupConfigurator(object):
                     return
 
                 CGroupConfigurator._Impl.__reload_systemd_config()
+
+        def _reset_agent_cgroup_setup(self):
+            try:
+                agent_drop_in_path = systemd.get_agent_drop_in_path()
+                if os.path.exists(agent_drop_in_path) and os.path.isdir(agent_drop_in_path):
+                    files_to_cleanup = []
+                    agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
+                    agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path,
+                                                                     _DROP_IN_FILE_CPU_ACCOUNTING)
+                    agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path,
+                                                                        _DROP_IN_FILE_MEMORY_ACCOUNTING)
+                    agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+                    files_to_cleanup.extend([agent_drop_in_file_slice, agent_drop_in_file_cpu_accounting,
+                                             agent_drop_in_file_memory_accounting, agent_drop_in_file_cpu_quota])
+                    self.__cleanup_all_files(files_to_cleanup)
+                    self.__reload_systemd_config()
+            except Exception as err:
+                logger.warn("Unable to delete Agent drop-in files while resetting the quotas: {0}".format(err))
+
 
         @staticmethod
         def __reload_systemd_config():
@@ -546,6 +556,26 @@ class CGroupConfigurator(object):
                 return False
             return True
 
+        def _check_fails_if_processes_found_in_agent_cgroup_before_enable(self, agent_slice):
+            """
+            This check ensures that before we enable the agent's cgroups, there are no unexpected processes in the agent's cgroup already.
+
+            The issue we observed that long running extension processes may be in agent cgroups if agent goes this cycle enabled(1)->disabled(2)->enabled(3).
+            1. Agent cgroups enabled in some version
+            2. Disabled agent cgroups due to check_cgroups regular check. Once we disable the cgroups we don't run the extensions in it's own slice, so they will be in agent cgroups.
+            3. When ext_hanlder restart and enable the cgroups again, already running processes from step 2 still be in agent cgroups. This may cause the extensions run with agent limit.
+            """
+            if agent_slice != AZURE_SLICE:
+                return False
+            try:
+                _log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
+                self._check_processes_in_agent_cgroup()
+            except CGroupsException as exception:
+                _log_cgroup_warning(ustr(exception))
+                return True
+
+            return False
+
         def check_cgroups(self, cgroup_metrics):
             self._check_cgroups_lock.acquire()
             try:
@@ -591,6 +621,11 @@ class CGroupConfigurator(object):
             """
             unexpected = []
             agent_cgroup_proc_names = []
+            # Now we call _check_processes_in_agent_cgroup before we enable the cgroups or any one of the controller is not mounted, agent cgroup paths can be None.
+            # so we need to check both.
+            cgroup_path = self._agent_cpu_cgroup_path if self._agent_cpu_cgroup_path is not None else self._agent_memory_cgroup_path
+            if cgroup_path is None:
+                return
             try:
                 daemon = os.getppid()
                 extension_handler = os.getpid()
@@ -598,7 +633,7 @@ class CGroupConfigurator(object):
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands = set()
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())
-                agent_cgroup = CGroupsApi.get_processes_in_cgroup(self._agent_cpu_cgroup_path)
+                agent_cgroup = CGroupsApi.get_processes_in_cgroup(cgroup_path)
                 # get the running commands again in case new commands started or completed while we were fetching the processes in the cgroup;
                 agent_commands.update(shellutil.get_running_commands())
                 systemd_run_commands.update(self._cgroups_api.get_systemd_run_commands())

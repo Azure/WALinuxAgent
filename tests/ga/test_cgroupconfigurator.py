@@ -46,6 +46,10 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         CGroupConfigurator._instance = None
         AgentTestCase.tearDownClass()
 
+    def tearDown(self):
+        CGroupConfigurator._instance = None
+        AgentTestCase.tearDown(self)
+
     @contextlib.contextmanager
     def _get_cgroup_configurator(self, initialize=True, enable=True, mock_commands=None):
         CGroupConfigurator._instance = None
@@ -904,6 +908,33 @@ exit 0
                 finally:
                     for p in patchers:
                         p.stop()
+
+    @patch('azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl._check_processes_in_agent_cgroup', side_effect=CGroupsException("Test"))
+    @patch('azurelinuxagent.ga.cgroupconfigurator.add_event')
+    def test_agent_should_not_enable_cgroups_if_unexpected_process_already_in_agent_cgroups(self, add_event, _):
+        command_mocks = [MockCommand(r"^systemctl show walinuxagent\.service --property Slice",
+'''Slice=azure.slice
+''')]
+        original_read_file = fileutil.read_file
+
+        def mock_read_file(filepath, **args):
+            if filepath == "/proc/self/cgroup":
+                filepath = os.path.join(data_dir, "cgroups", "proc_self_cgroup_azure_slice")
+            return original_read_file(filepath, **args)
+
+        with self._get_cgroup_configurator(initialize=False, mock_commands=command_mocks) as configurator:
+            with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=mock_read_file):
+                configurator.initialize()
+
+                self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
+                disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
+                self.assertTrue(
+                    len(disable_events) == 1,
+                    "Exactly 1 event should have been emitted. Got: {0}".format(disable_events))
+                self.assertIn(
+                    "Found unexpected processes in the agent cgroup before agent enable cgroups",
+                    disable_events[0]["message"],
+                    "The error message is not correct when process check failed")
 
     def test_check_agent_memory_usage_should_raise_a_cgroups_exception_when_the_limit_is_exceeded(self):
         metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1),
