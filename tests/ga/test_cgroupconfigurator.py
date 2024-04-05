@@ -35,7 +35,7 @@ from azurelinuxagent.common.exception import CGroupsException, AgentMemoryExceed
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.lib.mock_environment import MockCommand
-from tests.lib.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
+from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, UnitFilePaths, mock_cgroup_v2_environment
 from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir, is_python_version_26_or_34, skip_if_predicate_true
 from tests.lib.miscellaneous_tools import format_processes, wait_for
 
@@ -55,7 +55,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
-        with mock_cgroup_environment(self.tmp_dir) as mock_environment:
+        with mock_cgroup_v1_environment(self.tmp_dir) as mock_environment:
             if mock_commands is not None:
                 for command in mock_commands:
                     mock_environment.add_command(command)
@@ -68,9 +68,40 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     configurator.initialize()
             yield configurator
 
-    def test_initialize_should_enable_cgroups(self):
+    @contextlib.contextmanager
+    def _get_cgroup_configurator_v2(self, initialize=True, enable=True, mock_commands=None):
+        CGroupConfigurator._instance = None
+        configurator = CGroupConfigurator.get_instance()
+        CGroupsTelemetry.reset()
+        with mock_cgroup_v2_environment(self.tmp_dir) as mock_environment:
+            if mock_commands is not None:
+                for command in mock_commands:
+                    mock_environment.add_command(command)
+            configurator.mocks = mock_environment
+            if initialize:
+                if not enable:
+                    with patch.object(configurator, "enable"):
+                        configurator.initialize()
+                else:
+                    configurator.initialize()
+            yield configurator
+
+    def test_initialize_should_enable_cgroups_v1(self):
         with self._get_cgroup_configurator() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
+
+    def test_initialize_should_not_enable_cgroups_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertFalse(configurator.enabled(), "cgroups were enabled")
+
+    def test_initialize_should_not_enable_when_cgroup_api_cannot_be_determined(self):
+        # Mock cgroup api to raise CGroupsException
+        def mock_get_cgroup_api():
+            raise CGroupsException("")
+
+        with patch('azurelinuxagent.ga.cgroupconfigurator.get_cgroup_api', side_effect=mock_get_cgroup_api):
+            with self._get_cgroup_configurator() as configurator:
+                self.assertFalse(configurator.enabled(), "cgroups were enabled")
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
@@ -83,18 +114,18 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 "The Agent's Memory is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
-        command_mocks = [MockCommand(r"^mount -t cgroup$",
-'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
-cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+        command_mocks = [MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/cpu,cpuacct      cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpu,cpuacct
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 ''')]
         with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
             tracked = CGroupsTelemetry._tracked
@@ -104,17 +135,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 "The Agent's memory should not be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present(self):
-        command_mocks = [MockCommand(r"^mount -t cgroup$",
-'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+        command_mocks = [MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 ''')]
         with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
             tracked = CGroupsTelemetry._tracked
@@ -123,17 +154,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_agent_is_not_in_the_system_slice(self):
-        command_mocks = [MockCommand(r"^mount -t cgroup$",
-'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+        command_mocks = [MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd*
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 ''')]
 
         with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
@@ -290,6 +321,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked")
 
+    def test_enable_should_not_track_throttled_time_when_cgroups_v2_enabled(self):
+        with self._get_cgroup_configurator_v2(initialize=False) as configurator:
+            if CGroupsTelemetry.get_track_throttled_time():
+                raise Exception("Test setup should not start tracking Throttle Time")
+
+            configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
+
+            configurator.initialize()
+
+            self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked when using cgroups v2")
+
     def test_disable_should_reset_cpu_quota(self):
         with self._get_cgroup_configurator() as configurator:
             if len(CGroupsTelemetry._tracked) == 0:
@@ -380,7 +422,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_use_systemd_run_when_cgroups_are_enabled(self, _):
+    def test_start_extension_command_should_use_systemd_run_when_cgroups_v1_are_enabled(self, _):
         with self._get_cgroup_configurator() as configurator:
             with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                 configurator.start_extension_command(
@@ -449,13 +491,41 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_not_use_systemd_when_cgroup_v2_enabled(self, _):
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertFalse(configurator.enabled())
+
+            with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.start_extension_command") as v2_extension_start_command:
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
+                    configurator.start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="date",
+                        cmd_name="test",
+                        timeout=300,
+                        shell=False,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+
+                    command_calls = [args[0] for args, _ in patcher.call_args_list if
+                                     len(args) > 0 and "date" in args[0]]
+                    self.assertFalse(v2_extension_start_command.called)
+                    self.assertEqual(len(command_calls), 1,
+                                     "The test command should have been called exactly once [{0}]".format(
+                                         command_calls))
+                    self.assertNotIn("systemd-run", command_calls[0],
+                                     "The command should not have been invoked using systemd")
+                    self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
         with self._get_cgroup_configurator() as configurator:
 
             configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr='Failed to start transient scope unit: syntax error'))
 
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
-                with patch("azurelinuxagent.ga.cgroupconfigurator.add_event") as mock_add_event:
+                with patch("azurelinuxagent.ga.cgroupapi.add_event") as mock_add_event:
                     with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                         CGroupsTelemetry.reset()
 
@@ -841,7 +911,7 @@ exit 0
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
             other_processes = [1, get_completed_process()] + extension_processes
 
-            with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
+            with patch("azurelinuxagent.ga.cgroupapi._SystemdCgroupApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
                 with self.assertRaises(CGroupsException) as context_manager:
                     configurator._check_processes_in_agent_cgroup()
 
@@ -885,7 +955,7 @@ exit 0
                         patchers.append(p)
                         p.start()
 
-                    with patch("azurelinuxagent.ga.cgroupconfigurator.add_event") as add_event:
+                    with patch("azurelinuxagent.ga.cgroupapi.add_event") as add_event:
                         configurator.enable()
 
                         tracked_metrics = [
@@ -910,7 +980,7 @@ exit 0
                         p.stop()
 
     @patch('azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl._check_processes_in_agent_cgroup', side_effect=CGroupsException("Test"))
-    @patch('azurelinuxagent.ga.cgroupconfigurator.add_event')
+    @patch('azurelinuxagent.ga.cgroupapi.add_event')
     def test_agent_should_not_enable_cgroups_if_unexpected_process_already_in_agent_cgroups(self, add_event, _):
         command_mocks = [MockCommand(r"^systemctl show walinuxagent\.service --property Slice",
 '''Slice=azure.slice

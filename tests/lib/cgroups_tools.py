@@ -33,17 +33,3 @@ class CGroupsTools(object):
         fileutil.append_file(os.path.join(legacy_cgroup, "cgroup.procs"), daemon_pid + "\n")
         return legacy_cgroup
 
-    @staticmethod
-    def create_agent_cgroup(cgroups_file_system_root, controller, extension_handler_pid):
-        """
-        Previous versions of the daemon (2.2.31-2.2.40) wrote their PID to /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent;
-        starting from version 2.2.41 we track the agent service in walinuxagent.service instead of WALinuxAgent/WALinuxAgent.
-
-        This method creates a mock cgroup using the newer path and adds the given PID to it.
-        """
-        new_cgroup = os.path.join(cgroups_file_system_root, controller, "walinuxagent.service")
-        if not os.path.exists(new_cgroup):
-            os.makedirs(new_cgroup)
-        fileutil.append_file(os.path.join(new_cgroup, "cgroup.procs"), extension_handler_pid + "\n")
-        return new_cgroup
-
