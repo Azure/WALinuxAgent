@@ -87,7 +87,7 @@ echo "Service Status:"
 
 # We need to wait for the provisioning code to complete before stopping the agent's service to do the test setup
 started=false
-for i in {1..6}
+for i in {1..12}
 do
   if [[ -f /var/lib/waagent/provisioned ]]; then
     started=true
