@@ -91,14 +91,46 @@ class RecoverNetworkInterface(AgentVmTest):
         # The script should bring the primary network interface down and use the agent to recover the interface. These
         # commands will bring the network down, so they should be executed on the machine using CSE instead of ssh.
         script = f"""
-        set -euxo pipefail
-        ifdown {ifname};
-        nic_state=$(nmcli -g general.state device show {ifname})
-        echo Primary network interface state before recovering: $nic_state
-        source /home/{self._context.username}/bin/set-agent-env;
-        pypy3 -c 'from azurelinuxagent.common.osutil.redhat import RedhatOSUtil; RedhatOSUtil().check_and_recover_nic_state({formatted_ifname})';
-        nic_state=$(nmcli -g general.state device show {ifname});
-        echo Primary network interface state after recovering: $nic_state
+        set -uxo pipefail
+        
+        # The 'ifdown' network script is used to bring the network interface down. For some distros, this script 
+        # executes nmcli commands which can timeout and return non-zero exit codes. Allow 3 retries in case 'ifdown' 
+        # returns non-zero exit code. This is the same number of retries the agent allows in DefaultOSUtil.restart_if
+        retries=3;
+        ifdown_success=false
+        while [ $retries -gt 0 ]
+        do
+            echo Attempting to bring network interface down with ifdown...
+            ifdown {ifname};
+            exit_code=$?
+            if [ $exit_code -eq 0 ]; then
+                echo ifdown succeeded
+                ifdown_success=true
+                break
+            fi
+            echo ifdown failed with exit code $exit_code, try again after 5 seconds...
+            sleep 5
+            ((retries=retries-1))
+        done
+        
+        # Verify the agent network interface recovery logic only if 'ifdown' succeeded
+        if ! $ifdown_success ; then 
+            # Fail the script if 'ifdown' command didn't succeed
+            exit 1
+        else
+            # Log the network interface state before attempting to recover the interface
+            nic_state=$(nmcli -g general.state device show {ifname})
+            echo Primary network interface state before recovering: $nic_state
+            
+            # Use the agent OSUtil to bring the network interface back up
+            source /home/{self._context.username}/bin/set-agent-env;
+            echo Attempting to recover the network interface with the agent...
+            pypy3 -c 'from azurelinuxagent.common.osutil.redhat import RedhatOSUtil; RedhatOSUtil().check_and_recover_nic_state({formatted_ifname})';
+            
+            # Log the network interface state after attempting to recover the interface
+            nic_state=$(nmcli -g general.state device show {ifname});
+            echo Primary network interface state after recovering: $nic_state
+        fi
         """
         log.info("")
         log.info("Using CSE to bring the primary network interface down and call the OSUtil to bring the interface back up. Command to execute: {0}".format(script))
