@@ -171,7 +171,7 @@ class VirtualMachineClient(AzureSdkClient):
             instance_view = self.get_instance_view()
             power_state = [s.code for s in instance_view.statuses if "PowerState" in s.code]
             if len(power_state) != 1:
-                raise Exception(f"Could not find PowerState in the instance view statuses:\n{json.dumps(instance_view.statuses)}")
+                raise Exception(f"Could not find PowerState in the instance view statuses:\n{json.dumps(instance_view.serialize(), indent=2)}")
             log.info("VM's Power State: %s", power_state[0])
             if power_state[0] == "PowerState/running":
                 # We may get an instance view captured before the reboot actually happened; verify
