@@ -231,9 +231,9 @@ class Agent(object):
             if not cpu_slice_matches or not memory_slice_matches:
                 log_cgroup_warning("The Log Collector process is not in the proper cgroups:", send_event=False)
                 if not cpu_slice_matches:
-                    log_cgroup_warning("\tunexpected cpu slice", send_event=False)
+                    log_cgroup_warning("\tunexpected cpu slice: {0}".format(cpu_cgroup_path), send_event=False)
                 if not memory_slice_matches:
-                    log_cgroup_warning("\tunexpected memory slice", send_event=False)
+                    log_cgroup_warning("\tunexpected memory slice: {0}".format(memory_cgroup_path), send_event=False)
 
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
