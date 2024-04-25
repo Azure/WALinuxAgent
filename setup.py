@@ -344,6 +344,10 @@ setuptools.setup(
     install_requires=requires,
     cmdclass={
         'install': install
-    }
+    },
+    package_data={
+        "azurelinuxagent.common.policy": ["*.whl"],
+    },
+    include_package_data=True
 )
 
