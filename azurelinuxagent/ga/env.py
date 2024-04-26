@@ -104,6 +104,7 @@ class EnableFirewall(PeriodicOperation):
         self._osutil = osutil
         self._protocol = protocol
         self._try_remove_legacy_firewall_rule = False
+        self._is_first_setup = True
 
     def _operation(self):
         # If the rules ever change we must reset all rules and start over again.
@@ -117,13 +118,19 @@ class EnableFirewall(PeriodicOperation):
             self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
             self._try_remove_legacy_firewall_rule = True
 
-        success, is_firewall_rules_updated = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(),
-                                                                          uid=os.getuid())
+        firewall_state = self._get_firewall_state()
+
+        success, is_firewall_rules_updated = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
 
         if is_firewall_rules_updated:
-            msg = "Successfully added Azure fabric firewall rules. Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list())
-            logger.info(msg)
-            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.Firewall, message=msg, log_event=False)
+            if self._is_first_setup:
+                msg = "Created Azure fabric firewall rules:\n{0}".format(self._get_firewall_state())
+                logger.info(msg)
+                add_event(op=WALAEventOperation.Firewall, message=msg)
+            else:
+                msg = "Reset Azure fabric firewall rules.\nInitial state:\n{0}\nCurrent state:\n{1}".format(firewall_state, self._get_firewall_state())
+                logger.info(msg)
+                add_event(op=WALAEventOperation.ResetFirewall, message=msg)
 
         add_periodic(
             logger.EVERY_HOUR,
@@ -132,6 +139,14 @@ class EnableFirewall(PeriodicOperation):
             op=WALAEventOperation.Firewall,
             is_success=success,
             log_event=False)
+
+        self._is_first_setup = False
+
+    def _get_firewall_state(self):
+        try:
+            return self._osutil.get_firewall_list()
+        except Exception as e:
+            return "Failed to get the firewall state: {0}".format(ustr(e))
 
 
 class LogFirewallRules(PeriodicOperation):
