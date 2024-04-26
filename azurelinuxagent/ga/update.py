@@ -320,6 +320,14 @@ class UpdateHandler(object):
             vm_arch = self.osutil.get_vm_arch()
             logger.info("CPU Arch: {0}", vm_arch)
 
+            # check if wheel file exists
+            root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+            logger.info(f"Root dir: {root_dir}")
+            whl_path = os.path.join(root_dir, 'common', 'policy', 'regorus-0.1.0-cp38-cp38-manylinux_2_31_x86_64.whl')
+            if os.path.exists(whl_path):
+                logger.info("installing wheel file")
+                subprocess.check_call(["python3", "-m", "pip", "install", whl_path])
+
             os_info_msg = u"Distro: {dist_name}-{dist_ver}; "\
                 u"OSUtil: {util_name}; "\
                 u"AgentService: {service_name}; "\

@@ -14,10 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import regorus
 import json
 import os
+import regorus
+
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerStatus, ExtensionSettings
 
