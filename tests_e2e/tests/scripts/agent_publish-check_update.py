@@ -81,7 +81,7 @@ def verify_agent_update_from_log():
             continue
 
         for p in [_UPDATE_PATTERN_00, _UPDATE_PATTERN_01, _UPDATE_PATTERN_02, _UPDATE_PATTERN_03, _UPDATE_PATTERN_04]:
-            update_match = re.match(p, record.text)
+            update_match = re.match(p, record.message)
             if update_match:
                 detected_update = True
                 update_version = update_match.groups()[2]
