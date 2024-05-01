@@ -16,20 +16,12 @@
 
 import json
 import os
-import subprocess
+import regorus
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerStatus, ExtensionSettings
 
-whl_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'regorus-0.1.0-cp38-cp38-manylinux_2_31_x86_64.whl')
-if os.path.exists(whl_path):
-    logger.info("Installing Regorus wheel file")
-    try:
-        subprocess.check_call(["python3", "-m", "pip", "install", whl_path])
-        import regorus
-    except ImportError as e:
-        logger.info("Failed to install and import Regorus module.")
 
 class PolicyEngine:
     """Base class for policy engine"""
