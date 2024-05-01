@@ -72,13 +72,17 @@ fi
 #
 IP_ADDRESS=$(curl -4 ifconfig.io/ip)
 
+# certificate location in the container
+AZURE_CLIENT_CERTIFICATE_PATH="/home/waagent/app/cert.pem"
+
 docker run --rm \
     --volume "$BUILD_SOURCESDIRECTORY:/home/waagent/WALinuxAgent" \
     --volume "$AGENT_TEMPDIRECTORY"/ssh:/home/waagent/.ssh \
+    --volume "$AGENT_TEMPDIRECTORY"/app:/home/waagent/app \
     --volume "$LOGS_DIRECTORY":/home/waagent/logs \
     --env AZURE_CLIENT_ID \
-    --env AZURE_CLIENT_SECRET \
     --env AZURE_TENANT_ID \
+    --env AZURE_CLIENT_CERTIFICATE_PATH=$AZURE_CLIENT_CERTIFICATE_PATH \
     waagenttests.azurecr.io/waagenttests \
     bash --login -c \
       "lisa \

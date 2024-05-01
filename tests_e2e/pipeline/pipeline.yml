@@ -1,7 +1,7 @@
 # variables:
   #
   # NOTE: When creating the pipeline, "connection_info" must be added as a variable pointing to the
-  #       corresponding key vault; see wiki for details.
+  #        cloud specific service connection; see wiki for details.
   #
 
 parameters:
@@ -78,16 +78,17 @@ jobs:
           architecture: 'x64'
 
       # Extract the Azure cloud from the "connection_info" variable. Its value includes one of
-      # 'public', 'china', or 'government' as a suffix (the suffix comes after the last '-').
+      # 'public', 'china', or 'gov' as a suffix (the suffix comes after the '.').
       - bash: |
-          case $(echo $CONNECTION_INFO | sed 's/^.*-//') in
+          case $(echo $CONNECTION_INFO | sed 's/.*\.//') in
               public)
                   echo "##vso[task.setvariable variable=cloud]AzureCloud"
                   ;;
               china)
                   echo "##vso[task.setvariable variable=cloud]AzureChinaCloud"
+                  
                   ;;
-              government)
+              gov)
                   echo "##vso[task.setvariable variable=cloud]AzureUSGovernment"
                   ;;
               *)
@@ -106,9 +107,20 @@ jobs:
       - task: AzureKeyVault@2
         displayName: "Fetch connection info"
         inputs:
-          azureSubscription: 'azuremanagement'
-          KeyVaultName: '$(connection_info)'
+          azureSubscription: $(connection_info)
+          KeyVaultName: 'waagenttests'
           SecretsFilter: '*'
+
+      - task: AzureCLI@2
+        displayName: "Save connection certificate"
+        inputs:
+          azureSubscription: $(connection_info)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            # This temporary directory removed after the pipeline execution
+            mkdir -p $(Agent.TempDirectory)/app
+            az keyvault secret download --file $(Agent.TempDirectory)/app/cert.pem --vault-name waagenttests --name AZURE-CLIENT-CERTIFICATE
 
       - bash: $(Build.SourcesDirectory)/tests_e2e/pipeline/scripts/execute_tests.sh
         displayName: "Execute tests"
@@ -116,7 +128,6 @@ jobs:
         env:
           SUBSCRIPTION_ID: $(SUBSCRIPTION-ID)
           AZURE_CLIENT_ID: $(AZURE-CLIENT-ID)
-          AZURE_CLIENT_SECRET: $(AZURE-CLIENT-SECRET)
           AZURE_TENANT_ID: $(AZURE-TENANT-ID)
           CR_USER: $(CR-USER)
           CR_SECRET: $(CR-SECRET)
