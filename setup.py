@@ -346,7 +346,7 @@ setuptools.setup(
         'install': install
     },
     package_data={
-        "azurelinuxagent.common.policy": ["*.whl"],
+        "azurelinuxagent.common.policy.regorus": ["*.so"],
     },
     include_package_data=True
 )
