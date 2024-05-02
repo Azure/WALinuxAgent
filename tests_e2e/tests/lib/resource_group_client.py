@@ -46,7 +46,10 @@ class ResourceGroupClient(AzureSdkClient):
         Creates a resource group
         """
         log.info("Creating resource group %s", self)
-        self._resource_client.resource_groups.create_or_update(self.name, {"location": self.location})
+        self._execute_async_operation(
+            self._resource_client.resource_groups.create_or_update(self.name, {"location": self.location}),
+            operation_name=f"Create resource group {self}",
+            timeout=AzureSdkClient._DEFAULT_TIMEOUT)
 
     def deploy_template(self, template: Dict[str, Any], parameters: Dict[str, Any] = None):
         """
