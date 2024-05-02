@@ -47,7 +47,7 @@ class ResourceGroupClient(AzureSdkClient):
         """
         log.info("Creating resource group %s", self)
         self._execute_async_operation(
-            self._resource_client.resource_groups.create_or_update(self.name, {"location": self.location}),
+            operation=lambda: self._resource_client.resource_groups.create_or_update(self.name, {"location": self.location}),
             operation_name=f"Create resource group {self}",
             timeout=AzureSdkClient._DEFAULT_TIMEOUT)
 
