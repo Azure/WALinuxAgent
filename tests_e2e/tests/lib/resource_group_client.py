@@ -46,10 +46,7 @@ class ResourceGroupClient(AzureSdkClient):
         Creates a resource group
         """
         log.info("Creating resource group %s", self)
-        self._execute_async_operation(
-            operation=lambda: self._resource_client.resource_groups.create_or_update(self.name, {"location": self.location}),
-            operation_name=f"Create resource group {self}",
-            timeout=AzureSdkClient._DEFAULT_TIMEOUT)
+        self._resource_client.resource_groups.create_or_update(self.name, {"location": self.location})
 
     def deploy_template(self, template: Dict[str, Any], parameters: Dict[str, Any] = None):
         """
@@ -72,6 +69,12 @@ class ResourceGroupClient(AzureSdkClient):
         """
         log.info("Deleting resource group %s (no wait)", self)
         self._resource_client.resource_groups.begin_delete(self.name)  # Do not wait for the deletion to complete
+
+    def is_exists(self) -> bool:
+        """
+        Checks if the resource group exists
+        """
+        return self._resource_client.resource_groups.check_existence(self.name, {"location": self.location})
 
     def __str__(self):
         return f"{self.name}"
