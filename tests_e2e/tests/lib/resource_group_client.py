@@ -74,7 +74,7 @@ class ResourceGroupClient(AzureSdkClient):
         """
         Checks if the resource group exists
         """
-        return self._resource_client.resource_groups.check_existence(self.name, {"location": self.location})
+        return self._resource_client.resource_groups.check_existence(self.name)
 
     def __str__(self):
         return f"{self.name}"
