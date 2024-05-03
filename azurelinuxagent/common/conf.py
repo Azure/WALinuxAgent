@@ -147,7 +147,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
-    "Debug.EnablePolicy": True
+    "Debug.EnableExtensionPolicy": True
 }
 
 
@@ -683,11 +683,11 @@ def get_firewall_rules_log_period(conf=__conf__):
     return conf.get_int("Debug.FirewallRulesLogPeriod", 86400)
 
 
-def get_policy_enabled(conf=__conf__):
+def get_extension_policy_enabled(conf=__conf__):
     """
     Determine whether extension policy is enabled. If true, Regorus will be installed on the VM and
     the policy will be enforced before installing any extensions.
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnablePolicy", True)
+    return conf.get_switch("Debug.EnableExtensionPolicy", True)

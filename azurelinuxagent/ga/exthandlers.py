@@ -33,7 +33,7 @@ from functools import partial
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.osutil import get_osutil
-if conf.get_policy_enabled():
+if conf.get_extension_policy_enabled():
     from azurelinuxagent.common.policy.policy_engine import PolicyEngine
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
@@ -478,7 +478,7 @@ class ExtHandlersHandler(object):
 
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
-        if conf.get_policy_enabled():
+        if conf.get_extension_policy_enabled():
             engine = PolicyEngine()
             logger.info("Policy engine initialized: {0}".format(engine))
         for extension, ext_handler in all_extensions:
