@@ -147,7 +147,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
-    "Debug.EnableExtensionPolicy": True
+    "Debug.EnableExtensionPolicy": False
 }
 
 
@@ -690,4 +690,4 @@ def get_extension_policy_enabled(conf=__conf__):
 
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableExtensionPolicy", True)
+    return conf.get_switch("Debug.EnableExtensionPolicy", False)
