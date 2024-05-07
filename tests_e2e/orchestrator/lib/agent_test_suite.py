@@ -46,6 +46,7 @@ from lisa.sut_orchestrator.azure.platform_ import AzurePlatform  # pylint: disab
 
 import makepkg
 from azurelinuxagent.common.version import AGENT_VERSION
+from tests_e2e.tests.lib.retry import retry_if_false
 
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
@@ -913,6 +914,10 @@ class AgentTestSuite(LisaTestSuite):
         self._lisa_log.info("Creating resource group %s", self._resource_group_name)
         resource_group = ResourceGroupClient(cloud=self._cloud, location=self._location, subscription=self._subscription_id, name=self._resource_group_name)
         resource_group.create()
+        exist = retry_if_false(resource_group.is_exists)
+        if not exist:
+            self._lisa_log.error("Failed to create resource group %s", self._resource_group_name)
+            raise Exception("Failed to create resource group: {0}".format(self._resource_group_name))
         self._delete_scale_set = True
 
         self._lisa_log.info("Creating scale set %s", self._vmss_name)

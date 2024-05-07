@@ -70,5 +70,11 @@ class ResourceGroupClient(AzureSdkClient):
         log.info("Deleting resource group %s (no wait)", self)
         self._resource_client.resource_groups.begin_delete(self.name)  # Do not wait for the deletion to complete
 
+    def is_exists(self) -> bool:
+        """
+        Checks if the resource group exists
+        """
+        return self._resource_client.resource_groups.check_existence(self.name)
+
     def __str__(self):
         return f"{self.name}"
