@@ -112,7 +112,7 @@ jobs:
           SecretsFilter: '*'
 
       - task: AzureCLI@2
-        displayName: "Save connection certificate"
+        displayName: "Download connection certificate"
         inputs:
           azureSubscription: $(connection_info)
           scriptType: bash
