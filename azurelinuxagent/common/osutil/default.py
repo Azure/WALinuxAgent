@@ -268,7 +268,7 @@ class DefaultOSUtil(object):
         """
         It checks if every iptable rule exists and add them if not present. It returns a tuple(enable firewall success status, missing rules array)
         enable firewall success status: Returns True if every firewall rule exists otherwise False
-        missirg rules: array with names of the missing rules ("ACCEPT DNS", "ACCEPT", "DROP")
+        missing rules: array with names of the missing rules ("ACCEPT DNS", "ACCEPT", "DROP")
         """
         # If a previous attempt failed, do not retry
         global _enable_firewall  # pylint: disable=W0603

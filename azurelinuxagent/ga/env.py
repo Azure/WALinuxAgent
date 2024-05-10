@@ -107,7 +107,7 @@ class EnableFirewall(PeriodicOperation):
         self._is_first_setup = True
         self._reset_count = 0
         self._report_after = datetime.datetime.min
-        self._report_period = datetime.timedelta(seconds=0)  # 0 indicates "report immediately"
+        self._report_period = None  # None indicates "report immediately"
 
     def _operation(self):
         # If the rules ever change we must reset all rules and start over again.
@@ -130,14 +130,14 @@ class EnableFirewall(PeriodicOperation):
                 add_event(op=WALAEventOperation.Firewall, message=msg)
             else:
                 self._reset_count += 1
-                # We report immediately (period == 0) the first 5 instances, then we switch the period to every few hours
-                if self._report_period.total_seconds() == 0:
+                # We report immediately (when period is None) the first 5 instances, then we switch the period to every few hours
+                if self._report_period is None:
                     msg = "Some firewall rules were missing: {0}. Re-created all the rules:\n{1}".format(missing_firewall_rules, self._get_firewall_state())
                     if self._reset_count >= 5:
                         self._report_period = datetime.timedelta(hours=3)
                         self._reset_count = 0
                         self._report_after = datetime.datetime.now() + self._report_period
-                elif datetime.datetime.now() >=  self._report_after:
+                elif datetime.datetime.now() >= self._report_after:
                     msg = "Some firewall rules were missing: {0}. This has happened {1} time(s) since the last report. Re-created all the rules:\n{2}".format(
                         missing_firewall_rules, self._reset_count, self._get_firewall_state())
                     self._reset_count = 0
