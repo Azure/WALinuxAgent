@@ -368,10 +368,6 @@ class RDMADeviceHandler(object):
         count = 0
 
         for nic in nics:
-            # look for IBoIP interface of format ibXXX
-            if not re.match(r"ib\w+", nic):
-                continue
-
             mac_addr = None
             with open(os.path.join(net_dir, nic, "address")) as address_file:
                 mac_addr = address_file.read()
