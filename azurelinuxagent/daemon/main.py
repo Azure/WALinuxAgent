@@ -25,7 +25,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation, initialize_event_logger_vminfo_common_parameters
+from azurelinuxagent.common.event import add_event, WALAEventOperation, initialize_event_logger_vminfo_common_parameters_and_protocal
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateProperties
@@ -119,7 +119,7 @@ class DaemonHandler(object):
 
     def _initialize_telemetry(self):
         protocol = self.protocol_util.get_protocol()
-        initialize_event_logger_vminfo_common_parameters(protocol)
+        initialize_event_logger_vminfo_common_parameters_and_protocal(protocol)
 
     def daemon(self, child_args=None):
         logger.info("Run daemon")

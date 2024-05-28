@@ -55,7 +55,7 @@ class EventLoggerTools(object):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as mock_protocol:
             with tools.patch("azurelinuxagent.common.event.get_imds_client", return_value=mock_imds_client):
-                event.initialize_event_logger_vminfo_common_parameters(mock_protocol)
+                event.initialize_event_logger_vminfo_common_parameters_and_protocal(mock_protocol)
 
     @staticmethod
     def get_expected_os_version():

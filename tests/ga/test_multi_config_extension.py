@@ -146,27 +146,30 @@ class _MultiConfigBaseTestClass(AgentTestCase):
 
     @contextlib.contextmanager
     def _setup_test_env(self, mock_manifest=False):
+        # Added try-finally block to fix false positive pylint warning contextmanager-generator-missing-cleanup
+        try:
+            with mock_wire_protocol(self.test_data) as protocol:
+                def mock_http_put(url, *args, **_):
+                    if HttpRequestPredicates.is_host_plugin_status_request(url):
+                        # Skip reading the HostGA request data as its encoded
+                        return MockHttpResponse(status=500)
+                    protocol.aggregate_status = json.loads(args[0])
+                    return MockHttpResponse(status=201)
 
-        with mock_wire_protocol(self.test_data) as protocol:
-            def mock_http_put(url, *args, **_):
-                if HttpRequestPredicates.is_host_plugin_status_request(url):
-                    # Skip reading the HostGA request data as its encoded
-                    return MockHttpResponse(status=500)
-                protocol.aggregate_status = json.loads(args[0])
-                return MockHttpResponse(status=201)
+                with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", True):
+                    protocol.aggregate_status = None
+                    protocol.set_http_handlers(http_put_handler=mock_http_put)
+                    exthandlers_handler = get_exthandlers_handler(protocol)
+                    no_of_extensions = protocol.mock_wire_data.get_no_of_extensions_in_config()
 
-            with patch("azurelinuxagent.common.agent_supported_feature._MultiConfigFeature.is_supported", True):
-                protocol.aggregate_status = None
-                protocol.set_http_handlers(http_put_handler=mock_http_put)
-                exthandlers_handler = get_exthandlers_handler(protocol)
-                no_of_extensions = protocol.mock_wire_data.get_no_of_extensions_in_config()
-
-                if mock_manifest:
-                    with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.supports_multiple_extensions',
-                               return_value=True):
+                    if mock_manifest:
+                        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.supports_multiple_extensions',
+                                   return_value=True):
+                            yield exthandlers_handler, protocol, no_of_extensions
+                    else:
                         yield exthandlers_handler, protocol, no_of_extensions
-                else:
-                    yield exthandlers_handler, protocol, no_of_extensions
+        finally:
+            pass
 
     def _assert_and_get_handler_status(self, aggregate_status, handler_name="OSTCExtensions.ExampleHandlerLinux",
                                        handler_version="1.0.0", status="Ready", expected_count=1, message=None):

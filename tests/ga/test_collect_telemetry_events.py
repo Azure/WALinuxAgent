@@ -167,14 +167,15 @@ class TestExtensionTelemetryHandler(AgentTestCase, HttpRequestPredicates):
     @contextlib.contextmanager
     def _create_extension_telemetry_processor(self, telemetry_handler=None):
 
-        event_list = []
-        if not telemetry_handler:
-            telemetry_handler = MagicMock(autospec=True)
-            telemetry_handler.stopped = MagicMock(return_value=False)
-            telemetry_handler.enqueue_event = MagicMock(wraps=event_list.append)
-        extension_telemetry_processor = _ProcessExtensionEvents(telemetry_handler)
-        extension_telemetry_processor.event_list = event_list
-        yield extension_telemetry_processor
+        with patch("azurelinuxagent.ga.collect_telemetry_events.NUM_OF_EVENT_FILE_RETRIES", 1):
+            event_list = []
+            if not telemetry_handler:
+                telemetry_handler = MagicMock(autospec=True)
+                telemetry_handler.stopped = MagicMock(return_value=False)
+                telemetry_handler.enqueue_event = MagicMock(wraps=event_list.append)
+            extension_telemetry_processor = _ProcessExtensionEvents(telemetry_handler)
+            extension_telemetry_processor.event_list = event_list
+            yield extension_telemetry_processor
 
     def _assert_handler_data_in_event_list(self, telemetry_events, ext_names_with_count, expected_count=None):
 

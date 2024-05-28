@@ -36,7 +36,7 @@ from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters_and_protocal, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
@@ -346,7 +346,7 @@ class UpdateHandler(object):
             self._initialize_goal_state(protocol)
 
             # Initialize the common parameters for telemetry events
-            initialize_event_logger_vminfo_common_parameters(protocol)
+            initialize_event_logger_vminfo_common_parameters_and_protocal(protocol)
 
             # Send telemetry for the OS-specific info.
             add_event(AGENT_NAME, op=WALAEventOperation.OSInfo, message=os_info_msg)

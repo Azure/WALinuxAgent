@@ -171,7 +171,6 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             contained_id = create_event_and_return_container_id()
             self.assertEqual(contained_id, '11111111-2222-3333-4444-555555555555', "Incorrect container ID")
 
-
     def test_add_event_should_handle_event_errors(self):
         with patch("azurelinuxagent.common.utils.fileutil.mkdir", side_effect=OSError):
             with patch('azurelinuxagent.common.logger.periodic_error') as mock_logger_periodic_error:
@@ -360,7 +359,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
                            version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True, force=False)
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
-                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True)
+                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True, immediate_flush=False)
 
     @patch("azurelinuxagent.common.event.datetime")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -368,14 +367,14 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         event.__event_logger__.reset_periodic()
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", message="FauxEventMessage")
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Unknown, is_success=True, duration=0,
-                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True)
+                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True, immediate_flush=False)
 
     @patch("azurelinuxagent.common.event.EventLogger.add_event")
     def test_add_event_default_variables(self, mock_add_event):
         add_event('test', message='test event')
         mock_add_event.assert_called_once_with('test', duration=0, is_success=True, log_event=True,
                                                message='test event', op=WALAEventOperation.Unknown,
-                                               version=str(CURRENT_VERSION))
+                                               version=str(CURRENT_VERSION), immediate_flush=False)
 
     def test_collect_events_should_delete_event_files(self):
         add_event(name='Event1', op=TestEvent._Operation)
@@ -399,6 +398,40 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         for filename in os.listdir(self.event_dir):
             self.assertTrue(filename.endswith(AGENT_EVENT_FILE_EXTENSION),
                 'Event file does not have the correct extension ({0}): {1}'.format(AGENT_EVENT_FILE_EXTENSION, filename))
+
+    def test_add_event_flush_immediately(self):
+        def http_post_handler(url, body, **__):
+            if self.is_telemetry_request(url):
+                http_post_handler.request_body = body
+                return MockHttpResponse(status=200)
+            return None
+        http_post_handler.request_body = None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler):
+            expected_message = 'test event'
+            add_event('test', message=expected_message, op=TestEvent._Operation, immediate_flush=True)
+
+            event_message = self._get_event_message_from_http_request_body(http_post_handler.request_body)
+
+            self.assertEqual(event_message, expected_message,
+                         "The Message in the HTTP request does not match the Message in the add_event")
+
+            # If immediate_flush is set, the event should send to wireserver directly and file should not be created
+            self.assertTrue(len(self._collect_event_files()) == 0)
+
+    def test_add_event_flush_fails(self):
+        def http_post_handler(url, **__):
+            if self.is_telemetry_request(url):
+                return MockHttpResponse(status=500)
+            return None
+
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler):
+            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_RETRIES", 1):
+                expected_message = 'test event'
+                add_event('test', message=expected_message, op=TestEvent._Operation, immediate_flush=True)
+
+                # In case of failure, the event file should be created
+                self.assertTrue(len(self._collect_event_files()) == 1)
 
     @staticmethod
     def _get_event_message(evt):
@@ -424,27 +457,29 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         self._create_test_event_file("custom_script_2.tld")  # another valid event
 
         with patch("azurelinuxagent.common.event.add_event") as mock_add_event:
-            event_list = self._collect_events()
+            # mock the max retries on parsing invalid json to avoid the test run delays
+            with patch("azurelinuxagent.ga.collect_telemetry_events.NUM_OF_EVENT_FILE_RETRIES", 1):
+                event_list = self._collect_events()
 
-            self.assertEqual(
-                len(event_list), 2)
-            self.assertTrue(
-                all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list),
-                "The valid events were not found")
+                self.assertEqual(
+                    len(event_list), 2)
+                self.assertTrue(
+                    all(TestEvent._get_event_message(evt) == "A test telemetry message." for evt in event_list),
+                    "The valid events were not found")
 
-            invalid_events = []
-            total_dropped_count = 0
-            for args, kwargs in mock_add_event.call_args_list:  # pylint: disable=unused-variable
-                match = re.search(r"DroppedEventsCount: (\d+)", kwargs['message'])
-                if match is not None:
-                    invalid_events.append(kwargs['op'])
-                    total_dropped_count += int(match.groups()[0])
+                invalid_events = []
+                total_dropped_count = 0
+                for args, kwargs in mock_add_event.call_args_list:  # pylint: disable=unused-variable
+                    match = re.search(r"DroppedEventsCount: (\d+)", kwargs['message'])
+                    if match is not None:
+                        invalid_events.append(kwargs['op'])
+                        total_dropped_count += int(match.groups()[0])
 
-            self.assertEqual(3, total_dropped_count, "Total dropped events dont match")
-            self.assertIn(WALAEventOperation.CollectEventErrors, invalid_events,
-                          "{0} errors not reported".format(WALAEventOperation.CollectEventErrors))
-            self.assertIn(WALAEventOperation.CollectEventUnicodeErrors, invalid_events,
-                          "{0} errors not reported".format(WALAEventOperation.CollectEventUnicodeErrors))
+                self.assertEqual(3, total_dropped_count, "Total dropped events dont match")
+                self.assertIn(WALAEventOperation.CollectEventErrors, invalid_events,
+                              "{0} errors not reported".format(WALAEventOperation.CollectEventErrors))
+                self.assertIn(WALAEventOperation.CollectEventUnicodeErrors, invalid_events,
+                              "{0} errors not reported".format(WALAEventOperation.CollectEventUnicodeErrors))
 
     def test_save_event_rollover(self):
         # We keep 1000 events only, and the older ones are removed.
@@ -638,6 +673,9 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         shutil.copy(source_file_path, target_file_path)
         return target_file_path
 
+    def _collect_test_event_files(self, file_name):
+        return [os.path.join(self.event_dir, f) for f in os.listdir(self.event_dir) if file_name in f]
+
     @staticmethod
     def _get_file_creation_timestamp(file):  # pylint: disable=redefined-builtin
         return  TestEvent._datetime_to_event_timestamp(datetime.fromtimestamp(os.path.getmtime(file)))
@@ -733,6 +771,39 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
     def test_collect_events_should_ignore_extra_parameters_in_extension_events(self):
         self._assert_extension_event_includes_all_parameters_in_the_telemetry_schema('custom_script_extra_parameters.tld')
 
+    @staticmethod
+    def _get_event_message_from_http_request_body(event_body):
+        # The XML for the event is sent over as a CDATA element ("Event") in the request's body
+        http_request_body = event_body if (
+                event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body)
+        request_body_xml_doc = textutil.parse_doc(http_request_body)
+
+        event_node = textutil.find(request_body_xml_doc, "Event")
+        if event_node is None:
+            raise ValueError('Could not find the Event node in the XML document')
+        if len(event_node.childNodes) != 1:
+            raise ValueError('The Event node in the XML document should have exactly 1 child')
+
+        event_node_first_child = event_node.childNodes[0]
+        if event_node_first_child.nodeType != xml.dom.Node.CDATA_SECTION_NODE:
+            raise ValueError('The Event node contents should be CDATA')
+
+        event_node_cdata = event_node_first_child.nodeValue
+
+        # The CDATA will contain a sequence of "<Param Name='foo' Value='bar'/>" nodes, which
+        # correspond to the parameters of the telemetry event.  Wrap those into a "Helper" node
+        # and extract the "Message"
+        event_xml_text = '<?xml version="1.0"?><Helper>{0}</Helper>'.format(event_node_cdata)
+        event_xml_doc = textutil.parse_doc(event_xml_text)
+        helper_node = textutil.find(event_xml_doc, "Helper")
+
+        for child in helper_node.childNodes:
+            if child.getAttribute('Name') == GuestAgentExtensionEventsSchema.Message:
+                return child.getAttribute('Value')
+
+        raise ValueError(
+            'Could not find the Message for the telemetry event. Request body: {0}'.format(http_request_body))
+
     def test_report_event_should_encode_call_stack_correctly(self):
         """
         The Message in some telemetry events that include call stacks are being truncated in Kusto. While the issue doesn't seem
@@ -750,37 +821,6 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
             raise ValueError('Could not find the Message for the telemetry event in {0}'.format(event_file))
 
-        def get_event_message_from_http_request_body(event_body):
-            # The XML for the event is sent over as a CDATA element ("Event") in the request's body
-            http_request_body = event_body if (
-                    event_body is None or type(event_body) is ustr) else textutil.str_to_encoded_ustr(event_body)
-            request_body_xml_doc = textutil.parse_doc(http_request_body)
-
-            event_node = textutil.find(request_body_xml_doc, "Event")
-            if event_node is None:
-                raise ValueError('Could not find the Event node in the XML document')
-            if len(event_node.childNodes) != 1:
-                raise ValueError('The Event node in the XML document should have exactly 1 child')
-
-            event_node_first_child = event_node.childNodes[0]
-            if event_node_first_child.nodeType != xml.dom.Node.CDATA_SECTION_NODE:
-                raise ValueError('The Event node contents should be CDATA')
-
-            event_node_cdata = event_node_first_child.nodeValue
-
-            # The CDATA will contain a sequence of "<Param Name='foo' Value='bar'/>" nodes, which
-            # correspond to the parameters of the telemetry event.  Wrap those into a "Helper" node
-            # and extract the "Message"
-            event_xml_text = '<?xml version="1.0"?><Helper>{0}</Helper>'.format(event_node_cdata)
-            event_xml_doc = textutil.parse_doc(event_xml_text)
-            helper_node = textutil.find(event_xml_doc, "Helper")
-
-            for child in helper_node.childNodes:
-                if child.getAttribute('Name') == GuestAgentExtensionEventsSchema.Message:
-                    return child.getAttribute('Value')
-
-            raise ValueError('Could not find the Message for the telemetry event. Request body: {0}'.format(http_request_body))
-
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
                 http_post_handler.request_body = body
@@ -795,7 +835,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             event_list = self._collect_events()
             self._report_events(protocol, event_list)
 
-            event_message = get_event_message_from_http_request_body(http_post_handler.request_body)
+            event_message = self._get_event_message_from_http_request_body(http_post_handler.request_body)
 
             self.assertEqual(event_message, expected_message, "The Message in the HTTP request does not match the Message in the event's *.tld file")
 
@@ -809,32 +849,118 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         http_post_handler.request_body = None
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
-            test_messages = [
-                'Non-English message -  此文字不是英文的',
-                "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
-                "The quick brown fox jumps over the lazy dog",
-                "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
-                "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
-                "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
-                "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
-                "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
-                "Árvíztűrő tükörfúrógép",
-                "Kæmi ný öxi hér ykist þjófum nú bæði víl og ádrepa",
-                "Sævör grét áðan því úlpan var ónýt",
-                "いろはにほへとちりぬるを わかよたれそつねならむ うゐのおくやまけふこえて あさきゆめみしゑひもせす",
-                "? דג סקרן שט בים מאוכזב ולפתע מצא לו חברה איך הקליטה"
-                "Pchnąć w tę łódź jeża lub ośm skrzyń fig",
-                "Normal string event"
-            ]
-            for msg in test_messages:
-                add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
-                event_list = self._collect_events()
-                self._report_events(protocol, event_list)
-                # In Py2, encode() produces a str and in py3 it produces a bytes string.
-                # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
-                self.assertIsInstance(http_post_handler.request_body, bytes, "The Event request body should be encoded")
-                self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'), http_post_handler.request_body,
-                              "Encoded message not found in body")
+            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", 50):
+                test_messages = [
+                    'Non-English message -  此文字不是英文的',
+                    "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
+                    "The quick brown fox jumps over the lazy dog",
+                    "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
+                    "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
+                    "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
+                    "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
+                    "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
+                    "Árvíztűrő tükörfúrógép",
+                    "Kæmi ný öxi hér ykist þjófum nú bæði víl og ádrepa",
+                    "Sævör grét áðan því úlpan var ónýt",
+                    "いろはにほへとちりぬるを わかよたれそつねならむ うゐのおくやまけふこえて あさきゆめみしゑひもせす",
+                    "? דג סקרן שט בים מאוכזב ולפתע מצא לו חברה איך הקליטה"
+                    "Pchnąć w tę łódź jeża lub ośm skrzyń fig",
+                    "Normal string event"
+                ]
+                for msg in test_messages:
+                    add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
+                    event_list = self._collect_events()
+                    self._report_events(protocol, event_list)
+                    # In Py2, encode() produces a str and in py3 it produces a bytes string.
+                    # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
+                    self.assertIsInstance(http_post_handler.request_body, bytes, "The Event request body should be encoded")
+                    self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'), http_post_handler.request_body,
+                                  "Encoded message not found in body")
+
+    def test_report_event_should_honor_telemetry_api_limits(self):
+        def http_post_handler(url, body, **__):
+            if self.is_telemetry_request(url):
+                http_post_handler.request_body = body
+                return MockHttpResponse(status=200)
+            return None
+        http_post_handler.request_body = None
+
+        max_telemetry_calls_per_interval = 2
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
+            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", max_telemetry_calls_per_interval):
+                with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_DELAY", 0.1):
+                    with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_INTERVAL", 0.2):
+                        with patch("azurelinuxagent.common.protocol.wire.logger.verbose") as mock_logger:
+                            test_messages = [
+                                'Non-English message -  此文字不是英文的',
+                                "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
+                                "The quick brown fox jumps over the lazy dog",
+                                "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
+                                "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
+                                "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
+                                "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
+                                "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
+                                "Árvíztűrő tükörfúrógép"
+                            ]
+
+                            for msg in test_messages:
+                                add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
+                                event_list = self._collect_events()
+                                self._report_events(protocol, event_list)
+                                # In Py2, encode() produces a str and in py3 it produces a bytes string.
+                                # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
+                                self.assertIsInstance(http_post_handler.request_body, bytes,
+                                                      "The Event request body should be encoded")
+                                self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'),
+                                              http_post_handler.request_body,
+                                              "Encoded message not found in body")
+                            call_args = [args for args, _ in mock_logger.call_args_list if
+                                         "Reached telemetry api throttling limit: {0}".format(max_telemetry_calls_per_interval) in args[0]]
+                            self.assertTrue(
+                                len(call_args) >= 1 and len(call_args[0]) == 1 and "Reached telemetry api throttling limit" in call_args[0][0],
+                                "Expected telemetry api throttling limit log. Log calls: {0}".format(
+                                    mock_logger.call_args_list))
+
+    def test_report_event_should_not_wait_for_next_telemetry_api_call(self):
+        def http_post_handler(url, body, **__):
+            if self.is_telemetry_request(url):
+                http_post_handler.request_body = body
+                return MockHttpResponse(status=200)
+            return None
+        http_post_handler.request_body = None
+
+        max_telemetry_calls_per_interval = 50
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
+            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", max_telemetry_calls_per_interval):
+                with patch("azurelinuxagent.common.protocol.wire.logger.verbose") as mock_logger:
+                    test_messages = [
+                        'Non-English message -  此文字不是英文的',
+                        "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
+                        "The quick brown fox jumps over the lazy dog",
+                        "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
+                        "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
+                        "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
+                        "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
+                        "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
+                        "Árvíztűrő tükörfúrógép"
+                    ]
+
+                    for msg in test_messages:
+                        add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
+                        event_list = self._collect_events()
+                        self._report_events(protocol, event_list)
+                        # In Py2, encode() produces a str and in py3 it produces a bytes string.
+                        # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
+                        self.assertIsInstance(http_post_handler.request_body, bytes,
+                                              "The Event request body should be encoded")
+                        self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'),
+                                      http_post_handler.request_body,
+                                      "Encoded message not found in body")
+                    call_args = [args for args, _ in mock_logger.call_args_list if
+                                 "Reached telemetry api throttling limit: {0}".format(
+                                     max_telemetry_calls_per_interval) in args[0]]
+                    self.assertTrue(len(call_args) == 0, "Expected no telemetry api throttling limit log. Log calls: {0}".format(
+                        mock_logger.call_args_list))
 
 
 class TestMetrics(AgentTestCase):

@@ -27,7 +27,7 @@ from datetime import datetime
 from heapq import heappush, heappop
 
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
-from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters
+from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters_and_protocal
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
@@ -108,7 +108,7 @@ class LogCollector(object):
         protocol = get_protocol_util().get_protocol(init_goal_state=False)
         protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
         # Initialize the common parameters for telemetry events
-        initialize_event_logger_vminfo_common_parameters(protocol)
+        initialize_event_logger_vminfo_common_parameters_and_protocal(protocol)
 
     @staticmethod
     def _run_shell_command(command, stdout=subprocess.PIPE, log_output=False):
