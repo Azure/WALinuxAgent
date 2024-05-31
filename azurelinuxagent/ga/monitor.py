@@ -22,7 +22,7 @@ import threading
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-from azurelinuxagent.ga.cgroup import MetricValue, MetricsCategory, MetricsCounter
+from azurelinuxagent.ga.controllermetrics import MetricValue, MetricsCategory, MetricsCounter
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState

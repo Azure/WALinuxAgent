@@ -122,7 +122,9 @@ _MOCKED_COMMANDS_HYBRID = [
 
 _MOCKED_FILES_V1 = [
     ("/proc/self/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_self_cgroup')),
-    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_pid_cgroup'))
+    (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v1', 'proc_pid_cgroup')),
+    (r"/sys/fs/cgroup/cpu,cpuacct/system.slice/walinuxagent.service/cgroup.procs", os.path.join(data_dir, 'cgroups', 'cgroup.procs')),
+    (r"/sys/fs/cgroup/memory/system.slice/walinuxagent.service/cgroup.procs", os.path.join(data_dir, 'cgroups', 'cgroup.procs'))
 ]
 
 _MOCKED_FILES_V2 = [
@@ -130,7 +132,8 @@ _MOCKED_FILES_V2 = [
     (r"/proc/[0-9]+/cgroup", os.path.join(data_dir, 'cgroups', 'v2', 'proc_pid_cgroup')),
     ("/sys/fs/cgroup/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control')),
     ("/sys/fs/cgroup/azure.slice/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control')),
-    ("/sys/fs/cgroup/azure.slice/walinuxagent.service/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control_empty'))
+    ("/sys/fs/cgroup/azure.slice/walinuxagent.service/cgroup.subtree_control", os.path.join(data_dir, 'cgroups', 'v2', 'sys_fs_cgroup_cgroup.subtree_control_empty')),
+    (r"/sys/fs/cgroup/system.slice/walinuxagent.service/cgroup.procs", os.path.join(data_dir, 'cgroups', 'cgroup.procs'))
 ]
 
 _MOCKED_FILES_HYBRID = [

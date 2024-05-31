@@ -25,7 +25,7 @@ import datetime
 from assertpy import fail
 
 from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, check_log_message, get_unit_cgroup_paths, AGENT_SERVICE_NAME
+from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, check_log_message, get_unit_cgroup_path, AGENT_SERVICE_NAME
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 
@@ -62,8 +62,8 @@ def disable_agent_cgroups_with_unknown_process(pid):
     Note: System may kick the added process out of the cgroups, keeps adding until agent detect that process
     """
 
-    def unknown_process_found(cpu_cgroup):
-        cgroup_procs_path = os.path.join(cpu_cgroup, "cgroup.procs")
+    def unknown_process_found(cgroup_path):
+        cgroup_procs_path = os.path.join(cgroup_path, "cgroup.procs")
         log.info("Adding dummy process %s to cgroup.procs file %s", pid, cgroup_procs_path)
         try:
             with open(cgroup_procs_path, 'a') as f:
@@ -81,9 +81,9 @@ def disable_agent_cgroups_with_unknown_process(pid):
                 pid)), attempts=3)
         return found and retry_if_false(check_agent_quota_disabled, attempts=3)
 
-    cpu_cgroup, _ = get_unit_cgroup_paths(AGENT_SERVICE_NAME)
+    cgroup_path = get_unit_cgroup_path(AGENT_SERVICE_NAME)
 
-    found: bool = retry_if_false(lambda: unknown_process_found(cpu_cgroup), attempts=3)
+    found: bool = retry_if_false(lambda: unknown_process_found(cgroup_path), attempts=3)
     if not found:
         fail("The agent did not detect unknown process: {0}".format(pid))
 

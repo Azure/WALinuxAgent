@@ -27,7 +27,7 @@ import time
 import threading
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.ga.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
+from azurelinuxagent.ga.controllermetrics import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuMetrics
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, DisableCgroups
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
@@ -272,7 +272,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
                                           'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuCgroup('Microsoft.CPlat.Extension',
+                    CpuMetrics('Microsoft.CPlat.Extension',
                               '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
                 configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
@@ -369,10 +369,10 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 configurator.setup_extension_slice(extension_name=extension_name, cpu_quota=5)
                 configurator.set_extension_services_cpu_memory_quota(service_list)
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                    CpuMetrics('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
                                           'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuCgroup('Microsoft.CPlat.Extension',
+                    CpuMetrics('Microsoft.CPlat.Extension',
                               '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
                 configurator.disable("UNIT TEST", DisableCgroups.ALL)
@@ -717,7 +717,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             with patch("os.path.exists") as mock_path:
                 mock_path.return_value = True
-                CGroupsTelemetry.track_cgroup(CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
+                CGroupsTelemetry.track_cgroup(CpuMetrics('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
                 configurator.stop_tracking_extension_services_cgroups(service_list)
 
                 tracked = CGroupsTelemetry._tracked
@@ -776,7 +776,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             with patch("os.path.exists") as mock_path:
                 mock_path.side_effect = side_effect
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                    CpuMetrics('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 configurator.stop_tracking_unit_cgroups("extension.service")
 
                 tracked = CGroupsTelemetry._tracked
@@ -911,7 +911,7 @@ exit 0
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
             other_processes = [1, get_completed_process()] + extension_processes
 
-            with patch("azurelinuxagent.ga.cgroupapi._SystemdCgroupApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
+            with patch("azurelinuxagent.ga.cgroupapi.CgroupV1.get_processes", return_value=agent_processes + other_processes):
                 with self.assertRaises(CGroupsException) as context_manager:
                     configurator._check_processes_in_agent_cgroup()
 
@@ -1012,7 +1012,7 @@ exit 0
 
         with self.assertRaises(AgentMemoryExceededException) as context_manager:
             with self._get_cgroup_configurator() as configurator:
-                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_tracked_metrics") as tracked_metrics:
+                with patch("azurelinuxagent.ga.controllermetrics.MemoryMetrics.get_tracked_metrics") as tracked_metrics:
                     tracked_metrics.return_value = metrics
                     configurator.check_agent_memory_usage()
 

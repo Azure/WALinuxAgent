@@ -7,7 +7,7 @@ from assertpy import assert_that, fail
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, SystemdCgroupApiv1
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -164,9 +164,14 @@ def check_log_message(message, after_timestamp=datetime.datetime.min):
     return False
 
 
-def get_unit_cgroup_paths(unit_name):
+def get_unit_cgroup_path(unit_name):
     """
-    Returns the cgroup paths for the given unit
+    Returns the cgroup path for the given unit. For v1, gets the path of the cpu controller.
     """
     cgroups_api = get_cgroup_api()
-    return cgroups_api.get_unit_cgroup_paths(unit_name)
+    unit_controlgroup_path = systemd.get_unit_property(unit_name, "ControlGroup")
+
+    if isinstance(cgroups_api, SystemdCgroupApiv1):
+        return os.path.join(cgroups_api.get_controller_mountpoints().get('cpu,cpuacct'), unit_controlgroup_path[1:])
+    else:
+        return os.path.join(cgroups_api._get_root_cgroup_path(), unit_controlgroup_path)

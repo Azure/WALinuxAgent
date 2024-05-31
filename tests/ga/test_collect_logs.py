@@ -18,7 +18,7 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger, conf
-from azurelinuxagent.ga.cgroup import CpuCgroup, MemoryCgroup, MetricValue
+from azurelinuxagent.ga.controllermetrics import CpuMetrics, MemoryMetrics, MetricValue
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
@@ -197,8 +197,8 @@ def _create_log_collector_monitor_handler(iterations=1):
                     monitor_log_collector.join()
 
                 cgroups = [
-                    CpuCgroup("test", "dummy_cpu_path"),
-                    MemoryCgroup("test", "dummy_memory_path")
+                    CpuMetrics("test", "dummy_cpu_path"),
+                    MemoryMetrics("test", "dummy_memory_path")
                 ]
                 monitor_log_collector = get_log_collector_monitor_handler(cgroups)
                 monitor_log_collector.run_and_wait = run_and_wait
