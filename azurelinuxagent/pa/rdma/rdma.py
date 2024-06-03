@@ -377,8 +377,12 @@ class RDMADeviceHandler(object):
                 continue
 
             mac_addr = mac_addr.upper()
-
-            match = re.match(r".+(\w\w):(\w\w):(\w\w):\w\w:\w\w:(\w\w):(\w\w):(\w\w)\n", mac_addr)
+            
+            # if this is an IB interface, match IB-specific regex
+            if re.match(r"ib\w+", nic):
+                match = re.match(r".+(\w\w):(\w\w):(\w\w):\w\w:\w\w:(\w\w):(\w\w):(\w\w)\n", mac_addr)
+            else:
+                match = re.match(r"^(\w\w):(\w\w):(\w\w):(\w\w):(\w\w):(\w\w)$", mac_addr)
             if not match:
                 logger.error("RDMA: failed to parse address for device {0} address {1}".format(nic, mac_addr))
                 continue
