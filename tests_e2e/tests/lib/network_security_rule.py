@@ -17,7 +17,7 @@
 
 import json
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
