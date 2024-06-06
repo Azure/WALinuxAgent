@@ -284,6 +284,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
         fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
 
+        # pylint: disable=contextmanager-generator-missing-cleanup
         with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
@@ -1070,6 +1071,7 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
         dependent_sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
         independent_sc_ext = extension_emulator(name="Microsoft.Azure.Geneva.GenevaMonitoring", version="1.1.0")
 
+        # pylint: disable=contextmanager-generator-missing-cleanup
         with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
             yield exthandlers_handler, protocol, no_of_extensions, first_ext, second_ext, third_ext, dependent_sc_ext, independent_sc_ext
 

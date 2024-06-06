@@ -1200,6 +1200,7 @@ class TestUpdate(UpdateTestCase):
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
         try:
+            # pylint: disable=contextmanager-generator-missing-cleanup
             with _get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT, autoupdate_enabled=False) as (update_handler, protocol):
                 with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                     update_handler.run(debug=True)
@@ -1483,7 +1484,7 @@ class TestAgentUpgrade(UpdateTestCase):
                              reload_conf=None, autoupdate_frequency=0.001, hotfix_frequency=1.0, normal_frequency=2.0):
 
         test_data = DATA_FILE if test_data is None else test_data
-
+        # pylint: disable=contextmanager-generator-missing-cleanup
         with _get_update_handler(iterations, test_data) as (update_handler, protocol):
 
             protocol.aggregate_status = None
