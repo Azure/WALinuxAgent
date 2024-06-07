@@ -217,14 +217,22 @@ class AddFirewallRules(object):
         return False
 
     @staticmethod
-    def verify_iptables_rules_exist(wait, dst_ip, uid):
-        check_cmd_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
-        check_cmd_accept_rule = AddFirewallRules.get_wire_root_accept_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, uid,
-                                                                           wait=wait)
-        check_cmd_drop_rule = AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
+    def get_missing_iptables_rules(wait, dst_ip, uid):
+        missing = []
 
-        return AddFirewallRules.__execute_check_command(check_cmd_tcp_rule) and AddFirewallRules.__execute_check_command(check_cmd_accept_rule) \
-               and AddFirewallRules.__execute_check_command(check_cmd_drop_rule)
+        check_cmd_tcp_rule = AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
+        if not AddFirewallRules.__execute_check_command(check_cmd_tcp_rule):
+            missing.append("ACCEPT DNS")
+
+        check_cmd_accept_rule = AddFirewallRules.get_wire_root_accept_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, uid, wait=wait)
+        if not AddFirewallRules.__execute_check_command(check_cmd_accept_rule):
+            missing.append("ACCEPT")
+
+        check_cmd_drop_rule = AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND, dst_ip, wait=wait)
+        if not AddFirewallRules.__execute_check_command(check_cmd_drop_rule):
+            missing.append("DROP")
+
+        return missing
 
     @staticmethod
     def __execute_firewall_commands(dst_ip, uid, command=APPEND_COMMAND, firewalld_command="", wait=""):
