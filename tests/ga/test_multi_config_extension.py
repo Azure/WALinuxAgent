@@ -284,7 +284,8 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
         fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
 
-        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
+        # In _setup_test_env() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):  # pylint: disable=contextmanager-generator-missing-cleanup
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
@@ -1070,7 +1071,8 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
         dependent_sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
         independent_sc_ext = extension_emulator(name="Microsoft.Azure.Geneva.GenevaMonitoring", version="1.1.0")
 
-        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
+        # In _setup_test_env() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):  # pylint: disable=contextmanager-generator-missing-cleanup
             yield exthandlers_handler, protocol, no_of_extensions, first_ext, second_ext, third_ext, dependent_sc_ext, independent_sc_ext
 
     def test_it_should_process_dependency_chain_extensions_properly(self):
