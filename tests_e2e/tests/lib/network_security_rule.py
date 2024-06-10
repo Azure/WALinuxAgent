@@ -76,8 +76,14 @@ class NetworkSecurityRule:
                 "securityRules": []
             }}
         }}""")
-        nsg_reference = "network_security_groups"
-        resources[nsg_reference] = network_security_group
+
+        # resources is a dictionary in LISA's ARM template, but a list in the template for scale sets
+        if isinstance(resources, dict):
+            nsg_reference = "network_security_groups"
+            resources[nsg_reference] = network_security_group
+        else:
+            nsg_reference = f"[resourceId('Microsoft.Network/networkSecurityGroups', '{self._NETWORK_SECURITY_GROUP}')]"
+            resources.append(network_security_group)
 
         #
         # Add a dependency on the NSG to the virtual network
