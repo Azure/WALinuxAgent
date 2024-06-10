@@ -58,7 +58,8 @@ class UpdateArmTemplate(ABC):
     @staticmethod
     def get_lisa_function(template: Dict[str, Any], function_name: str) -> Dict[str, Any]:
         """
-        Looks for the given function name in the LISA namespace and returns its definition. Raises KeyError if the function is not found.
+        Looks for the given function name in the bicep namespace and returns its definition. Raises KeyError if the function is not found.
+        Note: LISA leverages the bicep language to define the ARM templates.Now namespace is changed to __bicep instead lisa
         """
         #
         # NOTE: LISA's functions are in the "lisa" namespace, for example:
@@ -96,7 +97,7 @@ class UpdateArmTemplate(ABC):
             name = namespace.get("namespace")
             if name is None:
                 raise Exception(f'Cannot find "namespace" in the LISA template: {namespace}')
-            if name == "lisa":
+            if name == "__bicep":
                 lisa_functions = namespace.get('members')
                 if lisa_functions is None:
                     raise Exception(f'Cannot find the members of the lisa namespace in the LISA template: {namespace}')
