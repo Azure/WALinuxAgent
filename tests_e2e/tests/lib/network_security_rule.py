@@ -55,7 +55,7 @@ class NetworkSecurityRule:
         self._get_network_security_group()["properties"]["securityRules"].append(security_rule)
 
     def _get_network_security_group(self) -> Dict[str, Any]:
-        resources: Dict[str, Dict[str, Any]] = self._template["resources"]
+        resources: Any = self._template["resources"]
         #
         # If the NSG already exists, just return it
         #
