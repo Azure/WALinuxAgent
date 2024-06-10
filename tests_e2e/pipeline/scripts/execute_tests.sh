@@ -74,6 +74,8 @@ IP_ADDRESS=$(curl -4 ifconfig.io/ip)
 
 # certificate location in the container
 AZURE_CLIENT_CERTIFICATE_PATH="/home/waagent/app/cert.pem"
+# Need to set this to True if we sue SNI based authentication for certificate
+AZURE_CLIENT_SEND_CERTIFICATE_CHAIN="True"
 
 docker run --rm \
     --volume "$BUILD_SOURCESDIRECTORY:/home/waagent/WALinuxAgent" \
@@ -83,6 +85,7 @@ docker run --rm \
     --env AZURE_CLIENT_ID \
     --env AZURE_TENANT_ID \
     --env AZURE_CLIENT_CERTIFICATE_PATH=$AZURE_CLIENT_CERTIFICATE_PATH \
+    --env AZURE_CLIENT_SEND_CERTIFICATE_CHAIN=$AZURE_CLIENT_SEND_CERTIFICATE_CHAIN \
     waagenttests.azurecr.io/waagenttests \
     bash --login -c \
       "lisa \
