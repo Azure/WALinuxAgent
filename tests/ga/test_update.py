@@ -1200,7 +1200,8 @@ class TestUpdate(UpdateTestCase):
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
         try:
-            with _get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT, autoupdate_enabled=False) as (update_handler, protocol):
+            # In _get_update_handler() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+            with _get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT, autoupdate_enabled=False) as (update_handler, protocol):  # pylint: disable=contextmanager-generator-missing-cleanup
                 with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                     update_handler.run(debug=True)
                     expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
@@ -1483,8 +1484,8 @@ class TestAgentUpgrade(UpdateTestCase):
                              reload_conf=None, autoupdate_frequency=0.001, hotfix_frequency=1.0, normal_frequency=2.0):
 
         test_data = DATA_FILE if test_data is None else test_data
-
-        with _get_update_handler(iterations, test_data) as (update_handler, protocol):
+        # In _get_update_handler() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with _get_update_handler(iterations, test_data) as (update_handler, protocol):  # pylint: disable=contextmanager-generator-missing-cleanup
 
             protocol.aggregate_status = None
 

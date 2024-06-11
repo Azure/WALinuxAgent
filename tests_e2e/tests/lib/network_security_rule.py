@@ -17,7 +17,7 @@
 
 import json
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from tests_e2e.tests.lib.update_arm_template import UpdateArmTemplate
 
@@ -55,7 +55,7 @@ class NetworkSecurityRule:
         self._get_network_security_group()["properties"]["securityRules"].append(security_rule)
 
     def _get_network_security_group(self) -> Dict[str, Any]:
-        resources: List[Dict[str, Any]] = self._template["resources"]
+        resources: Any = self._template["resources"]
         #
         # If the NSG already exists, just return it
         #
@@ -76,14 +76,20 @@ class NetworkSecurityRule:
                 "securityRules": []
             }}
         }}""")
-        resources.append(network_security_group)
+
+        # resources is a dictionary in LISA's ARM template, but a list in the template for scale sets
+        if isinstance(resources, dict):
+            nsg_reference = "network_security_groups"
+            resources[nsg_reference] = network_security_group
+        else:
+            nsg_reference = f"[resourceId('Microsoft.Network/networkSecurityGroups', '{self._NETWORK_SECURITY_GROUP}')]"
+            resources.append(network_security_group)
 
         #
         # Add a dependency on the NSG to the virtual network
         #
         network_resource = UpdateArmTemplate.get_resource(resources, "Microsoft.Network/virtualNetworks")
         network_resource_dependencies = network_resource.get("dependsOn")
-        nsg_reference = f"[resourceId('Microsoft.Network/networkSecurityGroups', '{self._NETWORK_SECURITY_GROUP}')]"
         if network_resource_dependencies is None:
             network_resource["dependsOn"] = [nsg_reference]
         else:

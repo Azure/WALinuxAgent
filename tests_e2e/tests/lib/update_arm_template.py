@@ -16,7 +16,7 @@
 #
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 class UpdateArmTemplate(ABC):
@@ -32,24 +32,28 @@ class UpdateArmTemplate(ABC):
         """
 
     @staticmethod
-    def get_resource(resources: List[Dict[str, Any]], type_name: str) -> Any:
+    def get_resource(resources: Any, type_name: str) -> Any:
         """
-        Returns the first resource of the specified type in the given 'resources' list.
+        Returns the first resource of the specified type in the given 'resources' list/dict.
 
         Raises KeyError if no resource of the specified type is found.
         """
+        if isinstance(resources, dict):
+            resources = resources.values()
         for item in resources:
             if item["type"] == type_name:
                 return item
         raise KeyError(f"Cannot find a resource of type {type_name} in the ARM template")
 
     @staticmethod
-    def get_resource_by_name(resources: List[Dict[str, Any]], resource_name: str, type_name: str) -> Any:
+    def get_resource_by_name(resources: Any, resource_name: str, type_name: str) -> Any:
         """
-        Returns the first resource of the specified type and name in the given 'resources' list.
+        Returns the first resource of the specified type and name in the given 'resources' list/dict.
 
         Raises KeyError if no resource of the specified type and name is found.
         """
+        if isinstance(resources, dict):
+            resources = resources.values()
         for item in resources:
             if item["type"] == type_name and item["name"] == resource_name:
                 return item
@@ -58,7 +62,8 @@ class UpdateArmTemplate(ABC):
     @staticmethod
     def get_lisa_function(template: Dict[str, Any], function_name: str) -> Dict[str, Any]:
         """
-        Looks for the given function name in the LISA namespace and returns its definition. Raises KeyError if the function is not found.
+        Looks for the given function name in the bicep namespace and returns its definition. Raises KeyError if the function is not found.
+        Note: LISA leverages the bicep language to define the ARM templates.Now namespace is changed to __bicep instead lisa
         """
         #
         # NOTE: LISA's functions are in the "lisa" namespace, for example:
@@ -96,7 +101,7 @@ class UpdateArmTemplate(ABC):
             name = namespace.get("namespace")
             if name is None:
                 raise Exception(f'Cannot find "namespace" in the LISA template: {namespace}')
-            if name == "lisa":
+            if name == "__bicep":
                 lisa_functions = namespace.get('members')
                 if lisa_functions is None:
                     raise Exception(f'Cannot find the members of the lisa namespace in the LISA template: {namespace}')
