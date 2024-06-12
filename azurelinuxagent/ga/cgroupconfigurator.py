@@ -207,11 +207,11 @@ class CGroupConfigurator(object):
                 for metric in metrics:
                     for prop in metric.get_unit_properties():
                         log_cgroup_info('{0}: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
-                    CGroupsTelemetry.track_cgroup(metric)
                     if isinstance(metric, CpuMetrics):
                         self.__set_cpu_quota(conf.get_agent_cpu_quota())
                     elif isinstance(metric, MemoryMetrics):
                         self._agent_memory_metrics = metric
+                    CGroupsTelemetry.track_cgroup(metric)
 
             except Exception as exception:
                 log_cgroup_warning("Error initializing cgroups: {0}".format(ustr(exception)))
