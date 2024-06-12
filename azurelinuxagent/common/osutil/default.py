@@ -38,13 +38,13 @@ import time
 from pwd import getpwall
 
 from azurelinuxagent.common.exception import OSUtilError
-# 'crypt' was removed in Python 3.13; use legacycrypt instead
+# 'crypt' was removed in Python 3.13; use crypt-r instead
 if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
     try:
-        from legacycrypt import crypt
+        from crypt_r import crypt
     except ImportError:
         def crypt(password, salt):
-            raise OSUtilError("Please install the legacycrypt Python module to use this feature.")
+            raise OSUtilError("Please install the crypt-r Python module to use this feature.")
 else:
     from crypt import crypt  # pylint: disable=deprecated-module
 
