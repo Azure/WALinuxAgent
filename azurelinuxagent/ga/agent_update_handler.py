@@ -29,6 +29,14 @@ from azurelinuxagent.ga.rsm_version_updater import RSMVersionUpdater
 from azurelinuxagent.ga.self_update_version_updater import SelfUpdateVersionUpdater
 
 
+class UpdateMode(object):
+    """
+    Enum for Update modes
+    """
+    RSM = "RSM"
+    SelfUpdate = "SelfUpdate"
+
+
 def get_agent_update_handler(protocol):
     return AgentUpdateHandler(protocol)
 
@@ -138,6 +146,15 @@ class AgentUpdateHandler(object):
                     family, self._gs_id))
         return agent_family_manifests[0]
 
+    def get_current_update_mode(self):
+        """
+        Returns current update mode whether RSM or Self-Update
+        """
+        if isinstance(self._updater, RSMVersionUpdater):
+            return UpdateMode.RSM
+        else:
+            return UpdateMode.SelfUpdate
+
     def run(self, goal_state, ext_gs_updated):
 
         try:
@@ -180,6 +197,9 @@ class AgentUpdateHandler(object):
             self._updater.retrieve_agent_version(agent_family, goal_state)
 
             if not self._updater.is_retrieved_version_allowed_to_update(agent_family):
+                # Reset the last error report msg since when this condition met there is no issue with update, either requested
+                # version is same as current version or below than daemon version. In that case, we shouldn't report any error msg in the status report
+                self._last_attempted_update_error_msg = ""
                 return
             self._updater.log_new_agent_update_message()
             agent = self._updater.download_and_get_new_agent(self._protocol, agent_family, goal_state)
