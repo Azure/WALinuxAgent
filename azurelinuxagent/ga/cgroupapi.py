@@ -626,16 +626,18 @@ class CgroupV1(Cgroup):
         for controller in self.get_supported_controllers():
             controller_metrics = None
             controller_path = self._controller_paths.get(controller)
+            controller_mountpoint = self._controller_mountpoints.get(controller)
+
+            if controller_mountpoint is None:
+                log_cgroup_warning("{0} controller is not mounted; will not track metrics".format(controller, self._cgroup_name), send_event=False)
+                continue
 
             if controller_path is None:
                 log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track metrics".format(controller, self._cgroup_name), send_event=False)
                 continue
 
             if expected_relative_path is not None:
-                expected_path = ""
-                controller_mountpoint = self._controller_mountpoints[controller]
-                if controller_mountpoint is not None:
-                    expected_path = os.path.join(controller_mountpoint, expected_relative_path)
+                expected_path = os.path.join(controller_mountpoint, expected_relative_path)
                 if controller_path != expected_path:
                     log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track metrics. Actual cgroup path:[{2}] Expected:[{3}]".format(controller, self._cgroup_name, controller_path, expected_path), send_event=False)
                     continue
