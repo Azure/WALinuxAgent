@@ -629,7 +629,7 @@ class CgroupV1(Cgroup):
             controller_mountpoint = self._controller_mountpoints.get(controller)
 
             if controller_mountpoint is None:
-                log_cgroup_warning("{0} controller is not mounted; will not track metrics".format(controller, self._cgroup_name), send_event=False)
+                log_cgroup_warning("{0} controller is not mounted; will not track metrics".format(controller), send_event=False)
                 continue
 
             if controller_path is None:
