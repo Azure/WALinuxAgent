@@ -1,0 +1,44 @@
+{
+    "extensions": {
+        "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux": {
+            "signingInfo": {
+                "extensionSigned": false
+            }
+        }
+
+        ,
+        "Microsoft.OSTCExtensions.VMAccessForLinux": {
+            "signingInfo": {
+                "extensionSigned": false
+            }
+        }
+
+        ,
+        "Microsoft.CPlat.Core.LinuxPatchExtension": {
+            "signingInfo": {
+                "extensionSigned": false
+            }
+        }
+
+        ,
+        "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": {
+            "signingInfo": {
+                "extensionSigned": false
+            }
+        }
+
+        ,
+        "Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent": {
+            "signingInfo": {
+                "extensionSigned": false
+            }
+        }
+
+        ,
+        "Microsoft.CPlat.Core.RunCommandLinux": {
+            "signingInfo": {
+                "extensionSigned": false
+            }
+        }
+    }
+}

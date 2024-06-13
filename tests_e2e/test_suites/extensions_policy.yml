@@ -2,8 +2,8 @@
 # The test suite disables extension processing and verifies that extensions
 # are not processed, but the agent continues reporting status.
 #
-name: "ExtensionsDisabled"
+name: "ExtensionsPolicy"
 tests:
-  - "extensions_disabled/extensions_disabled.py"
+  - "extensions_policy/extensions_policy.py"
 images: "random(endorsed)"
 owns_vm: true

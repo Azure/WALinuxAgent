@@ -480,7 +480,7 @@ class ExtHandlersHandler(object):
         extensions_enabled = conf.get_extensions_enabled()
         if conf.get_extension_policy_enabled():
             engine = PolicyEngine()
-            logger.info("Policy engine initialized: {0}".format(engine))
+            logger.info("Policy engine successfully initialized: {0}".format(engine))
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
