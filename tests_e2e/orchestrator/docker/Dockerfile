@@ -67,7 +67,7 @@ RUN \
     cd $HOME                                                                                                  && \
     git clone https://github.com/microsoft/lisa.git                                                           && \
     cd lisa                                                                                                   && \
-    git checkout 2c16e32001fdefb9572dff61241451b648259dbf                                                     && \
+    git checkout 95c09ff7d5b6e71d1642a628607ac9bb441c69f5                                                     && \
                                                                                                                  \
     python3 -m pip install --upgrade pip                                                                      && \
     python3 -m pip install --editable .[azure,libvirt] --config-settings editable_mode=compat                 && \

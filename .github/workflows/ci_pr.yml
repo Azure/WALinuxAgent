@@ -139,16 +139,15 @@ jobs:
         # * On 3.9 pylint crashes when parsing azurelinuxagent/daemon/main.py (see https://github.com/pylint-dev/pylint/issues/9473), so we ignore it.
         # * 'no-self-use' ("R0201: Method could be a function") was moved to an optional extension on 3.8 and is no longer used by default. It needs
         #    to be suppressed for previous versions (3.0-3.7), though.
-        #
+        # * 'contextmanager-generator-missing-cleanup' are false positives if yield is used inside an if-else block for contextmanager generator functions.
+        #   (https://pylint.readthedocs.io/en/latest/user_guide/messages/warning/contextmanager-generator-missing-cleanup.html). 
+        #   This is not implemented on versions (3.0-3.7) Bad option value 'contextmanager-generator-missing-cleanup' (bad-option-value)
         PYLINT_OPTIONS="--rcfile=ci/pylintrc --jobs=0"
-        if [[ "${{ matrix.python-version }}" == "3.5" ]]; then
-          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=bad-option-value"
-        fi
         if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member --ignore=main.py"
         fi
         if [[ "${{ matrix.python-version }}" =~ ^3\.[0-7]$ ]]; then
-          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use"
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use,bad-option-value"
         fi
 
         echo "PYLINT_OPTIONS: $PYLINT_OPTIONS"
