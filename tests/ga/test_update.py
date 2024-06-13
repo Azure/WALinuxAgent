@@ -106,20 +106,16 @@ def _get_update_handler(iterations=1, test_data=None, protocol=None, autoupdate_
     This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
     main loop [iterations] no of times.
     """
-    # Added try-finally block to fix false positive pylint warning contextmanager-generator-missing-cleanup
-    try:
-        test_data = DATA_FILE if test_data is None else test_data
+    test_data = DATA_FILE if test_data is None else test_data
 
-        with patch.object(HostPluginProtocol, "is_default_channel", False):
-            if protocol is None:
-                with mock_wire_protocol(test_data) as mock_protocol:
-                    with mock_update_handler(mock_protocol, iterations=iterations, autoupdate_enabled=autoupdate_enabled) as update_handler:
-                        yield update_handler, mock_protocol
-            else:
-                with mock_update_handler(protocol, iterations=iterations, autoupdate_enabled=autoupdate_enabled) as update_handler:
-                    yield update_handler, protocol
-    finally:
-        pass
+    with patch.object(HostPluginProtocol, "is_default_channel", False):
+        if protocol is None:
+            with mock_wire_protocol(test_data) as mock_protocol:
+                with mock_update_handler(mock_protocol, iterations=iterations, autoupdate_enabled=autoupdate_enabled) as update_handler:
+                    yield update_handler, mock_protocol
+        else:
+            with mock_update_handler(protocol, iterations=iterations, autoupdate_enabled=autoupdate_enabled) as update_handler:
+                yield update_handler, protocol
 
 
 class UpdateTestCase(AgentTestCaseWithGetVmSizeMock):
