@@ -1074,10 +1074,12 @@ class WireClient(object):
             while not can_make_wireserver_call():
                 next_call_time = self.telemetry_endpoint_calls_timestamps[0] + timedelta(seconds=TELEMETRY_INTERVAL)
                 logger.verbose("Reached telemetry endpoint throttling limit: {0}, so waiting to make next call after : {1}".format(TELEMETRY_MAX_CALLS_PER_INTERVAL, next_call_time))
-                sleep_time = (next_call_time - datetime.utcnow()).total_seconds()
+                sleep_timedelta = next_call_time - datetime.utcnow()
+                # timedelta.total_seconds() is not available on Python 2.6, do the computation manually
+                sleep_seconds = ((sleep_timedelta.days * 24 * 3600 + sleep_timedelta.seconds) * 10.0 ** 6 + sleep_timedelta.microseconds) / 10.0 ** 6
                 # next_call_time might be in past when we are here, so check if sleep_time is negative
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+                if sleep_seconds > 0:
+                    time.sleep(sleep_seconds)
 
             current_time = datetime.utcnow()
             self.telemetry_endpoint_calls_timestamps.append(current_time)
