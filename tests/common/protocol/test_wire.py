@@ -481,7 +481,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
     @patch("azurelinuxagent.common.protocol.wire.logger.verbose")
-    def test_report_event_should_honor_telemetry_api_limits(self, mock_logger, mock_http_request, *args):  # pylint: disable=unused-argument
+    def test_report_event_should_honor_telemetry_endpoint_limits(self, mock_logger, mock_http_request, *args):  # pylint: disable=unused-argument
         mock_http_request.return_value = MockHttpResponse(200)
         event_list = []
         event_str = random_generator(2 ** 15)
@@ -491,18 +491,17 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
         with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", 2):
             with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_INTERVAL", 0.2):
-                with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_DELAY", 0.1):
-                    client = WireProtocol(WIRESERVER_URL).client
-                    client.report_event(self._get_telemetry_events_generator(event_list))
-                    self.assertEqual(mock_http_request.call_count, 3)
+                client = WireProtocol(WIRESERVER_URL).client
+                client.report_event(self._get_telemetry_events_generator(event_list))
+                self.assertEqual(mock_http_request.call_count, 3)
 
-                    call_args = [args for args, _ in mock_logger.call_args_list if
-                                 "Reached telemetry api throttling limit: 2" in args[0]]
-                    self.assertTrue(
-                        len(call_args) >= 1 and len(call_args[0]) == 1 and "Reached telemetry api throttling limit" in
-                        call_args[0][0],
-                        "Expected telemetry api throttling limit log. Log calls: {0}".format(
-                            mock_logger.call_args_list))
+                call_args = [args for args, _ in mock_logger.call_args_list if
+                             "Reached telemetry endpoint throttling limit: 2" in args[0]]
+                self.assertTrue(
+                    len(call_args) >= 1 and len(call_args[0]) == 1 and "Reached telemetry endpoint throttling limit" in
+                    call_args[0][0],
+                    "Expected telemetry endpoint throttling limit log. Log calls: {0}".format(
+                        mock_logger.call_args_list))
 
     @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_report_event_http_req_should_not_retry_itself_on_throttling_error(self, mock_http_request, *args):  # pylint: disable=unused-argument

@@ -551,7 +551,7 @@ class EventLogger(object):
         Flush the event to wireserver if immediate_flush to set to true, else
         save it disk if we fail to send or not required to flush immediately.
         """
-        report_success = immediate_flush
+        report_success = False
         if immediate_flush and self.protocol is not None:
             report_success = self.protocol.report_event([event])
             if not report_success:
@@ -684,7 +684,7 @@ def report_metric(category, counter, instance, value, log_event=False, immediate
                                                      "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
 
-def initialize_event_logger_vminfo_common_parameters_and_protocal(protocol, reporter=__event_logger__):
+def initialize_event_logger_vminfo_common_parameters_and_protocol(protocol, reporter=__event_logger__):
     # Initialize protocal for event logger to directly send events to wireserver
     reporter.protocol = protocol
     reporter.initialize_vminfo_common_parameters(protocol)

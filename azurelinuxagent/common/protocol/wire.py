@@ -64,12 +64,13 @@ MAX_EVENT_BUFFER_SIZE = 2 ** 16 - 2 ** 10
 _DOWNLOAD_TIMEOUT = timedelta(minutes=5)
 
 # telemetrydata api max calls per 15 secs
+# Considered conservative approach and set the value to 12
 TELEMETRY_MAX_CALLS_PER_INTERVAL = 12
 TELEMETRY_INTERVAL = 15  # 15 seconds
-TELEMETRY_DELAY = 1  # 1 second
 
 # The maximum number of times to retry sending telemetry data
 TELEMETRY_MAX_RETRIES = 3
+TELEMETRY_DELAY = 1  # 1 second
 
 
 class UploadError(HttpError):
@@ -544,7 +545,7 @@ class WireClient(object):
         self._goal_state = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
-        self.telemetry_api_calls_timestamps = deque()  # A thread-safe queue to store the timestamps of the telemetry API calls
+        self.telemetry_endpoint_calls_timestamps = deque()  # A thread-safe queue to store the timestamps of the telemetry endpoint calls
 
     def get_endpoint(self):
         return self._endpoint
@@ -1044,18 +1045,18 @@ class WireClient(object):
 
     def send_encoded_event(self, provider_id, event_str, encoding='utf8'):
         """
-        Construct the encoded event and url for telemetry api call
-        Before calling telemetry api, ensure calls are under throttling limits and checks if the number of telemetry api calls 12 in the last 15 seconds
+        Construct the encoded event and url for telemetry endpoint call
+        Before calling telemetry endpoint, ensure calls are under throttling limits and checks if the number of telemetry endpoint calls 12 in the last 15 seconds
         (Considered 12 instead actual limit 15 as a conservative approach plus it helps for directly flushing events not hit the throttling issues)
         (Trade off between delay vs successful event delivery for immediate_flush events)
         Note: throttling limit is 15 calls in 15 seconds
         """
         def can_make_wireserver_call():
             current_time = datetime.utcnow()
-            fifteen_seconds_ago = current_time - timedelta(seconds=TELEMETRY_INTERVAL)
-            while self.telemetry_api_calls_timestamps and self.telemetry_api_calls_timestamps[0] < fifteen_seconds_ago:
-                self.telemetry_api_calls_timestamps.popleft()
-            return len(self.telemetry_api_calls_timestamps) < TELEMETRY_MAX_CALLS_PER_INTERVAL
+            interval_start_timestamp = current_time - timedelta(seconds=TELEMETRY_INTERVAL)
+            while len(self.telemetry_endpoint_calls_timestamps) > 0 and self.telemetry_endpoint_calls_timestamps[0] < interval_start_timestamp:
+                self.telemetry_endpoint_calls_timestamps.popleft()
+            return len(self.telemetry_endpoint_calls_timestamps) < TELEMETRY_MAX_CALLS_PER_INTERVAL
 
         uri = TELEMETRY_URI.format(self.get_endpoint())
         data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
@@ -1071,12 +1072,15 @@ class WireClient(object):
 
             # wait until throttling limit reset to make next call
             while not can_make_wireserver_call():
-                next_call_time = self.telemetry_api_calls_timestamps[0] + timedelta(seconds=TELEMETRY_INTERVAL)
-                logger.verbose("Reached telemetry api throttling limit: {0}, so waiting to make next call after : {1}".format(TELEMETRY_MAX_CALLS_PER_INTERVAL, next_call_time))
-                time.sleep(TELEMETRY_DELAY)
+                next_call_time = self.telemetry_endpoint_calls_timestamps[0] + timedelta(seconds=TELEMETRY_INTERVAL)
+                logger.verbose("Reached telemetry endpoint throttling limit: {0}, so waiting to make next call after : {1}".format(TELEMETRY_MAX_CALLS_PER_INTERVAL, next_call_time))
+                sleep_time = (next_call_time - datetime.utcnow()).total_seconds()
+                # next_call_time might be in past when we are here, so check if sleep_time is negative
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
 
             current_time = datetime.utcnow()
-            self.telemetry_api_calls_timestamps.append(current_time)
+            self.telemetry_endpoint_calls_timestamps.append(current_time)
 
             # Since we have throttling limit and also retry logic to pick up the events in next iteration, we set max_retry to 1 on http call to prevent retries on errors.
             # Currently, http_request has a logic to reset the max_retry to 26 on throttling errors, so
