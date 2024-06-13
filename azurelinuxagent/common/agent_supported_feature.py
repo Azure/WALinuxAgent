@@ -77,7 +77,7 @@ class _ETPFeature(AgentSupportedFeature):
 class _GAVersioningGovernanceFeature(AgentSupportedFeature):
     """
     CRP would drive the RSM update if agent reports that it does support RSM upgrades with this flag otherwise CRP fallback to largest version.
-    Agent doesn't report supported feature flag if auto update is disabled or old version of agent running that doesn't understand GA versioning.
+    Agent doesn't report supported feature flag if auto update is disabled or old version of agent running that doesn't understand GA versioning
     or if explicitly support for versioning is disabled in agent
 
     Note: Especially Windows need this flag to report to CRP that GA doesn't support the updates. So linux adopted same flag to have a common solution.
