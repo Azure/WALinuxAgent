@@ -80,7 +80,7 @@ def disable_agent_cgroups_with_unknown_process(pid):
                 pid)), attempts=3)
         return found and retry_if_false(check_agent_quota_disabled, attempts=3)
 
-    found: bool = retry_if_false(lambda: unknown_process_found(), attempts=3)       # pylint: disable=W0108
+    found: bool = retry_if_false(unknown_process_found, attempts=3)
     if not found:
         fail("The agent did not detect unknown process: {0}".format(pid))
 
