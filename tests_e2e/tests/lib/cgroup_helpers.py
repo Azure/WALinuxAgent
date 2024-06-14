@@ -164,14 +164,14 @@ def check_log_message(message, after_timestamp=datetime.datetime.min):
     return False
 
 
-def get_unit_cgroup_path(unit_name):
+def get_unit_cgroup_proc_path(unit_name, controller):
     """
-    Returns the cgroup path for the given unit. For v1, gets the path of the cpu controller.
+    Returns the cgroup.procs path for the given unit and controller.
     """
     cgroups_api = get_cgroup_api()
-    unit_controlgroup_path = systemd.get_unit_property(unit_name, "ControlGroup")
-
+    unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
     if isinstance(cgroups_api, SystemdCgroupApiv1):
-        return os.path.join(cgroups_api.get_controller_mountpoints().get('cpu,cpuacct'), unit_controlgroup_path[1:])
+        return unit_cgroup.get_controller_procs_path(controller=controller)
     else:
-        return os.path.join(cgroups_api._get_root_cgroup_path(), unit_controlgroup_path)
+        return unit_cgroup.get_procs_path()
+

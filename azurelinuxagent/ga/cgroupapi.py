@@ -654,12 +654,20 @@ class CgroupV1(Cgroup):
 
         return metrics
 
+    def get_controller_procs_path(self, controller):
+        controller_path = self._controller_paths.get(controller)
+        if controller_path is not None and controller_path != "":
+            return os.path.join(controller_path, "cgroup.procs")
+        return ""
+
     def get_processes(self):
         pids = set()
-        for cgroup_path in self._controller_paths.values():
-            with open(os.path.join(cgroup_path, "cgroup.procs"), "r") as cgroup_procs:
-                for pid in cgroup_procs.read().split():
-                    pids.add(int(pid))
+        for controller in self._controller_paths.keys():
+            procs_path = self.get_controller_procs_path(controller)
+            if os.path.exists(procs_path):
+                with open(procs_path, "r") as cgroup_procs:
+                    for pid in cgroup_procs.read().split():
+                        pids.add(int(pid))
         return list(pids)
 
 
@@ -693,10 +701,16 @@ class CgroupV2(Cgroup):
         # TODO - Implement controller metrics for cgroup v2
         raise NotImplementedError()
 
+    def get_procs_path(self):
+        if self._cgroup_path != "":
+            return os.path.join(self._cgroup_path, "cgroup.procs")
+        return ""
+
     def get_processes(self):
         pids = set()
-        if self._cgroup_path != "":
-            with open(os.path.join(self._cgroup_path, "cgroup.procs"), "r") as cgroup_procs:
+        procs_path = self.get_procs_path()
+        if os.path.exists(procs_path):
+            with open(procs_path, "r") as cgroup_procs:
                 for pid in cgroup_procs.read().split():
                     pids.add(int(pid))
         return list(pids)
