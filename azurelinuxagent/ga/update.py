@@ -60,6 +60,7 @@ from azurelinuxagent.ga.env import get_env_handler
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, list_agent_lib_directory, \
     ExtensionStatusValue, ExtHandlerStatusValue
 from azurelinuxagent.ga.guestagent import GuestAgent
+from azurelinuxagent.ga.policy.policy_engine import PolicyEngine
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from azurelinuxagent.ga.send_telemetry_events import get_send_telemetry_events_handler
 
@@ -369,6 +370,7 @@ class UpdateHandler(object):
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
             self._ensure_cgroups_initialized()
+            self._ensure_policy_initialized()
             self._ensure_extension_telemetry_state_configured_properly(protocol)
             self._ensure_firewall_rules_persisted(dst_ip=protocol.get_endpoint())
             self._add_accept_tcp_firewall_rule_if_not_enabled(dst_ip=protocol.get_endpoint())
@@ -849,6 +851,10 @@ class UpdateHandler(object):
     def _ensure_cgroups_initialized(self):
         configurator = CGroupConfigurator.get_instance()
         configurator.initialize()
+
+    def _ensure_policy_initialized(self):
+        policy_engine = PolicyEngine.get_instance()
+        policy_engine.initialize()
 
     def _evaluate_agent_health(self, latest_agent):
         """

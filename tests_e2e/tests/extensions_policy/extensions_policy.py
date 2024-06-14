@@ -39,7 +39,6 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 from tests_e2e.tests.lib.shell import CommandError
 
 
-
 class ExtensionsPolicy(AgentVmTest):
     class TestCase:
         def __init__(self, extension: VirtualMachineExtensionClient, settings: Any):
@@ -64,11 +63,6 @@ class ExtensionsPolicy(AgentVmTest):
                                               resource_name="CustomScript"),
                 {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
             )
-            # ExtensionsPolicy.TestCase(
-            #     VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-            #                                   resource_name="RunCommandHandler"),
-            #     {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
-            # )
         ]
 
         for t in test_cases:
@@ -80,78 +74,11 @@ class ExtensionsPolicy(AgentVmTest):
             try:
                 t.extension.enable(settings=t.settings, force_update=True, timeout=6 * 60)
                 log.info("Checking that policy engine is successfully initialized...")
-                expected_msg = "Policy engine successfully initialized:"
+                expected_msg = "Policy enforcement enabled"
                 ssh_client.run_command("grep \"{0}\" /var/log/waagent.log".format(expected_msg))
                 log.info("Successfully initialized policy engine")
             except Exception as error:
                 fail(f"Unexpected error while processing {t.extension.__str__()} during policy engine instantiation")
-
-        # for t in test_cases:
-        #     log.info("")
-        #     log.info("Test case: %s", t.extension)
-        #     #
-        #     # Validate that the agent is not processing extensions by attempting to enable extension & checking that
-        #     # provisioning fails fast
-        #     #
-        #     log.info(
-        #         "Executing {0}; the agent should report a VMExtensionProvisioningError without processing the extension"
-        #         .format(t.extension.__str__()))
-        #
-        #     try:
-        #         t.extension.enable(settings=t.settings, force_update=True, timeout=6 * 60)
-        #         fail("The agent should have reported an error processing the goal state")
-        #     except Exception as error:
-        #         assert_that("VMExtensionProvisioningError" in str(error)) \
-        #             .described_as(f"Expected a VMExtensionProvisioningError error, but actual error was: {error}") \
-        #             .is_true()
-        #         assert_that("Extension will not be processed since extension processing is disabled" in str(error)) \
-        #             .described_as(
-        #             f"Error message should communicate that extension will not be processed, but actual error "
-        #             f"was: {error}").is_true()
-        #         log.info("Goal state processing for {0} failed as expected".format(t.extension.__str__()))
-        #
-        #     #
-        #     # Validate the agent did not process the extension by checking it did not execute the extension settings
-        #     #
-        #     output = ssh_client.run_command("dir /tmp", use_sudo=True)
-        #     assert_that(output) \
-        #         .described_as(
-        #         f"Contents of '/tmp' on test VM contains {test_file}. Contents: {output}. \n This indicates "
-        #         f"{t.extension.__str__()} was unexpectedly processed") \
-        #         .does_not_contain(f"{test_file}")
-        #     log.info("The agent did not process the extension settings for {0} as expected".format(t.extension.__str__()))
-        #
-        # #
-        # # Validate that the agent continued reporting status even if it is not processing extensions
-        # #
-        # log.info("")
-        # instance_view: VirtualMachineInstanceView = self._context.vm.get_instance_view()
-        # log.info("Instance view of VM Agent:\n%s", instance_view.vm_agent.serialize())
-        # assert_that(instance_view.vm_agent.statuses).described_as("The VM agent should have exactly 1 status").is_length(1)
-        # assert_that(instance_view.vm_agent.statuses[0].display_status).described_as("The VM Agent should be ready").is_equal_to('Ready')
-        # # The time in the status is time zone aware and 'disabled_timestamp' is not; we need to make the latter time zone aware before comparing them
-        # assert_that(instance_view.vm_agent.statuses[0].time)\
-        #     .described_as("The VM Agent should be have reported status even after extensions were disabled")\
-        #     .is_greater_than(pytz.utc.localize(disabled_timestamp))
-        # log.info("The VM Agent reported status after extensions were disabled, as expected.")
-        #
-        # #
-        # # Validate that the agent processes extensions after re-enabling extension processing
-        # #
-        # log.info("")
-        # log.info("Enabling extension processing on the test VM [%s]", self._context.vm.name)
-        # output = ssh_client.run_command("update-waagent-conf Extensions.Enabled=y", use_sudo=True)
-        # log.info("Enable completed:\n%s", output)
-        #
-        # for t in test_cases:
-        #     try:
-        #         log.info("")
-        #         log.info("Executing {0}; the agent should process the extension".format(t.extension.__str__()))
-        #         t.extension.enable(settings=t.settings, force_update=True, timeout=15 * 60)
-        #         log.info("Goal state processing for {0} succeeded as expected".format(t.extension.__str__()))
-        #     except Exception as error:
-        #         fail(f"Unexpected error while processing {t.extension.__str__()} after re-enabling extension "
-        #              f"processing: {error}")
 
 
 if __name__ == "__main__":
