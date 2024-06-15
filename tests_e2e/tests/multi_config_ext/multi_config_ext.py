@@ -28,6 +28,8 @@ from assertpy import fail
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.azure_sdk_client import AzureSdkClient
+from tests_e2e.tests.lib.virtual_machine_runcommand_client import VirtualMachineRunCommandClient
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
@@ -36,7 +38,7 @@ from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineE
 
 class MultiConfigExt(AgentVmTest):
     class TestCase:
-        def __init__(self, extension: VirtualMachineExtensionClient, get_settings: Callable[[str], Dict[str, str]]):
+        def __init__(self, extension: AzureSdkClient, get_settings: Callable[[str], Dict[str, str]]):
             self.extension = extension
             self.get_settings = get_settings
             self.test_guid: str = str(uuid.uuid4())
@@ -89,19 +91,18 @@ class MultiConfigExt(AgentVmTest):
         # Create 3 different RCv2 extensions and a single config extension (CSE) and assign each a unique guid. Each
         # extension will have settings that echo its assigned guid. We will use this guid to verify the extension
         # statuses later.
-        mc_settings: Callable[[Any], Dict[str, Dict[str, str]]] = lambda s: {
-            "source": {"script": f"echo {s}"}}
+        mc_settings: Callable[[Any], Dict[str, str]] = lambda s: {"source": f"echo {s}"}
         sc_settings: Callable[[Any], Dict[str, str]] = lambda s: {'commandToExecute': f"echo {s}"}
 
         test_cases: Dict[str, MultiConfigExt.TestCase] = {
             "MCExt1": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt1"), mc_settings),
             "MCExt2": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt2"), mc_settings),
             "MCExt3": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt3"), mc_settings),
             "CSE": MultiConfigExt.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), sc_settings)
@@ -116,10 +117,10 @@ class MultiConfigExt(AgentVmTest):
         # Update MCExt3 and CSE with new guids and add a new instance of RCv2 to the VM
         updated_test_cases: Dict[str, MultiConfigExt.TestCase] = {
             "MCExt3": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt3"), mc_settings),
             "MCExt4": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt4"), mc_settings),
             "CSE": MultiConfigExt.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript), sc_settings)
@@ -138,10 +139,10 @@ class MultiConfigExt(AgentVmTest):
         log.info("Add only multi-config extensions to the VM...")
         mc_test_cases: Dict[str, MultiConfigExt.TestCase] = {
             "MCExt5": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt5"), mc_settings),
             "MCExt6": MultiConfigExt.TestCase(
-                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                               resource_name="MCExt6"), mc_settings)
         }
         self.enable_and_assert_test_cases(cases_to_enable=mc_test_cases, cases_to_assert=mc_test_cases,
