@@ -25,7 +25,7 @@ from azurelinuxagent.ga import logcollector, cgroupconfigurator
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.ga.cgroup import MetricsCounter
+from azurelinuxagent.ga.controllermetrics import MetricsCounter
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
