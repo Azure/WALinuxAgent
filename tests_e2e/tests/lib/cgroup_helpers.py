@@ -7,7 +7,7 @@ from assertpy import assert_that, fail
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, SystemdCgroupApiv1
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -164,9 +164,14 @@ def check_log_message(message, after_timestamp=datetime.datetime.min):
     return False
 
 
-def get_unit_cgroup_paths(unit_name):
+def get_unit_cgroup_proc_path(unit_name, controller):
     """
-    Returns the cgroup paths for the given unit
+    Returns the cgroup.procs path for the given unit and controller.
     """
     cgroups_api = get_cgroup_api()
-    return cgroups_api.get_unit_cgroup_paths(unit_name)
+    unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
+    if isinstance(cgroups_api, SystemdCgroupApiv1):
+        return unit_cgroup.get_controller_procs_path(controller=controller)
+    else:
+        return unit_cgroup.get_procs_path()
+

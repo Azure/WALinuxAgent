@@ -88,7 +88,7 @@ class MetricsCounter(object):
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 
-class CGroup(object):
+class ControllerMetrics(object):
     def __init__(self, name, cgroup_path):
         """
         Initialize _data collection for the Memory controller
@@ -169,10 +169,16 @@ class CGroup(object):
         """
         raise NotImplementedError()
 
+    def get_unit_properties(self):
+        """
+        Returns a list of the unit properties to collect for the controller.
+        """
+        raise NotImplementedError()
 
-class CpuCgroup(CGroup):
+
+class CpuMetrics(ControllerMetrics):
     def __init__(self, name, cgroup_path):
-        super(CpuCgroup, self).__init__(name, cgroup_path)
+        super(CpuMetrics, self).__init__(name, cgroup_path)
 
         self._osutil = get_osutil()
         self._previous_cgroup_cpu = None
@@ -306,10 +312,13 @@ class CpuCgroup(CGroup):
 
         return tracked
 
+    def get_unit_properties(self):
+        return ["CPUAccounting", "CPUQuotaPerSecUSec"]
 
-class MemoryCgroup(CGroup):
+
+class MemoryMetrics(ControllerMetrics):
     def __init__(self, name, cgroup_path):
-        super(MemoryCgroup, self).__init__(name, cgroup_path)
+        super(MemoryMetrics, self).__init__(name, cgroup_path)
 
         self._counter_not_found_error_count = 0
 
@@ -390,3 +399,6 @@ class MemoryCgroup(CGroup):
             MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, self.name,
                         self.try_swap_memory_usage(), _REPORT_EVERY_HOUR)
         ]
+
+    def get_unit_properties(self):
+        return["MemoryAccounting"]
