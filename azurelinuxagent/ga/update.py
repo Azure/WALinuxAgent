@@ -395,7 +395,7 @@ class UpdateHandler(object):
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
                 self._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
-                self._send_heartbeat_telemetry(protocol)
+                self._send_heartbeat_telemetry(protocol, agent_update_handler)
                 self._check_agent_memory_usage()
                 time.sleep(self._goal_state_period)
 
@@ -1036,22 +1036,23 @@ class UpdateHandler(object):
 
         return pid_files, pid_file
 
-    def _send_heartbeat_telemetry(self, protocol):
+    def _send_heartbeat_telemetry(self, protocol, agent_update_handler):
         if self._last_telemetry_heartbeat is None:
             self._last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
 
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
-            auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+            auto_update_enabled = 1 if conf.get_auto_update_to_latest_version() else 0
+            update_mode = agent_update_handler.get_current_update_mode()
 
-            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
+            telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
                                                          self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled)
+                                                         auto_update_enabled, update_mode)
             debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
-                            "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
+                            "UpdateGSErrors: {3};AutoUpdate: {4};UpdateMode: {5}]".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
                                                                           self._heartbeat_update_goal_state_error_count,
-                                                                          auto_update_enabled)
+                                                                          auto_update_enabled, update_mode)
 
             # Write Heartbeat events/logs
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,

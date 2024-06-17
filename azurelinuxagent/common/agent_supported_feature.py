@@ -77,14 +77,15 @@ class _ETPFeature(AgentSupportedFeature):
 class _GAVersioningGovernanceFeature(AgentSupportedFeature):
     """
     CRP would drive the RSM update if agent reports that it does support RSM upgrades with this flag otherwise CRP fallback to largest version.
-    Agent doesn't report supported feature flag if auto update is disabled or old version of agent running that doesn't understand GA versioning.
+    Agent doesn't report supported feature flag if auto update is disabled or old version of agent running that doesn't understand GA versioning
+    or if explicitly support for versioning is disabled in agent
 
     Note: Especially Windows need this flag to report to CRP that GA doesn't support the updates. So linux adopted same flag to have a common solution.
     """
 
     __NAME = SupportedFeatureNames.GAVersioningGovernance
     __VERSION = "1.0"
-    __SUPPORTED = conf.get_auto_update_to_latest_version()
+    __SUPPORTED = conf.get_auto_update_to_latest_version() and conf.get_enable_ga_versioning()
 
     def __init__(self):
         super(_GAVersioningGovernanceFeature, self).__init__(name=self.__NAME,

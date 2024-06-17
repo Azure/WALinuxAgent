@@ -2440,9 +2440,9 @@ class HeartbeatTestCase(AgentTestCase):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as mock_protocol:
             update_handler = get_update_handler()
-
+            agent_update_handler = Mock()
             update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-            update_handler._send_heartbeat_telemetry(mock_protocol)
+            update_handler._send_heartbeat_telemetry(mock_protocol, agent_update_handler)
             self.assertEqual(1, patch_add_event.call_count)
             self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
