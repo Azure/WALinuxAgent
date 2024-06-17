@@ -12,6 +12,7 @@ This will expedite the process of getting your pull request merged and avoid ext
 ---
 
 ### PR information
+- [ ] Ensure development PR is based on the `develop` branch.
 - [ ] The title of the PR is clear and informative.
 - [ ] There are a small number of commits, each of which has an informative message. This means that previously merged commits do not appear in the history of the PR. For information on cleaning up the commits in your pull request, [see this page](https://github.com/Azure/azure-powershell/blob/master/documentation/development-docs/cleaning-up-commits.md).
 - [ ] If applicable, the PR references the bug/issue that it fixes in the description.
