@@ -34,7 +34,7 @@ from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
 
-class ExtensionsPolicy(AgentVmTest):
+class ExtensionsPolicyDisabled(AgentVmTest):
     class TestCase:
         def __init__(self, extension: VirtualMachineExtensionClient, settings: Any):
             self.extension = extension
@@ -53,7 +53,7 @@ class ExtensionsPolicy(AgentVmTest):
         unique = str(uuid.uuid4())
         test_file = f"waagent-test.{unique}"
         test_cases = [
-            ExtensionsPolicy.TestCase(
+            ExtensionsPolicyDisabled.TestCase(
                 VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
                                               resource_name="CustomScript"),
                 {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
@@ -64,17 +64,16 @@ class ExtensionsPolicy(AgentVmTest):
             log.info("")
             log.info("Test case: %s", t.extension)
 
-            # validate that policy engine is correctly initialized
-            log.info("The agent should initialize the policy engine")
+            log.info("Policy engine initialization should fail.")
             try:
                 t.extension.enable(settings=t.settings, force_update=True, timeout=6 * 60)
-                log.info("Checking that policy engine is successfully initialized...")
-                expected_msg = "Extension policy is enabled. Continuing with policy enforcement."
+                log.info("Checking that policy engine initialization is skipped...")
+                expected_msg = "Extension policy is not enabled. Continuing without policy enforcement."
                 ssh_client.run_command("grep \"{0}\" /var/log/waagent.log".format(expected_msg))
-                log.info("Successfully initialized policy engine")
+                log.info("Skipped policy enforcement as expected.")
             except Exception as error:
-                fail(f"Unexpected error while processing {t.extension.__str__()} during policy engine instantiation")
+                fail(f"Unexpected error while processing {t.extension.__str__()}")
 
 
 if __name__ == "__main__":
-    ExtensionsPolicy.run_from_command_line()
+    ExtensionsPolicyDisabled.run_from_command_line()

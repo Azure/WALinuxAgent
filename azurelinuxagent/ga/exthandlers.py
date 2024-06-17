@@ -480,9 +480,9 @@ class ExtHandlersHandler(object):
         engine = PolicyEngine.get_instance()
         policy_enabled = engine.get_extension_policy_enabled()
         if policy_enabled:
-            logger.info("[DEBUG] Extension policy is enabled. Continuing with policy enforcement...")
+            logger.info("[DEBUG] Extension policy is enabled. Continuing with policy enforcement.")
         else:
-            logger.info("[DEBUG] Extension policy is not enabled. Continuing without policy enforcement...")
+            logger.info("[DEBUG] Extension policy is not enabled. Continuing without policy enforcement.")
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)

@@ -21,13 +21,6 @@
 import pwd
 import os
 import sys
-# TO DO - this code is for e2e testing, remove once the binary has been published to GA package
-user = next((u.pw_name for u in pwd.getpwall() if u.pw_uid == 1000), None)
-regorus_dir = os.path.join(("/home/" + str(user)), "lib/tests_e2e/tests/executables")
-sys.path.append(regorus_dir)
-regorus_dir = os.path.join(("/home/" + str(user)), "WALinuxAgent/tests_e2e/tests/executables")
-sys.path.append(regorus_dir)
-import regorus
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.version import get_distro
@@ -73,18 +66,27 @@ class PolicyEngine:
             if self._initialized:
                 return
             self._policy_supported = self._is_policy_supported()
+
             if not self._policy_supported:
                 log_policy_info("Policy enforcement is not supported on {0}".format(get_distro()))
                 return
+
             if not conf.get_extension_policy_enabled():
                 log_policy_info("Extension policy enforcement is disabled")
                 return
+
+            # TO DO - import code is for e2e testing, remove once the binary has been published to GA package
+            user = next((u.pw_name for u in pwd.getpwall() if u.pw_uid == 1000), None)
+            regorus_dir = os.path.join(("/home/" + str(user)), "lib/tests_e2e/tests/executables")
+            sys.path.append(regorus_dir)
+            import regorus  # pylint: disable=import-outside-toplevel
+
             self._engine = regorus.Engine()
-        except Exception as exception:
-            log_policy_info("Error initializing policy engine: {0}".format(ustr(exception)))
-        finally:
-            log_policy_info("Policy enforcement enabled")
             self._extension_policy_enabled = True
+        except Exception as exception:
+            log_policy_info("Error initializing policy engine: {0}".format(exception))
+        finally:
+            log_policy_info("Policy enforcement enabled: {0}".format(self._extension_policy_enabled))
             self._initialized = True
 
     def disable(self):

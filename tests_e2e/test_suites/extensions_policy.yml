@@ -1,9 +1,8 @@
 #
-# The test suite disables extension processing and verifies that extensions
-# are not processed, but the agent continues reporting status.
+# The test suite tests policy enforcement on supported distros.
 #
 name: "ExtensionsPolicy"
 tests:
   - "extensions_policy/extensions_policy.py"
-images: "random(endorsed)"
+images: "ubuntu_2004"
 owns_vm: true

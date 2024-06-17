@@ -1,0 +1,8 @@
+#
+# The test suite tests that policy enforcement is handled appropriately on unsupported distros.
+#
+name: "ExtensionsPolicyDisabled"
+tests:
+  - "extensions_policy_disabled/extensions_policy_disabled.py"
+images: "rhel_90"
+owns_vm: true
