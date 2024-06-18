@@ -822,13 +822,13 @@ Match host 192.168.1.2\n\
                 success, _ = osutil.DefaultOSUtil().enable_firewall(dst_ip=mock_iptables.destination, uid=mock_iptables.uid)
 
                 self.assertTrue(success, "Enabling the firewall was not successful")
-                # Exactly 8 calls have to be made.
-                # First check rule, delete 4 rules,
+                # Exactly 10 calls have to be made.
+                # First check 3 rules, delete 4 rules,
                 # and Append the IPTable 3 rules.
-                self.assertEqual(len(mock_iptables.command_calls), 8,
+                self.assertEqual(len(mock_iptables.command_calls), 10,
                                  "Incorrect number of calls to iptables: [{0}]".format(mock_iptables.command_calls))
                 for command in mock_iptables.command_calls:
-                    self.assertNotIn("-w", command, "The -w option should have been used in {0}".format(command))
+                    self.assertNotIn("-w", command, "The -w option sh       ould have been used in {0}".format(command))
 
                 self.assertTrue(osutil._enable_firewall, "The firewall should not have been disabled")
 

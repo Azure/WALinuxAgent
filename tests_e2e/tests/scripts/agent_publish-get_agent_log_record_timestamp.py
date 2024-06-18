@@ -48,6 +48,11 @@ _UPDATE_PATTERN_02 = re.compile(r'(.*Agent) upgrade discovered, updating to (WAL
 _UPDATE_PATTERN_03 = re.compile(
     r'(.*Agent) update found, exiting current process to (\S*) to the new Agent version (\S*)')
 
+"""
+Current Agent 2.8.9.9 completed all update checks, exiting current process to upgrade to the new Agent version 2.10.0.7
+('2.8.9.9', 'upgrade', '2.10.0.7')
+"""
+_UPDATE_PATTERN_04 = re.compile(r'Current Agent (\S*) completed all update checks, exiting current process to (\S*) to the new Agent version (\S*)')
 
 """
 This script return timestamp of update message in the agent log
@@ -60,8 +65,8 @@ def main():
 
         for record in agentlog.read():
 
-            for p in [_UPDATE_PATTERN_00, _UPDATE_PATTERN_01, _UPDATE_PATTERN_02, _UPDATE_PATTERN_03]:
-                update_match = re.match(p, record.text)
+            for p in [_UPDATE_PATTERN_00, _UPDATE_PATTERN_01, _UPDATE_PATTERN_02, _UPDATE_PATTERN_03, _UPDATE_PATTERN_04]:
+                update_match = re.match(p, record.message)
                 if update_match:
                     return record.timestamp
 

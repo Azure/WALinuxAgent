@@ -16,7 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import datetime
 import re
 import os
 import socket
@@ -104,6 +104,10 @@ class EnableFirewall(PeriodicOperation):
         self._osutil = osutil
         self._protocol = protocol
         self._try_remove_legacy_firewall_rule = False
+        self._is_first_setup = True
+        self._reset_count = 0
+        self._report_after = datetime.datetime.min
+        self._report_period = None  # None indicates "report immediately"
 
     def _operation(self):
         # If the rules ever change we must reset all rules and start over again.
@@ -117,13 +121,32 @@ class EnableFirewall(PeriodicOperation):
             self._osutil.remove_legacy_firewall_rule(dst_ip=self._protocol.get_endpoint())
             self._try_remove_legacy_firewall_rule = True
 
-        success, is_firewall_rules_updated = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(),
-                                                                          uid=os.getuid())
+        success, missing_firewall_rules = self._osutil.enable_firewall(dst_ip=self._protocol.get_endpoint(), uid=os.getuid())
 
-        if is_firewall_rules_updated:
-            msg = "Successfully added Azure fabric firewall rules. Current Firewall rules:\n{0}".format(self._osutil.get_firewall_list())
-            logger.info(msg)
-            add_event(AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.Firewall, message=msg, log_event=False)
+        if len(missing_firewall_rules) > 0:
+            if self._is_first_setup:
+                msg = "Created firewall rules for the Azure Fabric:\n{0}".format(self._get_firewall_state())
+                logger.info(msg)
+                add_event(op=WALAEventOperation.Firewall, message=msg)
+            else:
+                self._reset_count += 1
+                # We report immediately (when period is None) the first 5 instances, then we switch the period to every few hours
+                if self._report_period is None:
+                    msg = "Some firewall rules were missing: {0}. Re-created all the rules:\n{1}".format(missing_firewall_rules, self._get_firewall_state())
+                    if self._reset_count >= 5:
+                        self._report_period = datetime.timedelta(hours=3)
+                        self._reset_count = 0
+                        self._report_after = datetime.datetime.now() + self._report_period
+                elif datetime.datetime.now() >= self._report_after:
+                    msg = "Some firewall rules were missing: {0}. This has happened {1} time(s) since the last report. Re-created all the rules:\n{2}".format(
+                        missing_firewall_rules, self._reset_count, self._get_firewall_state())
+                    self._reset_count = 0
+                    self._report_after = datetime.datetime.now() + self._report_period
+                else:
+                    msg = ""
+                if msg != "":
+                    logger.info(msg)
+                    add_event(op=WALAEventOperation.ResetFirewall, message=msg)
 
         add_periodic(
             logger.EVERY_HOUR,
@@ -132,6 +155,14 @@ class EnableFirewall(PeriodicOperation):
             op=WALAEventOperation.Firewall,
             is_success=success,
             log_event=False)
+
+        self._is_first_setup = False
+
+    def _get_firewall_state(self):
+        try:
+            return self._osutil.get_firewall_list()
+        except Exception as e:
+            return "Failed to get the firewall state: {0}".format(ustr(e))
 
 
 class LogFirewallRules(PeriodicOperation):

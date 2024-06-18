@@ -18,9 +18,9 @@ parameters:
   - name: service_connections
     type: object
     default:
-      - azuremanagement
-      - azuremanagement.china
-      - azuremanagement.government
+      - waagenttests.public
+      - waagenttests.china
+      - waagenttests.gov
 
 pool:
   name: waagent-pool

@@ -122,6 +122,7 @@ class WALAEventOperation:
     ReportEventUnicodeErrors = "ReportEventUnicodeErrors"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
+    ResetFirewall = "ResetFirewall"
     Restart = "Restart"
     SequenceNumberMismatch = "SequenceNumberMismatch"
     SetCGroupsLimits = "SetCGroupsLimits"
