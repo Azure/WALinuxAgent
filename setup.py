@@ -344,10 +344,5 @@ setuptools.setup(
     install_requires=requires,
     cmdclass={
         'install': install
-    },
-    package_data={
-        "azurelinuxagent.common.policy.regorus": ["*.so"],
-    },
-    include_package_data=True
+    }
 )
-
