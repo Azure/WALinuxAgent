@@ -96,6 +96,8 @@ RETRY_EXCEPTIONS = [
     httpclient.BadStatusLine
 ]
 
+RETRY_CODES_FOR_TELEMETRY = list(set(RETRY_CODES) - set(THROTTLE_CODES))
+
 # http://www.gnu.org/software/wget/manual/html_node/Proxies.html
 HTTP_PROXY_ENV = "http_proxy"
 HTTPS_PROXY_ENV = "https_proxy"

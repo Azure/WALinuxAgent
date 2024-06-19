@@ -21,6 +21,7 @@ import json
 import os
 import re
 import threading
+import time
 from collections import defaultdict
 
 import azurelinuxagent.common.logger as logger
@@ -37,6 +38,10 @@ from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEvent
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
+
+# Event file specific retries and delays.
+NUM_OF_EVENT_FILE_RETRIES = 3
+EVENT_FILE_RETRY_DELAY = 1  # seconds
 
 
 def get_collect_telemetry_events_handler(send_telemetry_events_handler):
@@ -248,17 +253,35 @@ class _ProcessExtensionEvents(PeriodicOperation):
                                      ustr(error))
                         log_err = False
 
+    @staticmethod
+    def _read_event_file(event_file_path):
+        """
+        Read the event file and return the data.
+        :param event_file_path: Full path of the event file.
+        :return: Event data in list or string format.
+        """
+        # Retry for reading the event file in case file is modified while reading
+        error_count = 0
+        while True:
+            try:
+                # Read event file and decode it properly
+                with open(event_file_path, "rb") as event_file_descriptor:
+                    event_data = event_file_descriptor.read().decode("utf-8")
+
+                # Parse the string and get the list of events
+                return json.loads(event_data)
+            except Exception:
+                error_count += 1
+                if error_count >= NUM_OF_EVENT_FILE_RETRIES:
+                    raise
+            time.sleep(EVENT_FILE_RETRY_DELAY)
+
     def _enqueue_events_and_get_count(self, handler_name, event_file_path, captured_events_count,
                                       dropped_events_with_error_count):
 
         event_file_time = datetime.datetime.fromtimestamp(os.path.getmtime(event_file_path))
 
-        # Read event file and decode it properly
-        with open(event_file_path, "rb") as event_file_descriptor:
-            event_data = event_file_descriptor.read().decode("utf-8")
-
-        # Parse the string and get the list of events
-        events = json.loads(event_data)
+        events = self._read_event_file(event_file_path)
 
         # We allow multiple events in a file but there can be an instance where the file only has a single
         # JSON event and not a list. Handling that condition too
@@ -431,10 +454,7 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                 try:
                     logger.verbose("Processing event file: {0}", event_file_path)
 
-                    with open(event_file_path, "rb") as event_fd:
-                        event_data = event_fd.read().decode("utf-8")
-
-                    event = parse_event(event_data)
+                    event = self._read_and_parse_event_file(event_file_path)
 
                     # "legacy" events are events produced by previous versions of the agent (<= 2.2.46) and extensions;
                     # they do not include all the telemetry fields, so we add them here
@@ -469,6 +489,26 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                 debug_info.update_op_error(error)
 
         debug_info.report_debug_info()
+
+    @staticmethod
+    def _read_and_parse_event_file(event_file_path):
+        """
+        Read the event file and parse it to a TelemetryEvent object.
+        :param event_file_path: Full path of the event file.
+        :return: TelemetryEvent object.
+        """
+        # Retry for reading the event file in case file is modified while reading
+        error_count = 0
+        while True:
+            try:
+                with open(event_file_path, "rb") as event_fd:
+                    event_data = event_fd.read().decode("utf-8")
+                return parse_event(event_data)
+            except Exception:
+                error_count += 1
+                if error_count >= NUM_OF_EVENT_FILE_RETRIES:
+                    raise
+            time.sleep(EVENT_FILE_RETRY_DELAY)
 
     @staticmethod
     def _update_legacy_agent_event(event, event_creation_time):
