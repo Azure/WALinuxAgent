@@ -368,10 +368,6 @@ class RDMADeviceHandler(object):
         count = 0
 
         for nic in nics:
-            # look for IBoIP interface of format ibXXX
-            if not re.match(r"ib\w+", nic):
-                continue
-
             mac_addr = None
             with open(os.path.join(net_dir, nic, "address")) as address_file:
                 mac_addr = address_file.read()
@@ -382,7 +378,11 @@ class RDMADeviceHandler(object):
 
             mac_addr = mac_addr.upper()
 
-            match = re.match(r".+(\w\w):(\w\w):(\w\w):\w\w:\w\w:(\w\w):(\w\w):(\w\w)\n", mac_addr)
+            # if this is an IB interface, match IB-specific regex
+            if re.match(r"ib\w+", nic):
+                match = re.match(r".+(\w\w):(\w\w):(\w\w):\w\w:\w\w:(\w\w):(\w\w):(\w\w)\n", mac_addr)
+            else:
+                match = re.match(r"^(\w\w):(\w\w):(\w\w):(\w\w):(\w\w):(\w\w)$", mac_addr)
             if not match:
                 logger.error("RDMA: failed to parse address for device {0} address {1}".format(nic, mac_addr))
                 continue
