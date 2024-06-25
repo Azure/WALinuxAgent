@@ -31,7 +31,6 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
