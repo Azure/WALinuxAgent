@@ -206,7 +206,7 @@ class CGroupConfigurator(object):
 
                 for metric in metrics:
                     for prop in metric.get_unit_properties():
-                        log_cgroup_info('{0}: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
+                        log_cgroup_info('Agent {0} unit property value: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
                     if isinstance(metric, CpuMetrics):
                         self.__set_cpu_quota(conf.get_agent_cpu_quota())
                     elif isinstance(metric, MemoryMetrics):
