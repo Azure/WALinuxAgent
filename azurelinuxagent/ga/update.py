@@ -482,7 +482,7 @@ class UpdateHandler(object):
         """
         if self._vm_size is None:
 
-            imds_client = get_imds_client(protocol.get_endpoint())
+            imds_client = get_imds_client()
 
             try:
                 imds_info = imds_client.get_compute()
