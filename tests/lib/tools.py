@@ -42,9 +42,6 @@ import tests
 
 try:
     from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock  # pylint: disable=unused-import
-
-    # Import mock module for Python2 and Python3
-    from bin.waagent2 import Agent  # pylint: disable=unused-import
 except ImportError:
     from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
