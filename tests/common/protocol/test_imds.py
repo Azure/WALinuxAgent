@@ -56,7 +56,7 @@ class TestImds(AgentTestCase):
     def test_get(self, mock_http_get):
         mock_http_get.return_value = get_mock_compute_response()
 
-        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
+        test_subject = imds.ImdsClient()
         test_subject.get_compute()
 
         self.assertEqual(1, mock_http_get.call_count)
@@ -71,21 +71,21 @@ class TestImds(AgentTestCase):
     def test_get_bad_request(self, mock_http_get):
         mock_http_get.return_value = MockHttpResponse(status=restutil.httpclient.BAD_REQUEST)
 
-        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
+        test_subject = imds.ImdsClient()
         self.assertRaises(HttpError, test_subject.get_compute)
 
     @patch("azurelinuxagent.common.protocol.imds.restutil.http_get")
     def test_get_internal_service_error(self, mock_http_get):
         mock_http_get.return_value = MockHttpResponse(status=restutil.httpclient.INTERNAL_SERVER_ERROR)
 
-        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
+        test_subject = imds.ImdsClient()
         self.assertRaises(HttpError, test_subject.get_compute)
 
     @patch("azurelinuxagent.common.protocol.imds.restutil.http_get")
     def test_get_empty_response(self, mock_http_get):
         mock_http_get.return_value = MockHttpResponse(status=httpclient.OK, body=''.encode('utf-8'))
 
-        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
+        test_subject = imds.ImdsClient()
         self.assertRaises(ValueError, test_subject.get_compute)
 
     def test_deserialize_ComputeInfo(self):
@@ -359,7 +359,7 @@ class TestImds(AgentTestCase):
             return fh.read()
 
     def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
-        test_subject = imds.ImdsClient(restutil.KNOWN_WIRESERVER_IP)
+        test_subject = imds.ImdsClient()
         with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
             mock_http_get.return_value = MockHttpResponse(status=http_status_code,
                                                       reason='reason',
@@ -386,99 +386,86 @@ class TestImds(AgentTestCase):
         # http GET calls and enforces a single GET call (fallback would cause 2) and
         # checks the url called.
 
-        test_subject = imds.ImdsClient("foo.bar")
+        test_subject = imds.ImdsClient()
 
         # ensure user-agent gets set correctly
         for is_health, expected_useragent in [(False, restutil.HTTP_USER_AGENT), (True, restutil.HTTP_USER_AGENT_HEALTH)]:
             # set a different resource path for health query to make debugging unit test easier
             resource_path = 'something/health' if is_health else 'something'
 
-            for has_primary_ioerror in (False, True):
-                # secondary endpoint unreachable
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
-                self._mock_imds_setup(primary_ioerror=has_primary_ioerror, secondary_ioerror=True)
-                result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertFalse(result.success) if has_primary_ioerror else self.assertTrue(result.success)  # pylint: disable=expression-not-assigned
-                self.assertFalse(result.service_error)
-                if has_primary_ioerror:
-                    self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), result.response)
-                else:
-                    self.assertEqual('Mock success response', result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
-                    self.assertTrue('User-Agent' in kwargs['headers'])
-                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+            # IMDS success
+            test_subject._http_get = Mock(side_effect=self._mock_http_get)
+            self._mock_imds_setup()
+            result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertTrue(result.success)
+            self.assertFalse(result.service_error)
+            self.assertEqual('Mock success response', result.response)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+            self.assertEqual(1, test_subject._http_get.call_count)
 
-                # IMDS success
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
-                self._mock_imds_setup(primary_ioerror=has_primary_ioerror)
-                result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertTrue(result.success)
-                self.assertFalse(result.service_error)
-                self.assertEqual('Mock success response', result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
-                    self.assertTrue('User-Agent' in kwargs['headers'])
-                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+            # Connection error
+            test_subject._http_get = Mock(side_effect=self._mock_http_get)
+            self._mock_imds_setup(ioerror=True)
+            result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(result.success)
+            self.assertFalse(result.service_error)
+            self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), result.response)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+            self.assertEqual(1, test_subject._http_get.call_count)
 
-                # IMDS throttled
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
-                self._mock_imds_setup(primary_ioerror=has_primary_ioerror, throttled=True)
-                result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertFalse(result.success)
-                self.assertFalse(result.service_error)
-                self.assertEqual('IMDS error in /metadata/{0}: Throttled'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
-                    self.assertTrue('User-Agent' in kwargs['headers'])
-                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+            # IMDS throttled
+            test_subject._http_get = Mock(side_effect=self._mock_http_get)
+            self._mock_imds_setup(throttled=True)
+            result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(result.success)
+            self.assertFalse(result.service_error)
+            self.assertEqual('IMDS error in /metadata/{0}: Throttled'.format(resource_path), result.response)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+            self.assertEqual(1, test_subject._http_get.call_count)
 
-                # IMDS gone error
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
-                self._mock_imds_setup(primary_ioerror=has_primary_ioerror, gone_error=True)
-                result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertFalse(result.success)
-                self.assertTrue(result.service_error)
-                self.assertEqual('IMDS error in /metadata/{0}: HTTP Failed with Status Code 410: Gone'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
-                    self.assertTrue('User-Agent' in kwargs['headers'])
-                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+            # IMDS gone error
+            test_subject._http_get = Mock(side_effect=self._mock_http_get)
+            self._mock_imds_setup(gone_error=True)
+            result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(result.success)
+            self.assertTrue(result.service_error)
+            self.assertEqual('IMDS error in /metadata/{0}: HTTP Failed with Status Code 410: Gone'.format(resource_path), result.response)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+            self.assertEqual(1, test_subject._http_get.call_count)
 
-                # IMDS bad request
-                test_subject._http_get = Mock(side_effect=self._mock_http_get)
-                self._mock_imds_setup(primary_ioerror=has_primary_ioerror, bad_request=True)
-                result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
-                self.assertFalse(result.success)
-                self.assertFalse(result.service_error)
-                self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), result.response)
-                for _, kwargs in test_subject._http_get.call_args_list:
-                    self.assertTrue('User-Agent' in kwargs['headers'])
-                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
-                self.assertEqual(2 if has_primary_ioerror else 1, test_subject._http_get.call_count)
+            # IMDS bad request
+            test_subject._http_get = Mock(side_effect=self._mock_http_get)
+            self._mock_imds_setup(bad_request=True)
+            result = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(result.success)
+            self.assertFalse(result.service_error)
+            self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), result.response)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+            self.assertEqual(1, test_subject._http_get.call_count)
 
-    def _mock_imds_setup(self, primary_ioerror=False, secondary_ioerror=False, gone_error=False, throttled=False, bad_request=False):
-        self._mock_imds_expect_fallback = primary_ioerror  # pylint: disable=attribute-defined-outside-init
-        self._mock_imds_primary_ioerror = primary_ioerror  # pylint: disable=attribute-defined-outside-init
-        self._mock_imds_secondary_ioerror = secondary_ioerror  # pylint: disable=attribute-defined-outside-init
+    def _mock_imds_setup(self, ioerror=False, gone_error=False, throttled=False, bad_request=False):
+        self._mock_imds_ioerror = ioerror  # pylint: disable=attribute-defined-outside-init
         self._mock_imds_gone_error = gone_error  # pylint: disable=attribute-defined-outside-init
         self._mock_imds_throttled = throttled  # pylint: disable=attribute-defined-outside-init
         self._mock_imds_bad_request = bad_request  # pylint: disable=attribute-defined-outside-init
 
     def _mock_http_get(self, *_, **kwargs):
-        if "foo.bar" == kwargs['endpoint'] and not self._mock_imds_expect_fallback:
-            raise Exception("Unexpected endpoint called")
-        if self._mock_imds_primary_ioerror and "169.254.169.254" == kwargs['endpoint']:
-            raise HttpError("[HTTP Failed] GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
-        if self._mock_imds_secondary_ioerror and "foo.bar" == kwargs['endpoint']:
-            raise HttpError("[HTTP Failed] GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
+        if self._mock_imds_ioerror:
+            raise HttpError("[HTTP Failed] GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made".format(kwargs['endpoint'], kwargs['resource_path']))
         if self._mock_imds_gone_error:
             raise ResourceGoneError("Resource is gone")
         if self._mock_imds_throttled:
-            raise HttpError("[HTTP Retry] GET http://{0}/metadata/{1} -- Status Code 429 -- 25 attempts made"
-                            .format(kwargs['endpoint'], kwargs['resource_path']))
+            raise HttpError("[HTTP Retry] GET http://{0}/metadata/{1} -- Status Code 429 -- 25 attempts made".format(kwargs['endpoint'], kwargs['resource_path']))
 
         resp = MagicMock()
         resp.reason = 'reason'
