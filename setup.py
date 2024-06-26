@@ -346,4 +346,3 @@ setuptools.setup(
         'install': install
     }
 )
-
