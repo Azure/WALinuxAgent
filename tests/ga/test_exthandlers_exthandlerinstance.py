@@ -117,7 +117,7 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
         def mock_remove(path, dir_fd=None):  # pylint: disable=unused-argument
             if path.endswith("extension_file2"):
-                raise IOError("A mocked error")
+                raise IOError(999,"A mocked error","extension_file2")
             original_remove_api(path)
 
         with patch.object(shutil.os, remove_api_name, mock_remove):
