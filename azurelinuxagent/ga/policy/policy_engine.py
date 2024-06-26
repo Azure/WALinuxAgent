@@ -67,12 +67,12 @@ class PolicyEngine:
                 return
             self._policy_supported = self._is_policy_supported()
 
-            if not self._policy_supported:
-                log_policy_info("Policy enforcement is not supported on {0}".format(get_distro()))
-                return
-
             if not conf.get_extension_policy_enabled():
                 log_policy_info("Extension policy enforcement is disabled")
+                return
+
+            if not self._policy_supported:
+                log_policy_info("Policy enforcement is not supported on {0}".format(get_distro()))
                 return
 
             # TO DO - import code is for e2e testing, remove once the binary has been published to GA package

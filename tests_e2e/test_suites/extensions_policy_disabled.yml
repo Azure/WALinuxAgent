@@ -5,4 +5,3 @@ name: "ExtensionsPolicyDisabled"
 tests:
   - "extensions_policy_disabled/extensions_policy_disabled.py"
 images: "rhel_90"
-owns_vm: true

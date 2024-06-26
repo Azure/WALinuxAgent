@@ -75,6 +75,9 @@ class ExtensionsPolicy(AgentVmTest):
             except Exception as error:
                 fail(f"Unexpected error while processing {t.extension.__str__()} during policy engine instantiation")
 
+        log.info("Disable extension policy enforcement on the test VM [%s]", self._context.vm.name)
+        output = ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+        log.info("Disable policy completed:\n%s", output)
 
 if __name__ == "__main__":
     ExtensionsPolicy.run_from_command_line()
