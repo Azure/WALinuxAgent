@@ -31,7 +31,6 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
@@ -474,25 +473,6 @@ class UpdateHandler(object):
                 logger.error(message)
                 add_event(op=WALAEventOperation.CloudInit, message=message, is_success=False, log_event=False)
             self._cloud_init_completed = True  # Mark as completed even on error since we will proceed to execute extensions
-
-    def _get_vm_size(self, protocol):
-        """
-        Including VMSize is meant to capture the architecture of the VM (i.e. arm64 VMs will
-        have arm64 included in their vmsize field and amd64 will have no architecture indicated).
-        """
-        if self._vm_size is None:
-
-            imds_client = get_imds_client(protocol.get_endpoint())
-
-            try:
-                imds_info = imds_client.get_compute()
-                self._vm_size = imds_info.vmSize
-            except Exception as e:
-                err_msg = "Attempts to retrieve VM size information from IMDS are failing: {0}".format(textutil.format_exception(e))
-                logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(err_msg))
-                return "unknown"
-
-        return self._vm_size
 
     def _get_vm_arch(self):
         return platform.machine()

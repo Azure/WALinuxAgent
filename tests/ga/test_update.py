@@ -52,7 +52,7 @@ from azurelinuxagent.ga.update import  \
 from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
-from tests.lib.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
+from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances, is_python_version_26_or_34, skip_if_predicate_true
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
@@ -119,7 +119,7 @@ def _get_update_handler(iterations=1, test_data=None, protocol=None, autoupdate_
                 yield update_handler, protocol
 
 
-class UpdateTestCase(AgentTestCaseWithGetVmSizeMock):
+class UpdateTestCase(AgentTestCase):
     _test_suite_tmp_dir = None
     _agent_zip_dir = None
 
@@ -1928,7 +1928,7 @@ class TestAgentUpgrade(UpdateTestCase):
 @patch('azurelinuxagent.ga.update.get_collect_logs_handler')
 @patch('azurelinuxagent.ga.update.get_monitor_handler')
 @patch('azurelinuxagent.ga.update.get_env_handler')
-class MonitorThreadTest(AgentTestCaseWithGetVmSizeMock):
+class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         super(MonitorThreadTest, self).setUp()
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
