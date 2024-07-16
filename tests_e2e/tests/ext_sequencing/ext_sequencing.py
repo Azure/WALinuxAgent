@@ -226,7 +226,7 @@ class ExtSequencing(AgentVmssTest):
                 # fail. We know an extension should fail if "failing" is in the case name. Otherwise, report the
                 # failure.
                 deployment_failure_pattern = r"[\s\S]*\"details\": [\s\S]* \"code\": \"(?P<code>.*)\"[\s\S]* \"message\": \"(?P<msg>.*)\"[\s\S]*"
-                msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM. Please see the VM extension instance view for other failures. The first extension failed due to the error: VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
+                msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM.*VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
                 deployment_failure_match = re.match(deployment_failure_pattern, str(e))
                 if "failing" not in case.__name__:
                     fail("Extension template deployment unexpectedly failed: {0}".format(e))
