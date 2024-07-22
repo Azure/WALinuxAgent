@@ -58,12 +58,14 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is unsupported on this platform.")
                 return
 
-            # Import should only be attempted within the Configurator context, so must be outside top level.
+            # Import should only be attempted after checks, and we need to maintain import error state in this class.
+            # So import must happen here, outside top level.
             # pylint: disable=import-outside-top level
+            global regorus
             import regorus
             PolicyEngineConfigurator._policy_enabled = True
 
-        except ImportError:
+        except (ImportError, NameError) as ex:
             log_policy("Error: Failed to import Regorus module and initialize policy engine.", is_success=False)
         except Exception as ex:
             log_policy("Error: Failed to enable policy enforcement. '{0}'".format(ex), is_success=False)
@@ -102,7 +104,9 @@ class PolicyEngine:
         try:
             if PolicyEngineConfigurator.get_instance().get_policy_enabled():
                 self._engine = regorus.Engine()  # regorus will have already been imported in configurator
-            self._policy_engine_enabled = True
+                self._policy_engine_enabled = True
+        except (ImportError, NameError):
+            log_policy("Error: Failed to initialize Regorus policy engine due to import failure.", is_success=False)
         except Exception as ex:
             log_policy("Error: Failed to initialize Regorus policy engine. '{0}'".format(ex), is_success=False)
 

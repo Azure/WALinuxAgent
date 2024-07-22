@@ -15,6 +15,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import os
+import sys
+
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension
@@ -23,14 +26,21 @@ from unittest.mock import patch
 
 class TestPolicyEngineConfigurator(AgentTestCase):
     @classmethod
+    def setUpClass(cls):
+        # add path to regorus dependency to test environment
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
+        sys.path.insert(0, regorus_dir)
+        AgentTestCase.setUpClass()
+    @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
         AgentTestCase.tearDownClass()
-
     def tearDown(self):
         PolicyEngineConfigurator._instance = None
         PolicyEngineConfigurator._initialized = False
         PolicyEngineConfigurator._policy_enabled = False
+        patch.stopall()
         AgentTestCase.tearDown(self)
 
     def test_get_instance_should_return_same_instance(self):
@@ -56,11 +66,41 @@ class TestPolicyEngineConfigurator(AgentTestCase):
 
 
 class TestPolicyEngine(AgentTestCase):
+    @classmethod
+    def setUpClass(cls):
+        # add path to regorus dependency to test environment
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
+        sys.path.insert(0, regorus_dir)
+        AgentTestCase.setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        PolicyEngineConfigurator._instance = None
+        AgentTestCase.tearDownClass()
+
+    def tearDown(self):
+        PolicyEngineConfigurator._instance = None
+        PolicyEngineConfigurator._initialized = False
+        PolicyEngineConfigurator._policy_enabled = False
+        patch.stopall()
+        AgentTestCase.tearDown(self)
 
     def test_regorus_engine_should_be_initialized(self):
         """Regorus engine should initialize without any errors on a supported distro."""
-        engine = PolicyEngine()
-        self.assertTrue(engine.policy_engine_enabled)
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
+                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+            engine = PolicyEngine()
+            self.assertTrue(engine.policy_engine_enabled)
+
+    def test_regorus_engine_should_not_initialize(self):
+        """Policy should NOT be enabled on unsupported like RHEL."""
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
+                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+            engine = PolicyEngine()
+            regorus_engine_enabled = engine.policy_engine_enabled
+            self.assertFalse(regorus_engine_enabled,
+                             "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
 
 
