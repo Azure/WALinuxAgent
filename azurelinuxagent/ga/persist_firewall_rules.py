@@ -21,10 +21,10 @@ import sys
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.ga.firewall_manager import FirewallCmd, FirewallStateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.common.utils import shellutil, fileutil, textutil
-from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.utils.shellutil import CommandError
 
 
@@ -58,15 +58,13 @@ import os
 
 if __name__ == '__main__':
     if os.path.exists("{egg_path}"):
-        os.system("{py_path} {egg_path} --setup-firewall --dst_ip={wire_ip} --uid={user_id} {wait}")
+        os.system("{py_path} {egg_path} --setup-firewall={wire_ip}")
     else:
         print("{egg_path} file not found, skipping execution of firewall execution setup for this boot")
 """
 
     _AGENT_NETWORK_SETUP_NAME_FORMAT = "{0}-network-setup.service"
     BINARY_FILE_NAME = "waagent-network-setup.py"
-
-    _FIREWALLD_RUNNING_CMD = ["firewall-cmd", "--state"]
 
     # The current version of the unit file; Update it whenever the unit file is modified to ensure Agent can dynamically
     # modify the unit file on VM too
@@ -78,7 +76,7 @@ if __name__ == '__main__':
         service_name = PersistFirewallRulesHandler._AGENT_NETWORK_SETUP_NAME_FORMAT.format(osutil.get_service_name())
         return os.path.join(osutil.get_systemd_unit_file_install_path(), service_name)
 
-    def __init__(self, dst_ip, uid):
+    def __init__(self, dst_ip):
         """
         This class deals with ensuring that Firewall rules are persisted over system reboots.
         It tries to employ using Firewalld.service if present first as it already has provisions for persistent rules.
@@ -90,8 +88,6 @@ if __name__ == '__main__':
         self._is_systemd = systemd.is_systemd()
         self._systemd_file_path = osutil.get_systemd_unit_file_install_path()
         self._dst_ip = dst_ip
-        self._uid = uid
-        self._wait = osutil.get_firewall_will_wait()
         # The custom service will try to call the current agent executable to setup the firewall rules
         self._current_agent_executable_path = os.path.join(os.getcwd(), sys.argv[0])
 
@@ -101,67 +97,65 @@ if __name__ == '__main__':
         # https://docs.fedoraproject.org/en-US/Fedora/19/html/Security_Guide/sec-Check_if_firewalld_is_running.html
         # Eg:    firewall-cmd --state
         #           >   running
-        firewalld_state = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD
         try:
-            return shellutil.run_command(firewalld_state).rstrip() == "running"
+            status = shellutil.run_command(["firewall-cmd", "--state"]).rstrip()
+            if status == "running":
+                logger.info("The firewalld service is running")
+                return True
+            else:
+                logger.info("The firewalld service is present, but not running. Status: {0}".format(status))
+                return False
         except Exception as error:
-            logger.verbose("{0} command failed: {1}".format(' '.join(firewalld_state), ustr(error)))
-        return False
+            # Instance of 'Exception' has no 'errno' member (no-member)
+            # OK to disable, errno is a member of IOError
+            if isinstance(error, IOError) and error.errno == 2:  # pylint: disable=no-member
+                logger.info("The firewalld service is not present on the system")
+                return False
+            logger.warn("Cannot check the status of the firewall service: {0}".format(ustr(error)))
+            return False
 
     def setup(self):
-        if not systemd.is_systemd():
-            logger.warn("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
-            return
-
-        if self._is_firewall_service_running():
-            logger.info("Firewalld.service present on the VM, setting up permanent rules on the VM")
+        if not self._is_firewall_service_running():
+            setup_network_service = True
+            logger.info("Firewalld service not running/unavailable, trying to set up {0}".format(self._network_setup_service_name))
+        else:
+            setup_network_service = False
+            logger.info("Firewalld.service is running, setting up permanent rules on the VM")
             # In case of a failure, this would throw. In such a case, we don't need to try to setup our custom service
-            # because on system reboot, all iptable rules are reset by firewalld.service so it would be a no-op.
-            self._setup_permanent_firewalld_rules()
+            # because on system reboot, all iptables rules are reset by firewalld.service, so it would be a no-op.
+            # setup permanent firewalld rules
+            firewall_manager = FirewallCmd(self._dst_ip)
+
+            try:
+                if firewall_manager.check():
+                    msg = "The permanent firewall rules for Azure Fabric are already setup:\n{0}".format(firewall_manager.get_state())
+                else:
+                    firewall_manager.setup()
+                    msg = "Created permanent firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state())
+                logger.info(msg)
+                add_event(op=WALAEventOperation.Firewall, message=msg)
+            except FirewallStateError:
+                msg = "The permanent firewall rules for Azure Fabric are misconfigured, will reset them. Current state:\n{0}".format(firewall_manager.get_state())
+                logger.warn(msg)
+                add_event(op=WALAEventOperation.Firewall, message=msg, is_success=False, log_event=False)
+                firewall_manager.remove()
+                firewall_manager.setup()
+                msg = "Reset permanent firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state())
+                logger.info(msg)
+                add_event(op=WALAEventOperation.Firewall, message=msg)
 
             # Remove custom service if exists to avoid problems with firewalld
             try:
                 fileutil.rm_files(*[self.get_service_file_path(), os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)])
             except Exception as error:
-                logger.info(
-                    "Unable to delete existing service {0}: {1}".format(self._network_setup_service_name, ustr(error)))
-            return
+                logger.info("Unable to delete existing service {0}: {1}".format(self._network_setup_service_name, ustr(error)))
 
-        logger.info(
-            "Firewalld service not running/unavailable, trying to set up {0}".format(self._network_setup_service_name))
+        if setup_network_service:
+            if not systemd.is_systemd():
+                logger.warn("Did not detect Systemd, unable to set {0}".format(self._network_setup_service_name))
+                return
 
-        self._setup_network_setup_service()
-
-    def __verify_firewall_rules_enabled(self):
-        # Check if firewall-rules have already been enabled
-        # This function would also return False if the dest-ip is changed. So no need to check separately for that
-        try:
-            AddFirewallRules.check_firewalld_rule_applied(self._dst_ip, self._uid)
-        except Exception as error:
-            logger.verbose(
-                "Check if Firewall rules already applied using firewalld.service failed: {0}".format(ustr(error)))
-            return False
-
-        return True
-
-    def __remove_firewalld_rules(self):
-        try:
-            AddFirewallRules.remove_firewalld_rules(self._dst_ip, self._uid)
-        except Exception as error:
-            logger.warn(
-                "failed to remove rule using firewalld.service: {0}".format(ustr(error)))
-
-    def _setup_permanent_firewalld_rules(self):
-        if self.__verify_firewall_rules_enabled():
-            logger.info("Firewall rules already set. No change needed.")
-            return
-
-        logger.info("Firewall rules not added yet, adding them now using firewalld.service")
-        # Remove first if partial list present
-        self.__remove_firewalld_rules()
-        # Add rules if not already set
-        AddFirewallRules.add_firewalld_rules(self._dst_ip, self._uid)
-        logger.info("Successfully added the firewall commands using firewalld.service")
+            self._setup_network_setup_service()
 
     def __verify_network_setup_service_enabled(self):
         # Check if the custom service has already been enabled
@@ -209,8 +203,6 @@ if __name__ == '__main__':
             fileutil.write_file(binary_file_path,
                                 self.__BINARY_CONTENTS.format(egg_path=self._current_agent_executable_path,
                                                               wire_ip=self._dst_ip,
-                                                              user_id=self._uid,
-                                                              wait=self._wait,
                                                               py_path=sys.executable))
             logger.info("Successfully updated the Binary file {0} for firewall setup".format(binary_file_path))
         except Exception:
@@ -356,3 +348,4 @@ if __name__ == '__main__':
         logger.info(
             "Unit file matches with expected version: {0} and exec start: {1}, not overwriting unit file".format(unit_file_version, unit_exec_start))
         return False
+

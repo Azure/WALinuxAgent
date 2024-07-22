@@ -22,8 +22,7 @@ from datetime import datetime, timedelta
 from threading import current_thread
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, \
     AGENT_ERROR_FILE
-from tests.common.osutil.test_default import TestOSUtil
-import azurelinuxagent.common.osutil.default as osutil
+from tests.common.test_firewall_manager import create_mock_iptables, TestIpTablesFirewall
 
 _ORIGINAL_POPEN = subprocess.Popen
 
@@ -32,7 +31,6 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
     ExitException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr, httpclient
-from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import VMAgentFamily, \
     ExtHandlerPackage, ExtHandlerPackageList, Extension, VMStatus, ExtHandlerStatus, ExtensionStatus, \
@@ -41,19 +39,18 @@ from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.utils import fileutil, textutil, timeutil, shellutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME, AGENT_STATUS_FILE
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import FirewallCmdDirectCommands, AddFirewallRules
 from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB, AGENT_NAME, AGENT_DIR_PATTERN, \
     AGENT_VERSION, CURRENT_AGENT, CURRENT_VERSION, set_daemon_version, __DAEMON_VERSION_ENV_VARIABLE as DAEMON_VERSION_ENV_VARIABLE
 from azurelinuxagent.ga.exthandlers import ExtHandlersHandler, ExtHandlerInstance, HandlerEnvironment, ExtensionStatusValue
 from azurelinuxagent.ga.update import  \
-    get_update_handler, ORPHAN_POLL_INTERVAL, AGENT_PARTITION_FILE, ORPHAN_WAIT_INTERVAL, \
+    get_update_handler, ORPHAN_POLL_INTERVAL, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
 from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
 from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
-    clear_singleton_instances, is_python_version_26_or_34, skip_if_predicate_true
+    clear_singleton_instances, skip_if_predicate_true
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
 
@@ -416,23 +413,6 @@ class TestUpdate(UpdateTestCase):
             self.assertEqual(3, calls)
             self.assertEqual(2, sleeps)
             self.assertEqual(1, mock_kill.call_count)
-
-    @patch('azurelinuxagent.ga.update.datetime')
-    def test_ensure_partition_assigned(self, mock_time):
-        path = os.path.join(conf.get_lib_dir(), AGENT_PARTITION_FILE)
-        mock_time.utcnow = Mock()
-
-        self.assertFalse(os.path.exists(path))
-
-        for n in range(0, 99):
-            mock_time.utcnow.return_value = Mock(microsecond=n * 10000)
-
-            self.update_handler._ensure_partition_assigned()
-
-            self.assertTrue(os.path.exists(path))
-            s = fileutil.read_file(path)
-            self.assertEqual(n, int(s))
-            os.remove(path)
 
     def test_ensure_readonly_sets_readonly(self):
         test_files = [
@@ -1014,188 +994,26 @@ class TestUpdate(UpdateTestCase):
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
 
-    def test_it_should_not_setup_persistent_firewall_rules_if_EnableFirewall_is_disabled(self):
-        executed_firewall_commands = []
+    def test_it_should_setup_the_firewall_rules(self):
+        with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
+            with create_mock_iptables() as mock_iptables:
+                # Make all the "-C" (check) commands return 1 to indicate no rules are set yet
+                mock_iptables.set_return_values("-C", accept_dns=1, accept=1, drop=1)
+                with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                    update_handler.run(debug=True)
+                    self.assertEqual(
+                        [
+                            TestIpTablesFirewall.get_accept_dns_command("-C"),
+                            TestIpTablesFirewall.get_accept_command("-C"),
+                            TestIpTablesFirewall.get_drop_command("-C"),
+                            TestIpTablesFirewall.get_accept_dns_command("-A"),
+                            TestIpTablesFirewall.get_accept_command("-A"),
+                            TestIpTablesFirewall.get_drop_command("-A"),
+                        ],
+                        mock_iptables.firewall_calls,
+                        "Expected 3 calls to the -C (check) command followed by 3 calls to the -A (append) command")
 
-        def _mock_popen(cmd, *args, **kwargs):
-            if 'firewall-cmd' in cmd:
-                executed_firewall_commands.append(cmd)
-                cmd = ["echo", "running"]
-            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
-
-        with _get_update_handler(iterations=1) as (update_handler, _):
-            with patch("azurelinuxagent.common.logger.info") as patch_info:
-                with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen):
-                    with patch('azurelinuxagent.common.conf.enable_firewall', return_value=False):
-                        with patch("azurelinuxagent.common.logger.warn") as patch_warn:
-                            update_handler.run(debug=True)
-
-        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
-            patch_warn.call_args_list))
-        self.assertEqual(0, len(executed_firewall_commands), "firewall-cmd should not be called at all")
-        self.assertTrue(any(
-            "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
-            patch_info.call_args_list), "Info not logged properly, got: {0}".format(patch_info.call_args_list))
-
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
-    def test_it_should_setup_persistent_firewall_rules_on_startup(self):
-        iterations = 1
-        executed_commands = []
-
-        def _mock_popen(cmd, *args, **kwargs):
-            if 'firewall-cmd' in cmd:
-                executed_commands.append(cmd)
-                cmd = ["echo", "running"]
-            return _ORIGINAL_POPEN(cmd, *args, **kwargs)
-
-        with _get_update_handler(iterations) as (update_handler, _):
-            with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen", side_effect=_mock_popen) as mock_popen:
-                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
-                    with patch('azurelinuxagent.common.osutil.systemd.is_systemd', return_value=True):
-                        with patch("azurelinuxagent.common.logger.warn") as patch_warn:
-                            update_handler.run(debug=True)
-
-        self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0; List of all warnings logged by the agent: {0}".format(
-            patch_warn.call_args_list))
-
-        # Firewall-cmd should only be called 4 times - 1st to check if running, 2nd, 3rd and 4th for the QueryPassThrough cmd
-        self.assertEqual(4, len(executed_commands),
-                         "The number of times firewall-cmd should be called is only 4; Executed firewall commands: {0}; All popen calls: {1}".format(
-                             executed_commands, mock_popen.call_args_list))
-        self.assertEqual(PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD, executed_commands.pop(0),
-                         "First command should be to check if firewalld is running")
-        self.assertTrue([FirewallCmdDirectCommands.QueryPassThrough in cmd for cmd in executed_commands],
-                        "The remaining commands should only be for querying the firewall commands")
-
-    def test_it_should_set_dns_tcp_iptable_if_drop_available_accept_unavailable(self):
-
-        with TestOSUtil._mock_iptables() as mock_iptables:
-            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
-                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
-                    with patch.object(osutil, '_enable_firewall', True):
-                        # drop rule is present
-                        mock_iptables.set_command(
-                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                         mock_iptables.destination,
-                                                                         wait=mock_iptables.wait), exit_code=0)
-                        # non root tcp iptable rule is absent
-                        mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                                       mock_iptables.destination,
-                                                                                       wait=mock_iptables.wait),
-                                                  exit_code=1)
-
-                        update_handler._add_accept_tcp_firewall_rule_if_not_enabled(mock_iptables.destination)
-
-                        drop_check_command = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                         mock_iptables.destination,
-                                                                         wait=mock_iptables.wait))
-                        accept_tcp_check_rule = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                 mock_iptables.destination,
-                                                                 wait=mock_iptables.wait))
-                        accept_tcp_insert_rule = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND,
-                                                                 mock_iptables.destination,
-                                                                 wait=mock_iptables.wait))
-
-                        # Filtering the mock iptable command calls with only the ones related to this test.
-                        filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
-                                                       cmd in [drop_check_command, accept_tcp_check_rule,
-                                                               accept_tcp_insert_rule]]
-
-                        self.assertEqual(len(filtered_mock_iptable_calls), 3,
-                                         "Incorrect number of calls to iptables: [{0}]".format(
-                                             mock_iptables.command_calls))
-                        self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
-                                         "The first command should check the drop rule")
-                        self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
-                                         "The second command should check the accept rule")
-                        self.assertEqual(filtered_mock_iptable_calls[2], accept_tcp_insert_rule,
-                                         "The third command should add the accept rule")
-
-    def test_it_should_not_set_dns_tcp_iptable_if_drop_unavailable(self):
-
-        with TestOSUtil._mock_iptables() as mock_iptables:
-            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
-                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
-                    with patch.object(osutil, '_enable_firewall', True):
-                        # drop rule is not available
-                        mock_iptables.set_command(
-                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                         mock_iptables.destination,
-                                                                         wait=mock_iptables.wait), exit_code=1)
-
-                        update_handler._add_accept_tcp_firewall_rule_if_not_enabled(mock_iptables.destination)
-
-                        drop_check_command = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                         mock_iptables.destination,
-                                                                         wait=mock_iptables.wait))
-                        accept_tcp_check_rule = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                 mock_iptables.destination,
-                                                                 wait=mock_iptables.wait))
-                        accept_tcp_insert_rule = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND,
-                                                                 mock_iptables.destination,
-                                                                 wait=mock_iptables.wait))
-
-                        # Filtering the mock iptable command calls with only the ones related to this test.
-                        filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
-                                                       cmd in [drop_check_command, accept_tcp_check_rule,
-                                                               accept_tcp_insert_rule]]
-
-                        self.assertEqual(len(filtered_mock_iptable_calls), 1,
-                                         "Incorrect number of calls to iptables: [{0}]".format(
-                                             mock_iptables.command_calls))
-                        self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
-                                         "The first command should check the drop rule")
-
-    def test_it_should_not_set_dns_tcp_iptable_if_drop_and_accept_available(self):
-
-        with TestOSUtil._mock_iptables() as mock_iptables:
-            with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
-                with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
-                    with patch.object(osutil, '_enable_firewall', True):
-                        # drop rule is available
-                        mock_iptables.set_command(
-                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                         mock_iptables.destination,
-                                                                         wait=mock_iptables.wait), exit_code=0)
-                        # non root tcp iptable rule is available
-                        mock_iptables.set_command(AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                                       mock_iptables.destination,
-                                                                                       wait=mock_iptables.wait),
-                                                  exit_code=0)
-
-                        update_handler._add_accept_tcp_firewall_rule_if_not_enabled(mock_iptables.destination)
-
-                        drop_check_command = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_wire_non_root_drop_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                         mock_iptables.destination,
-                                                                         wait=mock_iptables.wait))
-                        accept_tcp_check_rule = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.CHECK_COMMAND,
-                                                                 mock_iptables.destination,
-                                                                 wait=mock_iptables.wait))
-                        accept_tcp_insert_rule = TestOSUtil._command_to_string(
-                            AddFirewallRules.get_accept_tcp_rule(AddFirewallRules.INSERT_COMMAND,
-                                                                 mock_iptables.destination,
-                                                                 wait=mock_iptables.wait))
-
-                        # Filtering the mock iptable command calls with only the ones related to this test.
-                        filtered_mock_iptable_calls = [cmd for cmd in mock_iptables.command_calls if
-                                                       cmd in [drop_check_command, accept_tcp_check_rule,
-                                                               accept_tcp_insert_rule]]
-
-                        self.assertEqual(len(filtered_mock_iptable_calls), 2,
-                                         "Incorrect number of calls to iptables: [{0}]".format(
-                                             mock_iptables.command_calls))
-                        self.assertEqual(filtered_mock_iptable_calls[0], drop_check_command,
-                                         "The first command should check the drop rule")
-                        self.assertEqual(filtered_mock_iptable_calls[1], accept_tcp_check_rule,
-                                         "The second command should check the accept rule")
+        # TODO: def test_it_should_setup_persistent_firewall_rules_on_startup(self):
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
@@ -2438,15 +2256,12 @@ class HeartbeatTestCase(AgentTestCase):
     @patch("azurelinuxagent.common.logger.info")
     @patch("azurelinuxagent.ga.update.add_event")
     def test_telemetry_heartbeat_creates_event(self, patch_add_event, patch_info, *_):
-
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as mock_protocol:
-            update_handler = get_update_handler()
-
-            update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-            update_handler._send_heartbeat_telemetry(mock_protocol)
-            self.assertEqual(1, patch_add_event.call_count)
-            self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
-                            for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
+        update_handler = get_update_handler()
+        update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
+        update_handler._send_heartbeat_telemetry()
+        self.assertEqual(1, patch_add_event.call_count)
+        self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
+                        for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
 
 
 class AgentMemoryCheckTestCase(AgentTestCase):

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# Microsoft Azure Linux Agent
+#
+# Copyright 2018 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Helper script which tries to access Wireserver on system reboot. Also prints out iptable rules if non-root and still
+# able to access Wireserver
+
+# iptables is not available on Ubuntu Minimal, but nftables will be available in the near future.
+# For now, on Ubuntu, if iptables is not available, we install nftables.
+# TODO: Remove this script once nftables is available on Ubuntu Minimal.
+if [[ "$(uname -v)" == *~*Ubuntu* ]]; then
+    if ! command -v iptables; then
+        echo "iptables is not available. Installing nftables."
+        if command -v nft; then
+            echo "nftables is already installed"
+        else
+            apt-get update
+            apt-get install -y nftables
+        fi
+    fi
+fi

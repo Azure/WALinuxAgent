@@ -26,7 +26,7 @@ import shutil
 from assertpy import fail
 
 from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.firewall_helpers import verify_all_rules_exist
+from tests_e2e.tests.lib.firewall_manager import FirewallManager
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry
 
@@ -153,10 +153,13 @@ def generate_svg():
 def main():
     try:
         # Verify firewall rules are set on boot through cron job logs
+        firewall_manager = FirewallManager.create()
+        firewall_manager.assert_all_rules_are_set()
+        firewall_manager.log_firewall_state("** Initial state of the firewall")
+
         verify_wireserver_ip_unreachable_for_non_root()
         verify_wireserver_ip_reachable_for_root()
         verify_tcp_connection_to_wireserver_for_non_root()
-        verify_all_rules_exist()
     finally:
         # save the logs to /var/log to capture by collect-logs, this might be useful for debugging
         move_cron_logs_to_var_log()

@@ -35,13 +35,14 @@ class AgentPersistFirewallTest(AgentVmTest):
         self._test_setup()
         # Test case 1: After test agent install, verify firewalld or network.setup is running
         self._verify_persist_firewall_service_running()
-        # Test case 2: Perform reboot and ensure firewall rules added on boot and working as expected
+        # Test case 2: Disable the agent(so that agent won't get started after reboot)
+        # perform reboot and ensure firewall rules added on boot even after agent is disabled
+        self._disable_agent()
         self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
         self._verify_persist_firewall_service_running()
         self._verify_firewall_rules_on_boot("first_boot")
-        # Test case 3: Disable the agent(so that agent won't get started after reboot)
-        # perform reboot and ensure firewall rules added on boot even after agent is disabled
-        self._disable_agent()
+        # Test case 3: Re-enable the agent and do an additional reboot. The intention is to check for conflicts between the agent and the persist firewall service
+        self._enable_agent()
         self._context.vm.restart(wait_for_boot=True, ssh_client=self._ssh_client)
         self._verify_persist_firewall_service_running()
         self._verify_firewall_rules_on_boot("second_boot")
@@ -65,6 +66,11 @@ class AgentPersistFirewallTest(AgentVmTest):
         self._run_remote_test(self._ssh_client, f"agent_persist_firewall-verify_firewall_rules_on_boot.py --user {self._context.username} --boot_name {boot_name}",
                               use_sudo=True)
         log.info("Successfully verified firewall rules on {0}".format(boot_name))
+
+    def _enable_agent(self):
+        log.info("Enabling agent")
+        self._run_remote_test(self._ssh_client, "agent-service enable", use_sudo=True)
+        log.info("Successfully enabled agent\n")
 
     def _disable_agent(self):
         log.info("Disabling agent")

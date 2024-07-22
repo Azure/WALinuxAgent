@@ -176,20 +176,19 @@ class TestProtocolUtil(AgentTestCase):
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
         protocol_util.osutil = MagicMock()
-        protocol_util.osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
         # Run
-        protocol_util.get_protocol()
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            protocol_util.get_protocol()
 
         # Check MDS Certs do not exist
         for mds_cert_path in mds_cert_paths:
             self.assertFalse(os.path.exists(mds_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_firewall.assert_called_once()
-        protocol_util.osutil.enable_firewall.assert_called_once()
+        mock_remove_firewall.assert_called_once()
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
@@ -216,13 +215,13 @@ class TestProtocolUtil(AgentTestCase):
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
         protocol_util.osutil = MagicMock()
-        protocol_util.osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
         mock_wire_client.return_value = MagicMock()
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
         # Run
-        protocol_util.get_protocol()
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            protocol_util.get_protocol()
 
         # Check MDS Certs do not exist
         for mds_cert_path in mds_cert_paths:
@@ -234,8 +233,7 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_firewall.assert_called_once()
-        protocol_util.osutil.enable_firewall.assert_called_once()
+        mock_remove_firewall.assert_called_once()
 
         # Check Protocol File is updated to WireProtocol
         with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
