@@ -20,49 +20,7 @@ import sys
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator
-from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension
 from unittest.mock import patch
-
-
-class TestPolicyEngineConfigurator(AgentTestCase):
-    @classmethod
-    def setUpClass(cls):
-        # add path to regorus dependency to test environment
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        sys.path.insert(0, regorus_dir)
-        AgentTestCase.setUpClass()
-    @classmethod
-    def tearDownClass(cls):
-        PolicyEngineConfigurator._instance = None
-        AgentTestCase.tearDownClass()
-    def tearDown(self):
-        PolicyEngineConfigurator._instance = None
-        PolicyEngineConfigurator._initialized = False
-        PolicyEngineConfigurator._policy_enabled = False
-        patch.stopall()
-        AgentTestCase.tearDown(self)
-
-    def test_get_instance_should_return_same_instance(self):
-        """PolicyEngineConfigurator should be a singleton."""
-        configurator_1 = PolicyEngineConfigurator.get_instance()
-        configurator_2 = PolicyEngineConfigurator.get_instance()
-        self.assertIs(configurator_1, configurator_2,
-                      "PolicyEngineConfigurator.get_instance() should return the same instance.")
-
-    def test_policy_should_be_enabled_on_supported_distro(self):
-        """Policy should be enabled on supported distro like Ubuntu 16.04."""
-        with patch('azurelinuxagent.common.version.get_distro', return_value=['ubuntu', '16.04']), \
-                patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True):
-            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
-
-    def test_policy_should_not_be_enabled_on_unsupported_distro(self):
-        """Policy should NOT be enabled on unsupported like RHEL."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")\
 
 
 class TestPolicyEngine(AgentTestCase):
@@ -86,54 +44,39 @@ class TestPolicyEngine(AgentTestCase):
         patch.stopall()
         AgentTestCase.tearDown(self)
 
-    def test_regorus_engine_should_be_initialized(self):
+    def test_configurator_get_instance_should_return_same_instance(self):
+        """PolicyEngineConfigurator should be a singleton."""
+        configurator_1 = PolicyEngineConfigurator.get_instance()
+        configurator_2 = PolicyEngineConfigurator.get_instance()
+        self.assertIs(configurator_1, configurator_2,
+                      "PolicyEngineConfigurator.get_instance() should return the same instance.")
+
+    def test_policy_should_be_enabled_on_supported_distro(self):
+        """Policy should be enabled on supported distro like Ubuntu 16.04."""
+        with patch('azurelinuxagent.common.version.get_distro', return_value=['ubuntu', '16.04']), \
+                patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True):
+            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+            self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
+
+    def test_policy_should_not_be_enabled_on_unsupported_distro(self):
+        """Policy should NOT be enabled on unsupported like RHEL."""
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
+                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+            self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
+
+    def test_regorus_engine_should_be_initialized_on_supported_distro(self):
         """Regorus engine should initialize without any errors on a supported distro."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
                 patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
             engine = PolicyEngine()
-            self.assertTrue(engine.policy_engine_enabled)
+            self.assertTrue(engine.policy_engine_enabled,
+                            "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
 
-    def test_regorus_engine_should_not_initialize(self):
-        """Policy should NOT be enabled on unsupported like RHEL."""
+    def test_regorus_engine_should_not_be_initialized_on_unsupported_distro(self):
+        """Regorus policy engine should NOT be initialized on unsupported distro like RHEL."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
                 patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
             engine = PolicyEngine()
-            regorus_engine_enabled = engine.policy_engine_enabled
-            self.assertFalse(regorus_engine_enabled,
+            self.assertFalse(engine.policy_engine_enabled,
                              "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
-
-
-
-class TestPolicyEngin2e(AgentTestCase):
-    """Test the PolicyEngine class."""
-
-    @staticmethod
-    def cleanup_engine(self, engine):
-        """Helper method to reset singleton."""
-        pass
-
-    def test_get_instance(self):
-        """
-        Test case to verify the singleton behavior of the policy engine configurator.
-        """
-        pass
-
-
-    def policy_should_be_enabled_on_supported_distro(self):
-        """
-        Test case to verify that policy is enabled when distro is supported.
-        """
-        pass
-
-
-    def policy_should_be_disabled_on_unsupported_distro(self):
-        """
-        Test case to verify that policy is disabled fails when distro is unsupported.
-        """
-        pass
-
-    def import_error_should_be_handled(self):
-        """
-        Test case to verify that policy is disabled fails when distro is unsupported.
-        """
-        pass

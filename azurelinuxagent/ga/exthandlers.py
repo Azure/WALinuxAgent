@@ -478,8 +478,9 @@ class ExtHandlersHandler(object):
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
 
-        # TO DO: add functionality here for extension allowlist validation, currently checks if engine is initialized.
-        engine = ExtensionPolicyEngine()
+        # TO DO: add functionality here for extension allowlist validation. Currently, we try to initialize the
+        # ExtensionPolicyEngine, the constructor will log necessary messages for testing.
+        ExtensionPolicyEngine()
 
         for extension, ext_handler in all_extensions:
 

@@ -58,9 +58,6 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is unsupported on this platform.")
                 return
 
-            # Import should only be attempted after checks, and we need to maintain import error state in this class.
-            # So import must happen here, outside top level.
-            # pylint: disable=import-outside-top level
             global regorus
             import regorus
             PolicyEngineConfigurator._policy_enabled = True
