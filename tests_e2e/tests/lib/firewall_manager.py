@@ -257,27 +257,33 @@ class NfTables(FirewallManager):
         return shellutil.run_command(["sudo", "nft", "list", "table", "walinuxagent"])
 
     _rule_regexp = {
-        FirewallManager.ACCEPT_DNS: r"168.63.129.16\s+tcp\s+dport 53\s+",
-        FirewallManager.ACCEPT: r"168.63.129.16\s+meta\s+skuid 0\s+",
-        FirewallManager.DROP: r"168.63.129.16\s+.+\s+drop"
+        FirewallManager.ACCEPT_DNS: r" tcp dport != 53 ",
+        FirewallManager.ACCEPT: r" meta skuid != 0 ",
+        FirewallManager.DROP: r" drop$"
     }
 
     def get_missing_rules(self) -> List[str]:
         missing = []
 
-        state: str = self.get_state()
-        for rule in NfTables._rule_regexp.keys():
-            if re.search(self._rule_regexp[rule], state) is None:
+        wireserver_rule = self._get_wireserver_rule()
+        for rule, regexp in NfTables._rule_regexp.items():
+            if re.search(regexp, wireserver_rule) is None:
                 missing.append(rule)
 
         return missing
 
     def check_rule(self, rule_name: str) -> bool:
         try:
-            state: str = self.get_state()
-            return re.search(self._rule_regexp[rule_name], state) is not None
+            wireserver_rule = self._get_wireserver_rule()
+            return re.search(self._rule_regexp[rule_name], wireserver_rule) is not None
         except KeyError:
             raise Exception(f"Invalid rule name: {rule_name}")
+
+    def _get_wireserver_rule(self) -> str:
+        for line in self.get_state().split("\n"):
+            if re.search(r"\s*ip daddr 168.63.129.16\s*", line) is not None:
+                return line
+        raise Exception("Could not any rules for the WireServer address in the nftables state")
 
     def delete_rule(self, rule_name: str) -> None:
         output: str = shellutil.run_command(["sudo", "nft", "--json", "--handle", "list", "table", "walinuxagent"])
