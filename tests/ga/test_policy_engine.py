@@ -93,4 +93,8 @@ class TestPolicyEngine(AgentTestCase):
                              "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
     def test_fail(self):
-        self.fail(os.listdir)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        dirtest = os.path.abspath(os.path.join(current_dir, "..", ".."))
+        listed = os.listdir(dirtest)
+        self.fail(listed)
+
