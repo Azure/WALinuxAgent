@@ -33,9 +33,9 @@ class TestPolicyEngine(AgentTestCase):
         self.mock_sys_path = self.patcher.start()
 
         # add regorus directory to sys.path
-        # current_dir = os.path.dirname(os.path.abspath(__file__))
-        # self.regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        # self.mock_sys_path.insert(0, self.regorus_dir)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
+        self.mock_sys_path.insert(0, self.regorus_dir)
         super().setUp()
 
     @classmethod
@@ -76,13 +76,13 @@ class TestPolicyEngine(AgentTestCase):
             policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
             self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
 
-    # def test_regorus_engine_should_be_initialized_on_supported_distro(self):
-    #     """Regorus engine should initialize without any errors on a supported distro."""
-    #     with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
-    #             patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-    #         engine = PolicyEngine()
-    #         self.assertTrue(engine.policy_engine_enabled,
-    #                         "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
+    def test_regorus_engine_should_be_initialized_on_supported_distro(self):
+        """Regorus engine should initialize without any errors on a supported distro."""
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
+                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+            engine = PolicyEngine()
+            self.assertTrue(engine.policy_engine_enabled,
+                            "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
 
     def test_regorus_engine_should_not_be_initialized_on_unsupported_distro(self):
         """Regorus policy engine should NOT be initialized on unsupported distro like RHEL."""
@@ -92,4 +92,11 @@ class TestPolicyEngine(AgentTestCase):
             self.assertFalse(engine.policy_engine_enabled,
                              "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
+    def test_fail(self):
+        syspath = sys.path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
+        listed = os.listdir(dirtest)
+        msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
+        self.fail(msg)
 
