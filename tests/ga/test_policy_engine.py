@@ -38,7 +38,6 @@ class TestPolicyEngine(AgentTestCase):
         self.mock_sys_path.insert(0, self.regorus_dir)
         super().setUp()
 
-
     @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
@@ -67,7 +66,8 @@ class TestPolicyEngine(AgentTestCase):
                 patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True):
             syspath = sys.path
             policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
+            msg = f"sys path: {syspath}"
+            self.assertTrue(policy_enabled, msg)
 
     def test_policy_should_not_be_enabled_on_unsupported_distro(self):
         """Policy should NOT be enabled on unsupported like RHEL."""
@@ -93,8 +93,9 @@ class TestPolicyEngine(AgentTestCase):
                              "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
     def test_fail(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        dirtest = os.path.abspath(os.path.join(current_dir, "..", ".."))
-        listed = os.listdir(dirtest)
-        self.fail(listed)
+        # current_dir = os.path.dirname(os.path.abspath(__file__))
+        # dirtest = os.path.abspath(os.path.join(current_dir, "..", ".."))
+        # listed = os.listdir(dirtest)
+        syspath = sys.path
+        self.fail(sys.path)
 
