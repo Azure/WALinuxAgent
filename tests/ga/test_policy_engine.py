@@ -35,7 +35,8 @@ class TestPolicyEngine(AgentTestCase):
         # add regorus directory to sys.path
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        self.mock_sys_path.insert(0, self.regorus_dir)
+        # self.mock_sys_path.insert(0, self.regorus_dir)
+        sys.path.insert(0, self.regorus_dir)
         super().setUp()
 
     @classmethod
