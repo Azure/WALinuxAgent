@@ -127,7 +127,7 @@ class ExtensionPolicyEngine(PolicyEngine):
         if self.policy_engine_enabled:
             try:
                 # TO DO: load policy and data file here
-                self._extension_policy_enabled = True
+                self._extension_policy_engine_enabled = True
                 log_policy("Successfully enabled extension policy enforcement.",
                            op=WALAEventOperation.ExtensionPolicy)
             except Exception as ex:

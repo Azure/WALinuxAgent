@@ -1,0 +1,7 @@
+#
+# The test suite tests policy enforcement on supported distros.
+#
+name: "ExtensionsPolicy"
+tests:
+  - "extensions_policy/extensions_policy.py"
+images: "ubuntu_2004"

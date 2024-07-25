@@ -19,7 +19,7 @@ import os
 import sys
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator
+from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
 from unittest.mock import patch
 from tests.lib.tools import patch, patch_builtin
 
@@ -92,11 +92,18 @@ class TestPolicyEngine(AgentTestCase):
             self.assertFalse(engine.policy_engine_enabled,
                              "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
-    def test_fail(self):
-        syspath = sys.path
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        listed = os.listdir(dirtest)
-        msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
-        self.fail(msg)
+    def test_extension_policy_engine_should_load_successfully(self):
+        """Extension policy engine should be able to load policy and data files without any errors."""
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
+                   patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+            engine = ExtensionPolicyEngine()
+            self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
+    # def test_fail(self):
+    #     syspath = sys.path
+    #     current_dir = os.path.dirname(os.path.abspath(__file__))
+    #     dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
+    #     listed = os.listdir(dirtest)
+    #     msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
+    #     self.fail(msg)
+    #
