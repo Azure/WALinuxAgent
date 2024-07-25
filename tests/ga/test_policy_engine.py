@@ -29,8 +29,8 @@ class TestPolicyEngine(AgentTestCase):
 
     def setUp(self):
         # mock sys.path so we can add Regorus binary file location to path
-        self.patcher = patch.object(sys, 'path', sys.path.copy())
-        self.mock_sys_path = self.patcher.start()
+        # self.patcher = patch.object(sys, 'path', sys.path.copy())
+        # self.mock_sys_path = self.patcher.start()
 
         # add regorus directory to sys.path
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -50,7 +50,7 @@ class TestPolicyEngine(AgentTestCase):
         PolicyEngineConfigurator._policy_enabled = False
 
         # restore sys.path
-        self.patcher.stop()
+        # self.patcher.stop()
         patch.stopall()
         AgentTestCase.tearDown(self)
 
