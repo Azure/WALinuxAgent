@@ -99,11 +99,11 @@ class TestPolicyEngine(AgentTestCase):
             engine = ExtensionPolicyEngine()
             self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
-    # def test_fail(self):
-    #     syspath = sys.path
-    #     current_dir = os.path.dirname(os.path.abspath(__file__))
-    #     dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-    #     listed = os.listdir(dirtest)
-    #     msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
-    #     self.fail(msg)
-    #
+    def test_fail(self):
+        syspath = sys.path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
+        listed = os.listdir(dirtest)
+        msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
+        self.fail(msg)
+
