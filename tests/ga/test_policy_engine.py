@@ -22,35 +22,38 @@ from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
 from unittest.mock import patch
 from tests.lib.tools import patch, patch_builtin
-
+import tests_e2e.tests.executables
+import shutil
 
 
 class TestPolicyEngine(AgentTestCase):
+    dummy_bin = None
 
-    def setUp(self):
-        # mock sys.path so we can add Regorus binary file location to path
-        # self.patcher = patch.object(sys, 'path', sys.path.copy())
-        # self.mock_sys_path = self.patcher.start()
-
-        # add regorus directory to sys.path
+    @classmethod
+    def setUpClass(cls):
+        # replace dummy regorus binary in ga folder with real binary from tests_e2e folder
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        # self.mock_sys_path.insert(0, self.regorus_dir)
-        sys.path.insert(0, self.regorus_dir)
-        super().setUp()
+        real_bin = os.path.abspath(
+            os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/regorus.cpython-38-x86_64-linux-gnu.so"))
+        dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
+        cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "regorus.cpython-38-x86_64-linux-gnu.so"))
+        os.makedirs(os.path.dirname(dummy_bin_dir), exist_ok=True)
+        if not os.path.exists(cls.dummy_bin):
+            shutil.copy(real_bin, cls.dummy_bin)
+        AgentTestCase.setUpClass()
+
 
     @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
+        if os.path.exists(cls.dummy_bin):
+            os.remove(cls.dummy_bin)
         AgentTestCase.tearDownClass()
 
     def tearDown(self):
         PolicyEngineConfigurator._instance = None
         PolicyEngineConfigurator._initialized = False
         PolicyEngineConfigurator._policy_enabled = False
-
-        # restore sys.path
-        # self.patcher.stop()
         patch.stopall()
         AgentTestCase.tearDown(self)
 
@@ -77,6 +80,7 @@ class TestPolicyEngine(AgentTestCase):
             policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
             self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
 
+    # @patch.dict('sys.modules', {'azurelinuxagent.ga.policy.regorus': __import__('tests_e2e.tests.executables')})
     def test_regorus_engine_should_be_initialized_on_supported_distro(self):
         """Regorus engine should initialize without any errors on a supported distro."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
@@ -100,11 +104,11 @@ class TestPolicyEngine(AgentTestCase):
             engine = ExtensionPolicyEngine()
             self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
-    def test_fail(self):
-        syspath = sys.path
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        listed = os.listdir(dirtest)
-        msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
-        self.fail(msg)
+    # def test_fail(self):
+    #     syspath = sys.path
+    #     current_dir = os.path.dirname(os.path.abspath(__file__))
+    #     dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
+    #     listed = os.listdir(dirtest)
+    #     msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
+    #     self.fail(msg)
 
