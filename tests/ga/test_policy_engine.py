@@ -22,7 +22,6 @@ from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
 from unittest.mock import patch
 from tests.lib.tools import patch, patch_builtin
-import tests_e2e.tests.executables
 import shutil
 
 
@@ -80,7 +79,6 @@ class TestPolicyEngine(AgentTestCase):
             policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
             self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
 
-    # @patch.dict('sys.modules', {'azurelinuxagent.ga.policy.regorus': __import__('tests_e2e.tests.executables')})
     def test_regorus_engine_should_be_initialized_on_supported_distro(self):
         """Regorus engine should initialize without any errors on a supported distro."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
