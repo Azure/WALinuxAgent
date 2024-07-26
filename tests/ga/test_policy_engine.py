@@ -16,95 +16,101 @@
 #
 
 import os
-import sys
+import shutil
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
-from unittest.mock import patch
-from tests.lib.tools import patch, patch_builtin
-
+from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine, POLICY_SUPPORT_MATRIX
+from tests.lib.tools import patch, data_dir, test_dir
 
 
 class TestPolicyEngine(AgentTestCase):
+    patcher = None
+    regorus_dest_path = None    # Location where real regorus executable should be.
 
-    def setUp(self):
-        # mock sys.path so we can add Regorus binary file location to path
-        # self.patcher = patch.object(sys, 'path', sys.path.copy())
-        # self.mock_sys_path = self.patcher.start()
-
-        # add regorus directory to sys.path
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.regorus_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        # self.mock_sys_path.insert(0, self.regorus_dir)
-        sys.path.insert(0, self.regorus_dir)
-        super().setUp()
+    @classmethod
+    def setUpClass(cls):
+        # Currently, ga/policy/regorus contains a dummy binary. The unit tests require a real binary,
+        # so we replace the dummy with a copy from the tests_e2e folder.
+        regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
+        cls.regorus_dest_path = os.path.abspath(os.path.join(test_dir, "..", "azurelinuxagent/ga/policy/regorus"))
+        if not os.path.exists(cls.regorus_dest_path):
+            shutil.copy(regorus_source_path, cls.regorus_dest_path)
+        # Patch the path to regorus for all unit tests.
+        cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
+        cls.patcher.start()
+        AgentTestCase.setUpClass()
 
     @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
+        # Clean up the Regorus binary that was copied to ga/policy/regorus.
+        if os.path.exists(cls.regorus_dest_path):
+            os.remove(cls.regorus_dest_path)
+        cls.patcher.stop()
         AgentTestCase.tearDownClass()
 
     def tearDown(self):
         PolicyEngineConfigurator._instance = None
         PolicyEngineConfigurator._initialized = False
         PolicyEngineConfigurator._policy_enabled = False
-
-        # restore sys.path
-        # self.patcher.stop()
-        patch.stopall()
         AgentTestCase.tearDown(self)
 
     def test_configurator_get_instance_should_return_same_instance(self):
         """PolicyEngineConfigurator should be a singleton."""
         configurator_1 = PolicyEngineConfigurator.get_instance()
         configurator_2 = PolicyEngineConfigurator.get_instance()
-        self.assertIs(configurator_1, configurator_2,
-                      "PolicyEngineConfigurator.get_instance() should return the same instance.")
+        self.assertTrue(configurator_1 is configurator_2,
+                        "PolicyEngineConfigurator.get_instance() should return the same instance.")
 
     def test_policy_should_be_enabled_on_supported_distro(self):
-        """Policy should be enabled on supported distro like Ubuntu 16.04."""
-        with patch('azurelinuxagent.common.version.get_distro', return_value=['ubuntu', '16.04']), \
-                patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True):
-            syspath = sys.path
-            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            msg = f"sys path: {syspath}"
-            self.assertTrue(policy_enabled, msg)
+        """Policy should be enabled on all supported distros."""
+        for distro_name, version in POLICY_SUPPORT_MATRIX.items():
+            with patch('azurelinuxagent.ga.policy.policy_engine.get_distro',
+                       return_value=[distro_name, str(version)]):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
+                           return_value=True):
+                    policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+                    self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
 
     def test_policy_should_not_be_enabled_on_unsupported_distro(self):
         """Policy should NOT be enabled on unsupported like RHEL."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+                self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
 
     def test_regorus_engine_should_be_initialized_on_supported_distro(self):
         """Regorus engine should initialize without any errors on a supported distro."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            engine = PolicyEngine()
-            self.assertTrue(engine.policy_engine_enabled,
-                            "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = PolicyEngine()
+                self.assertTrue(engine.policy_engine_enabled,
+                                "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
 
     def test_regorus_engine_should_not_be_initialized_on_unsupported_distro(self):
         """Regorus policy engine should NOT be initialized on unsupported distro like RHEL."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            engine = PolicyEngine()
-            self.assertFalse(engine.policy_engine_enabled,
-                             "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = PolicyEngine()
+                self.assertFalse(engine.policy_engine_enabled,
+                                 "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
     def test_extension_policy_engine_should_load_successfully(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
-                   patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            engine = ExtensionPolicyEngine()
-            self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = ExtensionPolicyEngine()
+                self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
-    def test_fail(self):
-        syspath = sys.path
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-        listed = os.listdir(dirtest)
-        msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
-        self.fail(msg)
-
+    def test_eval_query(self):
+        """Extension policy engine should be able to load policy and data files without any errors."""
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = PolicyEngine()
+                data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
+                policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+                input_file = os.path.join(data_dir, 'policy', "agent-extension-input.json")
+                query = "data.agent_extension_policy.extensions_to_download"
+                result = engine.eval_query(policy, data, input_file, query)
+                test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+                self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])

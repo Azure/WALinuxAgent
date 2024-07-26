@@ -20,7 +20,16 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 
+# Define support matrix for Regorus and policy engine feature.
+# Dict in the format: { distro:min_supported_version }
+POLICY_SUPPORT_MATRIX = {
+    'ubuntu': FlexibleVersion('16.04'),
+    'mariner': FlexibleVersion('1')
+}
 
+
+# This needs to be a module-level function because it is common across PolicyEngineConfigurator
+# and PolicyEngine classes, which do not inherit from each other.
 def log_policy(formatted_string, is_success=True, op=WALAEventOperation.Policy, send_event=True):
     """
     Log information to console and telemetry.
@@ -58,16 +67,16 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is unsupported on this platform.")
                 return
 
-            global regorus
-            import regorus
+            # Regorus import should only be attempted after completing the above checks within
+            # the configurator, but the module itself needs to be accessible outside this class.
+            global regorus  # pylint: disable=global-statement
+            import azurelinuxagent.ga.policy.regorus as regorus
             PolicyEngineConfigurator._policy_enabled = True
 
         except (ImportError, NameError) as ex:
-            log_policy("Error: Failed to import Regorus module and initialize policy engine.", is_success=False)
-            raise ex
+            log_policy("Error: Failed to import Regorus module and initialize policy engine. {0}".format(ex), is_success=False)
         except Exception as ex:
             log_policy("Error: Failed to enable policy enforcement. '{0}'".format(ex), is_success=False)
-            raise ex
         finally:
             PolicyEngineConfigurator._initialized = True
 
@@ -78,8 +87,14 @@ class PolicyEngineConfigurator:
         try:
             distro_version = FlexibleVersion(distro_info[1])
         except ValueError:
+            raise ValueError
+
+        # Check if the distro is in the support matrix and if the version is supported
+        if distro_name in POLICY_SUPPORT_MATRIX:
+            min_version = POLICY_SUPPORT_MATRIX[distro_name]
+            return distro_version >= min_version
+        else:
             return False
-        return distro_name.lower() == 'ubuntu' and distro_version.major >= 16
 
     @staticmethod
     def get_instance():
@@ -89,10 +104,10 @@ class PolicyEngineConfigurator:
 
     @staticmethod
     def get_policy_enabled():
-        return PolicyEngineConfigurator._policy_enabled
+        return PolicyEngineConfigurator.get_instance()._policy_enabled
 
 
-class PolicyEngine:
+class PolicyEngine(object):
     """
     Implements policy engine API. Class will always be initialized, but if the Regorus import fails,
     all methods will be no-ops.
@@ -105,15 +120,30 @@ class PolicyEngine:
                 self._engine = regorus.Engine()  # regorus will have already been imported in configurator
                 self._policy_engine_enabled = True
         except (ImportError, NameError) as ex:
-            log_policy("Error: Failed to initialize Regorus policy engine due to import failure.", is_success=False)
-            raise ex
+            log_policy("Error: Failed to initialize Regorus policy engine due to import failure. {0}".format(ex), is_success=False)
         except Exception as ex:
             log_policy("Error: Failed to initialize Regorus policy engine. '{0}'".format(ex), is_success=False)
-            raise ex
 
     @property
     def policy_engine_enabled(self):
         return self._policy_engine_enabled
+
+    def eval_query(self, policy, data, input_file, query):
+        if self._policy_engine_enabled:
+            self._engine.add_policy(policy)
+            self._engine.add_data(data)
+            self._engine.set_input(input_file)
+            result = self._engine.eval_query(query)
+            test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+            allowed = result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed']
+            if allowed:
+                log_policy("Extension is allowed!")
+                logger.info(str(result))
+            else:
+                log_policy("Extension is not allowed.")
+            return result
+        else:
+            return False
 
 
 class ExtensionPolicyEngine(PolicyEngine):
@@ -122,7 +152,7 @@ class ExtensionPolicyEngine(PolicyEngine):
     """
     def __init__(self):
         self._extension_policy_engine_enabled = False
-        super().__init__()
+        super(ExtensionPolicyEngine, self).__init__()
         # if Regorus engine initialization fails, we shouldn't try to load any files.
         if self.policy_engine_enabled:
             try:
