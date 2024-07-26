@@ -45,8 +45,8 @@ class TestPolicyEngine(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
-        if os.path.exists(cls.dummy_bin):
-            os.remove(cls.dummy_bin)
+        # if os.path.exists(cls.dummy_bin):
+        #     os.remove(cls.dummy_bin)
         AgentTestCase.tearDownClass()
 
     def tearDown(self):
@@ -67,10 +67,8 @@ class TestPolicyEngine(AgentTestCase):
         """Policy should be enabled on supported distro like Ubuntu 16.04."""
         with patch('azurelinuxagent.common.version.get_distro', return_value=['ubuntu', '16.04']), \
                 patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True):
-            syspath = sys.path
             policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            msg = f"sys path: {syspath}"
-            self.assertTrue(policy_enabled, msg)
+            self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
 
     def test_policy_should_not_be_enabled_on_unsupported_distro(self):
         """Policy should NOT be enabled on unsupported like RHEL."""
@@ -99,6 +97,8 @@ class TestPolicyEngine(AgentTestCase):
         """Extension policy engine should be able to load policy and data files without any errors."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
                    patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+            if not os.path.exists(TestPolicyEngine.dummy_bin):
+                self.fail("File isn't there")
             engine = ExtensionPolicyEngine()
             self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
