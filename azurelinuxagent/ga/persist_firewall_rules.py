@@ -126,6 +126,8 @@ if __name__ == '__main__':
             # setup permanent firewalld rules
             firewall_manager = FirewallCmd(self._dst_ip)
 
+            firewall_manager.remove_legacy_rule()
+
             try:
                 if firewall_manager.check():
                     msg = "The permanent firewall rules for Azure Fabric are already setup:\n{0}".format(firewall_manager.get_state())

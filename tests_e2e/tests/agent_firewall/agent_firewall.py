@@ -16,6 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+from typing import Any, Dict, List
+
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
@@ -35,6 +37,12 @@ class AgentFirewall(AgentVmTest):
         log.info("Checking firewall rules added by the agent")
         self._run_remote_test(self._ssh_client, f"agent_firewall-verify_all_firewall_rules.py --user {self._context.username}", use_sudo=True)
         log.info("Successfully verified all rules present and working as expected.")
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        """
+        Tests can override this method to return a list with rules to ignore errors in the agent log (see agent_log.py for sample rules).
+        """
+        return []
 
 
 if __name__ == "__main__":

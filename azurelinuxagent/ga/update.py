@@ -1081,9 +1081,7 @@ class UpdateHandler(object):
 
             firewall_manager = FirewallManager.create(wire_server_address)
 
-            # The legacy firewall rule was added using iptables; remove it only for that FirewallManager
-            if isinstance(firewall_manager, IpTables):
-                firewall_manager.remove_legacy_firewall_rule()
+            firewall_manager.remove_legacy_rule()
 
             try:
                 if firewall_manager.check():

@@ -16,6 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+from typing import Any, Dict, List
+
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.logging import log
@@ -78,6 +80,12 @@ class AgentPersistFirewallTest(AgentVmTest):
         log.info("Disabling agent")
         output = self._ssh_client.run_command("agent-service disable", use_sudo=True)
         log.info(f"Successfully disabled agent\n{output}")
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        """
+        Tests can override this method to return a list with rules to ignore errors in the agent log (see agent_log.py for sample rules).
+        """
+        return []
 
 
 if __name__ == "__main__":

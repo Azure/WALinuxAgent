@@ -97,6 +97,12 @@ class FirewallManager(object):
         """
         raise NotImplementedError()
 
+    def remove_legacy_rule(self):
+        """
+        The iptables and firewalld managers need to remove legacy rules; no-op for other managers.
+        """
+        pass
+
     def check(self):
         """
         Checks the current state of the firewall.
@@ -149,6 +155,20 @@ class _FirewallManagerMultipleRules(FirewallManager):
         for rule, command in self._get_commands(self._get_delete_command_option()):
             if rule in existing_rules:
                 self._execute_delete_command(command)
+
+    def remove_legacy_rule(self):
+        try:
+            check_command = self._get_legacy_rule_command(self._get_check_command_option())
+            try:
+                shellutil.run_command(check_command)
+            except CommandError as e:
+                if e.returncode == 1:  # rule does not exist
+                    return
+
+            delete_command = self._get_legacy_rule_command(self._get_delete_command_option())
+            self._execute_delete_command(delete_command)
+        except Exception as error:
+            logger.info("Unable to remove legacy firewall rule. Error: {0}".format(ustr(error)))
 
     def _execute_delete_command(self, command):
         """
@@ -204,6 +224,14 @@ class _FirewallManagerMultipleRules(FirewallManager):
     def _get_drop_rule_command(self, command_option):
         """
         Returns the command to manipulate the rule for dropping all requests on the WireServer address.
+        """
+        raise NotImplementedError()
+
+    def _get_legacy_rule_command(self, command_option):
+        """
+        Returns the command to delete the legacy firewall rule.
+
+        See the overrides of this method for details on those rules.
         """
         raise NotImplementedError()
 
@@ -265,20 +293,6 @@ class IpTables(_FirewallManagerMultipleRules):
         else:
             self._base_command = ["iptables", "-t", "security"]
 
-    def remove_legacy_firewall_rule(self):
-        # There was a rule change at 2.2.26, which started dropping non-root traffic
-        # to WireServer.  The previous rules allowed traffic.  Having both rules in
-        # place negated the fix in 2.2.26. Removing only the legacy rule and keeping other rules intact.
-        # This function removes the legacy firewall rule that was added <= 2.2.25 and may still exist on some VMs.
-        # Until 2.2.25 has aged out, keep this cleanup in place.
-        # Not adding the _enable_firewall check here as this will only be called once per service start and
-        # we dont want the state of this call to affect other iptable calls.
-        try:
-            command = self._base_command + ["-D", "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "ACCEPT"]
-            self._execute_delete_command(command)
-        except Exception as error:
-            logger.info("Unable to remove legacy firewall rule, won't try removing it again. Error: {0}".format(ustr(error)))
-
     def _execute_delete_command(self, command):
         """
         Continually execute the delete operation until the return code is non-zero or the limit has been reached.
@@ -303,6 +317,12 @@ class IpTables(_FirewallManagerMultipleRules):
 
     def _get_drop_rule_command(self, command_option):
         return self._base_command + [command_option, "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"]
+
+    def _get_legacy_rule_command(self, command_option):
+        # There was a rule change at 2.2.26, which started dropping non-root traffic to WireServer. The previous rule allowed traffic, and needs to be removed
+        # for the newer DROP rule to have any effect. This function returns the command to manipulate the legacy rule that was added <= 2.2.25. Until 2.2.25
+        # has aged out, keep this cleanup in place.
+        return self._base_command + [command_option, "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "ACCEPT"]
 
     def _get_append_command_option(self):
         return "-A"
@@ -329,6 +349,11 @@ class FirewallCmd(_FirewallManagerMultipleRules):
 
     def _get_drop_rule_command(self, command_option):
         return ["firewall-cmd", "--permanent", "--direct", command_option, "ipv4", "-t", "security", "-A", "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", "-m", "conntrack", "--ctstate", "INVALID,NEW", "-j", "DROP"]
+
+    def _get_legacy_rule_command(self, command_option):
+        # Agents <= 2.7.0.6 inserted (-I) the rule to accept DNS traffic; later agents changed that to append (-A) the rule.
+        # The insert rule needs to be removed, otherwise there will be duplicate rules for DNS.
+        return ["firewall-cmd", "--permanent", "--direct", command_option, "ipv4", "-t", "security", "-I", "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", '--destination-port', '53', '-j', 'ACCEPT']
 
     def _get_append_command_option(self):
         return "--passthrough"
