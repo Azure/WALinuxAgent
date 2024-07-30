@@ -1,3 +1,5 @@
+# pylint: disable-all
+
 from .regorus import *
 
 __doc__ = regorus.__doc__

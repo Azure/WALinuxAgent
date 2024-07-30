@@ -13,11 +13,3 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-#
-# pylint: disable-all
-#
-# from .regorus import *
-#
-# __doc__ = regorus.__doc__
-# if hasattr(regorus, "__all__"):
-#     __all__ = regorus.__all__
