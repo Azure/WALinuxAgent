@@ -20,8 +20,7 @@ import sys
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
-from unittest.mock import patch
-from tests.lib.tools import patch, patch_builtin
+from tests.lib.tools import patch
 import shutil
 
 

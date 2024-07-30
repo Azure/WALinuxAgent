@@ -58,7 +58,7 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is unsupported on this platform.")
                 return
 
-            global regorus
+            global regorus  # pylint: disable=global-statement
             import azurelinuxagent.ga.policy.regorus as regorus
             PolicyEngineConfigurator._policy_enabled = True
 
