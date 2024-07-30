@@ -14,7 +14,8 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-# pylint: disable=undefined-variable
+# pylint: disable-all
+
 from .regorus import *
 
 __doc__ = regorus.__doc__

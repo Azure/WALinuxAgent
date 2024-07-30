@@ -16,7 +16,6 @@
 #
 
 import os
-import sys
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
