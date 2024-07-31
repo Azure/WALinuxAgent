@@ -164,9 +164,12 @@ class _FirewallManagerMultipleRules(FirewallManager):
             except CommandError as e:
                 if e.returncode == 1:  # rule does not exist
                     return
+            logger.info("Found legacy firewall rule: {0}", check_command)
 
             delete_command = self._get_legacy_rule_command(self._get_delete_command_option())
+            logger.info("Removing legacy firewall rule: {0}", delete_command)
             self._execute_delete_command(delete_command)
+
         except Exception as error:
             logger.info("Unable to remove legacy firewall rule. Error: {0}".format(ustr(error)))
 
@@ -339,7 +342,7 @@ class FirewallCmd(_FirewallManagerMultipleRules):
     FirewallManager based on the firewalld command-line tool.
     """
     def _get_state_command(self):
-        return ["firewall-cmd", "--direct", "--get-all-passthroughs"]
+        return ["firewall-cmd", "--permanent", "--direct", "--get-all-passthroughs"]
 
     def _get_accept_dns_rule_command(self, command_option):
         return ["firewall-cmd", "--permanent", "--direct", command_option, "ipv4", "-t", "security", "-A", "OUTPUT", "-d", self._wire_server_address, "-p", "tcp", '--destination-port', '53', '-j', 'ACCEPT']

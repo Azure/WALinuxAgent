@@ -136,8 +136,8 @@ if __name__ == '__main__':
                     msg = "Created permanent firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state())
                 logger.info(msg)
                 add_event(op=WALAEventOperation.Firewall, message=msg)
-            except FirewallStateError:
-                msg = "The permanent firewall rules for Azure Fabric are misconfigured, will reset them. Current state:\n{0}".format(firewall_manager.get_state())
+            except FirewallStateError as e:
+                msg = "The permanent firewall rules for Azure Fabric are not setup correctly ({0}), will reset them. Current state:\n{1}".format(ustr(e), firewall_manager.get_state())
                 logger.warn(msg)
                 add_event(op=WALAEventOperation.Firewall, message=msg, is_success=False, log_event=False)
                 firewall_manager.remove()

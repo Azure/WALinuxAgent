@@ -82,10 +82,19 @@ class AgentPersistFirewallTest(AgentVmTest):
         log.info(f"Successfully disabled agent\n{output}")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
-        """
-        Tests can override this method to return a list with rules to ignore errors in the agent log (see agent_log.py for sample rules).
-        """
-        return []
+        return [
+            #
+            # The test deletes those rules, so the messages are expected
+            #
+            # 2024-07-30T23:36:35.705717Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS']), will reset them.
+            # 2024-07-30T23:37:23.612352Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT']), will reset them.
+            # 2024-07-30T23:38:11.083028Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['DROP']), will reset them.
+            #
+            {
+                'message': r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \[('ACCEPT DNS'|'ACCEPT'|'DROP'|, )+\]\), will reset them.",
+                'if': lambda r: r.level == "WARNING"
+            }
+        ]
 
 
 if __name__ == "__main__":

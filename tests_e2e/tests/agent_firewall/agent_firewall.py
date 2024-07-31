@@ -39,10 +39,19 @@ class AgentFirewall(AgentVmTest):
         log.info("Successfully verified all rules present and working as expected.")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
-        """
-        Tests can override this method to return a list with rules to ignore errors in the agent log (see agent_log.py for sample rules).
-        """
-        return []
+        return [
+            #
+            # The test deletes those rules, so the messages are expected
+            #
+            # 2024-07-23T16:24:35.641183Z WARNING ExtHandler ExtHandler The following rules are missing: ['ACCEPT DNS']
+            # 2024-07-23T16:26:26.236948Z WARNING ExtHandler ExtHandler The following rules are missing: ['ACCEPT', 'DROP']
+            # 2024-07-23T16:28:07.206546Z WARNING ExtHandler ExtHandler The following rules are missing: ['DROP']
+            #
+            {
+                'message': r"The following rules are missing: \[('ACCEPT DNS'|'ACCEPT'|'DROP'|, )+\]",
+                'if': lambda r: r.level == "WARNING"
+            }
+        ]
 
 
 if __name__ == "__main__":
