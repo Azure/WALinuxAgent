@@ -134,7 +134,11 @@ class EnableFirewall(PeriodicOperation):
             self._message_count = 0
             return
 
-        logger.info(message)
+        if is_success:
+            logger.info(message)
+        else:
+            logger.warn(message)
+
         add_event(op=WALAEventOperation.ResetFirewall, message=message, is_success=is_success, log_event=False)
 
 
