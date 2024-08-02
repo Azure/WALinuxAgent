@@ -24,7 +24,7 @@
 
 import uuid
 
-from assertpy import assert_that, fail
+from assertpy import fail
 from typing import Any
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
@@ -72,7 +72,7 @@ class ExtensionsPolicy(AgentVmTest):
                 expected_msg = "Extension policy is enabled. Continuing with policy enforcement."
                 ssh_client.run_command("grep \"{0}\" /var/log/waagent.log".format(expected_msg))
                 log.info("Successfully initialized policy engine")
-            except Exception as error:
+            except Exception:
                 fail(f"Unexpected error while processing {t.extension.__str__()} during policy engine instantiation")
 
         log.info("Disable extension policy enforcement on the test VM [%s]", self._context.vm.name)
