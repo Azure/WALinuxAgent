@@ -43,12 +43,23 @@ class AgentFirewall(AgentVmTest):
             #
             # The test deletes those rules, so the messages are expected
             #
-            # 2024-07-23T16:24:35.641183Z WARNING ExtHandler ExtHandler The following rules are missing: ['ACCEPT DNS']
-            # 2024-07-23T16:26:26.236948Z WARNING ExtHandler ExtHandler The following rules are missing: ['ACCEPT', 'DROP']
-            # 2024-07-23T16:28:07.206546Z WARNING ExtHandler ExtHandler The following rules are missing: ['DROP']
+            # 2024-07-31T13:49:53.309481Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['ACCEPT DNS']
+            # 2024-07-31T13:49:53.309481Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: [ACCEPT', 'DROP']
+            # 2024-07-31T13:49:53.309481Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['DROP']
             #
+            # 2024-07-23T16:24:35.641183Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS']
+            # 2024-07-23T16:26:26.236948Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT', 'DROP']
+            # 2024-07-23T16:28:07.206546Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['DROP']
+            #
+            # 2024-07-31T13:49:53.309481Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): ['No expression excludes the DNS port'].
+            # 2024-07-31T13:49:53.309481Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): ['The drop action is missing'].
+            # 2024-07-31T13:49:53.309481Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): ["No expression excludes the Agent's UID"].
+            #
+            # 2024-08-01T23:50:11.607020Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. ['No expression excludes the DNS port'].
+            # 2024-08-01T23:51:01.981996Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. ['The drop action is missing'].
+            # 2024-08-01T23:52:02.033667Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. ["No expression excludes the Agent's UID"].
             {
-                'message': r"The following rules are missing: \[('ACCEPT DNS'|'ACCEPT'|'DROP'|, )+\]",
+                'message': r"(The following rules are missing: \[('ACCEPT DNS'|'ACCEPT'|'DROP'|, )+\])|\[('No expression excludes the DNS port'|'The drop action is missing'|\"No expression excludes the Agent's UID\")+\]",
                 'if': lambda r: r.level == "WARNING"
             }
         ]

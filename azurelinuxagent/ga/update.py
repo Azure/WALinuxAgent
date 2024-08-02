@@ -1095,7 +1095,7 @@ class UpdateHandler(object):
 
             except FirewallStateError as e:
                 # Report the error and let the environment thread fix the firewall
-                msg = ustr(e)
+                msg = "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}".format(ustr(e))
                 logger.warn("{0}", e)
                 add_event(op=WALAEventOperation.Firewall, message=msg, is_success=False, log_event=False)
 

@@ -116,7 +116,7 @@ class EnableFirewall(PeriodicOperation):
                     return  # The firewall is configured correctly
                 self._report_message("The firewall has not been setup. Will set it up.", is_success=False)
             except FirewallStateError as e:
-                self._report_message("The firewall is not configured correctly: {0}. Will reset it. Current state:\n{1}".format(ustr(e), self._firewall_manager.get_state()), is_success=False)
+                self._report_message("The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}".format(ustr(e), self._firewall_manager.get_state()), is_success=False)
                 self._firewall_manager.remove()
             self._firewall_manager.setup()
             self._report_message("The firewall was setup successfully:\n{0}".format(self._firewall_manager.get_state()))
