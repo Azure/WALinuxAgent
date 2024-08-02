@@ -5,6 +5,7 @@ Generated with:
 
 Do not modify this file.
 """
+# pylint: skip-file
 
 __docformat__ = "restructuredtext"
 

@@ -15,12 +15,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import os
-
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
 from tests.lib.tools import patch
-import shutil
 
 
 class TestPolicyEngine(AgentTestCase):
