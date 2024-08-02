@@ -15,6 +15,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import os
+import shutil
+
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine
 from tests.lib.tools import patch
@@ -23,25 +26,25 @@ from tests.lib.tools import patch
 class TestPolicyEngine(AgentTestCase):
     dummy_bin = None
 
-    # @classmethod
-    # def setUpClass(cls):
-    #     # replace dummy regorus binary in ga folder with real binary from tests_e2e folder
-    #     current_dir = os.path.dirname(os.path.abspath(__file__))
-    #     real_bin = os.path.abspath(
-    #         os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/regorus.cpython-38-x86_64-linux-gnu.so"))
-    #     dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
-    #     cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "regorus.cpython-38-x86_64-linux-gnu.so"))
-    #     os.makedirs(os.path.dirname(dummy_bin_dir), exist_ok=True)
-    #     if not os.path.exists(cls.dummy_bin):
-    #         shutil.copy(real_bin, cls.dummy_bin)
-    #     AgentTestCase.setUpClass()
+    @classmethod
+    def setUpClass(cls):
+        # replace dummy regorus binary in ga folder with real binary from tests_e2e folder
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        real_bin = os.path.abspath(
+            os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/libregorus_ffi.so"))
+        dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
+        cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "libregorus_ffi.so"))
+        os.makedirs(os.path.dirname(dummy_bin_dir), exist_ok=True)
+        if not os.path.exists(cls.dummy_bin):
+            shutil.copy(real_bin, cls.dummy_bin)
+        AgentTestCase.setUpClass()
 
 
     @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
-        # if os.path.exists(cls.dummy_bin):
-        #     os.remove(cls.dummy_bin)
+        if os.path.exists(cls.dummy_bin):
+            os.remove(cls.dummy_bin)
         AgentTestCase.tearDownClass()
 
     def tearDown(self):
