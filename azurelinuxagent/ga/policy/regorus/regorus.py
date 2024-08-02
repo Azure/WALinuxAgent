@@ -23,7 +23,7 @@ class Engine:
             try:
                 json_output = json.loads(str(result.output))
             except json.JSONDecodeError as e:
-                print(f"Failed to decode JSON: {e}")
+                print("Failed to decode JSON: {}".format(e))
         else:
             json_output = "{}"
         return json_output
