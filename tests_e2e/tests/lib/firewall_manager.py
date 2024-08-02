@@ -46,7 +46,7 @@ class FirewallManager:
         Creates the appropriate firewall manager to 
         """
         try:
-            shellutil.run_command(["iptables", "--version"])
+            shellutil.run_command(["sudo", "iptables", "--version"])  # On some distros, e.g. CentOS, iptables is not on the PATH for regular users
             log.info("Using iptables to manage the firewall")
             return IpTables()
         except FileNotFoundError:
