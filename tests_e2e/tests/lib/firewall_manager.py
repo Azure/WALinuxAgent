@@ -49,7 +49,7 @@ class FirewallManager:
             shellutil.run_command(["sudo", "iptables", "--version"])  # On some distros, e.g. CentOS, iptables is not on the PATH for regular users
             log.info("Using iptables to manage the firewall")
             return IpTables()
-        except FileNotFoundError:
+        except CommandError:
             pass
 
         try:
@@ -215,7 +215,8 @@ class Firewalld(_IpTablesFirewalldManager):
         except Exception as exception:
             if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
                 return False
-            raise
+            log.info(f"The firewalld service is present, but it is not running: {exception}")
+            return False
 
     def _get_state_command(self) -> str:
         return "sudo firewall-cmd --permanent --direct --get-all-passthroughs"
@@ -249,7 +250,7 @@ class NfTables(FirewallManager):
         #       chain output {
         #               type filter hook output priority filter; policy accept;
         #               ip daddr 168.63.129.16 tcp dport 53 counter packets 0 bytes 0 accept
-        #              ip daddr 168.63.129.16 meta skuid 0 counter packets 93 bytes 57077 accept
+        #               ip daddr 168.63.129.16 meta skuid 0 counter packets 93 bytes 57077 accept
         #               ip daddr 168.63.129.16 ct state invalid,new counter packets 5904 bytes 742896 drop
         #           }
         #    }
