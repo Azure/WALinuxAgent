@@ -103,7 +103,7 @@ if __name__ == '__main__':
                 logger.info("The firewalld service is running")
                 return True
             else:
-                logger.info("The firewalld service is present, but not running. Status: {0}".format(status))
+                logger.info("The firewalld service is present, but not running: {0}".format(status))
                 return False
         except Exception as error:
             # Instance of 'Exception' has no 'errno' member (no-member)
@@ -111,7 +111,7 @@ if __name__ == '__main__':
             if isinstance(error, IOError) and error.errno == 2:  # pylint: disable=no-member
                 logger.info("The firewalld service is not present on the system")
                 return False
-            logger.warn("Cannot check the status of the firewall service: {0}".format(ustr(error)))
+            logger.info("The firewalld service is present, but not running: {0}".format(ustr(error)))
             return False
 
     def setup(self):
