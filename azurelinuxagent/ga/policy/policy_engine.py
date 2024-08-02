@@ -59,7 +59,7 @@ class PolicyEngineConfigurator:
                 return
 
             global regorus  # pylint: disable=global-statement
-            import azurelinuxagent.ga.policy.regorus as regorus
+            import azurelinuxagent.ga.policy.regorus.regorus as regorus
             PolicyEngineConfigurator._policy_enabled = True
 
         except (ImportError, NameError) as ex:

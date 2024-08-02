@@ -26,18 +26,18 @@ import shutil
 class TestPolicyEngine(AgentTestCase):
     dummy_bin = None
 
-    @classmethod
-    def setUpClass(cls):
-        # replace dummy regorus binary in ga folder with real binary from tests_e2e folder
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        real_bin = os.path.abspath(
-            os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/regorus.cpython-38-x86_64-linux-gnu.so"))
-        dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
-        cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "regorus.cpython-38-x86_64-linux-gnu.so"))
-        os.makedirs(os.path.dirname(dummy_bin_dir), exist_ok=True)
-        if not os.path.exists(cls.dummy_bin):
-            shutil.copy(real_bin, cls.dummy_bin)
-        AgentTestCase.setUpClass()
+    # @classmethod
+    # def setUpClass(cls):
+    #     # replace dummy regorus binary in ga folder with real binary from tests_e2e folder
+    #     current_dir = os.path.dirname(os.path.abspath(__file__))
+    #     real_bin = os.path.abspath(
+    #         os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/regorus.cpython-38-x86_64-linux-gnu.so"))
+    #     dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
+    #     cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "regorus.cpython-38-x86_64-linux-gnu.so"))
+    #     os.makedirs(os.path.dirname(dummy_bin_dir), exist_ok=True)
+    #     if not os.path.exists(cls.dummy_bin):
+    #         shutil.copy(real_bin, cls.dummy_bin)
+    #     AgentTestCase.setUpClass()
 
 
     @classmethod
@@ -95,16 +95,7 @@ class TestPolicyEngine(AgentTestCase):
         """Extension policy engine should be able to load policy and data files without any errors."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
                    patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            if not os.path.exists(TestPolicyEngine.dummy_bin):
-                self.fail("File isn't there")
             engine = ExtensionPolicyEngine()
             self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
-    # def test_fail(self):
-    #     syspath = sys.path
-    #     current_dir = os.path.dirname(os.path.abspath(__file__))
-    #     dirtest = os.path.abspath(os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables"))
-    #     listed = os.listdir(dirtest)
-    #     msg = "sys path: " + str(syspath) + " Dir content: " + str(listed)
-    #     self.fail(msg)
 
