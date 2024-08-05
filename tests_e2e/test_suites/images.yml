@@ -88,8 +88,16 @@ images:
       urn: "almalinux almalinux 9-gen2 latest"
       locations:
          AzureChinaCloud: []
-   azure-linux_3: "microsoftcblmariner azure-linux azure-linux-3 latest"
-   azure-linux_3_arm64: "microsoftcblmariner azure-linux azure-linux-arm64 latest"
+   azure-linux_3:
+      urn: "microsoftcblmariner azure-linux azure-linux-3 latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_3_arm64:
+      urn: "microsoftcblmariner azure-linux azure-linux-arm64 latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
    centos_610: "OpenLogic CentOS 6.10 latest"
    centos_75: "OpenLogic CentOS 7.5 latest"
    centos_79: "OpenLogic CentOS 7_9 latest"
