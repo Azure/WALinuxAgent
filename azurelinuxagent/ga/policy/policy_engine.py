@@ -89,7 +89,7 @@ class PolicyEngineConfigurator:
 
     @staticmethod
     def get_policy_enabled():
-        return PolicyEngineConfigurator._policy_enabled
+        return PolicyEngineConfigurator.get_instance()._policy_enabled
 
 
 class PolicyEngine:
