@@ -5,6 +5,8 @@ Generated with:
 
 Do not modify this file.
 """
+# pylint: disable-all
+
 
 __docformat__ = "restructuredtext"
 
