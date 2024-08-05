@@ -56,7 +56,8 @@ class PolicyEngineConfigurator:
 
             if not self._is_policy_supported():
                 log_policy("Policy enforcement is unsupported on this platform.")
-                return
+                raise Exception("Unsupported")
+                # return
 
             global regorus  # pylint: disable=global-statement
             import azurelinuxagent.ga.policy.regorus.regorus as regorus
@@ -78,7 +79,8 @@ class PolicyEngineConfigurator:
         try:
             distro_version = FlexibleVersion(distro_info[1])
         except ValueError:
-            return False
+            raise ValueError
+            # return False
         return distro_name.lower() == 'ubuntu' and distro_version.major >= 16
 
     @staticmethod
