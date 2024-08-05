@@ -75,15 +75,7 @@ class PolicyEngineConfigurator:
     def _is_policy_supported():
         distro_info = get_distro()
         distro_name = distro_info[0]
-        # try:
-        #     distro_version = FlexibleVersion(distro_info[1])
-        # except ValueError:
-        #     raise ValueError
-        #     # return False
-        allowed = distro_name.lower() == 'ubuntu' or distro_name.lower() == 'debian' # and distro_version.major >= 16
-        return allowed
-        # else:
-        #     raise Exception("Not supported: distro name is {0}".format(distro_name))
+        return distro_name.lower() == 'ubuntu'
 
     @staticmethod
     def get_instance():

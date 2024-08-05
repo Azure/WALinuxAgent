@@ -63,8 +63,8 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_policy_should_be_enabled_on_supported_distro(self):
         """Policy should be enabled on supported distro like Ubuntu 16.04."""
-        with patch('azurelinuxagent.common.version.get_distro', return_value=['ubuntu', '16.04']), \
-                patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True):
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
+                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
             from azurelinuxagent.ga.policy.policy_engine import PolicyEngineConfigurator
             policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
             self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
