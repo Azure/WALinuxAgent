@@ -80,11 +80,10 @@ class PolicyEngineConfigurator:
         # except ValueError:
         #     raise ValueError
         #     # return False
-        allowed = distro_name.lower() == 'ubuntu'  # and distro_version.major >= 16
-        if allowed:
-            return True
-        else:
-            raise Exception("Not supported: distro name is {0}".format(distro_name))
+        allowed = distro_name.lower() == 'ubuntu' or distro_name.lower() == 'debian' # and distro_version.major >= 16
+        return allowed
+        # else:
+        #     raise Exception("Not supported: distro name is {0}".format(distro_name))
 
     @staticmethod
     def get_instance():
