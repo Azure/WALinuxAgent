@@ -20,6 +20,12 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 
+# Define support matrix for Regorus and policy engine feature.
+# Dict in the format: { distro:version }
+SUPPORT_MATRIX = {
+    'ubuntu': FlexibleVersion('16.04')
+}
+
 
 def log_policy(formatted_string, is_success=True, op=WALAEventOperation.Policy, send_event=True):
     """
@@ -79,7 +85,13 @@ class PolicyEngineConfigurator:
             distro_version = FlexibleVersion(distro_info[1])
         except ValueError:
             raise ValueError
-        return distro_name.lower() == 'ubuntu' and distro_version.major >= 16
+
+        # Check if the distro is in the support matrix and if the version is supported
+        if distro_name in SUPPORT_MATRIX:
+            min_version = SUPPORT_MATRIX[distro_name]
+            return distro_version >= min_version
+        else:
+            return False
 
     @staticmethod
     def get_instance():

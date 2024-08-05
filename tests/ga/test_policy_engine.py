@@ -94,7 +94,7 @@ class TestPolicyEngine(AgentTestCase):
     def test_extension_policy_engine_should_load_successfully(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
-                   patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
             engine = ExtensionPolicyEngine()
             self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
