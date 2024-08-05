@@ -1,5 +1,5 @@
 import json
-import azurelinuxagent.ga.policy.regorus.regorus_ctypes as regorus
+import azurelinuxagent.ga.policy.regorus.regorus_ffi as regorus
 
 
 class Engine:

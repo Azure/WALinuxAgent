@@ -1,11 +1,10 @@
 r"""Wrapper for regorus.h
 
 Generated with:
-/home/manugunnala/.local/bin/ctypesgen regorus.h -l regorus_ffi -o regorus3.py
+/home/manugunnala/.local/bin/ctypesgen regorus.h -l regorus_ffi -o regorus_ffi.py
 
 Do not modify this file.
 """
-# pylint: skip-file
 
 __docformat__ = "restructuredtext"
 
@@ -906,202 +905,136 @@ struct_RegorusResult._fields_ = [
 RegorusResult = struct_RegorusResult# /home/manugunnala/regorus/bindings/ffi/regorus.h: 48
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 55
-for _lib in _libs.values():
-    if not _lib.has("regorus_result_drop", "cdecl"):
-        continue
-    regorus_result_drop = _lib.get("regorus_result_drop", "cdecl")
+if _libs["regorus_ffi"].has("regorus_result_drop", "cdecl"):
+    regorus_result_drop = _libs["regorus_ffi"].get("regorus_result_drop", "cdecl")
     regorus_result_drop.argtypes = [struct_RegorusResult]
     regorus_result_drop.restype = None
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 62
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_new", "cdecl"):
-        continue
-    regorus_engine_new = _lib.get("regorus_engine_new", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_new", "cdecl"):
+    regorus_engine_new = _libs["regorus_ffi"].get("regorus_engine_new", "cdecl")
     regorus_engine_new.argtypes = []
     regorus_engine_new.restype = POINTER(struct_RegorusEngine)
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 71
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_clone", "cdecl"):
-        continue
-    regorus_engine_clone = _lib.get("regorus_engine_clone", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_clone", "cdecl"):
+    regorus_engine_clone = _libs["regorus_ffi"].get("regorus_engine_clone", "cdecl")
     regorus_engine_clone.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_clone.restype = POINTER(struct_RegorusEngine)
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 73
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_drop", "cdecl"):
-        continue
-    regorus_engine_drop = _lib.get("regorus_engine_drop", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_drop", "cdecl"):
+    regorus_engine_drop = _libs["regorus_ffi"].get("regorus_engine_drop", "cdecl")
     regorus_engine_drop.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_drop.restype = None
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 84
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_add_policy", "cdecl"):
-        continue
-    regorus_engine_add_policy = _lib.get("regorus_engine_add_policy", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_add_policy", "cdecl"):
+    regorus_engine_add_policy = _libs["regorus_ffi"].get("regorus_engine_add_policy", "cdecl")
     regorus_engine_add_policy.argtypes = [POINTER(struct_RegorusEngine), String, String]
     regorus_engine_add_policy.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 88
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_add_policy_from_file", "cdecl"):
-        continue
-    regorus_engine_add_policy_from_file = _lib.get("regorus_engine_add_policy_from_file", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_add_policy_from_file", "cdecl"):
+    regorus_engine_add_policy_from_file = _libs["regorus_ffi"].get("regorus_engine_add_policy_from_file", "cdecl")
     regorus_engine_add_policy_from_file.argtypes = [POINTER(struct_RegorusEngine), String]
     regorus_engine_add_policy_from_file.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 97
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_add_data_json", "cdecl"):
-        continue
-    regorus_engine_add_data_json = _lib.get("regorus_engine_add_data_json", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_add_data_json", "cdecl"):
+    regorus_engine_add_data_json = _libs["regorus_ffi"].get("regorus_engine_add_data_json", "cdecl")
     regorus_engine_add_data_json.argtypes = [POINTER(struct_RegorusEngine), String]
     regorus_engine_add_data_json.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 104
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_get_packages", "cdecl"):
-        continue
-    regorus_engine_get_packages = _lib.get("regorus_engine_get_packages", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_get_packages", "cdecl"):
+    regorus_engine_get_packages = _libs["regorus_ffi"].get("regorus_engine_get_packages", "cdecl")
     regorus_engine_get_packages.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_get_packages.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 111
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_get_policies", "cdecl"):
-        continue
-    regorus_engine_get_policies = _lib.get("regorus_engine_get_policies", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_get_policies", "cdecl"):
+    regorus_engine_get_policies = _libs["regorus_ffi"].get("regorus_engine_get_policies", "cdecl")
     regorus_engine_get_policies.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_get_policies.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 113
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_add_data_from_json_file", "cdecl"):
-        continue
-    regorus_engine_add_data_from_json_file = _lib.get("regorus_engine_add_data_from_json_file", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_add_data_from_json_file", "cdecl"):
+    regorus_engine_add_data_from_json_file = _libs["regorus_ffi"].get("regorus_engine_add_data_from_json_file", "cdecl")
     regorus_engine_add_data_from_json_file.argtypes = [POINTER(struct_RegorusEngine), String]
     regorus_engine_add_data_from_json_file.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 121
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_clear_data", "cdecl"):
-        continue
-    regorus_engine_clear_data = _lib.get("regorus_engine_clear_data", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_clear_data", "cdecl"):
+    regorus_engine_clear_data = _libs["regorus_ffi"].get("regorus_engine_clear_data", "cdecl")
     regorus_engine_clear_data.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_clear_data.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 129
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_set_input_json", "cdecl"):
-        continue
-    regorus_engine_set_input_json = _lib.get("regorus_engine_set_input_json", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_set_input_json", "cdecl"):
+    regorus_engine_set_input_json = _libs["regorus_ffi"].get("regorus_engine_set_input_json", "cdecl")
     regorus_engine_set_input_json.argtypes = [POINTER(struct_RegorusEngine), String]
     regorus_engine_set_input_json.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 131
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_set_input_from_json_file", "cdecl"):
-        continue
-    regorus_engine_set_input_from_json_file = _lib.get("regorus_engine_set_input_from_json_file", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_set_input_from_json_file", "cdecl"):
+    regorus_engine_set_input_from_json_file = _libs["regorus_ffi"].get("regorus_engine_set_input_from_json_file", "cdecl")
     regorus_engine_set_input_from_json_file.argtypes = [POINTER(struct_RegorusEngine), String]
     regorus_engine_set_input_from_json_file.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 140
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_eval_query", "cdecl"):
-        continue
-    regorus_engine_eval_query = _lib.get("regorus_engine_eval_query", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_eval_query", "cdecl"):
+    regorus_engine_eval_query = _libs["regorus_ffi"].get("regorus_engine_eval_query", "cdecl")
     regorus_engine_eval_query.argtypes = [POINTER(struct_RegorusEngine), String]
     regorus_engine_eval_query.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 148
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_eval_rule", "cdecl"):
-        continue
-    regorus_engine_eval_rule = _lib.get("regorus_engine_eval_rule", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_eval_rule", "cdecl"):
+    regorus_engine_eval_rule = _libs["regorus_ffi"].get("regorus_engine_eval_rule", "cdecl")
     regorus_engine_eval_rule.argtypes = [POINTER(struct_RegorusEngine), String]
     regorus_engine_eval_rule.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 156
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_set_enable_coverage", "cdecl"):
-        continue
-    regorus_engine_set_enable_coverage = _lib.get("regorus_engine_set_enable_coverage", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_set_enable_coverage", "cdecl"):
+    regorus_engine_set_enable_coverage = _libs["regorus_ffi"].get("regorus_engine_set_enable_coverage", "cdecl")
     regorus_engine_set_enable_coverage.argtypes = [POINTER(struct_RegorusEngine), c_bool]
     regorus_engine_set_enable_coverage.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 163
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_get_coverage_report", "cdecl"):
-        continue
-    regorus_engine_get_coverage_report = _lib.get("regorus_engine_get_coverage_report", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_get_coverage_report", "cdecl"):
+    regorus_engine_get_coverage_report = _libs["regorus_ffi"].get("regorus_engine_get_coverage_report", "cdecl")
     regorus_engine_get_coverage_report.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_get_coverage_report.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 170
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_get_coverage_report_pretty", "cdecl"):
-        continue
-    regorus_engine_get_coverage_report_pretty = _lib.get("regorus_engine_get_coverage_report_pretty", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_get_coverage_report_pretty", "cdecl"):
+    regorus_engine_get_coverage_report_pretty = _libs["regorus_ffi"].get("regorus_engine_get_coverage_report_pretty", "cdecl")
     regorus_engine_get_coverage_report_pretty.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_get_coverage_report_pretty.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 177
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_clear_coverage_data", "cdecl"):
-        continue
-    regorus_engine_clear_coverage_data = _lib.get("regorus_engine_clear_coverage_data", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_clear_coverage_data", "cdecl"):
+    regorus_engine_clear_coverage_data = _libs["regorus_ffi"].get("regorus_engine_clear_coverage_data", "cdecl")
     regorus_engine_clear_coverage_data.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_clear_coverage_data.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 185
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_set_gather_prints", "cdecl"):
-        continue
-    regorus_engine_set_gather_prints = _lib.get("regorus_engine_set_gather_prints", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_set_gather_prints", "cdecl"):
+    regorus_engine_set_gather_prints = _libs["regorus_ffi"].get("regorus_engine_set_gather_prints", "cdecl")
     regorus_engine_set_gather_prints.argtypes = [POINTER(struct_RegorusEngine), c_bool]
     regorus_engine_set_gather_prints.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 192
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_take_prints", "cdecl"):
-        continue
-    regorus_engine_take_prints = _lib.get("regorus_engine_take_prints", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_take_prints", "cdecl"):
+    regorus_engine_take_prints = _libs["regorus_ffi"].get("regorus_engine_take_prints", "cdecl")
     regorus_engine_take_prints.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_take_prints.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 199
-for _lib in _libs.values():
-    if not _lib.has("regorus_engine_get_ast_as_json", "cdecl"):
-        continue
-    regorus_engine_get_ast_as_json = _lib.get("regorus_engine_get_ast_as_json", "cdecl")
+if _libs["regorus_ffi"].has("regorus_engine_get_ast_as_json", "cdecl"):
+    regorus_engine_get_ast_as_json = _libs["regorus_ffi"].get("regorus_engine_get_ast_as_json", "cdecl")
     regorus_engine_get_ast_as_json.argtypes = [POINTER(struct_RegorusEngine)]
     regorus_engine_get_ast_as_json.restype = struct_RegorusResult
-    break
 
 # /home/manugunnala/regorus/bindings/ffi/regorus.h: 201
 for _lib in _libs.values():
