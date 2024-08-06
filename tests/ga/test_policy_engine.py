@@ -30,14 +30,14 @@ class TestPolicyEngine(AgentTestCase):
     @classmethod
     def setUpClass(cls):
         # replace dummy regorus binary in ga folder with real binary from tests_e2e folder
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        real_bin = os.path.abspath(
-            os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/libregorus_ffi.so"))
-        dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
-        cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "libregorus_ffi.so"))
-        os.makedirs(os.path.dirname(dummy_bin_dir), exist_ok=True)
-        if not os.path.exists(cls.dummy_bin):
-            shutil.copy(real_bin, cls.dummy_bin)
+        # current_dir = os.path.dirname(os.path.abspath(__file__))
+        # real_bin = os.path.abspath(
+        #     os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/libregorus_ffi.so"))
+        # dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
+        # cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "libregorus_ffi.so"))
+        # if not os.path.exists(cls.dummy_bin):
+        #     os.makedirs(os.path.dirname(dummy_bin_dir))
+        #     shutil.copy(real_bin, cls.dummy_bin)
         AgentTestCase.setUpClass()
 
 
@@ -45,8 +45,8 @@ class TestPolicyEngine(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
-        if os.path.exists(cls.dummy_bin):
-            os.remove(cls.dummy_bin)
+        # if os.path.exists(cls.dummy_bin):
+        #     os.remove(cls.dummy_bin)
         AgentTestCase.tearDownClass()
 
     def tearDown(self):
