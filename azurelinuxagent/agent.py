@@ -33,6 +33,7 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.controllermetrics import AGENT_LOG_COLLECTOR, CpuMetrics
 from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning, InvalidCgroupMountpointException
+from azurelinuxagent.ga.firewall_manager import FirewallManager
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -258,7 +259,8 @@ class Agent(object):
         threading.current_thread().name = "Firewall"
         logger.info("Setting up firewall for the WALinux Agent. Endpoint: {0}", endpoint)
         try:
-            IpTables(endpoint).setup()
+            firewall_manager = FirewallManager.create(endpoint)
+            firewall_manager.setup()
             logger.info("Successfully set the firewall rules")
         except Exception as error:
             logger.error("Unable to add firewall rules. Error: {0}".format(ustr(error)))

@@ -380,6 +380,15 @@ class AgentLog(object):
                 'message': r"Unable to determine version of iptables: \[Errno 2\] No such file or directory: 'iptables'",
                 'if': lambda r: DISTRO_NAME == 'ubuntu'
             },
+            #
+            # SUSE 15 disables agent update and it is running 2.2.49.2, which does not add the DNS rule
+            #
+            # 2024-08-02T21:44:44.330727Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['ACCEPT DNS']
+            #
+            {
+                'message': r"The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: \['ACCEPT DNS'\]",
+                'if': lambda r: DISTRO_NAME == 'sles' and DISTRO_VERSION == '15.2' and r.level == "WARNING"
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:

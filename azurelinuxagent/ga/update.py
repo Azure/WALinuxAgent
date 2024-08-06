@@ -38,7 +38,7 @@ from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
     WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
-from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables, FirewallStateError
+from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
@@ -1096,7 +1096,7 @@ class UpdateHandler(object):
             except FirewallStateError as e:
                 # Report the error and let the environment thread fix the firewall
                 msg = "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}".format(ustr(e))
-                logger.warn("{0}", e)
+                logger.warn("{0}", msg)
                 add_event(op=WALAEventOperation.Firewall, message=msg, is_success=False, log_event=False)
 
             #
