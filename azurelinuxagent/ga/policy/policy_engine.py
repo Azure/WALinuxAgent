@@ -21,7 +21,7 @@ from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 
 # Define support matrix for Regorus and policy engine feature.
-# Dict in the format: { distro:version }
+# Dict in the format: { distro:min_supported_version }
 SUPPORT_MATRIX = {
     'ubuntu': FlexibleVersion('16.04')
 }
@@ -126,6 +126,16 @@ class PolicyEngine:
     @property
     def policy_engine_enabled(self):
         return self._policy_engine_enabled
+
+    def add_policy_from_file(self, file):
+        self._engine.add_policy_from_file()
+
+    def eval_query(self, policy, data, input_file, query):
+        self._engine.add_policy_from_file(policy)
+        self._engine.add_data_json(data)
+        self._engine.set_input_json(input_file)
+        result = self._engine.eval_query(query)
+        return result
 
 
 class ExtensionPolicyEngine(PolicyEngine):

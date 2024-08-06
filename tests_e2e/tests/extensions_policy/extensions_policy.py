@@ -39,6 +39,7 @@ class ExtensionsPolicy(AgentVmTest):
         def __init__(self, extension: VirtualMachineExtensionClient, settings: Any):
             self.extension = extension
             self.settings = settings
+
     def run(self):
         ssh_client: SshClient = self._context.create_ssh_client()
 
