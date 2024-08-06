@@ -32,15 +32,21 @@ class Engine:
         command = [regorus_path, "eval", "-d", self._policy_file, "-d", self._data_file,
                    "-i", self._input_file, query]
         try:
-            result = subprocess.run(command, capture_output=True, text=True)
-            if result.returncode == 0:
-                stdout = result.stdout
+            # use Popen for compatibility with older python versions
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+
+            if process.returncode == 0:
+                # Decode stdout to string if it is bytes (Python 3.x)
+                stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
                 print(stdout)
                 json_output = json.loads(stdout)
                 return json_output
             else:
+                stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
+                print("Standard Error:", stderr)
                 return {}
-        except Exception as e:
+        except Exception:
             raise Exception
 
 
