@@ -130,10 +130,20 @@ class AgentTestLoader(object):
     # Matches a reference to a random subset of images within a set with an optional count: random(<image_set>, [<count>]), e.g. random(endorsed, 3), random(endorsed)
     RANDOM_IMAGES_RE = re.compile(r"random\((?P<image_set>[^,]+)(\s*,\s*(?P<count>\d+))?\)")
 
+    # Images from a gallery are given as  "<image_gallery>/<image_definition>/<image_version>".
+    _IMAGE_FROM_GALLERY = re.compile(r"(?P<gallery>[^/]+)/(?P<image>[^/]+)/(?P<version>[^/]+)")
+
     def _validate(self):
         """
         Performs some basic validations on the data loaded from the YAML description files
         """
+
+        def _is_image_from_gallery(image: str) -> bool:
+            """
+            Verifies if image is from shared gallery
+            """
+            return AgentTestLoader._IMAGE_FROM_GALLERY.match(image) is not None
+
         def _parse_image(image: str) -> str:
             """
             Parses a reference to an image or image set and returns the name of the image or image set
@@ -147,8 +157,11 @@ class AgentTestLoader(object):
             # Validate that the images the suite must run on are in images.yml
             for image in suite.images:
                 image = _parse_image(image)
+                # skip validation if suite image from gallery image
+                if _is_image_from_gallery(image):
+                    continue
                 if image not in self.images:
-                    raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
+                    raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml or image from a shared gallery")
 
             # If the suite specifies a cloud and it's location<cloud:location>, validate that location string is start with <cloud:> and then validate that the images it uses are available in that location
             for suite_location in suite.locations:
@@ -158,6 +171,9 @@ class AgentTestLoader(object):
                     continue
                 for suite_image in suite.images:
                     suite_image = _parse_image(suite_image)
+                    # skip validation if suite image from gallery image
+                    if _is_image_from_gallery(suite_image):
+                        continue
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
                         if image.locations:
@@ -208,7 +224,7 @@ class AgentTestLoader(object):
                           rest of the tests in the suite will not be executed). By default, a failure on a test does not stop execution of
                           the test suite.
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
-                     can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The
+                     can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed") or shared gallery image. The
                      names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
         * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
                      If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful

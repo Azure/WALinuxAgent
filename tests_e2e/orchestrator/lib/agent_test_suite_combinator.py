@@ -472,7 +472,15 @@ class AgentTestSuitesCombinator(Combinator):
         for image in suite.images:
             match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
             if match is None:
-                image_list = loader.images[image]
+                # Added this condition for galley image as they don't have definition in images.yml
+                if AgentTestSuitesCombinator._is_image_from_gallery(image):
+                    i = VmImageInfo()
+                    i.urn = image
+                    i.locations = []
+                    i.vm_sizes = []
+                    image_list = [i]
+                else:
+                    image_list = loader.images[image]
             else:
                 count = match.group('count')
                 if count is None:
@@ -566,16 +574,13 @@ class AgentTestSuitesCombinator(Combinator):
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
 
-    # Images from a gallery are given as  "<image_gallery>/<image_definition>/<image_version>".
-    _IMAGE_FROM_GALLERY = re.compile(r"(?P<gallery>[^/]+)/(?P<image>[^/]+)/(?P<version>[^/]+)")
-
     @staticmethod
     def _is_image_from_gallery(image: str) -> bool:
-        return AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image) is not None
+        return AgentTestLoader._IMAGE_FROM_GALLERY.match(image) is not None
 
     @staticmethod
     def _get_name_of_image_from_gallery(image: str) -> bool:
-        match = AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image)
+        match = AgentTestLoader._IMAGE_FROM_GALLERY.match(image)
         if match is None:
             raise Exception(f"Invalid image from gallery: {image}")
         return match.group('image')

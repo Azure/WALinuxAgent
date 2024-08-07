@@ -19,20 +19,22 @@
 # returns the agent latest version published
 #
 
+import argparse
+
 from azurelinuxagent.common.protocol.goal_state import GoalStateProperties
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from tests_e2e.tests.lib.retry import retry
 
 
-def get_agent_family_manifest(goal_state):
+def get_agent_family_manifest(goal_state, family_type):
     """
-    Get the agent_family from last GS for Test Family
+    Get the agent_family from last GS for given Family
     """
     agent_families = goal_state.extensions_goal_state.agent_families
     agent_family_manifests = []
     for m in agent_families:
-        if m.name == 'Test':
+        if m.name == family_type:
             if len(m.uris) > 0:
                 agent_family_manifests.append(m)
     return agent_family_manifests[0]
@@ -53,11 +55,14 @@ def get_largest_version(agent_manifest):
 def main():
 
     try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--family_type', dest="family_type", default="Test")
+        args = parser.parse_args()
         protocol = get_protocol_util().get_protocol(init_goal_state=False)
         retry(lambda: protocol.client.reset_goal_state(
             goal_state_properties=GoalStateProperties.ExtensionsGoalState))
         goal_state = protocol.client.get_goal_state()
-        agent_family = get_agent_family_manifest(goal_state)
+        agent_family = get_agent_family_manifest(goal_state, args.family_type)
         agent_manifest = goal_state.fetch_agent_manifest(agent_family.name, agent_family.uris)
         largest_version = get_largest_version(agent_manifest)
         print(str(largest_version))

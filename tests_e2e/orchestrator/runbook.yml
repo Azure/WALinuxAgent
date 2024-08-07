@@ -54,6 +54,8 @@ variable:
       - publish_hostname
       - recover_network_interface
       - cgroup_v2_disabled
+      - agent_wait_for_cloud_init
+      - initial_agent_update
 
   #
   # Additional arguments pass to the test suites
