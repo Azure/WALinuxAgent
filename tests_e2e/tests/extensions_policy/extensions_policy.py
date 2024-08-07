@@ -33,7 +33,6 @@ from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
 from tests_e2e.tests.lib.virtual_machine_extension_client import VirtualMachineExtensionClient
 
-
 class ExtensionsPolicy(AgentVmTest):
     class TestCase:
         def __init__(self, extension: VirtualMachineExtensionClient, settings: Any):
@@ -70,7 +69,7 @@ class ExtensionsPolicy(AgentVmTest):
             try:
                 t.extension.enable(settings=t.settings, force_update=True, timeout=6 * 60)
                 log.info("Checking that policy engine is successfully initialized...")
-                expected_msg = "Extension policy is enabled. Continuing with policy enforcement."
+                expected_msg = "Successfully enabled extension policy enforcement."
                 ssh_client.run_command("grep \"{0}\" /var/log/waagent.log".format(expected_msg))
                 log.info("Successfully initialized policy engine")
             except Exception:

@@ -65,40 +65,40 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_policy_should_be_enabled_on_supported_distro(self):
         """Policy should be enabled on supported distro like Ubuntu 16.04."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+                self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
 
     def test_policy_should_not_be_enabled_on_unsupported_distro(self):
         """Policy should NOT be enabled on unsupported like RHEL."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-            self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+                self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
 
     def test_regorus_engine_should_be_initialized_on_supported_distro(self):
         """Regorus engine should initialize without any errors on a supported distro."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            engine = PolicyEngine()
-            self.assertTrue(engine.policy_engine_enabled,
-                            "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = PolicyEngine()
+                self.assertTrue(engine.policy_engine_enabled,
+                                "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
 
     def test_regorus_engine_should_not_be_initialized_on_unsupported_distro(self):
         """Regorus policy engine should NOT be initialized on unsupported distro like RHEL."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            engine = PolicyEngine()
-            self.assertFalse(engine.policy_engine_enabled,
-                             "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = PolicyEngine()
+                self.assertFalse(engine.policy_engine_enabled,
+                                "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
     def test_extension_policy_engine_should_load_successfully(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']), \
-                patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            engine = ExtensionPolicyEngine()
-            self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = ExtensionPolicyEngine()
+                self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
     def test_policy_should_be_added_successfully(self):
         """Extension policy engine should be able to load policy and data files without any errors."""

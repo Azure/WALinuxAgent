@@ -27,8 +27,8 @@ class Engine:
 
     def eval_query(self, query):
         from tests.lib.tools import data_dir
-        regorus_path = os.path.join(data_dir, 'policy', 'regorus')
-
+        # regorus_path = os.path.join(data_dir, 'policy', 'regorus')
+        regorus_path = "/home/manugunnala/lib/tests_e2e/tests/lib/regorus"
         command = [regorus_path, "eval", "-d", self._policy_file, "-d", self._data_file,
                    "-i", self._input_file, query]
         try:

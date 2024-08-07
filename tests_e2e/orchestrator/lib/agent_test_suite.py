@@ -392,10 +392,6 @@ class AgentTestSuite(LisaTestSuite):
             log.info("%s", command)
             run_command(command, shell=True)
             log.info("Contents of %s:\n%s", self._test_tools_tarball_path, run_command(['tar', 'tvf', str(self._test_tools_tarball_path)]))
-            log.info("Adding tests/executables")
-            command = "cd {0} ; tar rf {1} --transform='s,^,lib/,' --exclude=__pycache__ tests_e2e/tests/executables".format(self._test_source_directory.parent, self._test_tools_tarball_path)
-            log.info("%s", command)
-            run_command(command, shell=True)
             log.info("Completed setup, creating %s", completed)
             completed.touch()
 
