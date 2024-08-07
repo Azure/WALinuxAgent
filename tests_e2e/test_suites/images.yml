@@ -94,7 +94,7 @@ images:
          AzureUSGovernment: []
          AzureChinaCloud: []
    azure-linux_3_arm64:
-      urn: "microsoftcblmariner azure-linux-3 azure-linux-arm64 latest"
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-arm64 latest"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
