@@ -150,7 +150,7 @@ def generate_svg():
     err_code, stdout = shellutil.run_get_output(cmd)
     if err_code != 0:
         log.info("Unable to generate svg: {0}".format(stdout))
-    log.info("SVG generated successfully")
+    log.info(f"SVG generated successfully: {svg_name}")
 
 
 def main():
