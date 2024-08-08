@@ -60,9 +60,9 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is disabled via configuration file.")
                 return
 
-            if not self._is_policy_supported():
-                log_policy("Policy enforcement is unsupported on this platform.")
-                return
+            # if not self._is_policy_supported():
+            #     log_policy("Policy enforcement is unsupported on this platform.")
+            #     return
 
             global regorus  # pylint: disable=global-statement
             import azurelinuxagent.ga.policy.regorus.regorus as regorus
@@ -130,13 +130,26 @@ class PolicyEngine:
     def add_policy_from_file(self, file):
         self._engine.add_policy_from_file()
 
-    def eval_query(self, policy, data, input_file, query):
-        self._engine.add_policy_from_file(policy)
-        self._engine.add_data_json(data)
-        self._engine.set_input_json(input_file)
-        result = self._engine.eval_query(query)
-        return result
-
+    def eval_query(self, policy=None, data=None, input_file=None, query=None):
+        if self._policy_engine_enabled:
+            data = "/home/manugunnala/lib/tests_e2e/tests/lib/agent-extension-default-data.json"
+            policy = "/home/manugunnala/lib/tests_e2e/tests/lib/agent_extension_policy.rego"
+            input_file = "/home/manugunnala/lib/tests_e2e/tests/lib/agent-extension-input.json"
+            query = "data.agent_extension_policy.extensions_to_download"
+            self._engine.add_policy_from_file(policy)
+            self._engine.add_data_json(data)
+            self._engine.set_input_json(input_file)
+            result = self._engine.eval_query(query)
+            TEST_EXT_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+            allowed = result['result'][0]['expressions'][0]['value'][TEST_EXT_NAME]['downloadAllowed']
+            if allowed:
+                log_policy("Extension is allowed!")
+                logger.info(str(result))
+            else:
+                log_policy("Extension is not allowed.")
+            return result
+        else:
+            return False
 
 class ExtensionPolicyEngine(PolicyEngine):
     """
