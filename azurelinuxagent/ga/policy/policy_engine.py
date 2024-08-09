@@ -60,9 +60,9 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is disabled via configuration file.")
                 return
 
-            # if not self._is_policy_supported():
-            #     log_policy("Policy enforcement is unsupported on this platform.")
-            #     return
+            if not self._is_policy_supported():
+                log_policy("Policy enforcement is unsupported on this platform.")
+                return
 
             global regorus  # pylint: disable=global-statement
             import azurelinuxagent.ga.policy.regorus.regorus as regorus
@@ -151,13 +151,14 @@ class PolicyEngine:
         else:
             return False
 
+
 class ExtensionPolicyEngine(PolicyEngine):
     """
     Implements all extension policy-related operations.
     """
     def __init__(self):
         self._extension_policy_engine_enabled = False
-        super().__init__()
+        super(ExtensionPolicyEngine, self).__init__()
         # if Regorus engine initialization fails, we shouldn't try to load any files.
         if self.policy_engine_enabled:
             try:
