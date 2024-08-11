@@ -1416,15 +1416,17 @@ class ExtHandlerInstance(object):
             self.report_event(name=self.get_extension_full_name(extension), message=msg, is_success=False,
                               log_event=False)
 
-        # Clean extension state For Multi Config extensions on Disable.
-        # However, Disable is also called as part of the handler Update sequence. We need to remove these files only
-        # when the extension is actually being removed; in that case, the extension state will be set to "disabled",
-        # so we also check for that condition.
+        #
+        # In the case of multi-config handlers, we keep the state of each extension individually.
+        # Disable can be called when the extension is deleted (the extension state in the goal state is set to "disabled"),
+        # or as part of the Uninstall and Update sequences. When the extension is deleted, we need to remove its state, along
+        # with its status and settings files. Otherwise, we need to set the state to "disabled".
+        #
         if self.should_perform_multi_config_op(extension):
-            if extension.state == ExtensionRequestedState.Enabled:
-                self.__set_extension_state(extension, ExtensionState.Disabled)
-            elif extension.state == ExtensionRequestedState.Disabled:
+            if extension.state == ExtensionRequestedState.Disabled:
                 self.__remove_extension_state_files(extension)
+            else:
+                self.__set_extension_state(extension, ExtensionState.Disabled)
 
         # For Single config, dont check enabled_extensions because no extension state is maintained.
         # For MultiConfig, Set the handler state to Installed only when all extensions have been disabled
