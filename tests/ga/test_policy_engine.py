@@ -24,18 +24,21 @@ from tests.lib.tools import patch, data_dir, test_dir
 
 
 class TestPolicyEngine(AgentTestCase):
-    # Location where real regorus executable should be.
-    regorus_dest_path = None
+    patcher = None
+    regorus_dest_path = None    # Location where real regorus executable should be.
 
     @classmethod
     def setUpClass(cls):
         # Currently, ga/policy/regorus contains a dummy binary. The unit tests require a real binary,
         # so we replace the dummy with a copy from the tests_e2e folder.
         cwd = os.getcwd()
-        regorus_source_path = os.path.abspath(os.path.join(cwd, "..", "..", "tests_e2e/tests/lib/regorus"))
+        regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
         cls.regorus_dest_path = os.path.abspath(os.path.join(cwd, "..", "..", "azurelinuxagent/ga/policy/regorus"))
         if not os.path.exists(cls.regorus_dest_path):
             shutil.copy(regorus_source_path, cls.regorus_dest_path)
+        # Patch the path to regorus for all unit tests.
+        cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
+        cls.patcher.start()
         AgentTestCase.setUpClass()
 
     @classmethod
@@ -44,13 +47,13 @@ class TestPolicyEngine(AgentTestCase):
         # Clean up the Regorus binary that was copied to ga/policy/regorus.
         if os.path.exists(cls.regorus_dest_path):
             os.remove(cls.regorus_dest_path)
+        cls.patcher.stop()
         AgentTestCase.tearDownClass()
 
     def tearDown(self):
         PolicyEngineConfigurator._instance = None
         PolicyEngineConfigurator._initialized = False
         PolicyEngineConfigurator._policy_enabled = False
-        patch.stopall()
         AgentTestCase.tearDown(self)
 
     def test_configurator_get_instance_should_return_same_instance(self):
@@ -119,7 +122,6 @@ class TestPolicyEngine(AgentTestCase):
         """Extension policy engine should be able to load policy and data files without any errors."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=self.regorus_dest_path):
                     engine = PolicyEngine()
                     data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
                     policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
