@@ -31,9 +31,8 @@ class TestPolicyEngine(AgentTestCase):
     def setUpClass(cls):
         # Currently, ga/policy/regorus contains a dummy binary. The unit tests require a real binary,
         # so we replace the dummy with a copy from the tests_e2e folder.
-        cwd = os.getcwd()
         regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
-        cls.regorus_dest_path = os.path.abspath(os.path.join(cwd, "..", "..", "azurelinuxagent/ga/policy/regorus"))
+        cls.regorus_dest_path = os.path.abspath(os.path.join(test_dir, "..", "azurelinuxagent/ga/policy/regorus"))
         if not os.path.exists(cls.regorus_dest_path):
             shutil.copy(regorus_source_path, cls.regorus_dest_path)
         # Patch the path to regorus for all unit tests.
