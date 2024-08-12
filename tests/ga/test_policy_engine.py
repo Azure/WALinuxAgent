@@ -20,31 +20,30 @@ import shutil
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine, POLICY_SUPPORT_MATRIX
-from tests.lib.tools import patch, data_dir
+from tests.lib.tools import patch, data_dir, test_dir
 
 
 class TestPolicyEngine(AgentTestCase):
-    dummy_bin = None
+    # Location where real regorus executable should be.
+    regorus_dest_path = None
 
     @classmethod
     def setUpClass(cls):
         # Currently, ga/policy/regorus contains a dummy binary. The unit tests require a real binary,
         # so we replace the dummy with a copy from the tests_e2e folder.
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        real_bin = os.path.abspath(
-            os.path.join(current_dir, "..", "..", "tests_e2e/tests/lib/regorus"))
-        dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
-        cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "regorus"))
-        if not os.path.exists(cls.dummy_bin):
-            shutil.copy(real_bin, cls.dummy_bin)
+        cwd = os.getcwd()
+        regorus_source_path = os.path.abspath(os.path.join(cwd, "..", "..", "tests_e2e/tests/lib/regorus"))
+        cls.regorus_dest_path = os.path.abspath(os.path.join(cwd, "..", "..", "azurelinuxagent/ga/policy/regorus"))
+        if not os.path.exists(cls.regorus_dest_path):
+            shutil.copy(regorus_source_path, cls.regorus_dest_path)
         AgentTestCase.setUpClass()
 
     @classmethod
     def tearDownClass(cls):
         PolicyEngineConfigurator._instance = None
         # Clean up the Regorus binary that was copied to ga/policy/regorus.
-        if os.path.exists(cls.dummy_bin):
-            os.remove(cls.dummy_bin)
+        if os.path.exists(cls.regorus_dest_path):
+            os.remove(cls.regorus_dest_path)
         AgentTestCase.tearDownClass()
 
     def tearDown(self):
@@ -118,11 +117,9 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_eval_query(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
-        curr_dir = os.getcwd()
-        regorus_patch_dir = os.path.abspath(os.path.join(curr_dir, "..", "..", "azurelinuxagent", "ga", "policy", "regorus", "regorus"))
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with patch('azurelinuxagent.ga.policy.regorus.regorus.get_regorus_path', return_value=regorus_patch_dir):
+                with patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=self.regorus_dest_path):
                     engine = PolicyEngine()
                     data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
                     policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
