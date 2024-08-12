@@ -381,7 +381,7 @@ class AgentLog(object):
                 'if': lambda r: DISTRO_NAME == 'ubuntu'
             },
             #
-            # SUSE 15 disables agent update, and it is running 2.2.49.2, which does not add the DNS rule
+            # Some distros are running older agents, which do not add the DNS rule
             #
             # 2024-08-02T21:44:44.330727Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['ACCEPT DNS']
             # 2024-08-08T22:05:26.561896Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS']. Will reset it.
@@ -390,7 +390,7 @@ class AgentLog(object):
                 'message': r"(The firewall rules for Azure Fabric are not setup correctly \(the environment thread will fix it\): The following rules are missing: \['ACCEPT DNS'\])"
                            "|"
                            r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT DNS'\]. Will reset it.)",
-                'if': lambda r: DISTRO_NAME == 'sles' and DISTRO_VERSION == '15.2' and r.level == "WARNING"
+                'if': lambda r: r.level == "WARNING"
             },
         ]
 
