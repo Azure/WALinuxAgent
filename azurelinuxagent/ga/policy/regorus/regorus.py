@@ -3,11 +3,18 @@ import subprocess
 import os
 
 
+def get_regorus_path():
+    # Returns path to Regorus executable. Currently, the executable is copied into ga/policy/regorus
+    # during testing. It is not officially released as part of the agent package.
+    regorus_exe = os.path.join(os.getcwd(), "azurelinuxagent", "ga", "policy", "regorus", "regorus")
+    return regorus_exe
+
 class Engine:
     _engine = None
     _policy_file = None
     _data_file = None
     _input_file = None
+
 
     def __init__(self):
         pass
@@ -25,11 +32,11 @@ class Engine:
         self._data_file = data
 
     def eval_query(self, query):
-        regorus_path = "/home/manugunnala/lib/tests_e2e/tests/lib/regorus"
-        command = [regorus_path, "eval", "-d", self._policy_file, "-d", self._data_file,
+        regorus_exe = get_regorus_path()
+        command = [regorus_exe, "eval", "-d", self._policy_file, "-d", self._data_file,
                    "-i", self._input_file, query]
         try:
-            # use Popen for compatibility with older python versions
+            # use subprocess.Popen instead of subprocess.run for Python 2 compatibility
             process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = process.communicate()
 
@@ -45,7 +52,3 @@ class Engine:
                 return {}
         except Exception:
             raise Exception
-
-
-    # def add_data_from_json_file(self, file):
-    #     regorus.regorus_engine_add_data_from_json_file(self._engine, file)

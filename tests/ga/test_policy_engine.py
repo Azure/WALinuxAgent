@@ -17,7 +17,6 @@
 
 import os
 import shutil
-import json
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine, POLICY_SUPPORT_MATRIX
@@ -33,15 +32,12 @@ class TestPolicyEngine(AgentTestCase):
         # so we replace the dummy with a copy from the tests_e2e folder.
         current_dir = os.path.dirname(os.path.abspath(__file__))
         real_bin = os.path.abspath(
-            os.path.join(current_dir, "..", "..", "tests_e2e/tests/executables/libregorus_ffi.so"))
+            os.path.join(current_dir, "..", "..", "tests_e2e/tests/lib/regorus"))
         dummy_bin_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "azurelinuxagent/ga/policy/regorus/"))
-        cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "libregorus_ffi.so"))
-        if not os.path.exists(dummy_bin_dir):
-            os.makedirs(os.path.dirname(dummy_bin_dir))
+        cls.dummy_bin = os.path.abspath(os.path.join(dummy_bin_dir, "regorus"))
+        if not os.path.exists(cls.dummy_bin):
             shutil.copy(real_bin, cls.dummy_bin)
         AgentTestCase.setUpClass()
-
-
 
     @classmethod
     def tearDownClass(cls):
@@ -104,7 +100,7 @@ class TestPolicyEngine(AgentTestCase):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 engine = PolicyEngine()
                 self.assertFalse(engine.policy_engine_enabled,
-                                "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
+                                 "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
     def test_extension_policy_engine_should_load_successfully(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
@@ -122,13 +118,16 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_eval_query(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
+        curr_dir = os.getcwd()
+        regorus_patch_dir = os.path.abspath(os.path.join(curr_dir, "..", "..", "azurelinuxagent", "ga", "policy", "regorus", "regorus"))
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = PolicyEngine()
-                data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-                policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
-                input_file = os.path.join(data_dir, 'policy', "agent-extension-input.json")
-                query = "data.agent_extension_policy.extensions_to_download"
-                result = engine.eval_query(policy, data, input_file, query)
-                TEST_EXT_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                self.assertTrue(result['result'][0]['expressions'][0]['value'][TEST_EXT_NAME]['downloadAllowed'])
+                with patch('azurelinuxagent.ga.policy.regorus.regorus.get_regorus_path', return_value=regorus_patch_dir):
+                    engine = PolicyEngine()
+                    data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
+                    policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+                    input_file = os.path.join(data_dir, 'policy', "agent-extension-input.json")
+                    query = "data.agent_extension_policy.extensions_to_download"
+                    result = engine.eval_query(policy, data, input_file, query)
+                    test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+                    self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])

@@ -27,7 +27,8 @@ POLICY_SUPPORT_MATRIX = {
     'mariner': FlexibleVersion('1')
 }
 
-
+# This needs to be a module-level function because it is common across PolicyEngineConfigurator
+# and PolicyEngine classes, which do not inherit from each other.
 def log_policy(formatted_string, is_success=True, op=WALAEventOperation.Policy, send_event=True):
     """
     Log information to console and telemetry.
@@ -65,6 +66,8 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is unsupported on this platform.")
                 return
 
+            # Regorus import should only be attempted after completing the above checks within
+            # the configurator, but the module itself needs to be accessible outside this class.
             global regorus  # pylint: disable=global-statement
             import azurelinuxagent.ga.policy.regorus.regorus as regorus
             PolicyEngineConfigurator._policy_enabled = True
