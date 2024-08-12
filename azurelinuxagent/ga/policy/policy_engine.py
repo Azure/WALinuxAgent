@@ -22,8 +22,9 @@ from azurelinuxagent.common import conf
 
 # Define support matrix for Regorus and policy engine feature.
 # Dict in the format: { distro:min_supported_version }
-SUPPORT_MATRIX = {
-    'ubuntu': FlexibleVersion('16.04')
+POLICY_SUPPORT_MATRIX = {
+    'ubuntu': FlexibleVersion('16.04'),
+    'mariner': FlexibleVersion('1')
 }
 
 
@@ -60,9 +61,9 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is disabled via configuration file.")
                 return
 
-            # if not self._is_policy_supported():
-            #     log_policy("Policy enforcement is unsupported on this platform.")
-            #     return
+            if not self._is_policy_supported():
+                log_policy("Policy enforcement is unsupported on this platform.")
+                return
 
             global regorus  # pylint: disable=global-statement
             import azurelinuxagent.ga.policy.regorus.regorus as regorus
@@ -87,8 +88,8 @@ class PolicyEngineConfigurator:
             raise ValueError
 
         # Check if the distro is in the support matrix and if the version is supported
-        if distro_name in SUPPORT_MATRIX:
-            min_version = SUPPORT_MATRIX[distro_name]
+        if distro_name in POLICY_SUPPORT_MATRIX:
+            min_version = POLICY_SUPPORT_MATRIX[distro_name]
             return distro_version >= min_version
         else:
             return False
