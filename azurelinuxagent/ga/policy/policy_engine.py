@@ -74,7 +74,7 @@ class PolicyEngineConfigurator:
             PolicyEngineConfigurator._policy_enabled = True
 
         except (ImportError, NameError) as ex:
-            log_policy("Error: Failed to import Regorus module and initialize policy engine.", is_success=False)
+            log_policy("Error: Failed to import Regorus module and initialize policy engine. {0}".format(ex), is_success=False)
         except Exception as ex:
             log_policy("Error: Failed to enable policy enforcement. '{0}'".format(ex), is_success=False)
         finally:
@@ -120,7 +120,7 @@ class PolicyEngine(object):
                 self._engine = regorus.Engine()  # regorus will have already been imported in configurator
                 self._policy_engine_enabled = True
         except (ImportError, NameError) as ex:
-            log_policy("Error: Failed to initialize Regorus policy engine due to import failure.", is_success=False)
+            log_policy("Error: Failed to initialize Regorus policy engine due to import failure. {0}".format(ex), is_success=False)
         except Exception as ex:
             log_policy("Error: Failed to initialize Regorus policy engine. '{0}'".format(ex), is_success=False)
 
