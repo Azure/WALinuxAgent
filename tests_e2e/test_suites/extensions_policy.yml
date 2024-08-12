@@ -5,4 +5,4 @@ name: "ExtensionsPolicy"
 tests:
   - "extensions_policy/extensions_policy.py"
 images:
-  - "rhel_79"
+  - "policy-endorsed"

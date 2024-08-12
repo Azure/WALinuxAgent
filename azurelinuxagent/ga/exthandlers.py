@@ -481,7 +481,7 @@ class ExtHandlersHandler(object):
         # TO DO: add functionality here for extension allowlist validation. Currently, we try to initialize the
         # ExtensionPolicyEngine, the constructor will log necessary messages for testing.
         engine = ExtensionPolicyEngine()
-        result = engine.eval_query()
+        engine.eval_query()
 
         for extension, ext_handler in all_extensions:
 

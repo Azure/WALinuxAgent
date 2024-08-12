@@ -60,9 +60,9 @@ class PolicyEngineConfigurator:
                 log_policy("Policy enforcement is disabled via configuration file.")
                 return
 
-            if not self._is_policy_supported():
-                log_policy("Policy enforcement is unsupported on this platform.")
-                return
+            # if not self._is_policy_supported():
+            #     log_policy("Policy enforcement is unsupported on this platform.")
+            #     return
 
             global regorus  # pylint: disable=global-statement
             import azurelinuxagent.ga.policy.regorus.regorus as regorus
@@ -104,7 +104,7 @@ class PolicyEngineConfigurator:
         return PolicyEngineConfigurator.get_instance()._policy_enabled
 
 
-class PolicyEngine:
+class PolicyEngine(object):
     """
     Implements policy engine API. Class will always be initialized, but if the Regorus import fails,
     all methods will be no-ops.
