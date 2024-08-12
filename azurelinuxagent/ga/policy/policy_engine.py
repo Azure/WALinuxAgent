@@ -133,14 +133,10 @@ class PolicyEngine(object):
         return self._policy_engine_enabled
 
     def add_policy_from_file(self, file):
-        self._engine.add_policy_from_file()
+        self._engine.add_policy_from_file(file)
 
-    def eval_query(self, policy=None, data=None, input_file=None, query=None):
+    def eval_query(self, policy, data, input_file, query):
         if self._policy_engine_enabled:
-            data = "/home/manugunnala/lib/tests_e2e/tests/lib/agent-extension-default-data.json"
-            policy = "/home/manugunnala/lib/tests_e2e/tests/lib/agent_extension_policy.rego"
-            input_file = "/home/manugunnala/lib/tests_e2e/tests/lib/agent-extension-input.json"
-            query = "data.agent_extension_policy.extensions_to_download"
             self._engine.add_policy_from_file(policy)
             self._engine.add_data_json(data)
             self._engine.set_input_json(input_file)

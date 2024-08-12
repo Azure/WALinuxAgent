@@ -25,8 +25,8 @@ class Engine:
     def add_policy_from_file(self, file):
         self._policy_file = file
 
-    def set_input_json(self, input):
-        self._input_file = input
+    def set_input_json(self, input_file):
+        self._input_file = input_file
 
     def add_data_json(self, data):
         self._data_file = data

@@ -110,22 +110,15 @@ class TestPolicyEngine(AgentTestCase):
                 engine = ExtensionPolicyEngine()
                 self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
-    def test_policy_should_be_added_successfully(self):
-        """Extension policy engine should be able to load policy and data files without any errors."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = ExtensionPolicyEngine()
-                rule_file = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-
     def test_eval_query(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                    engine = PolicyEngine()
-                    data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-                    policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
-                    input_file = os.path.join(data_dir, 'policy', "agent-extension-input.json")
-                    query = "data.agent_extension_policy.extensions_to_download"
-                    result = engine.eval_query(policy, data, input_file, query)
-                    test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                    self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])
+                engine = PolicyEngine()
+                data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
+                policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+                input_file = os.path.join(data_dir, 'policy', "agent-extension-input.json")
+                query = "data.agent_extension_policy.extensions_to_download"
+                result = engine.eval_query(policy, data, input_file, query)
+                test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+                self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])
