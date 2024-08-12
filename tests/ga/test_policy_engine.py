@@ -63,11 +63,14 @@ class TestPolicyEngine(AgentTestCase):
                       "PolicyEngineConfigurator.get_instance() should return the same instance.")
 
     def test_policy_should_be_enabled_on_supported_distro(self):
-        """Policy should be enabled on supported distro like Ubuntu 16.04."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
-                self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
+        """Policy should be enabled on all supported distros."""
+        for distro_name, version in POLICY_SUPPORT_MATRIX.items():
+            with patch('azurelinuxagent.ga.policy.policy_engine.get_distro',
+                       return_value=[distro_name, str(version)]):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
+                           return_value=True):
+                    policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+                    self.assertTrue(policy_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
 
     def test_policy_should_not_be_enabled_on_unsupported_distro(self):
         """Policy should NOT be enabled on unsupported like RHEL."""
@@ -83,17 +86,6 @@ class TestPolicyEngine(AgentTestCase):
                 engine = PolicyEngine()
                 self.assertTrue(engine.policy_engine_enabled,
                                 "Regorus engine should be initialized on supported distro Ubuntu 16.04.")
-
-        # confirm that policy can be initialized on all supported distros
-        for distro_name, version in POLICY_SUPPORT_MATRIX.items():
-            with self.subTest(distro=distro_name, version=version):
-                with patch('azurelinuxagent.ga.policy.policy_engine.get_distro',
-                           return_value=[distro_name, str(version)]):
-                    with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
-                               return_value=True):
-                        engine = PolicyEngine()
-                        self.assertTrue(engine.policy_engine_enabled,
-                                        "Regorus engine should be initialized on supported distro {0} {1}.".format(distro_name, version))
 
     def test_regorus_engine_should_not_be_initialized_on_unsupported_distro(self):
         """Regorus policy engine should NOT be initialized on unsupported distro like RHEL."""
