@@ -59,8 +59,8 @@ class TestPolicyEngine(AgentTestCase):
         """PolicyEngineConfigurator should be a singleton."""
         configurator_1 = PolicyEngineConfigurator.get_instance()
         configurator_2 = PolicyEngineConfigurator.get_instance()
-        self.assertIs(configurator_1, configurator_2,
-                      "PolicyEngineConfigurator.get_instance() should return the same instance.")
+        self.assertTrue(configurator_1 is configurator_2,
+                        "PolicyEngineConfigurator.get_instance() should return the same instance.")
 
     def test_policy_should_be_enabled_on_supported_distro(self):
         """Policy should be enabled on all supported distros."""
