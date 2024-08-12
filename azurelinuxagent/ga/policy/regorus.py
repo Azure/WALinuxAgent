@@ -1,34 +1,41 @@
 import json
 import subprocess
 import os
+from azurelinuxagent.common import logger
 
 
 def get_regorus_path():
-    # Returns path to Regorus executable. Currently, the executable is copied into ga/policy/regorus
-    # during testing. It is not officially released as part of the agent package.
+    """
+    Returns path to Regorus executable. Currently, the executable is copied into ga/policy/regorus
+    during testing. It is not yet officially released as part of the agent package.
+    """
     regorus_exe = os.path.join(os.getcwd(), "azurelinuxagent", "ga", "policy", "regorus", "regorus")
     return regorus_exe
 
-class Engine:
-    _engine = None
-    _policy_file = None
-    _data_file = None
-    _input_file = None
 
+class Engine:
 
     def __init__(self):
-        pass
-        # self._engine = regorus.regorus_engine_new()
-        # if not self._engine:
-        #     raise Exception("Failed to create engine")
+        self._engine = None
+        self._policy_file = None
+        self._data_file = None
+        self._input_file = None
 
-    def add_policy_from_file(self, file):
-        self._policy_file = file
+    def add_policy(self, policy_path):
+        """Policy_path is expected to point to a valid Regorus file."""
+        if not os.path.exists(policy_path) or not policy_path.endswith('.rego'):
+            raise Exception("Policy path {} is not a valid .rego file.".format(policy_path))
+        self._policy_file = policy_path
 
-    def set_input_json(self, input_file):
-        self._input_file = input_file
+    def set_input(self, input_path):
+        if not os.path.exists(input_path) or not input_path.endswith(".json"):
+            raise Exception("Input path {} is not a valid JSON file.".format(input_path))
+        self._input_file = input_path
 
-    def add_data_json(self, data):
+    def add_data(self, data):
+        """Data parameter is expected to point to a valid json file."""
+        if not os.path.exists(data) or not data.endswith(".json"):
+            raise Exception("Data path {} is not a valid JSON file.".format(data))
         self._data_file = data
 
     def eval_query(self, query):
@@ -43,12 +50,11 @@ class Engine:
             if process.returncode == 0:
                 # Decode stdout to string if it is bytes (Python 3.x)
                 stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
-                print(stdout)
                 json_output = json.loads(stdout)
                 return json_output
             else:
                 stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
-                print("Standard Error:", stderr)
+                logger.error("Error when running Regorus executable: {}".format(stderr))
                 return {}
         except Exception:
             raise Exception

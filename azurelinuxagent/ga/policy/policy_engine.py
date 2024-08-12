@@ -75,10 +75,8 @@ class PolicyEngineConfigurator:
 
         except (ImportError, NameError) as ex:
             log_policy("Error: Failed to import Regorus module and initialize policy engine.", is_success=False)
-            raise ex
         except Exception as ex:
             log_policy("Error: Failed to enable policy enforcement. '{0}'".format(ex), is_success=False)
-            raise ex
         finally:
             PolicyEngineConfigurator._initialized = True
 
@@ -123,26 +121,21 @@ class PolicyEngine(object):
                 self._policy_engine_enabled = True
         except (ImportError, NameError) as ex:
             log_policy("Error: Failed to initialize Regorus policy engine due to import failure.", is_success=False)
-            raise ex
         except Exception as ex:
             log_policy("Error: Failed to initialize Regorus policy engine. '{0}'".format(ex), is_success=False)
-            raise ex
 
     @property
     def policy_engine_enabled(self):
         return self._policy_engine_enabled
 
-    def add_policy_from_file(self, file):
-        self._engine.add_policy_from_file(file)
-
     def eval_query(self, policy, data, input_file, query):
         if self._policy_engine_enabled:
-            self._engine.add_policy_from_file(policy)
-            self._engine.add_data_json(data)
-            self._engine.set_input_json(input_file)
+            self._engine.add_policy(policy)
+            self._engine.add_data(data)
+            self._engine.set_input(input_file)
             result = self._engine.eval_query(query)
-            TEST_EXT_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-            allowed = result['result'][0]['expressions'][0]['value'][TEST_EXT_NAME]['downloadAllowed']
+            test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+            allowed = result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed']
             if allowed:
                 log_policy("Extension is allowed!")
                 logger.info(str(result))
