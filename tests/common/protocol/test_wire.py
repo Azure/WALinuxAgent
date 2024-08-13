@@ -95,11 +95,11 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                 protocol.get_goal_state().fetch_extension_manifest(ext_handler.name, ext_handler.manifest_uris)
 
             crt1 = os.path.join(self.tmp_dir,
-                                '38B85D88F03D1A8E1C671EB169274C09BC4D4703.crt')
+                                '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
             crt2 = os.path.join(self.tmp_dir,
-                                'BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F.crt')
+                                'F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9.crt')
             prv2 = os.path.join(self.tmp_dir,
-                                'BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F.prv')
+                                'F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9.prv')
             if certsMustBePresent:
                 self.assertTrue(os.path.isfile(crt1))
                 self.assertTrue(os.path.isfile(crt2))
