@@ -171,6 +171,7 @@ class PolicyEngine(object):
             log_policy("Error: Failed to evaluate query for Regorus policy engine. '{0}'".format(ex), is_success=False)
             return {}
 
+
 class ExtensionPolicyEngine(PolicyEngine):
     """
     Implements all extension policy-related operations.
@@ -205,7 +206,7 @@ class ExtensionPolicyEngine(PolicyEngine):
             return allowed
 
         query = "data.agent_extension_policy.extensions_to_download"
-        result = self._engine.evaluate_query(query)  # if error thrown here, result will be {}
+        result = self.evaluate_query(query)  # if error thrown here, result will be {}
         for ext, info in result.items():
             if info.get('downloadAllowed'):
                 allowed.append(ext)
@@ -216,9 +217,9 @@ class ExtensionPolicyEngine(PolicyEngine):
             return False
         query = "data.agent_extension_policy.extensions_to_download"
         result = self.evaluate_query(query)
-        allowed = result.get(ext_name).get('downloadAllowed')
-        if allowed is None:
+        ext_info = result.get(ext_name)
+        if ext_info is None:
             return False
         else:
-            return allowed
+            return ext_info.get('downloadAllowed')
 
