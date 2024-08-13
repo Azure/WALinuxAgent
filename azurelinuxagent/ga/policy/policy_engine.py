@@ -209,6 +209,7 @@ class ExtensionPolicyEngine(PolicyEngine):
         for ext, info in result.items():
             if info.get('downloadAllowed'):
                 allowed.append(ext)
+        return allowed
 
     def is_extension_download_allowed(self, ext_name):
         if not self.extension_policy_engine_enabled:
