@@ -392,6 +392,7 @@ class AgentTestSuite(LisaTestSuite):
             log.info("%s", command)
             run_command(command, shell=True)
             log.info("Contents of %s:\n%s", self._test_tools_tarball_path, run_command(['tar', 'tvf', str(self._test_tools_tarball_path)]))
+
             log.info("Completed setup, creating %s", completed)
             completed.touch()
 
@@ -960,6 +961,3 @@ class AgentTestSuite(LisaTestSuite):
             "sku": {"value": sku},
             "version": {"value": version}
         }
-
-
-

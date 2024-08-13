@@ -57,4 +57,5 @@ class Engine:
                 logger.error("Error when running Regorus executable: {0}".format(stderr))
                 return {}
         except Exception as ex:
-            raise ex
+            logger.error("Exception thrown when running Regorus executable: {0}".format(ex))
+            return {}
