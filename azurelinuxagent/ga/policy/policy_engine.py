@@ -1,6 +1,4 @@
-# Microsoft Azure Linux Agent
-#
-# Copyright 2020 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Requires Python 2.4+ and Openssl 1.0+
+#
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.version import get_distro
@@ -128,22 +129,46 @@ class PolicyEngine(object):
     def policy_engine_enabled(self):
         return self._policy_engine_enabled
 
-    def eval_query(self, policy, data, input_file, query):
-        if self._policy_engine_enabled:
-            self._engine.add_policy(policy)
-            self._engine.add_data(data)
+    def add_policy(self, policy_file):
+        """Policy_path should be a path to a valid Rego policy rule file."""
+        if not self.policy_engine_enabled:
+            return
+
+        try:
+            self._engine.add_policy(policy_file)
+        except Exception as ex:
+            log_policy("Error: Failed to add policy to Regorus policy engine. '{0}'".format(ex), is_success=False)
+
+    def add_data(self, data_file):
+        """Data_file should be a path to a valid JSON data file."""
+        if not self.policy_engine_enabled:
+            return
+
+        try:
+            self._engine.add_data(data_file)
+        except Exception as ex:
+            log_policy("Error: Failed to add data to Regorus policy engine. '{0}'".format(ex), is_success=False)
+
+    def set_input(self, input_file):
+        """Input_file should be a path to a valid JSON input file."""
+        if not self.policy_engine_enabled:
+            return
+
+        try:
             self._engine.set_input(input_file)
-            result = self._engine.eval_query(query)
-            test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-            allowed = result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed']
-            if allowed:
-                log_policy("Extension is allowed!")
-                logger.info(str(result))
-            else:
-                log_policy("Extension is not allowed.")
-            return result
-        else:
-            return False
+        except Exception as ex:
+            log_policy("Error: Failed to set input for Regorus policy engine. '{0}'".format(ex), is_success=False)
+
+    def evaluate_query(self, query):
+        if not self.policy_engine_enabled:
+            return {}
+
+        try:
+            full_result = self._engine.eval_query(query)
+            value = full_result['result'][0]['expressions'][0]['value']
+            return value
+        except Exception as ex:
+            log_policy("Error: Failed to evaluate query for Regorus policy engine. '{0}'".format(ex), is_success=False)
 
 
 class ExtensionPolicyEngine(PolicyEngine):
@@ -153,17 +178,46 @@ class ExtensionPolicyEngine(PolicyEngine):
     def __init__(self):
         self._extension_policy_engine_enabled = False
         super(ExtensionPolicyEngine, self).__init__()
-        # if Regorus engine initialization fails, we shouldn't try to load any files.
-        if self.policy_engine_enabled:
-            try:
-                # TO DO: load policy and data file here
-                self._extension_policy_engine_enabled = True
-                log_policy("Successfully enabled extension policy enforcement.",
+
+        # if Regorus engine initialization fails during PolicyEngine init, we shouldn't enable extension policy.
+        if not self.policy_engine_enabled:
+            return
+
+        try:
+            self._extension_policy_engine_enabled = True
+            log_policy("Successfully enabled extension policy enforcement.",
                            op=WALAEventOperation.ExtensionPolicy)
-            except Exception as ex:
-                log_policy("Error: Failed to enable extension policy enforcement. '{0}'".format(ex), is_success=False,
+        except Exception as ex:
+            log_policy("Error: Failed to enable extension policy enforcement. '{0}'".format(ex), is_success=False,
                            op=WALAEventOperation.ExtensionPolicy)
 
     @property
     def extension_policy_engine_enabled(self):
         return self._extension_policy_engine_enabled
+
+    def get_allowed_list(self):
+        """
+        Evaluate query and return a list of only allowed extensions. If any errors are thrown, an empty list will be
+        returned.
+        """
+        allowed = []
+        if not self.extension_policy_engine_enabled:
+            return allowed
+
+        query = "data.agent_extension_policy.extensions_to_download"
+        result = self._engine.evaluate_query(query)  # if error thrown here, result will be {}
+        for ext, info in result.items():
+            if info.get('downloadAllowed'):
+                allowed.append(ext)
+
+    def is_extension_download_allowed(self, ext_name):
+        if not self.extension_policy_engine_enabled:
+            return False
+        query = "data.agent_extension_policy.extensions_to_download"
+        result = self.evaluate_query(query)
+        allowed = result.get(ext_name).get('downloadAllowed')
+        if allowed is None:
+            return False
+        else:
+            return allowed
+

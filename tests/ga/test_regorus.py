@@ -93,5 +93,5 @@ class TestPolicyEngine(AgentTestCase):
 
         # test eval_query, which will use subprocess.Popen
         engine = Engine()
-        result = engine.eval_query("test_query")
-        self.assertEqual(result, {})
+        with self.assertRaises(Exception, msg="Subprocess failure should have raised an exception."):
+            engine.eval_query("test_query")

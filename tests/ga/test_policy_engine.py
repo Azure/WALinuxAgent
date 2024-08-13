@@ -26,6 +26,9 @@ from tests.lib.tools import patch, data_dir, test_dir
 class TestPolicyEngine(AgentTestCase):
     patcher = None
     regorus_dest_path = None    # Location where real regorus executable should be.
+    default_data_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
+    default_policy_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+    test_input_path = os.path.join(data_dir, 'policy', "agent-extension-input.json")
 
     @classmethod
     def setUpClass(cls):
@@ -39,6 +42,7 @@ class TestPolicyEngine(AgentTestCase):
         cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
         cls.patcher.start()
         AgentTestCase.setUpClass()
+
 
     @classmethod
     def tearDownClass(cls):
@@ -102,15 +106,22 @@ class TestPolicyEngine(AgentTestCase):
                 engine = ExtensionPolicyEngine()
                 self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
 
-    def test_eval_query(self):
+    def test_policy_engine_should_add_policy(self):
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                engine = PolicyEngine()
+                policy_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+                engine.add_policy(policy_path)
+
+    def test_policy_engine_should_evaluate_query(self):
         """Extension policy engine should be able to load policy and data files without any errors."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 engine = PolicyEngine()
-                data = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-                policy = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
-                input_file = os.path.join(data_dir, 'policy', "agent-extension-input.json")
+                engine.add_data(self.default_data_path)
+                engine.add_policy(self.default_policy_path)
+                engine.set_input(self.test_input_path)
                 query = "data.agent_extension_policy.extensions_to_download"
-                result = engine.eval_query(policy, data, input_file, query)
+                result = engine.evaluate_query(query)
                 test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])
+                self.assertTrue(result[test_ext_name]['downloadAllowed'])
