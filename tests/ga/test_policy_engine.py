@@ -132,7 +132,6 @@ class TestPolicyEngine(AgentTestCase):
                 engine.add_data(self.default_data_path)
                 engine.add_policy(self.default_policy_path)
                 engine.set_input(self.test_input_path)
-                query = "data.agent_extension_policy.extensions_to_download"
                 result = engine.get_allowed_list()
                 test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
                 self.assertTrue(len(result) > 0)
@@ -145,7 +144,6 @@ class TestPolicyEngine(AgentTestCase):
                 engine.add_data(self.default_data_path)
                 engine.add_policy(self.default_policy_path)
                 engine.set_input(self.test_input_path)
-                query = "data.agent_extension_policy.extensions_to_download"
                 test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
                 result = engine.is_extension_download_allowed(test_ext_name)
                 self.assertTrue(result)
@@ -157,7 +155,6 @@ class TestPolicyEngine(AgentTestCase):
                 engine.add_data(self.default_data_path)
                 engine.add_policy(self.default_policy_path)
                 engine.set_input(self.test_input_path)
-                query = "data.agent_extension_policy.extensions_to_download"
                 test_ext_name = "Random.Disallowed.Extension"
                 result = engine.is_extension_download_allowed(test_ext_name)
                 self.assertFalse(result)
