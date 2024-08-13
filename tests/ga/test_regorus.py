@@ -22,13 +22,13 @@ from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.regorus import Engine
 from tests.lib.tools import patch, data_dir, test_dir, MagicMock
 
+
 class TestPolicyEngine(AgentTestCase):
     patcher = None
     regorus_dest_path = None    # Location where real regorus executable should be.
     default_data_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
     default_policy_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
     test_input_path = os.path.join(data_dir, 'policy', "agent-extension-input.json")
-
 
     @classmethod
     def setUpClass(cls):
@@ -52,6 +52,10 @@ class TestPolicyEngine(AgentTestCase):
         AgentTestCase.tearDownClass()
 
     def test_should_evaluate_query_with_valid_params(self):
+        """
+        Eval_query should return the expected output with a valid policy, data, and input file.
+        This unit test also tests the valid case for add_policy, add_data, and set_input.
+        """
         engine = Engine()
         engine.add_policy(self.default_policy_path)
         engine.add_data(self.default_data_path)

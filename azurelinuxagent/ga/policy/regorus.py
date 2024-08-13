@@ -54,7 +54,7 @@ class Engine:
                 return json_output
             else:
                 stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
-                logger.error("Error when running Regorus executable: {}".format(stderr))
+                logger.error("Error when running Regorus executable: {0}".format(stderr))
                 return {}
         except Exception as ex:
             raise ex
