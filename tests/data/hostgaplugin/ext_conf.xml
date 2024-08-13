@@ -58,7 +58,7 @@
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "protectedSettingsCertThumbprint": "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F",
+        "protectedSettingsCertThumbprint": "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9",
         "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent==",
         "publicSettings": {"GCS_AUTO_CONFIG":true}
       }
@@ -71,7 +71,7 @@
   "runtimeSettings": [
     {
       "handlerSettings": {
-        "protectedSettingsCertThumbprint": "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F",
+        "protectedSettingsCertThumbprint": "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9",
         "protectedSettings": "MIIBsAYJKoZIhvcNAQcDoIIBoTCCAZ0CAQAxggFpMIIBZQIBADBNMDkxNzA1BgoJkiaJk/Microsoft.Azure.Security.Monitoring.AzureSecurityLinuxAgent==",
         "publicSettings": {"enableGenevaUpload":true}
       }
