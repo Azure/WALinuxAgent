@@ -169,7 +169,7 @@ class PolicyEngine(object):
             return value
         except Exception as ex:
             log_policy("Error: Failed to evaluate query for Regorus policy engine. '{0}'".format(ex), is_success=False)
-
+            return {}
 
 class ExtensionPolicyEngine(PolicyEngine):
     """
