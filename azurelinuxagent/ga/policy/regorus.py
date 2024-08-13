@@ -56,5 +56,5 @@ class Engine:
                 stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
                 logger.error("Error when running Regorus executable: {}".format(stderr))
                 return {}
-        except Exception:
-            raise Exception
+        except Exception as ex:
+            raise ex
