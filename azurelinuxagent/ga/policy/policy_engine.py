@@ -29,8 +29,8 @@ POLICY_SUPPORT_MATRIX = {
 }
 
 
-# This needs to be a module-level function because it is common across PolicyEngineConfigurator
-# and PolicyEngine classes, which do not inherit from each other.
+# Common logging function across PolicyEngineConfigurator and PolicyEngine classes,
+# so should be a module-level function.
 def log_policy(formatted_string, is_success=True, op=WALAEventOperation.Policy, send_event=True):
     """
     Log information to console and telemetry.
@@ -112,6 +112,9 @@ class PolicyEngine(object):
     """
     Implements policy engine API. Class will always be initialized, but if the Regorus import fails,
     all methods will be no-ops.
+
+    If any errors are thrown in regorus.py, they will be caught and handled here. add_policy, add_data,
+    and set_input will be no-ops, eval_query will return an empty dict 
     """
     def __init__(self):
         self._policy_engine_enabled = False
@@ -170,55 +173,3 @@ class PolicyEngine(object):
         except Exception as ex:
             log_policy("Error: Failed to evaluate query for Regorus policy engine. '{0}'".format(ex), is_success=False)
             return {}
-
-
-class ExtensionPolicyEngine(PolicyEngine):
-    """
-    Implements all extension policy-related operations.
-    """
-    def __init__(self):
-        self._extension_policy_engine_enabled = False
-        super(ExtensionPolicyEngine, self).__init__()
-
-        # if Regorus engine initialization fails during PolicyEngine init, we shouldn't enable extension policy.
-        if not self.policy_engine_enabled:
-            return
-
-        try:
-            self._extension_policy_engine_enabled = True
-            log_policy("Successfully enabled extension policy enforcement.",
-                           op=WALAEventOperation.ExtensionPolicy)
-        except Exception as ex:
-            log_policy("Error: Failed to enable extension policy enforcement. '{0}'".format(ex), is_success=False,
-                           op=WALAEventOperation.ExtensionPolicy)
-
-    @property
-    def extension_policy_engine_enabled(self):
-        return self._extension_policy_engine_enabled
-
-    def get_allowed_list(self):
-        """
-        Evaluate query and return a list of only allowed extensions. If any errors are thrown, an empty list will be
-        returned.
-        """
-        allowed = []
-        if not self.extension_policy_engine_enabled:
-            return allowed
-
-        query = "data.agent_extension_policy.extensions_to_download"
-        result = self.evaluate_query(query)  # if error thrown here, result will be {}
-        for ext, info in result.items():
-            if info.get('downloadAllowed'):
-                allowed.append(ext)
-        return allowed
-
-    def is_extension_download_allowed(self, ext_name):
-        if not self.extension_policy_engine_enabled:
-            return False
-        query = "data.agent_extension_policy.extensions_to_download"
-        result = self.evaluate_query(query)
-        ext_info = result.get(ext_name)
-        if ext_info is None:
-            return False
-        else:
-            return ext_info.get('downloadAllowed')

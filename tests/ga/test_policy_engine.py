@@ -19,7 +19,7 @@ import os
 import shutil
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, ExtensionPolicyEngine, POLICY_SUPPORT_MATRIX
+from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, POLICY_SUPPORT_MATRIX
 from tests.lib.tools import patch, data_dir, test_dir
 
 
@@ -99,13 +99,6 @@ class TestPolicyEngine(AgentTestCase):
                 self.assertFalse(engine.policy_engine_enabled,
                                  "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
-    def test_extension_policy_engine_should_load_successfully(self):
-        """Extension policy engine should be able to load policy and data files without any errors."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = ExtensionPolicyEngine()
-                self.assertTrue(engine.extension_policy_engine_enabled, "Extension policy engine should load successfully.")
-
     def test_policy_engine_should_add_policy(self):
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
@@ -124,37 +117,3 @@ class TestPolicyEngine(AgentTestCase):
                 result = engine.evaluate_query(query)
                 test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
                 self.assertTrue(result[test_ext_name]['downloadAllowed'])
-
-    def test_should_return_allowed_list(self):
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = ExtensionPolicyEngine()
-                engine.add_data(self.default_data_path)
-                engine.add_policy(self.default_policy_path)
-                engine.set_input(self.test_input_path)
-                result = engine.get_allowed_list()
-                test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                self.assertTrue(len(result) > 0)
-                self.assertTrue(test_ext_name in result)
-
-    def test_extension_should_be_allowed(self):
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = ExtensionPolicyEngine()
-                engine.add_data(self.default_data_path)
-                engine.add_policy(self.default_policy_path)
-                engine.set_input(self.test_input_path)
-                test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                result = engine.is_extension_download_allowed(test_ext_name)
-                self.assertTrue(result)
-
-    def test_extension_should_be_disallowed(self):
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = ExtensionPolicyEngine()
-                engine.add_data(self.default_data_path)
-                engine.add_policy(self.default_policy_path)
-                engine.set_input(self.test_input_path)
-                test_ext_name = "Random.Disallowed.Extension"
-                result = engine.is_extension_download_allowed(test_ext_name)
-                self.assertFalse(result)
