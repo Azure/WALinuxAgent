@@ -100,6 +100,7 @@ class TestPolicyEngine(AgentTestCase):
                                  "Regorus engine should not be initialized on unsupported distro RHEL 9.0.")
 
     def test_policy_engine_should_add_policy(self):
+        """Policy engine should be able to add a policy without an error."""
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 engine = PolicyEngine()
@@ -107,6 +108,10 @@ class TestPolicyEngine(AgentTestCase):
                 engine.add_policy(policy_path)
 
     def test_policy_engine_should_evaluate_query(self):
+        """
+        Should be able to add policy, data, input, and evaluate query without an error.
+        This tests the happy path for add_policy, add_data, and set_input as well.
+        """
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 engine = PolicyEngine()
@@ -116,4 +121,18 @@ class TestPolicyEngine(AgentTestCase):
                 query = "data.agent_extension_policy.extensions_to_download"
                 result = engine.evaluate_query(query)
                 test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                self.assertTrue(result[test_ext_name]['downloadAllowed'])
+                self.assertTrue(result[test_ext_name]['downloadAllowed'],
+                                msg="Query should have returned that extension is allowed.")
+
+    def test_eval_query_should_be_no_op(self):
+        """
+        When policy enforcement is disabled, eval_query should return {} and not throw an error.
+        """
+        engine = PolicyEngine()
+        engine.add_data(self.default_data_path)
+        engine.add_policy(self.default_policy_path)
+        engine.set_input(self.test_input_path)
+        query = "data.agent_extension_policy.extensions_to_download"
+        result = engine.evaluate_query(query)
+        self.assertEquals(result, {}, msg="Query should have returned an empty dict.")
+
