@@ -134,5 +134,5 @@ class TestPolicyEngine(AgentTestCase):
         engine.set_input(self.test_input_path)
         query = "data.agent_extension_policy.extensions_to_download"
         result = engine.evaluate_query(query)
-        self.assertEquals(result, {}, msg="Query should have returned an empty dict.")
+        self.assertEqual(result, {}, msg="Query should have returned an empty dict.")
 
