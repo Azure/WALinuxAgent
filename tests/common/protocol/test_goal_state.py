@@ -401,7 +401,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
         with mock_wire_protocol(data_file) as protocol:
             goal_state = GoalState(protocol.client)
 
-            cert = "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F"
+            cert = "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9"
             crt_path = os.path.join(self.tmp_dir, cert + ".crt")
             prv_path = os.path.join(self.tmp_dir, cert + ".prv")
 
@@ -426,7 +426,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             protocol.mock_wire_data.set_vm_settings_source(GoalStateSource.Fabric)
             goal_state = GoalState(protocol.client)
 
-            cert = "BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F"
+            cert = "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9"
             crt_path = os.path.join(self.tmp_dir, cert + ".crt")
             prv_path = os.path.join(self.tmp_dir, cert + ".prv")
 
