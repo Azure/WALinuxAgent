@@ -99,10 +99,12 @@ fi
 echo ""
 
 WIRE_IP=$(cat /var/lib/waagent/WireServerEndpoint 2>/dev/null || echo '168.63.129.16' | tr -d '[:space:]')
-if command -v wget >/dev/null 2>&1; then
-    wget --tries=3 "http://$WIRE_IP/?comp=versions" --timeout=5 -O "/tmp/wire-versions-$USER.xml"
-else
+if command -v curl >/dev/null 2>&1; then
     curl --retry 3 --retry-delay 5 --connect-timeout 5 "http://$WIRE_IP/?comp=versions" -o "/tmp/wire-versions-$USER.xml"
+elif command -v wget >/dev/null 2>&1; then
+    wget --tries=3 "http://$WIRE_IP/?comp=versions" --timeout=5 -O "/tmp/wire-versions-$USER.xml"else
+else
+    http_get.py "http://168.63.129.16/?comp=versions" --timeout 5 --delay 5 --tries 3
 fi
 WIRE_EC=$?
 echo "ExitCode: $WIRE_EC"
