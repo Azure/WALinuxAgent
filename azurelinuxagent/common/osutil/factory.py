@@ -142,7 +142,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
     if distro_name == "iosxe":
         return IosxeOSUtil()
 
-    if distro_name == "mariner":
+    if distro_name in ["mariner", "azurelinux"]:
         return MarinerOSUtil()
 
     if distro_name == "nsbsd":
