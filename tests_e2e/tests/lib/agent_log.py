@@ -380,6 +380,24 @@ class AgentLog(object):
                 'message': r"Unable to determine version of iptables: \[Errno 2\] No such file or directory: 'iptables'",
                 'if': lambda r: DISTRO_NAME == 'ubuntu'
             },
+            #
+            # TODO: The Daemon has not been updated on Azure Linux 3; remove this message when it is.
+            #
+            # 2024-08-05T14:36:48.004865Z WARNING Daemon Daemon Unable to load distro implementation for azurelinux. Using default distro implementation instead.
+            #
+            {
+                'message': r"Unable to load distro implementation for azurelinux. Using default distro implementation instead.",
+                'if': lambda r: DISTRO_NAME == 'azurelinux' and r.prefix == 'Daemon' and r.level == 'WARNING'
+            },
+            #
+            # TODO: The OMS extension does not support Azure Linux 3; remove this message when it does.
+            #
+            # 2024-08-12T17:40:48.375193Z ERROR ExtHandler ExtHandler Event: name=Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 51, /var/lib/waagent/Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux-1.19.0/omsagent_shim.sh -install
+            #
+            {
+                'message': r"name=Microsoft\.EnterpriseCloud\.Monitoring\.OmsAgentForLinux.+Non-zero exit code: 51",
+                'if': lambda r: DISTRO_NAME == 'azurelinux' and DISTRO_VERSION == '3.0'
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
