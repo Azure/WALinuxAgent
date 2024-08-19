@@ -33,8 +33,8 @@ def get_agent_update_handler(protocol):
     return AgentUpdateHandler(protocol)
 
 
-RSM_UPDATE_STATE_FILE = "rsm_update.json"
-INITIAL_UPDATE_STATE_FILE = "initial_update.json"
+RSM_UPDATE_STATE_FILE = "waagent.rsm_update"
+INITIAL_UPDATE_STATE_FILE = "waagent.initial_update"
 
 
 class AgentUpdateHandler(object):
@@ -76,7 +76,7 @@ class AgentUpdateHandler(object):
         self._last_attempted_update_error_msg = ""
 
         # Restore the state of rsm update. Default to self-update if last update is not with RSM or if agent doing initial update
-        if not self._get_is_last_update_with_rsm() or not self._is_initial_update_attempted():
+        if not self._get_is_last_update_with_rsm() or self._is_initial_update():
             self._updater = SelfUpdateVersionUpdater(self._gs_id)
         else:
             self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version)
@@ -97,7 +97,7 @@ class AgentUpdateHandler(object):
         """
         return os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE)
 
-    def _save_initial_update_state(self):
+    def _save_initial_update_state_file(self):
         """
         Save the file if agent attempted initial update
         """
@@ -105,13 +105,15 @@ class AgentUpdateHandler(object):
             with open(self._get_initial_update_state_file(), "w"):
                 pass
         except Exception as e:
-            logger.warn("Error creating the initial update state ({0}): {1}", self._get_initial_update_state_file(), ustr(e))
+            msg = "Error creating the initial update state file ({0}): {1}".format(self._get_initial_update_state_file(), ustr(e))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
-    def _is_initial_update_attempted(self):
+    def _is_initial_update(self):
         """
-        Returns True if state file exits as presence of file consider as initial update attempted
+        Returns True if state file doesn't exit as presence of file consider as initial update already attempted
         """
-        return os.path.exists(self._get_initial_update_state_file())
+        return not os.path.exists(self._get_initial_update_state_file())
 
     @staticmethod
     def _get_rsm_update_state_file():
@@ -120,7 +122,7 @@ class AgentUpdateHandler(object):
         """
         return os.path.join(conf.get_lib_dir(), RSM_UPDATE_STATE_FILE)
 
-    def _save_rsm_update_state(self):
+    def _save_rsm_update_state_file(self):
         """
         Save the rsm state empty file when we switch to RSM
         """
@@ -128,9 +130,11 @@ class AgentUpdateHandler(object):
             with open(self._get_rsm_update_state_file(), "w"):
                 pass
         except Exception as e:
-            logger.warn("Error creating the RSM state ({0}): {1}", self._get_rsm_update_state_file(), ustr(e))
+            msg = "Error creating the RSM state file ({0}): {1}".format(self._get_rsm_update_state_file(), ustr(e))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
-    def _remove_rsm_update_state(self):
+    def _remove_rsm_update_state_file(self):
         """
         Remove the rsm state file when we switch to self-update
         """
@@ -138,7 +142,9 @@ class AgentUpdateHandler(object):
             if os.path.exists(self._get_rsm_update_state_file()):
                 os.remove(self._get_rsm_update_state_file())
         except Exception as e:
-            logger.warn("Error removing the RSM state ({0}): {1}", self._get_rsm_update_state_file(), ustr(e))
+            msg = "Error removing the RSM state file ({0}): {1}".format(self._get_rsm_update_state_file(), ustr(e))
+            logger.warn(msg)
+            add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
 
     def _get_is_last_update_with_rsm(self):
         """
@@ -188,8 +194,8 @@ class AgentUpdateHandler(object):
             agent_family = self._get_agent_family_manifest(goal_state)
 
             # Always agent uses self-update for initial update regardless vm enrolled into RSM or not
-            # So ignoring the check for updater switch for the initial goal state
-            if self._is_initial_update_attempted():
+            # So ignoring the check for updater switch for the initial goal state/update
+            if not self._is_initial_update():
 
                 # Updater will return True or False if we need to switch the updater
                 # If self-updater receives RSM update enabled, it will switch to RSM updater
@@ -202,14 +208,14 @@ class AgentUpdateHandler(object):
                     logger.info(msg)
                     add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
                     self._updater = SelfUpdateVersionUpdater(self._gs_id)
-                    self._remove_rsm_update_state()
+                    self._remove_rsm_update_state_file()
 
                 if is_rsm_update_enabled and isinstance(self._updater, SelfUpdateVersionUpdater):
                     msg = "VM enabled for RSM updates, switching to RSM update mode"
                     logger.info(msg)
                     add_event(op=WALAEventOperation.AgentUpgrade, message=msg, log_event=False)
                     self._updater = RSMVersionUpdater(self._gs_id, self._daemon_version)
-                    self._save_rsm_update_state()
+                    self._save_rsm_update_state_file()
 
             # If updater is changed in previous step, we allow update as it consider as first attempt. If not, it checks below condition
             # RSM checks new goal state; self-update checks manifest download interval
@@ -257,10 +263,10 @@ class AgentUpdateHandler(object):
                 add_event(op=WALAEventOperation.AgentUpgrade, is_success=False, message=error_msg, log_event=False)
             self._last_attempted_update_error_msg = error_msg
 
-        # save initial update state when agent is attempted first time
+        # save initial update state when agent is doing first update
         finally:
-            if not self._is_initial_update_attempted():
-                self._save_initial_update_state()
+            if self._is_initial_update():
+                self._save_initial_update_state_file()
 
     def get_vmagent_update_status(self):
         """

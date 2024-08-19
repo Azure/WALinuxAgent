@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Checks that the initial agent update happens before processing goal state from the agent log
+# Checks that the initial agent update happens with self-update before processing goal state from the agent log
 
 import argparse
 import datetime
@@ -32,35 +32,30 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--current_version", dest='current_version', required=True)
     parser.add_argument("--latest_version", dest='latest_version', required=True)
-    args, _ = parser.parse_known_args()
+    args = parser.parse_args()
 
     agentlog = AgentLog()
+    patterns = {
+        "goal_state": "ProcessExtensionsGoalState started",
+        "self_update": f"Self-update is ready to upgrade the new agent: {args.latest_version} now before processing the goal state",
+        "exit_process": f"Current Agent {args.current_version} completed all update checks, exiting current process to upgrade to the new Agent version {args.latest_version}"
+    }
+    first_occurrence_times = {"goal_state": datetime.time.min, "self_update": datetime.time.min, "exit_process": datetime.time.min}
 
-    goal_state_processing_pattern = "ProcessExtensionsGoalState started"
-    update_pattern = "Current Agent {0} completed all update checks, exiting current process to upgrade to the new Agent version {1}".format(args.current_version, args.latest_version)
-    processing_time = datetime.time.min
-    update_time = datetime.time.min
-
-    log.info(f"Searching for initial '{goal_state_processing_pattern}' pattern in agent log")
     for record in agentlog.read():
-        match = re.search(goal_state_processing_pattern, record.message, flags=re.DOTALL)
-        if match is not None:
-            log.info("Found data: {0} in agent log".format(record))
-            processing_time = record.when
-            break
+        for key, pattern in patterns.items():
+            # Skip if we already found the first occurrence of the pattern
+            if first_occurrence_times[key] != datetime.time.min:
+                continue
+            if re.search(pattern, record.message, flags=re.DOTALL):
+                log.info(f"Found data: {record} in agent log")
+                first_occurrence_times[key] = record.when
+                break
 
-    log.info(f"Searching for initial '{update_pattern}' pattern in agent log")
-    for record in agentlog.read():
-        match = re.search(update_pattern, record.message, flags=re.DOTALL)
-        if match is not None:
-            log.info("Found data: {0} in agent log".format(record))
-            update_time = record.when
-            break
-
-    if update_time < processing_time:
+    if first_occurrence_times["self_update"] < first_occurrence_times["goal_state"] and first_occurrence_times["exit_process"] < first_occurrence_times["goal_state"]:
         log.info("Verified initial agent update happened before processing goal state")
     else:
-        fail("Agent initial update didn't happened before processing goal state")
+        fail(f"Agent initial update didn't happen before processing goal state and first_occurrence_times for patterns: {patterns} are: {first_occurrence_times}")
 
 
 if __name__ == '__main__':

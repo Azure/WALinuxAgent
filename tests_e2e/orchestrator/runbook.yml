@@ -54,8 +54,9 @@ variable:
       - publish_hostname
       - recover_network_interface
       - cgroup_v2_disabled
-      - agent_wait_for_cloud_init
-      - initial_agent_update
+  # agent_wait_for_cloud_init and initial_agent_update runs on custom image, as we don't update the custom image daily in the test run, So we are skipping but make sure to run when we added breaking changes like new lisa version, pipeline changes etc
+  #   - agent_wait_for_cloud_init
+  #   - initial_agent_update
 
   #
   # Additional arguments pass to the test suites

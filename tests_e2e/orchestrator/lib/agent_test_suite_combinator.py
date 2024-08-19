@@ -22,7 +22,7 @@ from lisa.combinator import Combinator  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.util import field_metadata  # pylint: disable=E0401
 
-from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
+from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo, CustomImage
 from tests_e2e.tests.lib.logging import set_thread_name
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
@@ -171,10 +171,10 @@ class AgentTestSuitesCombinator(Combinator):
                     vhd = image.urn
                     image_name = urllib.parse.urlparse(vhd).path.split('/')[-1]  # take the last fragment of the URL's path (e.g. "RHEL_8_Standard-8.3.202006170423.vhd")
                     shared_gallery = ""
-                elif self._is_image_from_gallery(image.urn):
+                elif CustomImage._is_image_from_gallery(image.urn):
                     marketplace_image = ""
                     vhd = ""
-                    image_name = self._get_name_of_image_from_gallery(image.urn)
+                    image_name = CustomImage._get_name_of_image_from_gallery(image.urn)
                     shared_gallery = image.urn
                 else:
                     marketplace_image = image.urn
@@ -473,7 +473,7 @@ class AgentTestSuitesCombinator(Combinator):
             match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
             if match is None:
                 # Added this condition for galley image as they don't have definition in images.yml
-                if AgentTestSuitesCombinator._is_image_from_gallery(image):
+                if CustomImage._is_image_from_gallery(image):
                     i = VmImageInfo()
                     i.urn = image
                     i.locations = []
@@ -573,17 +573,6 @@ class AgentTestSuitesCombinator(Combinator):
         # VHDs are given as URIs to storage; do some basic validation, not intending to be exhaustive.
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
-
-    @staticmethod
-    def _is_image_from_gallery(image: str) -> bool:
-        return AgentTestLoader._IMAGE_FROM_GALLERY.match(image) is not None
-
-    @staticmethod
-    def _get_name_of_image_from_gallery(image: str) -> bool:
-        match = AgentTestLoader._IMAGE_FROM_GALLERY.match(image)
-        if match is None:
-            raise Exception(f"Invalid image from gallery: {image}")
-        return match.group('image')
 
     @staticmethod
     def _report_test_result(

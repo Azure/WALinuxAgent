@@ -27,7 +27,7 @@ from tests_e2e.tests.lib.retry import retry_if_false
 
 class InitialAgentUpdate(AgentVmTest):
     """
-    This test verifies that the Agent does initial update one very first goal state before it starts processing extensions for new vms that are enrolled into RSM
+    This test verifies that the Agent does initial update on very first goal state before it starts processing extensions for new vms that are enrolled into RSM
     """
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
@@ -75,7 +75,7 @@ class InitialAgentUpdate(AgentVmTest):
             f"Successfully verified agent updated to latest version. Current agent version running:\n {waagent_version}")
 
     def _verify_agent_updated_before_processing_goal_state(self, latest_version) -> None:
-        log.info("Checking agent log if agent does initial update before processing goal state")
+        log.info("Checking agent log if agent does initial update with self-update before processing goal state")
 
         output = self._ssh_client.run_command(
             "initial_agent_update-agent_update_check_from_log.py --current_version {0} --latest_version {1}".format(self._test_version, latest_version))
