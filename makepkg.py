@@ -92,6 +92,8 @@ def run(agent_family, output_directory, log):
     with open(publish_manifest_path, mode='w') as publish_manifest:
         publish_manifest.write(PUBLISH_MANIFEST.format(AGENT_VERSION, agent_family))
 
+    # TODO: ADO task 29072449
+    # Package Regorus executable as part of the agent package
     cwd = os.getcwd()
     os.chdir(target_path)
     try:

@@ -86,6 +86,9 @@ def set_udev_files(data_files, dest="/etc/udev/rules.d/", src=None):
                "config/99-azure-product-uuid.rules"]
     data_files.append((dest, src))
 
+# TODO: ADO task 29072543
+# setup.py should place default policy data file at /etc/waagent_extension_policy.json
+# for supported distros.
 
 def get_data_files(name, version, fullname):  # pylint: disable=R0912
     """

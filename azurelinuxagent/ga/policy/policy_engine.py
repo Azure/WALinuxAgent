@@ -60,6 +60,7 @@ class PolicyEngineConfigurator:
             if PolicyEngineConfigurator._initialized:
                 return
 
+            # TODO: remove conf flag post private preview.
             if not conf.get_extension_policy_enabled():
                 log_policy("Policy enforcement is disabled via configuration file.")
                 return
