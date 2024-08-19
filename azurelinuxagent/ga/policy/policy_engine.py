@@ -161,13 +161,13 @@ class PolicyEngine(object):
         except Exception as ex:
             log_policy("Error: Failed to add data to Regorus policy engine. '{0}'".format(ex), is_success=False)
 
-    def set_input(self, input_file):
-        """Input_file should be a path to a valid JSON input file."""
+    def set_input(self, input_json):
+        """Input_json should be a JSON object."""
         if not self.policy_engine_enabled:
             return
 
         try:
-            self._engine.set_input(input_file)
+            self._engine.set_input(input_json)
         except Exception as ex:
             log_policy("Error: Failed to set input for Regorus policy engine. '{0}'".format(ex), is_success=False)
 

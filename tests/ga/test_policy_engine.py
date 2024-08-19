@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import json
 import os
 import shutil
 
@@ -28,10 +29,11 @@ class TestPolicyEngine(AgentTestCase):
     regorus_dest_path = None    # Location where real regorus executable should be.
     default_data_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
     default_policy_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
-    test_input_path = os.path.join(data_dir, 'policy', "agent-extension-input.json")
+    input_json = None  # Input is stored in a file, and extracted into this variable during class setup.
 
     @classmethod
     def setUpClass(cls):
+
         # On a production VM, Regorus will be located in /var/lib/waagent/WALinuxAgent-x.x.x.x/bin. Unit tests
         # run within the agent directory, so we copy the executable to ga/policy/regorus and patch path.
         # Note: Regorus has not been published officially, so for now, unofficial exe is stored in tests/data/policy.
@@ -41,6 +43,10 @@ class TestPolicyEngine(AgentTestCase):
             shutil.copy(regorus_source_path, cls.regorus_dest_path)
         cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
         cls.patcher.start()
+
+        # We store input in a centralized file, we want to extract the JSON contents into a dict for testing.
+        with open(os.path.join(data_dir, 'policy', "agent-extension-input.json"), 'r', encoding='utf-8') as input_file:
+            cls.input_json = json.load(input_file)
         AgentTestCase.setUpClass()
 
 
@@ -125,11 +131,12 @@ class TestPolicyEngine(AgentTestCase):
                 engine = PolicyEngine()
                 engine.add_data(self.default_data_path)
                 engine.add_policy(self.default_policy_path)
-                engine.set_input(self.test_input_path)
+                engine.set_input(self.input_json)
                 query = "data.agent_extension_policy.extensions_to_download"
                 result = engine.evaluate_query(query)
                 test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                self.assertTrue(result[test_ext_name]['downloadAllowed'],
+                self.assertIsNotNone(result.get(test_ext_name), msg="Query should not have returned empty dict.")
+                self.assertTrue(result.get(test_ext_name).get('downloadAllowed'),
                                 msg="Query should have returned that extension is allowed.")
 
     def test_eval_query_should_be_no_op(self):
@@ -139,7 +146,7 @@ class TestPolicyEngine(AgentTestCase):
         engine = PolicyEngine()
         engine.add_data(self.default_data_path)
         engine.add_policy(self.default_policy_path)
-        engine.set_input(self.test_input_path)
+        engine.set_input(self.input_json)
         query = "data.agent_extension_policy.extensions_to_download"
         result = engine.evaluate_query(query)
         self.assertEqual(result, {}, msg="Query should have returned an empty dict.")

@@ -18,6 +18,7 @@
 import json
 import subprocess
 import os
+import tempfile
 
 
 def get_regorus_path():
@@ -40,7 +41,7 @@ class Engine:
         self._engine = None
         self._policy_file = None
         self._data_file = None
-        self._input_file = None
+        self._input_json = None
 
     def add_policy(self, policy_path):
         """Policy_path is expected to point to a valid Regorus file."""
@@ -48,11 +49,14 @@ class Engine:
             raise Exception("Policy path {0} is not a valid .rego file.".format(policy_path))
         self._policy_file = policy_path
 
-    def set_input(self, input_path):
+    def set_input(self, input_json):
         """Input_path is expected to point to a valid json file."""
-        if not os.path.exists(input_path) or not input_path.endswith(".json"):
-            raise Exception("Input path {0} is not a valid JSON file.".format(input_path))
-        self._input_file = input_path
+        if isinstance(input_json, dict):
+            self._input_json = input_json
+        elif isinstance(input_json, str):
+            self._input_json = json.loads(input_json)
+        else:
+            raise Exception("Input to policy engine is not a valid JSON object.")
 
     def add_data(self, data):
         """Data parameter is expected to point to a valid json file."""
@@ -64,26 +68,32 @@ class Engine:
         missing_files = []
         if self._policy_file is None:
             missing_files.append("policy file")
-        if self._input_file is None:
-            missing_files.append("input file")
+        if self._input_json is None:
+            missing_files.append("input")
         if self._data_file is None:
             missing_files.append("data file")
         if missing_files:
             raise Exception("Missing {0} to run query.".format(', '.join(missing_files)))
 
-        regorus_exe = get_regorus_path()
-        command = [regorus_exe, "eval", "-d", self._policy_file, "-d", self._data_file,
-                   "-i", self._input_file, query]
+        # Write input JSON to a temp file, because Regorus requires input to be a file path.
+        # Tempfile is automatically cleaned up at the end of with block
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as input_file:
+            json.dump(self._input_json, input_file, indent=4)
+            input_file.flush()
 
-        # use subprocess.Popen instead of subprocess.run for Python 2 compatibility
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate()
+            regorus_exe = get_regorus_path()
+            command = [regorus_exe, "eval", "-d", self._policy_file, "-d", self._data_file,
+                       "-i", input_file.name, query]
 
-        if process.returncode == 0:
-            # Decode stdout to string if it is bytes (Python 3.x)
-            stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
-            json_output = json.loads(stdout)
-            return json_output
-        else:
-            stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
-            raise Exception("Subprocess error. {0}".format(stderr))
+            # use subprocess.Popen instead of subprocess.run for Python 2 compatibility
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+
+            if process.returncode == 0:
+                # Decode stdout to string if it is bytes (Python 3.x)
+                stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
+                json_output = json.loads(stdout)
+                return json_output
+            else:
+                stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
+                raise Exception("Subprocess error. {0}".format(stderr))

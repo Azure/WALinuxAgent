@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import json
 import os
 import shutil
 
@@ -23,17 +24,18 @@ from azurelinuxagent.ga.policy.regorus import Engine
 from tests.lib.tools import patch, data_dir, test_dir, MagicMock
 
 
-class TestPolicyEngine(AgentTestCase):
+class TestRegorusEngine(AgentTestCase):
     patcher = None
     regorus_dest_path = None    # Location where real regorus executable should be.
     default_data_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
     default_policy_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
-    test_input_path = os.path.join(data_dir, 'policy', "agent-extension-input.json")
+    input_json = None  # Input is stored in a file, and extracted into this variable during class setup.
 
     @classmethod
     def setUpClass(cls):
-        # Currently, ga/policy/regorus contains a dummy binary. The unit tests require a real binary,
-        # so we replace the dummy with a copy from the tests_e2e folder.
+        # On a production VM, Regorus will be located in /var/lib/waagent/WALinuxAgent-x.x.x.x/bin. Unit tests
+        # run within the agent directory, so we copy the executable to ga/policy/regorus and patch path.
+        # Note: Regorus has not been published officially, so for now, unofficial exe is stored in tests/data/policy.s
         regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
         cls.regorus_dest_path = os.path.abspath(os.path.join(test_dir, "..", "azurelinuxagent/ga/policy/regorus"))
         if not os.path.exists(cls.regorus_dest_path):
@@ -41,6 +43,11 @@ class TestPolicyEngine(AgentTestCase):
         # Patch the path to regorus for all unit tests.
         cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
         cls.patcher.start()
+
+        # We store input in a centralized file, we want to extract the JSON contents into a dict for testing.
+        with open(os.path.join(data_dir, 'policy', "agent-extension-input.json"), 'r', encoding='utf-8') as input_file:
+            cls.input_json = json.load(input_file)
+
         AgentTestCase.setUpClass()
 
     @classmethod
@@ -59,7 +66,7 @@ class TestPolicyEngine(AgentTestCase):
         engine = Engine()
         engine.add_policy(self.default_policy_path)
         engine.add_data(self.default_data_path)
-        engine.set_input(self.test_input_path)
+        engine.set_input(self.input_json)
         result = engine.eval_query("data.agent_extension_policy.extensions_to_download")
         test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
         self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])
@@ -81,6 +88,12 @@ class TestPolicyEngine(AgentTestCase):
         engine = Engine()
         with self.assertRaises(Exception, msg="Adding an invalid input file should have raised an exception."):
             engine.set_input(self.default_policy_path)
+
+    def test_should_set_input_with_str(self):
+        """Set input should accept a string type, this shouldn't throw an error."""
+        engine = Engine()
+        input_str = json.dumps(self.input_json)
+        engine.set_input(input_str)
 
     @patch('subprocess.Popen')
     def test_eval_query_non_zero_return_code(self, mock_popen):
