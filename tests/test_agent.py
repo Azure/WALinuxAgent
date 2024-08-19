@@ -24,10 +24,10 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.ga.cgroupapi import InvalidCgroupMountpointException, CgroupV1
+from azurelinuxagent.ga.cgroupapi import InvalidCgroupMountpointException, CgroupV1, CgroupV2
 from azurelinuxagent.ga.collect_logs import CollectLogsHandler
-from azurelinuxagent.ga.controllermetrics import AGENT_LOG_COLLECTOR
-from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment
+from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
+from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, mock_cgroup_v2_environment
 from tests.lib.tools import AgentTestCase, data_dir, Mock, patch
 
 EXPECTED_CONFIGURATION = \
@@ -48,6 +48,7 @@ Debug.CgroupLogMetrics = False
 Debug.CgroupMonitorExpiryTime = 2022-03-31
 Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
 Debug.EnableAgentMemoryUsageCheck = False
+Debug.EnableCgroupV2ResourceLimiting = False
 Debug.EnableFastTrack = True
 Debug.EnableGAVersioning = True
 Debug.EtpCollectionPeriod = 300
@@ -232,7 +233,7 @@ class TestAgent(AgentTestCase):
     @patch("azurelinuxagent.agent.LogCollector")
     def test_calls_collect_logs_with_proper_mode(self, mock_log_collector, *args):  # pylint: disable=unused-argument
         agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
-        mock_log_collector.run = Mock()
+        mock_log_collector.return_value.collect_logs_and_get_archive.return_value = (Mock(), Mock())    # LogCollector.collect_logs_and_get_archive returns a tuple
 
         agent.collect_logs(is_full_mode=True)
         full_mode = mock_log_collector.call_args_list[0][0][0]
@@ -246,7 +247,7 @@ class TestAgent(AgentTestCase):
     def test_calls_collect_logs_on_valid_cgroups_v1(self, mock_log_collector):
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()
-            mock_log_collector.run = Mock()
+            mock_log_collector.return_value.collect_logs_and_get_archive.return_value = (Mock(), Mock())    # LogCollector.collect_logs_and_get_archive returns a tuple
 
             # Mock cgroup so process is in the log collector slice
             def mock_cgroup(*args, **kwargs):   # pylint: disable=W0613
@@ -266,6 +267,33 @@ class TestAgent(AgentTestCase):
             with mock_cgroup_v1_environment(self.tmp_dir):
                 with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1.get_process_cgroup",
                            side_effect=mock_cgroup):
+                    agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+                    agent.collect_logs(is_full_mode=True)
+
+                    mock_log_collector.assert_called_once()
+
+        finally:
+            CollectLogsHandler.disable_monitor_cgroups_check()
+
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_calls_collect_logs_on_valid_cgroups_v2(self, mock_log_collector):
+        try:
+            CollectLogsHandler.enable_monitor_cgroups_check()
+            mock_log_collector.return_value.collect_logs_and_get_archive.return_value = (
+            Mock(), Mock())  # LogCollector.collect_logs_and_get_archive returns a tuple
+
+            # Mock cgroup so process is in the log collector slice
+            def mock_cgroup(*args, **kwargs):  # pylint: disable=W0613
+                relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
+                return CgroupV2(
+                    cgroup_name=AGENT_LOG_COLLECTOR,
+                    root_cgroup_path="/sys/fs/cgroup",
+                    cgroup_path="/sys/fs/cgroup/{0}".format(relative_path),
+                    enabled_controllers=["cpu", "memory"]
+                )
+
+            with mock_cgroup_v2_environment(self.tmp_dir):
+                with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.get_process_cgroup", side_effect=mock_cgroup):
                     agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                     agent.collect_logs(is_full_mode=True)
 
@@ -336,6 +364,39 @@ class TestAgent(AgentTestCase):
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
 
+    @patch("azurelinuxagent.agent.LogCollector")
+    def test_doesnt_call_collect_logs_on_invalid_cgroups_v2(self, mock_log_collector):
+        try:
+            CollectLogsHandler.enable_monitor_cgroups_check()
+            mock_log_collector.run = Mock()
+
+            # Mock cgroup so process is in incorrect slice
+            def mock_cgroup(*args, **kwargs):  # pylint: disable=W0613
+                relative_path = "NOT_THE_CORRECT_PATH"
+                return CgroupV2(
+                    cgroup_name=AGENT_LOG_COLLECTOR,
+                    root_cgroup_path="/sys/fs/cgroup",
+                    cgroup_path="/sys/fs/cgroup/{0}".format(relative_path),
+                    enabled_controllers=["cpu", "memory"]
+                )
+
+            def raise_on_sys_exit(*args):
+                raise RuntimeError(args[0] if args else "Exiting")
+
+            with mock_cgroup_v2_environment(self.tmp_dir):
+                with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.get_process_cgroup",
+                           side_effect=mock_cgroup):
+                    agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+                    with patch("sys.exit", side_effect=raise_on_sys_exit) as mock_exit:
+                        try:
+                            agent.collect_logs(is_full_mode=True)
+                        except RuntimeError as re:
+                            self.assertEqual(logcollector.INVALID_CGROUPS_ERRCODE, re.args[0])
+                        mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
+        finally:
+            CollectLogsHandler.disable_monitor_cgroups_check()
+
     @patch('azurelinuxagent.agent.get_cgroup_api', side_effect=InvalidCgroupMountpointException("Test"))
     @patch("azurelinuxagent.agent.LogCollector")
     def test_doesnt_call_collect_logs_on_non_systemd_cgroups_v1_mountpoints(self, mock_log_collector, _):
@@ -393,7 +454,41 @@ class TestAgent(AgentTestCase):
                         mock_exit.assert_called_once_with(logcollector.INVALID_CGROUPS_ERRCODE)
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
-        
+
+    @patch("azurelinuxagent.agent.LogCollector")
+    @patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler.get_metrics_summary")
+    def test_collect_log_should_output_resource_usage_summary(self, mock_get_metrics_summary, mock_log_collector):
+        try:
+            CollectLogsHandler.enable_monitor_cgroups_check()
+            mock_log_collector.return_value.collect_logs_and_get_archive.return_value = (Mock(), Mock())  # LogCollector.collect_logs_and_get_archive returns a tuple
+            mock_get_metrics_summary.return_value = "metric summary"
+
+            # Mock cgroup so process is in the log collector slice
+            def mock_cgroup(*args, **kwargs):  # pylint: disable=W0613
+                relative_path = "{0}/{1}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE, logcollector.CGROUPS_UNIT)
+                return CgroupV1(
+                    cgroup_name=AGENT_LOG_COLLECTOR,
+                    controller_mountpoints={
+                        'cpu,cpuacct': "/sys/fs/cgroup/cpu,cpuacct",
+                        'memory': "/sys/fs/cgroup/memory"
+                    },
+                    controller_paths={
+                        'cpu,cpuacct': "/sys/fs/cgroup/cpu,cpuacct/{0}".format(relative_path),
+                        'memory': "/sys/fs/cgroup/memory/{0}".format(relative_path)
+                    }
+                )
+
+            with mock_cgroup_v1_environment(self.tmp_dir):
+                with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv1.get_process_cgroup", side_effect=mock_cgroup):
+                    agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+                    agent.collect_logs(is_full_mode=True)
+
+                    mock_log_collector.assert_called_once()
+                    mock_get_metrics_summary.assert_called_once()
+
+        finally:
+            CollectLogsHandler.disable_monitor_cgroups_check()
+
     def test_it_should_parse_setup_firewall_properly(self):
 
         test_firewall_meta = {

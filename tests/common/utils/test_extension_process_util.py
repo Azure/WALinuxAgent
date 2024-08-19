@@ -19,9 +19,9 @@ import shutil
 import subprocess
 import tempfile
 
-from azurelinuxagent.ga.controllermetrics import CpuMetrics
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1
 from azurelinuxagent.ga.extensionprocessutil import format_stdout_stderr, read_output, \
     wait_for_process_completion_or_timeout, handle_process_completion
 from tests.lib.tools import AgentTestCase, patch, data_dir
@@ -52,7 +52,7 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=5, cpu_metrics=None)
+        timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=5, cpu_controller=None)
         self.assertEqual(timed_out, False) 
         self.assertEqual(ret, 0) 
 
@@ -71,7 +71,7 @@ class TestProcessUtils(AgentTestCase):
         with patch('azurelinuxagent.ga.extensionprocessutil.os.killpg', wraps=os.killpg) as patch_kill:
             with patch('time.sleep') as mock_sleep:
                 timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=timeout,
-                                                                           cpu_metrics=None)
+                                                                           cpu_controller=None)
 
                 # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                 # we're "waiting" the correct amount of time before killing the process
@@ -90,7 +90,7 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=5, cpu_metrics=None)
+        timed_out, ret, _ = wait_for_process_completion_or_timeout(process=process, timeout=5, cpu_controller=None)
         self.assertEqual(timed_out, False) 
         self.assertEqual(ret, 2) 
 
@@ -149,9 +149,9 @@ class TestProcessUtils(AgentTestCase):
                 with patch('time.sleep') as mock_sleep:
                     with self.assertRaises(ExtensionError) as context_manager:
                         test_file = os.path.join(self.tmp_dir, "cpu.stat")
-                        shutil.copyfile(os.path.join(data_dir, "cgroups", "cpu.stat_t0"),
+                        shutil.copyfile(os.path.join(data_dir, "cgroups", "v1", "cpu.stat_t0"),
                                         test_file)  # throttled_time = 50
-                        cgroup = CpuMetrics("test", self.tmp_dir)
+                        cpu_controller = CpuControllerV1("test", self.tmp_dir)
                         process = subprocess.Popen(command,  # pylint: disable=subprocess-popen-preexec-fn
                                                    shell=True,
                                                    cwd=self.tmp_dir,
@@ -161,7 +161,7 @@ class TestProcessUtils(AgentTestCase):
                                                    preexec_fn=os.setsid)
 
                         handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
-                                                  stderr=stderr, error_code=42, cpu_metrics=cgroup)
+                                                  stderr=stderr, error_code=42, cpu_controller=cpu_controller)
 
                     # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
                     # we're "waiting" the correct amount of time before killing the process and raising an exception

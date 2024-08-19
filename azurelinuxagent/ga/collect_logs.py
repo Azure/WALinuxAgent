@@ -25,12 +25,12 @@ from azurelinuxagent.ga import logcollector, cgroupconfigurator
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.ga.controllermetrics import MetricsCounter
+from azurelinuxagent.ga.cgroupcontroller import MetricsCounter
 from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.ga.logcollector import COMPRESSED_ARCHIVE_PATH, GRACEFUL_KILL_ERRCODE
-from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, LOGCOLLECTOR_MEMORY_LIMIT
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, LOGCOLLECTOR_ANON_MEMORY_LIMIT, LOGCOLLECTOR_CACHE_MEMORY_LIMIT, LOGCOLLECTOR_MAX_THROTTLED_EVENTS
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -46,18 +46,27 @@ def get_collect_logs_handler():
 def is_log_collection_allowed():
     # There are three conditions that need to be met in order to allow periodic log collection:
     # 1) It should be enabled in the configuration.
-    # 2) The system must be using cgroups to manage services. Needed for resource limiting of the log collection.
+    # 2) The system must be using cgroups to manage services - needed for resource limiting of the log collection. The
+    # agent currently fully supports resource limiting for v1, but only supports log collector resource limiting for v2
+    # if enabled via configuration.
+    #    This condition is True if either:
+    #       a. cgroup usage in the agent is enabled; OR
+    #       b. the machine is using cgroup v2 and v2 resource limiting is enabled in the configuration.
     # 3) The python version must be greater than 2.6 in order to support the ZipFile library used when collecting.
     conf_enabled = conf.get_collect_logs()
     cgroups_enabled = CGroupConfigurator.get_instance().enabled()
+    cgroup_v2_resource_limiting_enabled = CGroupConfigurator.get_instance().using_cgroup_v2() and conf.get_enable_cgroup_v2_resource_limiting()
     supported_python = PY_VERSION_MINOR >= 6 if PY_VERSION_MAJOR == 2 else PY_VERSION_MAJOR == 3
-    is_allowed = conf_enabled and cgroups_enabled and supported_python
+    is_allowed = conf_enabled and (cgroups_enabled or cgroup_v2_resource_limiting_enabled) and supported_python
 
     msg = "Checking if log collection is allowed at this time [{0}]. All three conditions must be met: " \
-          "configuration enabled [{1}], cgroups enabled [{2}], python supported: [{3}]".format(is_allowed,
-                                                                                               conf_enabled,
-                                                                                               cgroups_enabled,
-                                                                                               supported_python)
+          "1. configuration enabled [{1}], " \
+          "2. cgroups v1 enabled [{2}] OR cgroups v2 is in use and v2 resource limiting configuration enabled [{3}], " \
+          "3. python supported: [{4}]".format(is_allowed,
+                                              conf_enabled,
+                                              cgroups_enabled,
+                                              cgroup_v2_resource_limiting_enabled,
+                                              supported_python)
     logger.info(msg)
     add_event(
         name=AGENT_NAME,
@@ -171,15 +180,13 @@ class CollectLogsHandler(ThreadHandlerInterface):
     def _collect_logs(self):
         logger.info("Starting log collection...")
 
-        # Invoke the command line tool in the agent to collect logs, with resource limits on CPU.
-        # Some distros like ubuntu20 by default cpu and memory accounting enabled. Thus create nested cgroups under the logcollector slice
-        # So disabling CPU and Memory accounting prevents from creating nested cgroups, so that all the counters will be present in logcollector Cgroup
-
+        # Invoke the command line tool in the agent to collect logs. The --scope option starts the process as a systemd
+        # transient scope unit. The --property option is used to set systemd memory and cpu properties on the scope.
         systemd_cmd = [
-            "systemd-run", "--property=CPUAccounting=no", "--property=MemoryAccounting=no",
+            "systemd-run",
             "--unit={0}".format(logcollector.CGROUPS_UNIT),
             "--slice={0}".format(cgroupconfigurator.LOGCOLLECTOR_SLICE), "--scope"
-        ]
+        ] + CGroupConfigurator.get_instance().get_logcollector_unit_properties()
 
         # The log tool is invoked from the current agent's egg with the command line option
         collect_logs_cmd = [sys.executable, "-u", sys.argv[0], "-collect-logs"]
@@ -208,8 +215,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
                     # pylint has limited (i.e. no) awareness of control flow w.r.t. typing. we disable=no-member
                     # here because we know e must be a CommandError but pylint still considers the case where
                     # e is a different type of exception.
-                    err_msg = ustr("Log Collector exited with code {0}").format(
-                        e.returncode)  # pylint: disable=no-member
+                    err_msg = ustr("Log Collector exited with code {0}").format(e.returncode)  # pylint: disable=no-member
 
                     if e.returncode == logcollector.INVALID_CGROUPS_ERRCODE:  # pylint: disable=no-member
                         logger.info("Disabling periodic log collection until service restart due to process error.")
@@ -277,11 +283,12 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
     def get_thread_name():
         return LogCollectorMonitorHandler._THREAD_NAME
 
-    def __init__(self, cgroups):
+    def __init__(self, controllers):
         self.event_thread = None
         self.should_run = True
         self.period = 2  # Log collector monitor runs every 2 secs.
-        self.cgroups = cgroups
+        self.controllers = controllers
+        self.max_recorded_metrics = {}
         self.__log_metrics = conf.get_cgroup_log_metrics()
 
     def run(self):
@@ -324,10 +331,21 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
                 "An error occurred in the MonitorLogCollectorCgroupsHandler thread; will exit the thread.\n{0}",
                 ustr(e))
 
+    def get_metrics_summary(self):
+        summary_string = ""
+        for metric, max_value in self.max_recorded_metrics.items():
+            summary_string += "{0}={1};".format(metric, max_value)
+        return summary_string
+
     def _poll_resource_usage(self):
         metrics = []
-        for cgroup in self.cgroups:
-            metrics.extend(cgroup.get_tracked_metrics(track_throttled_time=True))
+        for controller in self.controllers:
+            metrics.extend(controller.get_tracked_metrics(track_throttled_time=True))
+
+        for metric in metrics:
+            current_max = self.max_recorded_metrics.get(metric.counter)
+            self.max_recorded_metrics[metric.counter] = metric.value if current_max is None else max(current_max, metric.value)
+
         return metrics
 
     def _send_telemetry(self, metrics):
@@ -335,19 +353,35 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
             report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
 
     def _verify_memory_limit(self, metrics):
-        current_usage = 0
+        current_anon_and_swap_usage = 0
+        current_cache_usage = 0
+        memory_throttled_events = 0
         for metric in metrics:
-            if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
-                current_usage += metric.value
+            if metric.counter == MetricsCounter.ANON_MEM_USAGE:
+                current_anon_and_swap_usage += metric.value
             elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
-                current_usage += metric.value
+                current_anon_and_swap_usage += metric.value
+            elif metric.counter == MetricsCounter.CACHE_MEM_USAGE:
+                current_cache_usage = metric.value
+            elif metric.counter == MetricsCounter.MEM_THROTTLED:
+                memory_throttled_events = metric.value
 
-        if current_usage > LOGCOLLECTOR_MEMORY_LIMIT:
-            msg = "Log collector memory limit {0} bytes exceeded. The max reported usage is {1} bytes.".format(LOGCOLLECTOR_MEMORY_LIMIT, current_usage)
+        mem_limit_exceeded = False
+        if current_anon_and_swap_usage > LOGCOLLECTOR_ANON_MEMORY_LIMIT:
+            mem_limit_exceeded = True
+            msg = "Log collector anon + swap memory limit {0} bytes exceeded. The reported usage is {1} bytes.".format(LOGCOLLECTOR_ANON_MEMORY_LIMIT, current_anon_and_swap_usage)
             logger.info(msg)
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.LogCollection,
-                message=msg)
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.LogCollection, message=msg)
+        if current_cache_usage > LOGCOLLECTOR_CACHE_MEMORY_LIMIT:
+            mem_limit_exceeded = True
+            msg = "Log collector cache memory limit {0} bytes exceeded. The reported usage is {1} bytes.".format(LOGCOLLECTOR_CACHE_MEMORY_LIMIT, current_cache_usage)
+            logger.info(msg)
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.LogCollection, message=msg)
+        if memory_throttled_events > LOGCOLLECTOR_MAX_THROTTLED_EVENTS:
+            mem_limit_exceeded = True
+            msg = "Log collector memory throttled events limit {0} exceeded. The reported number of throttled events is {1}.".format(LOGCOLLECTOR_MAX_THROTTLED_EVENTS, memory_throttled_events)
+            logger.info(msg)
+            add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.LogCollection, message=msg)
+
+        if mem_limit_exceeded:
             os._exit(GRACEFUL_KILL_ERRCODE)
