@@ -19,7 +19,7 @@ import os
 import shutil
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, POLICY_SUPPORT_MATRIX
+from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyEngineConfigurator, POLICY_SUPPORTED_DISTROS
 from tests.lib.tools import patch, data_dir, test_dir
 
 
@@ -32,13 +32,13 @@ class TestPolicyEngine(AgentTestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Currently, ga/policy/regorus contains a dummy binary. The unit tests require a real binary,
-        # so we replace the dummy with a copy from the tests_e2e folder.
+        # On a production VM, Regorus will be located in /var/lib/waagent/WALinuxAgent-x.x.x.x/bin. Unit tests
+        # run within the agent directory, so we copy the executable to ga/policy/regorus and patch path.
+        # Note: Regorus has not been published officially, so for now, unofficial exe is stored in tests/data/policy.
         regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
         cls.regorus_dest_path = os.path.abspath(os.path.join(test_dir, "..", "azurelinuxagent/ga/policy/regorus"))
         if not os.path.exists(cls.regorus_dest_path):
             shutil.copy(regorus_source_path, cls.regorus_dest_path)
-        # Patch the path to regorus for all unit tests.
         cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
         cls.patcher.start()
         AgentTestCase.setUpClass()
@@ -68,7 +68,7 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_policy_should_be_enabled_on_supported_distro(self):
         """Policy should be enabled on all supported distros."""
-        for distro_name, version in POLICY_SUPPORT_MATRIX.items():
+        for distro_name, version in POLICY_SUPPORTED_DISTROS.items():
             with patch('azurelinuxagent.ga.policy.policy_engine.get_distro',
                        return_value=[distro_name, str(version)]):
                 with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
@@ -82,6 +82,14 @@ class TestPolicyEngine(AgentTestCase):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
                 self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported distro RHEL 9.0.")
+
+    def test_policy_should_not_be_enabled_on_unsupported_architecture(self):
+        """Policy should NOT be enabled on ARM64."""
+        # TODO: remove this test when support for ARM64 is added.
+        with patch('azurelinuxagent.ga.policy.policy_engine.platform.machine', return_value='arm64'):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                policy_enabled = PolicyEngineConfigurator.get_instance().get_policy_enabled()
+                self.assertFalse(policy_enabled, "Policy should not be enabled on unsupported architecture ARM64.")
 
     def test_regorus_engine_should_be_initialized_on_supported_distro(self):
         """Regorus engine should initialize without any errors on a supported distro."""

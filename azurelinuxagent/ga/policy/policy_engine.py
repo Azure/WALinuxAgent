@@ -20,13 +20,15 @@ from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
+import platform
 
 # Define support matrix for Regorus and policy engine feature.
 # Dict in the format: { distro:min_supported_version }
-POLICY_SUPPORT_MATRIX = {
+POLICY_SUPPORTED_DISTROS = {
     'ubuntu': FlexibleVersion('16.04'),
-    'mariner': FlexibleVersion('1')
+    'mariner': FlexibleVersion('2')
 }
+POLICY_SUPPORTED_ARCHITECTURE = ['x86_64', 'amd64']
 
 
 # Common logging function across PolicyEngineConfigurator and PolicyEngine classes,
@@ -87,6 +89,9 @@ class PolicyEngineConfigurator:
 
     @staticmethod
     def _is_policy_supported():
+        arch = platform.machine().lower()
+        if arch not in POLICY_SUPPORTED_ARCHITECTURE:
+            return False
         distro_info = get_distro()
         distro_name = distro_info[0]
         try:
@@ -95,8 +100,8 @@ class PolicyEngineConfigurator:
             raise ValueError
 
         # Check if the distro is in the support matrix and if the version is supported
-        if distro_name in POLICY_SUPPORT_MATRIX:
-            min_version = POLICY_SUPPORT_MATRIX[distro_name]
+        if distro_name in POLICY_SUPPORTED_DISTROS:
+            min_version = POLICY_SUPPORTED_DISTROS[distro_name]
             return distro_version >= min_version
         else:
             return False

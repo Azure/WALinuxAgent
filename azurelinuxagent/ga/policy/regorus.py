@@ -22,10 +22,11 @@ import os
 
 def get_regorus_path():
     """
-    Returns path to Regorus executable. Currently, the executable is copied into ga/policy/regorus
-    during testing. It is not yet officially released as part of the agent package.
+    Returns path to Regorus executable. The executable is not yet officially released as part of the agent package.
+    After release, executable will be placed at /var/lib/waagent/WALinuxAgent-x.x.x.x/bin/regorus.
+    Currently, the executable is copied into the agent directory for unit testing, and this method is mocked.
     """
-    regorus_exe = os.path.join(os.getcwd(), "azurelinuxagent", "ga", "policy", "regorus")
+    regorus_exe = os.path.join(os.getcwd(), "bin", "regorus")
     return regorus_exe
 
 
