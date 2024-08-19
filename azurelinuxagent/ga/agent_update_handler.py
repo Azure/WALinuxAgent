@@ -33,8 +33,8 @@ def get_agent_update_handler(protocol):
     return AgentUpdateHandler(protocol)
 
 
-RSM_UPDATE_STATE_FILE = "waagent.rsm_update"
-INITIAL_UPDATE_STATE_FILE = "waagent.initial_update"
+RSM_UPDATE_STATE_FILE = "waagent_rsm_update"
+INITIAL_UPDATE_STATE_FILE = "waagent_initial_update"
 
 
 class AgentUpdateHandler(object):
