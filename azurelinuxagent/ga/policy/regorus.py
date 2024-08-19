@@ -50,7 +50,7 @@ class Engine:
         self._policy_file = policy_path
 
     def set_input(self, input_json):
-        """Input_path is expected to point to a valid json file."""
+        """Input_path is expected to point to a valid JSON object."""
         if isinstance(input_json, dict):
             self._input_json = input_json
         elif isinstance(input_json, str):

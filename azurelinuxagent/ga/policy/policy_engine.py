@@ -62,9 +62,8 @@ class PolicyEngineConfigurator:
             if PolicyEngineConfigurator._initialized:
                 return
 
-            # TODO: remove conf flag post private preview.
-            if not conf.get_extension_policy_enabled():
-                log_policy("Policy enforcement is disabled via configuration file.")
+            if not self.is_policy_configured():
+                log_policy("Policy enforcement is disabled.")
                 return
 
             if not self._is_policy_supported():
@@ -88,7 +87,15 @@ class PolicyEngineConfigurator:
             PolicyEngineConfigurator._initialized = True
 
     @staticmethod
+    def is_policy_configured():
+        """Return True if the policy enforcement feature is configured/enabled by customer."""
+        # TODO: call from ExtensionPolicyEngine to bypass policy checking
+        #  Remove conf flag post private preview and add other checks here.
+        return conf.get_extension_policy_enabled()
+
+    @staticmethod
     def _is_policy_supported():
+        """Return True if the platform/distro supports policy enforcement."""
         arch = platform.machine().lower()
         if arch not in POLICY_SUPPORTED_ARCHITECTURE:
             return False

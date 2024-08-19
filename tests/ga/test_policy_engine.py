@@ -45,6 +45,7 @@ class TestPolicyEngine(AgentTestCase):
         cls.patcher.start()
 
         # We store input in a centralized file, we want to extract the JSON contents into a dict for testing.
+        # TODO: remove this logic once we add tests for ExtensionPolicyEngine
         with open(os.path.join(data_dir, 'policy', "agent-extension-input.json"), 'r', encoding='utf-8') as input_file:
             cls.input_json = json.load(input_file)
         AgentTestCase.setUpClass()
