@@ -476,6 +476,10 @@ class ExtHandlersHandler(object):
 
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
+
+        # TODO: ADO task 29072566
+        # Initialize ExtensionPolicyEngine, get allowed list, deny extension installation if not allowed.
+        # Write any errors to extension status file.
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)

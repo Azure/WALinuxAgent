@@ -65,6 +65,9 @@ class PolicyEngineConfigurator:
                 return
 
             if not self._is_policy_supported():
+                # If distro is unsupported but feature is enabled, we never set _policy_enabled=True.
+                # Any methods will be no-ops, and query evaluation will return an empty allowlist
+                # so no extensions will be allowed.
                 log_policy("Policy enforcement is unsupported on this platform.")
                 return
 
@@ -114,7 +117,7 @@ class PolicyEngine(object):
     all methods will be no-ops.
 
     If any errors are thrown in regorus.py, they will be caught and handled here. add_policy, add_data,
-    and set_input will be no-ops, eval_query will return an empty dict 
+    and set_input will be no-ops, eval_query will return an empty dict
     """
     def __init__(self):
         self._policy_engine_enabled = False
@@ -173,3 +176,6 @@ class PolicyEngine(object):
         except Exception as ex:
             log_policy("Error: Failed to evaluate query for Regorus policy engine. '{0}'".format(ex), is_success=False)
             return {}
+
+# TODO: ADO task 29144116
+# Implement code (ExtensionPolicyEngine) to return allowed list and handle/surface errors
