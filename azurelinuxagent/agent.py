@@ -209,7 +209,6 @@ class Agent(object):
 
         # Check the cgroups unit
         log_collector_monitor = None
-        total_uncompressed_size = 0
         tracked_controllers = []
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
             try:

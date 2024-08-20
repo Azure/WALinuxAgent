@@ -346,31 +346,37 @@ class TestLogCollectorMonitorHandler(AgentTestCase):
 
     def test_get_metrics_summary(self):
         with _create_log_collector_monitor_handler(iterations=2) as log_collector_monitor_handler:
-            cpu_iteration = 0
-            mem_iteration = 0
-            multiplier = 5
+            nonlocal_vars = {
+                'cpu_iteration': 0,
+                'mem_iteration': 0,
+                'multiplier': 5
+            }
 
             def get_different_cpu_metrics(**kwargs):    # pylint: disable=W0613
-                nonlocal cpu_iteration, multiplier
-                metrics = [MetricValue("Process", "% Processor Time", "service", 4.5), MetricValue("Process", "Throttled Time", "service", cpu_iteration*multiplier + 10.000)]
-                cpu_iteration += 1
+                metrics = [MetricValue("Process", "% Processor Time", "service", 4.5), MetricValue("Process", "Throttled Time", "service", nonlocal_vars['cpu_iteration']*nonlocal_vars['multiplier'] + 10.000)]
+                nonlocal_vars['cpu_iteration'] += 1
                 return metrics
 
             def get_different_memory_metrics(**kwargs):     # pylint: disable=W0613
-                nonlocal mem_iteration, multiplier
                 metrics = [MetricValue("Memory", "Total Memory Usage", "service", 20),
                           MetricValue("Memory", "Anon Memory Usage", "service", 15),
-                          MetricValue("Memory", "Cache Memory Usage", "service", mem_iteration*multiplier + 5),
+                          MetricValue("Memory", "Cache Memory Usage", "service", nonlocal_vars['mem_iteration']*nonlocal_vars['multiplier'] + 5),
                           MetricValue("Memory", "Max Memory Usage", "service", 30),
                           MetricValue("Memory", "Swap Memory Usage", "service", 0)]
-                mem_iteration += 1
+                nonlocal_vars['mem_iteration'] += 1
                 return metrics
 
             with patch("azurelinuxagent.ga.cpucontroller._CpuController.get_tracked_metrics", side_effect=get_different_cpu_metrics):
                 with patch("azurelinuxagent.ga.memorycontroller._MemoryController.get_tracked_metrics", side_effect=get_different_memory_metrics):
                     log_collector_monitor_handler.run_and_wait()
                     metrics_summary = log_collector_monitor_handler.get_metrics_summary()
-                    self.assertEqual("% Processor Time=4.5;Throttled Time=15.0;Total Memory Usage=20;Anon Memory Usage=15;Cache Memory Usage=10;Max Memory Usage=30;Swap Memory Usage=0;", metrics_summary)
+                    self.assertIn("% Processor Time=4.5", metrics_summary)
+                    self.assertIn("Throttled Time=15.0", metrics_summary)
+                    self.assertIn("Total Memory Usage=20", metrics_summary)
+                    self.assertIn("Anon Memory Usage=15", metrics_summary)
+                    self.assertIn("Cache Memory Usage=10", metrics_summary)
+                    self.assertIn("Max Memory Usage=30", metrics_summary)
+                    self.assertIn("Swap Memory Usage=0", metrics_summary)
 
     def test_send_extension_metrics_telemetry(self):
         with _create_log_collector_monitor_handler() as log_collector_monitor_handler:

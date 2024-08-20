@@ -567,7 +567,7 @@ class Cgroup(object):
     @staticmethod
     def get_supported_controller_names():
         """
-        Cgroup version specific. Returns a list of the controllers which the agent supports.
+        Cgroup version specific. Returns a list of the controllers which the agent supports as strings.
         """
         raise NotImplementedError()
 
@@ -581,7 +581,7 @@ class Cgroup(object):
 
     def get_controllers(self, expected_relative_path=None):
         """
-        Cgroup version specific. Returns a list of the controllers which are mounted/enabled for the cgroup.
+        Cgroup version specific. Returns a list of the agent supported controllers which are mounted/enabled for the cgroup.
 
         :param expected_relative_path: The expected relative path of the cgroup. If provided, only controllers mounted
         at this expected path will be returned.
