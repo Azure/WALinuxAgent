@@ -89,8 +89,7 @@ class PolicyEngineConfigurator:
     @staticmethod
     def is_policy_configured():
         """Return True if the policy enforcement feature is configured/enabled by customer."""
-        # TODO: call from ExtensionPolicyEngine to bypass policy checking
-        #  Remove conf flag post private preview and add other checks here.
+        # TODO: Remove conf flag post private preview and add other checks here.
         return conf.get_extension_policy_enabled()
 
     @staticmethod
@@ -189,6 +188,3 @@ class PolicyEngine(object):
         except Exception as ex:
             log_policy("Error: Failed to evaluate query for Regorus policy engine. '{0}'".format(ex), is_success=False)
             return {}
-
-# TODO: ADO task 29144116
-# Implement code (ExtensionPolicyEngine) to return allowed list and handle/surface errors
