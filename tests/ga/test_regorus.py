@@ -45,7 +45,7 @@ class TestRegorusEngine(AgentTestCase):
         cls.patcher.start()
 
         # We store input in a centralized file, we want to extract the JSON contents into a dict for testing.
-        with open(os.path.join(data_dir, 'policy', "agent-extension-input.json"), 'r', encoding='utf-8') as input_file:
+        with open(os.path.join(data_dir, 'policy', "agent-extension-input.json"), 'r') as input_file:
             cls.input_json = json.load(input_file)
 
         AgentTestCase.setUpClass()
