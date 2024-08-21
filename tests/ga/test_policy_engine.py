@@ -21,7 +21,7 @@ import shutil
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, POLICY_SUPPORTED_DISTROS_MIN_VERSIONS
-from tests.lib.tools import patch, data_dir, test_dir
+from tests.lib.tools import patch, data_dir, test_dir, MagicMock
 
 
 class TestPolicyEngine(AgentTestCase):
@@ -73,15 +73,18 @@ class TestPolicyEngine(AgentTestCase):
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 with self.assertRaises(Exception, msg="Policy should not be enabled on unsupported distro RHEL 9.0, should have raised exception."):
-                    engine = PolicyEngine(self.default_policy_path, self.default_data_path)
+                    PolicyEngine(self.default_policy_path, self.default_data_path)
 
     def test_should_raise_exception_on_unsupported_architecture(self):
         """Policy should NOT be enabled on ARM64."""
         # TODO: remove this test when support for ARM64 is added.
-        with patch('azurelinuxagent.ga.policy.policy_engine.platform.machine', return_value='arm64'):
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_osutil') as mock_get_osutil:
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 with self.assertRaises(Exception, msg="Policy should not be enabled on unsupported architecture ARM64, should have raised exception."):
-                    engine = PolicyEngine(self.default_policy_path, self.default_data_path)
+                    mock_osutil = MagicMock()
+                    mock_osutil.get_vm_arch.return_value = "arm64"
+                    mock_get_osutil.return_value = mock_osutil
+                    PolicyEngine(self.default_policy_path, self.default_data_path)
 
     def test_policy_engine_should_evaluate_query(self):
         """
@@ -100,10 +103,10 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_eval_query_should_be_no_op(self):
         """
-        When policy enforcement is disabled, eval_query should return {} and not throw an error.
+        When policy enforcement is disabled, evaluate_query should throw an error.
         """
         engine = PolicyEngine(self.default_policy_path, self.default_data_path)
         query = "data.agent_extension_policy.extensions_to_download"
-        result = engine.evaluate_query(self.input_json, query)
-        self.assertEqual(result, {}, msg="Query should have returned an empty dict.")
+        with self.assertRaises(Exception, msg="Adding an invalid policy file should have raised an exception."):
+            engine.evaluate_query(self.input_json, query)
 

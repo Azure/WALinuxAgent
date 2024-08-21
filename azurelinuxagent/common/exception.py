@@ -153,6 +153,12 @@ class MultiConfigExtensionEnableError(ExtensionError):
     """
 
 
+class PolicyError(AgentError):
+    """
+    Error raised during agent policy enforcement.
+    """
+
+
 class ProvisionError(AgentError):
     """
     When provision failed

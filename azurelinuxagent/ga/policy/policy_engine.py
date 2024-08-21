@@ -20,7 +20,9 @@ from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils.distro_version import DistroVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
-import platform
+from azurelinuxagent.common.exception import PolicyError
+from azurelinuxagent.common.osutil import get_osutil
+import azurelinuxagent.ga.policy.regorus as regorus
 
 # Define support matrix for Regorus and policy engine feature.
 # Dict in the format: { distro:min_supported_version }
@@ -30,7 +32,7 @@ POLICY_SUPPORTED_DISTROS_MIN_VERSIONS = {
     'azurelinux': DistroVersion('3')
 }
 # TODO: add 'arm64', 'aarch64' here once support is enabled for ARM64
-POLICY_SUPPORTED_ARCHITECTURE = ['x86_64', 'amd64']
+POLICY_SUPPORTED_ARCHITECTURE = ['x86_64']
 
 
 class PolicyEngine(object):
@@ -41,8 +43,29 @@ class PolicyEngine(object):
     If any errors are thrown in regorus.py, they will be caught and handled here. add_policy, add_data,
     and set_input will be no-ops, eval_query will return an empty dict
     """
-    def __init__(self, policy_file, data_file):
-        # TODO: package default policy and data file with agent, set paths as default constructor parameters
+    def __init__(self, rule_file, policy_file):
+        """
+        rule_file: Path to a Rego file that specifies rules for policy behavior.
+
+        policy_file: Path to a JSON file that specifies parameters for policy behavior - for example,
+        whether allowlist or extension signing should be enforced.
+        The expected file format is:
+        {
+            "azureGuestAgentPolicy": {
+                "policyVersion": "0.1.0",
+                "signingRules": {
+                    "extensionSigned": <true, false>
+                },
+                "allowListOnly": <true, false>
+            },
+            "azureGuestExtensionsPolicy": {
+                "allowed_ext_1": {
+                    "signingRules": {
+                        "extensionSigned": <true, false>
+                    }
+                }
+        }
+        """
         self._policy_engine_enabled = False
         self._engine = None
         if not self.is_policy_enforcement_enabled():
@@ -53,19 +76,17 @@ class PolicyEngine(object):
             # TODO: Update this error message when conf flag is removed post private preview.
             msg = "Attempted to enable policy enforcement, but feature is not supported on this platform."
             self.log_policy(msg=msg)
-            raise Exception(msg)
+            raise PolicyError(msg)
 
         try:
-            import azurelinuxagent.ga.policy.regorus as regorus
             self._engine = regorus.Engine()
-            self._engine.add_policy(policy_file)
-            self._engine.add_data(data_file)
+            self._engine.add_policy(rule_file)
+            self._engine.add_data(policy_file)
             self._policy_engine_enabled = True
-
         except Exception as ex:
             msg = "Failed to initialize Regorus policy engine: '{0}'".format(ex)
             self.log_policy(msg=msg)
-            raise Exception(msg)
+            raise PolicyError(msg)
 
     @classmethod
     def log_policy(cls, msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
@@ -88,7 +109,8 @@ class PolicyEngine(object):
     @staticmethod
     def is_policy_enforcement_supported():
         """Check that both platform architecture and distro/version are supported."""
-        arch = platform.machine().lower()
+        osutil = get_osutil()
+        arch = osutil.get_vm_arch()
         if arch not in POLICY_SUPPORTED_ARCHITECTURE:
             return False
         __distro__ = get_distro()
@@ -125,8 +147,9 @@ class PolicyEngine(object):
 
         Expected format for query: "data.agent_extension_policy.extensions_to_download"
         """
+        # This method should never be called if policy is not enabled, this would be a developer error.
         if not self.policy_engine_enabled:
-            raise Exception("Policy enforcement is disabled, cannot evaluate query.")
+            raise PolicyError("Policy enforcement is disabled, cannot evaluate query.")
 
         try:
             self._engine.set_input(input_json)
@@ -136,9 +159,7 @@ class PolicyEngine(object):
         except Exception as ex:
             msg = "Failed to evaluate query for Regorus policy engine: '{0}'".format(ex)
             self.log_policy(msg=msg, is_success=False)
-            raise Exception(msg)
+            raise PolicyError(msg)
 
 
-# TODO: Implement class ExtensionPolicyEngine with API is_extension_download_allowed(ext_name).
-# This API will call evaluate_query only if the feature is enabled, else it will return True. If the feature
-# is disabled, we should never call evaluate_query.
+# TODO: Implement class ExtensionPolicyEngine with API is_extension_download_allowed(ext_name) that calls evaluate_query.
