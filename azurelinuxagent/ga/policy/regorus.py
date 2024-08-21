@@ -16,9 +16,9 @@
 #
 
 import json
-import subprocess
 import os
 import tempfile
+import azurelinuxagent.common.utils.shellutil as shellutil
 
 
 def get_regorus_path():
@@ -50,7 +50,23 @@ class Engine:
         self._policy_file = policy_path
 
     def set_input(self, input_json):
-        """Input_path is expected to point to a valid JSON object."""
+        """
+        Input_json should be a JSON object.
+        Expected format:
+        {
+            "extensions": {
+                "<extension_name_1>": {
+                    "signingInfo": {
+                        "extensionSigned": <true, false>
+                    }
+                },
+                "<extension_name_2>": {
+                    "signingInfo": {
+                        "extensionSigned": <true, false>
+                    }
+                }, ...
+        }
+        """
         if isinstance(input_json, dict):
             self._input_json = input_json
         elif isinstance(input_json, str):
@@ -59,12 +75,27 @@ class Engine:
             raise Exception("Input to policy engine is not a valid JSON object.")
 
     def add_data(self, data):
-        """Data parameter is expected to point to a valid json file."""
+        """Data parameter should be a path to a valid JSON data file.
+        Expected format:
+        {
+            "azureGuestAgentPolicy": {
+                "policyVersion": "0.1.0",
+                "signingRules": {
+                    "extensionSigned": <true, false>
+                },
+                "allowListOnly": <true, false>
+            }
+        }
+        """
         if not os.path.exists(data) or not data.endswith(".json"):
             raise Exception("Data path {0} is not a valid JSON file.".format(data))
         self._data_file = data
 
     def eval_query(self, query):
+        """
+        It is expected that add_policy and add_data have already been called, before calling eval_query.
+        Multiple queries can be run with the same policy and data files.
+        """
         missing_files = []
         if self._policy_file is None:
             missing_files.append("policy file")
@@ -86,14 +117,7 @@ class Engine:
                        "-i", input_file.name, query]
 
             # use subprocess.Popen instead of subprocess.run for Python 2 compatibility
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = process.communicate()
+            stdout = shellutil.run_command(command)
+            json_output = json.loads(stdout)
+            return json_output
 
-            if process.returncode == 0:
-                # Decode stdout to string if it is bytes (Python 3.x)
-                stdout = stdout.decode('utf-8') if isinstance(stdout, bytes) else stdout
-                json_output = json.loads(stdout)
-                return json_output
-            else:
-                stderr = stderr.decode('utf-8') if isinstance(stderr, bytes) else stderr
-                raise Exception("Subprocess error. {0}".format(stderr))
