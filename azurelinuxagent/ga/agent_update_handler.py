@@ -197,7 +197,7 @@ class AgentUpdateHandler(object):
             self._updater.retrieve_agent_version(agent_family, goal_state)
 
             if not self._updater.is_retrieved_version_allowed_to_update(agent_family):
-                # Reset the last error report msg since when this condition met there is no issue with update, either requested
+                # Reset the last error report msg  when this condition met as there is no issue with update since requested
                 # version is same as current version or below than daemon version. In that case, we shouldn't report any error msg in the status report
                 self._last_attempted_update_error_msg = ""
                 return
