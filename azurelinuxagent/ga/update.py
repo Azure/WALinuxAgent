@@ -31,12 +31,12 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
+from azurelinuxagent.common import event
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, \
-    WALAEventOperation, EVENTS_DIRECTORY
+from azurelinuxagent.common.event import add_event, initialize_event_logger_vminfo_common_parameters, WALAEventOperation, EVENTS_DIRECTORY
 from azurelinuxagent.common.exception import ExitException, AgentUpgradeExitException, AgentMemoryExceededException
 from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
 from azurelinuxagent.common.future import ustr
@@ -359,6 +359,7 @@ class UpdateHandler(object):
 
             from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
             remote_access_handler = get_remote_access_handler(protocol)
+
             agent_update_handler = get_agent_update_handler(protocol)
 
             self._ensure_no_orphans()
@@ -1076,28 +1077,24 @@ class UpdateHandler(object):
     def _initialize_firewall(wire_server_address):
         try:
             if not conf.enable_firewall():
-                logger.info("Skipping firewall initialization, since OS.EnableFirewall=False")
+                event.info(WALAEventOperation.Firewall, "Skipping firewall initialization, since OS.EnableFirewall=False")
                 return
 
             firewall_manager = FirewallManager.create(wire_server_address)
 
-            firewall_manager.remove_legacy_rule()
+            try:
+                firewall_manager.remove_legacy_rule()
+            except Exception as error:
+                event.error(WALAEventOperation.Firewall, "Unable to remove legacy firewall rule. Error: {0}".format(ustr(error)))
 
             try:
                 if firewall_manager.check():
-                    msg = "The firewall rules for Azure Fabric are already setup:\n{0}".format(firewall_manager.get_state())
+                    event.info(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are already setup:\n{0}".format(firewall_manager.get_state()))
                 else:
                     firewall_manager.setup()
-                    msg = "Created firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state())
-
-                logger.info(msg)
-                add_event(op=WALAEventOperation.Firewall, message=msg)
-
+                    event.info(WALAEventOperation.Firewall, "Created firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state()))
             except FirewallStateError as e:
-                # Report the error and let the environment thread fix the firewall
-                msg = "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}".format(ustr(e))
-                logger.warn("{0}", msg)
-                add_event(op=WALAEventOperation.Firewall, message=msg, is_success=False, log_event=False)
+                event.warning(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}".format(ustr(e)))
 
             #
             # Ensure firewall rules are persisted across reboots
@@ -1105,16 +1102,9 @@ class UpdateHandler(object):
             logger.info("Setting up persistent firewall rules")
             try:
                 PersistFirewallRulesHandler(dst_ip=wire_server_address).setup()
-                success = True
-                msg = "Persistent firewall rules setup successfully"
-                logger.info(msg)
+                event.info(WALAEventOperation.PersistFirewallRules, "Persistent firewall rules setup successfully")
             except Exception as error:
-                success = False
-                msg = "Unable to setup the persistent firewall rules: {0}".format(ustr(error))
-                logger.error(msg)
-
-            add_event(op=WALAEventOperation.PersistFirewallRules, message=msg, is_success=success, log_event=False)
+                event.error(WALAEventOperation.PersistFirewallRules, "Unable to setup the persistent firewall rules: {0}".format(ustr(error)))
 
         except Exception as e:
-            msg = "Error initializing firewall: {0}".format(ustr(e))
-            logger.error(msg)
+            event.error(WALAEventOperation.Firewall, "Error initializing firewall: {0}".format(ustr(e)))

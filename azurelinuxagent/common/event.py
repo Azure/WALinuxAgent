@@ -326,10 +326,10 @@ class CollectOrReportEventDebugInfo(object):
         report_dropped_events_error(self.__unicode_error_count, self.__unicode_errors, self.__unicode_error_event)
 
     @staticmethod
-    def _update_errors_and_get_count(error_count, errors, error):
+    def _update_errors_and_get_count(error_count, errors, error_msg):
         error_count += 1
         if len(errors) < CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT:
-            errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+            errors.add("{0}: {1}".format(ustr(error_msg), traceback.format_exc()))
         return error_count
 
     def update_unicode_error(self, unicode_err):
@@ -675,7 +675,23 @@ def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_
 
 
 def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
-              message="", log_event=True, reporter=__event_logger__):
+              message="", log_level=None, log_event=True, reporter=__event_logger__):
+    """
+    NOTES:
+        * If log_event is True and is_success is False, the event is logged in the agent's log using this format: "Event: name={0}, op={1}, message={2}, duration={3}".
+          This usage is kept only for backwards compatibility, prefer the use of log_level over log_event and is_success.
+        * If log_level is provided, the event is logged using the provided logger.LogLevel. The log_event parameter is set to False and the is_success parameter is
+          set to False if the log level is ERROR or WARNING, or True otherwise
+
+    See also verbose(), info(), warning(), error()
+
+    """
+    if log_level is not None:
+        logger.log(log_level, "{0}".format(message))
+        log_event = False
+        is_success = log_level == logger.LogLevel.WARNING or log_level == logger.LogLevel.ERROR
+        message = message if log_level != logger.LogLevel.WARNING else "[WARNING] {0}".format(message)
+
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
@@ -686,6 +702,26 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
         reporter.add_event(name, op=op, is_success=is_success, duration=duration, version=str(version),
                            message=message,
                            log_event=log_event)
+
+
+def verbose(op, message):
+    """Convenience wrapper over add_event(log_level=logger.LogLevel.VERBOSE...)"""
+    add_event(op=op, message=message, log_level=logger.LogLevel.VERBOSE)
+
+
+def info(op, message):
+    """Convenience wrapper over add_event(log_level=logger.LogLevel.INFO...)"""
+    add_event(op=op, message=message, log_level=logger.LogLevel.INFO)
+
+
+def warning(op, message):
+    """Convenience wrapper over add_event(log_level=logger.LogLevel.WARNING...)"""
+    add_event(op=op, message=message, log_level=logger.LogLevel.WARNING)
+
+
+def error(op, message):
+    """Convenience wrapper over add_event(log_level=logger.LogLevel.ERROR...)"""
+    add_event(op=op, message=message, log_level=logger.LogLevel.ERROR)
 
 
 def add_log_event(level, message, forced=False, reporter=__event_logger__):
@@ -745,9 +781,9 @@ def dump_unhandled_err(name):
         last_type = getattr(sys, 'last_type')
         last_value = getattr(sys, 'last_value')
         last_traceback = getattr(sys, 'last_traceback')
-        error = traceback.format_exception(last_type, last_value,
+        trace = traceback.format_exception(last_type, last_value,
                                            last_traceback)
-        message = "".join(error)
+        message = "".join(trace)
         add_event(name, is_success=False, message=message,
                   op=WALAEventOperation.UnhandledError)
 

@@ -21,6 +21,7 @@ import os
 import re
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common import event
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.utils import shellutil
 
@@ -157,21 +158,18 @@ class _FirewallManagerMultipleRules(FirewallManager):
                 self._execute_delete_command(command)
 
     def remove_legacy_rule(self):
+        check_command = self._get_legacy_rule_command(self._get_check_command_option())
         try:
-            check_command = self._get_legacy_rule_command(self._get_check_command_option())
-            try:
-                shellutil.run_command(check_command)
-            except CommandError as e:
-                if e.returncode == 1:  # rule does not exist
-                    return
-            logger.info("Found legacy firewall rule: {0}", check_command)
+            shellutil.run_command(check_command)
+        except CommandError as e:
+            if e.returncode == 1:  # rule does not exist
+                logger.info("Did not find a legacy firewall rule: {0}", check_command)
+                return
 
-            delete_command = self._get_legacy_rule_command(self._get_delete_command_option())
-            logger.info("Removing legacy firewall rule: {0}", delete_command)
-            self._execute_delete_command(delete_command)
-
-        except Exception as error:
-            logger.info("Unable to remove legacy firewall rule. Error: {0}".format(ustr(error)))
+        logger.info("Found legacy firewall rule: {0}", check_command)
+        delete_command = self._get_legacy_rule_command(self._get_delete_command_option())
+        self._execute_delete_command(delete_command)
+        event.info(WALAEventOperation.Firewall, "Removed legacy firewall rule: {0}".format(delete_command))
 
     def _execute_delete_command(self, command):
         """
