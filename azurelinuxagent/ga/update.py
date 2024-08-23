@@ -1025,8 +1025,10 @@ class UpdateHandler(object):
             auto_update_enabled = 1 if conf.get_auto_update_to_latest_version() else 0
             update_mode = agent_update_handler.get_current_update_mode()
 
+            # Note: When we add new values to the heartbeat message, please add a semicolon at the end of the value.
+            # This helps to parse the message easily in kusto queries with regex
             heartbeat_msg = "HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
-                            "UpdateGSErrors: {3};AutoUpdate: {4};UpdateMode: {5}".format(self._heartbeat_counter,
+                            "UpdateGSErrors: {3};AutoUpdate: {4};UpdateMode: {5};".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
                                                                           self._heartbeat_update_goal_state_error_count,
                                                                           auto_update_enabled, update_mode)
