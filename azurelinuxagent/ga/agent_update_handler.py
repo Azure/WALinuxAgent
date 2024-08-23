@@ -29,6 +29,14 @@ from azurelinuxagent.ga.rsm_version_updater import RSMVersionUpdater
 from azurelinuxagent.ga.self_update_version_updater import SelfUpdateVersionUpdater
 
 
+class UpdateMode(object):
+    """
+    Enum for Update modes
+    """
+    RSM = "RSM"
+    SelfUpdate = "SelfUpdate"
+
+
 def get_agent_update_handler(protocol):
     return AgentUpdateHandler(protocol)
 
@@ -179,6 +187,15 @@ class AgentUpdateHandler(object):
                     family, self._gs_id))
         return agent_family_manifests[0]
 
+    def get_current_update_mode(self):
+        """
+        Returns current update mode whether RSM or Self-Update
+        """
+        if isinstance(self._updater, RSMVersionUpdater):
+            return UpdateMode.RSM
+        else:
+            return UpdateMode.SelfUpdate
+
     def run(self, goal_state, ext_gs_updated):
 
         try:
@@ -188,6 +205,8 @@ class AgentUpdateHandler(object):
 
             # Update the state only on new goal state
             if ext_gs_updated:
+                # Reset the last reported update state on new goal state before we attempt update otherwise we keep reporting the last update error if any
+                self._last_attempted_update_error_msg = ""
                 self._gs_id = goal_state.extensions_goal_state.id
                 self._updater.sync_new_gs_id(self._gs_id)
 

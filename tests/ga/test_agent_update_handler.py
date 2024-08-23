@@ -411,6 +411,29 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
             self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
 
+    def test_it_should_not_report_error_status_if_new_rsm_version_is_same_as_current_after_last_update_attempt_failed(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+
+        with self._get_agent_update_handler(test_data=data_file, protocol_get_error=True) as (agent_update_handler, _):
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+            self.assertEqual(1, vm_agent_update_status.code)
+            self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
+            self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
+
+            # Send same version GS after last update attempt failed
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(
+                str(CURRENT_VERSION))
+            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
+            agent_update_handler._protocol.client.update_goal_state()
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(VMAgentUpdateStatuses.Success, vm_agent_update_status.status)
+            self.assertEqual(0, vm_agent_update_status.code)
+            self.assertEqual(str(CURRENT_VERSION), vm_agent_update_status.expected_version)
+
     def test_it_should_report_update_status_with_missing_rsm_version_error(self):
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf_version_missing_in_agent_family.xml"
