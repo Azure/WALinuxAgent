@@ -27,8 +27,8 @@ from tests.lib.tools import patch, data_dir, test_dir, MagicMock
 class TestRegorusEngine(AgentTestCase):
     patcher = None
     regorus_dest_path = None    # Location where real regorus executable should be.
-    default_data_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-    default_policy_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+    default_policy_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
+    default_rule_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
     input_json = None  # Input is stored in a file, and extracted into this variable during class setup.
 
     @classmethod
@@ -64,30 +64,37 @@ class TestRegorusEngine(AgentTestCase):
         This unit test also tests the valid case for add_policy, add_data, and set_input.
         """
         engine = Engine()
-        engine.add_policy(self.default_policy_path)
-        engine.add_data(self.default_data_path)
+        engine.add_policy(self.default_rule_path)
+        engine.add_data(self.default_policy_path)
         engine.set_input(self.input_json)
         result = engine.eval_query("data.agent_extension_policy.extensions_to_download")
         test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
         self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])
 
-    def test_invalid_policy_should_raise_exception(self):
-        """Exception should be raised when we try to add a JSON file as a policy file (should be Rego)."""
+    def test_missing_rule_file_should_raise_exception(self):
+        """Exception should be raised when we try to add an invalid file path as rule file."""
         engine = Engine()
-        with self.assertRaises(Exception, msg="Adding an invalid policy file should have raised an exception."):
-            engine.add_policy(self.default_data_path)
+        with self.assertRaises(FileNotFoundError, msg="Adding a bad path to rule file should have raised an exception."):
+            fake_path = "/fake/file/path"
+            engine.add_policy(fake_path)
+
+    def test_invalid_rule_file_should_raise_exception(self):
+        """Exception should be raised when we try to add a rule file with invalid contents (JSON instead of Rego)."""
+        engine = Engine()
+        with self.assertRaises(TypeError, msg="Adding a rule file with invalid contents should have raised an exception."):
+            engine.add_policy(self.default_policy_path)
 
     def test_invalid_data_should_raise_exception(self):
         """Exception should be raised when we try to add a Rego file as a data file (should be JSON)."""
         engine = Engine()
         with self.assertRaises(Exception, msg="Adding an invalid data file should have raised an exception."):
-            engine.add_data(self.default_policy_path)
+            engine.add_data(self.default_rule_path)
 
     def test_invalid_input_should_raise_exception(self):
         """Exception should be raised when we try to add a Rego file as input (should be JSON)."""
         engine = Engine()
         with self.assertRaises(Exception, msg="Adding an invalid input file should have raised an exception."):
-            engine.set_input(self.default_policy_path)
+            engine.set_input(self.default_rule_path)
 
     def test_should_set_input_with_str(self):
         """Set input should accept a string type, this shouldn't throw an error."""
@@ -95,16 +102,10 @@ class TestRegorusEngine(AgentTestCase):
         input_str = json.dumps(self.input_json)
         engine.set_input(input_str)
 
-    @patch('subprocess.Popen')
-    def test_eval_query_non_zero_return_code(self, mock_popen):
-        """Test that {} is returned when subprocess.Popen fails."""
-        # mock the behavior of subprocess.Popen to return non-zero exit code
-        mock_process = MagicMock()
-        mock_process.returncode = 1
-        mock_process.communicate.return_value = (b'', b'Error occurred')  # Simulate stdout and stderr
-        mock_popen.return_value = mock_process
-
-        # test eval_query, which will use subprocess.Popen
+    def test_eval_query_non_zero_return_code(self):
+        """Test that error is raised when regorus eval CLI fails."""
         engine = Engine()
         with self.assertRaises(Exception, msg="Subprocess failure should have raised an exception."):
+            invalid_rule_file = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
+            engine.add_policy(invalid_rule_file)
             engine.eval_query("test_query")

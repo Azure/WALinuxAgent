@@ -27,8 +27,8 @@ from tests.lib.tools import patch, data_dir, test_dir, MagicMock
 class TestPolicyEngine(AgentTestCase):
     patcher = None
     regorus_dest_path = None    # Location where real regorus executable should be.
-    default_data_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-    default_policy_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+    default_policy_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
+    default_rule_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
     input_json = None  # Input is stored in a file, and extracted into this variable during class setup.
 
     @classmethod
@@ -65,7 +65,7 @@ class TestPolicyEngine(AgentTestCase):
                        return_value=[distro_name, str(version)]):
                 with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
                            return_value=True):
-                    engine = PolicyEngine(self.default_policy_path, self.default_data_path)
+                    engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
                     self.assertTrue(engine.policy_engine_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
 
     def test_should_raise_exception_on_unsupported_distro(self):
@@ -73,7 +73,7 @@ class TestPolicyEngine(AgentTestCase):
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 with self.assertRaises(Exception, msg="Policy should not be enabled on unsupported distro RHEL 9.0, should have raised exception."):
-                    PolicyEngine(self.default_policy_path, self.default_data_path)
+                    PolicyEngine(self.default_rule_path, self.default_policy_path)
 
     def test_should_raise_exception_on_unsupported_architecture(self):
         """Policy should NOT be enabled on ARM64."""
@@ -84,16 +84,16 @@ class TestPolicyEngine(AgentTestCase):
                     mock_osutil = MagicMock()
                     mock_osutil.get_vm_arch.return_value = "arm64"
                     mock_get_osutil.return_value = mock_osutil
-                    PolicyEngine(self.default_policy_path, self.default_data_path)
+                    PolicyEngine(self.default_rule_path, self.default_policy_path)
 
     def test_policy_engine_should_evaluate_query(self):
         """
-        Should be able to add policy, data, input, and evaluate query without an error.
+        Should be able to add rule file, data file, input, and evaluate query without an error.
         This tests the happy path for add_policy, add_data, and set_input as well.
         """
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = PolicyEngine(self.default_policy_path, self.default_data_path)
+                engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
                 query = "data.agent_extension_policy.extensions_to_download"
                 result = engine.evaluate_query(self.input_json, query)
                 test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
@@ -105,7 +105,7 @@ class TestPolicyEngine(AgentTestCase):
         """
         When policy enforcement is disabled, evaluate_query should throw an error.
         """
-        engine = PolicyEngine(self.default_policy_path, self.default_data_path)
+        engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
         query = "data.agent_extension_policy.extensions_to_download"
         with self.assertRaises(Exception, msg="Adding an invalid policy file should have raised an exception."):
             engine.evaluate_query(self.input_json, query)

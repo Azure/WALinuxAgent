@@ -19,6 +19,7 @@ import json
 import os
 import tempfile
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.exception import PolicyError
 
 
@@ -46,7 +47,7 @@ class Engine:
         self._input_json = None
 
     def add_policy(self, rule_file):
-        """Policy_path is expected to point to a valid Regorus file."""
+        """Rule_file is expected to point to a valid Regorus file."""
         if not os.path.exists(rule_file):
             raise FileNotFoundError("Policy rule file path {0} does not exist".format(rule_file))
         if not rule_file.endswith('.rego'):
@@ -83,8 +84,7 @@ class Engine:
         # TODO: Add JSON schema and validate input against it, return detailed error message
 
     def add_data(self, policy_file):
-        """Data parameter should be a path to a valid JSON data file (policy parameter file).
-        Expected format:
+        """Policy_file should be a path to a valid JSON policy (data) file.
         The expected file format is:
         {
             "azureGuestAgentPolicy": {
@@ -106,7 +106,7 @@ class Engine:
             raise FileNotFoundError("Policy parameter file path {0} does not exist.".format(policy_file))
         if not policy_file.endswith(".json"):
             raise TypeError("Policy parameter file path {0} is not a valid JSON file.".format(policy_file))
-        # TODO: Add JSON schema and validate data file against it, return detailed error message
+        # TODO: Add JSON schema and validate file against it, return detailed error message
         self._policy_file = policy_file
 
     def eval_query(self, query):
@@ -116,10 +116,10 @@ class Engine:
         In this method, we call the Regorus executable via run_command to query the policy engine.
 
         Command:
-            regorus eval -d <policy_file.rego> -d <data_file.json> -i <input_file.json> <QUERY>
+            regorus eval -d <rule_file.rego> -d <policy_file.json> -i <input_file.json> <QUERY>
 
         Parameters:
-            -d, --data <policy.rego|data.json> : Policy Rego file or data JSON file.
+            -d, --data <rule.rego|policy.json> : Rego file or JSON file.
             -i, --input <input.json> : Input file in JSON format.
             <QUERY>  Query. Rego query block in the format "data.<optional_query>"
 
@@ -135,11 +135,11 @@ class Engine:
 
         missing_files = []
         if self._rule_file is None:
-            missing_files.append("policy file")
+            missing_files.append("rule file")
         if self._input_json is None:
             missing_files.append("input")
         if self._policy_file is None:
-            missing_files.append("data file")
+            missing_files.append("policy file")
         if missing_files:
             raise PolicyError("Missing {0} to run query.".format(', '.join(missing_files)))
 
@@ -154,6 +154,17 @@ class Engine:
                        "-i", input_file.name, query]
 
             # use subprocess.Popen instead of subprocess.run for Python 2 compatibility
-            stdout = shellutil.run_command(command)
+            try:
+                stdout = shellutil.run_command(command)
+            except CommandError as ex:
+                code = ex.returncode
+                if code == 1:
+                    msg = "file error when using policy engine. {0}".format(ex)
+                elif code == 2:
+                    msg = "incorrect parameters passed to policy engine. {0}".format(ex)
+                else:
+                    msg = "error when using policy engine. {0}".format(ex)
+                raise PolicyError(msg=msg)
+
             json_output = json.loads(stdout)
             return json_output
