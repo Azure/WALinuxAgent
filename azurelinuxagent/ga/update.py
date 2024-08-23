@@ -1025,19 +1025,16 @@ class UpdateHandler(object):
             auto_update_enabled = 1 if conf.get_auto_update_to_latest_version() else 0
             update_mode = agent_update_handler.get_current_update_mode()
 
-            telemetry_msg = "{0};{1};{2};{3};{4};{5}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
-                                                         self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled, update_mode)
-            debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
-                            "UpdateGSErrors: {3};AutoUpdate: {4};UpdateMode: {5}]".format(self._heartbeat_counter,
+            heartbeat_msg = "HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
+                            "UpdateGSErrors: {3};AutoUpdate: {4};UpdateMode: {5}".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
                                                                           self._heartbeat_update_goal_state_error_count,
                                                                           auto_update_enabled, update_mode)
 
             # Write Heartbeat events/logs
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                      message=telemetry_msg, log_event=False)
-            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
+                      message=heartbeat_msg, log_event=False)
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent [DEBUG {1}]", CURRENT_AGENT, heartbeat_msg)
 
             # Update/Reset the counters
             self._heartbeat_counter += 1

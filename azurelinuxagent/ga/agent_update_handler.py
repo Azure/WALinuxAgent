@@ -164,6 +164,8 @@ class AgentUpdateHandler(object):
 
             # Update the state only on new goal state
             if ext_gs_updated:
+                # Reset the last reported update state on new goal state before we attempt update otherwise we keep reporting the last update error if any
+                self._last_attempted_update_error_msg = ""
                 self._gs_id = goal_state.extensions_goal_state.id
                 self._updater.sync_new_gs_id(self._gs_id)
 
@@ -197,9 +199,6 @@ class AgentUpdateHandler(object):
             self._updater.retrieve_agent_version(agent_family, goal_state)
 
             if not self._updater.is_retrieved_version_allowed_to_update(agent_family):
-                # Reset the last error report msg  when this condition met as there is no issue with update since requested
-                # version is same as current version or below than daemon version. In that case, we shouldn't report any error msg in the status report
-                self._last_attempted_update_error_msg = ""
                 return
             self._updater.log_new_agent_update_message()
             agent = self._updater.download_and_get_new_agent(self._protocol, agent_family, goal_state)
