@@ -116,7 +116,7 @@ class Engine:
         In this method, we call the Regorus executable via run_command to query the policy engine.
 
         Command:
-            regorus eval –d <policy_file.rego> -d <data_file.json> -i <input_file.json> <QUERY>
+            regorus eval -d <policy_file.rego> -d <data_file.json> -i <input_file.json> <QUERY>
 
         Parameters:
             -d, --data <policy.rego|data.json> : Policy Rego file or data JSON file.
@@ -126,12 +126,13 @@ class Engine:
         Return Codes:
             0 - successful query. optional parameters may be missing
             1 - file error: unsupported file type, error parsing file, file not found
-                    ex: "Error: Unsupported data file <file>. Must be rego or json."
-                    ex: "Error: Failed to read <file>. No such file or directory."
+                ex: "Error: Unsupported data file <file>. Must be rego or json."
+                ex: "Error: Failed to read <file>. No such file or directory."
             2 - usage error: missing query argument, unexpected or unlabeled parameter
-                    ex: "Error: the following required arguments were not provided: <QUERY>"
-                    ex: "Error: Unexpected argument <arg> found."
+                ex: "Error: the following required arguments were not provided: <QUERY>"
+                ex: "Error: Unexpected argument <arg> found."
         """
+
         missing_files = []
         if self._rule_file is None:
             missing_files.append("policy file")
