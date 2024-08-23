@@ -38,7 +38,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
-    GoalStateProperties
+    GoalStateProperties, GoalStateInconsistentError
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
@@ -86,7 +86,10 @@ class WireProtocol(DataContract):
         # Initialize the goal state, including all the inner properties
         if init_goal_state:
             logger.info('Initializing goal state during protocol detection')
-            self.client.reset_goal_state(save_to_history=save_to_history)
+            try:
+                self.client.reset_goal_state(save_to_history=save_to_history)
+            except GoalStateInconsistentError as error:
+                logger.warn("{0}", ustr(error))
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -1126,6 +1129,12 @@ class WireClient(object):
         }
 
     def get_header_for_cert(self):
+        return self._get_header_for_encrypted_request("DES_EDE3_CBC")
+
+    def get_header_for_remote_access(self):
+        return self._get_header_for_encrypted_request("AES128_CBC")
+
+    def _get_header_for_encrypted_request(self, cypher):
         trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
         try:
             content = fileutil.read_file(trans_cert_file)
@@ -1136,7 +1145,7 @@ class WireClient(object):
         return {
             "x-ms-agent-name": "WALinuxAgent",
             "x-ms-version": PROTOCOL_VERSION,
-            "x-ms-cipher-name": "DES_EDE3_CBC",
+            "x-ms-cipher-name": cypher,
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
