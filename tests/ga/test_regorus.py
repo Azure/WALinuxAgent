@@ -67,9 +67,12 @@ class TestRegorusEngine(AgentTestCase):
         engine.add_policy(self.default_rule_path)
         engine.add_data(self.default_policy_path)
         engine.set_input(self.input_json)
-        result = engine.eval_query("data.agent_extension_policy.extensions_to_download")
+        output = engine.eval_query("data.agent_extension_policy.extensions_to_download")
+        result = output['result'][0]['expressions'][0]['value']
         test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-        self.assertTrue(result['result'][0]['expressions'][0]['value'][test_ext_name]['downloadAllowed'])
+        ext_info = result.get(test_ext_name)
+        self.assertIsNotNone(ext_info, msg="Query failed, should have returned result for extension.")
+        self.assertTrue(ext_info.get('downloadAllowed'))
 
     def test_missing_rule_file_should_raise_exception(self):
         """Exception should be raised when we try to add an invalid file path as rule file."""
@@ -84,10 +87,17 @@ class TestRegorusEngine(AgentTestCase):
         with self.assertRaises(TypeError, msg="Adding a rule file with invalid contents should have raised an exception."):
             engine.add_policy(self.default_policy_path)
 
-    def test_invalid_data_should_raise_exception(self):
+    def test_missing_policy_file_should_raise_exception(self):
+        """Exception should be raised when we try to add invalid file path."""
+        engine = Engine()
+        fake_path = "/fake/file/path"
+        with self.assertRaises(IOError, msg="Adding a bad path to policy file should have raised an exception."):
+            engine.add_data(fake_path)
+
+    def test_invalid_policy_file_should_raise_exception(self):
         """Exception should be raised when we try to add a Rego file as a data file (should be JSON)."""
         engine = Engine()
-        with self.assertRaises(Exception, msg="Adding an invalid data file should have raised an exception."):
+        with self.assertRaises(TypeError, msg="Adding an invalid data file should have raised an exception."):
             engine.add_data(self.default_rule_path)
 
     def test_invalid_input_should_raise_exception(self):

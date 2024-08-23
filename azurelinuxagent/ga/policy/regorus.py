@@ -153,7 +153,6 @@ class Engine:
             command = [regorus_exe, "eval", "-d", self._rule_file, "-d", self._policy_file,
                        "-i", input_file.name, query]
 
-            # use subprocess.Popen instead of subprocess.run for Python 2 compatibility
             try:
                 stdout = shellutil.run_command(command)
             except CommandError as ex:

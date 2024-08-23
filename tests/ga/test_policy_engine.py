@@ -70,10 +70,17 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_should_raise_exception_on_unsupported_distro(self):
         """Policy should NOT be enabled on unsupported like RHEL."""
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['rhel', '9.0']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with self.assertRaises(Exception, msg="Policy should not be enabled on unsupported distro RHEL 9.0, should have raised exception."):
-                    PolicyEngine(self.default_rule_path, self.default_policy_path)
+        test_matrix = {
+            "rhel": "9.0",
+            "mariner": "1"
+        }
+        for distro_name, version in test_matrix.items():
+            with patch('azurelinuxagent.ga.policy.policy_engine.get_distro',
+                       return_value=[distro_name, str(version)]):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                    with self.assertRaises(Exception,
+                                           msg="Policy should not be enabled on unsupported distro {0} {1}".format(distro_name, version)):
+                        PolicyEngine(self.default_rule_path, self.default_policy_path)
 
     def test_should_raise_exception_on_unsupported_architecture(self):
         """Policy should NOT be enabled on ARM64."""
