@@ -20,7 +20,7 @@ import os
 import shutil
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, POLICY_SUPPORTED_DISTROS_MIN_VERSIONS
+from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, POLICY_SUPPORTED_DISTROS_MIN_VERSIONS, PolicyError
 from tests.lib.tools import patch, data_dir, test_dir, MagicMock
 
 
@@ -87,7 +87,7 @@ class TestPolicyEngine(AgentTestCase):
         # TODO: remove this test when support for ARM64 is added.
         with patch('azurelinuxagent.ga.policy.policy_engine.get_osutil') as mock_get_osutil:
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with self.assertRaises(Exception, msg="Policy should not be enabled on unsupported architecture ARM64, should have raised exception."):
+                with self.assertRaises(PolicyError, msg="Policy should not be enabled on unsupported architecture ARM64, should have raised exception."):
                     mock_osutil = MagicMock()
                     mock_osutil.get_vm_arch.return_value = "arm64"
                     mock_get_osutil.return_value = mock_osutil
@@ -108,12 +108,33 @@ class TestPolicyEngine(AgentTestCase):
                 self.assertTrue(result.get(test_ext_name).get('downloadAllowed'),
                                 msg="Query should have returned that extension is allowed.")
 
-    def test_eval_query_should_be_no_op(self):
+    def test_eval_query_should_throw_error_when_disabled(self):
         """
         When policy enforcement is disabled, evaluate_query should throw an error.
         """
         engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
         query = "data.agent_extension_policy.extensions_to_download"
-        with self.assertRaises(Exception, msg="Adding an invalid policy file should have raised an exception."):
+        with self.assertRaises(PolicyError, msg="Should throw error when policy enforcement is disabled."):
             engine.evaluate_query(self.input_json, query)
 
+    def test_should_throw_error_with_invalid_rule_file(self):
+        """
+        Initialize policy engine with invalid rule file, should throw error.
+        """
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
+                    # pass policy file instead of rule file in init
+                    PolicyEngine(self.default_policy_path, self.default_policy_path)
+
+    def test_should_throw_error_with_invalid_policy_file(self):
+        """
+        Initialize policy engine with invalid policy file, should throw error.
+        """
+        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
+            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
+                    # pass rule instead of policy file in init
+                    PolicyEngine(self.default_rule_path, self.default_rule_path)
+
+# TODO: add tests for all combinations of extensions and policy parameters when ExtensionPolicyEngine() class is added

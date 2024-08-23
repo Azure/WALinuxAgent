@@ -112,10 +112,12 @@ class TestRegorusEngine(AgentTestCase):
         input_str = json.dumps(self.input_json)
         engine.set_input(input_str)
 
-    def test_eval_query_non_zero_return_code(self):
+    def test_eval_query_should_raise_invalid_file(self):
         """Test that error is raised when regorus eval CLI fails."""
         engine = Engine()
         with self.assertRaises(Exception, msg="Subprocess failure should have raised an exception."):
             invalid_rule_file = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
             engine.add_policy(invalid_rule_file)
             engine.eval_query("test_query")
+
+
