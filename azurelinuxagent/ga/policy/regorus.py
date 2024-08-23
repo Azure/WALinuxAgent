@@ -49,7 +49,7 @@ class Engine:
     def add_policy(self, rule_file):
         """Rule_file is expected to point to a valid Regorus file."""
         if not os.path.exists(rule_file):
-            raise FileNotFoundError("Policy rule file path {0} does not exist".format(rule_file))
+            raise IOError("Policy rule file path {0} does not exist".format(rule_file))
         if not rule_file.endswith('.rego'):
             raise TypeError("Policy rule file path {0} is not a valid .rego file.".format(rule_file))
         self._rule_file = rule_file
@@ -103,7 +103,7 @@ class Engine:
         }
         """
         if not os.path.exists(policy_file):
-            raise FileNotFoundError("Policy parameter file path {0} does not exist.".format(policy_file))
+            raise IOError("Policy parameter file path {0} does not exist.".format(policy_file))
         if not policy_file.endswith(".json"):
             raise TypeError("Policy parameter file path {0} is not a valid JSON file.".format(policy_file))
         # TODO: Add JSON schema and validate file against it, return detailed error message

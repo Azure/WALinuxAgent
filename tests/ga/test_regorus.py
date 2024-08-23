@@ -21,7 +21,7 @@ import shutil
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.regorus import Engine
-from tests.lib.tools import patch, data_dir, test_dir, MagicMock
+from tests.lib.tools import patch, data_dir, test_dir
 
 
 class TestRegorusEngine(AgentTestCase):
@@ -74,7 +74,7 @@ class TestRegorusEngine(AgentTestCase):
     def test_missing_rule_file_should_raise_exception(self):
         """Exception should be raised when we try to add an invalid file path as rule file."""
         engine = Engine()
-        with self.assertRaises(FileNotFoundError, msg="Adding a bad path to rule file should have raised an exception."):
+        with self.assertRaises(IOError, msg="Adding a bad path to rule file should have raised an exception."):
             fake_path = "/fake/file/path"
             engine.add_policy(fake_path)
 
