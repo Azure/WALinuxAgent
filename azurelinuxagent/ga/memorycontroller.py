@@ -39,21 +39,27 @@ class _MemoryController(_CgroupController):
                 #
                 # Sample file v1:
                 #   # cat memory.stat
-                #   nr_periods  51660
-                #   nr_throttled 19461
-                #   throttled_time 1529590856339
+                #   cache 0
+                #   rss 0
+                #   rss_huge 0
+                #   shmem 0
+                #   mapped_file 0
+                #   dirty 0
+                #   writeback 0
+                #   swap 0
+                #   ...
                 #
                 # Sample file v2
                 #   # cat memory.stat
-                #   usage_usec 200161503
-                #   user_usec 199388368
-                #   system_usec 773134
-                #   core_sched.force_idle_usec 0
-                #   nr_periods 40059
-                #   nr_throttled 40022
-                #   throttled_usec 3565247992
-                #   nr_bursts 0
-                #   burst_usec 0
+                #   anon 0
+                #   file 147140608
+                #   kernel 1421312
+                #   kernel_stack 0
+                #   pagetables 0
+                #   sec_pagetables 0
+                #   percpu 130752
+                #   sock 0
+                #   ...
                 #
                 for line in memory_stat:
                     re_memory_counter = r'{0}\s+(\d+)'.format(counter_name)
@@ -161,6 +167,13 @@ class MemoryControllerV2(_MemoryController):
             with open(os.path.join(self.path, 'memory.events')) as memory_events:
                 #
                 # Sample file:
+                #   # cat memory.events
+                #   low 0
+                #   high 0
+                #   max 0
+                #   oom 0
+                #   oom_kill 0
+                #   oom_group_kill 0
                 #
                 for line in memory_events:
                     match = re.match(r'high\s+(\d+)', line)

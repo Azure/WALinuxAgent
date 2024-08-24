@@ -18,7 +18,7 @@ import contextlib
 import os
 
 from azurelinuxagent.common import logger, conf
-from azurelinuxagent.ga.cgroupcontroller import MetricValue
+from azurelinuxagent.ga.cgroupcontroller import MetricValue, MetricsCounter
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.logger import Logger
 from azurelinuxagent.common.protocol.util import ProtocolUtil
@@ -344,7 +344,7 @@ def _create_log_collector_monitor_handler(iterations=1, cgroup_version=CgroupVer
 
 class TestLogCollectorMonitorHandler(AgentTestCase):
 
-    def test_get_metrics_summary(self):
+    def test_get_max_recorded_metrics(self):
         with _create_log_collector_monitor_handler(iterations=2) as log_collector_monitor_handler:
             nonlocal_vars = {
                 'cpu_iteration': 0,
@@ -353,41 +353,42 @@ class TestLogCollectorMonitorHandler(AgentTestCase):
             }
 
             def get_different_cpu_metrics(**kwargs):    # pylint: disable=W0613
-                metrics = [MetricValue("Process", "% Processor Time", "service", 4.5), MetricValue("Process", "Throttled Time", "service", nonlocal_vars['cpu_iteration']*nonlocal_vars['multiplier'] + 10.000)]
+                metrics = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5), MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", nonlocal_vars['cpu_iteration']*nonlocal_vars['multiplier'] + 10.000)]
                 nonlocal_vars['cpu_iteration'] += 1
                 return metrics
 
             def get_different_memory_metrics(**kwargs):     # pylint: disable=W0613
-                metrics = [MetricValue("Memory", "Total Memory Usage", "service", 20),
-                          MetricValue("Memory", "Anon Memory Usage", "service", 15),
-                          MetricValue("Memory", "Cache Memory Usage", "service", nonlocal_vars['mem_iteration']*nonlocal_vars['multiplier'] + 5),
-                          MetricValue("Memory", "Max Memory Usage", "service", 30),
-                          MetricValue("Memory", "Swap Memory Usage", "service", 0)]
+                metrics = [MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 20),
+                          MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 15),
+                          MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", nonlocal_vars['mem_iteration']*nonlocal_vars['multiplier'] + 5),
+                          MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 30),
+                          MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0)]
                 nonlocal_vars['mem_iteration'] += 1
                 return metrics
 
             with patch("azurelinuxagent.ga.cpucontroller._CpuController.get_tracked_metrics", side_effect=get_different_cpu_metrics):
                 with patch("azurelinuxagent.ga.memorycontroller._MemoryController.get_tracked_metrics", side_effect=get_different_memory_metrics):
                     log_collector_monitor_handler.run_and_wait()
-                    metrics_summary = log_collector_monitor_handler.get_metrics_summary()
-                    self.assertIn("% Processor Time=4.5", metrics_summary)
-                    self.assertIn("Throttled Time=15.0", metrics_summary)
-                    self.assertIn("Total Memory Usage=20", metrics_summary)
-                    self.assertIn("Anon Memory Usage=15", metrics_summary)
-                    self.assertIn("Cache Memory Usage=10", metrics_summary)
-                    self.assertIn("Max Memory Usage=30", metrics_summary)
-                    self.assertIn("Swap Memory Usage=0", metrics_summary)
+                    max_recorded_metrics = log_collector_monitor_handler.get_max_recorded_metrics()
+                    self.assertEqual(len(max_recorded_metrics), 7)
+                    self.assertEqual(max_recorded_metrics[MetricsCounter.PROCESSOR_PERCENT_TIME], 4.5)
+                    self.assertEqual(max_recorded_metrics[MetricsCounter.THROTTLED_TIME], 15.0)
+                    self.assertEqual(max_recorded_metrics[MetricsCounter.TOTAL_MEM_USAGE], 20)
+                    self.assertEqual(max_recorded_metrics[MetricsCounter.ANON_MEM_USAGE], 15)
+                    self.assertEqual(max_recorded_metrics[MetricsCounter.CACHE_MEM_USAGE], 10)
+                    self.assertEqual(max_recorded_metrics[MetricsCounter.MAX_MEM_USAGE], 30)
+                    self.assertEqual(max_recorded_metrics[MetricsCounter.SWAP_MEM_USAGE], 0)
 
     def test_send_extension_metrics_telemetry(self):
         with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
             with patch("azurelinuxagent.common.event.EventLogger.add_metric") as patch_add_metric:
-                metrics = [MetricValue("Process", "% Processor Time", "service", 4.5),
-                              MetricValue("Process", "Throttled Time", "service", 10.281),
-                              MetricValue("Memory", "Total Memory Usage", "service", 170 * 1024 ** 2),
-                              MetricValue("Memory", "Anon Memory Usage", "service", 15 * 1024 ** 2),
-                              MetricValue("Memory", "Cache Memory Usage", "service", 140 * 1024 ** 2),
-                              MetricValue("Memory", "Max Memory Usage", "service", 171 * 1024 ** 2),
-                              MetricValue("Memory", "Swap Memory Usage", "service", 0)]
+                metrics = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),
+                              MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", 10.281),
+                              MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 170 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 15 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", 140 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 171 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0)]
                 with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage", return_value=metrics) as patch_poll_resource_usage:
                     log_collector_monitor_handler.run_and_wait()
                     self.assertEqual(1, patch_poll_resource_usage.call_count)
@@ -395,14 +396,14 @@ class TestLogCollectorMonitorHandler(AgentTestCase):
 
         with _create_log_collector_monitor_handler(cgroup_version=CgroupVersions.V2) as log_collector_monitor_handler:
             with patch("azurelinuxagent.common.event.EventLogger.add_metric") as patch_add_metric:
-                metrics = [MetricValue("Process", "% Processor Time", "service", 4.5),
-                              MetricValue("Process", "Throttled Time", "service", 10.281),
-                              MetricValue("Memory", "Total Memory Usage", "service", 170 * 1024 ** 2),
-                              MetricValue("Memory", "Anon Memory Usage", "service", 15 * 1024 ** 2),
-                              MetricValue("Memory", "Cache Memory Usage", "service", 140 * 1024 ** 2),
-                              MetricValue("Memory", "Max Memory Usage", "service", 171 * 1024 ** 2),
-                              MetricValue("Memory", "Swap Memory Usage", "service", 0),
-                              MetricValue("Memory", "Total Memory Throttled Events", "service", 5)]
+                metrics = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),
+                              MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", 10.281),
+                              MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 170 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 15 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", 140 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 171 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0),
+                              MetricValue("Memory", MetricsCounter.MEM_THROTTLED, "service", 5)]
                 with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage", return_value=metrics) as patch_poll_resource_usage:
                     log_collector_monitor_handler.run_and_wait()
                     self.assertEqual(1, patch_poll_resource_usage.call_count)
@@ -410,40 +411,40 @@ class TestLogCollectorMonitorHandler(AgentTestCase):
 
     def test_verify_log_collector_memory_limit_exceeded(self):
         with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
-            cache_exceeded = [MetricValue("Process", "% Processor Time", "service", 4.5),
-                              MetricValue("Process", "Throttled Time", "service", 10.281),
-                              MetricValue("Memory", "Total Memory Usage", "service", 170 * 1024 ** 2),
-                              MetricValue("Memory", "Anon Memory Usage", "service", 15 * 1024 ** 2),
-                              MetricValue("Memory", "Cache Memory Usage", "service", 155 * 1024 ** 2),
-                              MetricValue("Memory", "Max Memory Usage", "service", 171 * 1024 ** 2),
-                              MetricValue("Memory", "Swap Memory Usage", "service", 0)]
+            cache_exceeded = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),
+                              MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", 10.281),
+                              MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 170 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 15 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", 160 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 171 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0)]
             with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage", return_value=cache_exceeded):
                 with patch("os._exit") as mock_exit:
                     log_collector_monitor_handler.run_and_wait()
                     self.assertEqual(mock_exit.call_count, 1)
 
         with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
-            anon_exceeded = [MetricValue("Process", "% Processor Time", "service", 4.5),
-                              MetricValue("Process", "Throttled Time", "service", 10.281),
-                              MetricValue("Memory", "Total Memory Usage", "service", 170 * 1024 ** 2),
-                              MetricValue("Memory", "Anon Memory Usage", "service", 30 * 1024 ** 2),
-                              MetricValue("Memory", "Cache Memory Usage", "service", 140 * 1024 ** 2),
-                              MetricValue("Memory", "Max Memory Usage", "service", 171 * 1024 ** 2),
-                              MetricValue("Memory", "Swap Memory Usage", "service", 0)]
+            anon_exceeded = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),
+                              MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", 10.281),
+                              MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 170 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 30 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", 140 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 171 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0)]
             with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage", return_value=anon_exceeded):
                 with patch("os._exit") as mock_exit:
                     log_collector_monitor_handler.run_and_wait()
                     self.assertEqual(mock_exit.call_count, 1)
 
         with _create_log_collector_monitor_handler(cgroup_version=CgroupVersions.V2) as log_collector_monitor_handler:
-            mem_throttled_exceeded = [MetricValue("Process", "% Processor Time", "service", 4.5),
-                              MetricValue("Process", "Throttled Time", "service", 10.281),
-                              MetricValue("Memory", "Total Memory Usage", "service", 170 * 1024 ** 2),
-                              MetricValue("Memory", "Anon Memory Usage", "service", 15 * 1024 ** 2),
-                              MetricValue("Memory", "Cache Memory Usage", "service", 140 * 1024 ** 2),
-                              MetricValue("Memory", "Max Memory Usage", "service", 171 * 1024 ** 2),
-                              MetricValue("Memory", "Swap Memory Usage", "service", 0),
-                              MetricValue("Memory", "Total Memory Throttled Events", "service", 11)]
+            mem_throttled_exceeded = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),
+                              MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", 10.281),
+                              MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 170 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 15 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", 140 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 171 * 1024 ** 2),
+                              MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0),
+                              MetricValue("Memory", MetricsCounter.MEM_THROTTLED, "service", 11)]
             with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage", return_value=mem_throttled_exceeded):
                 with patch("os._exit") as mock_exit:
                     log_collector_monitor_handler.run_and_wait()

@@ -43,7 +43,7 @@ class TestCgroupController(AgentTestCase):
     @patch("azurelinuxagent.common.logger.periodic_warn")
     def test_is_active_file_not_present(self, patch_periodic_warn):
         test_metrics = _CgroupController("test_extension", self.tmp_dir)
-        self.assertEqual(False, test_metrics.is_active())
+        self.assertFalse(test_metrics.is_active())
 
         self.assertEqual(0, patch_periodic_warn.call_count)
 

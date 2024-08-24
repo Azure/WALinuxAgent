@@ -78,11 +78,11 @@ CPUAccounting=yes
 CPUQuota={cpu_quota}
 MemoryAccounting=yes
 """
-LOGCOLLECTOR_CPU_QUOTA = "5%"
-LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT = "170M"
-LOGCOLLECTOR_ANON_MEMORY_LIMIT = 25 * 1024 ** 2  # 25Mb
-LOGCOLLECTOR_CACHE_MEMORY_LIMIT = 150 * 1024 ** 2  # 150Mb
-LOGCOLLECTOR_MAX_THROTTLED_EVENTS = 10
+LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2 = "5%"
+LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2 = "170M"
+LOGCOLLECTOR_MAX_THROTTLED_EVENTS_FOR_V2 = 10
+LOGCOLLECTOR_ANON_MEMORY_LIMIT_FOR_V1_AND_V2 = 25 * 1024 ** 2  # 25Mb
+LOGCOLLECTOR_CACHE_MEMORY_LIMIT_FOR_V1_AND_V2 = 155 * 1024 ** 2  # 155Mb
 
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
@@ -181,6 +181,9 @@ class CGroupConfigurator(object):
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                     return
 
+                # Setup the slices before v2 check. Cgroup v2 usage is disabled for agent and extensions, but can be
+                # enabled for log collector in waagent.conf. The log collector slice should be created in case v2
+                # usage is enabled for log collector.
                 self.__setup_azure_slice()
 
                 if self.using_cgroup_v2():
@@ -284,7 +287,7 @@ class CGroupConfigurator(object):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             # Update log collector slice contents
-            slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=LOGCOLLECTOR_CPU_QUOTA)
+            slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)
             files_to_create.append((logcollector_slice, slice_contents))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
@@ -610,13 +613,18 @@ class CGroupConfigurator(object):
 
         def get_logcollector_unit_properties(self):
             """
-            Returns the systemd unit properties for the log collector process
+            Returns the systemd unit properties for the log collector process.
+
+            Each property should be explicitly set (even if already included in the log collector slice) for the log
+            collector process to run in the transient scope directory with the expected accounting and limits.
             """
-            logcollector_properties = ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota={0}".format(LOGCOLLECTOR_CPU_QUOTA)]
+            logcollector_properties = ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota={0}".format(LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)]
             if not self.using_cgroup_v2():
                 return logcollector_properties
-            # Memory throttling limit is used when running log collector on v2 machines
-            logcollector_properties.append("--property=MemoryHigh={0}".format(LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT))
+            # Memory throttling limit is used when running log collector on v2 machines using the 'MemoryHigh' property.
+            # We do not use a systemd property to enforce memory on V1 because it invokes the OOM killer if the limit
+            # is exceeded.
+            logcollector_properties.append("--property=MemoryHigh={0}".format(LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2))
             return logcollector_properties
 
         @staticmethod

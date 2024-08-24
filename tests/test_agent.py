@@ -456,7 +456,7 @@ class TestAgent(AgentTestCase):
             CollectLogsHandler.disable_monitor_cgroups_check()
 
     @patch("azurelinuxagent.agent.LogCollector")
-    @patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler.get_metrics_summary")
+    @patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler.get_max_recorded_metrics")
     def test_collect_log_should_output_resource_usage_summary(self, mock_get_metrics_summary, mock_log_collector):
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()

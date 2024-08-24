@@ -19,6 +19,7 @@ import os
 import random
 import time
 
+from azurelinuxagent.ga.cgroupcontroller import MetricsCounter
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.cpucontroller import CpuControllerV1
@@ -124,16 +125,16 @@ class TestCGroupsTelemetry(AgentTestCase):
                 self.assertEqual(metric.counter, "% Processor Time")
                 self.assertEqual(metric.value, cpu_metric_value)
             if metric.category == "Memory":
-                self.assertIn(metric.counter, ["Total Memory Usage", "Anon Memory Usage", "Cache Memory Usage", "Max Memory Usage", "Swap Memory Usage"])
-                if metric.counter == "Total Memory Usage":
+                self.assertIn(metric.counter, [MetricsCounter.TOTAL_MEM_USAGE, MetricsCounter.ANON_MEM_USAGE, MetricsCounter.CACHE_MEM_USAGE, MetricsCounter.MAX_MEM_USAGE, MetricsCounter.SWAP_MEM_USAGE])
+                if metric.counter == MetricsCounter.TOTAL_MEM_USAGE:
                     self.assertEqual(metric.value, current_total_memory_metric_value)
-                elif metric.counter == "Anon Memory Usage":
+                elif metric.counter == MetricsCounter.ANON_MEM_USAGE:
                     self.assertEqual(metric.value, current_anon_memory_metric_value)
-                elif metric.counter == "Cache Memory Usage":
+                elif metric.counter == MetricsCounter.CACHE_MEM_USAGE:
                     self.assertEqual(metric.value, current_cache_memory_metric_value)
-                elif metric.counter == "Max Memory Usage":
+                elif metric.counter == MetricsCounter.MAX_MEM_USAGE:
                     self.assertEqual(metric.value, max_memory_metric_value)
-                elif metric.counter == "Swap Memory Usage":
+                elif metric.counter == MetricsCounter.SWAP_MEM_USAGE:
                     self.assertEqual(metric.value, swap_memory_value)
 
     def test_telemetry_polling_with_active_cgroups(self, *args):  # pylint: disable=unused-argument

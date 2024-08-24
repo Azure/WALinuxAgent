@@ -21,6 +21,7 @@ import re
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.cgroupcontroller import _CgroupController, MetricValue, MetricsCategory, MetricsCounter
 
 re_v1_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
@@ -195,11 +196,34 @@ class CpuControllerV1(_CpuController):
 
 
 class CpuControllerV2(_CpuController):
+    @staticmethod
+    def get_system_uptime():
+        """
+        Get the uptime of the system (including time spent in suspend) in seconds.
+        /proc/uptime contains two numbers (values in seconds): the uptime of the system (including time spent in
+        suspend) and the amount of time spent in the idle process:
+            # cat /proc/uptime
+            365380.48 722644.81
+
+        :return: System uptime in seconds
+        :rtype: float
+        """
+        uptime_contents = fileutil.read_file('/proc/uptime').split()
+        return float(uptime_contents[0])
+
+    def _get_system_usage(self):
+        try:
+            return self.get_system_uptime()
+        except (OSError, IOError) as e:
+            raise CGroupsException("Couldn't read /proc/uptime: {0}".format(ustr(e)))
+        except Exception as e:
+            raise CGroupsException("Couldn't parse /proc/uptime: {0}".format(ustr(e)))
+
     def initialize_cpu_usage(self):
         if self._cpu_usage_initialized():
             raise CGroupsException("initialize_cpu_usage() should be invoked only once")
         self._current_cgroup_cpu = self._get_cpu_time(allow_no_such_file_or_directory_error=True)
-        self._current_system_cpu = self._osutil.get_system_uptime()
+        self._current_system_cpu = self._get_system_usage()
         self._current_throttled_time = self._get_cpu_stat_counter(counter_name='throttled_usec')
 
     def _get_cpu_time(self, allow_no_such_file_or_directory_error=False):
@@ -248,10 +272,10 @@ class CpuControllerV2(_CpuController):
         self._previous_cgroup_cpu = self._current_cgroup_cpu
         self._previous_system_cpu = self._current_system_cpu
         self._current_cgroup_cpu = self._get_cpu_time()
-        self._current_system_cpu = self._osutil.get_system_uptime()
+        self._current_system_cpu = self._get_system_usage()
 
         cgroup_delta = self._current_cgroup_cpu - self._previous_cgroup_cpu
-        system_delta = max(1, self._current_system_cpu - self._previous_system_cpu)
+        system_delta = max(1.0, self._current_system_cpu - self._previous_system_cpu)
 
         return round(100.0 * float(cgroup_delta) / float(system_delta), 3)
 

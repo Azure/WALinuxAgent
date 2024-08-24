@@ -23,6 +23,7 @@ Module agent
 
 from __future__ import print_function
 
+import json
 import os
 import re
 import subprocess
@@ -250,8 +251,9 @@ class Agent(object):
             if log_collector_monitor is not None:
                 log_collector_monitor.stop()
                 try:
-                    msg = "Resource usage summary: total uncompressed file size={0}; {1}".format(
-                        total_uncompressed_size, log_collector_monitor.get_metrics_summary())
+                    metrics_summary = log_collector_monitor.get_max_recorded_metrics()
+                    metrics_summary['Total Uncompressed File Size (B)'] = total_uncompressed_size
+                    msg = "Resource usage summary: {0}".format(json.dumps(metrics_summary))
                     logger.info(msg)
                     event.add_event(op=event.WALAEventOperation.LogCollection, message=msg, log_event=False)
                 except Exception as e:

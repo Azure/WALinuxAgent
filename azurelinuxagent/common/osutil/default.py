@@ -1440,31 +1440,6 @@ class DefaultOSUtil(object):
         return results
 
     @staticmethod
-    def get_system_uptime():
-        """
-        Get the uptime of the system (including time spent in suspend) in seconds.
-        /proc/uptime contains two numbers (values in seconds): the uptime of the system (including time spent in
-        suspend) and the amount of time spent in the idle process:
-            # cat /proc/uptime
-            365380.48 722644.81
-
-        :return: System uptime in seconds
-        :rtype: float
-        """
-        results = 0.0
-        try:
-            uptime_contents = fileutil.read_file('/proc/uptime').split()
-            results = float(uptime_contents[0])
-        except (OSError, IOError) as ex:
-            logger.warn("Couldn't read /proc/uptime: {0}".format(ex.strerror))
-            raise
-        except Exception as ex:
-            logger.warn("Couldn't parse /proc/uptime: {0}".format(ustr(ex)))
-            raise
-
-        return results
-
-    @staticmethod
     def get_total_cpu_ticks_since_boot():
         """
         Compute the number of USER_HZ units of time that have elapsed in all categories, across all cores, since boot.

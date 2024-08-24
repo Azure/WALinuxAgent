@@ -30,7 +30,7 @@ from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEv
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.ga.logcollector import COMPRESSED_ARCHIVE_PATH, GRACEFUL_KILL_ERRCODE
-from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, LOGCOLLECTOR_ANON_MEMORY_LIMIT, LOGCOLLECTOR_CACHE_MEMORY_LIMIT, LOGCOLLECTOR_MAX_THROTTLED_EVENTS
+from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, LOGCOLLECTOR_ANON_MEMORY_LIMIT_FOR_V1_AND_V2, LOGCOLLECTOR_CACHE_MEMORY_LIMIT_FOR_V1_AND_V2, LOGCOLLECTOR_MAX_THROTTLED_EVENTS_FOR_V2
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
@@ -268,8 +268,8 @@ class CollectLogsHandler(ThreadHandlerInterface):
                 log_event=False)
 
 
-def get_log_collector_monitor_handler(cgroups):
-    return LogCollectorMonitorHandler(cgroups)
+def get_log_collector_monitor_handler(controllers):
+    return LogCollectorMonitorHandler(controllers)
 
 
 class LogCollectorMonitorHandler(ThreadHandlerInterface):
@@ -331,11 +331,8 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
                 "An error occurred in the MonitorLogCollectorCgroupsHandler thread; will exit the thread.\n{0}",
                 ustr(e))
 
-    def get_metrics_summary(self):
-        summary_string = ""
-        for metric, max_value in self.max_recorded_metrics.items():
-            summary_string += "{0}={1};".format(metric, max_value)
-        return summary_string
+    def get_max_recorded_metrics(self):
+        return self.max_recorded_metrics
 
     def _poll_resource_usage(self):
         metrics = []
@@ -367,19 +364,19 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
                 memory_throttled_events = metric.value
 
         mem_limit_exceeded = False
-        if current_anon_and_swap_usage > LOGCOLLECTOR_ANON_MEMORY_LIMIT:
+        if current_anon_and_swap_usage > LOGCOLLECTOR_ANON_MEMORY_LIMIT_FOR_V1_AND_V2:
             mem_limit_exceeded = True
-            msg = "Log collector anon + swap memory limit {0} bytes exceeded. The reported usage is {1} bytes.".format(LOGCOLLECTOR_ANON_MEMORY_LIMIT, current_anon_and_swap_usage)
+            msg = "Log collector anon + swap memory limit {0} bytes exceeded. The reported usage is {1} bytes.".format(LOGCOLLECTOR_ANON_MEMORY_LIMIT_FOR_V1_AND_V2, current_anon_and_swap_usage)
             logger.info(msg)
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.LogCollection, message=msg)
-        if current_cache_usage > LOGCOLLECTOR_CACHE_MEMORY_LIMIT:
+        if current_cache_usage > LOGCOLLECTOR_CACHE_MEMORY_LIMIT_FOR_V1_AND_V2:
             mem_limit_exceeded = True
-            msg = "Log collector cache memory limit {0} bytes exceeded. The reported usage is {1} bytes.".format(LOGCOLLECTOR_CACHE_MEMORY_LIMIT, current_cache_usage)
+            msg = "Log collector cache memory limit {0} bytes exceeded. The reported usage is {1} bytes.".format(LOGCOLLECTOR_CACHE_MEMORY_LIMIT_FOR_V1_AND_V2, current_cache_usage)
             logger.info(msg)
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.LogCollection, message=msg)
-        if memory_throttled_events > LOGCOLLECTOR_MAX_THROTTLED_EVENTS:
+        if memory_throttled_events > LOGCOLLECTOR_MAX_THROTTLED_EVENTS_FOR_V2:
             mem_limit_exceeded = True
-            msg = "Log collector memory throttled events limit {0} exceeded. The reported number of throttled events is {1}.".format(LOGCOLLECTOR_MAX_THROTTLED_EVENTS, memory_throttled_events)
+            msg = "Log collector memory throttled events limit {0} exceeded. The reported number of throttled events is {1}.".format(LOGCOLLECTOR_MAX_THROTTLED_EVENTS_FOR_V2, memory_throttled_events)
             logger.info(msg)
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.LogCollection, message=msg)
 

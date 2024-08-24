@@ -314,16 +314,14 @@ class LogCollector(object):
 
                 if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
                     final_files_to_collect.append(file_path)
+                    total_uncompressed_size += file_size
                     _LOGGER.info("Adding file %s, size %s b", file_path, file_size)
                 else:
                     truncated_file_path = self._truncate_large_file(file_path)
                     if truncated_file_path:
                         _LOGGER.info("Adding truncated file %s, size %s b", truncated_file_path, file_size)
                         final_files_to_collect.append(truncated_file_path)
-                    else:
-                        file_size = 0
-
-                total_uncompressed_size += file_size
+                        total_uncompressed_size += file_size
             except IOError as e:
                 if e.errno == 2:    # [Errno 2] No such file or directory
                     _LOGGER.warning("File %s does not exist, skipping collection for this file", file_path)

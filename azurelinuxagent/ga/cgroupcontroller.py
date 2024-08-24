@@ -74,15 +74,15 @@ class MetricsCategory(object):
 
 class MetricsCounter(object):
     PROCESSOR_PERCENT_TIME = "% Processor Time"
-    THROTTLED_TIME = "Throttled Time"
-    TOTAL_MEM_USAGE = "Total Memory Usage"
-    ANON_MEM_USAGE = "Anon Memory Usage"
-    CACHE_MEM_USAGE = "Cache Memory Usage"
-    MAX_MEM_USAGE = "Max Memory Usage"
-    SWAP_MEM_USAGE = "Swap Memory Usage"
+    THROTTLED_TIME = "Throttled Time (s)"
+    TOTAL_MEM_USAGE = "Total Memory Usage (B)"
+    ANON_MEM_USAGE = "Anon Memory Usage (B)"
+    CACHE_MEM_USAGE = "Cache Memory Usage (B)"
+    MAX_MEM_USAGE = "Max Memory Usage (B)"
+    SWAP_MEM_USAGE = "Swap Memory Usage (B)"
     MEM_THROTTLED = "Total Memory Throttled Events"
-    AVAILABLE_MEM = "Available MBytes"
-    USED_MEM = "Used MBytes"
+    AVAILABLE_MEM = "Available Memory (MB)"
+    USED_MEM = "Used Memory (MB)"
 
 
 class _CgroupController(object):
