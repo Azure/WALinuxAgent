@@ -86,6 +86,18 @@ class WireProtocol(DataContract):
         # Initialize the goal state, including all the inner properties
         if init_goal_state:
             logger.info('Initializing goal state during protocol detection')
+            #
+            # TODO: Currently protocol detection retrieves the entire goal state. This is not needed; in particular, retrieving the Extensions goal state
+            #       is not needed. However, the goal state is cached in self.client._goal_state and other components, including the Extension Handler,
+            #       depend on this cached value. This has been a long-standing issue that causes multiple problems. Before removing the cached goal state,
+            #       though, a careful review of these dependencies is needed.
+            #
+            #       One of the problems of fetching the full goal state is that issues while retrieving it can block protocol detection and make the
+            #       Agent go into a retry loop that can last 1 full hour. One particular error, GoalStateInconsistentError, can arise if the certificates
+            #       needed by extensions are missing from the goal state; for example, if a FastTrack goal state is out of sync with the corresponding
+            #       Fabric goal state that contains the certificates, or if decryption of the certificates fais (and hence, the certificate list is
+            #       empty). The try/except below handles only this one particular problem.
+            #
             try:
                 self.client.reset_goal_state(save_to_history=save_to_history)
             except GoalStateInconsistentError as error:
