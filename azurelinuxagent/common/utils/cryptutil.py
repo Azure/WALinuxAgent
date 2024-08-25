@@ -87,6 +87,16 @@ class CryptUtil(object):
             return thumbprint
 
     def decrypt_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pem_file):
+
+        def _cleanup_files(files_to_cleanup):
+            for file_path in files_to_cleanup:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        logger.info("Removed file {0}", file_path)
+                    except Exception as e:
+                        logger.error("Failed to remove file {0}: {1}", file_path, ustr(e))
+
         if not os.path.exists(p7m_file):
             raise IOError(errno.ENOENT, "File not found", p7m_file)
         elif not os.path.exists(trans_prv_file):
@@ -99,6 +109,12 @@ class CryptUtil(object):
             except shellutil.CommandError as command_error:
                 logger.error("Failed to decrypt {0} (return code: {1})\n[stdout]\n{2}\n[stderr]\n{3}",
                     p7m_file, command_error.returncode, command_error.stdout, command_error.stderr)
+                # If the decryption fails, old version of openssl overwrite the output file with empty data while
+                # new version of openssl does not overwrite the output file So output file may contain old certs data.
+                # Correcting the behavior by removing the intermediate output files since having empty data/no data is makes sense when decryption fails.
+                files_to_remove = [p7m_file, pem_file]
+                logger.info("Removing intermediate cert files {0}", files_to_remove)
+                _cleanup_files(files_to_remove)
 
     def crt_to_ssh(self, input_file, output_file):
         with open(output_file, "ab") as file_out:
