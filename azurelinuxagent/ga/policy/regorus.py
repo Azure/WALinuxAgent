@@ -20,8 +20,7 @@ import os
 import tempfile
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
-from azurelinuxagent.common.exception import PolicyError
-
+from azurelinuxagent.common.exception import AgentError
 
 
 def get_regorus_path():
@@ -34,57 +33,23 @@ def get_regorus_path():
     return regorus_exe
 
 
+class PolicyError(AgentError):
+    """
+    Error raised during agent policy enforcement.
+    """
+
+
 class Engine:
     """
     This class implements the basic operations for the Regorus policy engine via subprocess.
     Any errors thrown in this class should be caught and handled by PolicyEngine.
     """
 
-    def __init__(self):
-        self._engine = None
-        self._rule_file = None
-        self._policy_file = None
-        self._input_json = None
-
-    def add_policy(self, rule_file):
-        """Rule_file is expected to point to a valid Regorus file."""
-        if not os.path.exists(rule_file):
-            raise IOError("Policy rule file path {0} does not exist".format(rule_file))
-        if not rule_file.endswith('.rego'):
-            raise TypeError("Policy rule file path {0} is not a valid .rego file.".format(rule_file))
-        self._rule_file = rule_file
-        # TODO: Currently, eval_query will raise error if policy file is invalid.
-        #  Consider a dummy "regorus eval" or "regorus parse" call here to validate policy rule file beforehand.
-
-    def set_input(self, input_json):
+    def __init__(self, policy_file, rule_file):
         """
-        This sets the input to the policy engine query, for example, a list of extensions we want to download.
-        Input_json should be a JSON object.
-        Expected format:
-        {
-            "extensions": {
-                "<extension_name_1>": {
-                    "signingInfo": {
-                        "extensionSigned": <true, false>
-                    }
-                },
-                "<extension_name_2>": {
-                    "signingInfo": {
-                        "extensionSigned": <true, false>
-                    }
-                }, ...
-        }
-        """
-        if isinstance(input_json, dict):
-            self._input_json = input_json
-        elif isinstance(input_json, str):
-            self._input_json = json.loads(input_json)
-        else:
-            raise TypeError("Input to policy engine is not a valid JSON object.")
-        # TODO: Add JSON schema and validate input against it, return detailed error message
+        Rule_file is expected to point to a valid Regorus file.
 
-    def add_data(self, policy_file):
-        """Policy_file should be a path to a valid JSON policy (data) file.
+        Policy_file should be a path to a valid JSON policy (data) file.
         The expected file format is:
         {
             "azureGuestAgentPolicy": {
@@ -102,16 +67,27 @@ class Engine:
                 }
         }
         """
-        if not os.path.exists(policy_file):
-            raise IOError("Policy parameter file path {0} does not exist.".format(policy_file))
-        if not policy_file.endswith(".json"):
-            raise TypeError("Policy parameter file path {0} is not a valid JSON file.".format(policy_file))
-        # TODO: Add JSON schema and validate file against it, return detailed error message
+        self._engine = None
+        self._rule_file = rule_file
         self._policy_file = policy_file
 
-    def eval_query(self, query):
+    def eval_query(self, input_dict, query):
         """
-        It is expected that add_policy and add_data have already been called, before calling eval_query.
+        Input_dict should be type dict.
+        Expected format:
+        {
+            "extensions": {
+                "<extension_name_1>": {
+                    "signingInfo": {
+                        "extensionSigned": <true, false>
+                    }
+                },
+                "<extension_name_2>": {
+                    "signingInfo": {
+                        "extensionSigned": <true, false>
+                    }
+                }, ...
+        }
 
         In this method, we call the Regorus executable via run_command to query the policy engine.
 
@@ -132,21 +108,10 @@ class Engine:
                 ex: "Error: the following required arguments were not provided: <QUERY>"
                 ex: "Error: Unexpected argument <arg> found."
         """
-
-        missing_files = []
-        if self._rule_file is None:
-            missing_files.append("rule file")
-        if self._input_json is None:
-            missing_files.append("input")
-        if self._policy_file is None:
-            missing_files.append("policy file")
-        if missing_files:
-            raise PolicyError("Missing {0} to run query.".format(', '.join(missing_files)))
-
-        # Write input JSON to a temp file, because Regorus requires input to be a file path.
+        # Write input_dict to a temp file, because Regorus requires input to be a file path.
         # Tempfile is automatically cleaned up at the end of with block
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as input_file:
-            json.dump(self._input_json, input_file, indent=4)
+            json.dump(input_dict, input_file, indent=4)
             input_file.flush()
 
             regorus_exe = get_regorus_path()

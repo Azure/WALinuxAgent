@@ -20,9 +20,9 @@ from azurelinuxagent.common.version import get_distro
 from azurelinuxagent.common.utils.distro_version import DistroVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.exception import PolicyError
 from azurelinuxagent.common.osutil import get_osutil
 import azurelinuxagent.ga.policy.regorus as regorus
+from azurelinuxagent.ga.policy.regorus import PolicyError
 
 # Define support matrix for Regorus and policy engine feature.
 # Dict in the format: { distro:min_supported_version }
@@ -79,9 +79,7 @@ class PolicyEngine(object):
             raise PolicyError(msg)
 
         try:
-            self._engine = regorus.Engine()
-            self._engine.add_policy(rule_file)
-            self._engine.add_data(policy_file)
+            self._engine = regorus.Engine(rule_file, policy_file)
             self._policy_engine_enabled = True
         except Exception as ex:
             msg = "Failed to initialize Regorus policy engine: '{0}'".format(ex)
@@ -94,16 +92,17 @@ class PolicyEngine(object):
         Log information to console and telemetry.
         """
         if is_success:
-            logger.info("[Policy] " + msg)
+            logger.info(msg)
         else:
-            logger.error("[Policy] " + msg)
+            logger.error(msg)
         if send_event:
             add_event(op=op, message=msg, is_success=is_success)
 
     @staticmethod
     def is_policy_enforcement_enabled():
         """Check whether user has opted into policy enforcement feature"""
-        # TODO: Remove conf flag post private preview and add other checks here.
+        # TODO: The conf flag will be removed post private preview. Before public preview, add checks
+        # according to the planned user experience (TBD).
         return conf.get_extension_policy_enabled()
 
     @staticmethod
@@ -133,9 +132,9 @@ class PolicyEngine(object):
         """This property tracks whether the feature is enabled and Regorus engine has been successfully initialized"""
         return self._policy_engine_enabled
 
-    def evaluate_query(self, input_json, query):
+    def evaluate_query(self, input_dict, query):
         """
-        Expected format for input_json:
+        Input_dict should be a dict. Expected format for input_dict:
         {
             "extensions": {
                 "<extension_name_1>": {
@@ -152,14 +151,21 @@ class PolicyEngine(object):
             raise PolicyError("Policy enforcement is disabled, cannot evaluate query.")
 
         try:
-            self._engine.set_input(input_json)
-            full_result = self._engine.eval_query(query)
-            value = full_result['result'][0]['expressions'][0]['value']
+            full_result = self._engine.eval_query(input_dict, query)
+            if not full_result.get('result') or not isinstance(full_result['result'], list):
+                raise PolicyError("query returned unexpected output with no 'result' list. Please validate rule file.")
+            expressions = full_result['result'][0].get('expressions')
+            if not expressions or not isinstance(expressions, list) or len(expressions) == 0:
+                raise PolicyError("query returned unexpected output with no 'expressions' list.")
+            value = expressions[0].get('value')
+            if not value:
+                raise PolicyError("query returned unexpected output, 'value' not found in 'expressions' list.")
+            if value == {}:
+                raise PolicyError("query returned empty value. Please validate policy file.")
             return value
         except Exception as ex:
             msg = "Failed to evaluate query for Regorus policy engine: '{0}'".format(ex)
             self.log_policy(msg=msg, is_success=False)
             raise PolicyError(msg)
-
 
 # TODO: Implement class ExtensionPolicyEngine with API is_extension_download_allowed(ext_name) that calls evaluate_query.

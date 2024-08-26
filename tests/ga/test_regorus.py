@@ -63,11 +63,8 @@ class TestRegorusEngine(AgentTestCase):
         Eval_query should return the expected output with a valid policy, data, and input file.
         This unit test also tests the valid case for add_policy, add_data, and set_input.
         """
-        engine = Engine()
-        engine.add_policy(self.default_rule_path)
-        engine.add_data(self.default_policy_path)
-        engine.set_input(self.input_json)
-        output = engine.eval_query("data.agent_extension_policy.extensions_to_download")
+        engine = Engine(self.default_policy_path, self.default_rule_path)
+        output = engine.eval_query(self.input_json, "data.agent_extension_policy.extensions_to_download")
         result = output['result'][0]['expressions'][0]['value']
         test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
         ext_info = result.get(test_ext_name)
@@ -76,48 +73,28 @@ class TestRegorusEngine(AgentTestCase):
 
     def test_missing_rule_file_should_raise_exception(self):
         """Exception should be raised when we try to add an invalid file path as rule file."""
-        engine = Engine()
-        with self.assertRaises(IOError, msg="Adding a bad path to rule file should have raised an exception."):
-            fake_path = "/fake/file/path"
-            engine.add_policy(fake_path)
+        engine = Engine("fake_file_path", self.default_policy_path)
+        with self.assertRaises(Exception, msg="Adding a bad path to rule file should have raised an exception."):
+            engine.eval_query(self.input_json, "data")
 
     def test_invalid_rule_file_should_raise_exception(self):
-        """Exception should be raised when we try to add a rule file with invalid contents (JSON instead of Rego)."""
-        engine = Engine()
-        with self.assertRaises(TypeError, msg="Adding a rule file with invalid contents should have raised an exception."):
-            engine.add_policy(self.default_policy_path)
+        """Exception should be raised when we try to add a rule file with invalid contents."""
+        invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
+        with self.assertRaises(Exception, msg="Adding a rule file with invalid contents should have raised an exception."):
+            engine = Engine(self.default_policy_path, invalid_rule)
+            engine.eval_query(self.input_json, "data")
 
     def test_missing_policy_file_should_raise_exception(self):
         """Exception should be raised when we try to add invalid file path."""
-        engine = Engine()
-        fake_path = "/fake/file/path"
-        with self.assertRaises(IOError, msg="Adding a bad path to policy file should have raised an exception."):
-            engine.add_data(fake_path)
+        invalid_policy = os.path.join("agent-extension-data-invalid.json")
+        with self.assertRaises(Exception, msg="Adding a bad path to policy file should have raised an exception."):
+            engine = Engine("fake_file_path", self.default_rule_path)
+            engine.eval_query("data")
 
     def test_invalid_policy_file_should_raise_exception(self):
         """Exception should be raised when we try to add a Rego file as a data file (should be JSON)."""
-        engine = Engine()
-        with self.assertRaises(TypeError, msg="Adding an invalid data file should have raised an exception."):
-            engine.add_data(self.default_rule_path)
-
-    def test_invalid_input_should_raise_exception(self):
-        """Exception should be raised when we try to add a Rego file as input (should be JSON)."""
-        engine = Engine()
-        with self.assertRaises(Exception, msg="Adding an invalid input file should have raised an exception."):
-            engine.set_input(self.default_rule_path)
-
-    def test_should_set_input_with_str(self):
-        """Set input should accept a string type, this shouldn't throw an error."""
-        engine = Engine()
-        input_str = json.dumps(self.input_json)
-        engine.set_input(input_str)
-
-    def test_eval_query_should_raise_invalid_file(self):
-        """Test that error is raised when regorus eval CLI fails."""
-        engine = Engine()
-        with self.assertRaises(Exception, msg="Subprocess failure should have raised an exception."):
-            invalid_rule_file = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
-            engine.add_policy(invalid_rule_file)
-            engine.eval_query("test_query")
-
+        invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
+        with self.assertRaises(Exception, msg="Adding an invalid data file should have raised an exception."):
+            engine = Engine(invalid_policy, self.default_rule_path)
+            engine.eval_query(self.input_json, "data")
 

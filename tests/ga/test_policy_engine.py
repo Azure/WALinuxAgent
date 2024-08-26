@@ -113,9 +113,8 @@ class TestPolicyEngine(AgentTestCase):
         When policy enforcement is disabled, evaluate_query should throw an error.
         """
         engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
-        query = "data.agent_extension_policy.extensions_to_download"
         with self.assertRaises(PolicyError, msg="Should throw error when policy enforcement is disabled."):
-            engine.evaluate_query(self.input_json, query)
+            engine.evaluate_query(self.input_json, "data")
 
     def test_should_throw_error_with_invalid_rule_file(self):
         """
@@ -125,7 +124,9 @@ class TestPolicyEngine(AgentTestCase):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                 with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
                     # pass policy file instead of rule file in init
-                    PolicyEngine(self.default_policy_path, self.default_policy_path)
+                    invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
+                    engine = PolicyEngine(invalid_rule, self.default_policy_path)
+                    engine.evaluate_query(self.input_json, "data")
 
     def test_should_throw_error_with_invalid_policy_file(self):
         """
@@ -133,8 +134,9 @@ class TestPolicyEngine(AgentTestCase):
         """
         with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
             with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
-                    # pass rule instead of policy file in init
-                    PolicyEngine(self.default_rule_path, self.default_rule_path)
+                with self.assertRaises(PolicyError, msg="Should throw error when policy file is incorrectly formatted."):
+                    invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
+                    engine = PolicyEngine(self.default_rule_path, invalid_policy)
+                    engine.evaluate_query(self.input_json, "data")
 
 # TODO: add tests for all combinations of extensions and policy parameters when ExtensionPolicyEngine() class is added
