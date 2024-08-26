@@ -379,36 +379,6 @@ class TestLogCollectorMonitorHandler(AgentTestCase):
                     self.assertEqual(max_recorded_metrics[MetricsCounter.MAX_MEM_USAGE], 30)
                     self.assertEqual(max_recorded_metrics[MetricsCounter.SWAP_MEM_USAGE], 0)
 
-    def test_send_extension_metrics_telemetry(self):
-        with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
-            with patch("azurelinuxagent.common.event.EventLogger.add_metric") as patch_add_metric:
-                metrics = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),
-                              MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", 10.281),
-                              MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 170 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 15 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", 140 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 171 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0)]
-                with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage", return_value=metrics) as patch_poll_resource_usage:
-                    log_collector_monitor_handler.run_and_wait()
-                    self.assertEqual(1, patch_poll_resource_usage.call_count)
-                    self.assertEqual(7, patch_add_metric.call_count)  # Seven metrics being sent.
-
-        with _create_log_collector_monitor_handler(cgroup_version=CgroupVersions.V2) as log_collector_monitor_handler:
-            with patch("azurelinuxagent.common.event.EventLogger.add_metric") as patch_add_metric:
-                metrics = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),
-                              MetricValue("Process", MetricsCounter.THROTTLED_TIME, "service", 10.281),
-                              MetricValue("Memory", MetricsCounter.TOTAL_MEM_USAGE, "service", 170 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.ANON_MEM_USAGE, "service", 15 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.CACHE_MEM_USAGE, "service", 140 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.MAX_MEM_USAGE, "service", 171 * 1024 ** 2),
-                              MetricValue("Memory", MetricsCounter.SWAP_MEM_USAGE, "service", 0),
-                              MetricValue("Memory", MetricsCounter.MEM_THROTTLED, "service", 5)]
-                with patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler._poll_resource_usage", return_value=metrics) as patch_poll_resource_usage:
-                    log_collector_monitor_handler.run_and_wait()
-                    self.assertEqual(1, patch_poll_resource_usage.call_count)
-                    self.assertEqual(8, patch_add_metric.call_count)  # Eight metrics being sent.
-
     def test_verify_log_collector_memory_limit_exceeded(self):
         with _create_log_collector_monitor_handler() as log_collector_monitor_handler:
             cache_exceeded = [MetricValue("Process", MetricsCounter.PROCESSOR_PERCENT_TIME, "service", 4.5),

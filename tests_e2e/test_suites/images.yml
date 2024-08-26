@@ -55,6 +55,19 @@ image-sets:
       - "oracle_610"
       - "rhel_610"
 
+   # These are the distros which have periodic log collector support.
+   log-collector-endorsed:
+      - "centos_82"
+      - "rhel_82"
+      - "ubuntu_1604"
+      - "ubuntu_1804"
+      - "ubuntu_2004"
+      - "ubuntu_2204"
+      - "ubuntu_2204_minimal"
+      - "ubuntu_2204_arm64"
+      - "ubuntu_2404"
+      - "ubuntu_2404_minimal"
+
 #
 # An image can be specified by a string giving its urn, as in
 #

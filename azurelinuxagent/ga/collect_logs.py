@@ -26,7 +26,7 @@ from azurelinuxagent.ga import logcollector, cgroupconfigurator
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.ga.cgroupcontroller import MetricsCounter
-from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation, report_metric
+from azurelinuxagent.common.event import elapsed_milliseconds, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.ga.logcollector import COMPRESSED_ARCHIVE_PATH, GRACEFUL_KILL_ERRCODE
@@ -35,8 +35,6 @@ from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR, AGENT_NAME, CURRENT_VERSION
-
-_INITIAL_LOG_COLLECTION_DELAY = 5 * 60  # Five minutes of delay
 
 
 def get_collect_logs_handler():
@@ -153,7 +151,7 @@ class CollectLogsHandler(ThreadHandlerInterface):
     def daemon(self):
         # Delay the first collector on start up to give short lived VMs (that might be dead before the second 
         # collection has a chance to run) an opportunity to do produce meaningful logs to collect.
-        time.sleep(_INITIAL_LOG_COLLECTION_DELAY)
+        time.sleep(conf.get_log_collector_initial_delay())
 
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()
@@ -289,7 +287,7 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
         self.period = 2  # Log collector monitor runs every 2 secs.
         self.controllers = controllers
         self.max_recorded_metrics = {}
-        self.__log_metrics = conf.get_cgroup_log_metrics()
+        self.__should_log_metrics = conf.get_cgroup_log_metrics()
 
     def run(self):
         self.start()
@@ -319,7 +317,8 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
             while not self.stopped():
                 try:
                     metrics = self._poll_resource_usage()
-                    self._send_telemetry(metrics)
+                    if self.__should_log_metrics:
+                        self._log_metrics(metrics)
                     self._verify_memory_limit(metrics)
                 except Exception as e:
                     logger.error("An error occurred in the log collection monitor thread loop; "
@@ -345,9 +344,9 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
 
         return metrics
 
-    def _send_telemetry(self, metrics):
+    def _log_metrics(self, metrics):
         for metric in metrics:
-            report_metric(metric.category, metric.counter, metric.instance, metric.value, log_event=self.__log_metrics)
+            logger.info("Metric {0}/{1} [{2}] = {3}".format(metric.category, metric.counter, metric.instance, metric.value))
 
     def _verify_memory_limit(self, metrics):
         current_anon_and_swap_usage = 0

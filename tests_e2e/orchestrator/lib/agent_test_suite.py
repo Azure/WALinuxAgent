@@ -802,45 +802,6 @@ class AgentTestSuite(LisaTestSuite):
                     "Error checking agent log",
                     add_exception_stack_trace=True)
 
-            try:
-                message = f"Checking that there were no issues with the log collector on test node {node_name}, starting at {check_log_start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')}"
-                self._lisa_log.info(message)
-                log.info(message)
-
-                output = ssh_client.run_command("check-agent-log_log-collector.py -j")
-                logcollector_records = json.loads(output, object_hook=AgentLogRecord.from_dictionary)
-
-                # If any logcollector records have a timestamp before check_log_start_time, ignore the entire log collector run
-                if len([r for r in logcollector_records if r.timestamp < check_log_start_time]) > 0:
-                    logcollector_records = []
-
-                if len(logcollector_records) == 0:
-                    # If no log collector records, don't create a log or test result.
-                    log.info("There are no issues detected with the log collector")
-                else:
-                    message = f"Detected a log collector run that did not successfully complete on {node_name}"
-                    self._lisa_log.error(message)
-                    log.error("%s:\n\n%s\n", message,'\n'.join(['\t\t' + r.text.replace('\n', '\n\t\t') for r in logcollector_records]))
-                    self._mark_log_as_failed()
-                    success = False
-
-                    self._report_test_result(
-                        test_result_name,
-                        "CheckAgentLog-LogCollector",
-                        TestStatus.FAILED,
-                        start_time,
-                        message=message + ' - Log collector logs:\n' + '\n'.join([r.text for r in logcollector_records]))
-            except:    # pylint: disable=bare-except
-                log.exception("Error checking agent log for log collector issues on %s", node_name)
-                success = False
-                self._report_test_result(
-                    test_result_name,
-                    "CheckAgentLog-LogCollector",
-                    TestStatus.FAILED,
-                    start_time,
-                    "Error checking agent log",
-                    add_exception_stack_trace=True)
-
         return success
 
     def _create_test_context(self,) -> AgentTestContext:

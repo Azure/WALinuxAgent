@@ -53,6 +53,7 @@ Debug.EnableFastTrack = True
 Debug.EnableGAVersioning = True
 Debug.EtpCollectionPeriod = 300
 Debug.FirewallRulesLogPeriod = 86400
+Debug.LogCollectorInitialDelay = 300
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure

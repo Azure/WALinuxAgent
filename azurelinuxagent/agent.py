@@ -253,7 +253,7 @@ class Agent(object):
                 try:
                     metrics_summary = log_collector_monitor.get_max_recorded_metrics()
                     metrics_summary['Total Uncompressed File Size (B)'] = total_uncompressed_size
-                    msg = "Resource usage summary: {0}".format(json.dumps(metrics_summary))
+                    msg = json.dumps(metrics_summary)
                     logger.info(msg)
                     event.add_event(op=event.WALAEventOperation.LogCollection, message=msg, log_event=False)
                 except Exception as e:

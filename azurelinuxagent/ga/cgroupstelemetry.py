@@ -39,7 +39,7 @@ class CGroupsTelemetry(object):
     @staticmethod
     def track_cgroup_controller(cgroup_controller):
         """
-        Adds the given item to the dictionary of tracked cgroup controller
+        Adds the given item to the dictionary of tracked cgroup controllers
         """
         if isinstance(cgroup_controller, _CpuController):
             # set the current cpu usage
