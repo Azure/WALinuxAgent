@@ -54,6 +54,7 @@ variable:
       - publish_hostname
       - recover_network_interface
       - cgroup_v2_disabled
+      - log_collector
 
   #
   # Additional arguments pass to the test suites

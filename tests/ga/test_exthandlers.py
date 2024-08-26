@@ -681,7 +681,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         self.assertGreaterEqual(len(output), 1024)
         self.assertLessEqual(len(output), TELEMETRY_MESSAGE_MAX_LEN)
 
-        mock_format.assert_called_once()
+        self.assertEqual(1, mock_format.call_count, "format_stdout_stderr should be called once")
 
         args, kwargs = mock_format.call_args  # pylint: disable=unused-variable
         stdout, stderr = args
