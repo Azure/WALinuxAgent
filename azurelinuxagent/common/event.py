@@ -683,11 +683,11 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
         * If log_level is provided, the event is logged using the provided logger.LogLevel. The log_event parameter is set to False and the is_success parameter is
           set to False if the log level is ERROR or WARNING, or True otherwise
 
-    See also verbose(), info(), warning(), error()
+    See also info(), warning(), error()
 
     """
     if log_level is not None:
-        logger.log(log_level, "{0}".format(message))
+        logger.log(log_level, "{0}", message)
         log_event = False
         is_success = log_level == logger.LogLevel.WARNING or log_level == logger.LogLevel.ERROR
         message = message if log_level != logger.LogLevel.WARNING else "[WARNING] {0}".format(message)
@@ -704,23 +704,24 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
                            log_event=log_event)
 
 
-def verbose(op, message):
-    """Convenience wrapper over add_event(log_level=logger.LogLevel.VERBOSE...)"""
-    add_event(op=op, message=message, log_level=logger.LogLevel.VERBOSE)
-
-
 def info(op, message):
-    """Convenience wrapper over add_event(log_level=logger.LogLevel.INFO...)"""
+    """
+     Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.INFO...);
+    """
     add_event(op=op, message=message, log_level=logger.LogLevel.INFO)
 
 
 def warning(op, message):
-    """Convenience wrapper over add_event(log_level=logger.LogLevel.WARNING...)"""
+    """
+    Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.WARNING...)
+    """
     add_event(op=op, message=message, log_level=logger.LogLevel.WARNING)
 
 
 def error(op, message):
-    """Convenience wrapper over add_event(log_level=logger.LogLevel.ERROR...)"""
+    """
+    Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.ERROR...)
+    """
     add_event(op=op, message=message, log_level=logger.LogLevel.ERROR)
 
 
