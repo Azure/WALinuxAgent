@@ -16,7 +16,6 @@
 #
 
 import json
-import os
 import tempfile
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.shellutil import CommandError
