@@ -24,8 +24,9 @@ import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.ga.controllermetrics import CpuMetrics, MemoryMetrics
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cpucontroller import _CpuController, CpuControllerV1, CpuControllerV2
+from azurelinuxagent.ga.memorycontroller import MemoryControllerV1, MemoryControllerV2
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
     ExtensionOperationError
@@ -292,7 +293,7 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
             if match is not None:
                 path = match.group('path')
                 controller = match.group('controller')
-                if controller is not None and path is not None and controller in CgroupV1.get_supported_controllers():
+                if controller is not None and path is not None and controller in CgroupV1.get_supported_controller_names():
                     mount_points[controller] = path
         return mount_points
 
@@ -335,7 +336,7 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
             if match is not None:
                 controller = match.group('controller')
                 path = match.group('path').lstrip('/') if match.group('path') != '/' else None
-                if path is not None and controller in CgroupV1.get_supported_controllers():
+                if path is not None and controller in CgroupV1.get_supported_controller_names():
                     conroller_relative_paths[controller] = path
 
         return conroller_relative_paths
@@ -371,7 +372,7 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
                         controller_paths=process_controller_paths)
 
     def log_root_paths(self):
-        for controller in CgroupV1.get_supported_controllers():
+        for controller in CgroupV1.get_supported_controller_names():
             mount_point = self._cgroup_mountpoints.get(controller)
             if mount_point is None:
                 log_cgroup_info("The {0} controller is not mounted".format(controller), send_event=False)
@@ -402,14 +403,14 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
 
         log_cgroup_info("Started extension in unit '{0}'".format(scope_name), send_event=False)
 
-        cpu_metrics = None
+        cpu_controller = None
         try:
             cgroup_relative_path = os.path.join('azure.slice/azure-vmextensions.slice', extension_slice_name)
             cgroup = self.get_cgroup_from_relative_path(cgroup_relative_path, extension_name)
-            for metrics in cgroup.get_controller_metrics():
-                if isinstance(metrics, CpuMetrics):
-                    cpu_metrics = metrics
-                CGroupsTelemetry.track_cgroup(metrics)
+            for controller in cgroup.get_controllers():
+                if isinstance(controller, _CpuController):
+                    cpu_controller = controller
+                CGroupsTelemetry.track_cgroup_controller(controller)
 
         except IOError as e:
             if e.errno == 2:  # 'No such file or directory'
@@ -421,7 +422,7 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
         # Wait for process completion or timeout
         try:
             return handle_process_completion(process=process, command=command, timeout=timeout, stdout=stdout,
-                                             stderr=stderr, error_code=error_code, cpu_metrics=cpu_metrics)
+                                             stderr=stderr, error_code=error_code, cpu_controller=cpu_controller)
         except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
@@ -498,7 +499,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
         enabled_controllers_file = os.path.join(root_cgroup_path, 'cgroup.subtree_control')
         if os.path.exists(enabled_controllers_file):
             controllers_enabled_at_root = fileutil.read_file(enabled_controllers_file).rstrip().split()
-            return list(set(controllers_enabled_at_root) & set(CgroupV2.get_supported_controllers()))
+            return list(set(controllers_enabled_at_root) & set(CgroupV2.get_supported_controller_names()))
         return []
 
     @staticmethod
@@ -546,7 +547,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
 
     def log_root_paths(self):
         log_cgroup_info("The root cgroup path is {0}".format(self._root_cgroup_path), send_event=False)
-        for controller in CgroupV2.get_supported_controllers():
+        for controller in CgroupV2.get_supported_controller_names():
             if controller in self._controllers_enabled_at_root:
                 log_cgroup_info("The {0} controller is enabled at the root cgroup".format(controller), send_event=False)
             else:
@@ -564,9 +565,9 @@ class Cgroup(object):
         self._cgroup_name = cgroup_name
 
     @staticmethod
-    def get_supported_controllers():
+    def get_supported_controller_names():
         """
-        Cgroup version specific. Returns a list of the controllers which the agent supports.
+        Cgroup version specific. Returns a list of the controllers which the agent supports as strings.
         """
         raise NotImplementedError()
 
@@ -578,12 +579,12 @@ class Cgroup(object):
         """
         raise NotImplementedError()
 
-    def get_controller_metrics(self, expected_relative_path=None):
+    def get_controllers(self, expected_relative_path=None):
         """
-        Cgroup version specific. Returns a list of the metrics for the agent supported controllers which are
-        mounted/enabled for the cgroup.
+        Cgroup version specific. Returns a list of the agent supported controllers which are mounted/enabled for the cgroup.
 
-        :param expected_relative_path: The expected relative path of the cgroup. If provided, only metrics for controllers at this expected path will be returned.
+        :param expected_relative_path: The expected relative path of the cgroup. If provided, only controllers mounted
+        at this expected path will be returned.
         """
         raise NotImplementedError()
 
@@ -608,7 +609,7 @@ class CgroupV1(Cgroup):
         self._controller_paths = controller_paths
 
     @staticmethod
-    def get_supported_controllers():
+    def get_supported_controller_names():
         return [CgroupV1.CPU_CONTROLLER, CgroupV1.MEMORY_CONTROLLER]
 
     def check_in_expected_slice(self, expected_slice):
@@ -620,39 +621,39 @@ class CgroupV1(Cgroup):
 
         return in_expected_slice
 
-    def get_controller_metrics(self, expected_relative_path=None):
-        metrics = []
+    def get_controllers(self, expected_relative_path=None):
+        controllers = []
 
-        for controller in self.get_supported_controllers():
-            controller_metrics = None
-            controller_path = self._controller_paths.get(controller)
-            controller_mountpoint = self._controller_mountpoints.get(controller)
+        for supported_controller_name in self.get_supported_controller_names():
+            controller = None
+            controller_path = self._controller_paths.get(supported_controller_name)
+            controller_mountpoint = self._controller_mountpoints.get(supported_controller_name)
 
             if controller_mountpoint is None:
-                log_cgroup_warning("{0} controller is not mounted; will not track metrics".format(controller), send_event=False)
+                log_cgroup_warning("{0} controller is not mounted; will not track".format(supported_controller_name), send_event=False)
                 continue
 
             if controller_path is None:
-                log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track metrics".format(controller, self._cgroup_name), send_event=False)
+                log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track".format(supported_controller_name, self._cgroup_name), send_event=False)
                 continue
 
             if expected_relative_path is not None:
                 expected_path = os.path.join(controller_mountpoint, expected_relative_path)
                 if controller_path != expected_path:
-                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track metrics. Actual cgroup path:[{2}] Expected:[{3}]".format(controller, self._cgroup_name, controller_path, expected_path), send_event=False)
+                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track. Actual cgroup path:[{2}] Expected:[{3}]".format(supported_controller_name, self._cgroup_name, controller_path, expected_path), send_event=False)
                     continue
 
-            if controller == self.CPU_CONTROLLER:
-                controller_metrics = CpuMetrics(self._cgroup_name, controller_path)
-            elif controller == self.MEMORY_CONTROLLER:
-                controller_metrics = MemoryMetrics(self._cgroup_name, controller_path)
+            if supported_controller_name == self.CPU_CONTROLLER:
+                controller = CpuControllerV1(self._cgroup_name, controller_path)
+            elif supported_controller_name == self.MEMORY_CONTROLLER:
+                controller = MemoryControllerV1(self._cgroup_name, controller_path)
 
-            if controller_metrics is not None:
-                msg = "{0} metrics for cgroup: {1}".format(controller, controller_metrics)
+            if controller is not None:
+                msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
                 log_cgroup_info(msg, send_event=False)
-                metrics.append(controller_metrics)
+                controllers.append(controller)
 
-        return metrics
+        return controllers
 
     def get_controller_procs_path(self, controller):
         controller_path = self._controller_paths.get(controller)
@@ -687,7 +688,7 @@ class CgroupV2(Cgroup):
         self._enabled_controllers = enabled_controllers
 
     @staticmethod
-    def get_supported_controllers():
+    def get_supported_controller_names():
         return [CgroupV2.CPU_CONTROLLER, CgroupV2.MEMORY_CONTROLLER]
 
     def check_in_expected_slice(self, expected_slice):
@@ -697,9 +698,41 @@ class CgroupV2(Cgroup):
 
         return True
 
-    def get_controller_metrics(self, expected_relative_path=None):
-        # TODO - Implement controller metrics for cgroup v2
-        raise NotImplementedError()
+    def get_controllers(self, expected_relative_path=None):
+        controllers = []
+
+        for supported_controller_name in self.get_supported_controller_names():
+            controller = None
+
+            if supported_controller_name not in self._enabled_controllers:
+                log_cgroup_warning("{0} controller is not enabled; will not track".format(supported_controller_name),
+                                   send_event=False)
+                continue
+
+            if self._cgroup_path == "":
+                log_cgroup_warning("Cgroup path for {0} cannot be determined; will not track".format(self._cgroup_name),
+                                   send_event=False)
+                continue
+
+            if expected_relative_path is not None:
+                expected_path = os.path.join(self._root_cgroup_path, expected_relative_path)
+                if self._cgroup_path != expected_path:
+                    log_cgroup_warning(
+                        "The {0} cgroup is not mounted at the expected path; will not track. Actual cgroup path:[{1}] Expected:[{2}]".format(
+                            self._cgroup_name, self._cgroup_path, expected_path), send_event=False)
+                    continue
+
+            if supported_controller_name == self.CPU_CONTROLLER:
+                controller = CpuControllerV2(self._cgroup_name, self._cgroup_path)
+            elif supported_controller_name == self.MEMORY_CONTROLLER:
+                controller = MemoryControllerV2(self._cgroup_name, self._cgroup_path)
+
+            if controller is not None:
+                msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
+                log_cgroup_info(msg, send_event=False)
+                controllers.append(controller)
+
+        return controllers
 
     def get_procs_path(self):
         if self._cgroup_path != "":
