@@ -26,10 +26,11 @@ from azurelinuxagent.common.exception import AgentError
 def get_regorus_path():
     """
     Returns path to Regorus executable. The executable is not yet officially released as part of the agent package.
-    After release, executable will be placed at /var/lib/waagent/WALinuxAgent-x.x.x.x/bin/regorus.
-    Currently, the executable is copied into the agent directory for unit testing, and this method is mocked.
+    Currently, the executable is copied into the agent directory for unit testing.
     """
-    regorus_exe = os.path.join(os.getcwd(), "bin", "regorus")
+    # TODO: update the logic to get regorus path once executable is released as part of agent package
+    # This method is currently mocked for unit tests.
+    regorus_exe = ""
     return regorus_exe
 
 
@@ -37,6 +38,7 @@ class PolicyError(AgentError):
     """
     Error raised during agent policy enforcement.
     """
+    # TODO: split into two error classes for internal/dev errors and user errors.
 
 
 class Engine:
@@ -124,8 +126,10 @@ class Engine:
                 code = ex.returncode
                 if code == 1:
                     msg = "file error when using policy engine. {0}".format(ex)
+                    # TODO: surface as a user error with clear instructions for fixing
                 elif code == 2:
                     msg = "incorrect parameters passed to policy engine. {0}".format(ex)
+                    # TODO: log this as an internal/developer error and include debug information
                 else:
                     msg = "error when using policy engine. {0}".format(ex)
                 raise PolicyError(msg=msg)

@@ -73,13 +73,13 @@ class PolicyEngine(object):
             return  # policy_engine_enabled is not set to True
 
         if not self.is_policy_enforcement_supported():
-            # TODO: Update this error message when conf flag is removed post private preview.
             msg = "Attempted to enable policy enforcement, but feature is not supported on this platform."
             self.log_policy(msg=msg)
+            # TODO: surface as a user error with clear instructions for fixing
             raise PolicyError(msg)
 
         try:
-            self._engine = regorus.Engine(rule_file, policy_file)
+            self._engine = regorus.Engine(policy_file=policy_file, rule_file=rule_file)
             self._policy_engine_enabled = True
         except Exception as ex:
             msg = "Failed to initialize Regorus policy engine: '{0}'".format(ex)
@@ -162,6 +162,7 @@ class PolicyEngine(object):
                 raise PolicyError("query returned unexpected output, 'value' not found in 'expressions' list.")
             if value == {}:
                 raise PolicyError("query returned empty value. Please validate policy file.")
+                # TODO: surface as a user error with clear instructions for fixing
             return value
         except Exception as ex:
             msg = "Failed to evaluate query for Regorus policy engine: '{0}'".format(ex)

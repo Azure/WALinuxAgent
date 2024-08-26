@@ -88,8 +88,8 @@ class TestRegorusEngine(AgentTestCase):
         """Exception should be raised when we try to add invalid file path."""
         invalid_policy = os.path.join("agent-extension-data-invalid.json")
         with self.assertRaises(Exception, msg="Adding a bad path to policy file should have raised an exception."):
-            engine = Engine("fake_file_path", self.default_rule_path)
-            engine.eval_query("data")
+            engine = Engine(invalid_policy, self.default_rule_path)
+            engine.eval_query(self.input_json, "data")
 
     def test_invalid_policy_file_should_raise_exception(self):
         """Exception should be raised when we try to add a Rego file as a data file (should be JSON)."""
