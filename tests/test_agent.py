@@ -298,7 +298,7 @@ class TestAgent(AgentTestCase):
                     agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                     agent.collect_logs(is_full_mode=True)
 
-                    mock_log_collector.assert_called_once()
+                    self.assertEqual(1, mock_log_collector.call_count, "LogCollector should be called once")
 
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
@@ -458,11 +458,11 @@ class TestAgent(AgentTestCase):
 
     @patch("azurelinuxagent.agent.LogCollector")
     @patch("azurelinuxagent.ga.collect_logs.LogCollectorMonitorHandler.get_max_recorded_metrics")
-    def test_collect_log_should_output_resource_usage_summary(self, mock_get_metrics_summary, mock_log_collector):
+    def test_collect_log_should_output_resource_usage_summary(self, mock_get_max_recorded_metrics, mock_log_collector):
         try:
             CollectLogsHandler.enable_monitor_cgroups_check()
             mock_log_collector.return_value.collect_logs_and_get_archive.return_value = (Mock(), Mock())  # LogCollector.collect_logs_and_get_archive returns a tuple
-            mock_get_metrics_summary.return_value = "metric summary"
+            mock_get_max_recorded_metrics.return_value = {}
 
             # Mock cgroup so process is in the log collector slice
             def mock_cgroup(*args, **kwargs):  # pylint: disable=W0613
@@ -484,8 +484,8 @@ class TestAgent(AgentTestCase):
                     agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                     agent.collect_logs(is_full_mode=True)
 
-                    mock_log_collector.assert_called_once()
-                    mock_get_metrics_summary.assert_called_once()
+                    self.assertEqual(1, mock_log_collector.call_count, "LogCollector should be called once")
+                    self.assertEqual(1, mock_get_max_recorded_metrics.call_count, "get_max_recorded_metrics should be called once")
 
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
