@@ -269,7 +269,7 @@ class TestAgent(AgentTestCase):
                     agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
                     agent.collect_logs(is_full_mode=True)
 
-                    mock_log_collector.assert_called_once()
+                    self.assertEqual(1, mock_log_collector.call_count, "LogCollector should be called once")
 
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()

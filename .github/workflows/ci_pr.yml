@@ -88,6 +88,7 @@ jobs:
       matrix:
         include:
           - python-version: "3.5"
+            # workaround for issue "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:728)" on Python 3.5
             pip_trusted_host: "pypi.python.org pypi.org files.pythonhosted.org"
           - python-version: "3.6"
           - python-version: "3.7"
