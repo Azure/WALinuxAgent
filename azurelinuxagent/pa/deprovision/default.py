@@ -162,7 +162,8 @@ class DeprovisionHandler(object):
             'published_hostname',
             'fast_track.json',
             'initial_goal_state',
-            'rsm_update.json'
+            'waagent_rsm_update',
+            'waagent_initial_update'
         ]
         known_files_glob = [
             'Extensions.*.xml',

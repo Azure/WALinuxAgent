@@ -391,7 +391,7 @@ class UpdateHandler(object):
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
                 self._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
-                self._send_heartbeat_telemetry()
+                self._send_heartbeat_telemetry(agent_update_handler)
                 self._check_agent_memory_usage()
                 time.sleep(self._goal_state_period)
 
@@ -991,22 +991,23 @@ class UpdateHandler(object):
 
         return pid_files, pid_file
 
-    def _send_heartbeat_telemetry(self):
+    def _send_heartbeat_telemetry(self, agent_update_handler):
         if self._last_telemetry_heartbeat is None:
             self._last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
 
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
-            auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+            auto_update_enabled = 1 if conf.get_auto_update_to_latest_version() else 0
+            update_mode = agent_update_handler.get_current_update_mode()
 
-            telemetry_msg = "{0};{1};{2};{3}".format(
-                self._heartbeat_counter, self._heartbeat_id, self._heartbeat_update_goal_state_error_count, auto_update_enabled)
-            debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1}; UpdateGSErrors: {2};AutoUpdate: {3}]".format(
-                self._heartbeat_counter, self._heartbeat_id, self._heartbeat_update_goal_state_error_count, auto_update_enabled)
+            # Note: When we add new values to the heartbeat message, please add a semicolon at the end of the value.
+            # This helps to parse the message easily in kusto queries with regex
+            heartbeat_msg = "HeartbeatCounter: {0};HeartbeatId: {1};UpdateGSErrors: {2};AutoUpdate: {3};UpdateMode: {4};".format(
+            	self._heartbeat_counter, self._heartbeat_id, self._heartbeat_update_goal_state_error_count, auto_update_enabled, update_mode)
 
             # Write Heartbeat events/logs
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                      message=telemetry_msg, log_event=False)
-            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
+                      message=heartbeat_msg, log_event=False)
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent [DEBUG {1}]", CURRENT_AGENT, heartbeat_msg)
 
             # Update/Reset the counters
             self._heartbeat_counter += 1
