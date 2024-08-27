@@ -9,5 +9,4 @@ tests:
   - "agent_wait_for_cloud_init/agent_wait_for_cloud_init.py"
 template: "agent_wait_for_cloud_init/add_cloud_init_script.py"
 install_test_agent: false
-# Dummy image, since the parameter is required. The actual image needs to be passed as a parameter to the runbook.
-images: "ubuntu_2204"
+images: "gallery/wait-cloud-init/1.0.2"
