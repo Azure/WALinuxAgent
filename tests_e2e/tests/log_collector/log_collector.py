@@ -46,10 +46,10 @@ class LogCollector(AgentVmTest):
 
         # Get any agent logs between log collector start and finish
         try:
-            output = ssh_client.run_command(
-                "sed -n " +
-                "'/INFO CollectLogsHandler ExtHandler Starting log collection/, /INFO CollectLogsHandler ExtHandler Successfully uploaded logs/p' " +
-                "/var/log/waagent.log").rstrip().splitlines()
+            # We match the first full log collector run in the agent log (this test just needs to validate any full log collector run, does not matter if it's the first or last)
+            lc_start_pattern = "INFO CollectLogsHandler ExtHandler Starting log collection"
+            lc_end_pattern = "INFO CollectLogsHandler ExtHandler Successfully uploaded logs"
+            output = ssh_client.run_command("sed -n '/{0}/,/{1}/{{p;/{1}/q}}' /var/log/waagent.log".format(lc_start_pattern, lc_end_pattern)).rstrip().splitlines()
         except Exception as e:
             raise Exception("Unable to get log collector logs from waagent.log: {0}".format(e))
 
