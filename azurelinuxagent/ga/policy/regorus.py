@@ -72,10 +72,10 @@ class Engine:
         self._rule_file = rule_file
         self._policy_file = policy_file
 
-    def eval_query(self, input_dict, query):
+    def eval_query(self, input_to_check, query):
         """
-        Input_dict should be type dict.
-        Expected format:
+        Input_to_check should be type dict.
+        Example format for extension policy:
         {
             "extensions": {
                 "<extension_name_1>": {
@@ -109,10 +109,10 @@ class Engine:
                 ex: "Error: the following required arguments were not provided: <QUERY>"
                 ex: "Error: Unexpected argument <arg> found."
         """
-        # Write input_dict to a temp file, because Regorus requires input to be a file path.
+        # Write input_to_check to a temp file, because Regorus requires input to be a file path.
         # Tempfile is automatically cleaned up at the end of with block
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as input_file:
-            json.dump(input_dict, input_file, indent=4)
+            json.dump(input_to_check, input_file, indent=4)
             input_file.flush()
 
             regorus_exe = get_regorus_path()

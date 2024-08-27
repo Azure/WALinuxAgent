@@ -16,7 +16,7 @@
 #
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.version import get_distro
+from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME
 from azurelinuxagent.common.utils.distro_version import DistroVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
@@ -72,11 +72,8 @@ class PolicyEngine(object):
             self.log_policy(msg="Policy enforcement is not enabled.")
             return  # policy_engine_enabled is not set to True
 
-        if not self.is_policy_enforcement_supported():
-            msg = "Attempted to enable policy enforcement, but feature is not supported on this platform."
-            self.log_policy(msg=msg)
-            # TODO: surface as a user error with clear instructions for fixing
-            raise PolicyError(msg)
+        # If unsupported, this call will raise an error
+        self.check_policy_enforcement_supported()
 
         try:
             self._engine = regorus.Engine(policy_file=policy_file, rule_file=rule_file)
@@ -106,35 +103,39 @@ class PolicyEngine(object):
         return conf.get_extension_policy_enabled()
 
     @staticmethod
-    def is_policy_enforcement_supported():
-        """Check that both platform architecture and distro/version are supported."""
+    def check_policy_enforcement_supported():
+        """
+        Check that both platform architecture and distro/version are supported.
+        If supported, do nothing.
+        If not supported, raise PolicyError with user-friendly error message.
+        """
         osutil = get_osutil()
         arch = osutil.get_vm_arch()
+        # TODO: surface as a user error with clear instructions for fixing
+        msg = "Attempted to enable policy enforcement, but feature is not supported on "
         if arch not in POLICY_SUPPORTED_ARCHITECTURE:
-            return False
-        __distro__ = get_distro()
-        DISTRO_NAME = __distro__[0]
-        DISTRO_VERSION = __distro__[1]
-        try:
-            distro_version = DistroVersion(DISTRO_VERSION)
-        except ValueError:
-            raise ValueError
-
-        # Check if the distro is in the support matrix and if the version is supported
-        if DISTRO_NAME in POLICY_SUPPORTED_DISTROS_MIN_VERSIONS:
-            min_version = POLICY_SUPPORTED_DISTROS_MIN_VERSIONS[DISTRO_NAME]
-            return distro_version >= min_version
+            msg += " architecture " + str(arch)
+        elif DISTRO_NAME not in POLICY_SUPPORTED_DISTROS_MIN_VERSIONS:
+            msg += " distro " + str(DISTRO_NAME)
         else:
-            return False
+            min_version = POLICY_SUPPORTED_DISTROS_MIN_VERSIONS.get(DISTRO_NAME)
+            if DISTRO_VERSION < min_version:
+                msg += " distro " + DISTRO_NAME + " " + DISTRO_VERSION + ". Policy is only supported on version " + \
+                        str(min_version) + " and above."
+            else:
+                return  # do nothing if platform is supported
+        raise PolicyError(msg)
+
 
     @property
     def policy_engine_enabled(self):
         """This property tracks whether the feature is enabled and Regorus engine has been successfully initialized"""
         return self._policy_engine_enabled
 
-    def evaluate_query(self, input_dict, query):
+    def evaluate_query(self, input_to_check, query):
         """
-        Input_dict should be a dict. Expected format for input_dict:
+        Input_to_check is the input we want to check against the policy engine (ex: extensions we want to install).
+        Input_to_check should be a dict. Expected format:
         {
             "extensions": {
                 "<extension_name_1>": {
@@ -144,14 +145,15 @@ class PolicyEngine(object):
                 }, ...
         }
 
-        Expected format for query: "data.agent_extension_policy.extensions_to_download"
+        The query parameter specifies the value we want to retrieve from the policy engine.
+        Example format for query: "data.agent_extension_policy.extensions_to_download"
         """
         # This method should never be called if policy is not enabled, this would be a developer error.
         if not self.policy_engine_enabled:
             raise PolicyError("Policy enforcement is disabled, cannot evaluate query.")
 
         try:
-            full_result = self._engine.eval_query(input_dict, query)
+            full_result = self._engine.eval_query(input_to_check, query)
             if not full_result.get('result') or not isinstance(full_result['result'], list):
                 raise PolicyError("query returned unexpected output with no 'result' list. Please validate rule file.")
             expressions = full_result['result'][0].get('expressions')

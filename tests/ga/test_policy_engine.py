@@ -61,12 +61,11 @@ class TestPolicyEngine(AgentTestCase):
     def test_policy_should_be_enabled_on_supported_distro(self):
         """Policy should be enabled on all supported distros."""
         for distro_name, version in POLICY_SUPPORTED_DISTROS_MIN_VERSIONS.items():
-            with patch('azurelinuxagent.ga.policy.policy_engine.get_distro',
-                       return_value=[distro_name, str(version)]):
-                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
-                           return_value=True):
-                    engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
-                    self.assertTrue(engine.policy_engine_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
+            with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new=distro_name):
+                with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new=version):
+                    with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                        engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
+                        self.assertTrue(engine.policy_engine_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
 
     def test_should_raise_exception_on_unsupported_distro(self):
         """Policy should NOT be enabled on unsupported like RHEL."""
@@ -75,12 +74,12 @@ class TestPolicyEngine(AgentTestCase):
             "mariner": "1"
         }
         for distro_name, version in test_matrix.items():
-            with patch('azurelinuxagent.ga.policy.policy_engine.get_distro',
-                       return_value=[distro_name, str(version)]):
-                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                    with self.assertRaises(Exception,
+            with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new=distro_name):
+                with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new=version):
+                    with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                        with self.assertRaises(Exception,
                                            msg="Policy should not be enabled on unsupported distro {0} {1}".format(distro_name, version)):
-                        PolicyEngine(self.default_rule_path, self.default_policy_path)
+                            PolicyEngine(self.default_rule_path, self.default_policy_path)
 
     def test_should_raise_exception_on_unsupported_architecture(self):
         """Policy should NOT be enabled on ARM64."""
@@ -98,15 +97,16 @@ class TestPolicyEngine(AgentTestCase):
         Should be able to add rule file, data file, input, and evaluate query without an error.
         This tests the happy path for add_policy, add_data, and set_input as well.
         """
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
-                query = "data.agent_extension_policy.extensions_to_download"
-                result = engine.evaluate_query(self.input_json, query)
-                test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-                self.assertIsNotNone(result.get(test_ext_name), msg="Query should not have returned empty dict.")
-                self.assertTrue(result.get(test_ext_name).get('downloadAllowed'),
-                                msg="Query should have returned that extension is allowed.")
+        with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new='ubuntu'):
+            with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new='20.04'):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                    engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
+                    query = "data.agent_extension_policy.extensions_to_download"
+                    result = engine.evaluate_query(self.input_json, query)
+                    test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+                    self.assertIsNotNone(result.get(test_ext_name), msg="Query should not have returned empty dict.")
+                    self.assertTrue(result.get(test_ext_name).get('downloadAllowed'),
+                                    msg="Query should have returned that extension is allowed.")
 
     def test_eval_query_should_throw_error_when_disabled(self):
         """
@@ -120,23 +120,25 @@ class TestPolicyEngine(AgentTestCase):
         """
         Initialize policy engine with invalid rule file, should throw error.
         """
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
-                    # pass policy file instead of rule file in init
-                    invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
-                    engine = PolicyEngine(invalid_rule, self.default_policy_path)
-                    engine.evaluate_query(self.input_json, "data")
+        with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new='ubuntu'):
+            with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new='20.04'):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                    with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
+                        # pass policy file instead of rule file in init
+                        invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
+                        engine = PolicyEngine(invalid_rule, self.default_policy_path)
+                        engine.evaluate_query(self.input_json, "data")
 
     def test_should_throw_error_with_invalid_policy_file(self):
         """
         Initialize policy engine with invalid policy file, should throw error.
         """
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_distro', return_value=['ubuntu', '16.04']):
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with self.assertRaises(PolicyError, msg="Should throw error when policy file is incorrectly formatted."):
-                    invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
-                    engine = PolicyEngine(self.default_rule_path, invalid_policy)
-                    engine.evaluate_query(self.input_json, "data")
+        with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new='ubuntu'):
+            with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new='20.04'):
+                with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
+                    with self.assertRaises(PolicyError, msg="Should throw error when policy file is incorrectly formatted."):
+                        invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
+                        engine = PolicyEngine(self.default_rule_path, invalid_policy)
+                        engine.evaluate_query(self.input_json, "data")
 
 # TODO: add tests for all combinations of extensions and policy parameters when ExtensionPolicyEngine() class is added
