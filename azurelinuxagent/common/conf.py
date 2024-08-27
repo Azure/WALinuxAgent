@@ -147,6 +147,7 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
+    "Debug.EnableCgroupV2ResourceLimiting": False,
     "Debug.EnableExtensionPolicy": False
 }
 

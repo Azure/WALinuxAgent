@@ -21,7 +21,7 @@ import shutil
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, POLICY_SUPPORTED_DISTROS_MIN_VERSIONS, PolicyError
-from tests.lib.tools import patch, data_dir, test_dir, MagicMock
+from tests.lib.tools import patch, data_dir, test_dir
 
 
 class TestPolicyEngine(AgentTestCase):
