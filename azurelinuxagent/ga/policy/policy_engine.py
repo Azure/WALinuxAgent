@@ -154,16 +154,17 @@ class PolicyEngine(object):
 
         try:
             full_result = self._engine.eval_query(input_to_check, query)
+            debug_info = "Rule file is located at '{0}'. \nFull query output: {1}".format(self._engine.rule_file, full_result)
             if not full_result.get('result') or not isinstance(full_result['result'], list):
-                raise PolicyError("query returned unexpected output with no 'result' list. Please validate rule file.")
+                raise PolicyError("query returned unexpected output with no 'result' list. Please validate rule file. {0}".format(debug_info))
             expressions = full_result['result'][0].get('expressions')
             if not expressions or not isinstance(expressions, list) or len(expressions) == 0:
-                raise PolicyError("query returned unexpected output with no 'expressions' list.")
+                raise PolicyError("query returned unexpected output with no 'expressions' list. {0}".format(debug_info))
             value = expressions[0].get('value')
             if not value:
-                raise PolicyError("query returned unexpected output, 'value' not found in 'expressions' list.")
+                raise PolicyError("query returned unexpected output, 'value' not found in 'expressions' list.{0}".format(debug_info))
             if value == {}:
-                raise PolicyError("query returned empty value. Please validate policy file.")
+                raise PolicyError("query returned empty value. Please validate policy file '{0}'.".format(self._engine.policy_file))
                 # TODO: surface as a user error with clear instructions for fixing
             return value
         except Exception as ex:

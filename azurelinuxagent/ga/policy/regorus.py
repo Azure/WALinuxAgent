@@ -72,6 +72,15 @@ class Engine:
         self._rule_file = rule_file
         self._policy_file = policy_file
 
+
+    @property
+    def policy_file(self):
+        return self._policy_file
+    
+    @property
+    def rule_file(self):
+        return self._rule_file
+
     def eval_query(self, input_to_check, query):
         """
         Input_to_check should be type dict.
