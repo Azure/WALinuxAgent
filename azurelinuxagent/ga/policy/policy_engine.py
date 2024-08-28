@@ -70,7 +70,7 @@ class PolicyEngine(object):
         self._engine = None
         if not self.is_policy_enforcement_enabled():
             self._log_policy(msg="Policy enforcement is not enabled.")
-            return  # policy_engine_enabled is not set to True
+            return
 
         # If unsupported, this call will raise an error
         self._check_policy_enforcement_supported()
@@ -92,7 +92,8 @@ class PolicyEngine(object):
     def is_policy_enforcement_enabled():
         """
         Check whether user has opted into policy enforcement feature.
-        Caller function should check this before performing any operations."""
+        Caller function should check this before performing any operations.
+        """
         # TODO: The conf flag will be removed post private preview. Before public preview, add checks
         # according to the planned user experience (TBD).
         return conf.get_extension_policy_enabled()
@@ -154,9 +155,10 @@ class PolicyEngine(object):
                 raise PolicyError("query returned unexpected output with no 'expressions' list. {0}".format(debug_info))
             value = expressions[0].get('value')
             if value is None:
-                raise PolicyError("query returned unexpected output, 'value' not found in 'expressions' list.{0}".format(debug_info))
+                raise PolicyError("query returned unexpected output, 'value' not found in 'expressions' list. {0}".format(debug_info))
             if value == {}:
-                raise PolicyError("query returned expected output format, but value is empty. Please validate policy file '{0}'.".format(self._engine.policy_file))
+                raise PolicyError("query returned expected output format, but value is empty. Please validate policy file '{0}'. '{1}"
+                                  .format(self._engine.policy_file, debug_info))
                 # TODO: surface as a user error with clear instructions for fixing
             return value
         except Exception as ex:
