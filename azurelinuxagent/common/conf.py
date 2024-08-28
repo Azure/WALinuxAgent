@@ -147,7 +147,8 @@ __SWITCH_OPTIONS__ = {
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
     "Debug.EnableGAVersioning": True,
-    "Debug.EnableCgroupV2ResourceLimiting": False
+    "Debug.EnableCgroupV2ResourceLimiting": False,
+    "Debug.EnableExtensionPolicy": False
 }
 
 
@@ -683,7 +684,15 @@ def get_firewall_rules_log_period(conf=__conf__):
     """
     return conf.get_int("Debug.FirewallRulesLogPeriod", 86400)
 
+  
+def get_extension_policy_enabled(conf=__conf__):
+    """
+    Determine whether extension policy is enabled. If true, policy will be enforced before installing any extensions.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableExtensionPolicy", False)
 
+  
 def get_enable_cgroup_v2_resource_limiting(conf=__conf__):
     """
     If True, the agent will enable resource monitoring and enforcement for the log collector on machines using cgroup v2.
