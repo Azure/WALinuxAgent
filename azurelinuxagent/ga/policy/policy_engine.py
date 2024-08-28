@@ -37,14 +37,15 @@ POLICY_SUPPORTED_ARCHITECTURE = ['x86_64']
 
 class PolicyEngine(object):
     """
-    Implements policy engine API. Class will always be initialized, but if the Regorus import fails,
-    all methods will be no-ops.
-
-    If any errors are thrown in regorus.py, they will be caught and handled here. add_policy, add_data,
-    and set_input will be no-ops, eval_query will return an empty dict
+    Implements base policy engine API.
+    If any errors are thrown in regorus.py, they will be caught and re-raised here.
+    The caller will be responsible for handling errors.
     """
     def __init__(self, rule_file, policy_file):
         """
+        Constructor checks that policy enforcement should be enabled, and then sets up the
+        Regorus policy engine (add rule and policy file).
+
         rule_file: Path to a Rego file that specifies rules for policy behavior.
 
         policy_file: Path to a JSON file that specifies parameters for policy behavior - for example,
@@ -66,25 +67,17 @@ class PolicyEngine(object):
                 }
         }
         """
-        self._policy_engine_enabled = False
         self._engine = None
         if not self.is_policy_enforcement_enabled():
-            self.log_policy(msg="Policy enforcement is not enabled.")
+            self._log_policy(msg="Policy enforcement is not enabled.")
             return  # policy_engine_enabled is not set to True
 
         # If unsupported, this call will raise an error
-        self.check_policy_enforcement_supported()
-
-        try:
-            self._engine = regorus.Engine(policy_file=policy_file, rule_file=rule_file)
-            self._policy_engine_enabled = True
-        except Exception as ex:
-            msg = "Failed to initialize Regorus policy engine: '{0}'".format(ex)
-            self.log_policy(msg=msg)
-            raise PolicyError(msg)
+        self._check_policy_enforcement_supported()
+        self._engine = regorus.Engine(policy_file=policy_file, rule_file=rule_file)
 
     @classmethod
-    def log_policy(cls, msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
+    def _log_policy(cls, msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
         """
         Log information to console and telemetry.
         """
@@ -97,13 +90,15 @@ class PolicyEngine(object):
 
     @staticmethod
     def is_policy_enforcement_enabled():
-        """Check whether user has opted into policy enforcement feature"""
+        """
+        Check whether user has opted into policy enforcement feature.
+        Caller function should check this before performing any operations."""
         # TODO: The conf flag will be removed post private preview. Before public preview, add checks
         # according to the planned user experience (TBD).
         return conf.get_extension_policy_enabled()
 
     @staticmethod
-    def check_policy_enforcement_supported():
+    def _check_policy_enforcement_supported():
         """
         Check that both platform architecture and distro/version are supported.
         If supported, do nothing.
@@ -126,12 +121,6 @@ class PolicyEngine(object):
                 return  # do nothing if platform is supported
         raise PolicyError(msg)
 
-
-    @property
-    def policy_engine_enabled(self):
-        """This property tracks whether the feature is enabled and Regorus engine has been successfully initialized"""
-        return self._policy_engine_enabled
-
     def evaluate_query(self, input_to_check, query):
         """
         Input_to_check is the input we want to check against the policy engine (ex: extensions we want to install).
@@ -149,27 +138,30 @@ class PolicyEngine(object):
         Example format for query: "data.agent_extension_policy.extensions_to_download"
         """
         # This method should never be called if policy is not enabled, this would be a developer error.
-        if not self.policy_engine_enabled:
+        if not self.is_policy_enforcement_enabled():
             raise PolicyError("Policy enforcement is disabled, cannot evaluate query.")
 
         try:
             full_result = self._engine.eval_query(input_to_check, query)
             debug_info = "Rule file is located at '{0}'. \nFull query output: {1}".format(self._engine.rule_file, full_result)
-            if not full_result.get('result') or not isinstance(full_result['result'], list):
+            if full_result is None or full_result == {}:
+                raise PolicyError("query returned empty output. Please validate rule file. {0}".format(debug_info))
+            result = full_result.get('result')
+            if result is None or not isinstance(result, list) or len(result) == 0:
                 raise PolicyError("query returned unexpected output with no 'result' list. Please validate rule file. {0}".format(debug_info))
-            expressions = full_result['result'][0].get('expressions')
-            if not expressions or not isinstance(expressions, list) or len(expressions) == 0:
+            expressions = result[0].get('expressions')
+            if expressions is None or not isinstance(expressions, list) or len(expressions) == 0:
                 raise PolicyError("query returned unexpected output with no 'expressions' list. {0}".format(debug_info))
             value = expressions[0].get('value')
-            if not value:
+            if value is None:
                 raise PolicyError("query returned unexpected output, 'value' not found in 'expressions' list.{0}".format(debug_info))
             if value == {}:
-                raise PolicyError("query returned empty value. Please validate policy file '{0}'.".format(self._engine.policy_file))
+                raise PolicyError("query returned expected output format, but value is empty. Please validate policy file '{0}'.".format(self._engine.policy_file))
                 # TODO: surface as a user error with clear instructions for fixing
             return value
         except Exception as ex:
             msg = "Failed to evaluate query for Regorus policy engine: '{0}'".format(ex)
-            self.log_policy(msg=msg, is_success=False)
+            self._log_policy(msg=msg, is_success=False)
             raise PolicyError(msg)
 
 # TODO: Implement class ExtensionPolicyEngine with API is_extension_download_allowed(ext_name) that calls evaluate_query.

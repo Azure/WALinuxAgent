@@ -34,7 +34,7 @@ class TestPolicyEngine(AgentTestCase):
     @classmethod
     def setUpClass(cls):
 
-        # On a production VM, Regorus will be located in /var/lib/waagent/WALinuxAgent-x.x.x.x/bin. Unit tests
+        # On a production VM, Regorus will be located in the agent package. Unit tests
         # run within the agent directory, so we copy the executable to ga/policy/regorus and patch path.
         # Note: Regorus has not been published officially, so for now, unofficial exe is stored in tests/data/policy.
         regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
@@ -65,10 +65,10 @@ class TestPolicyEngine(AgentTestCase):
                 with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new=version):
                     with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                         engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
-                        self.assertTrue(engine.policy_engine_enabled, "Policy should be enabled on supported distro Ubuntu 16.04.")
+                        self.assertTrue(engine.is_policy_enforcement_enabled(), "Policy should be enabled on supported distro {0} {1}".format(distro_name, version))
 
     def test_should_raise_exception_on_unsupported_distro(self):
-        """Policy should NOT be enabled on unsupported like RHEL."""
+        """Policy should NOT be enabled on unsupported distros."""
         test_matrix = {
             "rhel": "9.0",
             "mariner": "1"
@@ -92,8 +92,7 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_policy_engine_should_evaluate_query(self):
         """
-        Should be able to add rule file, data file, input, and evaluate query without an error.
-        This tests the happy path for add_policy, add_data, and set_input as well.
+        Should be able to initialize policy engine and evaluate query without an error.
         """
         with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new='ubuntu'):
             with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new='20.04'):
@@ -116,7 +115,7 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_should_throw_error_with_invalid_rule_file(self):
         """
-        Initialize policy engine with invalid rule file, should throw error.
+        Evaluate query with invalid rule file, should throw error.
         """
         with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new='ubuntu'):
             with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new='20.04'):
@@ -129,7 +128,7 @@ class TestPolicyEngine(AgentTestCase):
 
     def test_should_throw_error_with_invalid_policy_file(self):
         """
-        Initialize policy engine with invalid policy file, should throw error.
+        Evaluate query with invalid policy file, should throw error.
         """
         with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_NAME', new='ubuntu'):
             with patch('azurelinuxagent.ga.policy.policy_engine.DISTRO_VERSION', new='20.04'):

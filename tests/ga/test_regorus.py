@@ -33,7 +33,7 @@ class TestRegorusEngine(AgentTestCase):
 
     @classmethod
     def setUpClass(cls):
-        # On a production VM, Regorus will be located in /var/lib/waagent/WALinuxAgent-x.x.x.x/bin. Unit tests
+        # On a production VM, Regorus will be located in the agent package. Unit tests
         # run within the agent directory, so we copy the executable to ga/policy/regorus and patch path.
         # Note: Regorus has not been published officially, so for now, unofficial exe is stored in tests/data/policy.s
         regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
@@ -61,7 +61,6 @@ class TestRegorusEngine(AgentTestCase):
     def test_should_evaluate_query_with_valid_params(self):
         """
         Eval_query should return the expected output with a valid policy, data, and input file.
-        This unit test also tests the valid case for add_policy, add_data, and set_input.
         """
         engine = Engine(self.default_policy_path, self.default_rule_path)
         output = engine.eval_query(self.input_json, "data.agent_extension_policy.extensions_to_download")
@@ -72,27 +71,27 @@ class TestRegorusEngine(AgentTestCase):
         self.assertTrue(ext_info.get('downloadAllowed'))
 
     def test_missing_rule_file_should_raise_exception(self):
-        """Exception should be raised when we try to add an invalid file path as rule file."""
+        """Exception should be raised when we eval_query with invalid rule file path."""
         engine = Engine("fake_file_path", self.default_policy_path)
         with self.assertRaises(Exception, msg="Adding a bad path to rule file should have raised an exception."):
             engine.eval_query(self.input_json, "data")
 
     def test_invalid_rule_file_should_raise_exception(self):
-        """Exception should be raised when we try to add a rule file with invalid contents."""
+        """Exception should be raised when we eval_query with invalid rule file contents."""
         invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
         with self.assertRaises(Exception, msg="Adding a rule file with invalid contents should have raised an exception."):
             engine = Engine(self.default_policy_path, invalid_rule)
             engine.eval_query(self.input_json, "data")
 
     def test_missing_policy_file_should_raise_exception(self):
-        """Exception should be raised when we try to add invalid file path."""
+        """Exception should be raised when we eval_query with invalid policy file path."""
         invalid_policy = os.path.join("agent-extension-data-invalid.json")
         with self.assertRaises(Exception, msg="Adding a bad path to policy file should have raised an exception."):
             engine = Engine(invalid_policy, self.default_rule_path)
             engine.eval_query(self.input_json, "data")
 
     def test_invalid_policy_file_should_raise_exception(self):
-        """Exception should be raised when we try to add a Rego file as a data file (should be JSON)."""
+        """Exception should be raised when we eval_query with bad data file contents."""
         invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
         with self.assertRaises(Exception, msg="Adding an invalid data file should have raised an exception."):
             engine = Engine(invalid_policy, self.default_rule_path)

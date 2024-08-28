@@ -685,8 +685,7 @@ def get_firewall_rules_log_period(conf=__conf__):
 
 def get_extension_policy_enabled(conf=__conf__):
     """
-    Determine whether extension policy is enabled. If true, Regorus will be installed on the VM and
-    the policy will be enforced before installing any extensions.
+    Determine whether extension policy is enabled. If true, policy will be enforced before installing any extensions.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_switch("Debug.EnableExtensionPolicy", False)
