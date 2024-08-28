@@ -484,6 +484,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                         self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
 
     def test_goal_state_should_contain_empty_certs_when_it_is_fails_to_decrypt_certs(self):
+        #  This test simulates that scenario by mocking the goal state request is fabric, and it contains incorrect certs(incorrect-certs.xml)
 
         data_file = "wire/incorrect-certs.xml"
 
@@ -506,6 +507,8 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertEqual(1, http_get_handler.certificate_requests, "There should have been exactly 1 requests for the goal state certificates")
 
     def test_it_should_refresh_the_goal_state_when_it_is_fails_to_decrypt_cert(self):
+        # This test simulates that scenario by mocking the certificates request and returning first a set of certificates (incorrect-certs.xml) that will fail while decrypting, and then a
+        # set (certs.xml) that does match with what extensions are needed. The test then ensures that the goal state was refreshed and the correct certificates were fetched.
 
         data_files = [
             "wire/incorrect-certs.xml",
