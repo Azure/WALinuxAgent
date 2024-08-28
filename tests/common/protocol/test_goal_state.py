@@ -483,7 +483,7 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                     if settings.protectedSettings is not None:
                         self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
 
-    def test_it_should_fail_the_goal_state_when_it_is_fails_to_decrypt_certs(self):
+    def test_goal_state_should_contain_empty_certs_when_it_is_fails_to_decrypt_certs(self):
 
         data_file = "wire/incorrect-certs.xml"
 
@@ -496,18 +496,46 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
         http_get_handler.certificate_requests = 0
 
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+            protocol.mock_wire_data.reset_call_counts()
+
+            goal_state = GoalState(protocol.client)
+
+            self.assertEqual(0, len(goal_state.certs.summary), "Cert list should be empty")
+            self.assertEqual(1, http_get_handler.certificate_requests, "There should have been exactly 1 requests for the goal state certificates")
+
+    def test_it_should_refresh_the_goal_state_when_it_is_fails_to_decrypt_cert(self):
+
+        data_files = [
+            "wire/incorrect-certs.xml",
+            "wire/certs.xml"
+        ]
+
+        def http_get_handler(url, *_, **__):
+            if HttpRequestPredicates.is_certificates_request(url):
+                http_get_handler.certificate_requests += 1
+                if http_get_handler.certificate_requests < len(data_files):
+                    data = load_data(data_files[http_get_handler.certificate_requests - 1])
+                    return MockHttpResponse(status=200, body=data.encode('utf-8'))
+            return None
+        http_get_handler.certificate_requests = 0
+
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
             protocol.set_http_handlers(http_get_handler=http_get_handler)
             protocol.mock_wire_data.reset_call_counts()
 
-            with self.assertRaises(GoalStateInconsistentError) as context:
-                _ = GoalState(protocol.client)
-
-            expected_message = "Certificate F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9 needed by Microsoft.Azure.Monitor.AzureMonitorLinuxAgent is missing from the goal state"
-            self.assertIn(expected_message, str(context.exception))
+            goal_state = GoalState(protocol.client)
 
             self.assertEqual(2, protocol.mock_wire_data.call_counts['goalstate'], "There should have been exactly 2 requests for the goal state (original + refresh)")
             self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
+
+            thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
+
+            for extension in goal_state.extensions_goal_state.extensions:
+                for settings in extension.settings:
+                    if settings.protectedSettings is not None:
+                        self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
 
     def test_it_should_raise_when_goal_state_properties_not_initialized(self):
         with GoalStateTestCase._create_protocol_ws_and_hgap_in_sync() as protocol:
