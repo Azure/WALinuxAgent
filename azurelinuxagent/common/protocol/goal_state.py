@@ -212,7 +212,7 @@ class GoalState(object):
         except GoalStateInconsistentError as e:
             message = "Detected an inconsistency in the goal state: {0}".format(ustr(e))
             self.logger.warn(message)
-            add_event(op=WALAEventOperation.GoalState, is_success=False, message=message)
+            add_event(op=WALAEventOperation.GoalState, is_success=False, log_event=False, message=message)
 
             self._update(force_update=True)
 
@@ -503,7 +503,7 @@ class GoalState(object):
             if GoalStateProperties.RemoteAccessInfo & self._goal_state_properties:
                 remote_access_uri = findtext(container, "RemoteAccessInfo")
                 if remote_access_uri is not None:
-                    xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_cert())
+                    xml_text = self._wire_client.fetch_config(remote_access_uri, self._wire_client.get_header_for_remote_access())
                     remote_access = RemoteAccess(xml_text)
                     if self._save_to_history:
                         self._history.save_remote_access(xml_text)

@@ -188,8 +188,8 @@ class TestProtocolUtil(AgentTestCase):
             self.assertFalse(os.path.exists(mds_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_firewall.assert_called_once()
-        protocol_util.osutil.enable_firewall.assert_called_once()
+        self.assertEqual(1, protocol_util.osutil.remove_firewall.call_count, "remove_firewall should be called once")
+        self.assertEqual(1, protocol_util.osutil.enable_firewall.call_count, "enable_firewall should be called once")
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
@@ -234,8 +234,8 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules was reset
-        protocol_util.osutil.remove_firewall.assert_called_once()
-        protocol_util.osutil.enable_firewall.assert_called_once()
+        self.assertEqual(1, protocol_util.osutil.remove_firewall.call_count, "remove_firewall should be called once")
+        self.assertEqual(1, protocol_util.osutil.enable_firewall.call_count, "enable_firewall should be called once")
 
         # Check Protocol File is updated to WireProtocol
         with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:

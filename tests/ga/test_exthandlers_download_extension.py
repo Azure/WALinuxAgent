@@ -127,8 +127,8 @@ class DownloadExtensionTestCase(AgentTestCase):
                 self.ext_handler_instance.download()
 
         # first download attempt should succeed
-        mock_stream.assert_called_once()
-        mock_report_event.assert_called_once()
+        self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
+        self.assertEqual(1, mock_report_event.call_count, "report_event should be called once")
 
         self._assert_download_and_expand_succeeded()
 
@@ -154,7 +154,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             self.ext_handler_instance.download()
 
-        mock_stream.assert_called_once()
+        self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
 
         self._assert_download_and_expand_succeeded()
 
@@ -179,7 +179,8 @@ class DownloadExtensionTestCase(AgentTestCase):
         with DownloadExtensionTestCase.create_mock_stream(stream) as mock_stream:
             self.ext_handler_instance.download()
 
-        mock_stream.assert_called_once()
+        self.assertEqual(1, mock_stream.call_count, "wireserver stream should be called once")
+
         self._assert_download_and_expand_succeeded()
         self.assertEqual(self.ext_handler_instance.get_handler_state(), ExtHandlerState.NotInstalled,
                          "Ensure that the state is maintained for extension HandlerState")

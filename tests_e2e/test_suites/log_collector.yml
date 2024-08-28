@@ -1,0 +1,8 @@
+#
+# This test is used to verify that the log collector logs the expected behavior on periodic runs.
+#
+name: "LogCollector"
+tests:
+  - "log_collector/log_collector.py"
+images:
+  - "random(log-collector-endorsed, 1)"
