@@ -110,7 +110,7 @@ class CryptUtil(object):
                 logger.error("Failed to decrypt {0} (return code: {1})\n[stdout]\n{2}\n[stderr]\n{3}",
                     p7m_file, command_error.returncode, command_error.stdout, command_error.stderr)
                 # If the decryption fails, old version of openssl overwrite the output file(if exist) with empty data while
-                # new version of openssl does not overwrite the output file, So output file may contain old certs data.
+                # new version of openssl(3.2.2) does not overwrite the output file, So output file may contain old certs data.
                 # Correcting the behavior by removing the temporary output files since having empty/no data is makes sense when decryption fails
                 # otherwise we end up processing old certs again.
                 files_to_remove = [p7m_file, pem_file]
