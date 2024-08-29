@@ -49,6 +49,7 @@ Debug.CgroupMonitorExpiryTime = 2022-03-31
 Debug.CgroupMonitorExtensionName = Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
 Debug.EnableAgentMemoryUsageCheck = False
 Debug.EnableCgroupV2ResourceLimiting = False
+Debug.EnableExtensionPolicy = False
 Debug.EnableFastTrack = True
 Debug.EnableGAVersioning = True
 Debug.EtpCollectionPeriod = 300
