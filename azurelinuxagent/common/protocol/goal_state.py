@@ -593,29 +593,32 @@ class Certificates(object):
         thumbprints = {}
         index = 0
         v1_cert_list = []
-        with open(pem_file) as pem:
-            for line in pem.readlines():
-                buf.append(line)
-                if re.match(r'[-]+END.*KEY[-]+', line):
-                    tmp_file = Certificates._write_to_tmp_file(index, 'prv', buf)
-                    pub = cryptutil.get_pubkey_from_prv(tmp_file)
-                    prvs[pub] = tmp_file
-                    buf = []
-                    index += 1
-                elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
-                    tmp_file = Certificates._write_to_tmp_file(index, 'crt', buf)
-                    pub = cryptutil.get_pubkey_from_crt(tmp_file)
-                    thumbprint = cryptutil.get_thumbprint_from_crt(tmp_file)
-                    thumbprints[pub] = thumbprint
-                    # Rename crt with thumbprint as the file name
-                    crt = "{0}.crt".format(thumbprint)
-                    v1_cert_list.append({
-                        "name": None,
-                        "thumbprint": thumbprint
-                    })
-                    os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
-                    buf = []
-                    index += 1
+
+        # Ensure pem_file exists before read the certs data since decrypt_p7m may clear the pem_file wen decryption fails
+        if os.path.exists(pem_file):
+            with open(pem_file) as pem:
+                for line in pem.readlines():
+                    buf.append(line)
+                    if re.match(r'[-]+END.*KEY[-]+', line):
+                        tmp_file = Certificates._write_to_tmp_file(index, 'prv', buf)
+                        pub = cryptutil.get_pubkey_from_prv(tmp_file)
+                        prvs[pub] = tmp_file
+                        buf = []
+                        index += 1
+                    elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
+                        tmp_file = Certificates._write_to_tmp_file(index, 'crt', buf)
+                        pub = cryptutil.get_pubkey_from_crt(tmp_file)
+                        thumbprint = cryptutil.get_thumbprint_from_crt(tmp_file)
+                        thumbprints[pub] = thumbprint
+                        # Rename crt with thumbprint as the file name
+                        crt = "{0}.crt".format(thumbprint)
+                        v1_cert_list.append({
+                            "name": None,
+                            "thumbprint": thumbprint
+                        })
+                        os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
+                        buf = []
+                        index += 1
 
         # Rename prv key with thumbprint as the file name
         for pubkey in prvs:
