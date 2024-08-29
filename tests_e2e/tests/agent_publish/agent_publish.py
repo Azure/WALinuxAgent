@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import time
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -21,11 +20,11 @@ from datetime import datetime
 
 from assertpy import fail
 
+from tests_e2e.tests.lib.agent_setup_helpers import wait_for_agent_to_complete_provisioning
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update
 from tests_e2e.tests.lib.retry import retry_if_false
-from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds, VmExtensionIdentifier
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.ssh_client import SshClient
@@ -51,7 +50,7 @@ class AgentPublishTest(AgentVmTest):
             4. Ensure CSE is working
         """
         # Since we skip install_agent setup, doing it here for the Agent to complete provisioning before starting the test
-        self._wait_for_agent_to_complete_provisioning()
+        wait_for_agent_to_complete_provisioning(self._ssh_client)
         self._get_agent_info()
 
         log.info("Testing rsm update flow....")
@@ -70,22 +69,6 @@ class AgentPublishTest(AgentVmTest):
     def get_ignore_errors_before_timestamp(self) -> datetime:
         timestamp = self._ssh_client.run_command("agent_publish-get_agent_log_record_timestamp.py")
         return datetime.strptime(timestamp.strip(), u'%Y-%m-%d %H:%M:%S.%f')
-
-    def _wait_for_agent_to_complete_provisioning(self):
-        """
-        Wait for the agent to complete provisioning
-        """
-        log.info("Checking for the Agent to complete provisioning before starting the test validation")
-        for _ in range(5):
-            time.sleep(30)
-            try:
-                self._ssh_client.run_command("[ -f /var/lib/waagent/provisioned  ] && exit 0 || exit 1", use_sudo=True)
-                break
-            except CommandError:
-                log.info("Waiting for agent to complete provisioning, will check again after a short delay")
-
-        else:
-            fail("Timeout while waiting for the Agent to complete provisioning")
 
     def _get_published_version(self):
         """
