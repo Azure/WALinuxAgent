@@ -362,6 +362,7 @@ class ExtensionsGoalStateFromVmSettings(ExtensionsGoalState):
                 extension.name = extension_gs['name']
                 extension.version = extension_gs['version']
                 extension.state = extension_gs['state']
+                # extension.encoded_signature should be None if 'encodedSignature' key does not exist for the extension
                 extension.encoded_signature = extension_gs.get('encodedSignature')
                 if extension.state not in ExtensionRequestedState.All:
                     raise Exception('Invalid extension state: {0} ({1})'.format(extension.state, extension.name))
