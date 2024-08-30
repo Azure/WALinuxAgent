@@ -28,7 +28,7 @@ class TestPolicyEngine(AgentTestCase):
     patcher = None
     regorus_dest_path = None    # Location where real regorus executable should be.
     default_policy_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-    default_rule_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
+    default_rule_path = os.path.join(data_dir, 'policy', "agent_policy.rego")
     input_json = None  # Input is stored in a file, and extracted into this variable during class setup.
 
     @classmethod

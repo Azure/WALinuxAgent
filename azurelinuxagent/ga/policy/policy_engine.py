@@ -21,8 +21,7 @@ from azurelinuxagent.common.utils.distro_version import DistroVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.osutil import get_osutil
-import azurelinuxagent.ga.policy.regorus as regorus
-from azurelinuxagent.ga.policy.regorus import PolicyError
+from azurelinuxagent.ga.policy.regorus import PolicyError, Regorus
 
 # Define support matrix for Regorus and policy engine feature.
 # Dict in the format: { distro:min_supported_version }
@@ -74,7 +73,7 @@ class PolicyEngine(object):
 
         # If unsupported, this call will raise an error
         self._check_policy_enforcement_supported()
-        self._engine = regorus.Engine(policy_file=policy_file, rule_file=rule_file)
+        self._engine = Regorus(policy_file=policy_file, rule_file=rule_file)
 
     @classmethod
     def _log_policy(cls, msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
