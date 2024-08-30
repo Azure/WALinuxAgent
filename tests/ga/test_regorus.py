@@ -119,7 +119,9 @@ class TestRegorusEngine(AgentTestCase):
         input_dict = {
             "extensions": {
                 ALLOWED_EXT: {},
-                RANDOM_EXT: {}
+                RANDOM_EXT: {
+
+                }
             }
         }
 
@@ -311,12 +313,12 @@ class TestRegorusEngine(AgentTestCase):
         input_dict = {
             "extensions": {
                 ALLOWED_EXT: {
-                    "signingRules": {
+                    "signingInfo": {
                         "extensionSigned": True
                     }
                 },
                 RANDOM_EXT: {
-                    "signingRules": {
+                    "signingInfo": {
                         "extensionSigned": False
                     }
                 }
