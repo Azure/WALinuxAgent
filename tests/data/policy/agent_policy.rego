@@ -22,23 +22,17 @@ import rego.v1
 policy_version := "0.1.0"
 
 default default_global_rules := {
-	"allowListOnly": false,
+	"allowListOnly": true,
 	"signingRules": {
-		"extensionSigned": false,
-		"signingDetails": {},
-	},
-	"updateAllowed": true,
-	"uninstallAllowed": true,
+		"extensionSigned": true
+	}
 }
 
 default global_rules := {
-	"allowListOnly": false,
+	"allowListOnly": true,
 	"signingRules": {
-		"extensionSigned": false,
-		"signingDetails": {},
-	},
-	"updateAllowed": true,
-	"uninstallAllowed": true,
+		"extensionSigned": true
+	}
 }
 
 global_rules := object.union(default_global_rules, data.azureGuestAgentPolicy) if {

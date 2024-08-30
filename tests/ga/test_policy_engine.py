@@ -122,7 +122,7 @@ class TestPolicyEngine(AgentTestCase):
                 with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
                     with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
                         # pass policy file instead of rule file in init
-                        invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
+                        invalid_rule = os.path.join(data_dir, 'policy', "agent_policy_invalid.rego")
                         engine = PolicyEngine(invalid_rule, self.default_policy_path)
                         engine.evaluate_query(self.input_json, "data")
 

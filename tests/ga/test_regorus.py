@@ -63,45 +63,6 @@ class TestRegorusEngine(AgentTestCase):
         cls.patcher.stop()
         AgentTestCase.tearDownClass()
 
-    def test_should_evaluate_query_with_valid_params(self):
-        """
-        Eval_query should return the expected output with a valid policy, data, and input file.
-        """
-        engine = Regorus(self.default_policy_path, self.default_rule_path)
-        output = engine.eval_query(self.input_json, "data.agent_extension_policy.extensions_to_download")
-        result = output['result'][0]['expressions'][0]['value']
-        test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-        ext_info = result.get(test_ext_name)
-        self.assertIsNotNone(ext_info, msg="Query failed, should have returned result for extension.")
-        self.assertTrue(ext_info.get('downloadAllowed'))
-
-    def test_missing_rule_file_should_raise_exception(self):
-        """Exception should be raised when we eval_query with invalid rule file path."""
-        engine = Regorus("fake_file_path", self.default_policy_path)
-        with self.assertRaises(Exception, msg="Adding a bad path to rule file should have raised an exception."):
-            engine.eval_query(self.input_json, "data")
-
-    def test_invalid_rule_file_should_raise_exception(self):
-        """Exception should be raised when we eval_query with invalid rule file contents."""
-        invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
-        with self.assertRaises(Exception, msg="Adding a rule file with invalid contents should have raised an exception."):
-            engine = Regorus(self.default_policy_path, invalid_rule)
-            engine.eval_query(self.input_json, "data")
-
-    def test_missing_policy_file_should_raise_exception(self):
-        """Exception should be raised when we eval_query with invalid policy file path."""
-        invalid_policy = os.path.join("agent-extension-data-invalid.json")
-        with self.assertRaises(Exception, msg="Adding a bad path to policy file should have raised an exception."):
-            engine = Regorus(invalid_policy, self.default_rule_path)
-            engine.eval_query(self.input_json, "data")
-
-    def test_invalid_policy_file_should_raise_exception(self):
-        """Exception should be raised when we eval_query with bad data file contents."""
-        invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
-        with self.assertRaises(Exception, msg="Adding an invalid data file should have raised an exception."):
-            engine = Regorus(invalid_policy, self.default_rule_path)
-            engine.eval_query(self.input_json, "data")
-
     def test_should_allow_all(self):
         """
         If global allowlist rule is not enabled, downloadAllowed = true for all extensions.
@@ -336,3 +297,60 @@ class TestRegorusEngine(AgentTestCase):
             self.assertTrue(allowed_signing_validated, msg="No signing rules enforced so extension should be validated.")
             random_signing_validated = result.get(RANDOM_EXT).get("signingValidated")
             self.assertTrue(random_signing_validated, msg="No signing rules enforced so extension should be validated.")
+
+    def test_invalid_policy_section_should_block_all_extensions(self):
+        policy = {
+            "invalid_section": {
+                "signingRules": {
+                    "extensionSigned": False
+                },
+                "allowListOnly": False
+            }
+        }
+
+        input_dict = {
+            "extensions": {
+                ALLOWED_EXT: {
+                    "signingInfo": {
+                        "extensionSigned": True
+                    }
+                }
+            }
+        }
+
+        # Policy file is invalid, missing azureGuestAgentPolicy section. No extensions should be allowed.
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+            engine = Regorus(policy_file.name, self.default_rule_path)
+            output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_to_download")
+            result = output['result'][0]['expressions'][0]['value']
+            allowed_ext_allowed = result.get(ALLOWED_EXT).get("downloadAllowed")
+            self.assertFalse(allowed_ext_allowed, msg="Policy file is invalid so all extensions should be disallowed.")
+
+    def test_eval_query_missing_rule_file_should_raise_exception(self):
+        """Exception should be raised when we eval_query with invalid rule file path."""
+        engine = Regorus("/fake/policy/file/path", self.default_rule_path)
+        with self.assertRaises(Exception, msg="Evaluating query should raise exception when rule file doesn't exist."):
+            engine.eval_query(self.input_json, "data")
+
+    def test_eval_query_invalid_rule_file_syntax_should_raise_exception(self):
+        """Exception should be raised when we eval_query with invalid rule file syntax."""
+        invalid_rule = os.path.join(data_dir, 'policy', "agent_policy_invalid.rego")
+        with self.assertRaises(Exception, msg="Evaluating query should raise exception when rule file syntax is invalid"):
+            engine = Regorus(self.default_policy_path, invalid_rule)
+            engine.eval_query(self.input_json, "data")
+
+    def test_eval_query_missing_policy_file_should_raise_exception(self):
+        """Exception should be raised when we eval_query with invalid policy file path."""
+        invalid_policy = os.path.join("agent-extension-data-invalid.json")
+        with self.assertRaises(Exception, msg="Evaluating query should raise exception when policy file doesn't exist."):
+            engine = Regorus(invalid_policy, self.default_rule_path)
+            engine.eval_query(self.input_json, "data")
+
+    def test_eval_query_invalid_policy_file_syntax_should_raise_exception(self):
+        """Exception should be raised when we eval_query with bad data file contents."""
+        invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
+        with self.assertRaises(Exception, msg="Evaluating query should raise exception when policy file syntax is invalid."):
+            engine = Regorus(invalid_policy, self.default_rule_path)
+            engine.eval_query(self.input_json, "data")
