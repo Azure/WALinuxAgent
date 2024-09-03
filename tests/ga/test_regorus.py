@@ -34,23 +34,21 @@ class TestRegorusEngine(AgentTestCase):
     regorus_dest_path = None    # Location where real regorus executable should be.
     default_policy_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
     default_rule_path = os.path.join(data_dir, 'policy', "agent_policy.rego")
-    default_input = """
-        {
-            "extensions": {
-                "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux": {
-                    "signingInfo": {
-                        "extensionSigned": false
-                    }
-                },
-                "test2": {
-                    "signingInfo": {
-                        "extensionSigned": true
-                    }
-                },
-                "test3": {}
-            }
+    default_input = {
+        "extensions": {
+            "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux": {
+                "signingInfo": {
+                    "extensionSigned": False
+                }
+            },
+            "test2": {
+                "signingInfo": {
+                    "extensionSigned": True
+                }
+            },
+            "test3": {}
         }
-    """
+    }
 
     @classmethod
     def setUpClass(cls):

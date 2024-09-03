@@ -129,7 +129,7 @@ class PolicyEngine(object):
             "extensions": {
                 "<extension_name_1>": {
                     "signingInfo": {
-                        "extensionSigned": <true, false>
+                        "extensionSigned": <True, False>
                     }
                 }, ...
         }

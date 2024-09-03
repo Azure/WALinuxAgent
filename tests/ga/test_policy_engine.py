@@ -29,7 +29,21 @@ class TestPolicyEngine(AgentTestCase):
     regorus_dest_path = None    # Location where real regorus executable should be.
     default_policy_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
     default_rule_path = os.path.join(data_dir, 'policy', "agent_policy.rego")
-    input_json = None  # Input is stored in a file, and extracted into this variable during class setup.
+    input_json = {
+        "extensions": {
+            "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux": {
+                "signingInfo": {
+                    "extensionSigned": False
+                }
+            },
+            "test2": {
+                "signingInfo": {
+                    "extensionSigned": True
+                }
+            },
+            "test3": {}
+        }
+    }
 
     @classmethod
     def setUpClass(cls):
@@ -44,10 +58,6 @@ class TestPolicyEngine(AgentTestCase):
         cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
         cls.patcher.start()
 
-        # We store input in a centralized file, we want to extract the JSON contents into a dict for testing.
-        # TODO: remove this logic once we add tests for ExtensionPolicyEngine
-        with open(os.path.join(data_dir, 'policy', "agent-extension-input.json"), 'r') as input_file:
-            cls.input_json = json.load(input_file)
         AgentTestCase.setUpClass()
 
     @classmethod
