@@ -15,7 +15,6 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import json
 import os
 import shutil
 
