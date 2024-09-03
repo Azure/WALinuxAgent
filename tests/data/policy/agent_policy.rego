@@ -21,6 +21,7 @@ import rego.v1
 
 policy_version := "0.1.0"
 
+# Defines default rules to be used if not specified in policy file.
 default default_global_rules := {
 	"allowListOnly": true,
 	"signingRules": {
@@ -35,42 +36,35 @@ default global_rules := {
 	}
 }
 
+# Rules from policy file (data.azureGuestAgentPolicy) override the default rules if present.
 global_rules := object.union(default_global_rules, data.azureGuestAgentPolicy) if {
 	data.azureGuestAgentPolicy
 }
 
 default any_extension_allowed := true
 
+# If allowlist rule is true, download is not allowed by default.
 any_extension_allowed := false if {
 	global_rules.allowListOnly
 }
 
 default default_signing_info := {"signingInfo": {}}
 
-# Download rule 1: if the extension is in the list and download rule satisfied: download allowed
+# Download rule 1: if extension is in the allowlist, download is allowed.
 extensions_to_download[name] := extension if {
 	some name, input_extension in input.extensions
 	data.azureGuestExtensionsPolicy[name]
-	download_rule_validated(input_extension, data.azureGuestExtensionsPolicy[name])
 	extension := object.union(input_extension, {"downloadAllowed": true})
 }
 
-# Download rule 2: if the extension is in the list and download rule not satisfied: download denied
-extensions_to_download[name] := extension if {
-	some name, input_extension in input.extensions
-	data.azureGuestExtensionsPolicy[name]
-	not download_rule_validated(input_extension, data.azureGuestExtensionsPolicy[name])
-	extension := object.union(input_extension, {"downloadAllowed": false})
-}
-
-# Download rule 3: if the extension is not in the list: depending on allowListOnly on or off
+# Download rule 2: if the extension is not in the allowlist, download allowed depends on the global allowlist rule.
 extensions_to_download[name] := extension if {
 	some name, input_extension in input.extensions
 	not data.azureGuestExtensionsPolicy[name]
 	extension := object.union(input_extension, {"downloadAllowed": any_extension_allowed})
 }
 
-# Validate rule 1: if individual signing rule exists, signing rule validated according to the rules
+# Validate rule 1: if individual signing rule exists, signing rule is validated according to the rules.
 extensions_validated[name] := extension if {
 	some name, input_extension in input.extensions
 	data.azureGuestExtensionsPolicy[name]
@@ -82,7 +76,7 @@ extensions_validated[name] := extension if {
 	extension := object.union(output, {"signingValidated": true})
 }
 
-# Validate rule 2: if indivual signing rule exists, signing rule not validated according to the rules
+# Validate rule 2: if indivual signing rule exists, signing rule is not validated according to the rules.
 extensions_validated[name] := extension if {
 	some name, input_extension in input.extensions
 	data.azureGuestExtensionsPolicy[name]
@@ -94,7 +88,7 @@ extensions_validated[name] := extension if {
 	extension := object.union(output, {"signingValidated": false})
 }
 
-# Validate rule 3: if individual signing rule doesn't exist, signing rule validated according to global signing rule
+# Validate rule 3: if individual signing rule doesn't exist, signing rule validated according to global signing rule.
 extensions_validated[name] := extension if {
 	some name, input_extension in input.extensions
 	not data.azureGuestExtensionsPolicy[name]
@@ -104,7 +98,7 @@ extensions_validated[name] := extension if {
 	extension := object.union(output, {"signingValidated": true})
 }
 
-# Validate rule 4: if individual signing rule doesn't exist, signing rule not validated according to the global rules
+# Validate rule 4: if individual signing rule doesn't exist, signing rule not validated according to the global signing rule.
 extensions_validated[name] := extension if {
 	some name, input_extension in input.extensions
 	not data.azureGuestExtensionsPolicy[name]
@@ -114,11 +108,6 @@ extensions_validated[name] := extension if {
 	extension := object.union(output, {"signingValidated": false})
 }
 
-# Currently if download rules doesn't exist, allow the extension because its name is in the list.
-# In the future additional rules can be checked with downloadRules present.
-download_rule_validated(_, rules) if {
-	not rules.downloadRules
-}
 
 # Signing is validated if input comes with extension signed, or the input of signing information is matching the
 # rules in data.
