@@ -159,6 +159,7 @@ class Extension(object):
         self.settings = []
         self.manifest_uris = []
         self.supports_multi_config = False
+        self.encoded_signature = None
         self.__invalid_handler_setting_reason = None
 
     @property
