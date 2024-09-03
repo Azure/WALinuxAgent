@@ -22,7 +22,7 @@ import tempfile
 
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.regorus import Regorus
+from azurelinuxagent.ga.policy.regorus import Regorus, PolicyError
 from tests.lib.tools import patch, data_dir, test_dir
 
 ALLOWED_EXT = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
@@ -76,7 +76,7 @@ class TestRegorusEngine(AgentTestCase):
 
     def test_download_allowed_should_be_true_if_extension_in_allowlist(self):
         """
-        If extension is in the allowlist, downloadAllowed=True (regardless of global allowlist rule).
+        If extension is in the allowlist, downloadAllowed=True. Global allowlist rule shouldn't matter.
         """
         allowlist_only_cases = [True, False]
         for allowlist_only in allowlist_only_cases:
@@ -94,7 +94,7 @@ class TestRegorusEngine(AgentTestCase):
 
             input_dict = {
                 "extensions": {
-                    ALLOWED_EXT: {}
+                    ALLOWED_EXT: {}  # Extension in allowlist
                 }
             }
 
@@ -149,6 +149,7 @@ class TestRegorusEngine(AgentTestCase):
         If individual signing rule is enforced, signingValidated=true only if extension is signed.
         Global signing rule shouldn't matter.
         """
+        # Should be same result for global signing rule true/false, so we test both cases.
         global_signing_rule_cases = [True, False]
         for global_signing_rule in global_signing_rule_cases:
             policy = {
@@ -187,12 +188,13 @@ class TestRegorusEngine(AgentTestCase):
                     output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_validated")
                     result = output['result'][0]['expressions'][0]['value']
                     signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
-                    self.assertEqual(signing_validated, is_ext_signed, msg="Extension should be validated if signed.")
+                    self.assertEqual(signing_validated, is_ext_signed, msg="Extension should only be validated if signed.")
 
     def test_signing_validated_should_be_true_if_individual_signing_rule_false(self):
         """
         If individual signing rule is false (not enforced), signingValidated=true. Global signing rule shouldn't matter.
         """
+        # Should be same result for global signing rule true/false, so we test both cases.
         global_signing_rule_cases = [True, False]
         for global_signing_rule in global_signing_rule_cases:
             policy = {
@@ -236,7 +238,6 @@ class TestRegorusEngine(AgentTestCase):
         """
         If individual signing rule doesn't exist, signingValidated depends on global signing rule.
         If global signing rule is enforced, signingValidated = true only if extension is signed.
-        - If global signing rule not enforced, signingValidated = true. 
         """
         policy = {
             "azureGuestAgentPolicy": {
@@ -267,7 +268,7 @@ class TestRegorusEngine(AgentTestCase):
                 output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_validated")
                 result = output['result'][0]['expressions'][0]['value']
                 signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
-                self.assertEqual(signing_validated, is_ext_signed, msg="Extension should be validated if signed.")
+                self.assertEqual(signing_validated, is_ext_signed, msg="Extension should only be validated if signed.")
 
     def test_signing_validated_should_be_true_if_global_signing_rule_false_and_no_individual_rule(self):
         """
@@ -306,6 +307,9 @@ class TestRegorusEngine(AgentTestCase):
                 self.assertTrue(signing_validated, msg="Global signing rule is false so extension should always be validated.")
 
     def test_download_allowed_should_be_false_if_policy_invalid(self):
+        """
+        If policy file is missing a section, downloadAllowed should be invalid. No exception should be raised.
+        """
         policy = {
             "invalid_section": {
                 "signingRules": {
@@ -338,26 +342,26 @@ class TestRegorusEngine(AgentTestCase):
     def test_eval_query_should_raise_exception_for_bad_rule_file_path(self):
         """Exception should be raised when we eval_query with invalid rule file path."""
         engine = Regorus("/fake/policy/file/path", self.default_rule_path)
-        with self.assertRaises(Exception, msg="Evaluating query should raise exception when rule file doesn't exist."):
+        with self.assertRaises(PolicyError, msg="Evaluating query should raise exception when rule file doesn't exist."):
             engine.eval_query(self.default_input, "data")
 
     def test_eval_query_should_raise_exception_for_invalid_rule_file_syntax(self):
         """Exception should be raised when we eval_query with invalid rule file syntax."""
         invalid_rule = os.path.join(data_dir, 'policy', "agent_policy_invalid.rego")
-        with self.assertRaises(Exception, msg="Evaluating query should raise exception when rule file syntax is invalid"):
+        with self.assertRaises(PolicyError, msg="Evaluating query should raise exception when rule file syntax is invalid"):
             engine = Regorus(self.default_policy_path, invalid_rule)
             engine.eval_query(self.default_input, "data")
 
     def test_eval_query_should_raise_exception_for_bad_policy_file_path(self):
         """Exception should be raised when we eval_query with invalid policy file path."""
         invalid_policy = os.path.join("agent-extension-data-invalid.json")
-        with self.assertRaises(Exception, msg="Evaluating query should raise exception when policy file doesn't exist."):
+        with self.assertRaises(PolicyError, msg="Evaluating query should raise exception when policy file doesn't exist."):
             engine = Regorus(invalid_policy, self.default_rule_path)
             engine.eval_query(self.default_input, "data")
 
     def test_eval_query_should_raise_exception_for_invalid_policy_file_syntax(self):
         """Exception should be raised when we eval_query with bad data file contents."""
         invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
-        with self.assertRaises(Exception, msg="Evaluating query should raise exception when policy file syntax is invalid."):
+        with self.assertRaises(PolicyError, msg="Evaluating query should raise exception when policy file syntax is invalid."):
             engine = Regorus(invalid_policy, self.default_rule_path)
             engine.eval_query(self.default_input, "data")
