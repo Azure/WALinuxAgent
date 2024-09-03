@@ -451,7 +451,7 @@ class AgentTestSuitesCombinator(Combinator):
             return images
 
         # If it is not image or image set, it must be a URN, VHD, or an image from a gallery
-        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image) and not self._is_image_from_gallery(self.runbook.image):
+        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image) and not CustomImage._is_image_from_gallery(self.runbook.image):
             raise Exception(f"The 'image' parameter must be an image, image set name, urn, vhd, or an image from a shared gallery: {self.runbook.image}")
 
         i = VmImageInfo()
