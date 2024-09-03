@@ -85,12 +85,22 @@ def findtext(root, tag, namespace=None):
 
 def getattrib(node, attr_name):
     """
-    Get attribute of xml node
+    Get attribute of xml node. Returns None if node is None. Returns "" if node does not have attribute attr_name
     """
     if node is not None:
         return node.getAttribute(attr_name)
     else:
         return None
+
+
+def hasattrib(node, attr_name):
+    """
+    Return True if xml node has attribute, False if node is None or node does not have attribute attr_name
+    """
+    if node is not None:
+        return node.hasAttribute(attr_name)
+    else:
+        return False
 
 
 def unpack(buf, offset, value_range):
