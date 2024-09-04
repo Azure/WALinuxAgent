@@ -225,7 +225,39 @@ class ExtSequencing(AgentVmssTest):
                 # We only expect to catch an exception during deployment if we are forcing one of the extensions to
                 # fail. We know an extension should fail if "failing" is in the case name. Otherwise, report the
                 # failure.
-                deployment_failure_pattern = r"[\s\S]*\"details\": [\s\S]* \"code\": \"(?P<code>.*)\"[\s\S]* \"message\": \"(?P<msg>.*)\"[\s\S]*"
+                #
+                # Example deployment failure:
+                #   (DeploymentFailed) At least one resource deployment operation failed. Please list deployment operations for details. Please see https://aka.ms/arm-deployment-operations for usage details.
+                #   Code: DeploymentFailed
+                #   Message: At least one resource deployment operation failed. Please list deployment operations for details. Please see https://aka.ms/arm-deployment-operations for usage details.
+                #   Exception Details:	(Conflict) {
+                # 	  "status": "Failed",
+                # 	  "error": {
+                # 	    "code": "ResourceDeploymentFailure",
+                # 	    "message": "The resource write operation failed to complete successfully, because it reached terminal provisioning state 'Failed'.",
+                # 	    "details": [
+                # 	      {
+                # 	        "code": "VMExtensionProvisioningError",
+                # 	        "target": "0",
+                # 	        "message": "Multiple VM extensions failed to be provisioned on the VM. The Extensions failed due to the errors: \n[Extension Name: 'AzureMonitorLinuxAgent'\nError Message: VM Extension 'AzureMonitorLinuxAgent' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed.]\n\n[Extension Name: 'CustomScript'\nError Message: VM has reported a failure when processing extension 'CustomScript' (publisher 'Microsoft.Azure.Extensions' and type 'CustomScript'). Error message: 'Enable failed: failed to execute command: command terminated with exit status=1\n[stdout]\n\n[stderr]\n'. More information on troubleshooting is available at https://aka.ms/VMExtensionCSELinuxTroubleshoot. ]\n"
+                # 	      }
+                # 	    ]
+                # 	  }
+                # 	}
+                deployment_failure_pattern = r"[\s\S]*Exception Details:\t\(Conflict\) {\s*" \
+                                                r"\"status\": \"Failed\",\s*" \
+                                                r"\"error\": {\s*" \
+                                                    r"\"code\": \"ResourceDeploymentFailure\",\s*" \
+                                                    r"\"message\": \".*\",\s*" \
+                                                    r"\"details\": \[\s*" \
+                                                        r"{\s*" \
+                                                            r"\"code\": \"(?P<code>.*)\",\s*" \
+                                                            r"\"target\": \".*\",\s*" \
+                                                            r"\"message\": \"(?P<msg>.*)\"\s*" \
+                                                        r"}\s*" \
+                                                    r"]\s*" \
+                                                r"}\s*" \
+                                             r"}"
                 msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM.*VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
                 deployment_failure_match = re.match(deployment_failure_pattern, str(e))
                 if "failing" not in case.__name__:
