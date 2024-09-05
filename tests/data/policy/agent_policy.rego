@@ -21,7 +21,8 @@ import rego.v1
 
 policy_version := "0.1.0"
 
-# Defines default rules to be used if not specified in policy file.
+# Defines default rules to be used if not specified in policy file. This is effectively a constant.
+# Should match default "global_rules" below.
 default default_global_rules := {
 	"allowListOnly": true,
 	"signingRules": {
@@ -29,6 +30,8 @@ default default_global_rules := {
 	}
 }
 
+# The default "global_rules" rule should be the same as the "default_global_rules" constant above.
+#
 default global_rules := {
 	"allowListOnly": true,
 	"signingRules": {
@@ -68,7 +71,6 @@ extensions_to_download[name] := extension if {
 extensions_validated[name] := extension if {
 	some name, input_extension in input.extensions
 	data.azureGuestExtensionsPolicy[name]
-
 	extension_global_rules := object.union(global_rules, data.azureGuestExtensionsPolicy[name])
 	extension_signing_info := object.union(extension_global_rules, default_signing_info)
 	output := object.union(input_extension, extension_signing_info)
@@ -76,11 +78,10 @@ extensions_validated[name] := extension if {
 	extension := object.union(output, {"signingValidated": true})
 }
 
-# Validate rule 2: if indivual signing rule exists, signing rule is not validated according to the rules.
+# Validate rule 2: if individual signing rule exists, signing rule is not validated according to the rules.
 extensions_validated[name] := extension if {
 	some name, input_extension in input.extensions
 	data.azureGuestExtensionsPolicy[name]
-
 	extension_global_rules := object.union(global_rules, data.azureGuestExtensionsPolicy[name])
 	extension_signing_info := object.union(extension_global_rules, default_signing_info)
 	output := object.union(input_extension, extension_signing_info)
@@ -107,7 +108,6 @@ extensions_validated[name] := extension if {
 	not signing_validated(output.signingInfo, output.signingRules)
 	extension := object.union(output, {"signingValidated": false})
 }
-
 
 # Signing is validated if input comes with extension signed, or the input of signing information is matching the
 # rules in data.

@@ -142,5 +142,5 @@ class Regorus:
                     msg = "error when using policy engine. {0}".format(ex)
                 raise PolicyError(msg=msg)
 
-            json_output = json.loads(stdout)
-            return json_output
+            regorus_output_dict = json.loads(stdout)
+            return regorus_output_dict

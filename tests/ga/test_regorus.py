@@ -41,12 +41,12 @@ class TestRegorusEngine(AgentTestCase):
                     "extensionSigned": False
                 }
             },
-            "test2": {
+            "TestExtension2": {
                 "signingInfo": {
                     "extensionSigned": True
                 }
             },
-            "test3": {}
+            "TestExtension3": {}
         }
     }
 
@@ -74,6 +74,7 @@ class TestRegorusEngine(AgentTestCase):
 
     def test_download_allowed_should_be_true_if_extension_in_allowlist(self):
         """
+        Test download rule #1.
         If extension is in the allowlist, downloadAllowed=True. Global allowlist rule shouldn't matter.
         """
         allowlist_only_cases = [True, False]
@@ -90,7 +91,7 @@ class TestRegorusEngine(AgentTestCase):
                 }
             }
 
-            input_dict = {
+            extensions_to_query = {
                 "extensions": {
                     ALLOWED_EXT: {}  # Extension in allowlist
                 }
@@ -100,14 +101,38 @@ class TestRegorusEngine(AgentTestCase):
                 json.dump(policy, policy_file, indent=4)
                 policy_file.flush()
                 engine = Regorus(policy_file.name, self.default_rule_path)
-                output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_to_download")
+
+                """
+                Expected output:
+                {
+                  "result": {
+                    "expressions": {
+                      "value": {
+                        "AllowedExt1": {
+                          "downloadAllowed": true
+                        },
+                        "AllowedExt2": {
+                          "downloadAllowed": false
+                        }
+                      },
+                      "text": "data.agent_extension_policy.extensions_to_download",
+                      "location": {
+                        "row": 1,
+                        "col": 1
+                      }
+                    }
+                  }
+                }
+                """
+                output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
                 result = output['result'][0]['expressions'][0]['value']
                 download_allowed = result.get(ALLOWED_EXT).get("downloadAllowed")
                 self.assertTrue(download_allowed, msg="Extension is in allowlist, so downloadAllowed should be True.")
 
     def test_download_allowed_should_depend_on_global_allowlist_rule_if_extension_not_in_allowlist(self):
         """
-        If extension is not in the allowlist:
+        Test download rule #2.
+        If extension is not in the allowlist, download allowed depends on global allowlist rule:
          - downloadAllowed = true if global allowlist rule not enabled (allowlistOnly = false)
          - downloadAllowed = false if global allowlist rule enabled (allowlistOnly = true)
         """
@@ -125,7 +150,7 @@ class TestRegorusEngine(AgentTestCase):
                 }
             }
 
-            input_dict = {
+            extensions_to_query = {
                 "extensions": {
                     RANDOM_EXT: {}      # Not included in the allowlist.
                 }
@@ -135,15 +160,61 @@ class TestRegorusEngine(AgentTestCase):
                 json.dump(policy, policy_file, indent=4)
                 policy_file.flush()
                 engine = Regorus(policy_file.name, self.default_rule_path)
-                output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_to_download")
+                output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
                 result = output['result'][0]['expressions'][0]['value']
                 download_allowed = result.get(RANDOM_EXT).get("downloadAllowed")
                 self.assertEqual(download_allowed, (not allowlist_only),
                                 msg="Extension is not in allowlist, allowListOnly is {0} so downloadAllowed should be {1}"
                                  .format(download_allowed, allowlist_only))
 
+    def test_signing_validated_should_be_true_if_individual_signing_rule_false(self):
+        """
+        Test validate rule #1.
+        If individual signing rule is false (not enforced), signingValidated=true. Global signing rule shouldn't matter.
+        """
+        # Should be same result for global signing rule true/false, so we test both cases.
+        global_signing_rule_cases = [True, False]
+        for global_signing_rule in global_signing_rule_cases:
+            policy = {
+                "azureGuestAgentPolicy": {
+                    "signingRules": {
+                        "extensionSigned": global_signing_rule
+                    },
+                    "allowListOnly": False
+                },
+                "azureGuestExtensionsPolicy": {
+                    ALLOWED_EXT: {
+                        "signingRules": {
+                            "extensionSigned": False
+                        }
+                    }
+                }
+            }
+
+            is_ext_signed_values = (True, False)
+            for is_ext_signed in is_ext_signed_values:
+                extensions_to_query = {
+                    "extensions": {
+                        ALLOWED_EXT: {
+                            "signingInfo": {
+                                "extensionSigned": is_ext_signed
+                            }
+                        }
+                    }
+                }
+
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
+                    json.dump(policy, policy_file, indent=4)
+                    policy_file.flush()
+                    engine = Regorus(policy_file.name, self.default_rule_path)
+                    output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_validated")
+                    result = output['result'][0]['expressions'][0]['value']
+                    signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
+                    self.assertTrue(signing_validated, msg="Individual signing rule is false, so signingValidated should be true.")
+
     def test_signing_validated_should_depend_on_signature_if_individual_signing_rule_true(self):
         """
+        Test validate rule #2.
         If individual signing rule is enforced, signingValidated=true only if extension is signed.
         Global signing rule shouldn't matter.
         """
@@ -169,7 +240,7 @@ class TestRegorusEngine(AgentTestCase):
             # Extension should be validated only if it signed. Test both when extension is signed and not.
             is_ext_signed_values = (True, False)
             for is_ext_signed in is_ext_signed_values:
-                input_dict = {
+                extensions_to_query = {
                     "extensions": {
                         ALLOWED_EXT: {
                             "signingInfo": {
@@ -183,93 +254,14 @@ class TestRegorusEngine(AgentTestCase):
                     json.dump(policy, policy_file, indent=4)
                     policy_file.flush()
                     engine = Regorus(policy_file.name, self.default_rule_path)
-                    output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_validated")
+                    output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_validated")
                     result = output['result'][0]['expressions'][0]['value']
                     signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
                     self.assertEqual(signing_validated, is_ext_signed, msg="Extension should only be validated if signed.")
 
-    def test_signing_validated_should_be_true_if_individual_signing_rule_false(self):
-        """
-        If individual signing rule is false (not enforced), signingValidated=true. Global signing rule shouldn't matter.
-        """
-        # Should be same result for global signing rule true/false, so we test both cases.
-        global_signing_rule_cases = [True, False]
-        for global_signing_rule in global_signing_rule_cases:
-            policy = {
-                "azureGuestAgentPolicy": {
-                    "signingRules": {
-                        "extensionSigned": global_signing_rule
-                    },
-                    "allowListOnly": False
-                },
-                "azureGuestExtensionsPolicy": {
-                    ALLOWED_EXT: {
-                        "signingRules": {
-                            "extensionSigned": False
-                        }
-                    }
-                }
-            }
-
-            is_ext_signed_values = (True, False)
-            for is_ext_signed in is_ext_signed_values:
-                input_dict = {
-                    "extensions": {
-                        ALLOWED_EXT: {
-                            "signingInfo": {
-                                "extensionSigned": is_ext_signed
-                            }
-                        }
-                    }
-                }
-
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
-                    json.dump(policy, policy_file, indent=4)
-                    policy_file.flush()
-                    engine = Regorus(policy_file.name, self.default_rule_path)
-                    output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_validated")
-                    result = output['result'][0]['expressions'][0]['value']
-                    signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
-                    self.assertTrue(signing_validated, msg="Individual signing rule is false, so signingValidated should be true.")
-
-    def test_signing_validated_should_depend_on_signature_if_global_signing_rule_true_and_no_individual_rule(self):
-        """
-        If individual signing rule doesn't exist, signingValidated depends on global signing rule.
-        If global signing rule is enforced, signingValidated = true only if extension is signed.
-        """
-        policy = {
-            "azureGuestAgentPolicy": {
-                "signingRules": {
-                    "extensionSigned": True
-                },
-                "allowListOnly": False
-            }
-        }
-
-        # Extension should be validated only if it signed. Test both when extension is signed and not.
-        is_ext_signed_values = (True, False)
-        for is_ext_signed in is_ext_signed_values:
-            input_dict = {
-                "extensions": {
-                    ALLOWED_EXT: {
-                        "signingInfo": {
-                            "extensionSigned": is_ext_signed
-                        }
-                    }
-                }
-            }
-
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
-                json.dump(policy, policy_file, indent=4)
-                policy_file.flush()
-                engine = Regorus(policy_file.name, self.default_rule_path)
-                output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_validated")
-                result = output['result'][0]['expressions'][0]['value']
-                signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
-                self.assertEqual(signing_validated, is_ext_signed, msg="Extension should only be validated if signed.")
-
     def test_signing_validated_should_be_true_if_global_signing_rule_false_and_no_individual_rule(self):
         """
+        Test validate rule #3.
         If individual signing rule doesn't exist, signingValidated depends on global signing rule.
         If global signing rule not enforced, signingValidated = true.
         """
@@ -285,7 +277,7 @@ class TestRegorusEngine(AgentTestCase):
         # Extension should be validated always. Test both when extension is signed and not.
         is_ext_signed_values = (True, False)
         for is_ext_signed in is_ext_signed_values:
-            input_dict = {
+            extensions_to_query = {
                 "extensions": {
                     ALLOWED_EXT: {
                         "signingInfo": {
@@ -299,14 +291,51 @@ class TestRegorusEngine(AgentTestCase):
                 json.dump(policy, policy_file, indent=4)
                 policy_file.flush()
                 engine = Regorus(policy_file.name, self.default_rule_path)
-                output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_validated")
+                output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_validated")
                 result = output['result'][0]['expressions'][0]['value']
                 signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
                 self.assertTrue(signing_validated, msg="Global signing rule is false so extension should always be validated.")
 
+    def test_signing_validated_should_depend_on_signature_if_global_signing_rule_true_and_no_individual_rule(self):
+        """
+        Test validate rule #4.
+        If individual signing rule doesn't exist, signingValidated depends on global signing rule.
+        If global signing rule is enforced, signingValidated = true only if extension is signed.
+        """
+        policy = {
+            "azureGuestAgentPolicy": {
+                "signingRules": {
+                    "extensionSigned": True
+                },
+                "allowListOnly": False
+            }
+        }
+
+        # Extension should be validated only if it signed. Test both when extension is signed and not.
+        is_ext_signed_values = (True, False)
+        for is_ext_signed in is_ext_signed_values:
+            extensions_to_query = {
+                "extensions": {
+                    ALLOWED_EXT: {
+                        "signingInfo": {
+                            "extensionSigned": is_ext_signed
+                        }
+                    }
+                }
+            }
+
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
+                json.dump(policy, policy_file, indent=4)
+                policy_file.flush()
+                engine = Regorus(policy_file.name, self.default_rule_path)
+                output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_validated")
+                result = output['result'][0]['expressions'][0]['value']
+                signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
+                self.assertEqual(signing_validated, is_ext_signed, msg="Extension should only be validated if signed.")
+
     def test_download_allowed_should_be_false_if_policy_invalid(self):
         """
-        If policy file is missing a section, downloadAllowed should be invalid. No exception should be raised.
+        If policy file is missing a section, downloadAllowed should be false. No exception should be raised.
         """
         policy = {
             "invalid_section": {
@@ -317,7 +346,7 @@ class TestRegorusEngine(AgentTestCase):
             }
         }
 
-        input_dict = {
+        extensions_to_query = {
             "extensions": {
                 ALLOWED_EXT: {
                     "signingInfo": {
@@ -332,7 +361,33 @@ class TestRegorusEngine(AgentTestCase):
             json.dump(policy, policy_file, indent=4)
             policy_file.flush()
             engine = Regorus(policy_file.name, self.default_rule_path)
-            output = engine.eval_query(input_dict, "data.agent_extension_policy.extensions_to_download")
+            output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
+            result = output['result'][0]['expressions'][0]['value']
+            allowed_ext_allowed = result.get(ALLOWED_EXT).get("downloadAllowed")
+            self.assertFalse(allowed_ext_allowed, msg="Policy file is invalid so all extensions should be disallowed.")
+
+    def test_download_allowed_should_be_false_if_policy_empty(self):
+        """
+        If policy file is empty, downloadAllowed should be false. No exception should be raised.
+        """
+        policy = {}
+
+        extensions_to_query = {
+            "extensions": {
+                ALLOWED_EXT: {
+                    "signingInfo": {
+                        "extensionSigned": True
+                    }
+                }
+            }
+        }
+
+        # Policy file is invalid, missing azureGuestAgentPolicy section. No extensions should be allowed.
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+            engine = Regorus(policy_file.name, self.default_rule_path)
+            output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
             result = output['result'][0]['expressions'][0]['value']
             allowed_ext_allowed = result.get(ALLOWED_EXT).get("downloadAllowed")
             self.assertFalse(allowed_ext_allowed, msg="Policy file is invalid so all extensions should be disallowed.")
