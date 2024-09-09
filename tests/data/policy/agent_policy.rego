@@ -19,6 +19,7 @@ package agent_extension_policy
 
 import rego.v1
 
+# This version should be incremented when any rules are added or removed.
 policy_version := "0.1.0"
 
 # Defines default rules to be used if not specified in policy file. This is effectively a constant.
@@ -31,7 +32,8 @@ default default_global_rules := {
 }
 
 # The default "global_rules" rule should be the same as the "default_global_rules" constant above.
-#
+# Rego does not allow references/variables in default rule definition, so we need to define both
+# "global_rules" and "default_global_rules".
 default global_rules := {
 	"allowListOnly": true,
 	"signingRules": {
@@ -40,6 +42,7 @@ default global_rules := {
 }
 
 # Rules from policy file (data.azureGuestAgentPolicy) override the default rules if present.
+# "data" variable holds the data from the user policy file.
 global_rules := object.union(default_global_rules, data.azureGuestAgentPolicy) if {
 	data.azureGuestAgentPolicy
 }
@@ -54,6 +57,8 @@ any_extension_allowed := false if {
 default default_signing_info := {"signingInfo": {}}
 
 # Download rule 1: if extension is in the allowlist, download is allowed.
+# Note that each Rego rule can only evaluate to one possible value, so we require two extension_download_rules
+# to handle the two cases - extension in allowlist, and extension not in allowlist.
 extensions_to_download[name] := extension if {
 	some name, input_extension in input.extensions
 	data.azureGuestExtensionsPolicy[name]

@@ -101,71 +101,80 @@ class TestRegorusEngine(AgentTestCase):
                 json.dump(policy, policy_file, indent=4)
                 policy_file.flush()
                 engine = Regorus(policy_file.name, self.default_rule_path)
-
-                """
-                Expected output:
-                {
-                  "result": {
-                    "expressions": {
-                      "value": {
-                        "AllowedExt1": {
-                          "downloadAllowed": true
-                        },
-                        "AllowedExt2": {
-                          "downloadAllowed": false
-                        }
-                      },
-                      "text": "data.agent_extension_policy.extensions_to_download",
-                      "location": {
-                        "row": 1,
-                        "col": 1
-                      }
-                    }
-                  }
-                }
-                """
                 output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
+                # TODO: add expected output in a comment
                 result = output['result'][0]['expressions'][0]['value']
                 download_allowed = result.get(ALLOWED_EXT).get("downloadAllowed")
                 self.assertTrue(download_allowed, msg="Extension is in allowlist, so downloadAllowed should be True.")
 
-    def test_download_allowed_should_depend_on_global_allowlist_rule_if_extension_not_in_allowlist(self):
+    def test_download_allowed_should_be_false_if_global_allowlist_true_and_extension_not_in_allowlist(self):
         """
         Test download rule #2.
-        If extension is not in the allowlist, download allowed depends on global allowlist rule:
-         - downloadAllowed = true if global allowlist rule not enabled (allowlistOnly = false)
-         - downloadAllowed = false if global allowlist rule enabled (allowlistOnly = true)
+        If extension is not in the allowlist, download allowed depends on global allowlist rule.
+        downloadAllowed = false if global allowlist rule enabled (allowlistOnly = true)
         """
-        allowlist_only_cases = [True, False]
-        for allowlist_only in allowlist_only_cases:
-            policy = {
-                "azureGuestAgentPolicy": {
-                    "signingRules": {
-                        "extensionSigned": False
-                    },
-                    "allowListOnly": allowlist_only
+        policy = {
+            "azureGuestAgentPolicy": {
+                "signingRules": {
+                    "extensionSigned": False
                 },
-                "azureGuestExtensionsPolicy": {
-                    ALLOWED_EXT: {}
-                }
+                "allowListOnly": True
+            },
+            "azureGuestExtensionsPolicy": {
+                ALLOWED_EXT: {}
             }
+        }
 
-            extensions_to_query = {
-                "extensions": {
-                    RANDOM_EXT: {}      # Not included in the allowlist.
-                }
+        extensions_to_query = {
+            "extensions": {
+                RANDOM_EXT: {}      # Not included in the allowlist.
             }
+        }
 
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
-                json.dump(policy, policy_file, indent=4)
-                policy_file.flush()
-                engine = Regorus(policy_file.name, self.default_rule_path)
-                output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
-                result = output['result'][0]['expressions'][0]['value']
-                download_allowed = result.get(RANDOM_EXT).get("downloadAllowed")
-                self.assertEqual(download_allowed, (not allowlist_only),
-                                msg="Extension is not in allowlist, allowListOnly is {0} so downloadAllowed should be {1}"
-                                 .format(download_allowed, allowlist_only))
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+            engine = Regorus(policy_file.name, self.default_rule_path)
+            output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
+            # TODO: add expected output in a comment
+            result = output['result'][0]['expressions'][0]['value']
+            download_allowed = result.get(RANDOM_EXT).get("downloadAllowed")
+            self.assertFalse(download_allowed, msg="Extension is not in allowlist and global allowlist rule True, so "
+                                                   "extension download should not be allowed.")
+
+    def test_download_allowed_should_be_true_if_global_allowlist_false_and_extension_not_in_allowlist(self):
+        """
+        Test download rule #2.
+        If extension is not in the allowlist, download allowed depends on global allowlist rule.
+        downloadAllowed = true if global allowlist rule not enabled (allowlistOnly = false)
+        """
+        policy = {
+            "azureGuestAgentPolicy": {
+                "signingRules": {
+                    "extensionSigned": False
+                },
+                "allowListOnly": False
+            },
+            "azureGuestExtensionsPolicy": {
+                ALLOWED_EXT: {}
+            }
+        }
+
+        extensions_to_query = {
+            "extensions": {
+                RANDOM_EXT: {}      # Not included in the allowlist.
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=True) as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+            engine = Regorus(policy_file.name, self.default_rule_path)
+            output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
+            # TODO: add expected output in a comment
+            result = output['result'][0]['expressions'][0]['value']
+            download_allowed = result.get(RANDOM_EXT).get("downloadAllowed")
+            self.assertTrue(download_allowed, msg="Extension is not in allowlist, but global allowlist rule false so download should be allowed.")
 
     def test_signing_validated_should_be_true_if_individual_signing_rule_false(self):
         """
@@ -208,6 +217,7 @@ class TestRegorusEngine(AgentTestCase):
                     policy_file.flush()
                     engine = Regorus(policy_file.name, self.default_rule_path)
                     output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_validated")
+                    # TODO: add expected output in a comment
                     result = output['result'][0]['expressions'][0]['value']
                     signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
                     self.assertTrue(signing_validated, msg="Individual signing rule is false, so signingValidated should be true.")
@@ -255,6 +265,7 @@ class TestRegorusEngine(AgentTestCase):
                     policy_file.flush()
                     engine = Regorus(policy_file.name, self.default_rule_path)
                     output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_validated")
+                    # TODO: add expected output in a comment
                     result = output['result'][0]['expressions'][0]['value']
                     signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
                     self.assertEqual(signing_validated, is_ext_signed, msg="Extension should only be validated if signed.")
@@ -329,6 +340,7 @@ class TestRegorusEngine(AgentTestCase):
                 policy_file.flush()
                 engine = Regorus(policy_file.name, self.default_rule_path)
                 output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_validated")
+                # TODO: add expected output in a comment
                 result = output['result'][0]['expressions'][0]['value']
                 signing_validated = result.get(ALLOWED_EXT).get("signingValidated")
                 self.assertEqual(signing_validated, is_ext_signed, msg="Extension should only be validated if signed.")
@@ -362,6 +374,7 @@ class TestRegorusEngine(AgentTestCase):
             policy_file.flush()
             engine = Regorus(policy_file.name, self.default_rule_path)
             output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
+            # TODO: add expected output in a comment
             result = output['result'][0]['expressions'][0]['value']
             allowed_ext_allowed = result.get(ALLOWED_EXT).get("downloadAllowed")
             self.assertFalse(allowed_ext_allowed, msg="Policy file is invalid so all extensions should be disallowed.")
@@ -388,6 +401,7 @@ class TestRegorusEngine(AgentTestCase):
             policy_file.flush()
             engine = Regorus(policy_file.name, self.default_rule_path)
             output = engine.eval_query(extensions_to_query, "data.agent_extension_policy.extensions_to_download")
+            # TODO: add expected output in a comment
             result = output['result'][0]['expressions'][0]['value']
             allowed_ext_allowed = result.get(ALLOWED_EXT).get("downloadAllowed")
             self.assertFalse(allowed_ext_allowed, msg="Policy file is invalid so all extensions should be disallowed.")
