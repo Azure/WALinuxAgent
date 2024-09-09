@@ -1296,6 +1296,9 @@ class ExtHandlerInstance(object):
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
 
+        man = self.load_manifest()
+        man.report_invalid_boolean_properties(ext_name=self.get_full_name())
+
         self.ensure_consistent_data_for_mc()
 
         # Create status and config dir
@@ -2238,7 +2241,8 @@ class HandlerManifest(object):
         return self.data['handlerManifest']["disableCommand"]
 
     def is_report_heartbeat(self):
-        return self.data['handlerManifest'].get('reportHeartbeat', False)
+        value = self.data['handlerManifest'].get('reportHeartbeat', False)
+        return self._parse_boolean_value(value)
 
     def is_update_with_install(self):
         update_mode = self.data['handlerManifest'].get('updateMode')
@@ -2247,10 +2251,12 @@ class HandlerManifest(object):
         return update_mode.lower() == "updatewithinstall"
 
     def is_continue_on_update_failure(self):
-        return self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        value = self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        return self._parse_boolean_value(value)
 
     def supports_multiple_extensions(self):
-        return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        return self._parse_boolean_value(value)
 
     def get_resource_limits(self, extension_name, str_version):
         """
@@ -2282,6 +2288,28 @@ class HandlerManifest(object):
                 return ResourceLimits(test_man.get('resourceLimits', None))
 
         return ResourceLimits(self.data.get('resourceLimits', None))
+
+    def report_invalid_boolean_properties(self, ext_name):
+        """
+        Check that the specified keys in the handler manifest has boolean values.
+        """
+        for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions']:
+            value = self.data['handlerManifest'].get(key, False)
+            if not isinstance(value, bool):
+                msg =("In the handler manifest: '{0}' has a non-boolean value {1} for boolean type. Please change it to a boolean value. "
+                      "For backward compatibility, 'true' (case insensitive) is accepted, and other values default to False.").format(key, value)
+                logger.warn(msg)
+                add_event(name=ext_name, is_success=False, message=msg, op=WALAEventOperation.ExtensionHandlerManifest)
+
+    @staticmethod
+    def _parse_boolean_value(value, default_val=False):
+        """
+        Expects boolean value but
+        for backward compatibility, 'true' (case-insensitive) is accepted, and other values default to False
+        """
+        if not isinstance(value, bool):
+            return True if value.lower() == "true" else default_val
+        return value
 
 
 class ResourceLimits(object):
