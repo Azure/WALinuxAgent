@@ -22,6 +22,7 @@
 # validates they are enabled in order of dependencies.
 #
 import copy
+import json
 import random
 import re
 import uuid
@@ -244,26 +245,23 @@ class ExtSequencing(AgentVmssTest):
                 # 	    ]
                 # 	  }
                 # 	}
-                deployment_failure_pattern = r"[\s\S]*Exception Details:\t\(Conflict\) {\s*" \
-                                                r"\"status\": \"Failed\",\s*" \
-                                                r"\"error\": {\s*" \
-                                                    r"\"code\": \"ResourceDeploymentFailure\",\s*" \
-                                                    r"\"message\": \".*\",\s*" \
-                                                    r"\"details\": \[\s*" \
-                                                        r"{\s*" \
-                                                            r"\"code\": \"(?P<code>.*)\",\s*" \
-                                                            r"\"target\": \".*\",\s*" \
-                                                            r"\"message\": \"(?P<msg>.*)\"\s*" \
-                                                        r"}\s*" \
-                                                    r"]\s*" \
-                                                r"}\s*" \
-                                             r"}"
-                msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM.*VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
-                deployment_failure_match = re.match(deployment_failure_pattern, str(e))
                 if "failing" not in case.__name__:
                     fail("Extension template deployment unexpectedly failed: {0}".format(e))
-                elif not deployment_failure_match or deployment_failure_match.group("code") != "VMExtensionProvisioningError" or not re.match(msg_pattern, deployment_failure_match.group("msg")):
-                    fail("Extension template deployment failed as expected, but with an unexpected error: {0}".format(e))
+                else:
+                    deployment_failure_pattern = r"[\s\S]*\"code\":\s*\"ResourceDeploymentFailure\"[\s\S]*\"details\":\s*\[\s*(?P<error>[\s\S]*)\]"
+                    deployment_failure_match = re.match(deployment_failure_pattern, str(e))
+                    try:
+                        if deployment_failure_match is None:
+                            raise Exception("Unable to match a ResourceDeploymentFailure")
+                        error_json = json.loads(deployment_failure_match.group("error"))
+                        error_code = error_json['code']
+                        error_message = error_json['message']
+                    except Exception as parse_exc:
+                        fail("Extension template deployment failed as expected, but there was an error in parsing the failure. Parsing failure: {0}\nDeployment Failure: {1}".format(parse_exc, e))
+
+                    msg_pattern = r"Multiple VM extensions failed to be provisioned on the VM[\s\S]*VM Extension '.*' is marked as failed since it depends upon the VM Extension 'CustomScript' which has failed."
+                    if error_code != "VMExtensionProvisioningError" or re.match(msg_pattern, error_message) is None:
+                        fail("Extension template deployment failed as expected, but with an unexpected error: {0}".format(e))
 
             # Get the extensions on the VMSS from the instance view
             log.info("")
