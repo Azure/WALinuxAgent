@@ -2308,7 +2308,7 @@ class HandlerManifest(object):
         for backward compatibility, 'true' (case-insensitive) is accepted, and other values default to False
         """
         if not isinstance(value, bool):
-            return True if value.lower() == "true" else default_val
+            return True if isinstance(value, str) and value.lower() == "true" else default_val
         return value
 
 
