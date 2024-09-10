@@ -2296,10 +2296,10 @@ class HandlerManifest(object):
         for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions']:
             value = self.data['handlerManifest'].get(key, False)
             if not isinstance(value, bool):
-                msg =("In the handler manifest: '{0}' has a non-boolean value {1} for boolean type. Please change it to a boolean value. "
+                msg =("In the handler manifest: '{0}' has a non-boolean value [{1}] for boolean type. Please change it to a boolean value. "
                       "For backward compatibility, 'true' (case insensitive) is accepted, and other values default to False.").format(key, value)
                 logger.warn(msg)
-                add_event(name=ext_name, is_success=False, message=msg, op=WALAEventOperation.ExtensionHandlerManifest)
+                add_event(name=ext_name, is_success=False, message=msg, op=WALAEventOperation.ExtensionHandlerManifest, log_event=False)
 
     @staticmethod
     def _parse_boolean_value(value, default_val=False):
