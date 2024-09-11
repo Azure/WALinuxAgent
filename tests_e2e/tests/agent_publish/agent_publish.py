@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -21,6 +20,7 @@ from datetime import datetime
 
 from assertpy import fail
 
+from tests_e2e.tests.lib.agent_setup_helpers import wait_for_agent_to_complete_provisioning
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 from tests_e2e.tests.lib.agent_update_helpers import request_rsm_update
@@ -49,6 +49,8 @@ class AgentPublishTest(AgentVmTest):
             3. Check for agent update from the log and waagent version
             4. Ensure CSE is working
         """
+        # Since we skip install_agent setup, doing it here for the Agent to complete provisioning before starting the test
+        wait_for_agent_to_complete_provisioning(self._ssh_client)
         self._get_agent_info()
 
         log.info("Testing rsm update flow....")

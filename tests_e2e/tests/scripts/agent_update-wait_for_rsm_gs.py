@@ -60,7 +60,8 @@ def main():
     retry(lambda: protocol.client.reset_goal_state(
         goal_state_properties=GoalStateProperties.ExtensionsGoalState))
 
-    found: bool = retry_if_false(lambda: verify_rsm_requested_version(protocol, args.version))
+    # whole pipeline can take some time to update the goal state with the requested version, so increasing the timeout
+    found: bool = retry_if_false(lambda: verify_rsm_requested_version(protocol, args.version), delay=60)
 
     if not found:
         raise Exception("The latest goal state didn't contain requested version after we submit the rsm request for: {0}.".format(args.version))

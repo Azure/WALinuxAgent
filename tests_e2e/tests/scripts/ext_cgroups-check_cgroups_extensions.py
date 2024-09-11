@@ -28,7 +28,6 @@ from tests_e2e.tests.lib.cgroup_helpers import verify_if_distro_supports_cgroup,
     check_cgroup_disabled_with_unknown_process, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME, \
     print_cgroups
 from tests_e2e.tests.lib.logging import log
-from tests_e2e.tests.lib.remote_test import run_remote_test
 from tests_e2e.tests.lib.retry import retry_if_false
 
 
@@ -216,7 +215,7 @@ def main():
 
 
 try:
-    run_remote_test(main)
+    main()
 except Exception as e:
     # It is possible that  agent cgroup can be disabled due to UNKNOWN process or throttled before we run this check, in that case, we should ignore the validation
     if check_cgroup_disabled_with_unknown_process() and retry_if_false(check_agent_quota_disabled()):

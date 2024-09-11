@@ -22,7 +22,7 @@ from tests.lib import wire_protocol_data
 
 
 @contextlib.contextmanager
-def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True, save_to_history=False):
+def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_handler=None, http_put_handler=None, do_not_mock=lambda method, url: False, fail_on_unknown_request=True, save_to_history=False, detect_protocol=True):
     """
     Creates a WireProtocol object that handles requests to the WireServer, the Host GA Plugin, and some requests to storage (requests that provide mock data
     in wire_protocol_data.py).
@@ -149,7 +149,8 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
     # go do it
     try:
         protocol.start()
-        protocol.detect(save_to_history=save_to_history)
+        if detect_protocol:
+            protocol.detect(save_to_history=save_to_history)
         yield protocol
     finally:
         protocol.stop()

@@ -23,10 +23,12 @@ import threading
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.ga.controllermetrics import CpuMetrics, AGENT_NAME_TELEMETRY, MetricsCounter, MemoryMetrics
+from azurelinuxagent.ga.cgroupcontroller import AGENT_NAME_TELEMETRY, MetricsCounter
 from azurelinuxagent.ga.cgroupapi import SystemdRunError, EXTENSION_SLICE_PREFIX, CGroupUtil, SystemdCgroupApiv2, \
     log_cgroup_info, log_cgroup_warning, get_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.ga.cpucontroller import _CpuController
+from azurelinuxagent.ga.memorycontroller import _MemoryController
 from azurelinuxagent.common.exception import ExtensionErrorCodes, CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import systemd
@@ -76,8 +78,11 @@ CPUAccounting=yes
 CPUQuota={cpu_quota}
 MemoryAccounting=yes
 """
-_LOGCOLLECTOR_CPU_QUOTA = "5%"
-LOGCOLLECTOR_MEMORY_LIMIT = 30 * 1024 ** 2  # 30Mb
+LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2 = "5%"
+LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2 = "170M"
+LOGCOLLECTOR_MAX_THROTTLED_EVENTS_FOR_V2 = 10
+LOGCOLLECTOR_ANON_MEMORY_LIMIT_FOR_V1_AND_V2 = 25 * 1024 ** 2  # 25Mb
+LOGCOLLECTOR_CACHE_MEMORY_LIMIT_FOR_V1_AND_V2 = 155 * 1024 ** 2  # 155Mb
 
 _AGENT_DROP_IN_FILE_SLICE = "10-Slice.conf"
 _AGENT_DROP_IN_FILE_SLICE_CONTENTS = """
@@ -176,17 +181,29 @@ class CGroupConfigurator(object):
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                     return
 
-                if self.using_cgroup_v2():
-                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
-                    return
-
+                # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
+                # because the agent's Slice unit property will be 'azure.slice' if the slice drop-in file exists, even
+                # though systemd has not moved the agent to azure.slice yet. Systemd will only move the agent to
+                # azure.slice after a service restart.
                 agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
                 if agent_slice not in (AZURE_SLICE, "system.slice"):
                     log_cgroup_warning("The agent is within an unexpected slice: {0}".format(agent_slice))
                     return
 
+                # Notes about slice setup:
+                #   1. On first agent update (for machines where daemon version did not already create azure.slice), the
+                #   agent creates azure.slice and the agent unit Slice drop-in file, but systemd does not move the agent
+                #   unit to azure.slice until service restart. It is ok to enable cgroup usage in this case if agent is
+                #   running in system.slice.
+                #   2. We setup the slices before v2 check. Cgroup v2 usage is disabled for agent and extensions, but
+                #   can be enabled for log collector in waagent.conf. The log collector slice should be created in case
+                #   v2 usage is enabled for log collector.
                 self.__setup_azure_slice()
+
+                if self.using_cgroup_v2():
+                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
+                    return
 
                 # Log mount points/root paths for cgroup controllers
                 self._cgroups_api.log_root_paths()
@@ -199,19 +216,19 @@ class CGroupConfigurator(object):
                     self.disable(reason, DisableCgroups.ALL)
                     return
 
-                # Get metrics to track
-                metrics = self._agent_cgroup.get_controller_metrics(expected_relative_path=os.path.join(agent_slice, systemd.get_agent_unit_name()))
-                if len(metrics) > 0:
+                # Get controllers to track
+                agent_controllers = self._agent_cgroup.get_controllers(expected_relative_path=os.path.join(agent_slice, systemd.get_agent_unit_name()))
+                if len(agent_controllers) > 0:
                     self.enable()
 
-                for metric in metrics:
-                    for prop in metric.get_unit_properties():
+                for controller in agent_controllers:
+                    for prop in controller.get_unit_properties():
                         log_cgroup_info('Agent {0} unit property value: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
-                    if isinstance(metric, CpuMetrics):
+                    if isinstance(controller, _CpuController):
                         self.__set_cpu_quota(conf.get_agent_cpu_quota())
-                    elif isinstance(metric, MemoryMetrics):
-                        self._agent_memory_metrics = metric
-                    CGroupsTelemetry.track_cgroup(metric)
+                    elif isinstance(controller, _MemoryController):
+                        self._agent_memory_metrics = controller
+                    CGroupsTelemetry.track_cgroup_controller(controller)
 
             except Exception as exception:
                 log_cgroup_warning("Error initializing cgroups: {0}".format(ustr(exception)))
@@ -279,7 +296,7 @@ class CGroupConfigurator(object):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
             # Update log collector slice contents
-            slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=_LOGCOLLECTOR_CPU_QUOTA)
+            slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)
             files_to_create.append((logcollector_slice, slice_contents))
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
@@ -441,10 +458,10 @@ class CGroupConfigurator(object):
             elif disable_cgroups == DisableCgroups.AGENT:  # disable agent
                 self._agent_cgroups_enabled = False
                 self.__reset_agent_cpu_quota()
-                agent_metrics = self._agent_cgroup.get_controller_metrics()
-                for metric in agent_metrics:
-                    if isinstance(metric, CpuMetrics):
-                        CGroupsTelemetry.stop_tracking(metric)
+                agent_controllers = self._agent_cgroup.get_controllers()
+                for controller in agent_controllers:
+                    if isinstance(controller, _CpuController):
+                        CGroupsTelemetry.stop_tracking(controller)
                         break
 
             log_cgroup_warning("Disabling resource usage monitoring. Reason: {0}".format(reason), op=WALAEventOperation.CGroupsDisabled)
@@ -603,6 +620,22 @@ class CGroupConfigurator(object):
                 self._report_agent_cgroups_procs(agent_cgroup_proc_names, unexpected)
                 raise CGroupsException("The agent's cgroup includes unexpected processes: {0}".format(unexpected))
 
+        def get_logcollector_unit_properties(self):
+            """
+            Returns the systemd unit properties for the log collector process.
+
+            Each property should be explicitly set (even if already included in the log collector slice) for the log
+            collector process to run in the transient scope directory with the expected accounting and limits.
+            """
+            logcollector_properties = ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota={0}".format(LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)]
+            if not self.using_cgroup_v2():
+                return logcollector_properties
+            # Memory throttling limit is used when running log collector on v2 machines using the 'MemoryHigh' property.
+            # We do not use a systemd property to enforce memory on V1 because it invokes the OOM killer if the limit
+            # is exceeded.
+            logcollector_properties.append("--property=MemoryHigh={0}".format(LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2))
+            return logcollector_properties
+
         @staticmethod
         def _get_command(pid):
             try:
@@ -727,10 +760,10 @@ class CGroupConfigurator(object):
         def start_tracking_unit_cgroups(self, unit_name):
             try:
                 cgroup = self._cgroups_api.get_unit_cgroup(unit_name, unit_name)
-                metrics = cgroup.get_controller_metrics()
+                controllers = cgroup.get_controllers()
 
-                for metric in metrics:
-                    CGroupsTelemetry.track_cgroup(metric)
+                for controller in controllers:
+                    CGroupsTelemetry.track_cgroup_controller(controller)
 
             except Exception as exception:
                 log_cgroup_info("Failed to start tracking resource usage for the extension: {0}".format(ustr(exception)), send_event=False)
@@ -738,10 +771,10 @@ class CGroupConfigurator(object):
         def stop_tracking_unit_cgroups(self, unit_name):
             try:
                 cgroup = self._cgroups_api.get_unit_cgroup(unit_name, unit_name)
-                metrics = cgroup.get_controller_metrics()
+                controllers = cgroup.get_controllers()
 
-                for metric in metrics:
-                    CGroupsTelemetry.stop_tracking(metric)
+                for controller in controllers:
+                    CGroupsTelemetry.stop_tracking(controller)
 
             except Exception as exception:
                 log_cgroup_info("Failed to stop tracking resource usage for the extension service: {0}".format(ustr(exception)), send_event=False)
@@ -753,9 +786,9 @@ class CGroupConfigurator(object):
 
                 cgroup = self._cgroups_api.get_cgroup_from_relative_path(relative_path=cgroup_relative_path,
                                                                          cgroup_name=extension_name)
-                metrics = cgroup.get_controller_metrics()
-                for metric in metrics:
-                    CGroupsTelemetry.stop_tracking(metric)
+                controllers = cgroup.get_controllers()
+                for controller in controllers:
+                    CGroupsTelemetry.stop_tracking(controller)
 
             except Exception as exception:
                 log_cgroup_info("Failed to stop tracking resource usage for the extension service: {0}".format(ustr(exception)), send_event=False)

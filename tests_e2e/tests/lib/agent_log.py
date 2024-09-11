@@ -312,7 +312,7 @@ class AgentLog(object):
             # Reasons (first 5 errors): [ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] URI http://168.63.129.16/machine?comp=telemetrydata  [HTTP Failed] Status Code 400: Traceback (most recent call last):
             #
             {
-                'message': r"(?s)\[ProtocolError\].*http://168.63.129.16/machine\?comp=telemetrydata.*Status Code 400",
+                'message': r"(?s)\[ProtocolError\].*http:\/\/168.63.129.16\/machine\?comp=telemetrydata.*Status Code 400",
                 'if': lambda r: r.thread == 'SendTelemetryHandler' and self._increment_counter("SendTelemetryHandler-telemetrydata-Status Code 400") < 2  # ignore unless there are 2 or more instances
             },
             #

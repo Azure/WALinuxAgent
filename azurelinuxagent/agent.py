@@ -23,6 +23,7 @@ Module agent
 
 from __future__ import print_function
 
+import json
 import os
 import re
 import subprocess
@@ -31,7 +32,8 @@ import threading
 
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
-from azurelinuxagent.ga.controllermetrics import AGENT_LOG_COLLECTOR, CpuMetrics
+from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
+from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning, InvalidCgroupMountpointException
 from azurelinuxagent.ga.firewall_manager import FirewallManager
 
@@ -209,7 +211,7 @@ class Agent(object):
 
         # Check the cgroups unit
         log_collector_monitor = None
-        tracked_metrics = []
+        tracked_controllers = []
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
             try:
                 cgroup_api = get_cgroup_api()
@@ -221,10 +223,10 @@ class Agent(object):
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
             log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
-            tracked_metrics = log_collector_cgroup.get_controller_metrics()
+            tracked_controllers = log_collector_cgroup.get_controllers()
 
-            if len(tracked_metrics) != len(log_collector_cgroup.get_supported_controllers()):
-                log_cgroup_warning("At least one required controller is missing. The following controllers are required for the log collector to run: {0}".format(log_collector_cgroup.get_supported_controllers()))
+            if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
+                log_cgroup_warning("At least one required controller is missing. The following controllers are required for the log collector to run: {0}".format(log_collector_cgroup.get_supported_controller_names()))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
             if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
@@ -236,15 +238,30 @@ class Agent(object):
             # Running log collector resource monitoring only if agent starts the log collector.
             # If Log collector start by any other means, then it will not be monitored.
             if CollectLogsHandler.is_enabled_monitor_cgroups_check():
-                for metric in tracked_metrics:
-                    if isinstance(metric, CpuMetrics):
-                        metric.initialize_cpu_usage()
+                for controller in tracked_controllers:
+                    if isinstance(controller, _CpuController):
+                        controller.initialize_cpu_usage()
                         break
-                log_collector_monitor = get_log_collector_monitor_handler(tracked_metrics)
+                log_collector_monitor = get_log_collector_monitor_handler(tracked_controllers)
                 log_collector_monitor.run()
-            archive = log_collector.collect_logs_and_get_archive()
+
+            archive, total_uncompressed_size = log_collector.collect_logs_and_get_archive()
             logger.info("Log collection successfully completed. Archive can be found at {0} "
                   "and detailed log output can be found at {1}".format(archive, OUTPUT_RESULTS_FILE_PATH))
+
+            if log_collector_monitor is not None:
+                log_collector_monitor.stop()
+                try:
+                    metrics_summary = log_collector_monitor.get_max_recorded_metrics()
+                    metrics_summary['Total Uncompressed File Size (B)'] = total_uncompressed_size
+                    msg = json.dumps(metrics_summary)
+                    logger.info(msg)
+                    event.add_event(op=event.WALAEventOperation.LogCollection, message=msg, log_event=False)
+                except Exception as e:
+                    msg = "An error occurred while reporting log collector resource usage summary: {0}".format(ustr(e))
+                    logger.warn(msg)
+                    event.add_event(op=event.WALAEventOperation.LogCollection, is_success=False, message=msg, log_event=False)
+
         except Exception as e:
             logger.error("Log collection completed unsuccessfully. Error: {0}".format(ustr(e)))
             logger.info("Detailed log output can be found at {0}".format(OUTPUT_RESULTS_FILE_PATH))
