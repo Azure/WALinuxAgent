@@ -2242,7 +2242,7 @@ class HandlerManifest(object):
 
     def is_report_heartbeat(self):
         value = self.data['handlerManifest'].get('reportHeartbeat', False)
-        return self._parse_boolean_value(value)
+        return self._parse_boolean_value(value, default_val=False)
 
     def is_update_with_install(self):
         update_mode = self.data['handlerManifest'].get('updateMode')
@@ -2252,11 +2252,11 @@ class HandlerManifest(object):
 
     def is_continue_on_update_failure(self):
         value = self.data['handlerManifest'].get('continueOnUpdateFailure', False)
-        return self._parse_boolean_value(value)
+        return self._parse_boolean_value(value, default_val=False)
 
     def supports_multiple_extensions(self):
         value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
-        return self._parse_boolean_value(value)
+        return self._parse_boolean_value(value, default_val=False)
 
     def get_resource_limits(self, extension_name, str_version):
         """
@@ -2294,15 +2294,14 @@ class HandlerManifest(object):
         Check that the specified keys in the handler manifest has boolean values.
         """
         for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions']:
-            value = self.data['handlerManifest'].get(key, False)
-            if not isinstance(value, bool):
-                msg =("In the handler manifest: '{0}' has a non-boolean value [{1}] for boolean type. Please change it to a boolean value. "
-                      "For backward compatibility, 'true' (case insensitive) is accepted, and other values default to False.").format(key, value)
-                logger.warn(msg)
-                add_event(name=ext_name, is_success=False, message=msg, op=WALAEventOperation.ExtensionHandlerManifest, log_event=False)
+            value = self.data['handlerManifest'].get(key)
+            if value is not None and not isinstance(value, bool):
+                msg = "In the handler manifest: '{0}' has a non-boolean value [{1}] for boolean type. Please change it to a boolean value.".format(key, value)
+                logger.info(msg)
+                add_event(name=ext_name, message=msg, op=WALAEventOperation.ExtensionHandlerManifest, log_event=False)
 
     @staticmethod
-    def _parse_boolean_value(value, default_val=False):
+    def _parse_boolean_value(value, default_val):
         """
         Expects boolean value but
         for backward compatibility, 'true' (case-insensitive) is accepted, and other values default to False
