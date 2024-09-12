@@ -16,7 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from datetime import datetime, timedelta
 from pathlib import Path
 
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
