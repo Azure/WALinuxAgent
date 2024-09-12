@@ -25,6 +25,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
+from azurelinuxagent.common import event
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateError
 from azurelinuxagent.common.future import ustr
@@ -124,22 +125,20 @@ class EnableFirewall(PeriodicOperation):
             self._report_message("An error occurred while setting up the firewall: {0}".format(ustr(e)), is_success=False)
 
     def _report_message(self, message, is_success=True):
-        # Report the first 6 messages, then stop reporting for 8 hours
+        # Report the first 6 messages, then stop reporting for 12 hours
         if datetime.datetime.now() < self._report_after:
             return
 
         self._message_count += 1
         if self._message_count > 6:
-            self._report_after = datetime.datetime.now() + datetime.timedelta(hours=8)
+            self._report_after = datetime.datetime.now() + datetime.timedelta(hours=12)
             self._message_count = 0
             return
 
         if is_success:
-            logger.info(message)
+            event.info(WALAEventOperation.ResetFirewall, message)
         else:
-            logger.warn(message)
-
-        add_event(op=WALAEventOperation.ResetFirewall, message=message, is_success=is_success, log_event=False)
+            event.warning(WALAEventOperation.ResetFirewall, message)
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):

@@ -1088,6 +1088,7 @@ class UpdateHandler(object):
             except Exception as error:
                 event.error(WALAEventOperation.Firewall, "Unable to remove legacy firewall rule. Error: {0}".format(ustr(error)))
 
+            logger.info("Checking state of the firewall")
             try:
                 if firewall_manager.check():
                     event.info(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are already setup:\n{0}".format(firewall_manager.get_state()))
