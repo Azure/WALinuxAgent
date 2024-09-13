@@ -2305,11 +2305,11 @@ class HandlerManifest(object):
         """
         Expects boolean value but
         for backward compatibility, 'true' (case-insensitive) is accepted, and other values default to False
-        Note: In py2, string can be unicode or str type. In py3, unicode removed
+        Note: Json module returns unicode on py2. In py3, unicode removed
         ustr is a unicode object for Py2 and a str object for Py3.
         """
         if not isinstance(value, bool):
-            return True if isinstance(value, (ustr, str)) and value.lower() == "true" else default_val
+            return True if isinstance(value, ustr) and value.lower() == "true" else default_val
         return value
 
 

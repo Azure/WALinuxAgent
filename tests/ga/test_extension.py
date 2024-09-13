@@ -3477,7 +3477,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
         self.assertFalse(manifest.is_report_heartbeat())
         self.assertFalse(manifest.supports_multiple_extensions())
 
-    def test_handler_manifest_boolen_fields(self):
+    def test_handler_manifest_boolean_fields(self):
         # Set the boolean fields to strings
         handler_json = {
             "installCommand": "install_cmd",
@@ -3526,6 +3526,23 @@ class TestExtensionHandlerManifest(AgentTestCase):
         self.assertFalse(manifest.is_continue_on_update_failure())
         self.assertFalse(manifest.is_report_heartbeat())
         self.assertFalse(manifest.supports_multiple_extensions())
+
+    def test_unicode_values_for_boolean_fields_in_handler_manifest(self):
+        handler_json = {
+            "installCommand": "install_cmd",
+            "uninstallCommand": "uninstall_cmd",
+            "updateCommand": "update_cmd",
+            "enableCommand": "enable_cmd",
+            "disableCommand": "disable_cmd",
+            "reportHeartbeat": u"true",
+            "continueOnUpdateFailure": u"true",
+            "supportsMultipleExtensions": u"true"
+        }
+
+        manifest = HandlerManifest({'handlerManifest': handler_json})
+        self.assertTrue(manifest.is_continue_on_update_failure())
+        self.assertTrue(manifest.is_report_heartbeat())
+        self.assertTrue(manifest.supports_multiple_extensions())
 
     def test_report_msg_if_handler_manifest_contains_invalid_values(self):
         # Set the boolean fields to invalid values
