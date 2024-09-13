@@ -29,6 +29,7 @@ import unittest
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_crp
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import WALAEventOperation
@@ -3534,9 +3535,9 @@ class TestExtensionHandlerManifest(AgentTestCase):
             "updateCommand": "update_cmd",
             "enableCommand": "enable_cmd",
             "disableCommand": "disable_cmd",
-            "reportHeartbeat": u"true",
-            "continueOnUpdateFailure": u"true",
-            "supportsMultipleExtensions": u"true"
+            "reportHeartbeat": ustr("true"),
+            "continueOnUpdateFailure": ustr("true"),
+            "supportsMultipleExtensions": ustr("true")
         }
 
         manifest = HandlerManifest({'handlerManifest': handler_json})
