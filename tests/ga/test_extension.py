@@ -3446,7 +3446,6 @@ class TestExtensionHandlerManifest(AgentTestCase):
         self.test_file = os.path.join(self.tmp_dir, "HandlerManifest.json")
 
     def test_handler_manifest_parsed_correctly(self):
-        test_file = os.path.join(self.tmp_dir, "HandlerManifest.json")
         shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "valid_manifest.json"), self.test_file)
 
         with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
