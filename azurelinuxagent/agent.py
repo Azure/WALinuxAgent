@@ -45,7 +45,6 @@ from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PA
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.ga.firewall_manager import IpTables
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -274,13 +273,13 @@ class Agent(object):
     def setup_firewall(endpoint):
         logger.set_prefix("Firewall")
         threading.current_thread().name = "Firewall"
-        logger.info("Setting up firewall for the WALinux Agent. Endpoint: {0}", endpoint)
+        event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}".format(ustr(endpoint)))
         try:
             firewall_manager = FirewallManager.create(endpoint)
             firewall_manager.setup()
-            logger.info("Successfully set the firewall rules")
+            event.info(event.WALAEventOperation.Firewall, "Successfully set the firewall rules")
         except Exception as error:
-            logger.error("Unable to add firewall rules. Error: {0}".format(ustr(error)))
+            event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}".format(ustr(error)))
             sys.exit(1)
 
 

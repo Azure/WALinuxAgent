@@ -680,10 +680,10 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
               message="", log_level=None, log_event=True, reporter=__event_logger__):
     """
     NOTES:
-        * If log_event is True and is_success is False, the event is logged in the agent's log using this format: "Event: name={0}, op={1}, message={2}, duration={3}".
+        * If log_event is True and is_success is False, the event is written to the agent's log using this format: "Event: name={0}, op={1}, message={2}, duration={3}".
           This usage is kept only for backwards compatibility, prefer the use of log_level over log_event and is_success.
         * If log_level is provided, the event is logged using the provided logger.LogLevel. The log_event parameter is set to False and the is_success parameter is
-          set to False if the log level is ERROR or WARNING, or True otherwise
+          set to False if the log level is ERROR or WARNING, and True otherwise
 
     See also info(), warning(), error()
 

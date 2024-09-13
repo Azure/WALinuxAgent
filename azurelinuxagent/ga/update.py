@@ -1101,10 +1101,9 @@ class UpdateHandler(object):
             #
             # Ensure firewall rules are persisted across reboots
             #
-            logger.info("Setting up persistent firewall rules")
+            event.info(WALAEventOperation.PersistFirewallRules, "Setting up persistent firewall rules")
             try:
                 PersistFirewallRulesHandler(dst_ip=wire_server_address).setup()
-                event.info(WALAEventOperation.PersistFirewallRules, "Persistent firewall rules setup successfully")
             except Exception as error:
                 event.error(WALAEventOperation.PersistFirewallRules, "Unable to setup the persistent firewall rules: {0}".format(ustr(error)))
 

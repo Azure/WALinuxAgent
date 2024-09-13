@@ -130,7 +130,7 @@ class EnableFirewall(PeriodicOperation):
             return
 
         self._message_count += 1
-        if self._message_count > 6:
+        if self._message_count > 3:
             self._report_after = datetime.datetime.now() + datetime.timedelta(hours=12)
             self._message_count = 0
             return
