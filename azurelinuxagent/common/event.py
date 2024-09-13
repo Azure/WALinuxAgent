@@ -689,7 +689,7 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
 
     """
     if log_level is not None:
-        logger.log(log_level, "{0}", message)
+        logger.log(log_level, "{0}".format(message))
         log_event = False
         is_success = log_level == logger.LogLevel.WARNING or log_level == logger.LogLevel.ERROR
         message = message if log_level != logger.LogLevel.WARNING else "[WARNING] {0}".format(message)
