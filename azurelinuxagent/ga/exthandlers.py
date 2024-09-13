@@ -2309,7 +2309,7 @@ class HandlerManifest(object):
         ustr is a unicode object for Py2 and a str object for Py3.
         """
         if not isinstance(value, bool):
-            return True if isinstance(value, ustr) or isinstance(value, str) and value.lower() == "true" else default_val
+            return True if isinstance(value, (ustr, str)) and value.lower() == "true" else default_val
         return value
 
 
