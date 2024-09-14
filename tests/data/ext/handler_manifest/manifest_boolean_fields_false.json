@@ -1,0 +1,15 @@
+[{
+    "name": "ExampleHandlerLinux",
+    "version": 1.0,
+    "handlerManifest": {
+      "installCommand": "install_cmd",
+      "uninstallCommand": "uninstall_cmd",
+      "updateCommand": "update_cmd",
+      "enableCommand": "enable_cmd",
+      "disableCommand": "disable_cmd",
+      "reportHeartbeat": "false",
+      "continueOnUpdateFailure": "false",
+      "supportsMultipleExtensions": "false"
+    }
+}]
+
