@@ -133,7 +133,7 @@ class FirewallManager(object):
 
 class _FirewallManagerMultipleRules(FirewallManager):
     """
-    Base class for firewall manager that handle multiple rules, each rule being manipulated with a different command line (e.g. iptables, firewalld)
+    Base class for firewall managers that handle multiple rules, each rule being manipulated with a different command line (e.g. iptables, firewalld)
     """
     def setup(self):
         for command in self._get_commands(self._get_append_command_option()):

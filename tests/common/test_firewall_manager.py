@@ -32,24 +32,28 @@ def create_mock_iptables(version='1.4.21'):
             "ACCEPT DNS": 0,
             "ACCEPT": 0,
             "DROP": 0,
+            "legacy": 0,
         },
         "-C": {
             "ACCEPT DNS": 0,
             "ACCEPT": 0,
             "DROP": 0,
+            "legacy": 0,
         },
         # Note that currently the Agent calls delete repeatedly until it returns 1, indicating that the rule does not exist
         "-D": {
             "ACCEPT DNS": 1,
             "ACCEPT": 1,
             "DROP": 1,
+            "legacy": 1,
         },
     }
 
-    def set_return_values(option, accept_dns, accept, drop):
+    def set_return_values(option, accept_dns, accept, drop, legacy):
         return_values[option]["ACCEPT DNS"] = accept_dns
         return_values[option]["ACCEPT"] = accept
         return_values[option]["DROP"] = drop
+        return_values[option]["legacy"] = legacy
 
     def get_return_value(command):
         """
@@ -58,9 +62,10 @@ def create_mock_iptables(version='1.4.21'):
             iptables [-w] -t security <-A|-C|-D> OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT
             iptables [-w] -t security <-A|-C|-D> OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner <guid> -j ACCEPT
             iptables [-w] -t security <-A|-C|-D> OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j DROP
+            iptables [-w] -t security <-A|-C|-D> OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT (legacy rule
 
         """
-        match = re.match(r"iptables (-w )?-t security (?P<option>-[ACD]) OUTPUT -d 168.63.129.16 -p tcp (?P<rule>--destination-port 53 -j ACCEPT|-m owner --uid-owner \d+ -j ACCEPT|.+ -j DROP)", command)
+        match = re.match(r"iptables (-w )?-t security (?P<option>-[ACD]) OUTPUT -d 168.63.129.16 -p tcp (?P<rule>--destination-port 53 -j ACCEPT|-m owner --uid-owner \d+ -j ACCEPT|.+ -j (DROP|ACCEPT))", command)
         if match is None:
             raise Exception("Unexpected command: {0}".format(command))
         option = match.group("option")
@@ -71,6 +76,8 @@ def create_mock_iptables(version='1.4.21'):
             return return_values[option]["ACCEPT"]
         if rule == "-m conntrack --ctstate INVALID,NEW -j DROP":
             return return_values[option]["DROP"]
+        if rule == "-m conntrack --ctstate INVALID,NEW -j ACCEPT":
+            return return_values[option]["legacy"]
         raise Exception("Unexpected rule: {0}".format(rule))
 
     original_run_command = shellutil.run_command
@@ -94,7 +101,7 @@ def create_mock_iptables(version='1.4.21'):
         yield run_command_patcher
 
 
-class TestIpTablesFirewall(AgentTestCase):
+class TestIpTables(AgentTestCase):
     @staticmethod
     def get_accept_dns_command(option):
         return "iptables -w -t security {0} OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT".format(option)
@@ -106,6 +113,10 @@ class TestIpTablesFirewall(AgentTestCase):
     @staticmethod
     def get_drop_command(option):
         return "iptables -w -t security {0} OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j DROP".format(option)
+
+    @staticmethod
+    def get_legacy_command(option):
+        return "iptables -w -t security {0} OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT".format(option)
 
     def test_setup_should_set_all_the_firewall_rules(self):
         with create_mock_iptables() as mock_iptables:
@@ -140,7 +151,7 @@ class TestIpTablesFirewall(AgentTestCase):
 
     def test_remove_should_not_attempt_to_delete_rules_that_do_not_exist(self):
         with create_mock_iptables() as mock_iptables:
-            mock_iptables.set_return_values("-C", accept_dns=0, accept=1, drop=0)  # The accept rule does not exist
+            mock_iptables.set_return_values("-C", accept_dns=0, accept=1, drop=0, legacy=0)  # The accept rule does not exist
 
             firewall = IpTables('168.63.129.16')
             firewall.remove()
@@ -155,6 +166,31 @@ class TestIpTablesFirewall(AgentTestCase):
                 ],
                 mock_iptables.firewall_calls,
                 "Expected 3 calls to the -C (check) command followed by 2 calls to the -D (delete) command (accept DNS and drop)")
+
+    def test_check_should_verify_all_rules(self):
+        with create_mock_iptables() as mock_iptables:
+            firewall = IpTables('168.63.129.16')
+            firewall.check()
+
+            self.assertEqual(
+                [
+                    self.get_accept_dns_command("-C"),
+                    self.get_accept_command("-C"),
+                    self.get_drop_command("-C")
+                ],
+                mock_iptables.firewall_calls, "Expected 3 calls to the -C (check) command")
+
+    def test_remove_legacy_rule_should_delete_the_legacy_rule(self):
+        with create_mock_iptables() as mock_iptables:
+            firewall = IpTables('168.63.129.16')
+            firewall.remove_legacy_rule()
+
+            self.assertEqual(
+                [
+                    self.get_legacy_command("-C"),
+                    self.get_legacy_command("-D")
+                ],
+                mock_iptables.firewall_calls, "Expected a check (-C) for the legacy rule, followed by a delete (-D) of the rule")
 
     def test_it_should_not_use_the_wait_option_on_iptables_versions_less_than_1_4_21(self):
         with create_mock_iptables(version='1.4.20') as mock_iptables:

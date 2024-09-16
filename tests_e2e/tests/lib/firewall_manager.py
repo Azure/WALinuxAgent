@@ -22,7 +22,7 @@ def get_wireserver_ip() -> str:
 
 class FirewallConfigurationError(Exception):
     """
-    Exception raised when the firewall is not confired correctly
+    Exception raised when the firewall is not configured correctly
     """
 
 
@@ -266,10 +266,13 @@ class NfTables(FirewallManager):
     def get_missing_rules(self) -> List[str]:
         missing = []
 
-        wireserver_rule = self._get_wireserver_rule()
-        for rule, regexp in NfTables._rule_regexp.items():
-            if re.search(regexp, wireserver_rule) is None:
-                missing.append(rule)
+        try:
+            wireserver_rule = self._get_wireserver_rule()
+            for rule, regexp in NfTables._rule_regexp.items():
+                if re.search(regexp, wireserver_rule) is None:
+                    missing.append(rule)
+        except FirewallConfigurationError:
+            missing = [FirewallManager.ACCEPT_DNS, FirewallManager.ACCEPT, FirewallManager.DROP]
 
         return missing
 
@@ -281,10 +284,13 @@ class NfTables(FirewallManager):
             raise Exception(f"Invalid rule name: {rule_name}")
 
     def _get_wireserver_rule(self) -> str:
+        """
+        Returns the output line of the nft command that contains the rule for the WireServer address; raises FirewallConfigurationError if the rule is not found.
+        """
         for line in self.get_state().split("\n"):
             if re.search(r"\s*ip daddr 168.63.129.16\s*", line) is not None:
                 return line
-        raise Exception("Could not any rules for the WireServer address in the nftables state")
+        raise FirewallConfigurationError("Could not find any rules for the WireServer address in the nftables state")
 
     def delete_rule(self, rule_name: str) -> None:
         output: str = shellutil.run_command(["sudo", "nft", "--json", "--handle", "list", "table", "walinuxagent"])
