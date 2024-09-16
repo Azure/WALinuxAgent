@@ -115,16 +115,16 @@ class EnableFirewall(PeriodicOperation):
             try:
                 if self._firewall_manager.check():
                     return  # The firewall is configured correctly
-                self._report_message("The firewall has not been setup. Will set it up.", is_success=False)
+                self._report(event.warn, "The firewall has not been setup. Will set it up.")
             except FirewallStateError as e:
-                self._report_message("The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}".format(ustr(e), self._firewall_manager.get_state()), is_success=False)
+                self._report(event.warn, "The firewall is not configured correctly. {0}. Will reset it. Current state:\n{1}", ustr(e), self._firewall_manager.get_state())
                 self._firewall_manager.remove()
             self._firewall_manager.setup()
-            self._report_message("The firewall was setup successfully:\n{0}".format(self._firewall_manager.get_state()))
+            self._report(event.info, "The firewall was setup successfully:\n{0}", self._firewall_manager.get_state())
         except Exception as e:
-            self._report_message("An error occurred while setting up the firewall: {0}".format(ustr(e)), is_success=False)
+            self._report(event.warn, "An error occurred while setting up the firewall: {0}", ustr(e))
 
-    def _report_message(self, message, is_success=True):
+    def _report(self, report_function, message, *args):
         # Report the first 6 messages, then stop reporting for 12 hours
         if datetime.datetime.now() < self._report_after:
             return
@@ -135,10 +135,7 @@ class EnableFirewall(PeriodicOperation):
             self._message_count = 0
             return
 
-        if is_success:
-            event.info(WALAEventOperation.ResetFirewall, message)
-        else:
-            event.warn(WALAEventOperation.ResetFirewall, message)
+        report_function(WALAEventOperation.ResetFirewall, message, *args)
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):
