@@ -152,7 +152,8 @@ class TestProtocolUtil(AgentTestCase):
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
-    def test_get_protocol_wireserver_to_wireserver_update_removes_metadataserver_artifacts(self, mock_enable_firewall, mock_get_lib_dir, _):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_get_protocol_wireserver_to_wireserver_update_removes_metadataserver_artifacts(self, _, mock_enable_firewall, mock_get_lib_dir, __):
         """
         This is for testing that agent upgrade from WireServer to WireServer protocol
         will clean up leftover MDS Certificates (from a previous Metadata Server to Wireserver
@@ -194,7 +195,8 @@ class TestProtocolUtil(AgentTestCase):
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.protocol.wire.WireClient')
-    def test_get_protocol_metadataserver_to_wireserver_update_removes_metadataserver_artifacts(self, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, _):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_get_protocol_metadataserver_to_wireserver_update_removes_metadataserver_artifacts(self, _, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, __):
         """
         This is for testing that agent upgrade from MetadataServer to WireServer protocol
         will clean up leftover MDS Certificates and reset firewall rules. Also check that

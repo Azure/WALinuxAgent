@@ -76,7 +76,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        mock_remove_firewall.assert_called_once()
+        self.assertEquals(1, mock_remove_firewall.call_count, "_remove_firewall should be called once")
 
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.conf.get_lib_dir')
@@ -107,7 +107,7 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
         self.assertFalse(os.path.exists(metadata_server_p7b_file))
 
         # Assert Firewall rule calls
-        mock_remove_firewall.assert_called_once()
+        self.assertEquals(1, mock_remove_firewall.call_count, "_remove_firewall should be called once")
 
     # Cleanup certificate files
     def tearDown(self):
