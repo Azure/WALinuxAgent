@@ -50,7 +50,8 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('os.getuid')
-    def test_cleanup_metadata_server_artifacts_firewall_enabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_cleanup_metadata_server_artifacts_firewall_enabled(self, _, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
         # Setup Certificate Files
         dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
@@ -81,7 +82,8 @@ class TestMetadataServerMigrationUtil(AgentTestCase):
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('os.getuid')
-    def test_cleanup_metadata_server_artifacts_firewall_disabled(self, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_cleanup_metadata_server_artifacts_firewall_disabled(self, _, mock_os_getuid, mock_get_lib_dir, mock_enable_firewall):
         # Setup Certificate Files
         dir = tempfile.gettempdir()  # pylint: disable=redefined-builtin
         metadata_server_transport_prv_file = os.path.join(dir, _LEGACY_METADATA_SERVER_TRANSPORT_PRV_FILE_NAME)
