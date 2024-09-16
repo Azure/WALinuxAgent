@@ -102,7 +102,6 @@ class FirewallManager(object):
         """
         The iptables and firewalld managers need to remove legacy rules; no-op for other managers.
         """
-        pass
 
     def check(self):
         """
@@ -169,7 +168,7 @@ class _FirewallManagerMultipleRules(FirewallManager):
         logger.info("Found legacy firewall rule: {0}", check_command)
         delete_command = self._get_legacy_rule_command(self._get_delete_command_option())
         self._execute_delete_command(delete_command)
-        event.info(WALAEventOperation.Firewall, "Removed legacy firewall rule: {0}".format(delete_command))
+        event.info(WALAEventOperation.Firewall, "Removed legacy firewall rule: {0}", delete_command)
 
     def _execute_delete_command(self, command):
         """

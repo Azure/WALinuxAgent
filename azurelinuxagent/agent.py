@@ -273,13 +273,13 @@ class Agent(object):
     def setup_firewall(endpoint):
         logger.set_prefix("Firewall")
         threading.current_thread().name = "Firewall"
-        event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}".format(ustr(endpoint)))
+        event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}", ustr(endpoint))
         try:
             firewall_manager = FirewallManager.create(endpoint)
             firewall_manager.setup()
             event.info(event.WALAEventOperation.Firewall, "Successfully set the firewall rules")
         except Exception as error:
-            event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}".format(ustr(error)))
+            event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}", ustr(error))
             sys.exit(1)
 
 

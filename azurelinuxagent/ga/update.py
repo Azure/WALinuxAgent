@@ -1086,17 +1086,17 @@ class UpdateHandler(object):
             try:
                 firewall_manager.remove_legacy_rule()
             except Exception as error:
-                event.error(WALAEventOperation.Firewall, "Unable to remove legacy firewall rule. Error: {0}".format(ustr(error)))
+                event.error(WALAEventOperation.Firewall, "Unable to remove legacy firewall rule. Error: {0}", ustr(error))
 
             logger.info("Checking state of the firewall")
             try:
                 if firewall_manager.check():
-                    event.info(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are already setup:\n{0}".format(firewall_manager.get_state()))
+                    event.info(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are already setup:\n{0}", firewall_manager.get_state())
                 else:
                     firewall_manager.setup()
-                    event.info(WALAEventOperation.Firewall, "Created firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state()))
+                    event.info(WALAEventOperation.Firewall, "Created firewall rules for Azure Fabric:\n{0}", firewall_manager.get_state())
             except FirewallStateError as e:
-                event.warning(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}".format(ustr(e)))
+                event.warn(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}", ustr(e))
 
             #
             # Ensure firewall rules are persisted across reboots
@@ -1105,7 +1105,7 @@ class UpdateHandler(object):
             try:
                 PersistFirewallRulesHandler(dst_ip=wire_server_address).setup()
             except Exception as error:
-                event.error(WALAEventOperation.PersistFirewallRules, "Unable to setup the persistent firewall rules: {0}".format(ustr(error)))
+                event.error(WALAEventOperation.PersistFirewallRules, "Unable to setup the persistent firewall rules: {0}", ustr(error))
 
         except Exception as e:
-            event.error(WALAEventOperation.Firewall, "Error initializing firewall: {0}".format(ustr(e)))
+            event.error(WALAEventOperation.Firewall, "Error initializing firewall: {0}", ustr(e))

@@ -138,7 +138,7 @@ class EnableFirewall(PeriodicOperation):
         if is_success:
             event.info(WALAEventOperation.ResetFirewall, message)
         else:
-            event.warning(WALAEventOperation.ResetFirewall, message)
+            event.warn(WALAEventOperation.ResetFirewall, message)
 
 
 class SetRootDeviceScsiTimeout(PeriodicOperation):

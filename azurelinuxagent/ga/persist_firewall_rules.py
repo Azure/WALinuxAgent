@@ -122,7 +122,7 @@ if __name__ == '__main__':
             if systemd.is_systemd():
                 self._setup_network_setup_service()
             else:
-                event.info(WALAEventOperation.PersistFirewallRules, "Did not detect systemd, will not set {0}".format(self._network_setup_service_name))
+                event.info(WALAEventOperation.PersistFirewallRules, "Did not detect systemd, will not set {0}", self._network_setup_service_name)
             return
 
         event.info(WALAEventOperation.PersistFirewallRules,"Firewalld.service is running, setting up permanent rules on the VM")
@@ -135,17 +135,17 @@ if __name__ == '__main__':
 
         try:
             if firewall_manager.check():
-                event.info(WALAEventOperation.PersistFirewallRules, "The permanent firewall rules for Azure Fabric are already setup:\n{0}".format(firewall_manager.get_state()))
+                event.info(WALAEventOperation.PersistFirewallRules, "The permanent firewall rules for Azure Fabric are already setup:\n{0}", firewall_manager.get_state())
             else:
                 firewall_manager.setup()
-                event.info(WALAEventOperation.PersistFirewallRules, "Created permanent firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state()))
+                event.info(WALAEventOperation.PersistFirewallRules, "Created permanent firewall rules for Azure Fabric:\n{0}", firewall_manager.get_state())
         except FirewallStateError as e:
-            event.warning(
+            event.warn(
                 WALAEventOperation.PersistFirewallRules,
-                "The permanent firewall rules for Azure Fabric are not setup correctly ({0}), will reset them. Current state:\n{1}".format(ustr(e), firewall_manager.get_state()))
+                "The permanent firewall rules for Azure Fabric are not setup correctly ({0}), will reset them. Current state:\n{1}", ustr(e), firewall_manager.get_state())
             firewall_manager.remove()
             firewall_manager.setup()
-            event.info(WALAEventOperation.PersistFirewallRules, "Reset permanent firewall rules for Azure Fabric:\n{0}".format(firewall_manager.get_state()))
+            event.info(WALAEventOperation.PersistFirewallRules, "Reset permanent firewall rules for Azure Fabric:\n{0}", firewall_manager.get_state())
 
         # Remove custom service if exists to avoid problems with firewalld
         try:
@@ -176,7 +176,7 @@ if __name__ == '__main__':
 
         network_service_enabled = self.__verify_network_setup_service_enabled()
         if network_service_enabled and not self.__should_update_unit_file():
-            event.info(WALAEventOperation.PersistFirewallRules, "Service: {0} already enabled. No change needed.".format(self._network_setup_service_name))
+            event.info(WALAEventOperation.PersistFirewallRules, "Service: {0} already enabled. No change needed.", self._network_setup_service_name)
             self.__log_network_setup_service_logs()
 
         else:
@@ -190,7 +190,7 @@ if __name__ == '__main__':
             self.__set_service_unit_file()
             # Reload systemd configurations when we setup the service for the first time to avoid systemctl warnings
             self.__reload_systemd_conf()
-            event.info(WALAEventOperation.PersistFirewallRules, "Successfully added and enabled the {0}".format(self._network_setup_service_name))
+            event.info(WALAEventOperation.PersistFirewallRules, "Successfully added and enabled the {0}", self._network_setup_service_name)
 
     def __setup_binary_file(self):
         binary_file_path = os.path.join(conf.get_lib_dir(), self.BINARY_FILE_NAME)

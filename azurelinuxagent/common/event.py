@@ -677,23 +677,7 @@ def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_
 
 
 def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
-              message="", log_level=None, log_event=True, reporter=__event_logger__):
-    """
-    NOTES:
-        * If log_event is True and is_success is False, the event is written to the agent's log using this format: "Event: name={0}, op={1}, message={2}, duration={3}".
-          This usage is kept only for backwards compatibility, prefer the use of log_level over log_event and is_success.
-        * If log_level is provided, the event is logged using the provided logger.LogLevel. The log_event parameter is set to False and the is_success parameter is
-          set to False if the log level is ERROR or WARNING, and True otherwise
-
-    See also info(), warning(), error()
-
-    """
-    if log_level is not None:
-        logger.log(log_level, "{0}".format(message))
-        log_event = False
-        is_success = log_level == logger.LogLevel.WARNING or log_level == logger.LogLevel.ERROR
-        message = message if log_level != logger.LogLevel.WARNING else "[WARNING] {0}".format(message)
-
+              message="", log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
@@ -706,25 +690,28 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
                            log_event=log_event)
 
 
-def info(op, message):
+def info(op, fmt, *args):
     """
      Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.INFO...);
     """
-    add_event(op=op, message=message, log_level=logger.LogLevel.INFO)
+    logger.info(fmt, *args)
+    add_event(op=op, message=fmt.format(*args), is_success=True)
 
 
-def warning(op, message):
+def warn(op, fmt, *args):
     """
     Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.WARNING...)
     """
-    add_event(op=op, message=message, log_level=logger.LogLevel.WARNING)
+    logger.warn(fmt, *args)
+    add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
 
 
-def error(op, message):
+def error(op, fmt, *args):
     """
     Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.ERROR...)
     """
-    add_event(op=op, message=message, log_level=logger.LogLevel.ERROR)
+    logger.warn(fmt, *args)
+    add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
 
 
 def add_log_event(level, message, forced=False, reporter=__event_logger__):
