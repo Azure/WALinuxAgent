@@ -176,8 +176,6 @@ class TestProtocolUtil(AgentTestCase):
         mock_get_lib_dir.return_value = dir
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
-        protocol_util.osutil = MagicMock()
-        protocol_util.osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
@@ -265,7 +263,8 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
         # Run
-        protocol_util.get_protocol()
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            protocol_util.get_protocol()
 
         # Check that WireServer Certs exist
         ws_cert_paths = [os.path.join(dir, ws_cert) for ws_cert in TestProtocolUtil.WIRESERVER_CERTIFICATES]
@@ -273,8 +272,7 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules were not reset
-        protocol_util.osutil.remove_firewall.assert_not_called()
-        protocol_util.osutil.enable_firewall.assert_not_called()
+        mock_remove_firewall.assert_not_called()
 
         # Check Protocol File is updated to WireProtocol
         with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
