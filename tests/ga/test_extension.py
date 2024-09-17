@@ -3436,6 +3436,76 @@ class TestExtension(TestExtensionBase, HttpRequestPredicates):
             self.assertIn('[stdout]\n{0}'.format(expected), message, "The extension's stdout was not redacted correctly")
             self.assertIn('[stderr]\n{0}'.format(expected), message, "The extension's stderr was not redacted correctly")
 
+class TestExtensionHandlerManifest(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.ext_handler = Extension(name='foo')
+        self.ext_handler.version = "1.2.3"
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=WireProtocol("1.2.3.4"))
+        self.test_file = os.path.join(self.tmp_dir, "HandlerManifest.json")
+
+    def test_handler_manifest_parsed_correctly(self):
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "valid_manifest.json"), self.test_file)
+
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertEqual(manifest.get_install_command(), "install_cmd")
+            self.assertEqual(manifest.get_enable_command(), "enable_cmd")
+            self.assertEqual(manifest.get_uninstall_command(), "uninstall_cmd")
+            self.assertEqual(manifest.get_update_command(), "update_cmd")
+            self.assertEqual(manifest.get_disable_command(), "disable_cmd")
+            self.assertTrue(manifest.is_continue_on_update_failure())
+            self.assertTrue(manifest.is_report_heartbeat())
+            self.assertTrue(manifest.supports_multiple_extensions())
+
+    def test_handler_manifest_defaults(self):
+        # Set only the required fields
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_no_optional_fields.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertFalse(manifest.is_continue_on_update_failure())
+            self.assertFalse(manifest.is_report_heartbeat())
+            self.assertFalse(manifest.supports_multiple_extensions())
+
+    def test_handler_manifest_boolean_fields(self):
+        # Set the boolean fields to strings
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_strings.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertTrue(manifest.is_continue_on_update_failure())
+            self.assertTrue(manifest.is_report_heartbeat())
+            self.assertTrue(manifest.supports_multiple_extensions())
+
+        # set the boolean fields to invalid values
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_invalid.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertFalse(manifest.is_continue_on_update_failure())
+            self.assertFalse(manifest.is_report_heartbeat())
+            self.assertFalse(manifest.supports_multiple_extensions())
+
+        # set the boolean fields to 'false' string
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_false.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            manifest = self.ext_handler_instance.load_manifest()
+            self.assertFalse(manifest.is_continue_on_update_failure())
+            self.assertFalse(manifest.is_report_heartbeat())
+            self.assertFalse(manifest.supports_multiple_extensions())
+
+    def test_report_msg_if_handler_manifest_contains_invalid_values(self):
+        # Set the boolean fields to invalid values
+        shutil.copyfile(os.path.join(data_dir, "ext", "handler_manifest", "manifest_boolean_fields_invalid.json"), self.test_file)
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_manifest_file", return_value=self.test_file):
+            with patch("azurelinuxagent.ga.exthandlers.add_event") as mock_add_event:
+                manifest = self.ext_handler_instance.load_manifest()
+                manifest.report_invalid_boolean_properties("test_ext")
+                kw_messages = [kw for _, kw in mock_add_event.call_args_list if kw.get('op') == 'ExtensionHandlerManifest']
+                self.assertEqual(3, len(kw_messages))
+                self.assertIn("'reportHeartbeat' has a non-boolean value", kw_messages[0]['message'])
+                self.assertIn("'continueOnUpdateFailure' has a non-boolean value", kw_messages[1]['message'])
+                self.assertIn("'supportsMultipleExtensions' has a non-boolean value", kw_messages[2]['message'])
+
 
 if __name__ == '__main__':
     unittest.main()

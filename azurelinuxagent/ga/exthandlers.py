@@ -1296,6 +1296,9 @@ class ExtHandlerInstance(object):
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
 
+        man = self.load_manifest()
+        man.report_invalid_boolean_properties(ext_name=self.get_full_name())
+
         self.ensure_consistent_data_for_mc()
 
         # Create status and config dir
@@ -2230,7 +2233,8 @@ class HandlerManifest(object):
         return self.data['handlerManifest']["disableCommand"]
 
     def is_report_heartbeat(self):
-        return self.data['handlerManifest'].get('reportHeartbeat', False)
+        value = self.data['handlerManifest'].get('reportHeartbeat', False)
+        return self._parse_boolean_value(value, default_val=False)
 
     def is_update_with_install(self):
         update_mode = self.data['handlerManifest'].get('updateMode')
@@ -2239,13 +2243,38 @@ class HandlerManifest(object):
         return update_mode.lower() == "updatewithinstall"
 
     def is_continue_on_update_failure(self):
-        return self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        value = self.data['handlerManifest'].get('continueOnUpdateFailure', False)
+        return self._parse_boolean_value(value, default_val=False)
 
     def supports_multiple_extensions(self):
-        return self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
+        return self._parse_boolean_value(value, default_val=False)
 
     def get_resource_limits(self):
         return ResourceLimits(self.data.get('resourceLimits', None))
+
+    def report_invalid_boolean_properties(self, ext_name):
+        """
+        Check that the specified keys in the handler manifest has boolean values.
+        """
+        for key in ['reportHeartbeat', 'continueOnUpdateFailure', 'supportsMultipleExtensions']:
+            value = self.data['handlerManifest'].get(key)
+            if value is not None and not isinstance(value, bool):
+                msg = "In the handler manifest: '{0}' has a non-boolean value [{1}] for boolean type. Please change it to a boolean value.".format(key, value)
+                logger.info(msg)
+                add_event(name=ext_name, message=msg, op=WALAEventOperation.ExtensionHandlerManifest, log_event=False)
+
+    @staticmethod
+    def _parse_boolean_value(value, default_val):
+        """
+        Expects boolean value but
+        for backward compatibility, 'true' (case-insensitive) is accepted, and other values default to False
+        Note: Json module returns unicode on py2. In py3, unicode removed
+        ustr is a unicode object for Py2 and a str object for Py3.
+        """
+        if not isinstance(value, bool):
+            return True if isinstance(value, ustr) and value.lower() == "true" else default_val
+        return value
 
 
 class ResourceLimits(object):
