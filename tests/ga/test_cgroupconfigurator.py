@@ -225,7 +225,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator(initialize=False) as configurator:
             log_collector_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.logcollector)
 
-            # The mock creates the slice unit file with memory limit
+            # The mock creates the slice unit file
             configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "azure-walinuxagent-logcollector.slice"),
                                              UnitFilePaths.logcollector)
 
