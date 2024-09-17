@@ -65,7 +65,7 @@ class AgentFirewall(AgentVmTest):
                            r"|"
                            r"\[('No expression excludes the DNS port'|'The drop action is missing'|\"No expression excludes the Agent's UID\")+\]"
                            r"|"
-                           r"\(There should be exactly one rule in the 'output' chain.)",
+                           r"\(There should be exactly one rule in the 'output' chain.\)",
                 'if': lambda r: r.level == "WARNING"
             }
         ]
