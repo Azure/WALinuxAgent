@@ -24,7 +24,7 @@ from assertpy import fail
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import verify_if_distro_supports_cgroup, \
     verify_agent_cgroup_assigned_correctly, BASE_CGROUP, EXT_CONTROLLERS, get_unit_cgroup_mount_path, \
-    GATESTEXT_SERVICE, AZUREMONITORAGENT_SERVICE, MDSD_SERVICE, check_agent_quota_disabled, \
+    GATESTEXT_SERVICE, AZUREMONITORAGENT_SERVICE, check_agent_quota_disabled, \
     check_cgroup_disabled_with_unknown_process, CGROUP_TRACKED_PATTERN, AZUREMONITOREXT_FULL_NAME, GATESTEXT_FULL_NAME, \
     print_cgroups
 from tests_e2e.tests.lib.logging import log
@@ -118,10 +118,6 @@ def verify_extension_service_cgroup_created_on_file_system():
     # Azure Monitor Extension Service
     azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(AZUREMONITORAGENT_SERVICE)
     azuremonitoragent_service_name = AZUREMONITORAGENT_SERVICE
-    # Old versions of AMA extension has different service name
-    if azuremonitoragent_cgroup_mount_path is None:
-        azuremonitoragent_cgroup_mount_path = get_unit_cgroup_mount_path(MDSD_SERVICE)
-        azuremonitoragent_service_name = MDSD_SERVICE
     verify_extension_service_cgroup_created(azuremonitoragent_service_name, azuremonitoragent_cgroup_mount_path)
 
     log.info('Verified all extension service cgroup paths created in file system .\n')
@@ -177,7 +173,7 @@ def verify_ext_cgroups_tracked():
                 azuremonitoragent_cgroups_tracked = True
             elif name.startswith(GATESTEXT_SERVICE):
                 gatestext_service_cgroups_tracked = True
-            elif name.startswith(AZUREMONITORAGENT_SERVICE) or name.startswith(MDSD_SERVICE):
+            elif name.startswith(AZUREMONITORAGENT_SERVICE):
                 azuremonitoragent_service_cgroups_tracked = True
             cgroups_added_for_telemetry.append((name, path))
 

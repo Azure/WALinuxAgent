@@ -21,11 +21,9 @@ EXT_CONTROLLERS = ['cpu', 'memory']
 CGROUP_TRACKED_PATTERN = re.compile(r'Started tracking cgroup ([^\s]+)\s+\[(?P<path>[^\s]+)\]')
 
 GATESTEXT_FULL_NAME = "Microsoft.Azure.Extensions.Edp.GATestExtGo"
-GATESTEXT_SERVICE = "gatestext.service"
+GATESTEXT_SERVICE = "gatestext"
 AZUREMONITOREXT_FULL_NAME = "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent"
-AZUREMONITORAGENT_SERVICE = "azuremonitoragent.service"
-MDSD_SERVICE = "mdsd.service"
-
+AZUREMONITORAGENT_SERVICE = "azuremonitoragent"
 
 def verify_if_distro_supports_cgroup():
     """
