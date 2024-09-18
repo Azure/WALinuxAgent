@@ -7,6 +7,7 @@ if len(sys.argv) < 4:
 
 # W0632: Possible unbalanced tuple unpacking with sequence: left side has 3 label(s), right side has 0 value(s) (unbalanced-tuple-unpacking)
 # Disabled: Unpacking is balanced: there is a check for the length on line 5
+# test adding extra arguments like pycharm helpers (/snap/pycharm-professional/412/plugins/python-ce/helpers/pydev/pydevd.py)
 stdout, return_value, stderr = sys.argv[-3:]  # pylint: disable=W0632
 
 if stdout != '':

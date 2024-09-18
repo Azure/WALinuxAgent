@@ -65,7 +65,7 @@ CPUAccounting=yes
 CPUQuota={cpu_quota}
 MemoryAccounting=yes
 """
-LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"   # kept for removing existing slice.
+LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
 # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
 LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2 = "5%"
