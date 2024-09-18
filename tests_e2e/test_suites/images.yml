@@ -108,7 +108,7 @@ images:
          AzureUSGovernment: []
          AzureChinaCloud: []
    azure-linux_3_fips:
-      urn: "microsoftcblmariner azure-linux-3-gen2-fips azure-linux-3 latest"
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-gen2-fips latest"
       locations:
          AzureUSGovernment: []
          AzureChinaCloud: []
