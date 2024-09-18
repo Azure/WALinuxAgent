@@ -18,7 +18,8 @@ image-sets:
       - "flatcar"
       - "suse_12"
       - "mariner_2"
-      - "azure-linux_3"
+      - "azure-linux_3",
+      - "azure-linux_3_fips",
       - "suse_15"
       - "rhel_79"
       - "rhel_82"
