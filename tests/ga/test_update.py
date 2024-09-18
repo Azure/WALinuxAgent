@@ -24,7 +24,7 @@ from threading import current_thread
 from azurelinuxagent.ga.agent_update_handler import INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, \
     AGENT_ERROR_FILE
-from tests.common.test_firewall_manager import create_mock_iptables, TestIpTablesFirewall
+from tests.ga.test_firewall_manager import MockIpTables
 
 _ORIGINAL_POPEN = subprocess.Popen
 
@@ -996,24 +996,28 @@ class TestUpdate(UpdateTestCase):
             self.assertIn(HandlerEnvironment.eventsFolder, content[0][HandlerEnvironment.handlerEnvironment],
                           "{0} not found in HandlerEnv file".format(HandlerEnvironment.eventsFolder))
 
-    def test_it_should_setup_the_firewall_rules(self):
+    def test_it_should_setup_the_firewall(self):
         with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
-            with create_mock_iptables() as mock_iptables:
+            with MockIpTables() as mock_iptables:
                 # Make all the "-C" (check) commands return 1 to indicate no rules are set yet
-                mock_iptables.set_return_values("-C", accept_dns=1, accept=1, drop=1)
+                mock_iptables.set_return_values("-C", accept_dns=1, accept=1, drop=1, legacy=0)
                 with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
                     update_handler.run(debug=True)
                     self.assertEqual(
                         [
-                            TestIpTablesFirewall.get_accept_dns_command("-C"),
-                            TestIpTablesFirewall.get_accept_command("-C"),
-                            TestIpTablesFirewall.get_drop_command("-C"),
-                            TestIpTablesFirewall.get_accept_dns_command("-A"),
-                            TestIpTablesFirewall.get_accept_command("-A"),
-                            TestIpTablesFirewall.get_drop_command("-A"),
+                            # Remove the legacy rule
+                            MockIpTables.get_legacy_command("-C"),
+                            MockIpTables.get_legacy_command("-D"),
+                            # Setup the firewall rules
+                            MockIpTables.get_accept_dns_command("-C"),
+                            MockIpTables.get_accept_command("-C"),
+                            MockIpTables.get_drop_command("-C"),
+                            MockIpTables.get_accept_dns_command("-A"),
+                            MockIpTables.get_accept_command("-A"),
+                            MockIpTables.get_drop_command("-A"),
                         ],
-                        mock_iptables.firewall_calls,
-                        "Expected 3 calls to the -C (check) command followed by 3 calls to the -A (append) command")
+                        mock_iptables.call_list,
+                        "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
 
         # TODO: def test_it_should_setup_persistent_firewall_rules_on_startup(self):
 
