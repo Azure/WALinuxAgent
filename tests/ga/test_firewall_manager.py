@@ -21,6 +21,11 @@ from tests.lib.tools import AgentTestCase
 from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd
 
 class _TestFirewallCommand(AgentTestCase):
+    """
+    Defines the test cases common to TestIpTables and TestFirewallCmd.
+
+    Note that the test cases are marked as protected to prevent the unit test runner from executing them directly.
+    """
     def _test_setup_should_set_all_the_firewall_rules(self, firewall_cmd_type, mock_firewall_cmd_type):
         with mock_firewall_cmd_type() as mock:
             firewall = firewall_cmd_type('168.63.129.16')

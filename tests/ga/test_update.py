@@ -42,7 +42,7 @@ from azurelinuxagent.ga.update import  \
     get_update_handler, ORPHAN_POLL_INTERVAL, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
-from tests.lib.mock_firewall_command import MockIpTables
+from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd
 from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
@@ -993,25 +993,52 @@ class TestUpdate(UpdateTestCase):
     def test_it_should_setup_the_firewall(self):
         with patch('azurelinuxagent.common.conf.enable_firewall', return_value=True):
             with MockIpTables() as mock_iptables:
-                # Make all the "-C" (check) commands return 1 to indicate no rules are set yet
-                mock_iptables.set_return_values("-C", accept_dns=1, accept=1, drop=1, legacy=0)
-                with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
-                    update_handler.run(debug=True)
-                    self.assertEqual(
-                        [
-                            # Remove the legacy rule
-                            MockIpTables.get_legacy_command("-C"),
-                            MockIpTables.get_legacy_command("-D"),
-                            # Setup the firewall rules
-                            MockIpTables.get_accept_dns_command("-C"),
-                            MockIpTables.get_accept_command("-C"),
-                            MockIpTables.get_drop_command("-C"),
-                            MockIpTables.get_accept_dns_command("-A"),
-                            MockIpTables.get_accept_command("-A"),
-                            MockIpTables.get_drop_command("-A"),
-                        ],
-                        mock_iptables.call_list,
-                        "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
+                with MockFirewallCmd() as mock_firewall_cmd:
+                    # Make the check commands for the regular rules return 1 to indicate these
+                    # rules are not yet set, and 0 for the legacy rule to indicate it is set
+                    mock_iptables.set_return_values("-C", accept_dns=1, accept=1, drop=1, legacy=0)
+                    mock_firewall_cmd.set_return_values("--query-passthrough", accept_dns=1, accept=1, drop=1, legacy=0)
+
+                    with _get_update_handler(test_data=DATA_FILE) as (update_handler, _):
+                        update_handler.run(debug=True)
+
+                        #
+                        # Check regular rules
+                        #
+                        self.assertEqual(
+                            [
+                                # Remove the legacy rule
+                                MockIpTables.get_legacy_command("-C"),
+                                MockIpTables.get_legacy_command("-D"),
+                                # Setup the firewall rules
+                                MockIpTables.get_accept_dns_command("-C"),
+                                MockIpTables.get_accept_command("-C"),
+                                MockIpTables.get_drop_command("-C"),
+                                MockIpTables.get_accept_dns_command("-A"),
+                                MockIpTables.get_accept_command("-A"),
+                                MockIpTables.get_drop_command("-A"),
+                            ],
+                            mock_iptables.call_list,
+                            "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
+
+                        #
+                        # Check permanent rules
+                        #
+                        self.assertEqual(
+                            [
+                                # Remove the legacy rule
+                                MockFirewallCmd.get_legacy_command("--query-passthrough"),
+                                MockFirewallCmd.get_legacy_command("--remove-passthrough"),
+                                # Setup the firewall rules
+                                MockFirewallCmd.get_accept_dns_command("--query-passthrough"),
+                                MockFirewallCmd.get_accept_command("--query-passthrough"),
+                                MockFirewallCmd.get_drop_command("--query-passthrough"),
+                                MockFirewallCmd.get_accept_dns_command("--passthrough"),
+                                MockFirewallCmd.get_accept_command("--passthrough"),
+                                MockFirewallCmd.get_drop_command("--passthrough"),
+                            ],
+                            mock_firewall_cmd.call_list,
+                            "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):

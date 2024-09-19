@@ -22,7 +22,9 @@ from tests.lib.tools import patch
 
 class _MockFirewallCommand(object):
     """
-    Abstract base class for mocking firewall managers that handle multiple rules, each rule being manipulated with a different command line (e.g. iptables, firewalld)
+    Abstract base class for the MockIpTables and MockFirewallCmd classes.
+
+    Intercepts calls to shellutil.run_command and mocks the behavior of the firewall command-line utilities using a pre-defined set of return values.
     """
     def __init__(self, command_name, check_option, add_option, delete_option):
         self._command_name = command_name
@@ -92,7 +94,7 @@ class _MockFirewallCommand(object):
 
     def set_return_values(self, option, accept_dns, accept, drop, legacy):
         """
-        Changes the return values for the mocked commands
+        Changes the return values for the mocked command
         """
         self._return_values[option]["ACCEPT DNS"] = accept_dns
         self._return_values[option]["ACCEPT"] = accept
@@ -120,8 +122,11 @@ class _MockFirewallCommand(object):
 
 
 class MockIpTables(_MockFirewallCommand):
+    """
+    Mock for the iptables command
+    """
     def __init__(self, version='1.4.21'):
-        super().__init__("iptables", "-C", "-A", "-D")
+        super().__init__(command_name="iptables", check_option="-C", add_option="-A", delete_option="-D")
         self._version = version
         # Currently the Agent calls delete repeatedly until it returns 1, indicating that the rule does not exist (and hence the rule has been deleted successfully)
         self.set_return_values("-D", 1, 1, 1, 1)
@@ -174,8 +179,16 @@ class MockIpTables(_MockFirewallCommand):
 
 
 class MockFirewallCmd(_MockFirewallCommand):
+    """
+    Mock for the firewall-cmd command
+    """
     def __init__(self):
-        super().__init__("firewall-cmd", "--query-passthrough", "--passthrough", "--remove-passthrough")
+        super().__init__(command_name="firewall-cmd", check_option="--query-passthrough", add_option="--passthrough", delete_option="--remove-passthrough")
+
+    def _mock_run_command(self, command, *args, **kwargs):
+        if command[0] == 'firewall-cmd' and command[1] == '--state':
+            return self._original_run_command(['echo', 'running'], *args, **kwargs)
+        return super()._mock_run_command(command, *args, **kwargs)
 
     def _get_return_value(self, command):
         """
@@ -187,13 +200,14 @@ class MockFirewallCmd(_MockFirewallCommand):
             * Legacy rule:     firewall-cmd --permanent --direct <--passthrough|--query-passthrough|--remove-passthrough> ipv4 -t security -I OUTPUT -d 168.63.129.16 -p tcp --destination-port 53 -j ACCEPT
 
         """
-        match = re.match(r"firewall-cmd --permanent --direct (?P<option>--passthrough|--query-passthrough|--remove-passthrough) ipv4 -t security -[AI] OUTPUT -d 168.63.129.16 -p tcp (?P<rule>--destination-port 53 -j ACCEPT|-m owner --uid-owner \d+ -j ACCEPT|.+ -j DROP)", command)
+        match = re.match(r"firewall-cmd --permanent --direct (?P<option>--passthrough|--query-passthrough|--remove-passthrough) ipv4 -t security (?P<add_option>-[AI]) OUTPUT -d 168.63.129.16 -p tcp (?P<rule>--destination-port 53 -j ACCEPT|-m owner --uid-owner \d+ -j ACCEPT|.+ -j DROP)", command)
         if match is None:
             raise Exception("Unexpected command: {0}".format(command))
         option = match.group("option")
         rule = match.group("rule")
+        add_option = match.group("add_option")
         if rule == "--destination-port 53 -j ACCEPT":
-            if option == "-I":
+            if add_option == "-I":
                 return self._return_values[option]["legacy"]
             return self._return_values[option]["ACCEPT DNS"]
         if rule == "-m owner --uid-owner {0} -j ACCEPT".format(os.getuid()):
