@@ -31,8 +31,6 @@ POLICY_SUPPORTED_DISTROS_MIN_VERSIONS = {
     'mariner': DistroVersion('2'),
     'azurelinux': DistroVersion('3')
 }
-# TODO: add 'arm64', 'aarch64' here once support is enabled for ARM64
-POLICY_SUPPORTED_ARCHITECTURE = ['x86_64']
 
 
 class PolicyEngine(object):
@@ -101,17 +99,12 @@ class PolicyEngine(object):
     @staticmethod
     def _check_policy_enforcement_supported():
         """
-        Check that both platform architecture and distro/version are supported.
-        If supported, do nothing.
+        Check that distro and version are supported. If supported, do nothing.
         If not supported, raise PolicyError with user-friendly error message.
         """
-        osutil = get_osutil()
-        arch = osutil.get_vm_arch()
         # TODO: surface as a user error with clear instructions for fixing
         msg = "Attempted to enable policy enforcement, but feature is not supported on "
-        if arch not in POLICY_SUPPORTED_ARCHITECTURE:
-            msg += " architecture " + str(arch)
-        elif DISTRO_NAME not in POLICY_SUPPORTED_DISTROS_MIN_VERSIONS:
+        if DISTRO_NAME not in POLICY_SUPPORTED_DISTROS_MIN_VERSIONS:
             msg += " distro " + str(DISTRO_NAME)
         else:
             min_version = POLICY_SUPPORTED_DISTROS_MIN_VERSIONS.get(DISTRO_NAME)

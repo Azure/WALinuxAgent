@@ -81,15 +81,6 @@ class TestPolicyEngine(AgentTestCase):
                                            msg="Policy should not be enabled on unsupported distro {0} {1}".format(distro_name, version)):
                             PolicyEngine(self.default_rule_path, self.default_policy_path)
 
-    def test_should_raise_exception_on_unsupported_architecture(self):
-        """Policy should NOT be enabled on ARM64."""
-        # TODO: remove this test when support for ARM64 is added.
-        with patch('azurelinuxagent.ga.policy.policy_engine.get_osutil') as mock_get_osutil:
-            with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-                with self.assertRaises(PolicyError, msg="Policy should not be enabled on unsupported architecture ARM64, should have raised exception."):
-                    mock_get_osutil.get_vm_arch.return_value = "arm64"
-                    PolicyEngine(self.default_rule_path, self.default_policy_path)
-
     def test_policy_engine_should_evaluate_query(self):
         """
         Should be able to initialize policy engine and evaluate query without an error.
