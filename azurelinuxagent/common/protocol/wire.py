@@ -63,14 +63,15 @@ MAX_EVENT_BUFFER_SIZE = 2 ** 16 - 2 ** 10
 
 _DOWNLOAD_TIMEOUT = timedelta(minutes=5)
 
-# telemetrydata api max calls per 15 secs
+# telemetrydata api max calls 15 per 15 secs
 # Considered conservative approach and set the value to 12
 TELEMETRY_MAX_CALLS_PER_INTERVAL = 12
+# telemetrydata api interval 15 secs
 TELEMETRY_INTERVAL = 15  # 15 seconds
 
 # The maximum number of times to retry sending telemetry data
 TELEMETRY_MAX_RETRIES = 3
-TELEMETRY_DELAY = 1  # 1 second
+TELEMETRY_RETRY_DELAY = 1  # 1 second
 
 
 class UploadError(HttpError):
@@ -1043,7 +1044,7 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def send_encoded_event(self, provider_id, event_str, encoding='utf8'):
+    def _send_encoded_event(self, provider_id, event_str, encoding='utf8'):
         """
         Construct the encoded event and url for telemetry endpoint call
         Before calling telemetry endpoint, ensure calls are under throttling limits and checks if the number of telemetry endpoint calls 12 in the last 15 seconds
@@ -1099,7 +1100,7 @@ class WireClient(object):
     def report_event(self, events_iterator):
         """
         Report events to the wire server. The events are grouped and sent out in batches well with in the api body limit.
-        Note: Max body size is 64kb and throttling limit is 15 calls in 15 seconds
+        When talking to wire server, make sure to take account of telemetry endpoint limits: Max body size is 64kb and throttling limit is 15 calls in 15 seconds
         """
         buf = {}
         debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_REPORT)
@@ -1111,18 +1112,21 @@ class WireClient(object):
             try:
                 while True:
                     try:
-                        self.send_encoded_event(provider_id, buf[provider_id])
+                        self._send_encoded_event(provider_id, buf[provider_id])
                         break
-                    except Exception:
+                    except Exception as ex:
+                        # we should not retry on unicode errors as it's permanent error
+                        if isinstance(ex, UnicodeError):
+                            raise
                         error_count += 1
                         if error_count >= TELEMETRY_MAX_RETRIES:
                             raise
-                    time.sleep(TELEMETRY_DELAY)
+                    time.sleep(TELEMETRY_RETRY_DELAY)
             except UnicodeError as uni_error:
                 debug_info.update_unicode_error(uni_error)
             except Exception as error:
                 debug_info.update_op_error(error)
-
+        #
         # Group events by providerId
         for event in events_iterator:
             try:

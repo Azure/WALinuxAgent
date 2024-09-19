@@ -359,7 +359,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
                            version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True, force=False)
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
-                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True, immediate_flush=False)
+                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True)
 
     @patch("azurelinuxagent.common.event.datetime")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -367,14 +367,14 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         event.__event_logger__.reset_periodic()
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", message="FauxEventMessage")
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Unknown, is_success=True, duration=0,
-                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True, immediate_flush=False)
+                                           version=str(CURRENT_VERSION), message="FauxEventMessage", log_event=True)
 
     @patch("azurelinuxagent.common.event.EventLogger.add_event")
     def test_add_event_default_variables(self, mock_add_event):
         add_event('test', message='test event')
         mock_add_event.assert_called_once_with('test', duration=0, is_success=True, log_event=True,
                                                message='test event', op=WALAEventOperation.Unknown,
-                                               version=str(CURRENT_VERSION), immediate_flush=False)
+                                               version=str(CURRENT_VERSION), flush=False)
 
     def test_collect_events_should_delete_event_files(self):
         add_event(name='Event1', op=TestEvent._Operation)
@@ -409,7 +409,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler):
             expected_message = 'test event'
-            add_event('test', message=expected_message, op=TestEvent._Operation, immediate_flush=True)
+            add_event('test', message=expected_message, op=TestEvent._Operation, flush=True)
 
             event_message = self._get_event_message_from_http_request_body(http_post_handler.request_body)
 
@@ -428,7 +428,7 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler):
             with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_RETRIES", 1):
                 expected_message = 'test event'
-                add_event('test', message=expected_message, op=TestEvent._Operation, immediate_flush=True)
+                add_event('test', message=expected_message, op=TestEvent._Operation, flush=True)
 
                 # In case of failure, the event file should be created
                 self.assertTrue(len(self._collect_event_files()) == 1)

@@ -421,7 +421,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client.send_encoded_event("foo", event_str.encode('utf-8'))
+        client._send_encoded_event("foo", event_str.encode('utf-8'))
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
@@ -433,7 +433,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # the body is encoded, decode and check for equality
         self.assertIn(event_str, body_received.decode('utf-8'))
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient._send_encoded_event")
     def test_report_event_small_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -455,7 +455,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 1)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient._send_encoded_event")
     def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         client = WireProtocol(WIRESERVER_URL).client
@@ -469,7 +469,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         # It merges the messages into one message
         self.assertEqual(patch_send_event.call_count, 2)
 
-    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_encoded_event")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient._send_encoded_event")
     def test_report_event_large_event(self, patch_send_event, *args):  # pylint: disable=unused-argument
         event_list = []
         event_str = random_generator(2 ** 18)
@@ -522,7 +522,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         event_list.append(get_event(message=event_str))
         client = WireProtocol(WIRESERVER_URL).client
         with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_RETRIES", 5):
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_DELAY", 0.1):
+            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_RETRY_DELAY", 0.1):
                 client.report_event(self._get_telemetry_events_generator(event_list))
                 self.assertEqual(mock_http_request.call_count, 5)
 

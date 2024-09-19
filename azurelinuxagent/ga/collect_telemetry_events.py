@@ -261,6 +261,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
         :return: Event data in list or string format.
         """
         # Retry for reading the event file in case file is modified while reading
+        # We except FileNotFoundError and ValueError to handle the case where the file is deleted or modified while reading
         error_count = 0
         while True:
             try:
@@ -270,7 +271,7 @@ class _ProcessExtensionEvents(PeriodicOperation):
 
                 # Parse the string and get the list of events
                 return json.loads(event_data)
-            except Exception:
+            except (ValueError, FileNotFoundError):
                 error_count += 1
                 if error_count >= NUM_OF_EVENT_FILE_RETRIES:
                     raise
@@ -478,7 +479,8 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                     # Todo: We should delete files after ensuring that we sent the data to Wireserver successfully
                     # from our end rather than deleting first and sending later. This is to ensure the data reliability
                     # of the agent telemetry pipeline.
-                    os.remove(event_file_path)
+                    if os.path.exists(event_file_path):
+                        os.remove(event_file_path)
             except ServiceStoppedError as stopped_error:
                 logger.error(
                     "Unable to enqueue events as service stopped: {0}, skipping events collection".format(
@@ -498,13 +500,14 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
         :return: TelemetryEvent object.
         """
         # Retry for reading the event file in case file is modified while reading
+        # We except FileNotFoundError and ValueError to handle the case where the file is deleted or modified while reading
         error_count = 0
         while True:
             try:
                 with open(event_file_path, "rb") as event_fd:
                     event_data = event_fd.read().decode("utf-8")
                 return parse_event(event_data)
-            except Exception:
+            except (ValueError, FileNotFoundError):
                 error_count += 1
                 if error_count >= NUM_OF_EVENT_FILE_RETRIES:
                     raise
