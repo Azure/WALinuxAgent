@@ -214,7 +214,7 @@ try:
     main()
 except Exception as e:
     # It is possible that  agent cgroup can be disabled due to UNKNOWN process or throttled before we run this check, in that case, we should ignore the validation
-    if check_cgroup_disabled_with_unknown_process() and retry_if_false(check_agent_quota_disabled()):
+    if check_cgroup_disabled_with_unknown_process() and retry_if_false(check_agent_quota_disabled):
         log.info("Cgroup is disabled due to UNKNOWN process, ignoring ext cgroups validations")
     else:
         raise
