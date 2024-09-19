@@ -86,6 +86,7 @@ class WALAEventOperation:
     Downgrade = "Downgrade"
     Download = "Download"
     Enable = "Enable"
+    ExtensionHandlerManifest = "ExtensionHandlerManifest"
     ExtensionPolicy = "ExtensionPolicy"
     ExtensionProcessing = "ExtensionProcessing"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
