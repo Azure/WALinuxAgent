@@ -126,7 +126,7 @@ class MockIpTables(_MockFirewallCommand):
     Mock for the iptables command
     """
     def __init__(self, version='1.4.21'):
-        super().__init__(command_name="iptables", check_option="-C", add_option="-A", delete_option="-D")
+        super(MockIpTables, self).__init__(command_name="iptables", check_option="-C", add_option="-A", delete_option="-D")
         self._version = version
         # Currently the Agent calls delete repeatedly until it returns 1, indicating that the rule does not exist (and hence the rule has been deleted successfully)
         self.set_return_values("-D", 1, 1, 1, 1)
@@ -134,7 +134,7 @@ class MockIpTables(_MockFirewallCommand):
     def _mock_run_command(self, command, *args, **kwargs):
         if command[0] == 'iptables' and command[1] == '--version':
             return self._original_run_command(['echo', 'iptables v{0} (nf_tables)'.format(self._version)], *args, **kwargs)
-        return super()._mock_run_command(command, *args, **kwargs)
+        return super(MockIpTables, self)._mock_run_command(command, *args, **kwargs)
 
     def _get_return_value(self, command):
         """
@@ -183,12 +183,12 @@ class MockFirewallCmd(_MockFirewallCommand):
     Mock for the firewall-cmd command
     """
     def __init__(self):
-        super().__init__(command_name="firewall-cmd", check_option="--query-passthrough", add_option="--passthrough", delete_option="--remove-passthrough")
+        super(MockFirewallCmd, self).__init__(command_name="firewall-cmd", check_option="--query-passthrough", add_option="--passthrough", delete_option="--remove-passthrough")
 
     def _mock_run_command(self, command, *args, **kwargs):
         if command[0] == 'firewall-cmd' and command[1] == '--state':
             return self._original_run_command(['echo', 'running'], *args, **kwargs)
-        return super()._mock_run_command(command, *args, **kwargs)
+        return super(MockFirewallCmd, self)._mock_run_command(command, *args, **kwargs)
 
     def _get_return_value(self, command):
         """
