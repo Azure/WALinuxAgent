@@ -16,21 +16,10 @@
 #
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME
-from azurelinuxagent.common.utils.distro_version import DistroVersion
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.osutil import get_osutil
 import azurelinuxagent.ga.policy.regorus as regorus
 from azurelinuxagent.ga.policy.regorus import PolicyError
-
-# Define support matrix for Regorus and policy engine feature.
-# Dict in the format: { distro:min_supported_version }
-POLICY_SUPPORTED_DISTROS_MIN_VERSIONS = {
-    'ubuntu': DistroVersion('16.04'),
-    'mariner': DistroVersion('2'),
-    'azurelinux': DistroVersion('3')
-}
 
 
 class PolicyEngine(object):
@@ -70,8 +59,6 @@ class PolicyEngine(object):
             self._log_policy(msg="Policy enforcement is not enabled.")
             return
 
-        # If unsupported, this call will raise an error
-        self._check_policy_enforcement_supported()
         self._engine = regorus.Engine(policy_file=policy_file, rule_file=rule_file)
 
     @classmethod
@@ -95,25 +82,6 @@ class PolicyEngine(object):
         # TODO: The conf flag will be removed post private preview. Before public preview, add checks
         # according to the planned user experience (TBD).
         return conf.get_extension_policy_enabled()
-
-    @staticmethod
-    def _check_policy_enforcement_supported():
-        """
-        Check that distro and version are supported. If supported, do nothing.
-        If not supported, raise PolicyError with user-friendly error message.
-        """
-        # TODO: surface as a user error with clear instructions for fixing
-        msg = "Attempted to enable policy enforcement, but feature is not supported on "
-        if DISTRO_NAME not in POLICY_SUPPORTED_DISTROS_MIN_VERSIONS:
-            msg += " distro " + str(DISTRO_NAME)
-        else:
-            min_version = POLICY_SUPPORTED_DISTROS_MIN_VERSIONS.get(DISTRO_NAME)
-            if DISTRO_VERSION < min_version:
-                msg += " distro " + DISTRO_NAME + " " + DISTRO_VERSION + ". Policy is only supported on version " + \
-                        str(min_version) + " and above."
-            else:
-                return  # do nothing if platform is supported
-        raise PolicyError(msg)
 
     def evaluate_query(self, input_to_check, query):
         """
