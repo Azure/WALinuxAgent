@@ -10,7 +10,6 @@ import os
 import re
 import shutil
 import stat
-import subprocess
 import sys
 import tempfile
 import time
@@ -22,12 +21,7 @@ from datetime import datetime, timedelta
 from threading import current_thread
 
 from azurelinuxagent.ga.agent_update_handler import INITIAL_UPDATE_STATE_FILE
-from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, \
-    AGENT_ERROR_FILE
-from tests.ga.test_firewall_manager import MockIpTables
-
-_ORIGINAL_POPEN = subprocess.Popen
-
+from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
@@ -48,6 +42,7 @@ from azurelinuxagent.ga.update import  \
     get_update_handler, ORPHAN_POLL_INTERVAL, ORPHAN_WAIT_INTERVAL, \
     CHILD_LAUNCH_RESTART_MAX, CHILD_HEALTH_INTERVAL, GOAL_STATE_PERIOD_EXTENSIONS_DISABLED, UpdateHandler, \
     READONLY_FILE_GLOBS, ExtensionsSummary
+from tests.lib.mock_firewall_command import MockIpTables
 from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
@@ -55,7 +50,6 @@ from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_da
     clear_singleton_instances, skip_if_predicate_true
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
-
 
 NO_ERROR = {
     "last_failure": 0.0,
@@ -1018,8 +1012,6 @@ class TestUpdate(UpdateTestCase):
                         ],
                         mock_iptables.call_list,
                         "Expected 2 calls for the legacy rule (-C and -D), followed by 3 sets of calls for the current rules (-C and -A)")
-
-        # TODO: def test_it_should_setup_persistent_firewall_rules_on_startup(self):
 
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
