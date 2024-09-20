@@ -199,8 +199,7 @@ if __name__ == '__main__':
 
             # Create unit file with default values
             self.__set_service_unit_file()
-            # Reload systemd configurations when we setup the service for the first time to avoid systemctl warnings
-            self.__reload_systemd_conf()
+            # After modifying the service, systemctl may issue a warning when checking the service, and daemon-reload should not be used to clear the warning, since it can affect other services
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
 
     def __setup_binary_file(self):
@@ -296,13 +295,6 @@ if __name__ == '__main__':
             is_success=(not service_failed),
             message=msg,
             log_event=False)
-
-    def __reload_systemd_conf(self):
-        try:
-            logger.info("Executing systemctl daemon-reload for setting up {0}".format(self._network_setup_service_name))
-            shellutil.run_command(["systemctl", "daemon-reload"])
-        except Exception as exception:
-            logger.warn("Unable to reload systemctl configurations: {0}".format(ustr(exception)))
 
     def __get_unit_file_version(self):
         if not os.path.exists(self.get_service_file_path()):
