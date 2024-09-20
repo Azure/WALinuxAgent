@@ -199,8 +199,7 @@ if __name__ == '__main__':
 
             # Create unit file with default values
             self.__set_service_unit_file()
-            # Initially systemd daemon-reload added here to prevent systemctl warnings after unit file changes. But that warning is local to that service and it doesn't affect other services
-            # Since firewall service runs(restart) after boot, so removing it here to avoid unnecessary reloads which is global cmd and can affect other services
+            # After modifying the service, systemctl may issue a warning when checking the service, and daemon-reload should not be used to clear the warning, since it can affect other services
             logger.info("Successfully added and enabled the {0}".format(self._network_setup_service_name))
 
     def __setup_binary_file(self):

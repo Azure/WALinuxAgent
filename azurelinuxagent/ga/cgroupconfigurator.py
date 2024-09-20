@@ -171,6 +171,11 @@ class CGroupConfigurator(object):
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                     return
 
+                # TODO: Move this and systemd system check to cgroups_supported logic
+                if self.using_cgroup_v2():
+                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
+                    return
+
                 # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
                 # because the agent's Slice unit property will be 'azure.slice' if the slice drop-in file exists, even
                 # though systemd has not moved the agent to azure.slice yet. Systemd will only move the agent to
@@ -179,10 +184,6 @@ class CGroupConfigurator(object):
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
                 if agent_slice not in (AZURE_SLICE, "system.slice"):
                     log_cgroup_warning("The agent is within an unexpected slice: {0}".format(agent_slice))
-                    return
-
-                if self.using_cgroup_v2():
-                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
                     return
 
                 # Notes about slice setup:

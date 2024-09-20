@@ -7,7 +7,12 @@ if len(sys.argv) < 4:
 
 # W0632: Possible unbalanced tuple unpacking with sequence: left side has 3 label(s), right side has 0 value(s) (unbalanced-tuple-unpacking)
 # Disabled: Unpacking is balanced: there is a check for the length on line 5
-# test adding extra arguments like pycharm helpers (/snap/pycharm-professional/412/plugins/python-ce/helpers/pydev/pydevd.py)
+
+# This script will be used for mocking cgroups commands in test, when popen called this script will be executed instead of actual commands
+# We pass stdout, return_value, stderr of the mocked command output as arguments to this script and this script will print them to stdout, stderr and exit with the return value
+# So that popen gets the output of the mocked command. Ideally we should get 4 arguments, first one is the script name, next 3 are the actual command output
+# But somehow when we run the tests from pycharm, it adds extra arguments next to the script name, so we need to handle that when reading the arguments
+# extra args like pycharm helpers (/snap/pycharm-professional/412/plugins/python-ce/helpers/pydev/pydevd.py)
 stdout, return_value, stderr = sys.argv[-3:]  # pylint: disable=W0632
 
 if stdout != '':
