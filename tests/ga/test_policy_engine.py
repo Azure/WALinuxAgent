@@ -15,89 +15,20 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import json
-import os
-import shutil
-
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyError
-from tests.lib.tools import patch, data_dir, test_dir
+from tests.lib.tools import patch
 
 
 class TestPolicyEngine(AgentTestCase):
-    patcher = None
-    regorus_dest_path = None    # Location where real regorus executable should be.
-    default_policy_path = os.path.join(data_dir, 'policy', "agent-extension-default-data.json")
-    default_rule_path = os.path.join(data_dir, 'policy', "agent_extension_policy.rego")
-    input_json = None  # Input is stored in a file, and extracted into this variable during class setup.
-
-    @classmethod
-    def setUpClass(cls):
-
-        # On a production VM, Regorus will be located in the agent package. Unit tests
-        # run within the agent directory, so we copy the executable to ga/policy/regorus and patch path.
-        # Note: Regorus has not been published officially, so for now, unofficial exe is stored in tests/data/policy.
-        regorus_source_path = os.path.abspath(os.path.join(data_dir, "policy/regorus"))
-        cls.regorus_dest_path = os.path.abspath(os.path.join(test_dir, "..", "azurelinuxagent/ga/policy/regorus"))
-        if not os.path.exists(cls.regorus_dest_path):
-            shutil.copy(regorus_source_path, cls.regorus_dest_path)
-        cls.patcher = patch('azurelinuxagent.ga.policy.regorus.get_regorus_path', return_value=cls.regorus_dest_path)
-        cls.patcher.start()
-
-        # We store input in a centralized file, we want to extract the JSON contents into a dict for testing.
-        # TODO: remove this logic once we add tests for ExtensionPolicyEngine
-        with open(os.path.join(data_dir, 'policy', "agent-extension-input.json"), 'r') as input_file:
-            cls.input_json = json.load(input_file)
-        AgentTestCase.setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        # Clean up the Regorus binary that was copied to ga/policy/regorus.
-        if os.path.exists(cls.regorus_dest_path):
-            os.remove(cls.regorus_dest_path)
-        cls.patcher.stop()
-        AgentTestCase.tearDownClass()
-
-    def test_policy_engine_should_evaluate_query(self):
-        """
-        Should be able to initialize policy engine and evaluate query without an error.
-        """
+    def test_policy_enforcement_should_be_enabled(self):
         with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
-            query = "data.agent_extension_policy.extensions_to_download"
-            result = engine.evaluate_query(self.input_json, query)
-            test_ext_name = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-            self.assertIsNotNone(result.get(test_ext_name), msg="Query should not have returned empty dict.")
-            self.assertTrue(result.get(test_ext_name).get('downloadAllowed'),
-                            msg="Query should have returned that extension is allowed.")
+            engine = PolicyEngine()
+            self.assertTrue(engine.is_policy_enforcement_enabled(),
+                            msg="Conf flag is set to true so policy enforcement should be enabled.")
 
-    def test_eval_query_should_throw_error_when_disabled(self):
-        """
-        When policy enforcement is disabled, evaluate_query should throw an error.
-        """
-        engine = PolicyEngine(self.default_rule_path, self.default_policy_path)
-        with self.assertRaises(PolicyError, msg="Should throw error when policy enforcement is disabled."):
-            engine.evaluate_query(self.input_json, "data")
+    def test_policy_enforcement_should_be_disabled(self):
+        engine = PolicyEngine()
+        self.assertFalse(engine.is_policy_enforcement_enabled(),
+                         msg="Conf flag is set to false so policy enforcement should be disabled.")
 
-    def test_should_throw_error_with_invalid_rule_file(self):
-        """
-        Evaluate query with invalid rule file, should throw error.
-        """
-        with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            with self.assertRaises(PolicyError, msg="Should throw error when input is incorrectly formatted."):
-                # pass policy file instead of rule file in init
-                invalid_rule = os.path.join(data_dir, 'policy', "agent_extension_policy_invalid.rego")
-                engine = PolicyEngine(invalid_rule, self.default_policy_path)
-                engine.evaluate_query(self.input_json, "data")
-
-    def test_should_throw_error_with_invalid_policy_file(self):
-        """
-        Evaluate query with invalid policy file, should throw error.
-        """
-        with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            with self.assertRaises(PolicyError, msg="Should throw error when policy file is incorrectly formatted."):
-                invalid_policy = os.path.join(data_dir, 'policy', "agent-extension-data-invalid.json")
-                engine = PolicyEngine(self.default_rule_path, invalid_policy)
-                engine.evaluate_query(self.input_json, "data")
-
-# TODO: add tests for all combinations of extensions and policy parameters when ExtensionPolicyEngine() class is added
