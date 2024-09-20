@@ -1325,7 +1325,7 @@ class ExtHandlerInstance(object):
         extension_name = self.get_full_name()
         # setup the resource limits for extension operations and it's services.
         man = self.load_manifest()
-        resource_limits = man.get_resource_limits(extension_name, self.ext_handler.version)
+        resource_limits = man.get_resource_limits()
         if not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(extension_name,
                                                                                               cpu_quota=resource_limits.get_extension_slice_cpu_quota()):
             CGroupConfigurator.get_instance().setup_extension_slice(
@@ -1395,7 +1395,7 @@ class ExtHandlerInstance(object):
             self.__set_extension_state(extension, ExtensionState.Enabled)
 
         # start tracking the extension services cgroup.
-        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.version)
+        resource_limits = man.get_resource_limits()
         CGroupConfigurator.get_instance().start_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
 
@@ -1462,7 +1462,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
 
         # stop tracking extension services cgroup.
-        resource_limits = man.get_resource_limits(self.get_full_name(), self.ext_handler.version)
+        resource_limits = man.get_resource_limits()
         CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
         CGroupConfigurator.get_instance().remove_extension_services_drop_in_files(
@@ -2133,14 +2133,6 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
     @staticmethod
-    def is_azuremonitorlinuxagent(extension_name):
-        cgroup_monitor_extension_name = conf.get_cgroup_monitor_extension_name()
-        if re.match(r"\A" + cgroup_monitor_extension_name, extension_name) is not None\
-            and datetime.datetime.utcnow() < datetime.datetime.strptime(conf.get_cgroup_monitor_expiry_time(), "%Y-%m-%d"):
-            return True
-        return False
-
-    @staticmethod
     def _read_status_file(ext_status_file):
         err_count = 0
         while True:
@@ -2258,35 +2250,7 @@ class HandlerManifest(object):
         value = self.data['handlerManifest'].get('supportsMultipleExtensions', False)
         return self._parse_boolean_value(value, default_val=False)
 
-    def get_resource_limits(self, extension_name, str_version):
-        """
-        Placeholder values for testing and monitoring the monitor extension resource usage.
-        This is not effective after nov 30th.
-        """
-        if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
-            if FlexibleVersion(str_version) < FlexibleVersion("1.12"):
-                test_man = {
-                    "resourceLimits": {
-                        "services": [
-                            {
-                                "name": "mdsd.service"
-                            }
-                        ]
-                    }
-                }
-                return ResourceLimits(test_man.get('resourceLimits', None))
-            else:
-                test_man = {
-                    "resourceLimits": {
-                        "services": [
-                            {
-                                "name": "azuremonitoragent.service"
-                            }
-                        ]
-                    }
-                }
-                return ResourceLimits(test_man.get('resourceLimits', None))
-
+    def get_resource_limits(self):
         return ResourceLimits(self.data.get('resourceLimits', None))
 
     def report_invalid_boolean_properties(self, ext_name):
