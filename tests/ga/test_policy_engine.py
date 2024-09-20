@@ -16,7 +16,7 @@
 #
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import PolicyEngine, PolicyError
+from azurelinuxagent.ga.policy.policy_engine import PolicyEngine
 from tests.lib.tools import patch
 
 
