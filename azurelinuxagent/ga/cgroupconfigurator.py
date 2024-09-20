@@ -171,7 +171,7 @@ class CGroupConfigurator(object):
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                     return
 
-                # TODO: Move this and systemd system check to cgroups_supported logic
+                # TODO: Move this and systemd system check to cgroups_supported logic above
                 if self.using_cgroup_v2():
                     log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
                     return
