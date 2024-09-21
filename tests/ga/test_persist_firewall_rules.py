@@ -111,13 +111,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         else:
             self.assertNotIn(systemctl_command, self._executed_commands, "Systemctl command {0} found".format(cmd))
 
-    def __assert_systemctl_reloaded(self, validate_command_called=True):
-        systemctl_reload = "systemctl daemon-reload"
-        if validate_command_called:
-            self.assertIn(systemctl_reload, self._executed_commands, "Systemctl config not reloaded")
-        else:
-            self.assertNotIn(systemctl_reload, self._executed_commands, "Systemctl config reloaded")
-
     def __assert_firewall_cmd_running_called(self, validate_command_called=True):
         cmd = "firewall-cmd --state"
         if validate_command_called:
@@ -128,7 +121,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def __assert_network_service_setup_properly(self):
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
-        self.__assert_systemctl_reloaded()
         self.__assert_firewall_called(cmd="--passthrough", validate_command_called=False)  # ***
         self.assertTrue(os.path.exists(self._network_service_unit_file), "Service unit file should be there")
         self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
@@ -168,7 +160,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
-        self.__assert_systemctl_reloaded(validate_command_called=True)
         self.__assert_firewall_cmd_running_called(validate_command_called=True)
         self.__assert_firewall_called(cmd="--query-passthrough", validate_command_called=False)
         self.__assert_firewall_called(cmd="--remove-passthrough", validate_command_called=False)
@@ -202,7 +193,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
             self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
             self.__assert_systemctl_called(cmd="enable", validate_command_called=False)
-            self.__assert_systemctl_reloaded(validate_command_called=False)
             self.__assert_firewall_cmd_running_called(validate_command_called=True)
             self.__assert_firewall_called(cmd="--query-passthrough", validate_command_called=False)
             self.__assert_firewall_called(cmd="--remove-passthrough", validate_command_called=False)
@@ -348,7 +338,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             self.__assert_firewall_called(cmd="--passthrough", validate_command_called=True)
             self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=False)
             self.__assert_systemctl_called(cmd="enable", validate_command_called=False)
-            self.__assert_systemctl_reloaded(validate_command_called=False)
             self.assertFalse(os.path.exists(handler.get_service_file_path()), "Service unit file found")
             self.assertFalse(os.path.exists(os.path.join(conf.get_lib_dir(), handler.BINARY_FILE_NAME)), "Binary file found")
 
