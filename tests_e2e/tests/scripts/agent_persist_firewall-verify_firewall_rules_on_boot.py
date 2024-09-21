@@ -34,7 +34,12 @@ from tests_e2e.tests.lib.retry import retry
 def move_cron_logs_to_var_log():
     # Move the cron logs to /var/log
     log.info("Moving cron logs to /var/log for debugging purposes")
-    for cron_log in [ROOT_CRON_LOG, NON_ROOT_CRON_LOG, NON_ROOT_WIRE_XML, ROOT_WIRE_XML]:
+
+    files = [ROOT_CRON_LOG, NON_ROOT_WIRE_XML, ROOT_WIRE_XML]
+    if os.path.exists(NON_ROOT_CRON_LOG):
+        files.append(NON_ROOT_CRON_LOG)
+        
+    for cron_log in files:
         try:
             shutil.move(src=cron_log, dst=os.path.join("/var", "log",
                                                        "{0}.{1}".format(os.path.basename(cron_log),
