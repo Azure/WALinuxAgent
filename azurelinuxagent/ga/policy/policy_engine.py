@@ -66,8 +66,7 @@ class _PolicyEngine(object):
     @staticmethod
     def is_policy_enforcement_enabled():
         """
-        Policy will be enabled if (1) the policy file exists at CUSTOM_POLICY_PATH and
-         (2) the conf flag "Debug.EnableExtensionPolicy" is set to true.
+        Policy will be enabled if (1) policy file exists at CUSTOM_POLICY_PATH and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
         Caller function should check this before performing any operations.
         """
         # Policy should only be enabled if conf flag is true AND policy file is present.

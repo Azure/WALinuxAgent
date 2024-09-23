@@ -1007,7 +1007,7 @@ class ExtHandlersHandler(object):
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
         # We also need to report extension status for an uninstalled handler if extensions are disabled because CRP
         # waits for extension runtime status before failing the extension operation.
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled() or ExtensionPolicyEngine.is_policy_enforcement_feature_enabled():
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled() or ExtensionPolicyEngine.is_policy_enforcement_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.

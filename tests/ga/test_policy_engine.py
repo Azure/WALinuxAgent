@@ -32,12 +32,12 @@ class TestExtensionPolicyEngine(AgentTestCase):
                                                "waagent_policy.json")  # Path where we should create custom policy files for tests.
 
         # Patch attributes to enable policy feature
-        self.patcher_custom_policy_path = patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH',
-                                                new=self.custom_policy_path)
-        self.patcher_custom_policy_path.start()
-        self.patcher_enabled = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
+        self.patch_custom_policy_path = patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH',
+                                              new=self.custom_policy_path)
+        self.patch_custom_policy_path.start()
+        self.patch_conf_flag = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
                                      return_value=True)
-        self.patcher_enabled.start()
+        self.patch_conf_flag.start()
 
         AgentTestCase.setUp(self)
 
@@ -63,6 +63,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
                                 msg="Conf flag is set to true so policy enforcement should be enabled.")
 
     def test_policy_enforcement_should_be_disabled(self):
+        self.patch_conf_flag.stop()  # Turn off the policy feature enablement
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine(test_extension)
         self.assertFalse(engine.is_policy_enforcement_enabled(),
@@ -90,7 +91,6 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
-                    "signingPolicy": {},
                     "extensions": {
                         TEST_EXTENSION_NAME: {
                             "signatureRequired": False,
@@ -98,8 +98,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
                             "runtimePolicy": {}
                         }
                     }
-                },
-                "jitPolicies": {}
+                }
             }
         with open(self.custom_policy_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
@@ -119,10 +118,8 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
-                    "signingPolicy": {},
                     "extensions": {}  # Extension not in allowed list.
-                },
-                "jitPolicies": {}
+                }
             }
         with open(self.custom_policy_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
@@ -146,12 +143,9 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": False,
                     "signatureRequired": False,
-                    "signingPolicy": {},
                     "extensions": {
                         TEST_EXTENSION_NAME: {
-                            "signatureRequired": False,
-                            "signingPolicy": {},
-                            "runtimePolicy": {}
+                            "signatureRequired": False
                         }
                     }
                 },
@@ -180,16 +174,12 @@ class TestExtensionPolicyEngine(AgentTestCase):
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": False,
                         "signatureRequired": global_rule,
-                        "signingPolicy": {},
                         "extensions": {
                             TEST_EXTENSION_NAME: {
-                                "signatureRequired": True,
-                                "signingPolicy": {},
-                                "runtimePolicy": {}
+                                "signatureRequired": True
                             }
                         }
-                    },
-                    "jitPolicies": {}
+                    }
                 }
 
             with open(self.custom_policy_path, mode='w') as policy_file:
@@ -213,16 +203,12 @@ class TestExtensionPolicyEngine(AgentTestCase):
                     "extensionPolicies": {
                         "allowListedExtensionsOnly": False,
                         "signatureRequired": global_rule,
-                        "signingPolicy": {},
                         "extensions": {
                             TEST_EXTENSION_NAME: {
                                 "signatureRequired": False,
-                                "signingPolicy": {},
-                                "runtimePolicy": {}
                             }
                         }
-                    },
-                    "jitPolicies": {}
+                    }
                 }
 
             with open(self.custom_policy_path, mode='w') as policy_file:
@@ -244,10 +230,8 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": True,
-                    "signingPolicy": {},
                     "extensions": {}
-                },
-                "jitPolicies": {}
+                }
             }
         with open(self.custom_policy_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
@@ -268,10 +252,8 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
-                    "signingPolicy": {},
                     "extensions": {}
-                },
-                "jitPolicies": {}
+                }
             }
         with open(self.custom_policy_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
@@ -303,10 +285,8 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": "True",  # Should be bool
                     "signatureRequired": False,
-                    "signingPolicy": {},
                     "extensions": {}
-                },
-                "jitPolicies": {}
+                }
             }
 
         with open(self.custom_policy_path, mode='w') as policy_file:
@@ -324,16 +304,12 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
-                    "signingPolicy": {},
                     "extensions": {
                         TEST_EXTENSION_NAME: {
-                            "signatureRequired": "False",  # Should be bool
-                            "signingPolicy": {},
-                            "runtimePolicy": {}
+                            "signatureRequired": "False"  # Should be bool
                         }
                     }
-                },
-                "jitPolicies": {}
+                }
             }
         policy_global = \
             {
@@ -341,10 +317,8 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": "False",  # Should be bool
-                    "signingPolicy": {},
                     "extensions": {}
-                },
-                "jitPolicies": {}
+                }
             }
         for policy in [policy_individual, policy_global]:
             with open(self.custom_policy_path, mode='w') as policy_file:
@@ -358,8 +332,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy = \
             {
-                "policyVersion": "0.1.0",
-                "jitPolicies": {}
+                "policyVersion": "0.1.0"
             }
         with open(self.custom_policy_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
@@ -369,7 +342,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
             self.assertTrue(should_allow)
 
     def test_should_allow_if_policy_disabled(self):
-        self.patcher_enabled.stop()  # Turn off the policy feature enablement
+        self.patch_conf_flag.stop()  # Turn off the policy feature enablement
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine(test_extension)
         should_allow = engine.should_allow_extension()
@@ -377,7 +350,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
                         msg="Policy feature is disabled, so all extensions should be allowed.")
 
     def test_should_not_enforce_signature_if_policy_disabled(self):
-        self.patcher_enabled.stop()  # Turn off the policy feature enablement
+        self.patch_conf_flag.stop()  # Turn off the policy feature enablement
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine(test_extension)
         should_enforce_signature = engine.should_enforce_signature()
