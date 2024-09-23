@@ -53,6 +53,8 @@ from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, CUSTOM_POLICY_PATH, PolicyError
+
 
 _HANDLER_NAME_PATTERN = r'^([^-]+)'
 _HANDLER_VERSION_PATTERN = r'(\d+(?:\.\d+)*)'
@@ -620,6 +622,15 @@ class ExtHandlersHandler(object):
             # Handle everything on an extension level rather than Handler level
             ext_handler_i.logger.info("Target handler state: {0} [{1}]", handler_state, goal_state_id)
             if handler_state == ExtensionRequestedState.Enabled:
+                policy_engine = ExtensionPolicyEngine(ext_handler_i.ext_handler)
+                if not policy_engine.should_allow_extension():
+                    err_msg = "extension is not specified in allowlist. To enable, add extension to the allowed list " \
+                              "specified in '{0}'.".format(CUSTOM_POLICY_PATH)
+                    raise PolicyError(err_msg)
+                if policy_engine.should_enforce_signature() and ext_handler_i.ext_handler.encoded_signature is None:
+                    err_msg = "extension is not signed and policy requires signatures. To enable, ensure that extension " \
+                              " is signed or set signatureRequired=false in '{0}'.".format(CUSTOM_POLICY_PATH)
+                    raise PolicyError(err_msg)
                 self.handle_enable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Disabled:
                 self.handle_disable(ext_handler_i, extension)
@@ -658,6 +669,18 @@ class ExtHandlersHandler(object):
         except ExtensionError as error:
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error),
                                                         extension=extension)
+        except PolicyError as error:
+            # If extension is disallowed, we don't process it. But CRP is still waiting for status, so we will report
+            # status here with an error message.
+            msg = "Extension is disallowed by agent policy and will not be enabled or downloaded: {0}".format(
+                ustr(error))
+            add_event(op=WALAEventOperation.Enable, message=msg)
+            ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
+            ext_handler_i.create_status_file_if_not_exist(extension,
+                                                          status=ExtensionStatusValue.error,
+                                                          code=-1,
+                                                          operation=ext_handler_i.operation,
+                                                          message=msg)
         except Exception as error:
             error.code = -1
             self.__handle_and_report_ext_handler_errors(ext_handler_i, error, ext_handler_i.operation, ustr(error),
@@ -984,7 +1007,7 @@ class ExtHandlersHandler(object):
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
         # We also need to report extension status for an uninstalled handler if extensions are disabled because CRP
         # waits for extension runtime status before failing the extension operation.
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled() or ExtensionPolicyEngine.is_policy_enforcement_feature_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
