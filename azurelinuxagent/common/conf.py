@@ -146,7 +146,9 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
-    "Debug.EnableGAVersioning": True
+    "Debug.EnableGAVersioning": True,
+    "Debug.EnableCgroupV2ResourceLimiting": False,
+    "Debug.EnableExtensionPolicy": False
 }
 
 
@@ -168,9 +170,7 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountPoint": "/mnt/resource",
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
-    "AutoUpdate.GAFamily": "Prod",
-    "Debug.CgroupMonitorExpiryTime": "2022-03-31",
-    "Debug.CgroupMonitorExtensionName": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
+    "AutoUpdate.GAFamily": "Prod"
 }
 
 
@@ -200,7 +200,8 @@ __INTEGER_OPTIONS__ = {
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,
-    "Debug.FirewallRulesLogPeriod": 86400
+    "Debug.FirewallRulesLogPeriod": 86400,
+    "Debug.LogCollectorInitialDelay": 5 * 60
 }
 
 
@@ -613,25 +614,6 @@ def get_enable_agent_memory_usage_check(conf=__conf__):
     """
     return conf.get_switch("Debug.EnableAgentMemoryUsageCheck", False)
 
-
-def get_cgroup_monitor_expiry_time(conf=__conf__):
-    """
-    cgroups monitoring for pilot extensions disabled after expiry time
-
-    NOTE: This option is experimental and may be removed in later versions of the Agent.
-    """
-    return conf.get("Debug.CgroupMonitorExpiryTime", "2022-03-31")
-
-
-def get_cgroup_monitor_extension_name (conf=__conf__):
-    """
-    cgroups monitoring extension name
-
-    NOTE: This option is experimental and may be removed in later versions of the Agent.
-    """
-    return conf.get("Debug.CgroupMonitorExtensionName", "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent")
-
-
 def get_enable_fast_track(conf=__conf__):
     """
     If True, the agent use FastTrack when retrieving goal states
@@ -680,3 +662,28 @@ def get_firewall_rules_log_period(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.FirewallRulesLogPeriod", 86400)
+
+  
+def get_extension_policy_enabled(conf=__conf__):
+    """
+    Determine whether extension policy is enabled. If true, policy will be enforced before installing any extensions.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableExtensionPolicy", False)
+
+  
+def get_enable_cgroup_v2_resource_limiting(conf=__conf__):
+    """
+    If True, the agent will enable resource monitoring and enforcement for the log collector on machines using cgroup v2.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableCgroupV2ResourceLimiting", False)
+
+
+def get_log_collector_initial_delay(conf=__conf__):
+    """
+    Determine the initial delay at service start before the first periodic log collection.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.LogCollectorInitialDelay", 5 * 60)

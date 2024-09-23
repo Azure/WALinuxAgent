@@ -115,7 +115,7 @@ def verify_agent_reported_metrics():
             if match is not None:
                 processor_time.append(float(match.group(1)))
             else:
-                match = re.search(r"Throttled Time\s*\[walinuxagent.service\]\s*=\s*([0-9.]+)", record.message)
+                match = re.search(r"Throttled Time \(s\)\s*\[walinuxagent.service\]\s*=\s*([0-9.]+)", record.message)
                 if match is not None:
                     throttled_time.append(float(match.group(1)))
         if len(processor_time) < 1 or len(throttled_time) < 1:

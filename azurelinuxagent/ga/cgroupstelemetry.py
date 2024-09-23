@@ -17,7 +17,7 @@ import errno
 import threading
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.ga.cgroup import CpuCgroup
+from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.common.future import ustr
 
 
@@ -37,18 +37,18 @@ class CGroupsTelemetry(object):
         return CGroupsTelemetry._track_throttled_time
 
     @staticmethod
-    def track_cgroup(cgroup):
+    def track_cgroup_controller(cgroup_controller):
         """
-        Adds the given item to the dictionary of tracked cgroups
+        Adds the given item to the dictionary of tracked cgroup controllers
         """
-        if isinstance(cgroup, CpuCgroup):
+        if isinstance(cgroup_controller, _CpuController):
             # set the current cpu usage
-            cgroup.initialize_cpu_usage()
+            cgroup_controller.initialize_cpu_usage()
 
         with CGroupsTelemetry._rlock:
-            if not CGroupsTelemetry.is_tracked(cgroup.path):
-                CGroupsTelemetry._tracked[cgroup.path] = cgroup
-                logger.info("Started tracking cgroup {0}", cgroup)
+            if not CGroupsTelemetry.is_tracked(cgroup_controller.path):
+                CGroupsTelemetry._tracked[cgroup_controller.path] = cgroup_controller
+                logger.info("Started tracking cgroup {0}", cgroup_controller)
 
     @staticmethod
     def is_tracked(path):
@@ -75,11 +75,11 @@ class CGroupsTelemetry(object):
     @staticmethod
     def poll_all_tracked():
         metrics = []
-        inactive_cgroups = []
+        inactive_controllers = []
         with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked.values():
+            for controller in CGroupsTelemetry._tracked.values():
                 try:
-                    metrics.extend(cgroup.get_tracked_metrics(track_throttled_time=CGroupsTelemetry._track_throttled_time))
+                    metrics.extend(controller.get_tracked_metrics(track_throttled_time=CGroupsTelemetry._track_throttled_time))
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
@@ -87,11 +87,11 @@ class CGroupsTelemetry(object):
                     # exceptions which could occur, which is why we do a periodic log for all the other errors.
                     if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:  # pylint: disable=E1101
                         logger.periodic_warn(logger.EVERY_HOUR, '[PERIODIC] Could not collect metrics for cgroup '
-                                                                '{0}. Error : {1}'.format(cgroup.name, ustr(e)))
-                if not cgroup.is_active():
-                    inactive_cgroups.append(cgroup)
-            for inactive_cgroup in inactive_cgroups:
-                CGroupsTelemetry.stop_tracking(inactive_cgroup)
+                                                                '{0}. Error : {1}'.format(controller.name, ustr(e)))
+                if not controller.is_active():
+                    inactive_controllers.append(controller)
+            for inactive_controller in inactive_controllers:
+                CGroupsTelemetry.stop_tracking(inactive_controller)
 
         return metrics
 

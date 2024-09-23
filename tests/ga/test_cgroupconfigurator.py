@@ -27,13 +27,14 @@ import time
 import threading
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.ga.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
+from azurelinuxagent.ga.cgroupcontroller import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, DisableCgroups
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1
 from tests.lib.mock_environment import MockCommand
 from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, UnitFilePaths, mock_cgroup_v2_environment
 from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir, is_python_version_26_or_34, skip_if_predicate_true
@@ -220,26 +221,20 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
             self.assertTrue(os.path.exists(agent_drop_in_file_memory_accounting), "{0} was not created".format(agent_drop_in_file_memory_accounting))
 
-    def test_initialize_should_update_logcollector_memorylimit(self):
+    def test_initialize_should_clear_logcollector_slice(self):
         with self._get_cgroup_configurator(initialize=False) as configurator:
             log_collector_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.logcollector)
-            original_memory_limit = "MemoryLimit=30M"
 
-            # The mock creates the slice unit file with memory limit
+            # The mock creates the slice unit file
             configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "azure-walinuxagent-logcollector.slice"),
                                              UnitFilePaths.logcollector)
-            if not os.path.exists(log_collector_unit_file):
-                raise Exception("{0} should have been created during test setup".format(log_collector_unit_file))
-            if not fileutil.findre_in_file(log_collector_unit_file, original_memory_limit):
-                raise Exception("MemoryLimit was not set correctly. Expected: {0}. Got:\n{1}".format(
-                    original_memory_limit, fileutil.read_file(log_collector_unit_file)))
+
+            self.assertTrue(os.path.exists(log_collector_unit_file), "{0} was not created".format(log_collector_unit_file))
 
             configurator.initialize()
 
-            # initialize() should update the unit file to remove the memory limit
-            self.assertFalse(fileutil.findre_in_file(log_collector_unit_file, original_memory_limit),
-                             "Log collector slice unit file was not updated correctly. Expected no memory limit. Got:\n{0}".format(
-                                 fileutil.read_file(log_collector_unit_file)))
+            # initialize() should remove the unit file
+            self.assertFalse(os.path.exists(log_collector_unit_file), "{0} should not have been created".format(log_collector_unit_file))
 
     def test_setup_extension_slice_should_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
@@ -272,7 +267,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
                                           'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuCgroup('Microsoft.CPlat.Extension',
+                    CpuControllerV1('Microsoft.CPlat.Extension',
                               '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
                 configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
@@ -369,10 +364,10 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 configurator.setup_extension_slice(extension_name=extension_name, cpu_quota=5)
                 configurator.set_extension_services_cpu_memory_quota(service_list)
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
                                           'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuCgroup('Microsoft.CPlat.Extension',
+                    CpuControllerV1('Microsoft.CPlat.Extension',
                               '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
                 configurator.disable("UNIT TEST", DisableCgroups.ALL)
@@ -717,7 +712,8 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             with patch("os.path.exists") as mock_path:
                 mock_path.return_value = True
-                CGroupsTelemetry.track_cgroup(CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
+                CGroupsTelemetry.track_cgroup_controller(
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
                 configurator.stop_tracking_extension_services_cgroups(service_list)
 
                 tracked = CGroupsTelemetry._tracked
@@ -776,7 +772,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             with patch("os.path.exists") as mock_path:
                 mock_path.side_effect = side_effect
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 configurator.stop_tracking_unit_cgroups("extension.service")
 
                 tracked = CGroupsTelemetry._tracked
@@ -911,7 +907,7 @@ exit 0
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
             other_processes = [1, get_completed_process()] + extension_processes
 
-            with patch("azurelinuxagent.ga.cgroupapi._SystemdCgroupApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
+            with patch("azurelinuxagent.ga.cgroupapi.CgroupV1.get_processes", return_value=agent_processes + other_processes):
                 with self.assertRaises(CGroupsException) as context_manager:
                     configurator._check_processes_in_agent_cgroup()
 
@@ -1012,8 +1008,15 @@ exit 0
 
         with self.assertRaises(AgentMemoryExceededException) as context_manager:
             with self._get_cgroup_configurator() as configurator:
-                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_tracked_metrics") as tracked_metrics:
+                with patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV1.get_tracked_metrics") as tracked_metrics:
                     tracked_metrics.return_value = metrics
                     configurator.check_agent_memory_usage()
 
         self.assertIn("The agent memory limit {0} bytes exceeded".format(conf.get_agent_memory_quota()), ustr(context_manager.exception), "An incorrect exception was raised")
+
+    def test_get_log_collector_properties_should_return_correct_props(self):
+        with self._get_cgroup_configurator() as configurator:
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%"])
+
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%", "--property=MemoryHigh=170M"])

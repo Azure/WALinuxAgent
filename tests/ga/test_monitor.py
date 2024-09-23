@@ -21,12 +21,14 @@ import random
 import string
 
 from azurelinuxagent.common import event, logger
-from azurelinuxagent.ga.cgroup import CpuCgroup, MemoryCgroup, MetricValue, _REPORT_EVERY_HOUR
+from azurelinuxagent.ga.cgroupcontroller import MetricValue, _REPORT_EVERY_HOUR
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import EVENTS_DIRECTORY
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1
+from azurelinuxagent.ga.memorycontroller import MemoryControllerV1
 from azurelinuxagent.ga.monitor import get_monitor_handler, PeriodicOperation, SendImdsHeartbeat, \
     ResetPeriodicLogMessages, SendHostPluginHeartbeat, PollResourceUsage, \
     ReportNetworkErrors, ReportNetworkConfigurationChanges, PollSystemWideResourceUsage
@@ -222,23 +224,23 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_memory_usage")
+    @patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV1.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
     def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions_errno2(self, patch_periodic_warn,  # pylint: disable=unused-argument
-                                                                                       patch_get_memory_usage,
+                                                                                       get_memory_usage,
                                                                                        patch_add_metric, *args):
         ioerror = IOError()
         ioerror.errno = 2
-        patch_get_memory_usage.side_effect = ioerror
+        get_memory_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked["/test/path"] = MemoryCgroup("cgroup_name", "/test/path")
+        CGroupsTelemetry._tracked["/test/path"] = MemoryControllerV1("_cgroup_name", "/test/path")
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)
         self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
-    @patch("azurelinuxagent.ga.cgroup.CpuCgroup.get_cpu_usage")
+    @patch("azurelinuxagent.ga.cpucontroller.CpuControllerV1.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
     def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn,  # pylint: disable=unused-argument
                                                                                     patch_cpu_usage, patch_add_metric,
@@ -247,7 +249,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
 
-        CGroupsTelemetry._tracked["/test/path"] = CpuCgroup("cgroup_name", "/test/path")
+        CGroupsTelemetry._tracked["/test/path"] = CpuControllerV1("_cgroup_name", "/test/path")
 
         PollResourceUsage().run()
         self.assertEqual(0, patch_periodic_warn.call_count)

@@ -1,0 +1,13 @@
+#
+# This test verifies that the Agent does initial update on very first goal state before it starts processing extensions for new vms that are enrolled into RSM.
+#
+# NOTE: This test_suite is not fully automated. It requires a custom image where custom pre-installed Agent has been installed with version 2.8.9.9. Creation of custom images is not automated currently.
+# But daily run is automated and test suite will pass shared gallery custom image reference in images list
+#
+#
+name: "InitialAgentUpdate"
+tests:
+  - "initial_agent_update/initial_agent_update.py"
+install_test_agent: false
+images: "gallery/initial-agent-update/1.0.0"
+locations: "AzureCloud:eastus2euap"

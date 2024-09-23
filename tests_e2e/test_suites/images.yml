@@ -17,8 +17,9 @@ image-sets:
       - "debian_11"
       - "flatcar"
       - "suse_12"
-      - "mariner_1"
       - "mariner_2"
+      - "azure-linux_3"
+      - "azure-linux_3_fips"
       - "suse_15"
       - "rhel_79"
       - "rhel_82"
@@ -37,8 +38,10 @@ image-sets:
       - "debian_11_arm64"
       - "flatcar_arm64"
       - "mariner_2_arm64"
+      - "azure-linux_3_arm64"
       - "rhel_90_arm64"
       - "ubuntu_2204_arm64"
+      - "ubuntu_2404_arm64"
 
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
@@ -53,6 +56,20 @@ image-sets:
       - "centos_610"
       - "oracle_610"
       - "rhel_610"
+
+   # These are the distros which have periodic log collector support.
+   log-collector-endorsed:
+      - "centos_82"
+      - "rhel_82"
+      - "ubuntu_1604"
+      - "ubuntu_1804"
+      - "ubuntu_2004"
+      - "ubuntu_2204"
+      - "ubuntu_2204_minimal"
+      - "ubuntu_2204_arm64"
+      - "ubuntu_2404"
+      - "ubuntu_2404_minimal"
+      - "ubuntu_2404_arm64"
 
 #
 # An image can be specified by a string giving its urn, as in
@@ -86,6 +103,21 @@ images:
    alma_9:
       urn: "almalinux almalinux 9-gen2 latest"
       locations:
+         AzureChinaCloud: []
+   azure-linux_3:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3 latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_3_fips:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-gen2-fips latest"
+      locations:
+         AzureUSGovernment: []
+         AzureChinaCloud: []
+   azure-linux_3_arm64:
+      urn: "microsoftcblmariner azure-linux-3 azure-linux-3-arm64 latest"
+      locations:
+         AzureUSGovernment: []
          AzureChinaCloud: []
    centos_610: "OpenLogic CentOS 6.10 latest"
    centos_75: "OpenLogic CentOS 7.5 latest"
@@ -181,9 +213,9 @@ images:
          AzureChinaCloud: []
          AzureUSGovernment: []
    ubuntu_2204_minimal: "Canonical 0001-com-ubuntu-minimal-jammy minimal-22_04-lts-gen2 latest"
-   ubuntu_2404:
-      # TODO: Currently using the daily build, update to the release build once it is available
-      urn: "Canonical 0001-com-ubuntu-server-noble-daily 24_04-daily-lts-gen2 latest"
+   ubuntu_2404: "Canonical ubuntu-24_04-lts server latest"
+   ubuntu_2404_arm64:
+      urn: "Canonical ubuntu-24_04-lts server-arm64 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []

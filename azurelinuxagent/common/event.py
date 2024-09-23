@@ -86,6 +86,8 @@ class WALAEventOperation:
     Downgrade = "Downgrade"
     Download = "Download"
     Enable = "Enable"
+    ExtensionHandlerManifest = "ExtensionHandlerManifest"
+    ExtensionPolicy = "ExtensionPolicy"
     ExtensionProcessing = "ExtensionProcessing"
     ExtensionTelemetryEventProcessing = "ExtensionTelemetryEventProcessing"
     FetchGoalState = "FetchGoalState"
@@ -111,6 +113,7 @@ class WALAEventOperation:
     OpenSsl = "OpenSsl"
     Partition = "Partition"
     PersistFirewallRules = "PersistFirewallRules"
+    Policy = "Policy"
     ProvisionAfterExtensions = "ProvisionAfterExtensions"
     PluginSettingsVersionMismatch = "PluginSettingsVersionMismatch"
     InvalidExtensionConfig = "InvalidExtensionConfig"
@@ -433,7 +436,7 @@ class EventLogger(object):
             logger.warn("Failed to get VM info from goal state; will be missing from telemetry: {0}", ustr(e))
 
         try:
-            imds_client = get_imds_client(protocol.get_endpoint())
+            imds_client = get_imds_client()
             imds_info = imds_client.get_compute()
             parameters[CommonTelemetryEventSchema.Location].value = imds_info.location
             parameters[CommonTelemetryEventSchema.SubscriptionId].value = imds_info.subscriptionId

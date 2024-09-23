@@ -29,7 +29,8 @@ jobs:
 
     env:
       NOSEOPTS: "--verbose"
-
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    
     steps:
     - uses: actions/checkout@v3
 
@@ -87,6 +88,9 @@ jobs:
       matrix:
         include:
           - python-version: "3.5"
+            # workaround found in https://github.com/actions/setup-python/issues/866
+            # for issue "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:728)" on Python 3.5
+            pip_trusted_host: "pypi.python.org pypi.org files.pythonhosted.org"
           - python-version: "3.6"
           - python-version: "3.7"
           - python-version: "3.8"
@@ -110,6 +114,8 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
+      env:
+        PIP_TRUSTED_HOST: ${{ matrix.pip_trusted_host }}
 
     - name: Install dependencies
       id: install-dependencies
@@ -142,9 +148,14 @@ jobs:
         # * 'contextmanager-generator-missing-cleanup' are false positives if yield is used inside an if-else block for contextmanager generator functions.
         #   (https://pylint.readthedocs.io/en/latest/user_guide/messages/warning/contextmanager-generator-missing-cleanup.html). 
         #   This is not implemented on versions (3.0-3.7) Bad option value 'contextmanager-generator-missing-cleanup' (bad-option-value)
+        # * 3.9-3.11 will produce "too-many-positional-arguments" for several methods that are having more than 5 args, so we suppress that warning.
+        #  (R0917: Too many positional arguments (8/5) (too-many-positional-arguments))
         PYLINT_OPTIONS="--rcfile=ci/pylintrc --jobs=0"
         if [[ "${{ matrix.python-version }}" == "3.9" ]]; then
-          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member --ignore=main.py"
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-member,too-many-positional-arguments --ignore=main.py"
+        fi
+        if [[ "${{ matrix.python-version }}" =~ ^3\.(10|11)$ ]]; then
+          PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=too-many-positional-arguments"
         fi
         if [[ "${{ matrix.python-version }}" =~ ^3\.[0-7]$ ]]; then
           PYLINT_OPTIONS="$PYLINT_OPTIONS --disable=no-self-use,bad-option-value"

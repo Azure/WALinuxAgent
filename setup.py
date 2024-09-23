@@ -147,7 +147,7 @@ def get_data_files(name, version, fullname):  # pylint: disable=R0912
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest=systemd_dir_path,
                           src=["init/clearlinux/waagent.service"])
-    elif name == 'mariner':
+    elif name in ["mariner", "azurelinux"]:
         set_bin_files(data_files, dest=agent_bin_path)
         set_conf_files(data_files, dest="/etc",
                        src=["config/mariner/waagent.conf"])
