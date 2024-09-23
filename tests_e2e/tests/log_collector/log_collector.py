@@ -39,7 +39,7 @@ class LogCollector(AgentVmTest):
         log.info("Renaming agent log file and modifying log collector conf flags")
         setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
             "update-waagent-conf Logs.Collect=y Debug.EnableCgroupV2ResourceLimiting=y Debug.LogCollectorInitialDelay=60")
-        self._run_remote_test(ssh_client, f"sh -c '{setup_script}'", use_sudo=True)
+        ssh_client.run_command(f"sh -c '{setup_script}'", use_sudo=True)
         log.info('Renamed log file and updated log collector config flags')
 
         # Wait for log collector to finish uploading logs
