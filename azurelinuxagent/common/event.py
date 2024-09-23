@@ -344,8 +344,8 @@ class CollectOrReportEventDebugInfo(object):
     def update_op_error(self, op_err):
         self.__op_error_count = self._update_errors_and_get_count(self.__op_error_count, self.__op_errors, op_err)
 
-    def has_no_errors(self):
-        return self.__op_error_count == 0 and self.__unicode_error_count == 0
+    def get_error_count(self):
+        return self.__op_error_count + self.__unicode_error_count
 
 
 class EventLogger(object):

@@ -1183,7 +1183,7 @@ class WireClient(object):
         debug_info.report_debug_info()
 
         # use debug info to determine if the operation was successful or not, this is needed for immediate_flush events
-        return debug_info.has_no_errors()
+        return debug_info.get_error_count() == 0
 
     def report_status_event(self, message, is_success):
         report_event(op=WALAEventOperation.ReportStatus,
