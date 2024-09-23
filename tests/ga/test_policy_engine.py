@@ -28,8 +28,7 @@ TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
 
 class TestExtensionPolicyEngine(AgentTestCase):
     def setUp(self):
-        self.custom_policy_path = os.path.join(data_dir, 'policy',
-                                               "waagent_policy.json")  # Path where we should create custom policy files for tests.
+        self.custom_policy_path = os.path.join(data_dir, 'ga', "waagent_policy.json")
 
         # Patch attributes to enable policy feature
         self.patch_custom_policy_path = patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH',

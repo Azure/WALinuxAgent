@@ -3507,7 +3507,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
                 self.assertIn("'supportsMultipleExtensions' has a non-boolean value", kw_messages[2]['message'])
 
     @patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True)
-    @patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH', new=os.path.join(data_dir, 'policy', "waagent_policy.json"))
+    @patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH', new=os.path.join(data_dir, 'ga', "waagent_policy.json"))
     def test_should_block_extension_if_allowlist_true(self, _, *args):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             protocol.aggregate_status = None
@@ -3524,7 +3524,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
                     },
                     "jitPolicies": {}
                 }
-            with open(os.path.join(data_dir, 'policy', "waagent_policy.json"), mode='w') as policy_file:
+            with open(os.path.join(data_dir, 'ga', "waagent_policy.json"), mode='w') as policy_file:
                 json.dump(policy, policy_file, indent=4)
                 policy_file.flush()
                 exthandlers_handler.run()
@@ -3546,7 +3546,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
                 self.assertEqual(expected_msg, ext_status.message)
 
     @patch('azurelinuxagent.common.conf.get_extension_policy_enabled', return_value=True)
-    @patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH', new=os.path.join(data_dir, 'policy', "waagent_policy.json"))
+    @patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH', new=os.path.join(data_dir, 'ga', "waagent_policy.json"))
     def test_should_block_unsigned_extension_if_signature_required_true(self, _, *args):
         # Test the case where extension does not have an encoded signature.
         data_file = wire_protocol_data.DATA_FILE.copy()
@@ -3566,7 +3566,7 @@ class TestExtensionHandlerManifest(AgentTestCase):
                     },
                     "jitPolicies": {}
                 }
-            with open(os.path.join(data_dir, 'policy', "waagent_policy.json"), mode='w') as policy_file:
+            with open(os.path.join(data_dir, 'ga', "waagent_policy.json"), mode='w') as policy_file:
                 json.dump(policy, policy_file, indent=4)
                 policy_file.flush()
                 exthandlers_handler.run()

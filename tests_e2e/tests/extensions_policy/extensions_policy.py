@@ -30,6 +30,8 @@ import uuid
 
 from assertpy import assert_that, fail
 from typing import Any
+from pathlib import Path
+
 
 from azure.mgmt.compute.models import VirtualMachineInstanceView
 
@@ -59,7 +61,15 @@ class ExtensionsDisabled(AgentVmTest):
                     "extensions": {}
                 }
             }
-        policy_str = json.dumps(policy)
+        with open("waagent_policy.json", mode='w') as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+
+            remote_path = Path("/etc/waagent_policy.json")
+            local_path = Path(policy_file.name)
+            ssh_client.copy_to_node(local_path=local_path, remote_path=remote_path)
+            # output = ssh_client.run_command(f"echo '{policy_str}' > {policy_path}", use_sudo=True)
+
 
         # Enable policy enforcement via conf file and place policy file in correct location.
         log.info("")

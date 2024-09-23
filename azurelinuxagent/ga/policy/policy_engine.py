@@ -96,7 +96,7 @@ class _PolicyEngine(object):
         """
         if os.path.exists(CUSTOM_POLICY_PATH):
             self._log_policy("Custom policy found at {0}. Using custom policy.".format(CUSTOM_POLICY_PATH))
-            with open(CUSTOM_POLICY_PATH, 'r') as f:
+            with open(CUSTOM_POLICY_PATH, 'r') as f:        # Open file in read-only mode.
                 custom_policy = json.load(f)
                 return custom_policy
         else:
