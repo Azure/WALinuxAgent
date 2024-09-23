@@ -76,12 +76,14 @@ class MockEnvironment:
         self._original_popen = subprocess.Popen
         self._original_mkdir = fileutil.mkdir
         self._original_path_exists = os.path.exists
+        self._original_os_remove = os.remove
         self._original_open = open
 
         self.patchers = [
             patch_builtin("open", side_effect=self._mock_open),
             patch("subprocess.Popen", side_effect=self._mock_popen),
             patch("os.path.exists", side_effect=self._mock_path_exists),
+            patch("os.remove", side_effect=self._mock_os_remove),
             patch("azurelinuxagent.common.utils.fileutil.mkdir", side_effect=self._mock_mkdir)
         ]
 
@@ -165,4 +167,7 @@ class MockEnvironment:
 
     def _mock_path_exists(self, path):
         return self._original_path_exists(self.get_mapped_path(path))
+
+    def _mock_os_remove(self, path):
+        return self._original_os_remove(self.get_mapped_path(path))
 

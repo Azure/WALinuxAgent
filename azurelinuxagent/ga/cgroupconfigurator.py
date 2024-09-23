@@ -68,16 +68,6 @@ MemoryAccounting=yes
 LOGCOLLECTOR_SLICE = "azure-walinuxagent-logcollector.slice"
 # More info on resource limits properties in systemd here:
 # https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/resource_management_guide/sec-modifying_control_groups
-_LOGCOLLECTOR_SLICE_CONTENTS_FMT = """
-[Unit]
-Description=Slice for Azure VM Agent Periodic Log Collector
-DefaultDependencies=no
-Before=slices.target
-[Slice]
-CPUAccounting=yes
-CPUQuota={cpu_quota}
-MemoryAccounting=yes
-"""
 LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2 = "5%"
 LOGCOLLECTOR_MEMORY_THROTTLE_LIMIT_FOR_V2 = "170M"
 LOGCOLLECTOR_MAX_THROTTLED_EVENTS_FOR_V2 = 10
@@ -181,6 +171,11 @@ class CGroupConfigurator(object):
                     log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
                     return
 
+                # TODO: Move this and systemd system check to cgroups_supported logic above
+                if self.using_cgroup_v2():
+                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
+                    return
+
                 # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
                 # because the agent's Slice unit property will be 'azure.slice' if the slice drop-in file exists, even
                 # though systemd has not moved the agent to azure.slice yet. Systemd will only move the agent to
@@ -192,18 +187,12 @@ class CGroupConfigurator(object):
                     return
 
                 # Notes about slice setup:
-                #   1. On first agent update (for machines where daemon version did not already create azure.slice), the
+                #   On first agent update (for machines where daemon version did not already create azure.slice), the
                 #   agent creates azure.slice and the agent unit Slice drop-in file, but systemd does not move the agent
                 #   unit to azure.slice until service restart. It is ok to enable cgroup usage in this case if agent is
                 #   running in system.slice.
-                #   2. We setup the slices before v2 check. Cgroup v2 usage is disabled for agent and extensions, but
-                #   can be enabled for log collector in waagent.conf. The log collector slice should be created in case
-                #   v2 usage is enabled for log collector.
-                self.__setup_azure_slice()
 
-                if self.using_cgroup_v2():
-                    log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2")
-                    return
+                self.__setup_azure_slice()
 
                 # Log mount points/root paths for cgroup controllers
                 self._cgroups_api.log_root_paths()
@@ -295,9 +284,8 @@ class CGroupConfigurator(object):
             if not os.path.exists(vmextensions_slice):
                 files_to_create.append((vmextensions_slice, _VMEXTENSIONS_SLICE_CONTENTS))
 
-            # Update log collector slice contents
-            slice_contents = _LOGCOLLECTOR_SLICE_CONTENTS_FMT.format(cpu_quota=LOGCOLLECTOR_CPU_QUOTA_FOR_V1_AND_V2)
-            files_to_create.append((logcollector_slice, slice_contents))
+            # New agent will setup limits for scope instead slice, so removing existing logcollector slice.
+            CGroupConfigurator._Impl.__cleanup_unit_file(logcollector_slice)
 
             if fileutil.findre_in_file(agent_unit_file, r"Slice=") is not None:
                 CGroupConfigurator._Impl.__cleanup_unit_file(agent_drop_in_file_slice)
