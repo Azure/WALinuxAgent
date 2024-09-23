@@ -40,6 +40,7 @@ image-sets:
       - "azure-linux_3_arm64"
       - "rhel_90_arm64"
       - "ubuntu_2204_arm64"
+      - "ubuntu_2404_arm64"
 
    # As of today agent only support and enabled resource governance feature on following distros
    cgroups-endorsed:
@@ -67,6 +68,7 @@ image-sets:
       - "ubuntu_2204_arm64"
       - "ubuntu_2404"
       - "ubuntu_2404_minimal"
+      - "ubuntu_2404_arm64"
 
 #
 # An image can be specified by a string giving its urn, as in
@@ -205,9 +207,9 @@ images:
          AzureChinaCloud: []
          AzureUSGovernment: []
    ubuntu_2204_minimal: "Canonical 0001-com-ubuntu-minimal-jammy minimal-22_04-lts-gen2 latest"
-   ubuntu_2404:
-      # TODO: Currently using the daily build, update to the release build once it is available
-      urn: "Canonical 0001-com-ubuntu-server-noble-daily 24_04-daily-lts-gen2 latest"
+   ubuntu_2404: "Canonical ubuntu-24_04-lts server latest"
+   ubuntu_2404_arm64:
+      urn: "Canonical ubuntu-24_04-lts server-arm64 latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
