@@ -375,9 +375,9 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
         for controller in CgroupV1.get_supported_controller_names():
             mount_point = self._cgroup_mountpoints.get(controller)
             if mount_point is None:
-                log_cgroup_info("The {0} controller is not mounted".format(controller), send_event=False)
+                log_cgroup_info("The {0} controller is not mounted".format(controller))
             else:
-                log_cgroup_info("The {0} controller is mounted at {1}".format(controller, mount_point), send_event=False)
+                log_cgroup_info("The {0} controller is mounted at {1}".format(controller, mount_point))
 
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
@@ -546,12 +546,12 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
         return CgroupV2(cgroup_name=cgroup_name, root_cgroup_path=self._root_cgroup_path, cgroup_path=cgroup_path, enabled_controllers=self._controllers_enabled_at_root)
 
     def log_root_paths(self):
-        log_cgroup_info("The root cgroup path is {0}".format(self._root_cgroup_path), send_event=False)
+        log_cgroup_info("The root cgroup path is {0}".format(self._root_cgroup_path))
         for controller in CgroupV2.get_supported_controller_names():
             if controller in self._controllers_enabled_at_root:
-                log_cgroup_info("The {0} controller is enabled at the root cgroup".format(controller), send_event=False)
+                log_cgroup_info("The {0} controller is enabled at the root cgroup".format(controller))
             else:
-                log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller), send_event=False)
+                log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller))
 
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
@@ -630,17 +630,18 @@ class CgroupV1(Cgroup):
             controller_mountpoint = self._controller_mountpoints.get(supported_controller_name)
 
             if controller_mountpoint is None:
+                # Do not send telemetry here. We already have telemetry for unmounted controllers in cgroup init
                 log_cgroup_warning("{0} controller is not mounted; will not track".format(supported_controller_name), send_event=False)
                 continue
 
             if controller_path is None:
-                log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track".format(supported_controller_name, self._cgroup_name), send_event=False)
+                log_cgroup_warning("{0} is not mounted for the {1} cgroup; will not track".format(supported_controller_name, self._cgroup_name))
                 continue
 
             if expected_relative_path is not None:
                 expected_path = os.path.join(controller_mountpoint, expected_relative_path)
                 if controller_path != expected_path:
-                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track. Actual cgroup path:[{2}] Expected:[{3}]".format(supported_controller_name, self._cgroup_name, controller_path, expected_path), send_event=False)
+                    log_cgroup_warning("The {0} controller is not mounted at the expected path for the {1} cgroup; will not track. Actual cgroup path:[{2}] Expected:[{3}]".format(supported_controller_name, self._cgroup_name, controller_path, expected_path))
                     continue
 
             if supported_controller_name == self.CPU_CONTROLLER:
@@ -650,7 +651,7 @@ class CgroupV1(Cgroup):
 
             if controller is not None:
                 msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
-                log_cgroup_info(msg, send_event=False)
+                log_cgroup_info(msg)
                 controllers.append(controller)
 
         return controllers
@@ -705,13 +706,13 @@ class CgroupV2(Cgroup):
             controller = None
 
             if supported_controller_name not in self._enabled_controllers:
+                # Do not send telemetry here. We already have telemetry for disabled controllers in cgroup init
                 log_cgroup_warning("{0} controller is not enabled; will not track".format(supported_controller_name),
                                    send_event=False)
                 continue
 
             if self._cgroup_path == "":
-                log_cgroup_warning("Cgroup path for {0} cannot be determined; will not track".format(self._cgroup_name),
-                                   send_event=False)
+                log_cgroup_warning("Cgroup path for {0} cannot be determined; will not track".format(self._cgroup_name))
                 continue
 
             if expected_relative_path is not None:
@@ -719,7 +720,7 @@ class CgroupV2(Cgroup):
                 if self._cgroup_path != expected_path:
                     log_cgroup_warning(
                         "The {0} cgroup is not mounted at the expected path; will not track. Actual cgroup path:[{1}] Expected:[{2}]".format(
-                            self._cgroup_name, self._cgroup_path, expected_path), send_event=False)
+                            self._cgroup_name, self._cgroup_path, expected_path))
                     continue
 
             if supported_controller_name == self.CPU_CONTROLLER:
@@ -729,7 +730,7 @@ class CgroupV2(Cgroup):
 
             if controller is not None:
                 msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
-                log_cgroup_info(msg, send_event=False)
+                log_cgroup_info(msg)
                 controllers.append(controller)
 
         return controllers
