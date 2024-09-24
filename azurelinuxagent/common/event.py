@@ -693,7 +693,7 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
 
 def info(op, fmt, *args):
     """
-     Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.INFO...);
+     Creates a telemetry event and logs the message as INFO.
     """
     logger.info(fmt, *args)
     add_event(op=op, message=fmt.format(*args), is_success=True)
@@ -701,7 +701,7 @@ def info(op, fmt, *args):
 
 def warn(op, fmt, *args):
     """
-    Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.WARNING...)
+    Creates a telemetry event and logs the message as WARNING.
     """
     logger.warn(fmt, *args)
     add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
@@ -709,9 +709,9 @@ def warn(op, fmt, *args):
 
 def error(op, fmt, *args):
     """
-    Creates a telemetry event and logs the message as INFO; convenience wrapper over add_event(log_level=logger.LogLevel.ERROR...)
+    Creates a telemetry event and logs the message as ERROR.
     """
-    logger.warn(fmt, *args)
+    logger.error(fmt, *args)
     add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
 
 
