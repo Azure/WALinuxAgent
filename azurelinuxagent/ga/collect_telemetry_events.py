@@ -30,7 +30,7 @@ from azurelinuxagent.common.agent_supported_feature import get_supported_feature
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_ID, \
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, \
     CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
-from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
+from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError, EventError
 from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
@@ -38,7 +38,6 @@ from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEvent
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
-from build.lib.azurelinuxagent.common.exception import EventError
 
 # Event file specific retries and delays.
 NUM_OF_EVENT_FILE_RETRIES = 3
