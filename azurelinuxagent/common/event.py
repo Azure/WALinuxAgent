@@ -213,13 +213,9 @@ def parse_json_event(data_str):
 
 def parse_event(data_str):
     try:
-        try:
-            return parse_json_event(data_str)
-        except ValueError:
-            return parse_xml_event(data_str)
-    except Exception as e:
-        raise EventError("Error parsing event: {0}".format(ustr(e)))
-
+        return parse_json_event(data_str)
+    except ValueError:
+        return parse_xml_event(data_str)
 
 def parse_xml_param(param_node):
     name = getattrib(param_node, "Name")

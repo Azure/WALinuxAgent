@@ -31,13 +31,14 @@ from azurelinuxagent.common.event import EVENTS_DIRECTORY, TELEMETRY_LOG_EVENT_I
     TELEMETRY_LOG_PROVIDER_ID, add_event, WALAEventOperation, add_log_event, get_event_logger, \
     CollectOrReportEventDebugInfo, EVENT_FILE_REGEX, parse_event
 from azurelinuxagent.common.exception import InvalidExtensionEventError, ServiceStoppedError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, is_file_not_found_error
 from azurelinuxagent.ga.interfaces import ThreadHandlerInterface
 from azurelinuxagent.common.telemetryevent import TelemetryEvent, TelemetryEventParam, \
     GuestAgentGenericLogsSchema, GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
+from build.lib.azurelinuxagent.common.exception import EventError
 
 # Event file specific retries and delays.
 NUM_OF_EVENT_FILE_RETRIES = 3
@@ -271,9 +272,12 @@ class _ProcessExtensionEvents(PeriodicOperation):
 
                 # Parse the string and get the list of events
                 return json.loads(event_data)
-            except (ValueError, FileNotFoundError):
-                error_count += 1
-                if error_count >= NUM_OF_EVENT_FILE_RETRIES:
+            except Exception as e:
+                if is_file_not_found_error(e) or isinstance(e, ValueError):
+                    error_count += 1
+                    if error_count >= NUM_OF_EVENT_FILE_RETRIES:
+                        raise
+                else:
                     raise
             time.sleep(EVENT_FILE_RETRY_DELAY)
 
@@ -507,10 +511,13 @@ class _CollectAndEnqueueEvents(PeriodicOperation):
                 with open(event_file_path, "rb") as event_fd:
                     event_data = event_fd.read().decode("utf-8")
                 return parse_event(event_data)
-            except (ValueError, FileNotFoundError):
-                error_count += 1
-                if error_count >= NUM_OF_EVENT_FILE_RETRIES:
-                    raise
+            except Exception as e:
+                if is_file_not_found_error(e) or isinstance(e, ValueError):
+                    error_count += 1
+                    if error_count >= NUM_OF_EVENT_FILE_RETRIES:
+                        raise
+                else:
+                    raise EventError("Error parsing event: {0}".format(ustr(e)))
             time.sleep(EVENT_FILE_RETRY_DELAY)
 
     @staticmethod
