@@ -21,6 +21,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
+from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 
 # Customer-defined policy is expected to be located at this path.
 # If there is no file at this path, default policy will be used.
@@ -50,6 +51,7 @@ class _PolicyEngine(object):
             return
 
         self.policy = self.__get_policy()
+
 
     @classmethod
     def _log_policy(cls, msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
@@ -85,7 +87,7 @@ class _PolicyEngine(object):
                 "signatureRequired": bool,
                 "signingPolicy": dict,
                 "extensions": {
-                    "<extensionName>": {
+                    "<extensionName1>": {
                         "signatureRequired": bool,
                         "signingPolicy": dict,
                         "runtimePolicy": dict
@@ -112,9 +114,24 @@ class ExtensionPolicyEngine(_PolicyEngine):
         if not self.is_policy_enforcement_enabled():
             return
 
-        self.extension_policy = self.policy.get("extensionPolicies", {})
+        extension_policy = self.policy.get("extensionPolicies", {})
+        # CRP allows extension names to be any case. We use a case-folded dict to do a case-insensitive query of the allowlist.
+        # The rest of the policy remains case-sensitive, so we only replace the "extensions" dict with a case-folded dict,
+        # if it exists.
+        if extension_policy.get("extensions") is not None:
+            case_folded_extension_dict = _CaseFoldedDict.from_dict(extension_policy.get("extensions"))
+            self.policy["extensionPolicies"]["extensions"].update(case_folded_extension_dict)
+
+        self.extension_policy = extension_policy
 
     def should_allow_extension(self):
+        """
+        Return whether we should allow extension download based on policy.
+
+        If policy feature not enabled, return True.
+        If allowListedExtensionsOnly=true, return true only if extension present in "extensions" allowlist.
+        If allowListedExtensions=false, return true always.
+        """
         if not self.is_policy_enforcement_enabled():
             return True
 
@@ -124,10 +141,19 @@ class ExtensionPolicyEngine(_PolicyEngine):
                              .format(type(allow_listed_extension_only).__name__))
 
         extension_allowlist = self.extension_policy.get("extensions", {})
-        should_allow = not allow_listed_extension_only or extension_allowlist.get(self.extension_to_check.name) is not None
+
+        # CRP allows extension names to be any case. We use a case-folded dict to do a case-insensitive query of the allowlist.
+        should_allow = not allow_listed_extension_only or extension_allowlist.get(self.extension_to_check.name.lower()) is not None
         return should_allow
 
     def should_enforce_signature(self):
+        """
+        Return whether we should enforce signature based on policy.
+
+        If policy feature not enabled, return False.
+        Individual policy takes precedence over global - if individual signing policy present, return true/false based on
+        individual policy. Else, return true/false based on global policy.
+        """
         if not self.is_policy_enforcement_enabled():
             return False
 
@@ -136,14 +162,17 @@ class ExtensionPolicyEngine(_PolicyEngine):
         if not isinstance(global_signature_required, bool):
             raise ValueError("Invalid type {0} for attribute 'signatureRequired' in policy. Expected bool"
                              .format(type(global_signature_required).__name__))
-        extension_individual_policy = extension_dict.get(self.extension_to_check.name)
+        extension_individual_policy = extension_dict.get(self.extension_to_check.name.lower())
         if extension_individual_policy is None:
             return global_signature_required
         else:
-            individual_signature_required = extension_individual_policy.get("signatureRequired", DEFAULT_SIGNATURE_REQUIRED)
+            individual_signature_required = extension_individual_policy.get("signatureRequired")
+            # Currently, CaseFoldedDict.get() does not support a default return value, so we explicitly set the default.
+            if individual_signature_required is None:
+                individual_signature_required = DEFAULT_SIGNATURE_REQUIRED
             if not isinstance(individual_signature_required, bool):
                 raise ValueError("Invalid type {0} for attribute 'signatureRequired' in policy. Expected bool"
                                  .format(type(individual_signature_required).__name__))
-            return extension_individual_policy.get("signatureRequired", DEFAULT_SIGNATURE_REQUIRED)
+            return individual_signature_required
         
 

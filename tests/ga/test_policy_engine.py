@@ -356,5 +356,35 @@ class TestExtensionPolicyEngine(AgentTestCase):
         self.assertFalse(should_enforce_signature,
                          msg="Policy feature is disabled, so signature should not be enforced.")
 
-    def test_should_handle_lowercase(self):
-        pass
+    def test_policy_enforcement_should_be_case_insensitive(self):
+        """
+        Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature() return expected
+        results, even when the extension name does not match the case of the name specified in policy.
+        """
+        ext_name_to_test = "MicrOsoft.aZure.activedirectory.aaDsShloginFORlinux"
+        ext_name_in_policy = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+        test_extension = Extension(name=ext_name_to_test)
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": False,
+                    "extensions": {
+                        ext_name_in_policy: {
+                            "signatureRequired": True
+                        }
+                    }
+                }
+            }
+
+        with open(self.custom_policy_path, mode='w') as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+            engine = ExtensionPolicyEngine(test_extension)
+            should_allow = engine.should_allow_extension()
+            should_enforce_signature = engine.should_enforce_signature()
+            self.assertTrue(should_allow,
+                            msg="Extension should have been found in allowlist regardless of extension name case.")
+            self.assertTrue(should_enforce_signature,
+                            msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
