@@ -22,7 +22,7 @@ import re
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common import event
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils import shellutil
 
 from azurelinuxagent.common.future import ustr
@@ -283,9 +283,7 @@ class IpTables(_FirewallManagerMultipleRules):
         except Exception as exception:
             if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
                 raise FirewallManagerNotAvailableError("iptables is not available")
-            message = "Unable to determine version of iptables; will not use -w option. --version output: {0}".format(ustr(exception))
-            logger.warn(message)
-            add_event(op=WALAEventOperation.Firewall, is_success=False, message=message, log_event=False)
+            event.warn(WALAEventOperation.Firewall, "Unable to determine version of iptables; will not use -w option. --version output: {0}", ustr(exception))
             use_wait_option = False
 
         if use_wait_option:
@@ -338,6 +336,16 @@ class FirewallCmd(_FirewallManagerMultipleRules):
     """
     FirewallManager based on the firewalld command-line tool.
     """
+    def __init__(self, wire_server_address):
+        super(FirewallCmd, self).__init__(wire_server_address)
+
+        try:
+            self._version = shellutil.run_command(["firewall-cmd", "--version"]).strip()
+        except Exception as exception:
+            if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
+                raise FirewallManagerNotAvailableError("nft is not available")
+            self._version = "unknown"
+
     def _get_state_command(self):
         return ["firewall-cmd", "--permanent", "--direct", "--get-all-passthroughs"]
 
@@ -369,12 +377,26 @@ class NfTables(FirewallManager):
     """
     FirewallManager based on the nft command-line tool.
     """
+    def __init__(self, wire_server_address):
+        super(NfTables, self).__init__(wire_server_address)
+
+        try:
+            self._version = shellutil.run_command(["nft", "--version"]).strip()
+        except Exception as exception:
+            if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
+                raise FirewallManagerNotAvailableError("nft is not available")
+            self._version = "unknown"
+
+    @property
+    def version(self):
+        return self._version
+
     def setup(self):
         shellutil.run_command(["nft", "add", "table", "ip", "walinuxagent"])
         shellutil.run_command(["nft", "add", "chain", "ip", "walinuxagent", "output", "{", "type", "filter", "hook", "output", "priority", "0", ";", "policy", "accept", ";", "}"])
         shellutil.run_command([
             "nft", "add", "rule", "ip", "walinuxagent", "output", "ip", "daddr", self._wire_server_address,
-            "tcp", " dport", "!=", "53",
+            "tcp", "dport", "!=", "53",
             "skuid", "!=", str(os.getuid()),
             "ct", "state", "invalid,new", "counter", "drop"])
 

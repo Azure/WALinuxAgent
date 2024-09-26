@@ -14,11 +14,56 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import contextlib
+import os
 import unittest
 
-from azurelinuxagent.ga.firewall_manager import IpTables, FirewallCmd
-from tests.lib.tools import AgentTestCase
-from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd
+from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.ga.firewall_manager import FirewallManager, IpTables, FirewallCmd, NfTables, FirewallStateError, FirewallManagerNotAvailableError
+from tests.lib.tools import AgentTestCase, patch
+from tests.lib.mock_firewall_command import MockIpTables, MockFirewallCmd, MockNft
+
+
+@contextlib.contextmanager
+def firewall_command_exists_mock(iptables_exist=True, firewallcmd_exist=True, nft_exists=True):
+    """
+    Mocks the shellutil.run_command method to fake calls to the iptables/firewall-cmd/nft commands. If ech of those commands should exists,
+    the call is faked to return success. Otherwise, the call is faked to invoke a non-existing command.
+    """
+    commands = {
+        "iptables": iptables_exist,
+        "firewall-cmd": firewallcmd_exist,
+        "nft": nft_exists
+    }
+
+    original_run_command = shellutil.run_command
+
+    def mock_run_command(command, *args, **kwargs):
+        command_exists = commands.get(command[0])
+        if command_exists is not None:
+            command = ['sh', '-c', "exit 0"] if command_exists else ["fake-command-that-does-not-exist"]
+        return original_run_command(command, *args, **kwargs)
+
+    with patch("azurelinuxagent.ga.firewall_manager.shellutil.run_command", side_effect=mock_run_command) as patcher:
+        yield patcher
+
+
+class TestFirewallManager(AgentTestCase):
+    def test_create_should_prefer_iptables_when_both_iptables_and_nftables_exist(self):
+        with firewall_command_exists_mock(iptables_exist=True, nft_exists=True):
+            firewall = FirewallManager.create('168.63.129.16')
+            self.assertIsInstance(firewall, IpTables)
+
+    def test_create_should_use_nftables_when_iptables_does_not_exist(self):
+        with firewall_command_exists_mock(iptables_exist=False, nft_exists=True):
+            firewall = FirewallManager.create('168.63.129.16')
+            self.assertIsInstance(firewall, NfTables)
+
+    def test_create_should_raise_FirewallManagerNotAvailableError_when_both_iptables_and_nftables_do_not_exist(self):
+        with firewall_command_exists_mock(iptables_exist=False, nft_exists=False):
+            with self.assertRaises(FirewallManagerNotAvailableError):
+                FirewallManager.create('168.63.129.16')
+
 
 class _TestFirewallCommand(AgentTestCase):
     """
@@ -104,6 +149,11 @@ class _TestFirewallCommand(AgentTestCase):
 
 
 class TestIpTables(_TestFirewallCommand):
+    def test_it_should_raise_FirewallManagerNotAvailableError_when_the_command_is_not_available(self):
+        with firewall_command_exists_mock(iptables_exist=False):
+            with self.assertRaises(FirewallManagerNotAvailableError):
+                IpTables('168.63.129.16')
+
     def test_setup_should_set_all_the_firewall_rules(self):
         self._test_setup_should_set_all_the_firewall_rules(IpTables, MockIpTables)
 
@@ -135,6 +185,11 @@ class TestIpTables(_TestFirewallCommand):
 
 
 class TestFirewallCmd(_TestFirewallCommand):
+    def test_it_should_raise_FirewallManagerNotAvailableError_when_the_command_is_not_available(self):
+        with firewall_command_exists_mock(firewallcmd_exist=False):
+            with self.assertRaises(FirewallManagerNotAvailableError):
+                FirewallCmd('168.63.129.16')
+
     def test_setup_should_set_all_the_firewall_rules(self):
         self._test_setup_should_set_all_the_firewall_rules(FirewallCmd, MockFirewallCmd)
 
@@ -149,6 +204,61 @@ class TestFirewallCmd(_TestFirewallCommand):
 
     def test_remove_legacy_rule_should_delete_the_legacy_rule(self):
         self._test_remove_legacy_rule_should_delete_the_legacy_rule(FirewallCmd, MockFirewallCmd)
+
+
+class TestNft(AgentTestCase):
+    def test_it_should_raise_FirewallManagerNotAvailableError_when_the_command_is_not_available(self):
+        with firewall_command_exists_mock(nft_exists=False):
+            with self.assertRaises(FirewallManagerNotAvailableError):
+                NfTables('168.63.129.16')
+
+    def test_setup_should_set_the_walinuxagent_table(self):
+        with MockNft() as mock_nft:
+            firewall = NfTables('168.63.129.16')
+            firewall.setup()
+
+            self.assertEqual(
+                [
+                    mock_nft.get_add_command("table"),
+                    mock_nft.get_add_command("chain"),
+                    mock_nft.get_add_command("rule"),
+                ],
+                mock_nft.call_list,
+                "Expected exactly 3 calls, to the add the walinuxagent table, output chain, and wireserver rule")
+
+    def test_remove_should_delete_the_walinuxagent_table(self):
+        with MockNft() as mock_nft:
+            firewall = NfTables('168.63.129.16')
+            firewall.remove()
+
+            self.assertEqual([mock_nft.get_delete_command()], mock_nft.call_list, "Expected a call to delete the walinuxagent table")
+
+    def test_check_should_verify_all_rules(self):
+        with MockNft() as mock_nft:
+            _, walinuxagent_table = mock_nft.get_return_value(mock_nft.get_list_command("table"))
+
+            firewall = NfTables('168.63.129.16')
+
+            # Remove the clause for DNS and verify check() fails
+            stdout = walinuxagent_table.replace('{ "match": {"op": "!=", "left": { "payload": { "protocol": "tcp", "field": "dport" } }, "right": 53}},', '')
+            mock_nft.set_return_value("list", "table", (0, stdout))
+            with self.assertRaises(FirewallStateError) as context:
+                firewall.check()
+            self.assertIn("['No expression excludes the DNS port']", str(context.exception), "Expected an error message indicating the DNS port is not excluded")
+
+            # Remove the clause for root and verify check() fails
+            stdout = walinuxagent_table.replace('{ "match": {"op": "!=", "left": { "meta": { "key": "skuid" } }, "right": ' + str(os.getuid()) + '}},', '')
+            mock_nft.set_return_value("list", "table", (0, stdout))
+            with self.assertRaises(FirewallStateError) as context:
+                firewall.check()
+            self.assertIn('["No expression excludes the Agent\'s UID"]', str(context.exception), "Expected an error message indicating the Agent's UID is not excluded")
+
+            # Remove the "drop" clause and verify check() fails
+            stdout = walinuxagent_table.replace('{ "drop": null }', '{ "accept": null }')
+            mock_nft.set_return_value("list", "table", (0, stdout))
+            with self.assertRaises(FirewallStateError) as context:
+                firewall.check()
+            self.assertIn("['The drop action is missing']", str(context.exception), "Expected an error message indicating the Agent's UID is not excluded")
 
 
 if __name__ == '__main__':

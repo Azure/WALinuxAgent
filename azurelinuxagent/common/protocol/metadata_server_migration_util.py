@@ -62,8 +62,7 @@ def _cleanup_metadata_protocol_certificates():
 
 def _reset_firewall_rules():
     """
-    Removes MetadataServer firewall rule so IMDS can be used. Enables
-    WireServer firewall rule based on if firewall is configured to be on.
+    Removes MetadataServer firewall rule so IMDS can be used.
     """
     try:
         _remove_firewall(dst_ip=_KNOWN_METADATASERVER_IP, uid=os.getuid(), wait=_get_firewall_will_wait())

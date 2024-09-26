@@ -131,7 +131,10 @@ if __name__ == '__main__':
         # setup permanent firewalld rules
         firewall_manager = FirewallCmd(self._dst_ip)
 
-        firewall_manager.remove_legacy_rule()
+        try:
+            firewall_manager.remove_legacy_rule()
+        except Exception as error:
+            event.error(WALAEventOperation.Firewall, "Unable to remove legacy firewall rule. Error: {0}", ustr(error))
 
         try:
             if firewall_manager.check():

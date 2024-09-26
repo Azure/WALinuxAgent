@@ -125,7 +125,7 @@ class EnableFirewall(PeriodicOperation):
             self._report(event.warn, "An error occurred while setting up the firewall: {0}", ustr(e))
 
     def _report(self, report_function, message, *args):
-        # Report the first 6 messages, then stop reporting for 12 hours
+        # Report the first 3 messages, then stop reporting for 12 hours
         if datetime.datetime.now() < self._report_after:
             return
 
