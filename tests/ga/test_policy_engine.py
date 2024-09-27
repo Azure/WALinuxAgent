@@ -20,7 +20,7 @@ import json
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine
-from tests.lib.tools import patch, data_dir
+from tests.lib.tools import patch
 from azurelinuxagent.common.protocol.restapi import Extension
 
 TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
