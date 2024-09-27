@@ -22,13 +22,16 @@ from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
+
 
 # Customer-defined policy is expected to be located at this path.
 # If there is no file at this path, default policy will be used.
-CUSTOM_POLICY_PATH = "/etc/waagent_policy.json"
+CUSTOM_POLICY_PATH = DefaultOSUtil().get_custom_policy_file_path()
+
 # Default policy values to be used when no custom policy is present.
-DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
-DEFAULT_SIGNATURE_REQUIRED = False
+_DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
+_DEFAULT_SIGNATURE_REQUIRED = False
 
 
 class PolicyError(AgentError):
@@ -52,9 +55,8 @@ class _PolicyEngine(object):
 
         self.policy = self.__get_policy()
 
-
-    @classmethod
-    def _log_policy(cls, msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
+    @staticmethod
+    def _log_policy(msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
         """
         Log information to console and telemetry.
         """
@@ -63,7 +65,7 @@ class _PolicyEngine(object):
         else:
             logger.error(msg)
         if send_event:
-            add_event(op=op, message=msg, is_success=is_success)
+            add_event(op=op, message=msg, is_success=is_success, log_event=False)
 
     @staticmethod
     def is_policy_enforcement_enabled():
@@ -85,17 +87,15 @@ class _PolicyEngine(object):
             "extensionPolicies": {
                 "allowListedExtensionsOnly": bool,
                 "signatureRequired": bool,
-                "signingPolicy": dict,
                 "extensions": {
                     "<extensionName1>": {
-                        "signatureRequired": bool,
-                        "signingPolicy": dict,
-                        "runtimePolicy": dict
+                        "signatureRequired": bool
                     }
                 }
             }
         }
         """
+        # TODO: Add schema validation for custom policy file and raise relevant error message to user.
         if os.path.exists(CUSTOM_POLICY_PATH):
             self._log_policy("Custom policy found at {0}. Using custom policy.".format(CUSTOM_POLICY_PATH))
             with open(CUSTOM_POLICY_PATH, 'r') as f:        # Open file in read-only mode.
@@ -109,8 +109,12 @@ class _PolicyEngine(object):
 class ExtensionPolicyEngine(_PolicyEngine):
 
     def __init__(self, extension_to_check):
-        self.extension_to_check = extension_to_check    # each instance is tied to an extension.
+        """
+        Extension_to_check is expected to be an Extension object (main Plugin/handler specified by the publishers).
+        Each instance of ExtensionPolicyEngine is tied to an extension.
+        """
         super(ExtensionPolicyEngine, self).__init__()
+        self._extension_to_check = extension_to_check
         if not self.is_policy_enforcement_enabled():
             return
 
@@ -135,7 +139,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
         if not self.is_policy_enforcement_enabled():
             return True
 
-        allow_listed_extension_only = self.extension_policy.get("allowListedExtensionsOnly", DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY)
+        allow_listed_extension_only = self.extension_policy.get("allowListedExtensionsOnly", _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY)
         if not isinstance(allow_listed_extension_only, bool):
             raise ValueError("Invalid type {0} for attribute 'allowListedExtensionsOnly' in policy. Expected bool"
                              .format(type(allow_listed_extension_only).__name__))
@@ -143,10 +147,10 @@ class ExtensionPolicyEngine(_PolicyEngine):
         extension_allowlist = self.extension_policy.get("extensions", {})
 
         # CRP allows extension names to be any case. We use a case-folded dict to do a case-insensitive query of the allowlist.
-        should_allow = not allow_listed_extension_only or extension_allowlist.get(self.extension_to_check.name.lower()) is not None
+        should_allow = not allow_listed_extension_only or extension_allowlist.get(self._extension_to_check.name.lower()) is not None
         return should_allow
 
-    def should_enforce_signature(self):
+    def should_enforce_signature_validation(self):
         """
         Return whether we should enforce signature based on policy.
 
@@ -158,18 +162,18 @@ class ExtensionPolicyEngine(_PolicyEngine):
             return False
 
         extension_dict = self.extension_policy.get("extensions", {})
-        global_signature_required = self.extension_policy.get("signatureRequired", DEFAULT_SIGNATURE_REQUIRED)
+        global_signature_required = self.extension_policy.get("signatureRequired", _DEFAULT_SIGNATURE_REQUIRED)
         if not isinstance(global_signature_required, bool):
             raise ValueError("Invalid type {0} for attribute 'signatureRequired' in policy. Expected bool"
                              .format(type(global_signature_required).__name__))
-        extension_individual_policy = extension_dict.get(self.extension_to_check.name.lower())
+        extension_individual_policy = extension_dict.get(self._extension_to_check.name.lower())
         if extension_individual_policy is None:
             return global_signature_required
         else:
             individual_signature_required = extension_individual_policy.get("signatureRequired")
             # Currently, CaseFoldedDict.get() does not support a default return value, so we explicitly set the default.
             if individual_signature_required is None:
-                individual_signature_required = DEFAULT_SIGNATURE_REQUIRED
+                individual_signature_required = _DEFAULT_SIGNATURE_REQUIRED
             if not isinstance(individual_signature_required, bool):
                 raise ValueError("Invalid type {0} for attribute 'signatureRequired' in policy. Expected bool"
                                  .format(type(individual_signature_required).__name__))

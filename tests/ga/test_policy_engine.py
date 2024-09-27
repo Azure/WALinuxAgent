@@ -28,7 +28,8 @@ TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
 
 class TestExtensionPolicyEngine(AgentTestCase):
     def setUp(self):
-        self.custom_policy_path = os.path.join(data_dir, 'ga', "waagent_policy.json")
+        AgentTestCase.setUp(self)
+        self.custom_policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
 
         # Patch attributes to enable policy feature
         self.patch_custom_policy_path = patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH',
@@ -38,7 +39,6 @@ class TestExtensionPolicyEngine(AgentTestCase):
                                      return_value=True)
         self.patch_conf_flag.start()
 
-        AgentTestCase.setUp(self)
 
     def tearDown(self):
         # Clean up any custom policy file we created
@@ -47,21 +47,24 @@ class TestExtensionPolicyEngine(AgentTestCase):
         patch.stopall()
         AgentTestCase.tearDown(self)
 
-    def test_policy_enforcement_should_be_enabled(self):
+    def _create_policy_file(self, policy):
+        with open(self.custom_policy_path, mode='w') as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+
+    def test_policy_enforcement_should_be_enabled_when_policy_file_exists(self):
         """
         When conf flag is set to true and policy file is present at expected location, feature should be enabled.
         """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
             # Create dummy policy file at the expected path to enable feature.
-            with open(self.custom_policy_path, mode='w') as policy_file:
-                json.dump({}, policy_file, indent=4)
-                policy_file.flush()
-                engine = ExtensionPolicyEngine(test_extension)
-                self.assertTrue(engine.is_policy_enforcement_enabled(),
-                                msg="Conf flag is set to true so policy enforcement should be enabled.")
+            self._create_policy_file({})
+            engine = ExtensionPolicyEngine(test_extension)
+            self.assertTrue(engine.is_policy_enforcement_enabled(),
+                            msg="Conf flag is set to true so policy enforcement should be enabled.")
 
-    def test_policy_enforcement_should_be_disabled(self):
+    def test_policy_enforcement_should_be_disabled_by_default(self):
         self.patch_conf_flag.stop()  # Turn off the policy feature enablement
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine(test_extension)
@@ -76,7 +79,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
         engine = ExtensionPolicyEngine(test_extension)
         should_allow = engine.should_allow_extension()
         self.assertTrue(should_allow, msg="Default policy should allow all extensions.")
-        should_enforce = engine.should_enforce_signature()
+        should_enforce = engine.should_enforce_signature_validation()
         self.assertFalse(should_enforce, msg="Default policy should not enforce extension signature.")
 
     def test_should_allow_if_allowListedExtensionsOnly_true_and_extension_in_list(self):
@@ -99,12 +102,10 @@ class TestExtensionPolicyEngine(AgentTestCase):
                     }
                 }
             }
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            engine = ExtensionPolicyEngine(test_extension)
-            should_allow = engine.should_allow_extension()
-            self.assertTrue(should_allow, msg="Extension is in allowlist, so should be allowed.")
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine(test_extension)
+        should_allow = engine.should_allow_extension()
+        self.assertTrue(should_allow, msg="Extension is in allowlist, so should be allowed.")
 
     def test_should_not_allow_if_allowListedExtensionsOnly_true_and_extension_not_in_list(self):
         """
@@ -120,19 +121,16 @@ class TestExtensionPolicyEngine(AgentTestCase):
                     "extensions": {}  # Extension not in allowed list.
                 }
             }
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            engine = ExtensionPolicyEngine(test_extension)
-            should_allow = engine.should_allow_extension()
-            self.assertFalse(should_allow,
-                             msg="allowListedExtensionsOnly is true and extension is not in allowlist, so should not be allowed.")
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine(test_extension)
+        should_allow = engine.should_allow_extension()
+        self.assertFalse(should_allow,
+                            msg="allowListedExtensionsOnly is true and extension is not in allowlist, so should not be allowed.")
 
     def test_should_allow_if_allowListedExtensionsOnly_false(self):
         """
         If allowListedExtensionsOnly is false, should_allow = True (whether extension in list or not).
         """
-
         # Test an extension in the allowlist, and an extension not in the allowlist. Both should be allowed.
         test_ext_in_list = Extension(name=TEST_EXTENSION_NAME)
         test_ext_not_in_list = Extension(name="Random.Ext")
@@ -150,19 +148,17 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 },
                 "jitPolicies": {}
             }
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            engine1 = ExtensionPolicyEngine(test_ext_in_list)
-            self.assertTrue(engine1.should_allow_extension(),
-                            msg="allowListedExtensionsOnly is false, so extension should be allowed.")
-            engine2 = ExtensionPolicyEngine(test_ext_not_in_list)
-            self.assertTrue(engine2.should_allow_extension(),
-                            msg="allowListedExtensionsOnly is false, so extension should be allowed.")
+        self._create_policy_file(policy)
+        engine1 = ExtensionPolicyEngine(test_ext_in_list)
+        self.assertTrue(engine1.should_allow_extension(),
+                        msg="allowListedExtensionsOnly is false, so extension should be allowed.")
+        engine2 = ExtensionPolicyEngine(test_ext_not_in_list)
+        self.assertTrue(engine2.should_allow_extension(),
+                        msg="allowListedExtensionsOnly is false, so extension should be allowed.")
 
     def test_should_enforce_signature_if_individual_enforceSignature_true(self):
         """
-        If signatureRequired is true for individual extension, should_enforce_signature = True (whether global signatureRequired is true or false).
+        If signatureRequired is true for individual extension, should_enforce_signature_validation = True (whether global signatureRequired is true or false).
         """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         global_signature_rule_cases = [True, False]
@@ -180,18 +176,15 @@ class TestExtensionPolicyEngine(AgentTestCase):
                         }
                     }
                 }
-
-            with open(self.custom_policy_path, mode='w') as policy_file:
-                json.dump(policy, policy_file, indent=4)
-                policy_file.flush()
-                engine = ExtensionPolicyEngine(test_extension)
-                should_enforce_signature = engine.should_enforce_signature()
-                self.assertTrue(should_enforce_signature,
-                                msg="Individual signatureRequired policy is true, so signature should be enforced.")
+            self._create_policy_file(policy)
+            engine = ExtensionPolicyEngine(test_extension)
+            should_enforce_signature = engine.should_enforce_signature_validation()
+            self.assertTrue(should_enforce_signature,
+                            msg="Individual signatureRequired policy is true, so signature should be enforced.")
 
     def test_should_not_enforce_signature_if_individual_enforceSignature_false(self):
         """
-        If signatureRequired is false for individual extension policy, should_enforce_signature = False (whether global signatureRequired is true or false).
+        If signatureRequired is false for individual extension policy, should_enforce_signature_validation = False (whether global signatureRequired is true or false).
         """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         global_signature_rule_cases = [True, False]
@@ -209,18 +202,15 @@ class TestExtensionPolicyEngine(AgentTestCase):
                         }
                     }
                 }
-
-            with open(self.custom_policy_path, mode='w') as policy_file:
-                json.dump(policy, policy_file, indent=4)
-                policy_file.flush()
-                engine = ExtensionPolicyEngine(test_extension)
-                should_enforce_signature = engine.should_enforce_signature()
-                self.assertFalse(should_enforce_signature,
-                                 msg="Individual signatureRequired policy is false, so signature should be not enforced.")
+            self._create_policy_file(policy)
+            engine = ExtensionPolicyEngine(test_extension)
+            should_enforce_signature = engine.should_enforce_signature_validation()
+            self.assertFalse(should_enforce_signature,
+                                msg="Individual signatureRequired policy is false, so signature should be not enforced.")
 
     def test_should_enforce_signature_if_global_enforceSignature_true_and_no_individual_policy(self):
         """
-        If signatureRequired is true globally and no individual extension signature policy, should_enforce_signature = True.
+        If signatureRequired is true globally and no individual extension signature policy, should_enforce_signature_validation = True.
         """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy = \
@@ -232,17 +222,15 @@ class TestExtensionPolicyEngine(AgentTestCase):
                     "extensions": {}
                 }
             }
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            engine = ExtensionPolicyEngine(test_extension)
-            should_enforce_signature = engine.should_enforce_signature()
-            self.assertTrue(should_enforce_signature,
-                            msg="Global signatureRequired policy is true, so signature should be enforced.")
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine(test_extension)
+        should_enforce_signature = engine.should_enforce_signature_validation()
+        self.assertTrue(should_enforce_signature,
+                        msg="Global signatureRequired policy is true, so signature should be enforced.")
 
     def test_should_not_enforce_signature_if_global_enforceSignature_false_and_no_individual_policy(self):
         """
-        If signatureRequired is false globally and no individual extension signature policy, should_enforce_signature = False.
+        If signatureRequired is false globally and no individual extension signature policy, should_enforce_signature_validation = False.
         """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy = \
@@ -254,18 +242,16 @@ class TestExtensionPolicyEngine(AgentTestCase):
                     "extensions": {}
                 }
             }
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            engine = ExtensionPolicyEngine(test_extension)
-            should_enforce_signature = engine.should_enforce_signature()
-            self.assertFalse(should_enforce_signature,
-                             msg="Global signatureRequired policy is false, so signature should not be enforced.")
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine(test_extension)
+        should_enforce_signature = engine.should_enforce_signature_validation()
+        self.assertFalse(should_enforce_signature,
+                            msg="Global signatureRequired policy is false, so signature should not be enforced.")
 
     def test_should_enforce_signature_if_no_custom_policy_present(self):
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine(test_extension)
-        should_enforce_signature = engine.should_enforce_signature()
+        should_enforce_signature = engine.should_enforce_signature_validation()
         self.assertFalse(should_enforce_signature,
                          msg="No custom policy is present, so use default policy. Should not enforce signature.")
 
@@ -287,13 +273,10 @@ class TestExtensionPolicyEngine(AgentTestCase):
                     "extensions": {}
                 }
             }
-
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            with self.assertRaises(ValueError, msg="String used instead of boolean, should raise error."):
-                engine = ExtensionPolicyEngine(test_extension)
-                engine.should_allow_extension()
+        self._create_policy_file(policy)
+        with self.assertRaises(ValueError, msg="String used instead of boolean, should raise error."):
+            engine = ExtensionPolicyEngine(test_extension)
+            engine.should_allow_extension()
 
     def test_should_raise_error_if_signatureRequired_is_string(self):
         test_extension = Extension(name=TEST_EXTENSION_NAME)
@@ -320,12 +303,10 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 }
             }
         for policy in [policy_individual, policy_global]:
-            with open(self.custom_policy_path, mode='w') as policy_file:
-                json.dump(policy, policy_file, indent=4)
-                policy_file.flush()
-                with self.assertRaises(ValueError, msg="String used instead of boolean, should raise error."):
-                    engine = ExtensionPolicyEngine(test_extension)
-                    engine.should_enforce_signature()
+            self._create_policy_file(policy)
+            with self.assertRaises(ValueError, msg="String used instead of boolean, should raise error."):
+                engine = ExtensionPolicyEngine(test_extension)
+                engine.should_enforce_signature_validation()
 
     def test_should_allow_if_extension_policy_section_missing(self):
         test_extension = Extension(name=TEST_EXTENSION_NAME)
@@ -333,12 +314,10 @@ class TestExtensionPolicyEngine(AgentTestCase):
             {
                 "policyVersion": "0.1.0"
             }
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            engine = ExtensionPolicyEngine(test_extension)
-            should_allow = engine.should_allow_extension()
-            self.assertTrue(should_allow)
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine(test_extension)
+        should_allow = engine.should_allow_extension()
+        self.assertTrue(should_allow)
 
     def test_should_allow_if_policy_disabled(self):
         self.patch_conf_flag.stop()  # Turn off the policy feature enablement
@@ -352,13 +331,13 @@ class TestExtensionPolicyEngine(AgentTestCase):
         self.patch_conf_flag.stop()  # Turn off the policy feature enablement
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine(test_extension)
-        should_enforce_signature = engine.should_enforce_signature()
+        should_enforce_signature = engine.should_enforce_signature_validation()
         self.assertFalse(should_enforce_signature,
                          msg="Policy feature is disabled, so signature should not be enforced.")
 
     def test_policy_enforcement_should_be_case_insensitive(self):
         """
-        Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature() return expected
+        Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature_validation() return expected
         results, even when the extension name does not match the case of the name specified in policy.
         """
         ext_name_to_test = "MicrOsoft.aZure.activedirectory.aaDsShloginFORlinux"
@@ -378,13 +357,11 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 }
             }
 
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
-            policy_file.flush()
-            engine = ExtensionPolicyEngine(test_extension)
-            should_allow = engine.should_allow_extension()
-            should_enforce_signature = engine.should_enforce_signature()
-            self.assertTrue(should_allow,
-                            msg="Extension should have been found in allowlist regardless of extension name case.")
-            self.assertTrue(should_enforce_signature,
-                            msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
+        self._create_policy_file(policy)
+        engine = ExtensionPolicyEngine(test_extension)
+        should_allow = engine.should_allow_extension()
+        should_enforce_signature = engine.should_enforce_signature_validation()
+        self.assertTrue(should_allow,
+                        msg="Extension should have been found in allowlist regardless of extension name case.")
+        self.assertTrue(should_enforce_signature,
+                        msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
