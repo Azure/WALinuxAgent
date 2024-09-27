@@ -19,7 +19,7 @@ import os
 import json
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError
 from tests.lib.tools import patch
 from azurelinuxagent.common.protocol.restapi import Extension
 
@@ -32,7 +32,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
         self.custom_policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
 
         # Patch attributes to enable policy feature
-        self.patch_custom_policy_path = patch('azurelinuxagent.ga.policy.policy_engine.CUSTOM_POLICY_PATH',
+        self.patch_custom_policy_path = patch('azurelinuxagent.ga.policy.policy_engine._CUSTOM_POLICY_PATH',
                                               new=self.custom_policy_path)
         self.patch_custom_policy_path.start()
         self.patch_conf_flag = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
@@ -41,9 +41,6 @@ class TestExtensionPolicyEngine(AgentTestCase):
 
 
     def tearDown(self):
-        # Clean up any custom policy file we created
-        if os.path.exists(self.custom_policy_path):
-            os.remove(self.custom_policy_path)
         patch.stopall()
         AgentTestCase.tearDown(self)
 
@@ -56,7 +53,6 @@ class TestExtensionPolicyEngine(AgentTestCase):
         """
         When conf flag is set to true and policy file is present at expected location, feature should be enabled.
         """
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
         with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
             # Create dummy policy file at the expected path to enable feature.
             self._create_policy_file({})
@@ -66,7 +62,6 @@ class TestExtensionPolicyEngine(AgentTestCase):
 
     def test_policy_enforcement_should_be_disabled_by_default(self):
         self.patch_conf_flag.stop()  # Turn off the policy feature enablement
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine()
         self.assertFalse(engine.is_policy_enforcement_enabled(),
                          msg="Conf flag is set to false so policy enforcement should be disabled.")
@@ -295,7 +290,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
                 }
             }
         self._create_policy_file(policy)
-        with self.assertRaises(ValueError, msg="String used instead of boolean, should raise error."):
+        with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
             engine = ExtensionPolicyEngine()
             engine.should_allow_extension(test_extension)
 
@@ -325,7 +320,7 @@ class TestExtensionPolicyEngine(AgentTestCase):
             }
         for policy in [policy_individual, policy_global]:
             self._create_policy_file(policy)
-            with self.assertRaises(ValueError, msg="String used instead of boolean, should raise error."):
+            with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
                 engine = ExtensionPolicyEngine()
                 engine.should_enforce_signature_validation(test_extension)
 
@@ -386,3 +381,17 @@ class TestExtensionPolicyEngine(AgentTestCase):
                         msg="Extension should have been found in allowlist regardless of extension name case.")
         self.assertTrue(should_enforce_signature,
                         msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
+
+    def test_should_raise_value_error_if_policy_file_is_invalid_json(self):
+        policy = """
+        {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                }
+        """
+        self._create_policy_file(policy)
+        with open(self.custom_policy_path, mode='w') as policy_file:
+            policy_file.write(policy)
+            policy_file.flush()
+        with self.assertRaises(PolicyInvalidError, msg="Invalid json in policy file should raise error."):
+            ExtensionPolicyEngine()
