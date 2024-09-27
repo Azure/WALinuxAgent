@@ -35,10 +35,10 @@ class AddCloudInitScript(UpdateArmTemplate):
         #
         # cloud-init configuration needs to be added in the osProfile.customData property as a base64-encoded string.
         #
-        # LISA uses the getOSProfile function to generate the value for osProfile; add customData to its output, checking that we do not
+        # LISA uses the generateOsProfile function to generate the value for osProfile; add customData to its output, checking that we do not
         # override any existing value (the current LISA template does not have any).
         #
-        #    "getOSProfile": {
+        #    "generateOsProfile": {
         #        "parameters": [
         #            ...
         #        ],
@@ -55,7 +55,7 @@ class AddCloudInitScript(UpdateArmTemplate):
         #
         encoded_script = base64.b64encode(AgentWaitForCloudInit.CloudInitScript.encode('utf-8')).decode('utf-8')
 
-        get_os_profile = self.get_lisa_function(template, 'getOSProfile')
+        get_os_profile = self.get_lisa_function(template, 'generateOsProfile')
         output = self.get_function_output(get_os_profile)
         if output.get('customData') is not None:
             raise Exception(f"The getOSProfile function already has a 'customData'. Won't override it. Definition: {get_os_profile}")
