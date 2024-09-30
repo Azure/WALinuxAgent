@@ -149,7 +149,7 @@ class _PolicyEngine(object):
             if signature_policy is not None:
                 if not isinstance(signature_policy, bool):
                     raise PolicyInvalidError(
-                        "invalid type {0} for attribute 'signatureRequired' in policy, please change to bool"
+                        "invalid type {0} for attribute 'signatureRequired', please change to bool"
                         .format(type(signature_policy).__name__))
                 template["extensionPolicies"]["signatureRequired"] = signature_policy
 
@@ -162,7 +162,7 @@ class _PolicyEngine(object):
                         if individual_signing_policy is not None:
                             if not isinstance(individual_signing_policy, bool):
                                 raise PolicyInvalidError(
-                                    "invalid type {0} for attribute 'signatureRequired' in policy, please change to bool."
+                                    "invalid type {0} for attribute 'signatureRequired', please change to bool."
                                     .format(type(individual_signing_policy).__name__))
                         else:
                             # If individual extension is present but signature policy not specified, use global policy.
@@ -172,7 +172,6 @@ class _PolicyEngine(object):
                         policy_to_add = {
                             "signatureRequired": individual_signing_policy
                         }
-
                         template["extensionPolicies"]["extensions"][ext_name] = policy_to_add
 
                 # Convert "extensions" to a case-folded dict for case-insensitive lookup
@@ -214,8 +213,8 @@ class ExtensionPolicyEngine(_PolicyEngine):
         if not self.is_policy_enforcement_enabled():
             return False
 
-        extension_dict = self._policy.get("extensionPolicies").get("extensions")
         global_signature_required = self._policy.get("extensionPolicies").get("signatureRequired")
+        extension_dict = self._policy.get("extensionPolicies").get("extensions")
         extension_individual_policy = extension_dict.get(extension_to_check.name)
         if extension_individual_policy is None:
             return global_signature_required

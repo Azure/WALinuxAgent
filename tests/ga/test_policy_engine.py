@@ -19,7 +19,7 @@ import os
 import json
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError, _PolicyEngine
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError
 from tests.lib.tools import patch
 from azurelinuxagent.common.protocol.restapi import Extension
 
@@ -95,7 +95,6 @@ class TestPolicyEngine(_TestPolicyBase):
                          msg="Policy file is not present so policy enforcement should be disabled.")
 
     def test_should_raise_error_if_allowListedExtensionsOnly_is_string(self):
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -110,7 +109,6 @@ class TestPolicyEngine(_TestPolicyBase):
             ExtensionPolicyEngine()
 
     def test_should_raise_error_if_signatureRequired_is_string(self):
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy_individual = \
             {
                 "policyVersion": "0.1.0",
