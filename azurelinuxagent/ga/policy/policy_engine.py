@@ -39,6 +39,7 @@ class PolicyError(AgentError):
     Error raised during agent policy enforcement.
     """
 
+
 class PolicyInvalidError(AgentError):
     """
     Error raised if user-provided policy is invalid.
@@ -46,6 +47,7 @@ class PolicyInvalidError(AgentError):
     def __init__(self, msg, inner=None):
         msg = "Customer-provided policy file ('{0}') is invalid, please correct the policy: {1}".format(_CUSTOM_POLICY_PATH, msg)
         super(PolicyInvalidError, self).__init__(msg, inner)
+
 
 class _PolicyEngine(object):
     """
@@ -82,28 +84,29 @@ class _PolicyEngine(object):
 
     def __get_policy(self):
         """
-        Check if custom policy exists at CUSTOM_POLICY_PATH, load JSON object and return as a dict.
-        Return default policy if no policy exists.
+        Load policy JSON object from policy file (CUSTOM_POLICY_PATH), return as a dict.
+
+        Note that we should only call this function after validating that CUSTOM_POLICY_PATH exists (this is currently
+        done in __init__).
         """
         # TODO: Add schema validation for custom policy file and raise relevant error message to user.
-        if os.path.exists(_CUSTOM_POLICY_PATH):
-            self._log_policy_event("Custom policy found at {0}. Using custom policy.".format(_CUSTOM_POLICY_PATH))
-            with open(_CUSTOM_POLICY_PATH, 'r') as f:        # Open file in read-only mode.
-                try:
-                    custom_policy = json.load(f)
-                except Exception as ex:
-                    msg = "policy file does not conform to valid json syntax"
-                    raise PolicyInvalidError(msg=msg, inner=ex)
-                return self.__parse_policy(custom_policy)
-        else:
-            self._log_policy_event("No custom policy found at {0}. Using default policy.".format(_CUSTOM_POLICY_PATH))
-            return self.__parse_policy({})  # Return default policy
+        with open(_CUSTOM_POLICY_PATH, 'r') as f:        # Open file in read-only mode.
+            self._log_policy_event("Custom policy file found at {0}. Using custom policy.".format(_CUSTOM_POLICY_PATH))
+            try:
+                custom_policy = json.load(f)
+            except Exception as ex:
+                msg = "policy file does not conform to valid json syntax"
+                raise PolicyInvalidError(msg=msg, inner=ex)
+            return self.__parse_policy(custom_policy)
 
     @staticmethod
     def __parse_policy(custom_policy):
         """
         Return a policy combining the default and custom_policy. Any attributes provided in the custom policy
         override default values used in the template. If attribute is not provided, default is used.
+
+        The value of the "extensions" attribute is a case-folded dict. CRP allows extensions to be any case, so we use
+        case-folded dict to allow for case-insensitive lookup of individual extension policies.
 
         The expected custom policy format is:
          {
@@ -172,8 +175,7 @@ class _PolicyEngine(object):
 
                         template["extensionPolicies"]["extensions"][ext_name] = policy_to_add
 
-                # CRP allows extension names to be any case. We convert "extensions" dict to a case-folded dict
-                # to allow for case-insensitive look-up of individual extension policies.
+                # Convert "extensions" to a case-folded dict for case-insensitive lookup
                 case_folded_extension_dict = _CaseFoldedDict.from_dict(template["extensionPolicies"]["extensions"])
                 template["extensionPolicies"]["extensions"] = case_folded_extension_dict
 
@@ -197,8 +199,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
         allow_listed_extension_only = self._policy.get("extensionPolicies").get("allowListedExtensionsOnly")
         extension_allowlist = self._policy.get("extensionPolicies").get("extensions")
 
-        # CRP allows extension names to be any case. We convert to lowercase here to query the case-folded "extensions" dict.
-        should_allow = not allow_listed_extension_only or extension_allowlist.get(extension_to_check.name.lower()) is not None
+        should_allow = not allow_listed_extension_only or extension_allowlist.get(extension_to_check.name) is not None
         return should_allow
 
     def should_enforce_signature_validation(self, extension_to_check):
@@ -215,7 +216,7 @@ class ExtensionPolicyEngine(_PolicyEngine):
 
         extension_dict = self._policy.get("extensionPolicies").get("extensions")
         global_signature_required = self._policy.get("extensionPolicies").get("signatureRequired")
-        extension_individual_policy = extension_dict.get(extension_to_check.name.lower())
+        extension_individual_policy = extension_dict.get(extension_to_check.name)
         if extension_individual_policy is None:
             return global_signature_required
         else:

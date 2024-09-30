@@ -19,14 +19,17 @@ import os
 import json
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError, _PolicyEngine
 from tests.lib.tools import patch
 from azurelinuxagent.common.protocol.restapi import Extension
 
 TEST_EXTENSION_NAME = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
 
 
-class TestExtensionPolicyEngine(AgentTestCase):
+class _TestPolicyBase(AgentTestCase):
+    """
+    Define common methods for policy engine test classes.
+    """
     def setUp(self):
         AgentTestCase.setUp(self)
         self.custom_policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
@@ -39,7 +42,6 @@ class TestExtensionPolicyEngine(AgentTestCase):
                                      return_value=True)
         self.patch_conf_flag.start()
 
-
     def tearDown(self):
         patch.stopall()
         AgentTestCase.tearDown(self)
@@ -48,6 +50,25 @@ class TestExtensionPolicyEngine(AgentTestCase):
         with open(self.custom_policy_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
             policy_file.flush()
+
+
+class TestPolicyEngine(_TestPolicyBase):
+    """
+    Test policy enablement and parsing logic.
+    """
+
+    def test_should_raise_error_if_policy_file_is_invalid_json(self):
+        policy = """
+        {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+        """
+        self._create_policy_file(policy)
+        with open(self.custom_policy_path, mode='w') as policy_file:
+            policy_file.write(policy)
+            policy_file.flush()
+        with self.assertRaises(PolicyInvalidError, msg="Invalid json in policy file should raise error."):
+            ExtensionPolicyEngine()
 
     def test_policy_enforcement_should_be_enabled_when_policy_file_exists(self):
         """
@@ -61,11 +82,101 @@ class TestExtensionPolicyEngine(AgentTestCase):
                             msg="Conf flag is set to true so policy enforcement should be enabled.")
 
     def test_policy_enforcement_should_be_disabled_by_default(self):
-        self.patch_conf_flag.stop()  # Turn off the policy feature enablement
-        engine = ExtensionPolicyEngine()
-        self.assertFalse(engine.is_policy_enforcement_enabled(),
+        # Test when conf flag is turned off - feature should be disabled.
+        self.patch_conf_flag.stop()
+        engine1 = ExtensionPolicyEngine()
+        self.assertFalse(engine1.is_policy_enforcement_enabled(),
                          msg="Conf flag is set to false so policy enforcement should be disabled.")
 
+        # Test when conf flag is turned on - feature should still be disabled, because policy file is not present.
+        self.patch_conf_flag.start()
+        engine2 = ExtensionPolicyEngine()
+        self.assertFalse(engine2.is_policy_enforcement_enabled(),
+                         msg="Policy file is not present so policy enforcement should be disabled.")
+
+    def test_should_raise_error_if_allowListedExtensionsOnly_is_string(self):
+        test_extension = Extension(name=TEST_EXTENSION_NAME)
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": "True",  # Should be bool
+                    "signatureRequired": False,
+                    "extensions": {}
+                }
+            }
+        self._create_policy_file(policy)
+        with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
+            ExtensionPolicyEngine()
+
+    def test_should_raise_error_if_signatureRequired_is_string(self):
+        test_extension = Extension(name=TEST_EXTENSION_NAME)
+        policy_individual = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": False,
+                    "extensions": {
+                        TEST_EXTENSION_NAME: {
+                            "signatureRequired": "False"  # Should be bool
+                        }
+                    }
+                }
+            }
+        policy_global = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": "False",  # Should be bool
+                    "extensions": {}
+                }
+            }
+        for policy in [policy_individual, policy_global]:
+            self._create_policy_file(policy)
+            with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
+                ExtensionPolicyEngine()
+
+    def test_extension_name_in_policy_should_be_case_insensitive(self):
+        """
+        Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature_validation() return expected
+        results, even when the extension name does not match the case of the name specified in policy.
+        """
+        ext_name_in_policy = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
+        for ext_name_to_test in [
+            "MicrOsoft.aZure.activedirectory.aaDsShloginFORlinux",
+            "microsoft.azure.activedirectory.aadsshloginforlinux"
+        ]:
+            test_extension = Extension(name=ext_name_to_test)
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": False,
+                        "extensions": {
+                            ext_name_in_policy: {
+                                "signatureRequired": True
+                            }
+                        }
+                    }
+                }
+
+            self._create_policy_file(policy)
+            engine = ExtensionPolicyEngine()
+            should_allow = engine.should_allow_extension(test_extension)
+            should_enforce_signature = engine.should_enforce_signature_validation(test_extension)
+            self.assertTrue(should_allow,
+                            msg="Extension should have been found in allowlist regardless of extension name case.")
+            self.assertTrue(should_enforce_signature,
+                            msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
+
+
+class TestExtensionPolicyEngine(_TestPolicyBase):
+    """
+    Test ExtensionPolicyEngine should_allow() and should_enforce_signature_validation().
+    """
     def test_should_allow_and_should_not_enforce_signature_for_default_policy(self):
         """
         Default policy should allow all extensions and not enforce signature.
@@ -278,52 +389,6 @@ class TestExtensionPolicyEngine(AgentTestCase):
         self.assertTrue(should_allow,
                         msg="No custom policy is present, so use default policy. Should allow all extensions.")
 
-    def test_should_raise_error_if_allowListedExtensionsOnly_is_string(self):
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
-        policy = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": "True",  # Should be bool
-                    "signatureRequired": False,
-                    "extensions": {}
-                }
-            }
-        self._create_policy_file(policy)
-        with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
-            engine = ExtensionPolicyEngine()
-            engine.should_allow_extension(test_extension)
-
-    def test_should_raise_error_if_signatureRequired_is_string(self):
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
-        policy_individual = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": False,
-                    "extensions": {
-                        TEST_EXTENSION_NAME: {
-                            "signatureRequired": "False"  # Should be bool
-                        }
-                    }
-                }
-            }
-        policy_global = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": "False",  # Should be bool
-                    "extensions": {}
-                }
-            }
-        for policy in [policy_individual, policy_global]:
-            self._create_policy_file(policy)
-            with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
-                engine = ExtensionPolicyEngine()
-                engine.should_enforce_signature_validation(test_extension)
-
     def test_should_allow_if_extension_policy_section_missing(self):
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy = \
@@ -350,48 +415,3 @@ class TestExtensionPolicyEngine(AgentTestCase):
         should_enforce_signature = engine.should_enforce_signature_validation(test_extension)
         self.assertFalse(should_enforce_signature,
                          msg="Policy feature is disabled, so signature should not be enforced.")
-
-    def test_policy_enforcement_should_be_case_insensitive(self):
-        """
-        Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature_validation() return expected
-        results, even when the extension name does not match the case of the name specified in policy.
-        """
-        ext_name_to_test = "MicrOsoft.aZure.activedirectory.aaDsShloginFORlinux"
-        ext_name_in_policy = "Microsoft.Azure.ActiveDirectory.AADSSHLoginForLinux"
-        test_extension = Extension(name=ext_name_to_test)
-        policy = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": False,
-                    "extensions": {
-                        ext_name_in_policy: {
-                            "signatureRequired": True
-                        }
-                    }
-                }
-            }
-
-        self._create_policy_file(policy)
-        engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(test_extension)
-        should_enforce_signature = engine.should_enforce_signature_validation(test_extension)
-        self.assertTrue(should_allow,
-                        msg="Extension should have been found in allowlist regardless of extension name case.")
-        self.assertTrue(should_enforce_signature,
-                        msg="Individual signatureRequired policy should have been found and used, regardless of extension name case.")
-
-    def test_should_raise_value_error_if_policy_file_is_invalid_json(self):
-        policy = """
-        {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                }
-        """
-        self._create_policy_file(policy)
-        with open(self.custom_policy_path, mode='w') as policy_file:
-            policy_file.write(policy)
-            policy_file.flush()
-        with self.assertRaises(PolicyInvalidError, msg="Invalid json in policy file should raise error."):
-            ExtensionPolicyEngine()
