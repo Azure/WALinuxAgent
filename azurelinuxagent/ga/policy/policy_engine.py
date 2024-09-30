@@ -45,7 +45,7 @@ class PolicyInvalidError(AgentError):
     Error raised if user-provided policy is invalid.
     """
     def __init__(self, msg, inner=None):
-        msg = "Customer-provided policy file ('{0}') is invalid, please correct the policy: {1}".format(_CUSTOM_POLICY_PATH, msg)
+        msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(_CUSTOM_POLICY_PATH, msg)
         super(PolicyInvalidError, self).__init__(msg, inner)
 
 

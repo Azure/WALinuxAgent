@@ -63,36 +63,42 @@ class TestPolicyEngine(_TestPolicyBase):
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
         """
-        self._create_policy_file(policy)
         with open(self.custom_policy_path, mode='w') as policy_file:
             policy_file.write(policy)
             policy_file.flush()
         with self.assertRaises(PolicyInvalidError, msg="Invalid json in policy file should raise error."):
             ExtensionPolicyEngine()
 
-    def test_policy_enforcement_should_be_enabled_when_policy_file_exists(self):
+    def test_policy_enforcement_should_be_enabled_when_policy_file_exists_and_conf_flag_true(self):
         """
         When conf flag is set to true and policy file is present at expected location, feature should be enabled.
         """
-        with patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled', return_value=True):
-            # Create dummy policy file at the expected path to enable feature.
-            self._create_policy_file({})
-            engine = ExtensionPolicyEngine()
-            self.assertTrue(engine.is_policy_enforcement_enabled(),
-                            msg="Conf flag is set to true so policy enforcement should be enabled.")
+        # Create dummy policy file at the expected path to enable feature.
+        self._create_policy_file({})
+        engine = ExtensionPolicyEngine()
+        self.assertTrue(engine.is_policy_enforcement_enabled(),
+                        msg="Conf flag is set to true so policy enforcement should be enabled.")
 
-    def test_policy_enforcement_should_be_disabled_by_default(self):
+    def test_policy_enforcement_should_be_disabled_when_conf_flag_false_or_no_policy_file(self):
+
         # Test when conf flag is turned off - feature should be disabled.
         self.patch_conf_flag.stop()
         engine1 = ExtensionPolicyEngine()
         self.assertFalse(engine1.is_policy_enforcement_enabled(),
-                         msg="Conf flag is set to false so policy enforcement should be disabled.")
+                         msg="Conf flag is set to false and policy file missing so policy enforcement should be disabled.")
 
-        # Test when conf flag is turned on - feature should still be disabled, because policy file is not present.
+        # Turn on conf flag - feature should still be disabled, because policy file is not present.
         self.patch_conf_flag.start()
         engine2 = ExtensionPolicyEngine()
         self.assertFalse(engine2.is_policy_enforcement_enabled(),
                          msg="Policy file is not present so policy enforcement should be disabled.")
+
+        # Create a policy file, but turn off conf flag - feature should be disabled due to flag.
+        self.patch_conf_flag.stop()
+        self._create_policy_file({})
+        engine3 = ExtensionPolicyEngine()
+        self.assertFalse(engine3.is_policy_enforcement_enabled(),
+                         msg="Conf flag is set to false so policy enforcement should be disabled.")
 
     def test_should_raise_error_if_allowListedExtensionsOnly_is_string(self):
         policy = \
@@ -249,8 +255,7 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
                             "signatureRequired": False
                         }
                     }
-                },
-                "jitPolicies": {}
+                }
             }
         self._create_policy_file(policy)
         engine = ExtensionPolicyEngine()
