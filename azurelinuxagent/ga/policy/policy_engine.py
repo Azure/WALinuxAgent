@@ -27,7 +27,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 # Customer-defined policy is expected to be located at this path.
 # If there is no file at this path, default policy will be used.
-_CUSTOM_POLICY_PATH = DefaultOSUtil().get_custom_policy_file_path()
+_CUSTOM_POLICY_PATH =  get_osutil().get_custom_policy_file_path()
 
 # Default policy values to be used when no custom policy is present.
 _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
