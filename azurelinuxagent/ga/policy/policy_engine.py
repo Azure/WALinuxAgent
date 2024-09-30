@@ -22,12 +22,12 @@ from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.osutil.factory import get_osutil
 
 
 # Customer-defined policy is expected to be located at this path.
 # If there is no file at this path, default policy will be used.
-_CUSTOM_POLICY_PATH =  get_osutil().get_custom_policy_file_path()
+_CUSTOM_POLICY_PATH = get_osutil().get_custom_policy_file_path()
 
 # Default policy values to be used when no custom policy is present.
 _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
