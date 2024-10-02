@@ -103,6 +103,9 @@ class _PolicyEngine(object):
             except ValueError as ex:
                 msg = "policy file does not conform to valid json syntax"
                 raise PolicyInvalidError(msg=msg, inner=ex)
+            except Exception as ex:
+                msg = "unable to load policy file"
+                raise PolicyInvalidError(msg=msg, inner=ex)
             return self.__parse_policy(custom_policy)
 
     @staticmethod
