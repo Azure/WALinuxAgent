@@ -19,7 +19,8 @@ import os
 import json
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError, \
+    _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
 from tests.lib.tools import patch
 from azurelinuxagent.common.protocol.restapi import Extension
 
@@ -183,21 +184,106 @@ class TestPolicyEngine(_TestPolicyBase):
         os.remove(self.custom_policy_path)
         self.assertTrue(engine.policy_enforcement_enabled)
 
+    def test_should_parse_policy_successfully(self):
+        """
+        Values provided in custom policy should override any defaults.
+        """
+        policy1 = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": True,
+                    "extensions": {
+                        TEST_EXTENSION_NAME: {
+                            "signatureRequired": False
+                        }
+                    }
+                }
+            }
+        policy2 = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": False,
+                    "extensions": {
+                        TEST_EXTENSION_NAME: {
+                            "signatureRequired": True
+                        }
+                    }
+                }
+            }
+        for expected_policy in [policy1, policy2]:
+            self._create_policy_file(expected_policy)
+            engine = ExtensionPolicyEngine()
+            actual_policy = engine._policy
+            self.assertEqual(actual_policy.get("policyVersion"), expected_policy.get("policyVersion"))
+
+            actual_extension_policy = actual_policy.get("extensionPolicies")
+            expected_extension_policy = expected_policy.get("extensionPolicies")
+            self.assertEqual(actual_extension_policy.get("allowListedExtensionsOnly"), expected_extension_policy.get("allowListedExtensionsOnly"))
+            self.assertEqual(actual_extension_policy.get("signatureRequired"), expected_extension_policy.get("signatureRequired"))
+            self.assertEqual(actual_extension_policy.get("signatureRequired"), expected_extension_policy.get("signatureRequired"))
+
+            actual_individual_policy = actual_extension_policy.get("extensions").get(TEST_EXTENSION_NAME)
+            expected_individual_policy = expected_extension_policy.get("extensions").get(TEST_EXTENSION_NAME)
+            self.assertEqual(actual_individual_policy.get("signatureRequired"), expected_individual_policy.get("signatureRequired"))
+
 
 class TestExtensionPolicyEngine(_TestPolicyBase):
     """
     Test ExtensionPolicyEngine should_allow() and should_enforce_signature_validation().
     """
-    def test_should_allow_and_should_not_enforce_signature_for_default_policy(self):
+    def test_should_allow_and_should_not_enforce_signature_if_no_custom_policy_file(self):
         """
-        Default policy should allow all extensions and not enforce signature.
+        When custom policy file not present, should allow all extensions and not enforce signature.
         """
+        # No policy file is present - feature is disabled.
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         engine = ExtensionPolicyEngine()
         should_allow = engine.should_allow_extension(test_extension)
-        self.assertTrue(should_allow, msg="Default policy should allow all extensions.")
+        self.assertTrue(should_allow, msg="Policy feature is disabled because no custom policy file, so all extensions should be allowed.")
         should_enforce = engine.should_enforce_signature_validation(test_extension)
-        self.assertFalse(should_enforce, msg="Default policy should not enforce extension signature.")
+        self.assertFalse(should_enforce, msg="Policy feature is disabled no custom policy file, so signature should not be enforced.")
+
+    def test_should_allow_and_should_not_enforce_signature_if_conf_flag_false(self):
+        """
+        When conf flag turned off, should allow all extensions and not enforce signature.
+        """
+        self.patch_conf_flag.stop()
+        self._create_policy_file({})
+        test_extension = Extension(name=TEST_EXTENSION_NAME)
+        engine = ExtensionPolicyEngine()
+        should_allow = engine.should_allow_extension(test_extension)
+        self.assertTrue(should_allow, msg="Policy feature is disabled because conf flag false, so all extensions should be allowed.")
+        should_enforce = engine.should_enforce_signature_validation(test_extension)
+        self.assertFalse(should_enforce, msg="Policy feature is disabled because conf flag false, so signature should not be enforced.")
+
+    def test_should_use_default_policy_if_no_custom_extension_policy_specified(self):
+        """
+        Test that default policy is used when custom policy file does not specify the extension policy.
+        """
+        test_extension = Extension(name=TEST_EXTENSION_NAME)
+        policy_cases = [
+            {},
+            {
+                "policyVersion": "0.1.0"
+            },
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {}
+            }
+        ]
+        for policy in policy_cases:
+            self._create_policy_file(policy)
+            engine = ExtensionPolicyEngine()
+            should_allow = engine.should_allow_extension(test_extension)
+            self.assertEqual(should_allow, not _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY,
+                             msg="Extension policy is not specified, so should use default policy.")
+            should_enforce = engine.should_enforce_signature_validation(test_extension)
+            self.assertEqual(should_enforce, _DEFAULT_SIGNATURE_REQUIRED,
+                             msg="Extension policy is not specified, so should use default policy.")
 
     def test_should_allow_if_allowListedExtensionsOnly_true_and_extension_in_list(self):
         """
@@ -385,47 +471,27 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         self.assertTrue(should_enforce_signature,
                             msg="Individual signatureRequired policy is not set, so should use global policy and enforce signature.")
 
-    def test_should_not_enforce_signature_if_no_custom_policy_present(self):
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
-        engine = ExtensionPolicyEngine()
-        should_enforce_signature = engine.should_enforce_signature_validation(test_extension)
-        self.assertFalse(should_enforce_signature,
-                         msg="No custom policy is present, so use default policy. Should not enforce signature.")
-
-    def test_should_allow_if_no_custom_policy_present(self):
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
-        engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(test_extension)
-        self.assertTrue(should_allow,
-                        msg="No custom policy is present, so use default policy. Should allow all extensions.")
-
-    def test_should_allow_if_extension_policy_section_missing(self):
+    def test_should_not_enforce_signature_if_global_signatureRequired_false_and_individual_signatureRequired_not_specified(self):
+        """
+        If individual policy is present, but signatureRequired is not specified for that policy, use global signatureRequired.
+        """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy = \
             {
-                "policyVersion": "0.1.0"
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": False,
+                    "extensions": {
+                        TEST_EXTENSION_NAME: {}
+                    }
+                }
             }
         self._create_policy_file(policy)
         engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(test_extension)
-        self.assertTrue(should_allow)
-
-    def test_should_allow_if_policy_disabled(self):
-        self.patch_conf_flag.stop()  # Turn off the policy feature enablement
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
-        engine = ExtensionPolicyEngine()
-        should_allow = engine.should_allow_extension(test_extension)
-        self.assertTrue(should_allow,
-                        msg="Policy feature is disabled, so all extensions should be allowed.")
-
-    def test_should_not_enforce_signature_if_policy_disabled(self):
-        self.patch_conf_flag.stop()  # Turn off the policy feature enablement
-        test_extension = Extension(name=TEST_EXTENSION_NAME)
-        engine = ExtensionPolicyEngine()
         should_enforce_signature = engine.should_enforce_signature_validation(test_extension)
         self.assertFalse(should_enforce_signature,
-                         msg="Policy feature is disabled, so signature should not be enforced.")
-
+                            msg="Individual signatureRequired policy is not set, so should use global policy and enforce signature.")
     def test_extension_name_in_policy_should_be_case_insensitive(self):
         """
         Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature_validation() return expected
