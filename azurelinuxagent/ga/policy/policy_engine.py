@@ -100,7 +100,7 @@ class _PolicyEngine(object):
             self._log_policy_event("Custom policy file found at {0}. Using custom policy.".format(_CUSTOM_POLICY_PATH))
             try:
                 custom_policy = json.load(f)
-            except json.JSONDecodeError as ex:
+            except ValueError as ex:
                 msg = "policy file does not conform to valid json syntax"
                 raise PolicyInvalidError(msg=msg, inner=ex)
             return self.__parse_policy(custom_policy)
