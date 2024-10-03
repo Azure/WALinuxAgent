@@ -20,7 +20,7 @@ import json
 
 from tests.lib.tools import AgentTestCase
 from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError, \
-    _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
+    _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
 from tests.lib.tools import patch
 from azurelinuxagent.common.protocol.restapi import Extension
 
@@ -55,7 +55,7 @@ class _TestPolicyBase(AgentTestCase):
 
 class TestPolicyEngine(_TestPolicyBase):
     """
-    Test policy enablement and parsing logic.
+    Test policy enablement and parsing logic for _PolicyEngine.
     """
 
     def test_should_raise_error_if_policy_file_is_invalid_json(self):
@@ -69,7 +69,7 @@ class TestPolicyEngine(_TestPolicyBase):
                 policy_file.write(policy)
                 policy_file.flush()
             with self.assertRaises(PolicyInvalidError, msg="Invalid json in policy file should raise error."):
-                ExtensionPolicyEngine()
+                _PolicyEngine()
 
     def test_policy_enforcement_should_be_enabled_when_policy_file_exists_and_conf_flag_true(self):
         """
@@ -77,7 +77,7 @@ class TestPolicyEngine(_TestPolicyBase):
         """
         # Create dummy policy file at the expected path to enable feature.
         self._create_policy_file({})
-        engine = ExtensionPolicyEngine()
+        engine = _PolicyEngine()
         self.assertTrue(engine.policy_enforcement_enabled,
                         msg="Conf flag is set to true so policy enforcement should be enabled.")
 
@@ -85,20 +85,20 @@ class TestPolicyEngine(_TestPolicyBase):
 
         # Test when conf flag is turned off - feature should be disabled.
         self.patch_conf_flag.stop()
-        engine1 = ExtensionPolicyEngine()
+        engine1 = _PolicyEngine()
         self.assertFalse(engine1.policy_enforcement_enabled,
                          msg="Conf flag is set to false and policy file missing so policy enforcement should be disabled.")
 
         # Turn on conf flag - feature should still be disabled, because policy file is not present.
         self.patch_conf_flag.start()
-        engine2 = ExtensionPolicyEngine()
+        engine2 = _PolicyEngine()
         self.assertFalse(engine2.policy_enforcement_enabled,
                          msg="Policy file is not present so policy enforcement should be disabled.")
 
         # Create a policy file, but turn off conf flag - feature should be disabled due to flag.
         self.patch_conf_flag.stop()
         self._create_policy_file({})
-        engine3 = ExtensionPolicyEngine()
+        engine3 = _PolicyEngine()
         self.assertFalse(engine3.policy_enforcement_enabled,
                          msg="Conf flag is set to false so policy enforcement should be disabled.")
 
@@ -114,7 +114,7 @@ class TestPolicyEngine(_TestPolicyBase):
             }
         self._create_policy_file(policy)
         with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
-            ExtensionPolicyEngine()
+            _PolicyEngine()
 
     def test_should_raise_error_if_signatureRequired_is_string(self):
         policy_individual = \
@@ -142,7 +142,7 @@ class TestPolicyEngine(_TestPolicyBase):
         for policy in [policy_individual, policy_global]:
             self._create_policy_file(policy)
             with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
-                ExtensionPolicyEngine()
+                _PolicyEngine()
 
     def test_should_raise_error_if_individual_extension_policy_is_not_dict(self):
         policy = \
@@ -158,7 +158,7 @@ class TestPolicyEngine(_TestPolicyBase):
             }
         self._create_policy_file(policy)
         with self.assertRaises(PolicyInvalidError, msg="Individual extension policy is not a dict, should raise error."):
-            ExtensionPolicyEngine()
+            _PolicyEngine()
 
     def test_should_raise_error_if_extensions_is_not_dict(self):
         policy = \
@@ -172,14 +172,14 @@ class TestPolicyEngine(_TestPolicyBase):
             }
         self._create_policy_file(policy)
         with self.assertRaises(PolicyInvalidError, msg="List used instead of dict, should raise error."):
-            ExtensionPolicyEngine()
+            _PolicyEngine()
 
     def test_policy_should_be_enabled_even_if_policy_file_deleted(self):
         """
         If policy file is deleted while processing a single goal state, policy should still be enabled.
         """
         self._create_policy_file({})
-        engine = ExtensionPolicyEngine()
+        engine = _PolicyEngine()
         self.assertTrue(engine.policy_enforcement_enabled)
         os.remove(self.custom_policy_path)
         self.assertTrue(engine.policy_enforcement_enabled)
@@ -216,7 +216,7 @@ class TestPolicyEngine(_TestPolicyBase):
             }
         for expected_policy in [policy1, policy2]:
             self._create_policy_file(expected_policy)
-            engine = ExtensionPolicyEngine()
+            engine = _PolicyEngine()
             actual_policy = engine._policy
             self.assertEqual(actual_policy.get("policyVersion"), expected_policy.get("policyVersion"))
 
@@ -290,6 +290,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         If allowListedExtensionsOnly is true and extension in list, should_allow = True.
         """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
+        TEST_EXTENSION_NAME_2 = "Test.Extension.Name"
+        test_extension_2 = Extension(name=TEST_EXTENSION_NAME_2)
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -297,10 +299,9 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
                     "extensions": {
-                        TEST_EXTENSION_NAME: {
-                            "signatureRequired": False,
-                            "signingPolicy": {},
-                            "runtimePolicy": {}
+                        TEST_EXTENSION_NAME: {},
+                        TEST_EXTENSION_NAME_2: {
+                            "signatureRequired": False
                         }
                     }
                 }
@@ -308,6 +309,8 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         self._create_policy_file(policy)
         engine = ExtensionPolicyEngine()
         should_allow = engine.should_allow_extension(test_extension)
+        self.assertTrue(should_allow, msg="Extension is in allowlist, so should be allowed.")
+        should_allow = engine.should_allow_extension(test_extension_2)
         self.assertTrue(should_allow, msg="Extension is in allowlist, so should be allowed.")
 
     def test_should_not_allow_if_allowListedExtensionsOnly_true_and_extension_not_in_list(self):

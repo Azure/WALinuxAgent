@@ -183,19 +183,18 @@ class _PolicyEngine(object):
                 __validate_attribute_type("extensions", extensions, dict)
                 for ext_name, ext_policy in extensions.items():
                     __validate_attribute_type(ext_name, ext_policy, dict, "extensions")
-                    if ext_policy is not None:
-                        individual_signing_policy = ext_policy.get("signatureRequired")
-                        if individual_signing_policy is not None:
-                            __validate_attribute_type("signatureRequired", individual_signing_policy, bool, ext_name)
-                        else:
-                            # If individual extension is present but signature policy not specified, use global policy.
-                            individual_signing_policy = template.get("extensionPolicies").get("signatureRequired")
+                    individual_signing_policy = ext_policy.get("signatureRequired")
+                    if individual_signing_policy is not None:
+                        __validate_attribute_type("signatureRequired", individual_signing_policy, bool, ext_name)
+                    else:
+                        # If individual extension is present but signature policy not specified, use global policy.
+                        individual_signing_policy = template.get("extensionPolicies").get("signatureRequired")
 
-                        # Build individual extension policy and add to template.
-                        policy_to_add = {
-                            "signatureRequired": individual_signing_policy
-                        }
-                        template["extensionPolicies"]["extensions"][ext_name] = policy_to_add
+                    # Build individual extension policy and add to template.
+                    policy_to_add = {
+                        "signatureRequired": individual_signing_policy
+                    }
+                    template["extensionPolicies"]["extensions"][ext_name] = policy_to_add
 
                 # Convert "extensions" to a case-folded dict for case-insensitive lookup
                 case_folded_extension_dict = _CaseFoldedDict.from_dict(template["extensionPolicies"]["extensions"])
