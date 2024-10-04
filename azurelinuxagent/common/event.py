@@ -511,7 +511,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
         self.add_common_event_parameters(event, datetime.utcnow())
 
-        self.report_or_save_event(event, message, flush)
+        self.report_or_save_event(event, flush)
 
     def add_log_event(self, level, message):
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
@@ -522,7 +522,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
         self.add_common_event_parameters(event, datetime.utcnow())
 
-        self.report_or_save_event(event, message)
+        self.report_or_save_event(event)
 
     def add_metric(self, category, counter, instance, value, log_event=False):
         """
@@ -535,8 +535,8 @@ class EventLogger(object):
         :param bool log_event: If true, log the collected metric in the agent log
         :param immediate_flush: If true, flush the event to wireserver immediately
         """
-        message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         if log_event:
+            message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
         event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
@@ -546,9 +546,9 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
         self.add_common_event_parameters(event, datetime.utcnow())
 
-        self.report_or_save_event(event, message)
+        self.report_or_save_event(event)
 
-    def report_or_save_event(self, event, message, flush=False):
+    def report_or_save_event(self, event, flush=False):
         """
         Flush the event to wireserver if flush to set to true, else
         save it disk if we fail to send or not required to flush immediately.
@@ -556,9 +556,7 @@ class EventLogger(object):
         """
         report_success = False
         if flush and self.protocol is not None:
-            report_success = self.protocol.report_event([event])
-            if not report_success:
-                logger.error("Failed to send event: '{0}' directly to Wireserver. So, agent will save it to disk for periodic flush.", message)
+            report_success = self.protocol.report_event([event], flush)
 
         if not report_success:
             try:

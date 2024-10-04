@@ -421,7 +421,7 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
 
         event_str = u'a test string'
         client = WireProtocol(WIRESERVER_URL).client
-        client._send_encoded_event("foo", event_str.encode('utf-8'))
+        client._send_encoded_event("foo", event_str.encode('utf-8'), flush=False)
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
@@ -478,53 +478,24 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         client.report_event(self._get_telemetry_events_generator(event_list))
 
         self.assertEqual(patch_send_event.call_count, 0)
-
-    @patch("azurelinuxagent.common.utils.restutil.http_request")
-    @patch("azurelinuxagent.common.protocol.wire.logger.verbose")
-    def test_report_event_should_honor_telemetry_endpoint_limits(self, mock_logger, mock_http_request, *args):  # pylint: disable=unused-argument
-        mock_http_request.return_value = MockHttpResponse(200)
-        event_list = []
-        event_str = random_generator(2 ** 15)
-        event_list.append(get_event(message=event_str))
-        event_list.append(get_event(message=event_str))
-        event_list.append(get_event(message=event_str))
-
-        with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", 2):
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_INTERVAL", 0.2):
-                client = WireProtocol(WIRESERVER_URL).client
-                client.report_event(self._get_telemetry_events_generator(event_list))
-                self.assertEqual(mock_http_request.call_count, 3)
-
-                call_args = [args for args, _ in mock_logger.call_args_list if
-                             "Reached telemetry endpoint throttling limit: 2" in args[0]]
-                self.assertTrue(
-                    len(call_args) >= 1 and len(call_args[0]) == 1 and "Reached telemetry endpoint throttling limit" in
-                    call_args[0][0],
-                    "Expected telemetry endpoint throttling limit log. Log calls: {0}".format(
-                        mock_logger.call_args_list))
-
+        
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_report_event_http_req_should_not_retry_itself_on_throttling_error(self, mock_http_request, *args):  # pylint: disable=unused-argument
+    def test_report_event_http_req_should_do_max_retries_on_throttling_error(self, mock_http_request, *args):  # pylint: disable=unused-argument
         mock_http_request.return_value = MockHttpResponse(429)
         event_list = []
         event_str = random_generator(2 ** 15)
         event_list.append(get_event(message=event_str))
         client = WireProtocol(WIRESERVER_URL).client
-        with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_RETRIES", 1):
+        with patch("azurelinuxagent.common.utils.restutil.TELEMETRY_THROTTLE_DELAY_IN_SECONDS", 0.001):
             client.report_event(self._get_telemetry_events_generator(event_list))
-            self.assertEqual(mock_http_request.call_count, 1)
+            self.assertEqual(mock_http_request.call_count, 3)
 
-    @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_report_event_should_only_attempt_max_retries_if_fails_to_send(self, mock_http_request, *args):  # pylint: disable=unused-argument
-        mock_http_request.return_value = MockHttpResponse(500)
-        event_list = []
-        event_str = random_generator(2 ** 15)
-        event_list.append(get_event(message=event_str))
-        client = WireProtocol(WIRESERVER_URL).client
-        with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_RETRIES", 5):
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_RETRY_DELAY", 0.1):
-                client.report_event(self._get_telemetry_events_generator(event_list))
-                self.assertEqual(mock_http_request.call_count, 5)
+        mock_http_request.reset_mock()
+        self.assertEqual(mock_http_request.call_count, 0)
+        mock_http_request.return_value = MockHttpResponse(429)
+        with patch("azurelinuxagent.common.utils.restutil.TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS", 0.001):
+            client.report_event(self._get_telemetry_events_generator(event_list), flush=True)
+            self.assertEqual(mock_http_request.call_count, 3)
 
     def test_get_header_for_cert_should_use_triple_des(self, *_):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:

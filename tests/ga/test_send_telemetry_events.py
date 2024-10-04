@@ -66,7 +66,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
     _TEST_EVENT_OPERATION = "TEST_EVENT_OPERATION"
 
     @contextlib.contextmanager
-    def _create_send_telemetry_events_handler(self, timeout=0.5, start_thread=True, batching_queue_limit=1, telemetry_endpoint_calls_limit=50, telemetry_max_retries=1):
+    def _create_send_telemetry_events_handler(self, timeout=0.5, start_thread=True, batching_queue_limit=1):
         def http_post_handler(url, body, **__):
             if self.is_telemetry_request(url):
                 send_telemetry_events_handler.event_calls.append((datetime.now(), body))
@@ -78,19 +78,14 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             protocol_util.get_protocol = Mock(return_value=protocol)
             send_telemetry_events_handler = get_send_telemetry_events_handler(protocol_util)
             send_telemetry_events_handler.event_calls = []
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", telemetry_endpoint_calls_limit):
-                with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_RETRIES",
-                           telemetry_max_retries):
-                    with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
-                               batching_queue_limit):
-                        with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):
-
-
-                            send_telemetry_events_handler.get_mock_wire_protocol = lambda: protocol
-                            if start_thread:
-                                send_telemetry_events_handler.start()
-                                self.assertTrue(send_telemetry_events_handler.is_alive(), "Thread didn't start properly!")
-                            yield send_telemetry_events_handler
+            with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
+                       batching_queue_limit):
+                with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):
+                    send_telemetry_events_handler.get_mock_wire_protocol = lambda: protocol
+                    if start_thread:
+                        send_telemetry_events_handler.start()
+                        self.assertTrue(send_telemetry_events_handler.is_alive(), "Thread didn't start properly!")
+                    yield send_telemetry_events_handler
 
     @staticmethod
     def _stop_handler(telemetry_handler, timeout=0.001):
@@ -428,32 +423,6 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
 
                 # The send_event call should never be called as the events are larger than 2**16.
                 self.assertEqual(0, len(self._get_extension_events(telemetry_handler)))
-
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events_should_honor_telemetry_endpoint_limits(self, mock_lib_dir):
-        mock_lib_dir.return_value = self.lib_dir
-        max_telemetry_calls_per_interval = 2
-        with self._create_send_telemetry_events_handler(telemetry_endpoint_calls_limit=max_telemetry_calls_per_interval) as telemetry_handler:
-            sizes = [15, 15, 15, 15, 15]  # get the powers of 2
-
-            for power in sizes:
-                size = 2 ** power
-                self._create_extension_event(size)
-            with patch("azurelinuxagent.common.protocol.wire.logger.verbose") as mock_logger:
-                with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_INTERVAL", 0.2):
-                    _CollectAndEnqueueEvents(telemetry_handler).run()
-                    TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)
-
-                    # The send_event call should be called only for events are less than 2**16.
-                    self.assertEqual(5, len(self._get_extension_events(telemetry_handler)))
-                    self.assertEqual(0, len(os.listdir(self.event_dir)), "All event files should be cleaned after sending")
-
-                    call_args = [args for args, _ in mock_logger.call_args_list if
-                                 "Reached telemetry endpoint throttling limit: {0}".format(max_telemetry_calls_per_interval) in args[0]]
-                    self.assertTrue(
-                        len(call_args) >= 1 and len(call_args[0]) == 1 and "Reached telemetry endpoint throttling limit" in call_args[0][0],
-                        "Expected telemetry endpoint throttling limit log. Log calls: {0}".format(
-                            mock_logger.call_args_list))
 
     @staticmethod
     def _get_extension_events(telemetry_handler):

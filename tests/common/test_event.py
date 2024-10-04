@@ -426,12 +426,11 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
             return None
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler):
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_RETRIES", 1):
-                expected_message = 'test event'
-                add_event('test', message=expected_message, op=TestEvent._Operation, flush=True)
+            expected_message = 'test event'
+            add_event('test', message=expected_message, op=TestEvent._Operation, flush=True)
 
-                # In case of failure, the event file should be created
-                self.assertTrue(len(self._collect_event_files()) == 1)
+            # In case of failure, the event file should be created
+            self.assertTrue(len(self._collect_event_files()) == 1)
 
     @staticmethod
     def _get_event_message(evt):
@@ -849,117 +848,32 @@ class TestEvent(HttpRequestPredicates, AgentTestCase):
         http_post_handler.request_body = None
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", 50):
-                test_messages = [
-                    'Non-English message -  此文字不是英文的',
-                    "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
-                    "The quick brown fox jumps over the lazy dog",
-                    "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
-                    "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
-                    "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
-                    "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
-                    "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
-                    "Árvíztűrő tükörfúrógép",
-                    "Kæmi ný öxi hér ykist þjófum nú bæði víl og ádrepa",
-                    "Sævör grét áðan því úlpan var ónýt",
-                    "いろはにほへとちりぬるを わかよたれそつねならむ うゐのおくやまけふこえて あさきゆめみしゑひもせす",
-                    "? דג סקרן שט בים מאוכזב ולפתע מצא לו חברה איך הקליטה"
-                    "Pchnąć w tę łódź jeża lub ośm skrzyń fig",
-                    "Normal string event"
-                ]
-                for msg in test_messages:
-                    add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
-                    event_list = self._collect_events()
-                    self._report_events(protocol, event_list)
-                    # In Py2, encode() produces a str and in py3 it produces a bytes string.
-                    # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
-                    self.assertIsInstance(http_post_handler.request_body, bytes, "The Event request body should be encoded")
-                    self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'), http_post_handler.request_body,
-                                  "Encoded message not found in body")
-
-    def test_report_event_should_honor_telemetry_endpoint_limits(self):
-        def http_post_handler(url, body, **__):
-            if self.is_telemetry_request(url):
-                http_post_handler.request_body = body
-                return MockHttpResponse(status=200)
-            return None
-        http_post_handler.request_body = None
-
-        max_telemetry_calls_per_interval = 2
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", max_telemetry_calls_per_interval):
-                with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_INTERVAL", 0.2):
-                    with patch("azurelinuxagent.common.protocol.wire.logger.verbose") as mock_logger:
-                        test_messages = [
-                            'Non-English message -  此文字不是英文的',
-                            "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
-                            "The quick brown fox jumps over the lazy dog",
-                            "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
-                            "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
-                            "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
-                            "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
-                            "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
-                            "Árvíztűrő tükörfúrógép"
-                        ]
-
-                        for msg in test_messages:
-                            add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
-                            event_list = self._collect_events()
-                            self._report_events(protocol, event_list)
-                            # In Py2, encode() produces a str and in py3 it produces a bytes string.
-                            # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
-                            self.assertIsInstance(http_post_handler.request_body, bytes,
-                                                  "The Event request body should be encoded")
-                            self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'),
-                                          http_post_handler.request_body,
-                                          "Encoded message not found in body")
-                        call_args = [args for args, _ in mock_logger.call_args_list if
-                                     "Reached telemetry endpoint throttling limit: {0}".format(max_telemetry_calls_per_interval) in args[0]]
-                        self.assertTrue(
-                            len(call_args) >= 1 and len(call_args[0]) == 1 and "Reached telemetry endpoint throttling limit" in call_args[0][0],
-                            "Expected telemetry endpoint throttling limit log. Log calls: {0}".format(
-                                mock_logger.call_args_list))
-
-    def test_report_event_should_not_wait_for_next_telemetry_endpoint_call(self):
-        def http_post_handler(url, body, **__):
-            if self.is_telemetry_request(url):
-                http_post_handler.request_body = body
-                return MockHttpResponse(status=200)
-            return None
-        http_post_handler.request_body = None
-
-        max_telemetry_calls_per_interval = 50
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE, http_post_handler=http_post_handler) as protocol:
-            with patch("azurelinuxagent.common.protocol.wire.TELEMETRY_MAX_CALLS_PER_INTERVAL", max_telemetry_calls_per_interval):
-                with patch("azurelinuxagent.common.protocol.wire.logger.verbose") as mock_logger:
-                    test_messages = [
-                        'Non-English message -  此文字不是英文的',
-                        "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
-                        "The quick brown fox jumps over the lazy dog",
-                        "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
-                        "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
-                        "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
-                        "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
-                        "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
-                        "Árvíztűrő tükörfúrógép"
-                    ]
-
-                    for msg in test_messages:
-                        add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
-                        event_list = self._collect_events()
-                        self._report_events(protocol, event_list)
-                        # In Py2, encode() produces a str and in py3 it produces a bytes string.
-                        # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
-                        self.assertIsInstance(http_post_handler.request_body, bytes,
-                                              "The Event request body should be encoded")
-                        self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'),
-                                      http_post_handler.request_body,
-                                      "Encoded message not found in body")
-                    call_args = [args for args, _ in mock_logger.call_args_list if
-                                 "Reached telemetry endpoint throttling limit: {0}".format(
-                                     max_telemetry_calls_per_interval) in args[0]]
-                    self.assertTrue(len(call_args) == 0, "Expected no telemetry endpoint throttling limit log. Log calls: {0}".format(
-                        mock_logger.call_args_list))
+            test_messages = [
+                'Non-English message -  此文字不是英文的',
+                "Ξεσκεπάζω τὴν ψυχοφθόρα βδελυγμία",
+                "The quick brown fox jumps over the lazy dog",
+                "El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío, añoraba a su querido cachorro.",
+                "Portez ce vieux whisky au juge blond qui fume sur son île intérieure, à côté de l'alcôve ovoïde, où les bûches",
+                "se consument dans l'âtre, ce qui lui permet de penser à la cænogenèse de l'être dont il est question",
+                "dans la cause ambiguë entendue à Moÿ, dans un capharnaüm qui, pense-t-il, diminue çà et là la qualité de son œuvre.",
+                "D'fhuascail Íosa, Úrmhac na hÓighe Beannaithe, pór Éava agus Ádhaimh",
+                "Árvíztűrő tükörfúrógép",
+                "Kæmi ný öxi hér ykist þjófum nú bæði víl og ádrepa",
+                "Sævör grét áðan því úlpan var ónýt",
+                "いろはにほへとちりぬるを わかよたれそつねならむ うゐのおくやまけふこえて あさきゆめみしゑひもせす",
+                "? דג סקרן שט בים מאוכזב ולפתע מצא לו חברה איך הקליטה"
+                "Pchnąć w tę łódź jeża lub ośm skrzyń fig",
+                "Normal string event"
+            ]
+            for msg in test_messages:
+                add_event('TestEventEncoding', message=msg, op=TestEvent._Operation)
+                event_list = self._collect_events()
+                self._report_events(protocol, event_list)
+                # In Py2, encode() produces a str and in py3 it produces a bytes string.
+                # type(bytes) == type(str) for Py2 so this check is mainly for Py3 to ensure that the event is encoded properly.
+                self.assertIsInstance(http_post_handler.request_body, bytes, "The Event request body should be encoded")
+                self.assertIn(textutil.str_to_encoded_ustr(msg).encode('utf-8'), http_post_handler.request_body,
+                              "Encoded message not found in body")
 
 
 class TestMetrics(AgentTestCase):

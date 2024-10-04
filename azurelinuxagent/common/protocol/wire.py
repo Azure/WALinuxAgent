@@ -23,7 +23,7 @@ import shutil
 import time
 import zipfile
 
-from collections import defaultdict, deque
+from collections import defaultdict
 from datetime import datetime, timedelta
 from xml.sax import saxutils
 
@@ -44,7 +44,8 @@ from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatu
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.utils.restutil import RETRY_CODES_FOR_TELEMETRY
+from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SECONDS, \
+    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -52,7 +53,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
 ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
-TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
+TELEMETRY_URI = "http://{0}/machine?comp={1}"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -62,16 +63,6 @@ SHORT_WAITING_INTERVAL = 1  # 1 second
 MAX_EVENT_BUFFER_SIZE = 2 ** 16 - 2 ** 10
 
 _DOWNLOAD_TIMEOUT = timedelta(minutes=5)
-
-# telemetrydata api max calls 15 per 15 secs
-# Considered conservative approach and set the value to 12
-TELEMETRY_MAX_CALLS_PER_INTERVAL = 12
-# telemetrydata api interval 15 secs
-TELEMETRY_INTERVAL = 15  # 15 seconds
-
-# The maximum number of times to retry sending telemetry data
-TELEMETRY_MAX_RETRIES = 3
-TELEMETRY_RETRY_DELAY = 1  # 1 second
 
 
 class UploadError(HttpError):
@@ -155,8 +146,8 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
-    def report_event(self, events_iterator):
-        return self.client.report_event(events_iterator)
+    def report_event(self, events_iterator, flush=False):
+        return self.client.report_event(events_iterator, flush)
 
     def upload_logs(self, logs):
         self.client.upload_logs(logs)
@@ -561,7 +552,6 @@ class WireClient(object):
         self._goal_state = None
         self._host_plugin = None
         self.status_blob = StatusBlob(self)
-        self.telemetry_endpoint_calls_timestamps = deque()  # A thread-safe queue to store the timestamps of the telemetry endpoint calls
 
     def get_endpoint(self):
         return self._endpoint
@@ -1059,22 +1049,8 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def _send_encoded_event(self, provider_id, event_str, encoding='utf8'):
-        """
-        Construct the encoded event and url for telemetry endpoint call
-        Before calling telemetry endpoint, ensure calls are under throttling limits and checks if the number of telemetry endpoint calls 12 in the last 15 seconds
-        (Considered 12 instead actual limit 15 as a conservative approach plus it helps for directly flushing events not hit the throttling issues)
-        (Trade off between delay vs successful event delivery for immediate_flush events)
-        Note: throttling limit is 15 calls in 15 seconds
-        """
-        def can_make_wireserver_call():
-            current_time = datetime.utcnow()
-            interval_start_timestamp = current_time - timedelta(seconds=TELEMETRY_INTERVAL)
-            while len(self.telemetry_endpoint_calls_timestamps) > 0 and self.telemetry_endpoint_calls_timestamps[0] < interval_start_timestamp:
-                self.telemetry_endpoint_calls_timestamps.popleft()
-            return len(self.telemetry_endpoint_calls_timestamps) < TELEMETRY_MAX_CALLS_PER_INTERVAL
-
-        uri = TELEMETRY_URI.format(self.get_endpoint())
+    def _send_encoded_event(self, provider_id, event_str, flush, encoding='utf8'):
+        uri = TELEMETRY_URI.format(self.get_endpoint(), TELEMETRY_DATA)
         data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
             provider_id).encode(encoding)
         data_format_footer = ustr('</Provider></TelemetryData>').encode(encoding)
@@ -1082,28 +1058,15 @@ class WireClient(object):
         # dividing it into parts.
         data = data_format_header + event_str + data_format_footer
         try:
+            header = self.get_header_for_xml_content()
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
             #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
-            header = self.get_header_for_xml_content()
 
-            # wait until throttling limit reset to make next call
-            while not can_make_wireserver_call():
-                next_call_time = self.telemetry_endpoint_calls_timestamps[0] + timedelta(seconds=TELEMETRY_INTERVAL)
-                logger.verbose("Reached telemetry endpoint throttling limit: {0}, so waiting to make next call after : {1}".format(TELEMETRY_MAX_CALLS_PER_INTERVAL, next_call_time))
-                sleep_timedelta = next_call_time - datetime.utcnow()
-                # timedelta.total_seconds() is not available on Python 2.6, do the computation manually
-                sleep_seconds = ((sleep_timedelta.days * 24 * 3600 + sleep_timedelta.seconds) * 10.0 ** 6 + sleep_timedelta.microseconds) / 10.0 ** 6
-                # next_call_time might be in past when we are here, so check if sleep_time is negative
-                if sleep_seconds > 0:
-                    time.sleep(sleep_seconds)
-
-            current_time = datetime.utcnow()
-            self.telemetry_endpoint_calls_timestamps.append(current_time)
-
-            # Since we have throttling limit and also retry logic to pick up the events in next iteration, we set max_retry to 1 on http call to prevent retries on errors.
-            # Currently, http_request has a logic to reset the max_retry to 26 on throttling errors, so
-            # setting specific retry codes(which doesn't include throttling codes) to avoid max_retry reset and that will prevent retry in http request on throttling errors
-            resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=1, retry_codes=RETRY_CODES_FOR_TELEMETRY)
+            # if it's important event flush, we use less throttle delay(to avoid long delay to complete this operation)) on throttling errors
+            if flush:
+                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, telemetry_throttle_delay=TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS)
+            else:
+                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, telemetry_throttle_delay=TELEMETRY_THROTTLE_DELAY_IN_SECONDS)
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
@@ -1112,36 +1075,19 @@ class WireClient(object):
             raise ProtocolError(
                 "Failed to send events:{0}".format(resp.status))
 
-    def report_event(self, events_iterator):
-        """
-        Report events to the wire server. The events are grouped and sent out in batches well with in the api body limit.
-        When talking to wire server, make sure to take account of telemetry endpoint limits: Max body size is 64kb and throttling limit is 15 calls in 15 seconds
-        """
+    def report_event(self, events_iterator, flush=False):
         buf = {}
         debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_REPORT)
         events_per_provider = defaultdict(int)
 
-        def _send_event(provider_id, debug_info):
-            # we retry few times and eventually drop the events if we are not able to send them out
-            error_count = 0
+        def _send_event(provider_id, debug_info, flush):
             try:
-                while True:
-                    try:
-                        self._send_encoded_event(provider_id, buf[provider_id])
-                        break
-                    except Exception as ex:
-                        # we should not retry on unicode errors as it's permanent error
-                        if isinstance(ex, UnicodeError):
-                            raise
-                        error_count += 1
-                        if error_count >= TELEMETRY_MAX_RETRIES:
-                            raise
-                    time.sleep(TELEMETRY_RETRY_DELAY)
+                self._send_encoded_event(provider_id, buf[provider_id], flush)
             except UnicodeError as uni_error:
                 debug_info.update_unicode_error(uni_error)
             except Exception as error:
                 debug_info.update_op_error(error)
-        #
+
         # Group events by providerId
         for event in events_iterator:
             try:
@@ -1163,7 +1109,7 @@ class WireClient(object):
                 # If buffer is full, send out the events in buffer and reset buffer
                 if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                     logger.verbose("No of events this request = {0}".format(events_per_provider[event.providerId]))
-                    _send_event(event.providerId, debug_info)
+                    _send_event(event.providerId, debug_info, flush)
                     buf[event.providerId] = b""
                     events_per_provider[event.providerId] = 0
 
@@ -1178,11 +1124,10 @@ class WireClient(object):
         for provider_id in list(buf.keys()):
             if buf[provider_id]:
                 logger.verbose("No of events this request = {0}".format(events_per_provider[provider_id]))
-                _send_event(provider_id, debug_info)
+                _send_event(provider_id, debug_info, flush)
 
         debug_info.report_debug_info()
 
-        # use debug info to determine if the operation was successful or not, this is needed for immediate_flush events
         return debug_info.get_error_count() == 0
 
     def report_status_event(self, message, is_success):
