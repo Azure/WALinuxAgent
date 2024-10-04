@@ -224,7 +224,6 @@ class TestPolicyEngine(_TestPolicyBase):
             expected_extension_policy = expected_policy.get("extensionPolicies")
             self.assertEqual(actual_extension_policy.get("allowListedExtensionsOnly"), expected_extension_policy.get("allowListedExtensionsOnly"))
             self.assertEqual(actual_extension_policy.get("signatureRequired"), expected_extension_policy.get("signatureRequired"))
-            self.assertEqual(actual_extension_policy.get("signatureRequired"), expected_extension_policy.get("signatureRequired"))
 
             actual_individual_policy = actual_extension_policy.get("extensions").get(TEST_EXTENSION_NAME)
             expected_individual_policy = expected_extension_policy.get("extensions").get(TEST_EXTENSION_NAME)
@@ -495,6 +494,7 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         should_enforce_signature = engine.should_enforce_signature_validation(test_extension)
         self.assertFalse(should_enforce_signature,
                             msg="Individual signatureRequired policy is not set, so should use global policy and enforce signature.")
+
     def test_extension_name_in_policy_should_be_case_insensitive(self):
         """
         Extension name is allowed to be any case. Test that should_allow() and should_enforce_signature_validation() return expected
