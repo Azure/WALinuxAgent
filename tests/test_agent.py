@@ -86,6 +86,7 @@ OS.SshDir = /notareal/path
 OS.SudoersDir = /etc/sudoers.d
 OS.UpdateRdmaDriver = False
 Pid.File = /var/run/waagent.pid
+Policy.PolicyFile = /etc/waagent_policy.json
 Provisioning.Agent = auto
 Provisioning.AllowResetSysUser = False
 Provisioning.DecodeCustomData = False

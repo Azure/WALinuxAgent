@@ -170,7 +170,8 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountPoint": "/mnt/resource",
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
-    "AutoUpdate.GAFamily": "Prod"
+    "AutoUpdate.GAFamily": "Prod",
+    "Policy.PolicyFile": "/etc/waagent_policy.json"
 }
 
 
@@ -313,6 +314,10 @@ def get_ext_log_dir(conf=__conf__):
 
 def get_agent_log_file():
     return "/var/log/waagent.log"
+
+
+def get_policy_file_path(conf=__conf__):
+    return conf.get("Policy.PolicyFile", "/etc/waagent_policy.json")
 
 
 def get_fips_enabled(conf=__conf__):

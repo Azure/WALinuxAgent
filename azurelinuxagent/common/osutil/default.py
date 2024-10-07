@@ -143,7 +143,6 @@ GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
 class DefaultOSUtil(object):
     def __init__(self):
         self.agent_conf_file_path = '/etc/waagent.conf'
-        self.custom_policy_file_path = '/etc/waagent_policy.json'
         self.selinux = None
         self.disable_route_warning = False
         self.jit_enabled = False
