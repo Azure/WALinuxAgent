@@ -291,6 +291,7 @@ class IpTables(_FirewallManagerMultipleRules):
             if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
                 raise FirewallManagerNotAvailableError("iptables is not available")
             event.warn(WALAEventOperation.Firewall, "Unable to determine version of iptables; will not use -w option. --version output: {0}", ustr(exception))
+            self._version = "unknown"
             use_wait_option = False
 
         if use_wait_option:
