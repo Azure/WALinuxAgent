@@ -90,7 +90,8 @@ class AgentNotProvisioned(AgentVmTest):
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         return [
             {'message': 'Disabling guest agent in accordance with ovf-env.xml'},
-            {'message': 'Disabling the guest agent by sleeping forever; to re-enable, remove /var/lib/waagent/disable_agent and restart'}
+            {'message': 'Disabling the guest agent by sleeping forever; to re-enable, remove /var/lib/waagent/disable_agent and restart'},
+            {'message': "To enable VM extensions, also ensure that the VM's osProfile.allowExtensionOperations property is set to true."}
         ]
 
 
