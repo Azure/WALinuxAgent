@@ -24,10 +24,6 @@ from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 
 
-# Customer-defined policy is expected to be located at this path.
-# If there is no file at this path, default policy will be used.
-_CUSTOM_POLICY_PATH = conf.get_policy_file_path()
-
 # Default policy values to be used when no custom policy is present.
 _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
 _DEFAULT_SIGNATURE_REQUIRED = False
@@ -39,13 +35,13 @@ class PolicyError(AgentError):
     """
 
 
-class PolicyInvalidError(AgentError):
+class InvalidPolicyError(AgentError):
     """
     Error raised if user-provided policy is invalid.
     """
     def __init__(self, msg, inner=None):
-        msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(_CUSTOM_POLICY_PATH, msg)
-        super(PolicyInvalidError, self).__init__(msg, inner)
+        msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(conf.get_policy_file_path(), msg)
+        super(InvalidPolicyError, self).__init__(msg, inner)
 
 
 class _PolicyEngine(object):
@@ -57,7 +53,6 @@ class _PolicyEngine(object):
         # The same policy should be enforced even if the policy file is deleted/changed during a single goal state processing.
         self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
         if not self.policy_enforcement_enabled:
-            self._log_policy_event(msg="Policy enforcement is not enabled.")
             return
 
         self._policy = self.__get_policy()
@@ -77,35 +72,35 @@ class _PolicyEngine(object):
     @staticmethod
     def __get_policy_enforcement_enabled():
         """
-        Policy will be enabled if (1) policy file exists at _CUSTOM_POLICY_PATH and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
+        Policy will be enabled if (1) policy file exists at the expected location and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
         """
         # Policy should only be enabled if conf flag is true AND policy file is present.
-        policy_file_exists = os.path.exists(_CUSTOM_POLICY_PATH)
-        return conf.get_extension_policy_enabled() and policy_file_exists
+        return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
 
     @property
     def policy_enforcement_enabled(self):
         return self._policy_enforcement_enabled
 
-    def __get_policy(self):
+    @staticmethod
+    def __get_policy():
         """
         Load policy JSON object from policy file (CUSTOM_POLICY_PATH), return as a dict.
 
         Note that we should only call this function after validating that CUSTOM_POLICY_PATH exists (this is currently
         done in __init__).
         """
-        # TODO: Add schema validation for custom policy file and raise relevant error message to user.
-        with open(_CUSTOM_POLICY_PATH, 'r') as f:        # Open file in read-only mode.
-            self._log_policy_event("Custom policy file found at {0}. Using custom policy.".format(_CUSTOM_POLICY_PATH))
+        # TODO: Add schema validation for policy file and raise relevant error message to user.
+        with open(conf.get_policy_file_path(), 'r') as f:        # Open file in read-only mode.
+            _PolicyEngine._log_policy_event("Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'.".format(conf.get_policy_file_path()))
             try:
                 custom_policy = json.load(f)
             except ValueError as ex:
                 msg = "policy file does not conform to valid json syntax"
-                raise PolicyInvalidError(msg=msg, inner=ex)
+                raise InvalidPolicyError(msg=msg, inner=ex)
             except Exception as ex:
                 msg = "unable to load policy file"
-                raise PolicyInvalidError(msg=msg, inner=ex)
-            return self.__parse_policy(custom_policy)
+                raise InvalidPolicyError(msg=msg, inner=ex)
+            return _PolicyEngine.__parse_policy(custom_policy)
 
     @staticmethod
     def __parse_policy(custom_policy):
@@ -132,12 +127,12 @@ class _PolicyEngine(object):
         """
         def __validate_attribute_type(attribute_name, attribute_value, expected_type, parent_attribute_name=None):
             """
-            Helper method to raise PolicyInvalidError with useful error message.
+            Helper method to raise InvalidPolicyError with useful error message.
             """
             if not isinstance(attribute_value, expected_type):
                 # Error message should refer to "JSON" not "dict".
                 if expected_type == dict:
-                    expected_type_in_msg = "JSON"
+                    expected_type_in_msg = "object"
                 else:
                     expected_type_in_msg = expected_type.__name__
 
@@ -148,7 +143,7 @@ class _PolicyEngine(object):
                     msg = ("invalid type {0} for attribute '{1}' in section '{2}', please change to {3}."
                            .format(type(attribute_value).__name__, attribute_name, parent_attribute_name, expected_type_in_msg))
 
-                raise PolicyInvalidError(msg)
+                raise InvalidPolicyError(msg)
 
         # We use the default policy as a template, and replace any attributes provided in the custom policy.
         template = \

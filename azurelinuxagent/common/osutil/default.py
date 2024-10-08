@@ -369,8 +369,6 @@ class DefaultOSUtil(object):
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
 
-    def get_custom_policy_file_path(self):
-        return self.custom_policy_file_path
 
     def get_instance_id(self):
         """

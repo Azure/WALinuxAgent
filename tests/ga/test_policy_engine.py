@@ -19,7 +19,7 @@ import os
 import json
 
 from tests.lib.tools import AgentTestCase
-from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, PolicyInvalidError, \
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, InvalidPolicyError, \
     _PolicyEngine, _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY, _DEFAULT_SIGNATURE_REQUIRED
 from tests.lib.tools import patch
 from azurelinuxagent.common.protocol.restapi import Extension
@@ -33,12 +33,12 @@ class _TestPolicyBase(AgentTestCase):
     """
     def setUp(self):
         AgentTestCase.setUp(self)
-        self.custom_policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
+        self.policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
 
         # Patch attributes to enable policy feature
-        self.patch_custom_policy_path = patch('azurelinuxagent.ga.policy.policy_engine._CUSTOM_POLICY_PATH',
-                                              new=self.custom_policy_path)
-        self.patch_custom_policy_path.start()
+        self.patch_policy_path = patch('azurelinuxagent.common.conf.get_policy_file_path',
+                                       return_value=str(self.policy_path))
+        self.patch_policy_path.start()
         self.patch_conf_flag = patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
                                      return_value=True)
         self.patch_conf_flag.start()
@@ -48,7 +48,7 @@ class _TestPolicyBase(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def _create_policy_file(self, policy):
-        with open(self.custom_policy_path, mode='w') as policy_file:
+        with open(self.policy_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
             policy_file.flush()
 
@@ -65,17 +65,17 @@ class TestPolicyEngine(_TestPolicyBase):
                 "extensionPolicies": {
         """
         for policy in [incomplete_policy, ""]:
-            with open(self.custom_policy_path, mode='w') as policy_file:
+            with open(self.policy_path, mode='w') as policy_file:
                 policy_file.write(policy)
                 policy_file.flush()
-            with self.assertRaises(PolicyInvalidError, msg="Invalid json in policy file should raise error."):
+            with self.assertRaises(InvalidPolicyError, msg="Invalid json in policy file should raise error."):
                 _PolicyEngine()
 
     def test_policy_enforcement_should_be_enabled_when_policy_file_exists_and_conf_flag_true(self):
         """
         When conf flag is set to true and policy file is present at expected location, feature should be enabled.
         """
-        # Create dummy policy file at the expected path to enable feature.
+        # Create policy file with empty policy object at the expected path to enable feature.
         self._create_policy_file({})
         engine = _PolicyEngine()
         self.assertTrue(engine.policy_enforcement_enabled,
@@ -113,7 +113,7 @@ class TestPolicyEngine(_TestPolicyBase):
                 }
             }
         self._create_policy_file(policy)
-        with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
+        with self.assertRaises(InvalidPolicyError, msg="String used instead of boolean, should raise error."):
             _PolicyEngine()
 
     def test_should_raise_error_if_signatureRequired_is_string(self):
@@ -141,7 +141,7 @@ class TestPolicyEngine(_TestPolicyBase):
             }
         for policy in [policy_individual, policy_global]:
             self._create_policy_file(policy)
-            with self.assertRaises(PolicyInvalidError, msg="String used instead of boolean, should raise error."):
+            with self.assertRaises(InvalidPolicyError, msg="String used instead of boolean, should raise error."):
                 _PolicyEngine()
 
     def test_should_raise_error_if_individual_extension_policy_is_not_dict(self):
@@ -157,7 +157,7 @@ class TestPolicyEngine(_TestPolicyBase):
                 }
             }
         self._create_policy_file(policy)
-        with self.assertRaises(PolicyInvalidError, msg="Individual extension policy is not a dict, should raise error."):
+        with self.assertRaises(InvalidPolicyError, msg="Individual extension policy is not a dict, should raise error."):
             _PolicyEngine()
 
     def test_should_raise_error_if_extensions_is_not_dict(self):
@@ -171,7 +171,7 @@ class TestPolicyEngine(_TestPolicyBase):
                 }
             }
         self._create_policy_file(policy)
-        with self.assertRaises(PolicyInvalidError, msg="List used instead of dict, should raise error."):
+        with self.assertRaises(InvalidPolicyError, msg="List used instead of dict, should raise error."):
             _PolicyEngine()
 
     def test_policy_should_be_enabled_even_if_policy_file_deleted(self):
@@ -181,7 +181,7 @@ class TestPolicyEngine(_TestPolicyBase):
         self._create_policy_file({})
         engine = _PolicyEngine()
         self.assertTrue(engine.policy_enforcement_enabled)
-        os.remove(self.custom_policy_path)
+        os.remove(self.policy_path)
         self.assertTrue(engine.policy_enforcement_enabled)
 
     def test_should_parse_policy_successfully(self):
