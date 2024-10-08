@@ -20,7 +20,6 @@ from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
-from tests_e2e.tests.lib.logging import log
 
 
 class AgentFirewall(AgentVmTest):
