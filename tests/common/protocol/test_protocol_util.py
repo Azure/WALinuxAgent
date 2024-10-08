@@ -152,7 +152,8 @@ class TestProtocolUtil(AgentTestCase):
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
-    def test_get_protocol_wireserver_to_wireserver_update_removes_metadataserver_artifacts(self, mock_enable_firewall, mock_get_lib_dir, _):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_get_protocol_wireserver_to_wireserver_update_removes_metadataserver_artifacts(self, _, mock_enable_firewall, mock_get_lib_dir, __):
         """
         This is for testing that agent upgrade from WireServer to WireServer protocol
         will clean up leftover MDS Certificates (from a previous Metadata Server to Wireserver
@@ -175,26 +176,25 @@ class TestProtocolUtil(AgentTestCase):
         mock_get_lib_dir.return_value = dir
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
-        protocol_util.osutil = MagicMock()
-        protocol_util.osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
         # Run
-        protocol_util.get_protocol()
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            protocol_util.get_protocol()
 
         # Check MDS Certs do not exist
         for mds_cert_path in mds_cert_paths:
             self.assertFalse(os.path.exists(mds_cert_path))
 
         # Check firewall rules was reset
-        self.assertEqual(1, protocol_util.osutil.remove_firewall.call_count, "remove_firewall should be called once")
-        self.assertEqual(1, protocol_util.osutil.enable_firewall.call_count, "enable_firewall should be called once")
+        self.assertEqual(1, mock_remove_firewall.call_count, "remove_firewall should be called once")
 
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     @patch('azurelinuxagent.common.conf.enable_firewall')
     @patch('azurelinuxagent.common.protocol.wire.WireClient')
-    def test_get_protocol_metadataserver_to_wireserver_update_removes_metadataserver_artifacts(self, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, _):
+    @patch("azurelinuxagent.common.protocol.metadata_server_migration_util._get_firewall_will_wait", return_value="-w")
+    def test_get_protocol_metadataserver_to_wireserver_update_removes_metadataserver_artifacts(self, _, mock_wire_client, mock_enable_firewall, mock_get_lib_dir, __):
         """
         This is for testing that agent upgrade from MetadataServer to WireServer protocol
         will clean up leftover MDS Certificates and reset firewall rules. Also check that
@@ -216,13 +216,13 @@ class TestProtocolUtil(AgentTestCase):
         mock_enable_firewall.return_value = True
         protocol_util = get_protocol_util()
         protocol_util.osutil = MagicMock()
-        protocol_util.osutil.enable_firewall.return_value = (MagicMock(), MagicMock())
         mock_wire_client.return_value = MagicMock()
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
         # Run
-        protocol_util.get_protocol()
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            protocol_util.get_protocol()
 
         # Check MDS Certs do not exist
         for mds_cert_path in mds_cert_paths:
@@ -234,13 +234,12 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules was reset
-        self.assertEqual(1, protocol_util.osutil.remove_firewall.call_count, "remove_firewall should be called once")
-        self.assertEqual(1, protocol_util.osutil.enable_firewall.call_count, "enable_firewall should be called once")
+        self.assertEqual(1, mock_remove_firewall.call_count, "remove_firewall should be called once")
 
         # Check Protocol File is updated to WireProtocol
         with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:
             self.assertEqual(f.read(), WIRE_PROTOCOL_NAME)
-        
+
         # Check Endpoint file is updated to WireServer IP
         with open(os.path.join(dir, ENDPOINT_FILE_NAME), 'r') as f:
             self.assertEqual(f.read(), KNOWN_WIRESERVER_IP)
@@ -264,7 +263,8 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler.endpoint = KNOWN_WIRESERVER_IP
 
         # Run
-        protocol_util.get_protocol()
+        with patch("azurelinuxagent.common.protocol.metadata_server_migration_util._remove_firewall") as mock_remove_firewall:
+            protocol_util.get_protocol()
 
         # Check that WireServer Certs exist
         ws_cert_paths = [os.path.join(dir, ws_cert) for ws_cert in TestProtocolUtil.WIRESERVER_CERTIFICATES]
@@ -272,8 +272,7 @@ class TestProtocolUtil(AgentTestCase):
             self.assertTrue(os.path.isfile(ws_cert_path))
 
         # Check firewall rules were not reset
-        protocol_util.osutil.remove_firewall.assert_not_called()
-        protocol_util.osutil.enable_firewall.assert_not_called()
+        mock_remove_firewall.assert_not_called()
 
         # Check Protocol File is updated to WireProtocol
         with open(os.path.join(dir, PROTOCOL_FILE_NAME), "r") as f:

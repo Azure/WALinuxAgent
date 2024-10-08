@@ -490,40 +490,22 @@ class TestAgent(AgentTestCase):
             CollectLogsHandler.disable_monitor_cgroups_check()
 
     def test_it_should_parse_setup_firewall_properly(self):
-
-        test_firewall_meta = {
-            "dst_ip": "1.2.3.4",
-            "uid": "9999",
-            "wait": "-w"
-        }
-        cmd, _, _, _, _, _, firewall_metadata = parse_args(
-            ["-{0}".format(AgentCommands.SetupFirewall), "-dst_ip=1.2.3.4", "-uid=9999", "-w"])
+        cmd, _, _, _, _, _, wire_server_address = parse_args(["-{0}={1}".format(AgentCommands.SetupFirewall, "1.2.3.4")])
 
         self.assertEqual(cmd, AgentCommands.SetupFirewall)
-        self.assertEqual(firewall_metadata, test_firewall_meta)
+        self.assertEqual(wire_server_address, "1.2.3.4")
 
         # Defaults to None if command is different
-        test_firewall_meta = {
-            "dst_ip": None,
-            "uid": None,
-            "wait": ""
-        }
-        cmd, _, _, _, _, _, firewall_metadata = parse_args(["-{0}".format(AgentCommands.Help)])
+        cmd, _, _, _, _, _, wire_server_address = parse_args(["-{0}".format(AgentCommands.Help)])
         self.assertEqual(cmd, AgentCommands.Help)
-        self.assertEqual(test_firewall_meta, firewall_metadata)
+        self.assertEqual(None, wire_server_address)
 
     def test_it_should_ignore_empty_arguments(self):
 
-        test_firewall_meta = {
-            "dst_ip": "1.2.3.4",
-            "uid": "9999",
-            "wait": ""
-        }
-        cmd, _, _, _, _, _, firewall_metadata = parse_args(
-            ["-{0}".format(AgentCommands.SetupFirewall), "-dst_ip=1.2.3.4", "-uid=9999", ""])
+        cmd, _, _, _, _, _, wire_server_address = parse_args(["-{0}={1}".format(AgentCommands.SetupFirewall, "1.2.3.4"), ""])
 
         self.assertEqual(cmd, AgentCommands.SetupFirewall)
-        self.assertEqual(firewall_metadata, test_firewall_meta)
+        self.assertEqual(wire_server_address, "1.2.3.4")
 
     def test_agent_usage_message(self):
         message = usage()

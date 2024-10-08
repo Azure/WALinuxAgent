@@ -22,8 +22,7 @@ from assertpy import fail
 
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.firewall_helpers import execute_cmd_return_err_code, \
-    firewalld_service_running, verify_all_firewalld_rules_exist
+from tests_e2e.tests.lib.firewall_manager import Firewalld
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 
@@ -36,9 +35,11 @@ def verify_network_setup_service_enabled():
     service_name = "{0}-network-setup.service".format(agent_name)
     cmd = ["systemctl", "is-enabled", service_name]
 
-    def op(cmd):
-        exit_code, output = execute_cmd_return_err_code(cmd)
-        return exit_code == 0 and output.rstrip() == "enabled"
+    def op(command):
+        try:
+            return shellutil.run_command(command).rstrip() == "enabled"
+        except shellutil.CommandError:
+            return False
 
     try:
         status = retry_if_false(lambda: op(cmd), attempts=5, delay=30)
@@ -55,11 +56,10 @@ def verify_network_setup_service_enabled():
 def verify_firewall_service_running():
     log.info("Ensure test agent initialize the firewalld/network service setup")
 
-    # Check if firewall active on the Vm
-    log.info("Checking if firewall service is active on the VM")
-    if firewalld_service_running():
-        # Checking if firewalld rules are present in rule set if firewall service is active
-        verify_all_firewalld_rules_exist()
+    log.info("Checking if the firewalld service is active on the VM")
+    if Firewalld.is_service_running():
+        # Checking if firewalld rules are present in the rule set if firewall service is active
+        Firewalld().assert_all_rules_are_set()
     else:
         # Checking if network-setup service is enabled if firewall service is not active
         log.info("Checking if network-setup service is enabled by the agent since firewall service is not active")
