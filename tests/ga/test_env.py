@@ -167,9 +167,9 @@ class TestEnableFirewall(AgentTestCase):
             enable_firewall = EnableFirewall('168.63.129.16')
 
             test_cases = [  # Exit codes for the "-C" (check) command
-                # {"accept_dns": 1, "accept": 0, "drop": 0, "legacy": 0},
-                # {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
-                # {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
+                {"accept_dns": 1, "accept": 0, "drop": 0, "legacy": 0},
+                {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
+                {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
                 {"accept_dns": 1, "accept": 1, "drop": 1, "legacy": 0},
             ]
 
