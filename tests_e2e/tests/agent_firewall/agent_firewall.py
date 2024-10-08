@@ -33,9 +33,7 @@ class AgentFirewall(AgentVmTest):
         self._ssh_client = self._context.create_ssh_client()
 
     def run(self):
-        log.info("Checking firewall rules added by the agent")
         self._run_remote_test(self._ssh_client, f"agent_firewall-verify_all_firewall_rules.py --user {self._context.username}", use_sudo=True)
-        log.info("Successfully verified all rules present and working as expected.")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         return [
