@@ -392,13 +392,11 @@ class NfTables(FirewallManager):
         return self._version
 
     def setup(self):
-        shellutil.run_command(["nft", "add", "table", "ip", "walinuxagent"])
-        shellutil.run_command(["nft", "add", "chain", "ip", "walinuxagent", "output", "{", "type", "filter", "hook", "output", "priority", "0", ";", "policy", "accept", ";", "}"])
-        shellutil.run_command([
-            "nft", "add", "rule", "ip", "walinuxagent", "output", "ip", "daddr", self._wire_server_address,
-            "tcp", "dport", "!=", "53",
-            "skuid", "!=", str(os.getuid()),
-            "ct", "state", "invalid,new", "counter", "drop"])
+        shellutil.run_command(["nft", "-f", "-"], input="""
+            add table ip walinuxagent
+            add chain ip walinuxagent output {{ type filter hook output priority 0 ; policy accept ; }}
+            add rule ip walinuxagent output ip daddr {0} tcp dport != 53 skuid != {1} ct state invalid,new counter drop
+        """.format(self._wire_server_address, os.getuid()))
 
     def remove(self):
         shellutil.run_command(["nft", "delete", "table", "walinuxagent"])
