@@ -90,15 +90,21 @@ echo "Finally online, Time: $(date --utc +%FT%T.%3NZ)"
 echo "Trying to contact Wireserver as $USER to see if accessible"
 
 echo ""
-echo "IPTables before accessing Wireserver"
-sudo iptables -t security -L -nxv -w
+echo "Firewall configuration before accessing Wireserver:"
+if command -v iptables; then
+  sudo iptables -t security -L -nxv -w
+else
+  sudo nft list table walinuxagent
+fi
 echo ""
 
 WIRE_IP=$(cat /var/lib/waagent/WireServerEndpoint 2>/dev/null || echo '168.63.129.16' | tr -d '[:space:]')
-if command -v wget >/dev/null 2>&1; then
-    wget --tries=3 "http://$WIRE_IP/?comp=versions" --timeout=5 -O "/tmp/wire-versions-$USER.xml"
-else
+if command -v curl >/dev/null 2>&1; then
     curl --retry 3 --retry-delay 5 --connect-timeout 5 "http://$WIRE_IP/?comp=versions" -o "/tmp/wire-versions-$USER.xml"
+elif command -v wget >/dev/null 2>&1; then
+    wget --tries=3 "http://$WIRE_IP/?comp=versions" --timeout=5 -O "/tmp/wire-versions-$USER.xml"else
+else
+    http_get.py "http://168.63.129.16/?comp=versions" --timeout 5 --delay 5 --tries 3
 fi
 WIRE_EC=$?
 echo "ExitCode: $WIRE_EC"
@@ -108,9 +114,9 @@ if [[ "$USER" != "root" && "$WIRE_EC" == 0  ]]; then
 fi
 
 if [[ "$USER" != "root" ]]; then
-echo ""
-echo "checking tcp traffic to wireserver port 53 for non-root user ($USER)"
-echo -n 2>/dev/null < /dev/tcp/$WIRE_IP/53 && echo 0 || echo 1  # Establish network connection for port 53
-TCP_EC=$?
-echo "TCP 53 Connection ExitCode: $TCP_EC"
+  echo ""
+  echo "checking tcp traffic to wireserver port 53 for non-root user ($USER)"
+  echo -n 2>/dev/null < /dev/tcp/$WIRE_IP/53 && echo 0 || echo 1  # Establish network connection for port 53
+  TCP_EC=$?
+  echo "TCP 53 Connection ExitCode: $TCP_EC"
 fi

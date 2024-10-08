@@ -111,7 +111,6 @@ class WALAEventOperation:
     NoExec = "NoExec"
     OSInfo = "OSInfo"
     OpenSsl = "OpenSsl"
-    Partition = "Partition"
     PersistFirewallRules = "PersistFirewallRules"
     Policy = "Policy"
     ProvisionAfterExtensions = "ProvisionAfterExtensions"
@@ -126,7 +125,6 @@ class WALAEventOperation:
     ReportStatusExtended = "ReportStatusExtended"
     ResetFirewall = "ResetFirewall"
     Restart = "Restart"
-    SequenceNumberMismatch = "SequenceNumberMismatch"
     SetCGroupsLimits = "SetCGroupsLimits"
     SkipUpdate = "SkipUpdate"
     StatusProcessing = "StatusProcessing"
@@ -331,10 +329,10 @@ class CollectOrReportEventDebugInfo(object):
         report_dropped_events_error(self.__unicode_error_count, self.__unicode_errors, self.__unicode_error_event)
 
     @staticmethod
-    def _update_errors_and_get_count(error_count, errors, error):
+    def _update_errors_and_get_count(error_count, errors, error_msg):
         error_count += 1
         if len(errors) < CollectOrReportEventDebugInfo.__MAX_ERRORS_TO_REPORT:
-            errors.add("{0}: {1}".format(ustr(error), traceback.format_exc()))
+            errors.add("{0}: {1}".format(ustr(error_msg), traceback.format_exc()))
         return error_count
 
     def update_unicode_error(self, unicode_err):
@@ -693,6 +691,30 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
                            log_event=log_event)
 
 
+def info(op, fmt, *args):
+    """
+     Creates a telemetry event and logs the message as INFO.
+    """
+    logger.info(fmt, *args)
+    add_event(op=op, message=fmt.format(*args), is_success=True)
+
+
+def warn(op, fmt, *args):
+    """
+    Creates a telemetry event and logs the message as WARNING.
+    """
+    logger.warn(fmt, *args)
+    add_event(op=op, message="[WARNING] " + fmt.format(*args), is_success=False, log_event=False)
+
+
+def error(op, fmt, *args):
+    """
+    Creates a telemetry event and logs the message as ERROR.
+    """
+    logger.error(fmt, *args)
+    add_event(op=op, message=fmt.format(*args), is_success=False, log_event=False)
+
+
 def add_log_event(level, message, forced=False, reporter=__event_logger__):
     """
     :param level: LoggerLevel of the log event
@@ -750,9 +772,9 @@ def dump_unhandled_err(name):
         last_type = getattr(sys, 'last_type')
         last_value = getattr(sys, 'last_value')
         last_traceback = getattr(sys, 'last_traceback')
-        error = traceback.format_exception(last_type, last_value,
+        trace = traceback.format_exception(last_type, last_value,
                                            last_traceback)
-        message = "".join(error)
+        message = "".join(trace)
         add_event(name, is_success=False, message=message,
                   op=WALAEventOperation.UnhandledError)
 
