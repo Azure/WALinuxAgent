@@ -531,7 +531,6 @@ class EventLogger(object):
         :param str instance: For instanced metrics, the instance identifier (filesystem name, cpu core#, etc.)
         :param value: Value of the metric
         :param bool log_event: If true, log the collected metric in the agent log
-        :param immediate_flush: If true, flush the event to wireserver immediately
         """
         if log_event:
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
