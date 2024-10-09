@@ -217,21 +217,20 @@ class TestNft(AgentTestCase):
             firewall = NfTables('168.63.129.16')
             firewall.setup()
 
-            self.assertEqual(
-                [
-                    mock_nft.get_add_command("table"),
-                    mock_nft.get_add_command("chain"),
-                    mock_nft.get_add_command("rule"),
-                ],
-                mock_nft.call_list,
-                "Expected exactly 3 calls, to the add the walinuxagent table, output chain, and wireserver rule")
+            self.assertEqual(len(mock_nft.call_list), 1, "Expected exactly 1 call to execute a script to create the walinuxagent table; got {0}".format(mock_nft.call_list))
+
+            script = mock_nft.call_list[0]
+            self.assertIn("add table ip walinuxagent", script, "The setup script should to create the walinuxagent table. Script: {0}".format(script))
+            self.assertIn("add chain ip walinuxagent output", script, "The setup script should to create the output chain. Script: {0}".format(script))
+            self.assertIn("add rule ip walinuxagent output ", script, "The setup script should to create the rule to manage the output chain. Script: {0}".format(script))
+
 
     def test_remove_should_delete_the_walinuxagent_table(self):
         with MockNft() as mock_nft:
             firewall = NfTables('168.63.129.16')
             firewall.remove()
 
-            self.assertEqual([mock_nft.get_delete_command()], mock_nft.call_list, "Expected a call to delete the walinuxagent table")
+            self.assertEqual(['nft delete table walinuxagent'], mock_nft.call_list, "Expected a call to delete the walinuxagent table")
 
     def test_check_should_verify_all_rules(self):
         with MockNft() as mock_nft:
