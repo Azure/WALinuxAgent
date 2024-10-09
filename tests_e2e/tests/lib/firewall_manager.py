@@ -264,17 +264,19 @@ class NfTables(FirewallManager):
     }
 
     def get_missing_rules(self) -> List[str]:
-        missing = []
+        if "table ip walinuxagent" not in shellutil.run_command(["sudo", "nft", "list", "tables"]):
+            return [FirewallManager.ACCEPT_DNS, FirewallManager.ACCEPT, FirewallManager.DROP]
 
         try:
+            missing = []
+
             wireserver_rule = self._get_wireserver_rule()
             for rule, regexp in NfTables._rule_regexp.items():
                 if re.search(regexp, wireserver_rule) is None:
                     missing.append(rule)
+            return missing
         except FirewallConfigurationError:
-            missing = [FirewallManager.ACCEPT_DNS, FirewallManager.ACCEPT, FirewallManager.DROP]
-
-        return missing
+            return [FirewallManager.ACCEPT_DNS, FirewallManager.ACCEPT, FirewallManager.DROP]
 
     def check_rule(self, rule_name: str) -> bool:
         try:
