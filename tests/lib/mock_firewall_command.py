@@ -242,15 +242,10 @@ class MockNft(object):
         self._original_run_command = shellutil.run_command
         self._run_command_patcher = patch("azurelinuxagent.ga.firewall_manager.shellutil.run_command", side_effect=self._mock_run_command)
         #
-        # Return values for each nft command-line indexed by command name ("add", "delete", "list"). Each item is a (exit_code, stdout) tuple.
-        # These default values indicate success, and can be overridden with  the set_*_return_values() methods.
+        # Return values for the "delete" and "list" options of the nft command. Each item is a (exit_code, stdout) tuple.
+        # The default values below indicate success, and can be overridden with  the set_return_value() method.
         #
         self._return_values = {
-            "add": {
-                "table": (0, ''),  # nft add table ip walinuxagent
-                "chain": (0, ''),  # nft add chain ip walinuxagent output { type filter hook output priority 0 ; policy accept ; }
-                "rule": (0, ''),   # nft add rule ip walinuxagent output ip daddr 168.63.129.16 tcp dport != 53 skuid != 0 ct state invalid,new counter drop
-            },
             "delete": {
                 "table": (0, ''),  # nft delete table walinuxagent
             },
@@ -300,15 +295,17 @@ class MockNft(object):
     def _mock_run_command(self, command, *args, **kwargs):
         if command[0] == 'nft':
             command_string = " ".join(command)
+            if command_string == "nft --version":
+                # return a hardcoded version string and don't add the command to the call list
+                return self._original_run_command(['echo', 'nftables v1.0.2 (Lester Gooch)'], *args, **kwargs)
+            elif command_string == 'nft -f -':
+                # if we are executing an nft script, add the script to the call list and return success with no stdout (empty string)
+                script = self._original_run_command(['cat'], *args, **kwargs)
+                self._call_list.append(script)
+                return self._original_run_command(['echo', '-n'], *args, **kwargs)
+            # get the exit code and stdout from the pre-defined table of return values and add the command to the call list
             exit_code, stdout = self.get_return_value(command_string)
-            script = \
-"""
-cat << ..
-{0}
-..
-exit {1}
-""".format(stdout, exit_code)
-            command = ['sh', '-c', script]
+            command = ['sh', '-c', "echo '{0}'; exit {1}".format(stdout, exit_code)]
             self._call_list.append(command_string)
         return self._original_run_command(command, *args, **kwargs)
 
@@ -323,29 +320,18 @@ exit {1}
         """
         Changes the return values for the mocked command
         """
+        if command not in self._return_values or target not in self._return_values[command]:
+            raise Exception("Unexpected command: {0} {1}".format(command, target))
         self._return_values[command][target] = return_value
 
     def get_return_value(self, command):
         """
         Possible commands are:
 
-            nft add table ip walinuxagent
-            nft add chain ip walinuxagent output { type filter hook output priority 0 ; policy accept ; }
-            nft add rule ip walinuxagent output ip daddr 168.63.129.16 tcp  dport != 53 skuid != 0 ct state invalid,new counter drop
             nft delete table walinuxagent
             nft --json list tables
             nft --json  list table walinuxagent
         """
-        r = r"nft add (?P<target>table|chain|rule)" + \
-            r"(ip walinuxagent output " + \
-                r"(\{ type filter hook output priority 0 ; policy accept ; })" + \
-                r"|" + \
-                r"(ip daddr 168.63.129.16 tcp  dport != 53 skuid != \d+ ct state invalid,new counter drop)" + \
-            r")?"
-        match = re.match(r, command)
-        if match is not None:
-            target = match.group("target")
-            return self._return_values["add"][target]
         if command == "nft delete table walinuxagent":
             return self._return_values["delete"]["table"]
         match = re.match(r"nft --json list (?P<target>tables|table)( walinuxagent)?", command)
@@ -353,20 +339,6 @@ exit {1}
             target = match.group("target")
             return self._return_values["list"][target]
         raise Exception("Unexpected command: {0}".format(command))
-
-    @staticmethod
-    def get_add_command(target):
-        if target == "table":
-            return "nft add table ip walinuxagent"
-        if target == "chain":
-            return "nft add chain ip walinuxagent output { type filter hook output priority 0 ; policy accept ; }"
-        if target == "rule":
-            return "nft add rule ip walinuxagent output ip daddr 168.63.129.16 tcp dport != 53 skuid != {0} ct state invalid,new counter drop".format(os.getuid())
-        raise Exception("Unexpected command target: {0}".format(target))
-
-    @staticmethod
-    def get_delete_command():
-        return "nft delete table walinuxagent"
 
     @staticmethod
     def get_list_command(target):
