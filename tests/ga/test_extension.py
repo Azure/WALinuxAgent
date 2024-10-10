@@ -1583,7 +1583,7 @@ class TestExtension_Deprecated(TestExtensionBase):
                 ext_handler = ext_handlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
                 self.assertEqual(config_version, ext_handler.version, "config version.")
-                ExtHandlerInstance(ext_handler, protocol).decide_version()
+                ExtHandlerInstance(ext_handler, protocol).decide_version(None, None, None)
                 self.assertEqual(decision_version, ext_handler.version, "decision version.")
 
     def test_ext_handler_version_decide_between_minor_versions(self, *args):
@@ -1623,7 +1623,7 @@ class TestExtension_Deprecated(TestExtensionBase):
             ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
             ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
 
-            ext_handler_instance.decide_version()
+            ext_handler_instance.decide_version(None, None, None)
             self.assertEqual(expected_version, ext_handler.version)
 
     @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
