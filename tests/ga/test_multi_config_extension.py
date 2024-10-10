@@ -146,7 +146,6 @@ class _MultiConfigBaseTestClass(AgentTestCase):
 
     @contextlib.contextmanager
     def _setup_test_env(self, mock_manifest=False):
-
         with mock_wire_protocol(self.test_data) as protocol:
             def mock_http_put(url, *args, **_):
                 if HttpRequestPredicates.is_host_plugin_status_request(url):

@@ -81,7 +81,6 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MIN_EVENTS_TO_BATCH",
                        batching_queue_limit):
                 with patch("azurelinuxagent.ga.send_telemetry_events.SendTelemetryEventsHandler._MAX_TIMEOUT", timeout):
-
                     send_telemetry_events_handler.get_mock_wire_protocol = lambda: protocol
                     if start_thread:
                         send_telemetry_events_handler.start()
