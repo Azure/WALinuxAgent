@@ -1064,9 +1064,9 @@ class WireClient(object):
 
             # if it's important event flush, we use less throttle delay(to avoid long delay to complete this operation)) on throttling errors
             if flush:
-                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, telemetry_throttle_delay=TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS)
+                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, throttle_delay=TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS)
             else:
-                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, telemetry_throttle_delay=TELEMETRY_THROTTLE_DELAY_IN_SECONDS)
+                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, throttle_delay=TELEMETRY_THROTTLE_DELAY_IN_SECONDS)
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 

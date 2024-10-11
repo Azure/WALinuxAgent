@@ -373,7 +373,7 @@ def http_request(method,
                  max_retry=None,
                  retry_codes=None,
                  retry_delay=DELAY_IN_SECONDS,
-                 telemetry_throttle_delay=TELEMETRY_THROTTLE_DELAY_IN_SECONDS,
+                 throttle_delay=THROTTLE_DELAY_IN_SECONDS,
                  redact_data=False,
                  return_raw_response=False):
     """
@@ -438,10 +438,7 @@ def http_request(method,
             # -- Otherwise, compute a delay that is the product of the next
             #    item in the Fibonacci series and the initial delay value
             if was_throttled:
-                if _is_telemetry_req(url):
-                    delay = telemetry_throttle_delay
-                else:
-                    delay = THROTTLE_DELAY_IN_SECONDS
+                delay = throttle_delay
             else:
                 delay = _compute_delay(retry_attempt=attempt, delay=retry_delay)
 
@@ -481,8 +478,8 @@ def http_request(method,
                     # retry attempts
                     if _is_throttle_status(resp.status):
                         was_throttled = True
-                        # Today, THROTTLE_RETRIES set to big number as opposite to slow down the retry attempts
-                        # So, we are not using that for telemetrydata endpoint, instead we are using max_retry that was set in the caller for overall retry attempts
+                        # Today, THROTTLE_RETRIES is set to a large number (26) for retries, as opposed to backing off and attempting fewer retries.
+                        # However, for telemetry calls (due to throttle limit 15 calls per 15 seconds), we use max_retry set by the caller for overall retry attempts instead of THROTTLE_RETRIES.
                         if not _is_telemetry_req(url):
                             max_retry = max(max_retry, THROTTLE_RETRIES)
                     continue
@@ -579,7 +576,7 @@ def http_post(url,
               max_retry=None,
               retry_codes=None,
               retry_delay=DELAY_IN_SECONDS,
-              telemetry_throttle_delay=TELEMETRY_THROTTLE_DELAY_IN_SECONDS,
+              throttle_delay=THROTTLE_DELAY_IN_SECONDS,
               timeout=10):
 
     if max_retry is None:
@@ -593,7 +590,7 @@ def http_post(url,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay,
-                        telemetry_throttle_delay=telemetry_throttle_delay)
+                        throttle_delay=throttle_delay)
 
 
 def http_put(url,
