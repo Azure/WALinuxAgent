@@ -18,6 +18,7 @@
 import json
 import os
 import re
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
@@ -267,7 +268,7 @@ class _PolicyEngine(object):
                        .format(type(value).__name__, key))
             else:
                 msg = ("invalid type {0} for attribute '{1}' in section '{2}', please change to bool."
-                       .format(type(value).__name__, key, parent_attribute_name, parent_attribute_name))
+                       .format(type(value).__name__, key, parent_attribute_name))
 
             raise InvalidPolicyError(msg)
 
@@ -290,7 +291,7 @@ class _PolicyEngine(object):
         if value is None:
             return None
 
-        if not isinstance(value, str):
+        if not isinstance(value, (str, ustr)):
             raise InvalidPolicyError("invalid type '{0}' for attribute '{1}', please change to object.".format(type(value).__name__, key))
 
         return value
