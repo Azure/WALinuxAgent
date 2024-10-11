@@ -35,6 +35,7 @@ from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
 from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning, InvalidCgroupMountpointException
+from azurelinuxagent.ga.firewall_manager import FirewallManager
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -44,7 +45,6 @@ from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PA
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.networkutil import AddFirewallRules
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, \
     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
@@ -270,15 +270,16 @@ class Agent(object):
                 log_collector_monitor.stop()
 
     @staticmethod
-    def setup_firewall(firewall_metadata):
-
-        print("Setting up firewall for the WALinux Agent with args: {0}".format(firewall_metadata))
+    def setup_firewall(endpoint):
+        logger.set_prefix("Firewall")
+        threading.current_thread().name = "Firewall"
+        event.info(event.WALAEventOperation.Firewall, "Setting up firewall after boot. Endpoint: {0}", ustr(endpoint))
         try:
-            AddFirewallRules.add_iptables_rules(firewall_metadata['wait'], firewall_metadata['dst_ip'],
-                                                firewall_metadata['uid'])
-            print("Successfully set the firewall rules")
+            firewall_manager = FirewallManager.create(endpoint)
+            firewall_manager.setup()
+            event.info(event.WALAEventOperation.Firewall, "Successfully set the firewall rules")
         except Exception as error:
-            print("Unable to add firewall rules. Error: {0}".format(ustr(error)))
+            event.error(event.WALAEventOperation.Firewall, "Unable to add firewall rules. Error: {0}", ustr(error))
             sys.exit(1)
 
 
@@ -291,7 +292,7 @@ def main(args=None):
         args = []
     if len(args) <= 0:
         args = sys.argv[1:]
-    command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata = parse_args(args)
+    command, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_endpoint = parse_args(args)
     if command == AgentCommands.Version:
         version()
     elif command == AgentCommands.Help:
@@ -318,7 +319,7 @@ def main(args=None):
             elif command == AgentCommands.CollectLogs:
                 agent.collect_logs(log_collector_full_mode)
             elif command == AgentCommands.SetupFirewall:
-                agent.setup_firewall(firewall_metadata)
+                agent.setup_firewall(firewall_endpoint)
         except Exception as e:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
@@ -335,11 +336,7 @@ def parse_args(sys_args):
     debug = False
     conf_file_path = None
     log_collector_full_mode = False
-    firewall_metadata = {
-        "dst_ip": None,
-        "uid": None,
-        "wait": ""
-    }
+    endpoint = None
 
     regex_cmd_format = "^([-/]*){0}"
 
@@ -383,20 +380,17 @@ def parse_args(sys_args):
             cmd = AgentCommands.CollectLogs
         elif re.match(regex_cmd_format.format("full"), arg):
             log_collector_full_mode = True
-        elif re.match(regex_cmd_format.format(AgentCommands.SetupFirewall), arg):
-            cmd = AgentCommands.SetupFirewall
-        elif re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\\d.]{7,})"), arg):
-            firewall_metadata['dst_ip'] = re.match(regex_cmd_format.format("dst_ip=(?P<dst_ip>[\\d.]{7,})"), arg).group(
-                'dst_ip')
-        elif re.match(regex_cmd_format.format("uid=(?P<uid>[\\d]+)"), arg):
-            firewall_metadata['uid'] = re.match(regex_cmd_format.format("uid=(?P<uid>[\\d]+)"), arg).group('uid')
-        elif re.match(regex_cmd_format.format("(w|wait)$"), arg):
-            firewall_metadata['wait'] = "-w"
         else:
-            cmd = AgentCommands.Help
-            break
+            regex_cmd = regex_cmd_format.format("{0}=(?P<endpoint>[\\d.]{{7,}})".format(AgentCommands.SetupFirewall))
+            match = re.match(regex_cmd, arg)
+            if match is not None:
+                cmd = AgentCommands.SetupFirewall
+                endpoint = match.group('endpoint')
+            else:
+                cmd = AgentCommands.Help
+                break
 
-    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode, firewall_metadata
+    return cmd, force, verbose, debug, conf_file_path, log_collector_full_mode, endpoint
 
 
 def version():
@@ -416,11 +410,11 @@ def usage():
     """
     Return agent usage message
     """
-    s  = "\n"
+    s = "\n"
     s += ("usage: {0} [-verbose] [-force] [-help] "
            "-configuration-path:<path to configuration file>" 
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall [-dst_ip=<IP> -uid=<UID> [-w/--wait]]"
+           "-run-exthandlers|-show-configuration|-collect-logs [-full]|-setup-firewall=<IP>]"
            "").format(sys.argv[0])
     s += "\n"
     return s
