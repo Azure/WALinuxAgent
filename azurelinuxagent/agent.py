@@ -208,6 +208,8 @@ class Agent(object):
         else:
             logger.info("Running log collector mode normal")
 
+        LogCollector.initialize_telemetry()
+
         # Check the cgroups unit
         log_collector_monitor = None
         tracked_controllers = []
@@ -229,7 +231,7 @@ class Agent(object):
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
             if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
-                log_cgroup_warning("The Log Collector process is not in the proper cgroups", send_event=False)
+                log_cgroup_warning("The Log Collector process is not in the proper cgroups", send_event=True)
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
         try:
