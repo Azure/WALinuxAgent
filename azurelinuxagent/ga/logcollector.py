@@ -27,7 +27,7 @@ from datetime import datetime
 from heapq import heappush, heappop
 
 from azurelinuxagent.common.conf import get_lib_dir, get_ext_log_dir, get_agent_log_file
-from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters_and_protocol
+from azurelinuxagent.common.event import initialize_event_logger_vminfo_common_parameters, add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.logcollector_manifests import MANIFEST_NORMAL, MANIFEST_FULL
 
@@ -76,7 +76,6 @@ class LogCollector(object):
         self._must_collect_files = self._expand_must_collect_files()
         self._create_base_dirs()
         self._set_logger()
-        self._initialize_telemetry()
 
     @staticmethod
     def _mkdir(dirname):
@@ -104,7 +103,7 @@ class LogCollector(object):
         _LOGGER.setLevel(logging.INFO)
 
     @staticmethod
-    def _initialize_telemetry():
+    def initialize_telemetry():
         protocol = get_protocol_util().get_protocol(init_goal_state=False)
         protocol.client.reset_goal_state(goal_state_properties=GoalStateProperties.RoleConfig | GoalStateProperties.HostingEnv)
         # Initialize the common parameters for telemetry events
@@ -326,7 +325,9 @@ class LogCollector(object):
                 if e.errno == 2:    # [Errno 2] No such file or directory
                     _LOGGER.warning("File %s does not exist, skipping collection for this file", file_path)
 
-        _LOGGER.info("Uncompressed archive size is %s b", total_uncompressed_size)
+        msg = "Uncompressed archive size is {0} b".format(total_uncompressed_size)
+        _LOGGER.info(msg)
+        add_event(op=WALAEventOperation.LogCollection, message=msg)
 
         return final_files_to_collect, total_uncompressed_size
 

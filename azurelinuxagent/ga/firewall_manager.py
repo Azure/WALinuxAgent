@@ -72,19 +72,26 @@ class FirewallManager(object):
         """
         try:
             manager = IpTables(wire_server_address)
-            logger.info("Using iptables to manage firewall rules")
+            event.info(WALAEventOperation.Firewall, "Using iptables [version {0}] to manage firewall rules", manager.version)
             return manager
         except FirewallManagerNotAvailableError:
             pass
 
         try:
             manager = NfTables(wire_server_address)
-            logger.info("Using nftables to manage firewall rules")
+            event.info(WALAEventOperation.Firewall, "Using nft [version {0}] to manage firewall rules", manager.version)
             return manager
         except FirewallManagerNotAvailableError:
             pass
 
         raise FirewallManagerNotAvailableError("Cannot create a firewall manager; no known command-line tools are available")
+
+    @property
+    def version(self):
+        """
+        Returns the version of the underlying command-line tool.
+        """
+        raise NotImplementedError()
 
     def setup(self):
         """
@@ -277,19 +284,24 @@ class IpTables(_FirewallManagerMultipleRules):
             match = re.match(r"^[^\d.]*([\d.]+).*$", output)
             if match is None:
                 raise Exception('output of "--version": {0}'.format(output))
-            version = FlexibleVersion(match.group(1))
-            use_wait_option = version >= FlexibleVersion('1.4.21')
+            self._version = FlexibleVersion(match.group(1))
+            use_wait_option = self._version >= FlexibleVersion('1.4.21')
 
         except Exception as exception:
             if isinstance(exception, OSError) and exception.errno == errno.ENOENT:  # pylint: disable=no-member
                 raise FirewallManagerNotAvailableError("iptables is not available")
             event.warn(WALAEventOperation.Firewall, "Unable to determine version of iptables; will not use -w option. --version output: {0}", ustr(exception))
+            self._version = "unknown"
             use_wait_option = False
 
         if use_wait_option:
             self._base_command = ["iptables", "-w", "-t", "security"]
         else:
             self._base_command = ["iptables", "-t", "security"]
+
+    @property
+    def version(self):
+        return self._version
 
     def _execute_delete_command(self, command):
         """
@@ -346,6 +358,10 @@ class FirewallCmd(_FirewallManagerMultipleRules):
                 raise FirewallManagerNotAvailableError("nft is not available")
             self._version = "unknown"
 
+    @property
+    def version(self):
+        return self._version
+
     def _get_state_command(self):
         return ["firewall-cmd", "--permanent", "--direct", "--get-all-passthroughs"]
 
@@ -392,13 +408,11 @@ class NfTables(FirewallManager):
         return self._version
 
     def setup(self):
-        shellutil.run_command(["nft", "add", "table", "ip", "walinuxagent"])
-        shellutil.run_command(["nft", "add", "chain", "ip", "walinuxagent", "output", "{", "type", "filter", "hook", "output", "priority", "0", ";", "policy", "accept", ";", "}"])
-        shellutil.run_command([
-            "nft", "add", "rule", "ip", "walinuxagent", "output", "ip", "daddr", self._wire_server_address,
-            "tcp", "dport", "!=", "53",
-            "skuid", "!=", str(os.getuid()),
-            "ct", "state", "invalid,new", "counter", "drop"])
+        shellutil.run_command(["nft", "-f", "-"], input="""
+            add table ip walinuxagent
+            add chain ip walinuxagent output {{ type filter hook output priority 0 ; policy accept ; }}
+            add rule ip walinuxagent output ip daddr {0} tcp dport != 53 skuid != {1} ct state invalid,new counter drop
+        """.format(self._wire_server_address, os.getuid()))
 
     def remove(self):
         shellutil.run_command(["nft", "delete", "table", "walinuxagent"])

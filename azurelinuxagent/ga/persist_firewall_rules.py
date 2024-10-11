@@ -130,6 +130,7 @@ if __name__ == '__main__':
         # because on system reboot, all iptables rules are reset by firewalld.service, so it would be a no-op.
         # setup permanent firewalld rules
         firewall_manager = FirewallCmd(self._dst_ip)
+        event.info(WALAEventOperation.Firewall, "Using firewall-cmd [version {0}] to manage the persistent firewall rules", firewall_manager.version)
 
         try:
             firewall_manager.remove_legacy_rule()

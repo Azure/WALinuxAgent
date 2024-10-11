@@ -123,6 +123,8 @@ class WALAEventOperation:
     ReportEventUnicodeErrors = "ReportEventUnicodeErrors"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
+    RequestedStateDisabled = "RequestedStateDisabled"
+    RequestedVersionMismatch = "RequestedVersionMismatch"
     ResetFirewall = "ResetFirewall"
     Restart = "Restart"
     SetCGroupsLimits = "SetCGroupsLimits"

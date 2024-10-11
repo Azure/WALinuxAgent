@@ -169,7 +169,8 @@ class TestEnableFirewall(AgentTestCase):
             test_cases = [  # Exit codes for the "-C" (check) command
                 {"accept_dns": 1, "accept": 0, "drop": 0, "legacy": 0},
                 {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
-                {"accept_dns": 0, "accept": 0, "drop": 1, "legacy": 0},
+                {"accept_dns": 0, "accept": 1, "drop": 0, "legacy": 0},
+                {"accept_dns": 1, "accept": 1, "drop": 1, "legacy": 0},
             ]
 
             for test_case in test_cases:

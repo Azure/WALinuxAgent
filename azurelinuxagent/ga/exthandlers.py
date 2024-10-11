@@ -35,6 +35,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common import version
+from azurelinuxagent.common import event
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
@@ -279,6 +280,8 @@ class ExtHandlersHandler(object):
         # extensions on goal state change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
         self.__gs_aggregate_status = None
+        # CRP Activity ID for the goal state that is being processed. Initialized once we start processing the goal state.
+        self._gs_activity_id = '00000000-0000-0000-0000-000000000000'
 
         self.report_status_error_state = ErrorState()
 
@@ -293,6 +296,8 @@ class ExtHandlersHandler(object):
         try:
             gs = self.protocol.get_goal_state()
             egs = gs.extensions_goal_state
+            self._gs_activity_id = egs.activity_id
+
 
             # self.ext_handlers needs to be initialized before returning, since status reporting depends on it; also
             # we make a deep copy of the extensions, since changes are made to self.ext_handlers while processing the extensions
@@ -609,8 +614,7 @@ class ExtHandlersHandler(object):
             # If the extension version is unregistered and the customers wants to uninstall the extension,
             # we should let it go through even if the installed version doesnt exist in Handler manifest (PIR) anymore.
             # If target state is enabled and version not found in manifest, do not process the extension.
-            if ext_handler_i.decide_version(target_state=handler_state,
-                                            extension=extension) is None and handler_state == ExtensionRequestedState.Enabled:
+            if ext_handler_i.decide_version(target_state=handler_state, extension=extension, gs_activity_id=self._gs_activity_id) is None and handler_state == ExtensionRequestedState.Enabled:
                 handler_version = ext_handler_i.ext_handler.version
                 name = ext_handler_i.ext_handler.name
                 err_msg = "Unable to find version {0} in manifest for extension {1}".format(handler_version, name)
@@ -622,6 +626,8 @@ class ExtHandlersHandler(object):
             if handler_state == ExtensionRequestedState.Enabled:
                 self.handle_enable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Disabled:
+                # The "disabled" state is now deprecated. Send telemetry if it is still being used on any VMs
+                event.info(WALAEventOperation.RequestedStateDisabled, 'Goal State is requesting "disabled" state on {0} [Activity ID: {1}]',  ext_handler_i.ext_handler.name, self._gs_activity_id)
                 self.handle_disable(ext_handler_i, extension)
             elif handler_state == ExtensionRequestedState.Uninstall:
                 self.handle_uninstall(ext_handler_i, extension=extension)
@@ -1098,7 +1104,7 @@ class ExtHandlerInstance(object):
                         logger.warn("Exception occurred while attempting to remove file '{0}': {1}", f,
                                     cleanup_exception)
 
-    def decide_version(self, target_state=None, extension=None):
+    def decide_version(self, target_state, extension, gs_activity_id):
         self.logger.verbose("Decide which version to use")
         try:
             manifest = self.protocol.get_goal_state().fetch_extension_manifest(self.ext_handler.name, self.ext_handler.manifest_uris)
@@ -1143,6 +1149,11 @@ class ExtHandlerInstance(object):
         else:
             self.pkg = selected_pkg
             if self.pkg is not None:
+                if self.ext_handler.version != str(selected_pkg.version):
+                    # The Agent should not change the version requested by the Goal State. Send telemetry if this happens.
+                    event.info(
+                        WALAEventOperation.RequestedVersionMismatch,
+                        'Goal State requesting {0} version {1}, but Agent overriding with version {2} [Activity ID: {3}]',  self.ext_handler.name, self.ext_handler.version, selected_pkg.version, gs_activity_id)
                 self.ext_handler.version = str(selected_pkg.version)
 
         if self.pkg is not None:
