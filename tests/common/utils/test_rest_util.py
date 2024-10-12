@@ -661,6 +661,23 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_try_max_retries_when_telemetry_throttled(self, _http_request, _sleep):
+        # Ensure the code is a throttle code
+        self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
+        max_retries = 5
+        _http_request.side_effect = [
+                Mock(status=httpclient.SERVICE_UNAVAILABLE)
+                    for i in range(max_retries-1)  # pylint: disable=unused-variable
+            ] + [Mock(status=httpclient.OK)]
+
+        restutil.http_post("https://telemetrydata", data=None,
+                            max_retry=max_retries)
+        self.assertEqual(max_retries, _http_request.call_count)
+        self.assertEqual(max_retries-1, _sleep.call_count)
+
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_raises_for_resource_gone(self, _http_request, _sleep):
         _http_request.side_effect = [
             Mock(status=httpclient.GONE)

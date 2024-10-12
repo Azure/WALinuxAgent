@@ -99,7 +99,6 @@ def _get_update_handler(iterations=1, test_data=None, protocol=None, autoupdate_
     This function returns a mocked version of the UpdateHandler object to be used for testing. It will only run the
     main loop [iterations] no of times.
     """
-
     test_data = DATA_FILE if test_data is None else test_data
 
     with patch.object(HostPluginProtocol, "is_default_channel", False):
@@ -1256,7 +1255,7 @@ class UpdateHandlerRunTestCase(AgentTestCase):
                     with patch('azurelinuxagent.ga.update.get_collect_logs_handler') as mock_collect_logs:
                         with patch('azurelinuxagent.ga.update.get_send_telemetry_events_handler') as mock_telemetry_send_events:
                             with patch('azurelinuxagent.ga.update.get_collect_telemetry_events_handler') as mock_event_collector:
-                                with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                                with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters_and_protocol'):
                                     with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                         with mock_wire_protocol(DATA_FILE) as protocol:
                                             mock_exthandlers_handler = Mock()
@@ -1804,7 +1803,7 @@ class MonitorThreadTest(AgentTestCase):
                     with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler'):
                         with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                             with patch('azurelinuxagent.ga.agent_update_handler.get_agent_update_handler'):
-                                with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
+                                with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters_and_protocol'):
                                     with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=False):  # skip all cgroup stuff
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                             with patch('time.sleep'):
