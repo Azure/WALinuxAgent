@@ -159,7 +159,7 @@ class _PolicyEngine(object):
         Validate and return "policyVersion" attribute. If not a string in the format "x.y.z", raise InvalidPolicyError.
         If policy_version is greater than maximum supported version, raise InvalidPolicyError.
         """
-        version = self.__parse_string(policy, "policyVersion")
+        version = self.__parse_attribute(policy, "policyVersion", _POLICY_SCHEMA)
         if version is None:
             return
 
@@ -176,24 +176,22 @@ class _PolicyEngine(object):
         self._policy["policyVersion"] = version
 
     def __parse_extension_policies(self, policy):
-        extension_policies = self.__parse_dict(policy, "extensionPolicies")
+        extension_policies = self.__parse_attribute(policy, "extensionPolicies", _POLICY_SCHEMA)
         if extension_policies is not None:
             self.__validate_schema(extension_policies, _POLICY_SCHEMA["extensionPolicies"])
 
             # Parse allowlist policy
-            allowlist_policy = self.__parse_bool(extension_policies, "allowListedExtensionsOnly")
+            allowlist_policy = self.__parse_attribute(extension_policies, "allowListedExtensionsOnly", _POLICY_SCHEMA["extensionPolicies"])
             if allowlist_policy is not None:
                 self._policy["extensionPolicies"]["allowListedExtensionsOnly"] = allowlist_policy
 
             # Parse global signature policy
-            signature_policy = self.__parse_bool(extension_policies, "signatureRequired", "extensionPolicies")
+            signature_policy = self.__parse_attribute(extension_policies, "signatureRequired", _POLICY_SCHEMA["extensionPolicies"], "extensionPolicies")
             if signature_policy is not None:
                 self._policy["extensionPolicies"]["signatureRequired"] = signature_policy
 
             # Parse individual extension policies
             self.__parse_extensions(extension_policies)
-
-        return extension_policies
 
     def __parse_extensions(self, extensions_policy):
         """
@@ -209,25 +207,23 @@ class _PolicyEngine(object):
 
         If "signatureRequired" isn't provided, the global "signatureRequired" value will be used instead.
         """
-        extensions = self.__parse_dict(extensions_policy, "extensions")
+        extensions = self.__parse_attribute(extensions_policy, "extensions", _POLICY_SCHEMA["extensionPolicies"])
         if extensions is None:
             return
 
-        # Validate "extensions" dict against the schema
-        extensions_schema = _POLICY_SCHEMA["extensionPolicies"]["extensions"]
-        if not isinstance(extensions, dict):
-            raise InvalidPolicyError("invalid type {0} for attribute 'extensions', please change to object."
-                                     .format(type(extensions).__name__))
-
         # Parse "extensions" and update self._policy with specified attributes
         parsed_extensions_dict = {}
-        for (extension_name, individual_policy) in extensions.items():
-            self.__validate_schema(individual_policy, extensions_schema["<extensionName>"])
+        for extension_name, individual_policy in extensions.items():
+
+            # Validate each individual policy against the schema.
+            # We don't validate the schema of "extensions", because individual extensions names are not defined in the schema.
+            individual_policy_schema = _POLICY_SCHEMA["extensionPolicies"]["extensions"]["<extensionName>"]
             if not isinstance(individual_policy, dict):
                 raise InvalidPolicyError("invalid type {0} for attribute '{1}', please change to object."
                                          .format(type(individual_policy).__name__, extension_name))
+            self.__validate_schema(individual_policy, individual_policy_schema)
 
-            extension_signature_policy = _PolicyEngine.__parse_bool(individual_policy, "signatureRequired", extension_name)
+            extension_signature_policy = self.__parse_attribute(individual_policy, "signatureRequired", individual_policy_schema, extension_name)
             if extension_signature_policy is None:
                 extension_signature_policy = self._policy["extensionPolicies"]["signatureRequired"]
 
@@ -252,51 +248,45 @@ class _PolicyEngine(object):
                                          "and change or remove this attribute accordingly.".format(key))
 
     @staticmethod
-    def __parse_bool(policy, key, parent_attribute_name=None):
+    def __parse_attribute(policy, key, schema, parent_attribute_name=None):
         """
-        Raise error if policy[key] is not a boolean. Return none if the key does not exist.
-        For attributes that are used in multiple places (ex: "signatureRequired"), we specify the parent attribute in
+        Return policy[key], return None if the key does not exist in the policy.
+
+        Raise error if policy[key] does not match the expected value specified in the schema (schema[key])
+        For attributes that are used in multiple places (ex: "signatureRequired"), specify the parent attribute in
         the error message to avoid ambiguity.
         """
         value = policy.get(key)
         if value is None:
             return None
 
-        if not isinstance(value, bool):
+        expected_type = schema.get(key)
+
+        # don't recurse into nested dicts, just validate that the type is dict
+        if isinstance(expected_type, dict):
+            expected_type = dict
+        if expected_type == str:
+            expected_type = (str, ustr)
+
+        # Map from python types to the types we want to reference in error messages
+        type_in_err_msg = {
+            dict: "object",
+            (str, ustr): "string",
+            bool: "boolean"
+        }
+
+        # Raise error if attribute is not the expected type
+        if not isinstance(value, expected_type):
             if parent_attribute_name is None:
-                msg = ("invalid type {0} for attribute '{1}', please change to bool."
-                       .format(type(value).__name__, key))
+                msg = ("invalid type {0} for attribute '{1}', please change to {2}."
+                       .format(type(value).__name__, key, type_in_err_msg.get(expected_type)))
             else:
-                msg = ("invalid type {0} for attribute '{1}' in section '{2}', please change to bool."
-                       .format(type(value).__name__, key, parent_attribute_name))
+                msg = ("invalid type {0} for attribute '{1}' in section '{2}', please change to {3}."
+                       .format(type(value).__name__, key, parent_attribute_name,  type_in_err_msg.get(expected_type)))
 
             raise InvalidPolicyError(msg)
 
         return value
-
-    @staticmethod
-    def __parse_dict(policy, key):
-        value = policy.get(key)
-        if value is None:
-            return None
-
-        if not isinstance(value, dict):
-            raise InvalidPolicyError("invalid type '{0}' for attribute '{1}', please change to object.".format(type(value).__name__, key))
-
-        return value
-
-    @staticmethod
-    def __parse_string(policy, key):
-        value = policy.get(key)
-        if value is None:
-            return None
-
-        if not isinstance(value, (str, ustr)):
-            raise InvalidPolicyError("invalid type '{0}' for attribute '{1}', please change to object.".format(type(value).__name__, key))
-
-        return value
-
-
 
 
 class ExtensionPolicyEngine(_PolicyEngine):

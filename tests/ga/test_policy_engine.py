@@ -49,9 +49,11 @@ class _TestPolicyBase(AgentTestCase):
 
     def _create_policy_file(self, policy):
         with open(self.policy_path, mode='w') as policy_file:
-            json.dump(policy, policy_file, indent=4)
+            if isinstance(policy, dict):
+                json.dump(policy, policy_file, indent=4)
+            else:
+                policy_file.write(policy)
             policy_file.flush()
-
 
 class TestPolicyEngine(_TestPolicyBase):
     """
@@ -158,9 +160,7 @@ class TestPolicyEngine(_TestPolicyBase):
             '''
         ]
         for policy in cases:
-            with open(self.policy_path, mode='w') as policy_file:
-                policy_file.write(policy)
-                policy_file.flush()
+            self._create_policy_file(policy)
             with self.assertRaises(InvalidPolicyError, msg="Policy is not a valid json, should raise error: {0}.".format(policy)):
                 _PolicyEngine()
 
@@ -235,34 +235,45 @@ class TestPolicyEngine(_TestPolicyBase):
                 _PolicyEngine()
 
     def test_should_raise_error_if_extensions_is_not_dict(self):
-        policy = \
+
+        cases = [
             {
-                "policyVersion": "0.1.0",
                 "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": False,
-                    "extensions": []    # Should be a dict
+                    "extensions": []
+                }
+            },
+            {
+                "extensionPolicies": {
+                    "extensions": 0
                 }
             }
-        self._create_policy_file(policy)
-        with self.assertRaises(InvalidPolicyError, msg="List used instead of dict, should raise error."):
-            _PolicyEngine()
+        ]
+        for policy in cases:
+            self._create_policy_file(policy)
+            with self.assertRaises(InvalidPolicyError, msg="'extensions' attribute is not a dict, should raise error: {0}".format(policy)):
+                _PolicyEngine()
 
     def test_should_raise_error_if_individual_extension_policy_is_not_dict(self):
-        policy = \
+        cases = [
             {
-                "policyVersion": "0.1.0",
                 "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": False,
                     "extensions": {
-                        TEST_EXTENSION_NAME: ""     # Value should be a dict, not string.
+                        "Ext.Name": 0
+                    }
+                }
+            },
+            {
+                "extensionPolicies": {
+                    "extensions": {
+                        "Ext.Name": []
                     }
                 }
             }
-        self._create_policy_file(policy)
-        with self.assertRaises(InvalidPolicyError, msg="Individual extension policy is not a dict, should raise error."):
-            _PolicyEngine()
+        ]
+        for policy in cases:
+            self._create_policy_file(policy)
+            with self.assertRaises(InvalidPolicyError, msg="Individual extension policy is not a dict, should raise error."):
+                _PolicyEngine()
 
     def test_should_raise_error_for_unrecognized_attribute(self):
         # All cases below have either a typo or a random additional attribute.
