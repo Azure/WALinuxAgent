@@ -18,7 +18,6 @@
 import copy
 import json
 import os
-import re
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
@@ -31,7 +30,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 # Schema for policy file.
 _POLICY_SCHEMA = \
     {
-        "policyVersion": str,
+        "policyVersion": ustr,
         "extensionPolicies": {
             "allowListedExtensionsOnly": bool,
             "signatureRequired": bool,
@@ -88,7 +87,6 @@ class _PolicyEngine(object):
             return
 
         # Use a copy of the policy as a template. Update the template as we parse the custom policy.
-        # Update self._policy only if parsing completes successfully.
         template = copy.deepcopy(self._policy)
         custom_policy = self.__read_policy()
         self.__parse_policy(template, custom_policy)
@@ -140,6 +138,8 @@ class _PolicyEngine(object):
                 msg = "unable to read policy file"
                 raise InvalidPolicyError(msg=msg, inner=ex)
 
+            _PolicyEngine._log_policy_event(
+                "The following user-provided policy is being enforced: '{0}'.".format(custom_policy))
             return custom_policy
 
     @staticmethod
@@ -259,11 +259,9 @@ class _PolicyEngine(object):
             expected_type = schema.get(key)
             if isinstance(expected_type, dict):
                 expected_type = dict
-            if expected_type == str:
-                expected_type = (str, ustr)
             type_in_err_msg = {
                 dict: "object",
-                (str, ustr): "string",
+                ustr: "string",
                 bool: "boolean"
             }
 
