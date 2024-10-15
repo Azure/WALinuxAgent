@@ -153,6 +153,7 @@ class _PolicyEngine(object):
         """
         # Validate top level attributes and then parse each section of the custom policy.
         # Individual parsing functions are responsible for validating schema of that section (any nested dicts).
+        # Note that validation must happen before parsing.
         _PolicyEngine.__validate_schema(custom_policy, _POLICY_SCHEMA)
         _PolicyEngine.__parse_version(template, custom_policy)
         _PolicyEngine.__parse_extension_policies(template, custom_policy)
