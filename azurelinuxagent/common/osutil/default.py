@@ -158,7 +158,6 @@ class DefaultOSUtil(object):
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
 
-
     def get_instance_id(self):
         """
         Azure records a UUID as the instance ID
