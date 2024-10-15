@@ -25,6 +25,8 @@ from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+
 
 # Schema for policy file.
 _POLICY_SCHEMA = \
@@ -70,15 +72,6 @@ class _PolicyEngine(object):
     Implements base policy engine API.
     """
     def __init__(self):
-        """
-        _PolicyEngine should be initialized on a per-goal state basis. Policy enablement is checked and policy file is
-        read only during initialization. The same policy is enforced even if the policy file is deleted or changed
-        during a single goal state processing.
-        """
-        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
-        if not self.policy_enforcement_enabled:
-            return
-
         # Set defaults for policy
         self._policy = \
         {
@@ -90,10 +83,14 @@ class _PolicyEngine(object):
             }
         }
 
+        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
+        if not self.policy_enforcement_enabled:
+            return
+
         # Use a copy of the policy as a template. Update the template as we parse the custom policy.
         # Update self._policy only if parsing completes successfully.
         template = copy.deepcopy(self._policy)
-        custom_policy = self.__get_policy()
+        custom_policy = self.__read_policy()
         self.__parse_policy(template, custom_policy)
         self._policy = template
 
@@ -121,7 +118,7 @@ class _PolicyEngine(object):
         return self._policy_enforcement_enabled
 
     @staticmethod
-    def __get_policy():
+    def __read_policy():
         """
         Read customer-provided policy JSON file, load and return as a dict.
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
@@ -140,7 +137,7 @@ class _PolicyEngine(object):
                 msg = "policy file does not conform to valid json syntax"
                 raise InvalidPolicyError(msg=msg, inner=ex)
             except Exception as ex:
-                msg = "unable to load policy file"
+                msg = "unable to read policy file"
                 raise InvalidPolicyError(msg=msg, inner=ex)
 
             return custom_policy
@@ -153,9 +150,6 @@ class _PolicyEngine(object):
             - if an attribute is not provided, use the default value
             - if an unrecognized attribute is present in custom_policy (not defined in _POLICY_SCHEMA), raise an error
             - if an attribute does not match the type specified in the schema, raise an error
-
-        If provided, the "extensions" attribute will be converted to a case-folded dict. CRP allows extensions to be any
-        case, so we use case-folded dict to allow for case-insensitive lookup of individual extension policies.
         """
         # Validate top level attributes and then parse each section of the custom policy.
         # Individual parsing functions are responsible for validating schema of that section (any nested dicts).
@@ -173,13 +167,14 @@ class _PolicyEngine(object):
         if version is None:
             return
 
-        pattern = r'^\d+\.\d+\.\d+$'
-        if not re.match(pattern, version):
-            raise InvalidPolicyError("invalid value for attribute 'policyVersion' attribute 'policyVersion' is expected to be in format 'major.minor.patch' "
-                                     "(e.g., '1.0.0'). Please change to a valid value.")
-        version_tuple = tuple(map(int, version.split(".")))
+        try:
+            flexible_version = FlexibleVersion(version)
+        except ValueError:
+            raise InvalidPolicyError(
+                "invalid value for attribute 'policyVersion' attribute 'policyVersion' is expected to be in format 'major.minor.patch' "
+                                         "(e.g., '1.0.0'). Please change to a valid value.")
 
-        if tuple(map(int, _MAX_SUPPORTED_POLICY_VERSION.split("."))) < version_tuple:
+        if FlexibleVersion(_MAX_SUPPORTED_POLICY_VERSION) < flexible_version:
             raise InvalidPolicyError("policy version '{0}' is not supported. The agent supports policy versions up to '{1}'. Please provide a compatible policy version."
                                      .format(version, _MAX_SUPPORTED_POLICY_VERSION))
 
@@ -218,6 +213,8 @@ class _PolicyEngine(object):
         }
 
         If "signatureRequired" isn't provided, the global "signatureRequired" value will be used instead.
+        The "extensions" attribute will be converted to a case-folded dict. CRP allows extensions to be any
+        case, so we use case-folded dict to allow for case-insensitive lookup of individual extension policies.
         """
         extensions = extensions_policy.get("extensions")
         if extensions is None:
@@ -320,6 +317,3 @@ class ExtensionPolicyEngine(_PolicyEngine):
             return global_signature_required
         else:
             return individual_policy.get("signatureRequired")
-
-    # TODO: Consider adding a function should_download_extension() combining should_allow_extension() and
-    # should_enforce_signature_validation(), such that caller function only needs to make one call.

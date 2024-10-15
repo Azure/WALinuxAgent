@@ -55,6 +55,18 @@ class _TestPolicyBase(AgentTestCase):
                 policy_file.write(policy)
             policy_file.flush()
 
+    def _run_test_cases_should_fail_to_parse(self, cases, assert_msg):
+        """
+        Cases should be a list of policies.
+        For each policy in the list, we create a policy file, initialize policy engine, and assert that InvalidPolicyError
+        is raised.
+        """
+        for policy in cases:
+            self._create_policy_file(policy)
+            msg = "invalid policy should not have parsed successfully: {0}. Policy: {1}".format(assert_msg, policy)
+            with self.assertRaises(InvalidPolicyError, msg=msg):
+                _PolicyEngine()
+
 class TestPolicyEngine(_TestPolicyBase):
     """
     Test policy enablement and parsing logic for _PolicyEngine.
@@ -159,41 +171,36 @@ class TestPolicyEngine(_TestPolicyBase):
             { not_a_string: ""}
             '''
         ]
-        for policy in cases:
-            self._create_policy_file(policy)
-            with self.assertRaises(InvalidPolicyError, msg="Policy is not a valid json, should raise error: {0}.".format(policy)):
-                _PolicyEngine()
+        self._run_test_cases_should_fail_to_parse(cases, "not a valid json")
 
     def test_should_raise_error_for_invalid_policy_version(self):
         cases = [
             {"policyVersion": "1.2.a"},
-            {"policyVersion": "0.0.0.1"},
             {"policyVersion": 0},
-            {"policyVersion": "0"},
+            {"policyVersion": None}
         ]
-        for policy in cases:
-            self._create_policy_file(policy)
-            with self.assertRaises(InvalidPolicyError, msg="Invalid policy version {0}, should have raised error.".format(policy.get("policyVersion"))):
-                _PolicyEngine()
+        self._run_test_cases_should_fail_to_parse(cases, "policy version invalid")
 
     def test_should_raise_error_for_unsupported_policy_version(self):
-        policy = {"policyVersion": "9.9.9"}
-        self._create_policy_file(policy)
-        with self.assertRaises(InvalidPolicyError, msg="Policy version is greater than max supported verison, should have raised error."):
-            _PolicyEngine()
+        cases = [
+            {"policyVersion": "9.9.9"},
+            {"policyVersion": "9"}
+        ]
+        self._run_test_cases_should_fail_to_parse(cases, "agent does not support policy version")
 
     def test_should_raise_error_if_extensions_policy_is_not_dict(self):
-        policy = \
+        cases = [
             {
-                "policyVersion": "0.1.0",
                 "extensionPolicies": ""
+            },
+            {
+                "extensionPolicies": None
             }
-        self._create_policy_file(policy)
-        with self.assertRaises(InvalidPolicyError, msg="extensionPolicies is not a dict, should raise error."):
-            _PolicyEngine()
+        ]
+        self._run_test_cases_should_fail_to_parse(cases, "extensionPolicies is not a dict")
 
     def test_should_raise_error_if_allowListedExtensionsOnly_is_not_bool(self):
-        policy = \
+        cases = [
             {
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
@@ -202,12 +209,11 @@ class TestPolicyEngine(_TestPolicyBase):
                     "extensions": {}
                 }
             }
-        self._create_policy_file(policy)
-        with self.assertRaises(InvalidPolicyError, msg="String used instead of boolean, should raise error."):
-            _PolicyEngine()
+        ]
+        self._run_test_cases_should_fail_to_parse(cases, "allowListedExtensionsOnly is not a bool")
 
     def test_should_raise_error_if_signatureRequired_is_not_bool(self):
-        policy_individual = \
+        cases = [
             {
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
@@ -219,8 +225,7 @@ class TestPolicyEngine(_TestPolicyBase):
                         }
                     }
                 }
-            }
-        policy_global = \
+            },
             {
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
@@ -229,13 +234,10 @@ class TestPolicyEngine(_TestPolicyBase):
                     "extensions": {}
                 }
             }
-        for policy in [policy_individual, policy_global]:
-            self._create_policy_file(policy)
-            with self.assertRaises(InvalidPolicyError, msg="String used instead of boolean, should raise error."):
-                _PolicyEngine()
+        ]
+        self._run_test_cases_should_fail_to_parse(cases, "signatureRequired is not a bool")
 
     def test_should_raise_error_if_extensions_is_not_dict(self):
-
         cases = [
             {
                 "extensionPolicies": {
@@ -246,12 +248,14 @@ class TestPolicyEngine(_TestPolicyBase):
                 "extensionPolicies": {
                     "extensions": 0
                 }
+            },
+            {
+                "extensionPolicies": {
+                    "extensions": None
+                }
             }
         ]
-        for policy in cases:
-            self._create_policy_file(policy)
-            with self.assertRaises(InvalidPolicyError, msg="'extensions' attribute is not a dict, should raise error: {0}".format(policy)):
-                _PolicyEngine()
+        self._run_test_cases_should_fail_to_parse(cases, "'extensions' is not a dict")
 
     def test_should_raise_error_if_individual_extension_policy_is_not_dict(self):
         cases = [
@@ -270,10 +274,7 @@ class TestPolicyEngine(_TestPolicyBase):
                 }
             }
         ]
-        for policy in cases:
-            self._create_policy_file(policy)
-            with self.assertRaises(InvalidPolicyError, msg="Individual extension policy is not a dict, should raise error."):
-                _PolicyEngine()
+        self._run_test_cases_should_fail_to_parse(cases, "individual extension policy is not a dict")
 
     def test_should_raise_error_for_unrecognized_attribute(self):
         # All cases below have either a typo or a random additional attribute.
@@ -291,10 +292,7 @@ class TestPolicyEngine(_TestPolicyBase):
                 }
             }}
         ]
-        for policy in cases:
-            self._create_policy_file(policy)
-            with self.assertRaises(InvalidPolicyError, msg="Invalid attribute in policy {0}, should have raised error.".format(policy)):
-                _PolicyEngine()
+        self._run_test_cases_should_fail_to_parse(cases, "unrecognized attribute in policy")
 
 
 class TestExtensionPolicyEngine(_TestPolicyBase):
