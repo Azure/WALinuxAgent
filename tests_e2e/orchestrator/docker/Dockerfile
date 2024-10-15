@@ -28,7 +28,11 @@ RUN \
     #                                                                                                            \
     # Install LISA dependencies                                                                                  \
     #                                                                                                            \
-    tdnf install -y git gcc gobject-introspection-devel cairo-devel pkg-config python3-devel libvirt-devel       \
+    # NOTE - Dependencies for Ubuntu:                                                                            \
+    #                                                                                                            \
+    # apt install -y gcc libgirepository1.0-dev libcairo2-dev qemu-utils libvirt-dev python3-pip python3-venv    \                                                                                                      \
+    #                                                                                                            \
+    tdnf install -y gcc gobject-introspection-devel cairo-devel pkg-config python3-devel libvirt-devel           \
             cairo-gobject binutils kernel-headers glibc-devel python3-pip python3-virtualenv                  && \
                                                                                                                  \
     #                                                                                                            \

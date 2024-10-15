@@ -291,7 +291,7 @@ class ProtocolUtil(SingletonPerThread):
                 # were not cleaned up (intermediate updated agent does not have cleanup 
                 # logic but we transitioned from Metadata to Wire protocol)
                 if is_metadata_server_artifact_present():
-                    cleanup_metadata_server_artifacts(self.osutil)
+                    cleanup_metadata_server_artifacts()
                 return self._protocol
 
             logger.info("Detect protocol endpoint")
@@ -307,7 +307,7 @@ class ProtocolUtil(SingletonPerThread):
             # delete MDS certificates if we can't reach WireServer and have to roll back
             # the update
             if is_metadata_server_artifact_present():
-                cleanup_metadata_server_artifacts(self.osutil)
+                cleanup_metadata_server_artifacts()
 
             return self._protocol
         finally:

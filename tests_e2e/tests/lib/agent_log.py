@@ -369,18 +369,20 @@ class AgentLog(object):
                 'if': lambda r: r.prefix == 'ExtHandler' and r.thread == 'ExtHandler'
             },
             #
-            # TODO: Currently Ubuntu minimal does not include the 'iptables' command. Remove this rule once this has been addressed.
+            # Some distros are running older agents, which do not add the DNS rule
             #
-            # We don't have an easy way to distinguish Ubuntu minimal, so this rule suppresses for any Ubuntu. This is OK; if 'iptables' was missing from the regular Ubuntu images, the firewall tests would fail.
-            #
-            # 2024-03-27T16:12:35.666460Z ERROR ExtHandler ExtHandler Unable to setup the persistent firewall rules: Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
-            # 2024-03-27T16:12:35.667253Z WARNING ExtHandler ExtHandler Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
+            # 2024-08-02T21:44:44.330727Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['ACCEPT DNS']
+            # 2024-08-08T22:05:26.561896Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS']. Will reset it.
+            # 2024-09-16T15:50:12.473500Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS']), will reset them.
             #
             {
-                'message': r"Unable to determine version of iptables: \[Errno 2\] No such file or directory: 'iptables'",
-                'if': lambda r: DISTRO_NAME == 'ubuntu'
+                'message': r"(The firewall rules for Azure Fabric are not setup correctly \(the environment thread will fix it\): The following rules are missing: \['ACCEPT DNS'\])"
+                           "|"
+                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT DNS'\]. Will reset it.)"
+                           "|"
+                           r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \['ACCEPT DNS'\]\), will reset them.",
+                'if': lambda r: r.level == "WARNING"
             },
-            #
             # TODO: The Daemon has not been updated on Azure Linux 3; remove this message when it is.
             #
             # 2024-08-05T14:36:48.004865Z WARNING Daemon Daemon Unable to load distro implementation for azurelinux. Using default distro implementation instead.
