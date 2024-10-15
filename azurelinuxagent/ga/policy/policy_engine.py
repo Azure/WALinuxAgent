@@ -126,6 +126,8 @@ class _PolicyEngine(object):
         Read customer-provided policy JSON file, load and return as a dict.
         Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
         after verifying that the file exists (currently done in __init__).
+
+        Raise InvalidPolicyError if JSON is invalid, or any exceptions are thrown while reading the file.
         """
         with open(conf.get_policy_file_path(), 'r') as f:
             _PolicyEngine._log_policy_event(
@@ -143,7 +145,8 @@ class _PolicyEngine(object):
 
             return custom_policy
 
-    def __parse_policy(self, template, custom_policy):
+    @staticmethod
+    def __parse_policy(template, custom_policy):
         """
         Update template with attributes specified in custom_policy:
             - attributes provided in custom_policy override the default values in template
@@ -155,10 +158,10 @@ class _PolicyEngine(object):
         case, so we use case-folded dict to allow for case-insensitive lookup of individual extension policies.
         """
         # Validate top level attributes and then parse each section of the custom policy.
-        # Individual parsing functions are responsible for validating schema of that section (nested dict).
-        self.__validate_schema(custom_policy, _POLICY_SCHEMA)
-        self.__parse_version(template, custom_policy)
-        self.__parse_extension_policies(template, custom_policy)
+        # Individual parsing functions are responsible for validating schema of that section (any nested dicts).
+        _PolicyEngine.__validate_schema(custom_policy, _POLICY_SCHEMA)
+        _PolicyEngine.__parse_version(template, custom_policy)
+        _PolicyEngine.__parse_extension_policies(template, custom_policy)
 
     @staticmethod
     def __parse_version(template, policy):
@@ -186,7 +189,7 @@ class _PolicyEngine(object):
     def __parse_extension_policies(template, policy):
         extension_policies = policy.get("extensionPolicies")
         if extension_policies is not None:
-            _PolicyEngine.__validate_schema(extension_policies, _POLICY_SCHEMA["extensionPolicies"])
+            _PolicyEngine.__validate_schema(extension_policies, _POLICY_SCHEMA["extensionPolicies"], "extensionPolicies")
 
             # Parse allowlist policy
             allowlist_policy = extension_policies.get("allowListedExtensionsOnly")
@@ -220,26 +223,26 @@ class _PolicyEngine(object):
         if extensions is None:
             return
 
-        # Parse "extensions" and update template with specified attributes
         parsed_extensions_dict = {}
         for extension_name, individual_policy in extensions.items():
 
-            # Validate each individual policy against the schema.
-            # We don't validate the schema of "extensions", because individual extensions names are not defined in the schema.
+            # We don't validate "extensions" against the schema, because the attributes (individual extension names)
+            # are dynamic and not defined in the schema. We do validate that individual_policy is a dict, and validate
+            # the schema of individual_policy.
             individual_policy_schema = _POLICY_SCHEMA["extensionPolicies"]["extensions"]["<extensionName>"]
             if not isinstance(individual_policy, dict):
                 raise InvalidPolicyError("invalid type {0} for attribute '{1}', please change to object."
                                          .format(type(individual_policy).__name__, extension_name))
-            _PolicyEngine.__validate_schema(individual_policy, individual_policy_schema)
+            _PolicyEngine.__validate_schema(individual_policy, individual_policy_schema, extension_name)
 
             extension_signature_policy = individual_policy.get("signatureRequired")
             if extension_signature_policy is None:
                 extension_signature_policy = template["extensionPolicies"]["signatureRequired"]
 
-            policy_to_add = {
-                "signatureRequired": extension_signature_policy
-            }
-            parsed_extensions_dict[extension_name] = policy_to_add
+            parsed_extensions_dict[extension_name] = \
+                {
+                    "signatureRequired": extension_signature_policy
+                }
 
         # Convert "extensions" to a case-folded dict for case-insensitive lookup
         case_folded_extensions_dict = _CaseFoldedDict.from_dict(parsed_extensions_dict)
