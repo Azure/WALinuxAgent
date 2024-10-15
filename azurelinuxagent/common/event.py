@@ -213,13 +213,9 @@ def parse_json_event(data_str):
 
 def parse_event(data_str):
     try:
-        try:
-            return parse_json_event(data_str)
-        except ValueError:
-            return parse_xml_event(data_str)
-    except Exception as e:
-        raise EventError("Error parsing event: {0}".format(ustr(e)))
-
+        return parse_json_event(data_str)
+    except ValueError:
+        return parse_xml_event(data_str)
 
 def parse_xml_param(param_node):
     name = getattrib(param_node, "Name")
@@ -344,11 +340,15 @@ class CollectOrReportEventDebugInfo(object):
     def update_op_error(self, op_err):
         self.__op_error_count = self._update_errors_and_get_count(self.__op_error_count, self.__op_errors, op_err)
 
+    def get_error_count(self):
+        return self.__op_error_count + self.__unicode_error_count
+
 
 class EventLogger(object):
     def __init__(self):
         self.event_dir = None
         self.periodic_events = {}
+        self.protocol = None
 
         #
         # All events should have these parameters.
@@ -494,7 +494,10 @@ class EventLogger(object):
             self.periodic_events[h] = datetime.now()
 
     def add_event(self, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
-                  message="", log_event=True):
+                  message="", log_event=True, flush=False):
+        """
+        :param flush: Flush the event immediately to the wire server
+        """
 
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
@@ -508,12 +511,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentExtensionEventsSchema.Duration, int(duration)))
         self.add_common_event_parameters(event, datetime.utcnow())
 
-        data = get_properties(event)
-
-        try:
-            self.save_event(json.dumps(data))
-        except EventError as e:
-            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
+        self.report_or_save_event(event, flush)
 
     def add_log_event(self, level, message):
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
@@ -524,11 +522,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentGenericLogsSchema.Context3, ''))
         self.add_common_event_parameters(event, datetime.utcnow())
 
-        data = get_properties(event)
-        try:
-            self.save_event(json.dumps(data))
-        except EventError:
-            pass
+        self.report_or_save_event(event)
 
     def add_metric(self, category, counter, instance, value, log_event=False):
         """
@@ -551,11 +545,25 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam(GuestAgentPerfCounterEventsSchema.Value, float(value)))
         self.add_common_event_parameters(event, datetime.utcnow())
 
-        data = get_properties(event)
-        try:
-            self.save_event(json.dumps(data))
-        except EventError as e:
-            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
+        self.report_or_save_event(event)
+
+    def report_or_save_event(self, event, flush=False):
+        """
+        Flush the event to wireserver if flush to set to true, else
+        save it disk if we fail to send or not required to flush immediately.
+        TODO: pickup as many events as possible and send them in one go.
+        """
+        report_success = False
+        if flush and self.protocol is not None:
+            report_success = self.protocol.report_event([event], flush)
+
+        if not report_success:
+            try:
+                data = get_properties(event)
+                self.save_event(json.dumps(data))
+            except EventError as e:
+                logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
+
 
     @staticmethod
     def _clean_up_message(message):
@@ -636,13 +644,16 @@ def elapsed_milliseconds(utc_start):
                     (d.microseconds / 1000.0))
 
 
-def report_event(op, is_success=True, message='', log_event=True):
+def report_event(op, is_success=True, message='', log_event=True, flush=False):
+    """
+    :param flush: if true, flush the event immediately to the wire server
+    """
     add_event(AGENT_NAME,
               version=str(CURRENT_VERSION),
               is_success=is_success,
               message=message,
               op=op,
-              log_event=log_event)
+              log_event=log_event, flush=flush)
 
 
 def report_periodic(delta, op, is_success=True, message=''):
@@ -675,12 +686,17 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
                                                      "{0}/{1} [{2}] = {3}".format(category, counter, instance, value))
 
 
-def initialize_event_logger_vminfo_common_parameters(protocol, reporter=__event_logger__):
+def initialize_event_logger_vminfo_common_parameters_and_protocol(protocol, reporter=__event_logger__):
+    # Initialize protocal for event logger to directly send events to wireserver
+    reporter.protocol = protocol
     reporter.initialize_vminfo_common_parameters(protocol)
 
 
 def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
-              message="", log_event=True, reporter=__event_logger__):
+              message="", log_event=True, flush=False, reporter=__event_logger__):
+    """
+    :param flush: if true, flush the event immediately to the wire server
+    """
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
@@ -690,7 +706,7 @@ def add_event(name=AGENT_NAME, op=WALAEventOperation.Unknown, is_success=True, d
         mark_event_status(name, version, op, is_success)
         reporter.add_event(name, op=op, is_success=is_success, duration=duration, version=str(version),
                            message=message,
-                           log_event=log_event)
+                           log_event=log_event, flush=flush)
 
 
 def info(op, fmt, *args):
@@ -723,7 +739,7 @@ def add_log_event(level, message, forced=False, reporter=__event_logger__):
     :param message: Message
     :param forced: Force write the event even if send_logs_to_telemetry() is disabled
         (NOTE: Remove this flag once send_logs_to_telemetry() is enabled for all events)
-    :param reporter:
+    :param reporter: The EventLogger instance to which metric events should be sent
     :return:
     """
     if reporter.event_dir is None:

@@ -44,6 +44,8 @@ from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatu
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
 from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
+from azurelinuxagent.common.utils.restutil import TELEMETRY_THROTTLE_DELAY_IN_SECONDS, \
+    TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS, TELEMETRY_DATA
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, gettext, remove_bom, get_bytes_from_pem, parse_json
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -51,7 +53,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
 ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
-TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
+TELEMETRY_URI = "http://{0}/machine?comp={1}"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -144,8 +146,8 @@ class WireProtocol(DataContract):
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
-    def report_event(self, events_iterator):
-        self.client.report_event(events_iterator)
+    def report_event(self, events_iterator, flush=False):
+        return self.client.report_event(events_iterator, flush)
 
     def upload_logs(self, logs):
         self.client.upload_logs(logs)
@@ -1047,8 +1049,8 @@ class WireClient(object):
                                  u",{0}: {1}").format(resp.status,
                                                       resp.read()))
 
-    def send_encoded_event(self, provider_id, event_str, encoding='utf8'):
-        uri = TELEMETRY_URI.format(self.get_endpoint())
+    def _send_encoded_event(self, provider_id, event_str, flush, encoding='utf8'):
+        uri = TELEMETRY_URI.format(self.get_endpoint(), TELEMETRY_DATA)
         data_format_header = ustr('<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">').format(
             provider_id).encode(encoding)
         data_format_footer = ustr('</Provider></TelemetryData>').encode(encoding)
@@ -1059,7 +1061,12 @@ class WireClient(object):
             header = self.get_header_for_xml_content()
             # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
             #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
-            resp = self.call_wireserver(restutil.http_post, uri, data, header)
+
+            # if it's important event flush, we use less throttle delay(to avoid long delay to complete this operation)) on throttling errors
+            if flush:
+                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, throttle_delay=TELEMETRY_FLUSH_THROTTLE_DELAY_IN_SECONDS)
+            else:
+                resp = self.call_wireserver(restutil.http_post, uri, data, header, max_retry=3, throttle_delay=TELEMETRY_THROTTLE_DELAY_IN_SECONDS)
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
@@ -1068,14 +1075,14 @@ class WireClient(object):
             raise ProtocolError(
                 "Failed to send events:{0}".format(resp.status))
 
-    def report_event(self, events_iterator):
+    def report_event(self, events_iterator, flush=False):
         buf = {}
         debug_info = CollectOrReportEventDebugInfo(operation=CollectOrReportEventDebugInfo.OP_REPORT)
         events_per_provider = defaultdict(int)
 
-        def _send_event(provider_id, debug_info):
+        def _send_event(provider_id, debug_info, flush):
             try:
-                self.send_encoded_event(provider_id, buf[provider_id])
+                self._send_encoded_event(provider_id, buf[provider_id], flush)
             except UnicodeError as uni_error:
                 debug_info.update_unicode_error(uni_error)
             except Exception as error:
@@ -1102,7 +1109,7 @@ class WireClient(object):
                 # If buffer is full, send out the events in buffer and reset buffer
                 if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                     logger.verbose("No of events this request = {0}".format(events_per_provider[event.providerId]))
-                    _send_event(event.providerId, debug_info)
+                    _send_event(event.providerId, debug_info, flush)
                     buf[event.providerId] = b""
                     events_per_provider[event.providerId] = 0
 
@@ -1117,9 +1124,11 @@ class WireClient(object):
         for provider_id in list(buf.keys()):
             if buf[provider_id]:
                 logger.verbose("No of events this request = {0}".format(events_per_provider[provider_id]))
-                _send_event(provider_id, debug_info)
+                _send_event(provider_id, debug_info, flush)
 
         debug_info.report_debug_info()
+
+        return debug_info.get_error_count() == 0
 
     def report_status_event(self, message, is_success):
         report_event(op=WALAEventOperation.ReportStatus,

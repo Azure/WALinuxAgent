@@ -34,12 +34,13 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
 from azurelinuxagent.ga.cpucontroller import _CpuController
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api, log_cgroup_warning, InvalidCgroupMountpointException
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.firewall_manager import FirewallManager
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.ga.logcollector import LogCollector, OUTPUT_RESULTS_FILE_PATH
 from azurelinuxagent.common.osutil import get_osutil
@@ -208,6 +209,8 @@ class Agent(object):
         else:
             logger.info("Running log collector mode normal")
 
+        LogCollector.initialize_telemetry()
+
         # Check the cgroups unit
         log_collector_monitor = None
         tracked_controllers = []
@@ -215,21 +218,22 @@ class Agent(object):
             try:
                 cgroup_api = get_cgroup_api()
             except InvalidCgroupMountpointException as e:
-                log_cgroup_warning("The agent does not support cgroups if the default systemd mountpoint is not being used: {0}".format(ustr(e)), send_event=True)
+                event.warn(WALAEventOperation.LogCollection, "The agent does not support cgroups if the default systemd mountpoint is not being used: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
             except CGroupsException as e:
-                log_cgroup_warning("Unable to determine which cgroup version to use: {0}".format(ustr(e)), send_event=True)
+                event.warn(WALAEventOperation.LogCollection, "Unable to determine which cgroup version to use: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
             log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
             tracked_controllers = log_collector_cgroup.get_controllers()
 
             if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
-                log_cgroup_warning("At least one required controller is missing. The following controllers are required for the log collector to run: {0}".format(log_collector_cgroup.get_supported_controller_names()))
+                event.warn(WALAEventOperation.LogCollection, "At least one required controller is missing. The following controllers are required for the log collector to run: {0}", log_collector_cgroup.get_supported_controller_names())
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
-            if not log_collector_cgroup.check_in_expected_slice(cgroupconfigurator.LOGCOLLECTOR_SLICE):
-                log_cgroup_warning("The Log Collector process is not in the proper cgroups", send_event=False)
+            expected_slice = cgroupconfigurator.LOGCOLLECTOR_SLICE
+            if not log_collector_cgroup.check_in_expected_slice(expected_slice):
+                event.warn(WALAEventOperation.LogCollection, "The Log Collector process is not in the proper cgroups. Expected slice: {0}", expected_slice)
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
 
         try:

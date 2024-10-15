@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import copy
 import json
 import os
 import re
@@ -78,7 +79,7 @@ class _PolicyEngine(object):
         if not self.policy_enforcement_enabled:
             return
 
-        # Set defaults for policy and update with the customer-provided policy file.
+        # Set defaults for policy
         self._policy = \
         {
             "policyVersion": _MAX_SUPPORTED_POLICY_VERSION,
@@ -88,8 +89,13 @@ class _PolicyEngine(object):
                 "extensions": {}
             }
         }
+
+        # Use a copy of the policy as a template. Update the template as we parse the custom policy.
+        # Update self._policy only if parsing completes successfully.
+        template = copy.deepcopy(self._policy)
         custom_policy = self.__get_policy()
-        self.__parse_policy(custom_policy)
+        self.__parse_policy(template, custom_policy)
+        self._policy = template
 
     @staticmethod
     def _log_policy_event(msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
@@ -137,10 +143,10 @@ class _PolicyEngine(object):
 
             return custom_policy
 
-    def __parse_policy(self, custom_policy):
+    def __parse_policy(self, template, custom_policy):
         """
-        Update self._policy with attributes specified in custom_policy:
-            - attributes provided in custom_policy override the default values in self._policy
+        Update template with attributes specified in custom_policy:
+            - attributes provided in custom_policy override the default values in template
             - if an attribute is not provided, use the default value
             - if an unrecognized attribute is present in custom_policy (not defined in _POLICY_SCHEMA), raise an error
             - if an attribute does not match the type specified in the schema, raise an error
@@ -148,18 +154,19 @@ class _PolicyEngine(object):
         If provided, the "extensions" attribute will be converted to a case-folded dict. CRP allows extensions to be any
         case, so we use case-folded dict to allow for case-insensitive lookup of individual extension policies.
         """
-        # Validate top level attributes and then parse each section of the policy file.
+        # Validate top level attributes and then parse each section of the custom policy.
         # Individual parsing functions are responsible for validating schema of that section (nested dict).
         self.__validate_schema(custom_policy, _POLICY_SCHEMA)
-        self.__parse_version(custom_policy)
-        self.__parse_extension_policies(custom_policy)
+        self.__parse_version(template, custom_policy)
+        self.__parse_extension_policies(template, custom_policy)
 
-    def __parse_version(self, policy):
+    @staticmethod
+    def __parse_version(template, policy):
         """
         Validate and return "policyVersion" attribute. If not a string in the format "x.y.z", raise InvalidPolicyError.
         If policy_version is greater than maximum supported version, raise InvalidPolicyError.
         """
-        version = self.__parse_attribute(policy, "policyVersion", _POLICY_SCHEMA)
+        version = policy.get("policyVersion")
         if version is None:
             return
 
@@ -173,29 +180,31 @@ class _PolicyEngine(object):
             raise InvalidPolicyError("policy version '{0}' is not supported. The agent supports policy versions up to '{1}'. Please provide a compatible policy version."
                                      .format(version, _MAX_SUPPORTED_POLICY_VERSION))
 
-        self._policy["policyVersion"] = version
+        template["policyVersion"] = version
 
-    def __parse_extension_policies(self, policy):
-        extension_policies = self.__parse_attribute(policy, "extensionPolicies", _POLICY_SCHEMA)
+    @staticmethod
+    def __parse_extension_policies(template, policy):
+        extension_policies = policy.get("extensionPolicies")
         if extension_policies is not None:
-            self.__validate_schema(extension_policies, _POLICY_SCHEMA["extensionPolicies"])
+            _PolicyEngine.__validate_schema(extension_policies, _POLICY_SCHEMA["extensionPolicies"])
 
             # Parse allowlist policy
-            allowlist_policy = self.__parse_attribute(extension_policies, "allowListedExtensionsOnly", _POLICY_SCHEMA["extensionPolicies"])
+            allowlist_policy = extension_policies.get("allowListedExtensionsOnly")
             if allowlist_policy is not None:
-                self._policy["extensionPolicies"]["allowListedExtensionsOnly"] = allowlist_policy
+                template["extensionPolicies"]["allowListedExtensionsOnly"] = allowlist_policy
 
             # Parse global signature policy
-            signature_policy = self.__parse_attribute(extension_policies, "signatureRequired", _POLICY_SCHEMA["extensionPolicies"], "extensionPolicies")
+            signature_policy = extension_policies.get("signatureRequired")
             if signature_policy is not None:
-                self._policy["extensionPolicies"]["signatureRequired"] = signature_policy
+                template["extensionPolicies"]["signatureRequired"] = signature_policy
 
             # Parse individual extension policies
-            self.__parse_extensions(extension_policies)
+            _PolicyEngine.__parse_extensions(template, extension_policies)
 
-    def __parse_extensions(self, extensions_policy):
+    @staticmethod
+    def __parse_extensions(template, extensions_policy):
         """
-        Parse "extensions" dict and update in self._policy.
+        Parse "extensions" dict and update in template.
         "extensions" is expected to be in the format:
         {
             "extensions": {
@@ -207,11 +216,11 @@ class _PolicyEngine(object):
 
         If "signatureRequired" isn't provided, the global "signatureRequired" value will be used instead.
         """
-        extensions = self.__parse_attribute(extensions_policy, "extensions", _POLICY_SCHEMA["extensionPolicies"])
+        extensions = extensions_policy.get("extensions")
         if extensions is None:
             return
 
-        # Parse "extensions" and update self._policy with specified attributes
+        # Parse "extensions" and update template with specified attributes
         parsed_extensions_dict = {}
         for extension_name, individual_policy in extensions.items():
 
@@ -221,11 +230,11 @@ class _PolicyEngine(object):
             if not isinstance(individual_policy, dict):
                 raise InvalidPolicyError("invalid type {0} for attribute '{1}', please change to object."
                                          .format(type(individual_policy).__name__, extension_name))
-            self.__validate_schema(individual_policy, individual_policy_schema)
+            _PolicyEngine.__validate_schema(individual_policy, individual_policy_schema)
 
-            extension_signature_policy = self.__parse_attribute(individual_policy, "signatureRequired", individual_policy_schema, extension_name)
+            extension_signature_policy = individual_policy.get("signatureRequired")
             if extension_signature_policy is None:
-                extension_signature_policy = self._policy["extensionPolicies"]["signatureRequired"]
+                extension_signature_policy = template["extensionPolicies"]["signatureRequired"]
 
             policy_to_add = {
                 "signatureRequired": extension_signature_policy
@@ -234,59 +243,40 @@ class _PolicyEngine(object):
 
         # Convert "extensions" to a case-folded dict for case-insensitive lookup
         case_folded_extensions_dict = _CaseFoldedDict.from_dict(parsed_extensions_dict)
-        self._policy["extensionPolicies"]["extensions"] = case_folded_extensions_dict
+        template["extensionPolicies"]["extensions"] = case_folded_extensions_dict
 
     @staticmethod
-    def __validate_schema(policy, schema):
+    def __validate_schema(policy, schema, section_name=None):
         """
         Validate the provided policy against the schema - we only do a shallow check (no recursion into nested dicts).
         If there is an unrecognized attribute, raise an error.
         """
-        for key in policy:
+        for key, value in policy.items():
             if key not in schema:
                 raise InvalidPolicyError("attribute '{0}' is not defined in the policy schema. Please refer to the policy documentation "
                                          "and change or remove this attribute accordingly.".format(key))
 
-    @staticmethod
-    def __parse_attribute(policy, key, schema, parent_attribute_name=None):
-        """
-        Return policy[key], return None if the key does not exist in the policy.
+            expected_type = schema.get(key)
+            if isinstance(expected_type, dict):
+                expected_type = dict
+            if expected_type == str:
+                expected_type = (str, ustr)
+            type_in_err_msg = {
+                dict: "object",
+                (str, ustr): "string",
+                bool: "boolean"
+            }
 
-        Raise error if policy[key] does not match the expected value specified in the schema (schema[key])
-        For attributes that are used in multiple places (ex: "signatureRequired"), specify the parent attribute in
-        the error message to avoid ambiguity.
-        """
-        value = policy.get(key)
-        if value is None:
-            return None
+            if not isinstance(value, expected_type):
+                if section_name is None:
+                    msg = ("invalid type {0} for attribute '{1}', please change to {2}."
+                           .format(type(value).__name__, key, type_in_err_msg.get(expected_type)))
+                else:
+                    msg = ("invalid type {0} for attribute '{1}' in section '{2}', please change to {3}."
+                           .format(type(value).__name__, key, section_name,
+                                   type_in_err_msg.get(expected_type)))
 
-        expected_type = schema.get(key)
-
-        # don't recurse into nested dicts, just validate that the type is dict
-        if isinstance(expected_type, dict):
-            expected_type = dict
-        if expected_type == str:
-            expected_type = (str, ustr)
-
-        # Map from python types to the types we want to reference in error messages
-        type_in_err_msg = {
-            dict: "object",
-            (str, ustr): "string",
-            bool: "boolean"
-        }
-
-        # Raise error if attribute is not the expected type
-        if not isinstance(value, expected_type):
-            if parent_attribute_name is None:
-                msg = ("invalid type {0} for attribute '{1}', please change to {2}."
-                       .format(type(value).__name__, key, type_in_err_msg.get(expected_type)))
-            else:
-                msg = ("invalid type {0} for attribute '{1}' in section '{2}', please change to {3}."
-                       .format(type(value).__name__, key, parent_attribute_name,  type_in_err_msg.get(expected_type)))
-
-            raise InvalidPolicyError(msg)
-
-        return value
+                raise InvalidPolicyError(msg)
 
 
 class ExtensionPolicyEngine(_PolicyEngine):
