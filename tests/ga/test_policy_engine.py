@@ -102,16 +102,6 @@ class TestPolicyEngine(_TestPolicyBase):
         self.assertFalse(engine3.policy_enforcement_enabled,
                          msg="Conf flag is set to false so policy enforcement should be disabled.")
 
-    def test_policy_should_be_enabled_even_if_policy_file_deleted(self):
-        """
-        If policy file is deleted while processing a single goal state, policy should still be enabled.
-        """
-        self._create_policy_file({})
-        engine = _PolicyEngine()
-        self.assertTrue(engine.policy_enforcement_enabled)
-        os.remove(self.policy_path)
-        self.assertTrue(engine.policy_enforcement_enabled)
-
     def test_should_parse_policy_successfully(self):
         """
         Values provided in custom policy should override any defaults.

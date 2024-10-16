@@ -125,12 +125,13 @@ class _PolicyEngine(object):
         Raise InvalidPolicyError if JSON is invalid, or any exceptions are thrown while reading the file.
         """
         with open(conf.get_policy_file_path(), 'r') as f:
-            _PolicyEngine._log_policy_event(
-                "Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'.".format(
-                    conf.get_policy_file_path()))
             try:
-                # json.load will raise error if file is not in valid json format (including empty file).
-                custom_policy = json.load(f)
+                contents = f.read()
+                _PolicyEngine._log_policy_event(
+                    "Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'. File contents: {1}"
+                    .format(conf.get_policy_file_path(), contents))
+                # json.loads will raise error if file contents are not a valid json (including empty file).
+                custom_policy = json.loads(contents)
             except ValueError as ex:
                 msg = "policy file does not conform to valid json syntax"
                 raise InvalidPolicyError(msg=msg, inner=ex)
@@ -138,8 +139,6 @@ class _PolicyEngine(object):
                 msg = "unable to read policy file"
                 raise InvalidPolicyError(msg=msg, inner=ex)
 
-            _PolicyEngine._log_policy_event(
-                "The following user-provided policy is being enforced: '{0}'.".format(custom_policy))
             return custom_policy
 
     @staticmethod
