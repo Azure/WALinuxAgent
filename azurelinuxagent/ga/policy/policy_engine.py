@@ -15,10 +15,40 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import copy
+import json
+import os
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.exception import AgentError
+from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+
+
+# Schema for policy file.
+_POLICY_SCHEMA = \
+    {
+        "policyVersion": ustr,
+        "extensionPolicies": {
+            "allowListedExtensionsOnly": bool,
+            "signatureRequired": bool,
+            "extensions": {
+                "<extensionName>": {
+                    "signatureRequired": bool
+                }
+            }
+        }
+    }
+
+# Default policy values to be used when customer does not specify these attributes in the policy file.
+_DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY = False
+_DEFAULT_SIGNATURE_REQUIRED = False
+
+# Agent supports up to this version of the policy file ("policyVersion" in schema).
+# Increment this number when any new attributes are added to the policy schema.
+_MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
 
 
 class PolicyError(AgentError):
@@ -27,12 +57,43 @@ class PolicyError(AgentError):
     """
 
 
-class PolicyEngine(object):
+class InvalidPolicyError(AgentError):
+    """
+    Error raised if user-provided policy is invalid.
+    """
+    def __init__(self, msg, inner=None):
+        msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(conf.get_policy_file_path(), msg)
+        super(InvalidPolicyError, self).__init__(msg, inner)
+
+
+class _PolicyEngine(object):
     """
     Implements base policy engine API.
     """
-    @classmethod
-    def _log_policy(cls, msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
+    def __init__(self):
+        # Set defaults for policy
+        self._policy = \
+        {
+            "policyVersion": _MAX_SUPPORTED_POLICY_VERSION,
+            "extensionPolicies": {
+                "allowListedExtensionsOnly": _DEFAULT_ALLOW_LISTED_EXTENSIONS_ONLY,
+                "signatureRequired": _DEFAULT_SIGNATURE_REQUIRED,
+                "extensions": {}
+            }
+        }
+
+        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
+        if not self.policy_enforcement_enabled:
+            return
+
+        # Use a copy of the policy as a template. Update the template as we parse the custom policy.
+        template = copy.deepcopy(self._policy)
+        custom_policy = self.__read_policy()
+        self.__parse_policy(template, custom_policy)
+        self._policy = template
+
+    @staticmethod
+    def _log_policy_event(msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
         """
         Log information to console and telemetry.
         """
@@ -41,15 +102,216 @@ class PolicyEngine(object):
         else:
             logger.error(msg)
         if send_event:
-            add_event(op=op, message=msg, is_success=is_success)
+            add_event(op=op, message=msg, is_success=is_success, log_event=False)
 
     @staticmethod
-    def is_policy_enforcement_enabled():
+    def __get_policy_enforcement_enabled():
         """
-        Check whether user has opted into policy enforcement feature.
-        Caller function should check this before performing any operations.
+        Policy will be enabled if (1) policy file exists at the expected location and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
         """
-        # TODO: Add check for policy file present at /etc/waagent_policy.json.
-        # Policy should only be enabled if conf flag is true AND policy file is present.
-        return conf.get_extension_policy_enabled()
+        return conf.get_extension_policy_enabled() and os.path.exists(conf.get_policy_file_path())
 
+    @property
+    def policy_enforcement_enabled(self):
+        return self._policy_enforcement_enabled
+
+    @staticmethod
+    def __read_policy():
+        """
+        Read customer-provided policy JSON file, load and return as a dict.
+        Policy file is expected to be at conf.get_policy_file_path(). Note that this method should only be called
+        after verifying that the file exists (currently done in __init__).
+
+        Raise InvalidPolicyError if JSON is invalid, or any exceptions are thrown while reading the file.
+        """
+        with open(conf.get_policy_file_path(), 'r') as f:
+            try:
+                contents = f.read()
+                _PolicyEngine._log_policy_event(
+                    "Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'. File contents:\n{1}"
+                    .format(conf.get_policy_file_path(), contents))
+                # json.loads will raise error if file contents are not a valid json (including empty file).
+                custom_policy = json.loads(contents)
+            except ValueError as ex:
+                msg = "policy file does not conform to valid json syntax"
+                raise InvalidPolicyError(msg=msg, inner=ex)
+            except Exception as ex:
+                msg = "unable to read policy file"
+                raise InvalidPolicyError(msg=msg, inner=ex)
+
+            return custom_policy
+
+    @staticmethod
+    def __parse_policy(template, custom_policy):
+        """
+        Update template with attributes specified in custom_policy:
+            - attributes provided in custom_policy override the default values in template
+            - if an attribute is not provided, use the default value
+            - if an unrecognized attribute is present in custom_policy (not defined in _POLICY_SCHEMA), raise an error
+            - if an attribute does not match the type specified in the schema, raise an error
+        """
+        # Validate top level attributes and then parse each section of the custom policy.
+        # Individual parsing functions are responsible for validating schema of that section (any nested dicts).
+        # Note that validation must happen before parsing.
+        _PolicyEngine.__validate_schema(custom_policy, _POLICY_SCHEMA)
+        _PolicyEngine.__parse_version(template, custom_policy)
+        _PolicyEngine.__parse_extension_policies(template, custom_policy)
+
+    @staticmethod
+    def __parse_version(template, policy):
+        """
+        Validate and return "policyVersion" attribute. If not a string in the format "x.y.z", raise InvalidPolicyError.
+        If policy_version is greater than maximum supported version, raise InvalidPolicyError.
+        """
+        version = policy.get("policyVersion")
+        if version is None:
+            return
+
+        try:
+            flexible_version = FlexibleVersion(version)
+        except ValueError:
+            raise InvalidPolicyError(
+                "invalid value for attribute 'policyVersion' attribute 'policyVersion' is expected to be in format 'major.minor.patch' "
+                                         "(e.g., '1.0.0'). Please change to a valid value.")
+
+        if FlexibleVersion(_MAX_SUPPORTED_POLICY_VERSION) < flexible_version:
+            raise InvalidPolicyError("policy version '{0}' is not supported. The agent supports policy versions up to '{1}'. Please provide a compatible policy version."
+                                     .format(version, _MAX_SUPPORTED_POLICY_VERSION))
+
+        template["policyVersion"] = version
+
+    @staticmethod
+    def __parse_extension_policies(template, policy):
+        extension_policies = policy.get("extensionPolicies")
+        if extension_policies is not None:
+            _PolicyEngine.__validate_schema(extension_policies, _POLICY_SCHEMA["extensionPolicies"], "extensionPolicies")
+
+            # Parse allowlist policy
+            allowlist_policy = extension_policies.get("allowListedExtensionsOnly")
+            if allowlist_policy is not None:
+                template["extensionPolicies"]["allowListedExtensionsOnly"] = allowlist_policy
+
+            # Parse global signature policy
+            signature_policy = extension_policies.get("signatureRequired")
+            if signature_policy is not None:
+                template["extensionPolicies"]["signatureRequired"] = signature_policy
+
+            # Parse individual extension policies
+            _PolicyEngine.__parse_extensions(template, extension_policies)
+
+    @staticmethod
+    def __parse_extensions(template, extensions_policy):
+        """
+        Parse "extensions" dict and update in template.
+        "extensions" is expected to be in the format:
+        {
+            "extensions": {
+                "<extensionName>": {
+                    "signatureRequired": bool
+                }
+            }
+        }
+
+        If "signatureRequired" isn't provided, the global "signatureRequired" value will be used instead.
+        The "extensions" attribute will be converted to a case-folded dict. CRP allows extensions to be any
+        case, so we use case-folded dict to allow for case-insensitive lookup of individual extension policies.
+        """
+        extensions = extensions_policy.get("extensions")
+        if extensions is None:
+            return
+
+        parsed_extensions_dict = {}
+        for extension_name, individual_policy in extensions.items():
+
+            # We don't validate "extensions" against the schema, because the attributes (individual extension names)
+            # are dynamic and not defined in the schema. We do validate that individual_policy is a dict, and validate
+            # the schema of individual_policy.
+            individual_policy_schema = _POLICY_SCHEMA["extensionPolicies"]["extensions"]["<extensionName>"]
+            if not isinstance(individual_policy, dict):
+                raise InvalidPolicyError("invalid type {0} for attribute '{1}', please change to object."
+                                         .format(type(individual_policy).__name__, extension_name))
+            _PolicyEngine.__validate_schema(individual_policy, individual_policy_schema, extension_name)
+
+            extension_signature_policy = individual_policy.get("signatureRequired")
+            if extension_signature_policy is None:
+                extension_signature_policy = template["extensionPolicies"]["signatureRequired"]
+
+            parsed_extensions_dict[extension_name] = \
+                {
+                    "signatureRequired": extension_signature_policy
+                }
+
+        # Convert "extensions" to a case-folded dict for case-insensitive lookup
+        case_folded_extensions_dict = _CaseFoldedDict.from_dict(parsed_extensions_dict)
+        template["extensionPolicies"]["extensions"] = case_folded_extensions_dict
+
+    @staticmethod
+    def __validate_schema(policy, schema, section_name=None):
+        """
+        Validate the provided policy against the schema - we only do a shallow check (no recursion into nested dicts).
+        If there is an unrecognized attribute, raise an error.
+        """
+        for key, value in policy.items():
+            if key not in schema:
+                raise InvalidPolicyError("attribute '{0}' is not defined in the policy schema. Please refer to the policy documentation "
+                                         "and change or remove this attribute accordingly.".format(key))
+
+            expected_type = schema.get(key)
+            if isinstance(expected_type, dict):
+                expected_type = dict
+            type_in_err_msg = {
+                dict: "object",
+                ustr: "string",
+                bool: "boolean"
+            }
+
+            if not isinstance(value, expected_type):
+                if section_name is None:
+                    msg = ("invalid type {0} for attribute '{1}', please change to {2}."
+                           .format(type(value).__name__, key, type_in_err_msg.get(expected_type)))
+                else:
+                    msg = ("invalid type {0} for attribute '{1}' in section '{2}', please change to {3}."
+                           .format(type(value).__name__, key, section_name,
+                                   type_in_err_msg.get(expected_type)))
+
+                raise InvalidPolicyError(msg)
+
+
+class ExtensionPolicyEngine(_PolicyEngine):
+
+    def should_allow_extension(self, extension_to_check):
+        """
+        Return whether we should allow extension download based on policy.
+        extension_to_check is expected to be an Extension object.
+
+        If policy feature not enabled, return True.
+        If allowListedExtensionsOnly=true, return true only if extension present in "extensions" allowlist.
+        If allowListedExtensions=false, return true always.
+        """
+        if not self.policy_enforcement_enabled:
+            return True
+
+        allow_listed_extension_only = self._policy.get("extensionPolicies").get("allowListedExtensionsOnly")
+        extension_allowlist = self._policy.get("extensionPolicies").get("extensions")
+
+        should_allow = not allow_listed_extension_only or extension_allowlist.get(extension_to_check.name) is not None
+        return should_allow
+
+    def should_enforce_signature_validation(self, extension_to_check):
+        """
+        Return whether we should enforce signature based on policy.
+        extension_to_check is expected to be an Extension object.
+
+        If policy feature not enabled, return False.
+        Individual policy takes precedence over global - if individual signing policy present, return true/false based on
+        individual policy. Else, return true/false based on global policy.
+        """
+        if not self.policy_enforcement_enabled:
+            return False
+
+        global_signature_required = self._policy.get("extensionPolicies").get("signatureRequired")
+        individual_policy = self._policy.get("extensionPolicies").get("extensions").get(extension_to_check.name)
+        if individual_policy is None:
+            return global_signature_required
+        else:
+            return individual_policy.get("signatureRequired")
