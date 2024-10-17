@@ -63,9 +63,10 @@ class _TestPolicyBase(AgentTestCase):
         """
         for policy in cases:
             self._create_policy_file(policy)
-            msg = "invalid policy should not have parsed successfully: {0}. Policy: {1}".format(assert_msg, policy)
+            msg = "invalid policy should not have parsed successfully: {0}.\nPolicy: \n{1}".format(assert_msg, policy)
             with self.assertRaises(InvalidPolicyError, msg=msg):
                 _PolicyEngine()
+
 
 class TestPolicyEngine(_TestPolicyBase):
     """

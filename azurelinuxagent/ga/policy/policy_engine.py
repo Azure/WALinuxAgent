@@ -128,7 +128,7 @@ class _PolicyEngine(object):
             try:
                 contents = f.read()
                 _PolicyEngine._log_policy_event(
-                    "Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'. File contents: {1}"
+                    "Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'. File contents:\n{1}"
                     .format(conf.get_policy_file_path(), contents))
                 # json.loads will raise error if file contents are not a valid json (including empty file).
                 custom_policy = json.loads(contents)
