@@ -386,7 +386,7 @@ class ExtensionWorkflow(AgentVmTest):
             dcr_ext.modify_ext_settings_and_enable()
             dcr_ext.assert_instance_view()
 
-            # Record the time we start the test
+            # Record the time we start the update without scenario test
             start_time = self._ssh_client.run_command("date '+%Y-%m-%dT%TZ'").rstrip()
 
             # Create DcrTestExtension with version 1.3
