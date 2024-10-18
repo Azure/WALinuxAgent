@@ -58,7 +58,6 @@ def parse_ops_log(ops_version: str, input_ops: List[str], start_time: str):
 
     ops = []
     with open(ops_file_name, 'r') as ops_log:
-        # we get the last len(input_ops) from the log file and ensure they match with the input_ops
         # Example of a line in the log file - `Date:2019-07-30T21:54:03Z; Operation:install; SeqNo:0`
         content = ops_log.readlines()
         for op_log in content:
@@ -73,6 +72,9 @@ def parse_ops_log(ops_version: str, input_ops: List[str], start_time: str):
 
             ops.append({'date': date, 'op': op, 'seq_no': seq_no})
 
+            # Only parse the expected number of operations after the test case starts. There may be additional
+            # operations on the extension if the agent processes a goal state with additional extensions added by policy
+            # or otherwise (ConfigurationforLinux, for example)
             if len(ops) == len(input_ops):
                 break
 
