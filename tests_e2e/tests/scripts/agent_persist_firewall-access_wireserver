@@ -39,8 +39,7 @@ function ping_localhost
 
 function socket_connection
 {
-    output=$(python3 /home/"$TEST_USER"/bin/agent_persist_firewall-check_connectivity.py 2>&1)
-    echo $output
+    python3 /home/"$TEST_USER"/bin/agent_persist_firewall-check_connectivity.py 2>&1 && echo 0 || echo 1
 }
 
 # Check more, sleep less
@@ -77,7 +76,7 @@ if [ "$IS_ONLINE" -eq 1 ]; then
         echo "Ping to localhost succeeded"
     fi
     echo "Running socket connection to wireserver:53 option"
-    socket_connection
+    IS_ONLINE=$(socket_connection)
 fi
 if [ "$IS_ONLINE" -eq 1 ]; then
     # We will never be able to get online. Kill script.
@@ -91,7 +90,7 @@ echo "Trying to contact Wireserver as $USER to see if accessible"
 
 echo ""
 echo "Firewall configuration before accessing Wireserver:"
-if command -v iptables; then
+if sudo which iptables > /dev/null ; then
   sudo iptables -t security -L -nxv -w
 else
   sudo nft list table walinuxagent
