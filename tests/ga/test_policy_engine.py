@@ -77,7 +77,10 @@ class TestPolicyEngine(_TestPolicyBase):
         When conf flag is set to true and policy file is present at expected location, feature should be enabled.
         """
         # Create policy file with empty policy object at the expected path to enable feature.
-        self._create_policy_file({})
+        self._create_policy_file(
+        {
+            "policyVersion": "0.0.1"
+        })
         engine = _PolicyEngine()
         self.assertTrue(engine.policy_enforcement_enabled,
                         msg="Conf flag is set to true so policy enforcement should be enabled.")
@@ -115,7 +118,8 @@ class TestPolicyEngine(_TestPolicyBase):
                     "signatureRequired": True,
                     "extensions": {
                         TEST_EXTENSION_NAME: {
-                            "signatureRequired": False
+                            "signatureRequired": False,
+                            "runtimePolicy": True
                         }
                     }
                 }
@@ -128,7 +132,8 @@ class TestPolicyEngine(_TestPolicyBase):
                     "signatureRequired": False,
                     "extensions": {
                         TEST_EXTENSION_NAME: {
-                            "signatureRequired": True
+                            "signatureRequired": True,
+                            "runtimePolicy": [ True, None, { "bar": "baz" } ]
                         }
                     }
                 }
@@ -147,6 +152,14 @@ class TestPolicyEngine(_TestPolicyBase):
             actual_individual_policy = actual_extension_policy.get("extensions").get(TEST_EXTENSION_NAME)
             expected_individual_policy = expected_extension_policy.get("extensions").get(TEST_EXTENSION_NAME)
             self.assertEqual(actual_individual_policy.get("signatureRequired"), expected_individual_policy.get("signatureRequired"))
+            self.assertEqual(actual_individual_policy.get("runtimePolicy"), expected_individual_policy.get("runtimePolicy"))
+
+    def test_it_should_verify_policy_version_is_required(self):
+        self._create_policy_file({
+                "extensionPolicies": {}
+            })
+        with self.assertRaises(InvalidPolicyError):
+            _PolicyEngine()
 
     def test_should_raise_error_if_policy_file_is_invalid_json(self):
         cases = [
@@ -321,7 +334,6 @@ class TestExtensionPolicyEngine(_TestPolicyBase):
         """
         test_extension = Extension(name=TEST_EXTENSION_NAME)
         policy_cases = [
-            {},
             {
                 "policyVersion": "0.1.0"
             },
