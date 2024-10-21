@@ -77,7 +77,7 @@ if [ "$IS_ONLINE" -eq 1 ]; then
         echo "Ping to localhost succeeded"
     fi
     echo "Running socket connection to wireserver:53 option"
-    socket_connection
+    IS_ONLINE=$(socket_connection)
 fi
 if [ "$IS_ONLINE" -eq 1 ]; then
     # We will never be able to get online. Kill script.
