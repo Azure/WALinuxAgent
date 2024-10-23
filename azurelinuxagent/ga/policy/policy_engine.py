@@ -155,7 +155,7 @@ class _PolicyEngine(object):
         version = _PolicyEngine._get_string(policy, attribute="policyVersion")
 
         if not re.match(r"^\d+\.\d+\.\d+$", version):
-            raise InvalidPolicyError("invalid value for attribute 'policyVersion'; it should be in format 'major.minor.patch' (e.g., '1.0.0')")
+            raise InvalidPolicyError("invalid value for attribute 'policyVersion': '{0}'; it should be in format 'major.minor.patch' (e.g., '1.0.0')".format(version))
 
         if FlexibleVersion(_MAX_SUPPORTED_POLICY_VERSION) < FlexibleVersion(version):
             raise InvalidPolicyError("policy version '{0}' is not supported. The agent supports policy versions up to '{1}'.".format(version, _MAX_SUPPORTED_POLICY_VERSION))
@@ -212,7 +212,7 @@ class _PolicyEngine(object):
 
         for extension, extension_policy in extensions.items():
             if not isinstance(extension_policy, dict):
-                raise InvalidPolicyError("invalid type {0} for attribute '{1}', must be 'object'".format(type(extension_policy).__name__, extension))
+                raise InvalidPolicyError("invalid type {0} for attribute '{1}'; must be 'object'".format(type(extension_policy).__name__, extension))
             parsed[extension] = _PolicyEngine._parse_extension(extension_policy)
 
         return parsed
