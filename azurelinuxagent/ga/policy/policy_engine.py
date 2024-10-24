@@ -115,20 +115,18 @@ class _PolicyEngine(object):
     @staticmethod
     def _parse_policy(policy):
         """
-        Parses the given policy document and an equivalent document that has been populated with default values and verified for correctness, i.e.
+        Parses the given policy document and returns an equivalent document that has been populated with default values and verified for correctness, i.e.
         that conforms the following schema:
 
             {
                  "policyVersion": "0.1.0",
                  "extensionPolicies": {
-                     "allowListedExtensionsOnly": <true, false>,
-                     "signatureRequired": <true, false>,
-                     "extensions": {
+                     "allowListedExtensionsOnly": <true, false>, [Optional; default: false]
+                     "signatureRequired": <true, false>, [Optional; default: false]
+                     "extensions": { [Optional; default: {} (empty)]
                          "<extension_name>": {
-                             "signatureRequired": <true, false>
-                             "runtimePolicy": {
-                                 <extension-specific policy>
-                             }
+                             "signatureRequired": <true, false> [Optional; no default]
+                             "runtimePolicy": <extension-specific policy> [Optional; no default]
                          }
                      },
                  }
@@ -165,20 +163,7 @@ class _PolicyEngine(object):
     @staticmethod
     def _parse_extension_policies(policy):
         """
-        Parses the "extensionPolicies" attribute of the policy document. It should conform to the following schema:
-
-            "extensionPolicies": {
-                 "allowListedExtensionsOnly": <true, false>,
-                 "signatureRequired": <true, false>,
-                 "extensions": {
-                     "<extension_name>": {
-                         "signatureRequired": <true, false>
-                         "runtimePolicy": {
-                             <extension-specific policy>
-                         }
-                     }
-                 },
-            }
+        Parses the "extensionPolicies" attribute of the policy document. See _parse_policy() for schema.
         """
         extension_policies = _PolicyEngine._get_dictionary(policy, attribute="extensionPolicies", optional=True, default={})
 
@@ -195,17 +180,7 @@ class _PolicyEngine(object):
     @staticmethod
     def _parse_extensions(extensions):
         """
-        Parses the "extensions" attribute. It should conform to the following schema:
-
-        "extensions": {
-            "<extensionName>": {
-                "signatureRequired": bool
-                 "runtimePolicy": {
-                     <extension-specific policy>
-                 }
-            }
-        }
-
+        Parses the "extensions" attribute. See _parse_policy() for schema.
         The return value is a case-folded dict. CRP allows extensions to be any case, so we allow for case-insensitive lookup of individual extension policies.
         """
         parsed = _CaseFoldedDict.from_dict({})
@@ -220,14 +195,7 @@ class _PolicyEngine(object):
     @staticmethod
     def _parse_extension(extension):
         """
-        Parses an individual extension. It should conform to the following schema:
-
-            "<extensionName>": {
-                "signatureRequired": bool
-                 "runtimePolicy": {
-                     <extension-specific policy>
-                 }
-            }
+        Parses an individual extension. See _parse_policy() for schema.
         """
         extension_attribute_name = "extensionPolicies.extensions.{0}".format(extension)
 
