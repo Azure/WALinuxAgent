@@ -198,7 +198,7 @@ images:
          AzureUSGovernment: []
    rhel_94: "RedHat RHEL 9_4 latest"
    rocky_9:
-      urn: "erockyenterprisesoftwarefoundationinc1653071250513 rockylinux-9 rockylinux-9 latest"
+      urn: "resf rockylinux-x86_64 9-base latest"
       locations:
          AzureChinaCloud: []
          AzureUSGovernment: []
