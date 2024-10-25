@@ -147,7 +147,7 @@ class _PolicyEngine(object):
     @staticmethod
     def _parse_policy_version(policy):
         """
-        Validate and return "policyVersion" attribute. If not a string in the format "x.y.z", raise InvalidPolicyError.
+        Validate and return "policyVersion" attribute. If not a string in the format "major[.minor[.patch]]", raise InvalidPolicyError.
         If policy_version is greater than maximum supported version, raise InvalidPolicyError.
         """
         version = _PolicyEngine._get_string(policy, attribute="policyVersion")
@@ -280,8 +280,6 @@ class ExtensionPolicyEngine(_PolicyEngine):
     def should_allow_extension(self, extension_name):
         """
         Return whether we should allow extension download based on policy.
-        extension_to_check is expected to be an Extension object.
-
         If policy feature not enabled, return True.
         If allowListedExtensionsOnly=true, return true only if extension present in "extensions" allowlist.
         If allowListedExtensions=false, return true always.
@@ -298,7 +296,6 @@ class ExtensionPolicyEngine(_PolicyEngine):
     def should_enforce_signature_validation(self, extension_name):
         """
         Return whether we should enforce signature based on policy.
-
         If policy feature not enabled, return False.
         Individual policy takes precedence over global.
         """
