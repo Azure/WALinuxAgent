@@ -29,65 +29,53 @@ echo "$(date --utc +%FT%T.%3NZ): Running as user: $USER"
 
 function check_online
 {
-    ping 8.8.8.8 -c 1 -i .2 -t 30 > /dev/null 2>&1 && echo 0 || echo 1
-}
+    echo "Checking network connectivity..."
 
-function ping_localhost
-{
-    ping 127.0.0.1 -c 1 -i .2 -t 30 > /dev/null 2>&1 && echo 0 || echo 1
-}
+    echo "Running ping to 8.8.8.8 option"
+    checks=0
+    while true; do
+        if ping 8.8.8.8 -c 1 -i .2 -t 30; then
+            echo "Network is accessible"
+            return 0
+        fi
+        checks=$((checks + 1))
+        if [ $checks -gt 10 ]; then
+            break
+        fi
 
-function socket_connection
-{
-    python3 /home/"$TEST_USER"/bin/agent_persist_firewall-check_connectivity.py 2>&1 && echo 0 || echo 1
-}
+        echo "$(date --utc +%FT%T.%3NZ): Network still not accessible"
+        # We're offline. Sleep for a bit, then check again
+        sleep 1;
+    done
 
-# Check more, sleep less
-MAX_CHECKS=10
-# Initial starting value for checks
-CHECKS=0
-IS_ONLINE=$(check_online)
+    echo "Checking other options to see if network is accessible..."
 
-echo "Checking network connectivity..."
-echo "Running ping to 8.8.8.8 option"
-# Loop while we're not online.
-while [ "$IS_ONLINE" -eq 1 ]; do
-
-    CHECKS=$((CHECKS + 1))
-    if [ $CHECKS -gt $MAX_CHECKS ]; then
-        break
-    fi
-
-    echo "$(date --utc +%FT%T.%3NZ): Network still not accessible"
-    # We're offline. Sleep for a bit, then check again
-    sleep 1;
-    IS_ONLINE=$(check_online)
-
-done
-
-# logging other options output to compare and evaluate which option is more stable when ping to 8.8.8.8 failed
-if [ "$IS_ONLINE" -eq 1 ]; then
-    echo "Checking other options to see if network is accessible"
     echo "Running ping to localhost option"
-    PING_LOCAL=$(ping_localhost)
-    if [ "$PING_LOCAL" -eq 1 ]; then
-        echo "Ping to localhost failed"
-    else
+    if ping 127.0.0.1 -c 1 -i .2 -t 30; then
         echo "Ping to localhost succeeded"
+        return 0
     fi
+    echo "Ping to localhost failed"
+
     echo "Running socket connection to wireserver:53 option"
-    IS_ONLINE=$(socket_connection)
-fi
-if [ "$IS_ONLINE" -eq 1 ]; then
+    if python3 /home/"$TEST_USER"/bin/agent_persist_firewall-check_connectivity.py; then
+        echo "Socket connection succeeded"
+        return 0
+    fi
+    echo "Socket connection failed"
+
+    echo "Unable to connect to network, giving up"
+    return 1
+}
+
+if ! check_online; then
     # We will never be able to get online. Kill script.
     echo "Unable to connect to network, exiting now"
-    echo "ExitCode: 1"
     exit 1
 fi
 
 echo "Finally online, Time: $(date --utc +%FT%T.%3NZ)"
 echo "Trying to contact Wireserver as $USER to see if accessible"
-
 echo ""
 echo "Firewall configuration before accessing Wireserver:"
 if sudo which iptables > /dev/null ; then
