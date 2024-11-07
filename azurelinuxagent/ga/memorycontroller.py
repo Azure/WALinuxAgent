@@ -120,6 +120,9 @@ class _MemoryController(_CgroupController):
     def get_unit_properties(self):
         return["MemoryAccounting"]
 
+    def get_controller_type(self):
+        return "memory"
+
 
 class MemoryControllerV1(_MemoryController):
     def get_memory_usage(self):

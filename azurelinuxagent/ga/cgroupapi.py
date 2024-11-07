@@ -59,7 +59,7 @@ class CGroupUtil(object):
     Cgroup utility methods which are independent of systemd cgroup api.
     """
     @staticmethod
-    def cgroups_supported():
+    def distro_supported():
         distro_info = get_distro()
         distro_name = distro_info[0]
         try:
@@ -650,8 +650,6 @@ class CgroupV1(Cgroup):
                 controller = MemoryControllerV1(self._cgroup_name, controller_path)
 
             if controller is not None:
-                msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
-                log_cgroup_info(msg)
                 controllers.append(controller)
 
         return controllers
@@ -729,8 +727,6 @@ class CgroupV2(Cgroup):
                 controller = MemoryControllerV2(self._cgroup_name, self._cgroup_path)
 
             if controller is not None:
-                msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
-                log_cgroup_info(msg)
                 controllers.append(controller)
 
         return controllers

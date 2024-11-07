@@ -72,6 +72,8 @@ class MockEnvironment:
         self.files = [] if files is None else files[:]
         self._data_files = data_files
 
+        self._commands_call_list = []
+
         # get references to the functions we'll mock so that we can call the original implementations
         self._original_popen = subprocess.Popen
         self._original_mkdir = fileutil.mkdir
@@ -138,6 +140,10 @@ class MockEnvironment:
                 return mapped
         return path
 
+    @property
+    def commands_call_list(self):
+        return self._commands_call_list
+
     def _mock_popen(self, command, *args, **kwargs):
         if isinstance(command, list):
             command_string = " ".join(command)
@@ -153,7 +159,7 @@ class MockEnvironment:
                 else:
                     command = [mock_script, cmd.stdout, ustr(cmd.return_value), cmd.stderr]
                 break
-
+        self._commands_call_list.append(command_string)
         return self._original_popen(command, *args, **kwargs)
 
     def _mock_mkdir(self, path, *args, **kwargs):
