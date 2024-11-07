@@ -31,22 +31,34 @@ function check_online
 {
     echo "Checking network connectivity..."
 
-    echo "Running ping to 8.8.8.8 option"
-    checks=0
-    while true; do
-        if ping 8.8.8.8 -c 1 -i .2 -t 30; then
-            echo "Network is accessible"
-            return 0
-        fi
-        checks=$((checks + 1))
-        if [ $checks -gt 10 ]; then
-            break
-        fi
+    echo "Connecting to ifconfig.io to check network connection"
+    if command -v curl >/dev/null 2>&1; then
+        curl --retry 5 --retry-delay 5 --connect-timeout 5 -4 ifconfig.io/ip
+    elif command -v wget >/dev/null 2>&1; then
+        wget --tries=5 --timeout=5 --wait=5 -4 ifconfig.io/ip
+    else
+        http_get.py "http://ifconfig.io/ip" --timeout 5 --delay 5 --tries 5
+    fi
 
+    if [[ $? -eq 0 ]]; then
+        echo "Network is accessible"
+        return 0
+    else:
         echo "$(date --utc +%FT%T.%3NZ): Network still not accessible"
-        # We're offline. Sleep for a bit, then check again
-        sleep 1;
-    done
+    fi
+
+    echo "Running ping to 8.8.8.8 option"
+
+    if ping 8.8.8.8 -c 1 -i .2 -t 30; then
+        echo "Network is accessible"
+        return 0
+    fi
+
+    echo "$(date --utc +%FT%T.%3NZ): Network still not accessible"
+    echo "Unable to connect to network, giving up"
+    retun 1
+
+    # Will remove other options if we determine first option is stable
 
     echo "Checking other options to see if network is accessible..."
 
@@ -77,10 +89,12 @@ fi
 echo "Finally online, Time: $(date --utc +%FT%T.%3NZ)"
 echo "Trying to contact Wireserver as $USER to see if accessible"
 echo ""
+
+# This script is run by a cron job on reboot, so it runs in a limited environment. Some distros may be missing the iptables path,
+# so adding common iptables paths to the environment.
+export PATH=$PATH:/usr/sbin:/sbin
 echo "Firewall configuration before accessing Wireserver:"
-if sudo which iptables > /dev/null ; then
-  sudo iptables -t security -L -nxv -w
-else
+if ! sudo iptables -t security -L -nxv -w; then
   sudo nft list table walinuxagent
 fi
 echo ""
@@ -89,7 +103,7 @@ WIRE_IP=$(cat /var/lib/waagent/WireServerEndpoint 2>/dev/null || echo '168.63.12
 if command -v curl >/dev/null 2>&1; then
     curl --retry 3 --retry-delay 5 --connect-timeout 5 "http://$WIRE_IP/?comp=versions" -o "/tmp/wire-versions-$USER.xml"
 elif command -v wget >/dev/null 2>&1; then
-    wget --tries=3 "http://$WIRE_IP/?comp=versions" --timeout=5 -O "/tmp/wire-versions-$USER.xml"else
+    wget --tries=3 "http://$WIRE_IP/?comp=versions" --timeout=5 --wait=5 -O "/tmp/wire-versions-$USER.xml"
 else
     http_get.py "http://168.63.129.16/?comp=versions" --timeout 5 --delay 5 --tries 3
 fi
