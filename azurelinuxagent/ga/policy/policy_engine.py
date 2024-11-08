@@ -36,12 +36,6 @@ _DEFAULT_EXTENSIONS = {}
 _MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
 
 
-class PolicyError(AgentError):
-    """
-    Error raised during agent policy enforcement.
-    """
-
-
 class InvalidPolicyError(AgentError):
     """
     Error raised if user-provided policy is invalid.
@@ -59,15 +53,6 @@ class ExtensionPolicyError(ExtensionError):
     def __init__(self, msg, inner=None, code=-1):
         msg = "Extension is disallowed by agent policy and will not be processed: {0}".format(msg)
         super(ExtensionPolicyError, self).__init__(msg, inner, code)
-
-
-class InvalidPolicyError(AgentError):
-    """
-    Error raised if user-provided policy is invalid.
-    """
-    def __init__(self, msg, inner=None):
-        msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(conf.get_policy_file_path(), msg)
-        super(InvalidPolicyError, self).__init__(msg, inner)
 
 
 class _PolicyEngine(object):
