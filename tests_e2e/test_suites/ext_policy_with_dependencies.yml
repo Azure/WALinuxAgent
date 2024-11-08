@@ -1,0 +1,8 @@
+#
+# The test suite verifies that disallowed extensions are not processed, but the agent should still report status.
+#
+name: "ExtPolicyWithDependencies"
+tests:
+  - "ext_policy/ext_policy_with_dependencies.py"
+images: "random(endorsed)"
+executes_on_scale_set: true

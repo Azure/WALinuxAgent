@@ -39,6 +39,7 @@ from azurelinuxagent.common import event
 from azurelinuxagent.common.agent_supported_feature import get_agent_supported_features_list_for_extensions, \
     SupportedFeatureNames, get_supported_feature_by_name, get_agent_supported_features_list_for_crp
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.ga.policy.policy_engine import ExtensionPolicyEngine, ExtensionPolicyError
 from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, elapsed_milliseconds, WALAEventOperation, \
@@ -482,9 +483,48 @@ class ExtHandlersHandler(object):
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
 
+        # Instantiate policy engine, and use same engine to handle all extension handlers.
+        # If an error is thrown during policy engine initialization, we block all extensions and report the error via handler/extension status for
+        # each extension.
+        policy_error = None
+        try:
+            policy_engine = ExtensionPolicyEngine()
+        except Exception as ex:
+            policy_error = ex
+
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
+            # Invoke policy engine to determine if extension is allowed. If not, block extension and report error on
+            # behalf of the extension.
+            policy_err_map = {
+                ExtensionRequestedState.Enabled: ('enable', ExtensionErrorCodes.PluginEnableProcessingFailed),
+                # TODO: CRP does not currently have a terminal error code for uninstall. Once CRP adds
+                # an error code for uninstall or for policy, use this code instead of PluginDisableProcessingFailed
+                # Note that currently, CRP waits for 90 minutes to time out for a failed uninstall operation, instead of
+                # failing fast.
+                ExtensionRequestedState.Uninstall: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
+                ExtensionRequestedState.Disabled: ('disable', ExtensionErrorCodes.PluginDisableProcessingFailed),
+            }
+            policy_op, policy_err_code = policy_err_map.get(ext_handler.state)
+            if policy_error is not None:
+                err = ExtensionPolicyError(msg="", inner=policy_error, code=policy_err_code)
+                self.__handle_and_report_ext_handler_errors(handler_i, err,
+                                                            report_op=handler_i.operation,
+                                                            message=ustr(err), extension=extension, report=True)
+                continue
+
+            extension_allowed = policy_engine.should_allow_extension(ext_handler.name)
+            if not extension_allowed:
+                msg = "failed to {0} extension '{1}' because extension is not specified in allowlist. To {0}, " \
+                      "add extension to the allowed list in the policy file ('{2}').".format(policy_op,
+                                                                                             ext_handler.name,
+                                                                                             conf.get_policy_file_path())
+                err = ExtensionPolicyError(msg, code=policy_err_code)
+                self.__handle_and_report_ext_handler_errors(handler_i, err,
+                                                            report_op=handler_i.operation,
+                                                            message=ustr(err), extension=extension, report=True)
 
             # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
@@ -527,7 +567,11 @@ class ExtHandlersHandler(object):
                 continue
 
             # Process extensions and get if it was successfully executed or not
-            extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
+            # If extension was blocked by policy, treat the extension as failed and do not process the handler.
+            if not extension_allowed:
+                extension_success = False
+            else:
+                extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
 
             dep_level = self.__get_dependency_level((extension, ext_handler))
             if 0 <= dep_level < max_dep_level:

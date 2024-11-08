@@ -22,7 +22,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.exception import AgentError
+from azurelinuxagent.common.exception import AgentError, ExtensionError
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
@@ -40,6 +40,25 @@ class PolicyError(AgentError):
     """
     Error raised during agent policy enforcement.
     """
+
+
+class InvalidPolicyError(AgentError):
+    """
+    Error raised if user-provided policy is invalid.
+    """
+    def __init__(self, msg, inner=None):
+        msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(conf.get_policy_file_path(), msg)
+        super(InvalidPolicyError, self).__init__(msg, inner)
+
+
+class ExtensionPolicyError(ExtensionError):
+    """
+    Error raised during agent extension policy enforcement.
+    """
+    # TODO: when CRP adds terminal error code for policy-related extension failures, set that as the default code.
+    def __init__(self, msg, inner=None, code=-1):
+        msg = "Extension is disallowed by agent policy and will not be processed: {0}".format(msg)
+        super(ExtensionPolicyError, self).__init__(msg, inner, code)
 
 
 class InvalidPolicyError(AgentError):

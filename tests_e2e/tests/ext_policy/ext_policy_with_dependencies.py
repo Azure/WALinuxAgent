@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+
+# Microsoft Azure Linux Agent
+#
+# Copyright 2018 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+#
+# This test adds extensions with multiple dependencies to a VMSS using the 'provisionAfterExtensions' property and
+# validates they are enabled in order of dependencies.
+#
+import copy
+import json
+import random
+import re
+import uuid
+from datetime import datetime
+from typing import List, Dict, Any
+
+from assertpy import fail
+from tests_e2e.tests.lib.agent_test import AgentVmssTest, TestSkipped
+from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
+from tests_e2e.tests.lib.virtual_machine_scale_set_client import VmssInstanceIpAddress
+from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.resource_group_client import ResourceGroupClient
+from tests_e2e.tests.lib.ssh_client import SshClient
+from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
+from tests_e2e.tests.ext_policy.policy_dependencies_cases import _should_fail_single_config_depends_on_disallowed_no_config, \
+        _should_fail_single_config_depends_on_disallowed_single_config, \
+        _should_succeed_single_config_depends_on_no_config, \
+        _should_succeed_single_config_depends_on_single_config
+        # _should_fail_single_config_depends_on_disallowed_multi_config,
+        # _should_fail_multi_config_depends_on_disallowed_single_config,
+        # _should_fail_multi_config_depends_on_disallowed_no_config,
+
+class ExtPolicyWithDependencies(AgentVmssTest):
+    def __init__(self, context: AgentVmTestContext):
+        super().__init__(context)
+        self._scenario_start = datetime.min
+
+    # Cases to test different dependency scenarios
+    _test_cases = [
+        _should_fail_single_config_depends_on_disallowed_no_config,
+        _should_fail_single_config_depends_on_disallowed_single_config,
+        # TODO: RunCommand is unable to be installed properly, so these tests are currently disabled. Investigate the
+        # issue and enable these 3 tests.
+        # _should_fail_single_config_depends_on_disallowed_multi_config,
+        # _should_fail_multi_config_depends_on_disallowed_single_config,
+        # _should_fail_multi_config_depends_on_disallowed_no_config,
+        _should_succeed_single_config_depends_on_no_config,
+        _should_succeed_single_config_depends_on_single_config
+    ]
+
+    @staticmethod
+    def _create_policy_file(ssh_client, policy):
+        with open("waagent_policy.json", mode='w') as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+
+            remote_path = "/tmp/waagent_policy.json"
+            local_path = policy_file.name
+            ssh_client.copy_to_node(local_path=local_path, remote_path=remote_path)
+            policy_file_final_dest = "/etc/waagent_policy.json"
+            ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
+
+    def run(self):
+        instances_ip_address: List[VmssInstanceIpAddress] = self._context.vmss.get_instances_ip_address()
+        ssh_clients: Dict[str, SshClient] = {}
+        for instance in instances_ip_address:
+            ssh_clients[instance.instance_name] = SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file)
+
+        for ssh_client in ssh_clients.values():
+            ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
+
+        if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(next(iter(ssh_clients.values())).run_command("get_distro.py").rstrip()):
+            raise TestSkipped("Currently AzureMonitorLinuxAgent is not supported on this distro")
+
+        # This is the base ARM template that's used for deploying extensions for this scenario
+        base_extension_template = {
+            "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+            "contentVersion": "1.0.0.0",
+            "resources": [
+                {
+                    "type": "Microsoft.Compute/virtualMachineScaleSets",
+                    "name": f"{self._context.vmss.name}",
+                    "location": "[resourceGroup().location]",
+                    "apiVersion": "2018-06-01",
+                    "properties": {
+                        "virtualMachineProfile": {
+                            "extensionProfile": {
+                                "extensions": []
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+
+        for case in self._test_cases:
+            log.info("")
+            log.info("Test case: {0}".format(case.__name__.replace('_', ' ')))
+            test_case_start = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
+            if self._scenario_start == datetime.min:
+                self._scenario_start = test_case_start
+            log.info("Test case start time: {0}".format(test_case_start))
+
+            # Assign unique guid to forceUpdateTag for each extension to make sure they're always unique to force CRP
+            # to generate a new sequence number each time
+            test_guid = str(uuid.uuid4())
+            policy, extensions, expected_errors, deletion_order = case()
+
+            for ext in extensions:
+                ext["properties"].update({
+                    "forceUpdateTag": test_guid
+                })
+
+            # We update the extension template here with extensions that are specific to the scenario that we want to
+            # test out
+            ext_template = copy.deepcopy(base_extension_template)
+            ext_template['resources'][0]['properties']['virtualMachineProfile']['extensionProfile'][
+                'extensions'] = extensions
+
+            # Log the dependencies for the extensions in this test case
+            for ext in extensions:
+                provisioned_after = ext['properties'].get('provisionAfterExtensions')
+                depends_on = provisioned_after if provisioned_after else []
+                dependency_list = "-" if not depends_on else ' and '.join(depends_on)
+                log.info("{0} depends on {1}".format(ext['name'], dependency_list))
+
+            # Copy policy file to each instance
+            log.info("Updating policy file with new policy: {0}".format(policy))
+            for instance_name, ssh_client in ssh_clients.items():
+                self._create_policy_file(ssh_client, policy)
+
+            # Deploy updated extension template to the scale set.
+            log.info("Deploying extensions to the scale set...")
+            rg_client = ResourceGroupClient(self._context.vmss.cloud, self._context.vmss.subscription,
+                                            self._context.vmss.resource_group, self._context.vmss.location)
+
+            try:
+                rg_client.deploy_template(template=ext_template)
+                if expected_errors is not None and len(expected_errors) != 0:
+                    fail("Extension deployment was expected to fail with the following errors: {0}".format(expected_errors))
+                log.info("Extension deployment succeeded as expected")
+                log.info("")
+            except Exception as e:
+                if expected_errors is None or len(expected_errors) == 0:
+                    fail("Extension template deployment unexpectedly failed: {0}".format(e))
+                else:
+                    deployment_failure_pattern = r"[\s\S]*\"code\":\s*\"ResourceDeploymentFailure\"[\s\S]*\"details\":\s*\[\s*(?P<error>[\s\S]*)\]"
+                    deployment_failure_match = re.match(deployment_failure_pattern, str(e))
+                    try:
+                        if deployment_failure_match is None:
+                            raise Exception("Unable to match a ResourceDeploymentFailure")
+                        error_json = json.loads(deployment_failure_match.group("error"))
+                        error_message = error_json['message']
+                    except Exception as parse_exc:
+                        fail("Extension template deployment failed as expected, but there was an error in parsing the failure. Parsing failure: {0}\nDeployment Failure: {1}".format(parse_exc, e))
+
+                    for phrase in expected_errors:
+                        if phrase not in error_message:
+                            fail("Extension template deployment failed as expected, but with an unexpected error. Error expected to contain message '{0}'. Actual error: {1}".format(phrase, e))
+                log.info("Extensions failed as expected")
+                log.info("")
+
+            # After each test, clean up failed extensions to leave VMSS in a good state for the next test.
+            # If there are leftover failed extensions, CRP will attempt to uninstall them in the next test, but they
+            # will be disallowed by policy. Since CRP waits for a 90 minute timeout for uninstall, the operation will
+            # timeout and fail, and subsequently, the whole test case will fail.
+            # To clean up, we first update the policy to allow all, then remove the extensions.
+            log.info("Starting cleanup for test case...")
+            for ssh_client in ssh_clients.values():
+                allow_all_policy = \
+                    {
+                        "policyVersion": "0.1.0",
+                        "extensionPolicies": {
+                            "allowListedExtensionsOnly": False
+                        }
+                    }
+                self._create_policy_file(ssh_client, allow_all_policy)
+
+            for ext_to_delete in deletion_order:
+                ext_name_to_delete = ext_to_delete.type
+                try:
+                    self._context.vmss.delete_extension(ext_name_to_delete)
+                except Exception as crp_err:
+                    # Known issue - CRP returns stale status in cases of dependency failures. Even if the deletion succeeds,
+                    # CRP may return a failure here. We swallow the error, and instead, check that the logs for uninstall
+                    # are present in the agent log (after the start time of this test case).
+                    log.info("CRP returned an error for deletion operation, may be a false error. Checking agent log to determine if operation succeeded. Exception: {0}".format(crp_err))
+                    try:
+                        for ssh_client in ssh_clients.values():
+                            msg = ("Remove the extension slice: {0}".format(str(ext_to_delete)))
+                            result = ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{msg}' --after-timestamp '{test_case_start}'", use_sudo=True)
+                            log.info(result)
+                    except Exception as agent_err:
+                        fail("Unable to successfully uninstall extension {0}. Exception: {1}".format(ext_name_to_delete, agent_err))
+                log.info("Successfully uninstalled extension {0}".format(ext_name_to_delete))
+
+            log.info("Successfully removed all extensions from VMSS")
+            log.info("---------------------------------------------")
+
+    def get_ignore_errors_before_timestamp(self) -> datetime:
+        # Ignore errors in the agent log before the first test case starts
+        if self._scenario_start == datetime.min:
+            return self._scenario_start
+        return datetime.strptime(self._scenario_start, u'%Y-%m-%d %H:%M:%S')
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            #
+            # WARNING ExtHandler ExtHandler Missing dependsOnExtension on extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent
+            # This message appears when an extension doesn't depend on another extension
+            #
+            {
+                'message': r"Missing dependsOnExtension on extension .*"
+            },
+            #
+            # WARNING ExtHandler ExtHandler Extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent does not have any settings. Will ignore dependency (dependency level: 1)
+            # We currently ignore dependencies for extensions without settings
+            #
+            {
+                'message': r"Extension .* does not have any settings\. Will ignore dependency \(dependency level: \d\)"
+            },
+            #
+            # 2023-10-31T17:46:59.675959Z WARNING ExtHandler ExtHandler Dependent extension Microsoft.Azure.Extensions.CustomScript failed or timed out, will skip processing the rest of the extensions
+            # We intentionally disallow some extensions to test that dependent are skipped. We assert the specific expected failure message in the test.
+            #
+            {
+                'message': r"Dependent extension .* failed or timed out, will skip processing the rest of the extensions"
+            },
+            #
+            # 2023-10-31T17:48:13.349214Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionProcessing, message=Dependent Extension Microsoft.Azure.Extensions.CustomScript did not succeed. Status was error, duration=0
+            # We intentionally fail to test that dependent extensions are skipped
+            #
+            {
+                'message': r"Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionProcessing, message=Dependent Extension .* did not succeed. Status was error, duration=0"
+            },
+            #
+            # 2023-10-31T17:47:07.689083Z WARNING ExtHandler ExtHandler [PERIODIC] This status is being reported by the Guest Agent since no status file was reported by extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent: [ExtensionStatusError] Status file /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.28.11/status/6.status does not exist
+            # We expect extensions that are dependent on a failing extension to not report status
+            #
+            {
+                'message': r"\[PERIODIC\] This status is being reported by the Guest Agent since no status file was reported by extension .*: \[ExtensionStatusError\] Status file \/var\/lib\/waagent\/.*\/status\/\d.status does not exist"
+            },
+            #
+            # 2023-10-31T17:48:11.306835Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed: [('Microsoft.Azure.Extensions.CustomScript', 'error'), ('Microsoft.Azure.Monitor.AzureMonitorLinuxAgent', 'transitioning'), ('Microsoft.CPlat.Core.RunCommandLinux', 'success')]
+            # This message appears when the previous test scenario had failing extensions due to extension dependencies
+            #
+            {
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed: \[(\(u?'.*', u?'(error|transitioning|success)'\),?)+\]"
+            },
+            # 2024-10-23T18:01:32.247341Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=ExtensionProcessing, message=Skipping processing of extensions since execution of dependent extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent failed, duration=0
+            # We intentionally block extensions with policy and expect any dependent extensions to be skipped
+            {
+                'message': r"Skipping processing of extensions since execution of dependent extension .* failed"
+            },
+            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension is disallowed by agent policy and will not be processed: failed to enable extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because extension is not specified in allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
+            # We intentionally block extensions with policy and expect this failure message
+            {
+                'message': r"Extension is disallowed by agent policy and will not be processed"
+            }
+        ]
+        return ignore_rules
+
+
+if __name__ == "__main__":
+    ExtPolicyWithDependencies.run_from_command_line()
