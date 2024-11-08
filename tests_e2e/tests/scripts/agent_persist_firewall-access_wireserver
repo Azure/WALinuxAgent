@@ -43,7 +43,7 @@ function check_online
     if [[ $? -eq 0 ]]; then
         echo "Network is accessible"
         return 0
-    else:
+    else
         echo "$(date --utc +%FT%T.%3NZ): Network still not accessible"
     fi
 
