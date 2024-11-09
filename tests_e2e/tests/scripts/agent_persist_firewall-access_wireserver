@@ -56,7 +56,7 @@ function check_online
 
     echo "$(date --utc +%FT%T.%3NZ): Network still not accessible"
     echo "Unable to connect to network, giving up"
-    retun 1
+    return 1
 
     # Will remove other options if we determine first option is stable
 
