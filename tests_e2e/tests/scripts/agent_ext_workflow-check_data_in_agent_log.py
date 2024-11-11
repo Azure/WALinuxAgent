@@ -36,8 +36,11 @@ def main():
     found = False
 
     try:
-        after_timestamp = (datetime.strptime(args.after_timestamp, '%Y-%m-%d %H:%M:%S') if args.after_timestamp else None)
-        found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data, after_timestamp)
+        if args.after_timestamp is not None:
+            after_datetime = datetime.strptime(args.after_timestamp, '%Y-%m-%d %H:%M:%S')
+            found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data, after_datetime)
+        else:
+            found = AgentLog(Path('/var/log/waagent.log')).agent_log_contains(args.data)
         if found:
             print("Found data: {0} in agent log".format(args.data))
         else:

@@ -76,18 +76,19 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
 
     def run(self):
+
+        # Set up the test run
         instances_ip_address: List[VmssInstanceIpAddress] = self._context.vmss.get_instances_ip_address()
         ssh_clients: Dict[str, SshClient] = {}
         for instance in instances_ip_address:
             ssh_clients[instance.instance_name] = SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file)
-
         for ssh_client in ssh_clients.values():
             ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
         if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(next(iter(ssh_clients.values())).run_command("get_distro.py").rstrip()):
             raise TestSkipped("Currently AzureMonitorLinuxAgent is not supported on this distro")
 
-        # This is the base ARM template that's used for deploying extensions for this scenario
+        # This is the base ARM template that's used for deploying extensions for this scenario.
         base_extension_template = {
             "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
             "contentVersion": "1.0.0.0",
@@ -139,16 +140,17 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                 dependency_list = "-" if not depends_on else ' and '.join(depends_on)
                 log.info("{0} depends on {1}".format(ext['name'], dependency_list))
 
-            # Copy policy file to each instance
+            # Copy policy file to each VM instance
             log.info("Updating policy file with new policy: {0}".format(policy))
-            for instance_name, ssh_client in ssh_clients.items():
+            for ssh_client in ssh_clients.values():
                 self._create_policy_file(ssh_client, policy)
 
-            # Deploy updated extension template to the scale set.
             log.info("Deploying extensions to the scale set...")
             rg_client = ResourceGroupClient(self._context.vmss.cloud, self._context.vmss.subscription,
                                             self._context.vmss.resource_group, self._context.vmss.location)
 
+            # Deploy updated extension template to the scale set.
+            # If test case is supposed to fail, assert that the operation fails with the expected error messages.
             try:
                 rg_client.deploy_template(template=ext_template)
                 if expected_errors is not None and len(expected_errors) != 0:
@@ -176,9 +178,9 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                 log.info("")
 
             # After each test, clean up failed extensions to leave VMSS in a good state for the next test.
-            # If there are leftover failed extensions, CRP will attempt to uninstall them in the next test, but they
+            # If there are leftover failed extensions, CRP will attempt to uninstall them in the next test, but uninstall
             # will be disallowed by policy. Since CRP waits for a 90 minute timeout for uninstall, the operation will
-            # timeout and fail, and subsequently, the whole test case will fail.
+            # timeout and fail without an appropriate error message (known issue), and the whole test case will fail.
             # To clean up, we first update the policy to allow all, then remove the extensions.
             log.info("Starting cleanup for test case...")
             for ssh_client in ssh_clients.values():
@@ -246,7 +248,7 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             # We intentionally fail to test that dependent extensions are skipped
             #
             {
-                'message': r"Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionProcessing, message=Dependent Extension .* did not succeed. Status was error, duration=0"
+                'message': r"message=Dependent Extension .* did not succeed. Status was error, duration=0"
             },
             #
             # 2023-10-31T17:47:07.689083Z WARNING ExtHandler ExtHandler [PERIODIC] This status is being reported by the Guest Agent since no status file was reported by extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent: [ExtensionStatusError] Status file /var/lib/waagent/Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.28.11/status/6.status does not exist
