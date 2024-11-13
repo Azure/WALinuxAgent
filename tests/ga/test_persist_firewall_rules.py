@@ -127,13 +127,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
         else:
             self.assertNotIn(systemctl_command, self.__executed_commands, "Systemctl command {0} found".format(cmd))
 
-    def __assert_systemctl_reloaded(self, validate_command_called=True):
-        systemctl_reload = ["systemctl", "daemon-reload"]
-        if validate_command_called:
-            self.assertIn(systemctl_reload, self.__executed_commands, "Systemctl config not reloaded")
-        else:
-            self.assertNotIn(systemctl_reload, self.__executed_commands, "Systemctl config reloaded")
-
     def __assert_firewall_cmd_running_called(self, validate_command_called=True):
         cmd = PersistFirewallRulesHandler._FIREWALLD_RUNNING_CMD
         if validate_command_called:
@@ -144,7 +137,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
     def __assert_network_service_setup_properly(self):
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
-        self.__assert_systemctl_reloaded()
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=False)
         self.assertTrue(os.path.exists(self._network_service_unit_file), "Service unit file should be there")
         self.assertTrue(os.path.exists(self._binary_file), "Binary file should be there")
@@ -200,7 +192,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
         self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
         self.__assert_systemctl_called(cmd="enable", validate_command_called=True)
-        self.__assert_systemctl_reloaded(validate_command_called=True)
         self.__assert_firewall_cmd_running_called(validate_command_called=True)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
         self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=False)
@@ -234,7 +225,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
 
             self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=True)
             self.__assert_systemctl_called(cmd="enable", validate_command_called=False)
-            self.__assert_systemctl_reloaded(validate_command_called=False)
             self.__assert_firewall_cmd_running_called(validate_command_called=True)
             self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.QueryPassThrough, validate_command_called=False)
             self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.RemovePassThrough, validate_command_called=False)
@@ -396,7 +386,6 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
             self.__assert_firewall_called(cmd=FirewallCmdDirectCommands.PassThrough, validate_command_called=True)
             self.__assert_systemctl_called(cmd="is-enabled", validate_command_called=False)
             self.__assert_systemctl_called(cmd="enable", validate_command_called=False)
-            self.__assert_systemctl_reloaded(validate_command_called=False)
             self.assertFalse(os.path.exists(handler.get_service_file_path()), "Service unit file found")
             self.assertFalse(os.path.exists(os.path.join(conf.get_lib_dir(), handler.BINARY_FILE_NAME)), "Binary file found")
 
@@ -414,3 +403,18 @@ class TestPersistFirewallRulesHandler(AgentTestCase):
                                                                    mock_popen=self.__mock_network_setup_service_enabled)
             self.assertNotIn(test_ver, fileutil.read_file(handler.get_service_file_path()),
                              "Test version found incorrectly")
+
+    def test_it_should_reset_service_unit_file_if_python_version_changes(self):
+        with self._get_persist_firewall_rules_handler() as handler:
+            # 1st step - Setup the service with some python Version
+            python_ver = "test_python"
+            with patch("sys.executable", python_ver):
+                self.__setup_and_assert_network_service_setup_scenario(handler)
+                self.assertIn(python_ver, fileutil.read_file(handler.get_service_file_path()), "Python version not found")
+
+            # 2nd step - Re-run the setup and ensure the service file set up again even if service enabled
+            self.__executed_commands = []
+            self.__setup_and_assert_network_service_setup_scenario(handler,
+                                                                   mock_popen=self.__mock_network_setup_service_enabled)
+            self.assertNotIn(python_ver, fileutil.read_file(handler.get_service_file_path()),
+                             "Python version found incorrectly")

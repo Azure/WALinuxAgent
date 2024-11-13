@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 
@@ -6,8 +7,10 @@ from assertpy import assert_that, fail
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.ga.cgroupapi import get_cgroup_api, SystemdCgroupApiv1
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
+from tests_e2e.tests.lib.retry import retry_if_false
 
 BASE_CGROUP = '/sys/fs/cgroup'
 AGENT_CGROUP_NAME = 'WALinuxAgent'
@@ -93,23 +96,27 @@ def verify_agent_cgroup_assigned_correctly():
     This method checks agent is running and assigned to the correct cgroup using service status output
     """
     log.info("===== Verifying the daemon and the agent are assigned to the same correct cgroup using systemd")
-    service_status = shellutil.run_command(["systemctl", "status", systemd.get_agent_unit_name()])
-    log.info("Agent service status output:\n%s", service_status)
-    is_active = False
-    is_cgroup_assigned = False
     cgroup_mount_path = get_agent_cgroup_mount_path()
-    is_active_pattern = re.compile(r".*Active:\s+active.*")
+    service_status = ""
 
-    for line in service_status.splitlines():
-        if re.match(is_active_pattern, line):
-            is_active = True
-        elif cgroup_mount_path in line:
-            is_cgroup_assigned = True
+    def check_agent_service_cgroup():
+        is_active = False
+        is_cgroup_assigned = False
+        service_status = shellutil.run_command(["systemctl", "status", systemd.get_agent_unit_name()])
+        log.info("Agent service status output:\n%s", service_status)
+        is_active_pattern = re.compile(r".*Active:\s+active.*")
 
-    if not is_active:
-        fail('walinuxagent service was not active/running. Service status:{0}'.format(service_status))
-    if not is_cgroup_assigned:
-        fail('walinuxagent service was not assigned to the expected cgroup:{0}'.format(cgroup_mount_path))
+        for line in service_status.splitlines():
+            if re.match(is_active_pattern, line):
+                is_active = True
+            elif cgroup_mount_path in line:
+                is_cgroup_assigned = True
+
+        return is_active and is_cgroup_assigned
+
+    # Test check can happen before correct cgroup assigned and relfected in service status. So, retrying the check for few times
+    if not retry_if_false(check_agent_service_cgroup):
+        fail('walinuxagent service was not assigned to the expected cgroup:{0}. Current agent status:{1}'.format(cgroup_mount_path, service_status))
 
     log.info("Successfully verified the agent cgroup assigned correctly by systemd\n")
 
@@ -141,10 +148,30 @@ def check_cgroup_disabled_with_unknown_process():
     """
     Returns True if the cgroup is disabled with unknown process
     """
+    return check_log_message("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN")
+
+
+def check_log_message(message, after_timestamp=datetime.datetime.min):
+    """
+    Check if the log message is present after the given timestamp(if provided) in the agent log
+    """
+    log.info("Checking log message: {0}".format(message))
     for record in AgentLog().read():
-        match = re.search("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN",
-                          record.message, flags=re.DOTALL)
-        if match is not None:
+        match = re.search(message, record.message, flags=re.DOTALL)
+        if match is not None and record.timestamp > after_timestamp:
             log.info("Found message:\n\t%s", record.text.replace("\n", "\n\t"))
             return True
     return False
+
+
+def get_unit_cgroup_proc_path(unit_name, controller):
+    """
+    Returns the cgroup.procs path for the given unit and controller.
+    """
+    cgroups_api = get_cgroup_api()
+    unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
+    if isinstance(cgroups_api, SystemdCgroupApiv1):
+        return unit_cgroup.get_controller_procs_path(controller=controller)
+    else:
+        return unit_cgroup.get_procs_path()
+

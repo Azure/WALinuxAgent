@@ -79,9 +79,9 @@ class TestLogCollector(AgentTestCase):
 
         def mock_read_file(filepath, **args):
             if filepath == "/proc/stat":
-                filepath = os.path.join(data_dir, "cgroups", "proc_stat_t0")
+                filepath = os.path.join(data_dir, "cgroups", "v1", "proc_stat_t0")
             elif filepath.endswith("/cpuacct.stat"):
-                filepath = os.path.join(data_dir, "cgroups", "cpuacct.stat_t0")
+                filepath = os.path.join(data_dir, "cgroups", "v1", "cpuacct.stat_t0")
             return original_read_file(filepath, **args)
 
         cls._mock_read_cpu_cgroup_file = patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=mock_read_file)
@@ -213,7 +213,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         with patch("azurelinuxagent.ga.logcollector.MANIFEST_NORMAL", manifest):
             with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                 log_collector = LogCollector()
-                archive = log_collector.collect_logs_and_get_archive()
+                archive, uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         with open(self.output_results_file_path, "r") as fh:
             results = fh.readlines()
@@ -227,6 +227,7 @@ diskinfo,""".format(folder_to_list, file_to_collect)
         # Assert copy was parsed
         self._assert_archive_created(archive)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])
+        self.assertEqual(uncompressed_file_size, os.path.getsize(file_to_collect))
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEqual(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files))
@@ -242,10 +243,11 @@ copy,{0}
         with patch("azurelinuxagent.ga.logcollector.MANIFEST_FULL", manifest):
             with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                 log_collector = LogCollector(is_full_mode=True)
-                archive = log_collector.collect_logs_and_get_archive()
+                archive, uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
         self._assert_files_are_in_archive(expected_files=[file_to_collect])
+        self.assertEqual(uncompressed_file_size, os.path.getsize(file_to_collect))
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEqual(1, no_files, "Expected 1 file in archive, found {0}!".format(no_files))
@@ -256,7 +258,7 @@ copy,{0}
 
         with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
             log_collector = LogCollector()
-            archive = log_collector.collect_logs_and_get_archive()
+            archive, uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
 
@@ -269,6 +271,10 @@ copy,{0}
             os.path.join(self.root_collect_dir, "another_dir", "least_important_file")
         ]
         self._assert_files_are_in_archive(expected_files)
+        expected_total_uncompressed_size = 0
+        for file in expected_files:
+            expected_total_uncompressed_size += os.path.getsize(file)
+        self.assertEqual(uncompressed_file_size, expected_total_uncompressed_size)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEqual(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
@@ -278,7 +284,7 @@ copy,{0}
         with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
             with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                 log_collector = LogCollector()
-                archive = log_collector.collect_logs_and_get_archive()
+                archive, uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
 
@@ -294,6 +300,13 @@ copy,{0}
         ]
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
+        total_uncompressed_file_size = 0
+        for file in expected_files:
+            if file.startswith("truncated_"):
+                total_uncompressed_file_size += SMALL_FILE_SIZE
+            else:
+                total_uncompressed_file_size += os.path.getsize(file)
+        self.assertEqual(total_uncompressed_file_size, uncompressed_file_size)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEqual(5, no_files, "Expected 5 files in archive, found {0}!".format(no_files))
@@ -312,7 +325,7 @@ copy,{0}
             with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
                 with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                     log_collector = LogCollector()
-                    archive = log_collector.collect_logs_and_get_archive()
+                    archive, uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
 
@@ -328,6 +341,10 @@ copy,{0}
         ]
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
+        expected_total_uncompressed_size = 0
+        for file in expected_files:
+            expected_total_uncompressed_size += os.path.getsize(file)
+        self.assertEqual(uncompressed_file_size, expected_total_uncompressed_size)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEqual(3, no_files, "Expected 3 files in archive, found {0}!".format(no_files))
@@ -338,7 +355,7 @@ copy,{0}
 
         with patch("azurelinuxagent.ga.logcollector._UNCOMPRESSED_ARCHIVE_SIZE_LIMIT", 10 * 1024 * 1024):
             with patch("azurelinuxagent.ga.logcollector._MUST_COLLECT_FILES", must_collect_files):
-                second_archive = log_collector.collect_logs_and_get_archive()
+                second_archive, second_uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         expected_files = [
             os.path.join(self.root_collect_dir, "waagent.log"),
@@ -352,6 +369,10 @@ copy,{0}
         ]
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
+        expected_total_uncompressed_size = 0
+        for file in expected_files:
+            expected_total_uncompressed_size += os.path.getsize(file)
+        self.assertEqual(second_uncompressed_file_size, expected_total_uncompressed_size)
 
         self._assert_archive_created(second_archive)
 
@@ -363,7 +384,7 @@ copy,{0}
         # needs to be updated in the archive, deleted if removed from disk, and added if not previously seen.
         with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
             log_collector = LogCollector()
-            first_archive = log_collector.collect_logs_and_get_archive()
+            first_archive, first_uncompressed_file_size = log_collector.collect_logs_and_get_archive()
         self._assert_archive_created(first_archive)
 
         # Everything should be in the archive
@@ -376,6 +397,10 @@ copy,{0}
             os.path.join(self.root_collect_dir, "another_dir", "least_important_file")
         ]
         self._assert_files_are_in_archive(expected_files)
+        expected_total_uncompressed_size = 0
+        for file in expected_files:
+            expected_total_uncompressed_size += os.path.getsize(file)
+        self.assertEqual(first_uncompressed_file_size, expected_total_uncompressed_size)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEqual(6, no_files, "Expected 6 files in archive, found {0}!".format(no_files))
@@ -392,7 +417,7 @@ copy,{0}
                                            LARGE_FILE_SIZE)
         rm_files(os.path.join(self.root_collect_dir, "waagent.log.1"))
 
-        second_archive = log_collector.collect_logs_and_get_archive()
+        second_archive, second_uncompressed_file_size = log_collector.collect_logs_and_get_archive()
         self._assert_archive_created(second_archive)
 
         expected_files = [
@@ -408,6 +433,10 @@ copy,{0}
         ]
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
+        expected_total_uncompressed_size = 0
+        for file in expected_files:
+            expected_total_uncompressed_size += os.path.getsize(file)
+        self.assertEqual(second_uncompressed_file_size, expected_total_uncompressed_size)
 
         file = os.path.join(self.root_collect_dir, "waagent.log")  # pylint: disable=redefined-builtin
         new_file_size = self._get_uncompressed_file_size(file)
@@ -434,7 +463,7 @@ copy,{0}
                 with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
                     with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                         log_collector = LogCollector()
-                        archive = log_collector.collect_logs_and_get_archive()
+                        archive, uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         self._assert_archive_created(archive)
 
@@ -443,6 +472,13 @@ copy,{0}
             self._truncated_path(os.path.join(self.root_collect_dir, "waagent.log.1")),  # this file should be truncated
         ]
         self._assert_files_are_in_archive(expected_files)
+        expected_total_uncompressed_size = 0
+        for file in expected_files:
+            if file.startswith("truncated_"):
+                expected_total_uncompressed_size += SMALL_FILE_SIZE
+            else:
+                expected_total_uncompressed_size += os.path.getsize(file)
+        self.assertEqual(uncompressed_file_size, expected_total_uncompressed_size)
 
         no_files = self._get_number_of_files_in_archive()
         self.assertEqual(2, no_files, "Expected 2 files in archive, found {0}!".format(no_files))
@@ -456,7 +492,7 @@ copy,{0}
                 with patch("azurelinuxagent.ga.logcollector._FILE_SIZE_LIMIT", SMALL_FILE_SIZE):
                     with patch('azurelinuxagent.ga.logcollector.LogCollector._initialize_telemetry'):
                         log_collector = LogCollector()
-                        second_archive = log_collector.collect_logs_and_get_archive()
+                        second_archive, second_uncompressed_file_size = log_collector.collect_logs_and_get_archive()
 
         expected_files = [
             os.path.join(self.root_collect_dir, "waagent.log"),
@@ -467,6 +503,13 @@ copy,{0}
         ]
         self._assert_files_are_in_archive(expected_files)
         self._assert_files_are_not_in_archive(unexpected_files)
+        expected_total_uncompressed_size = 0
+        for file in expected_files:
+            if file.startswith("truncated_"):
+                expected_total_uncompressed_size += SMALL_FILE_SIZE
+            else:
+                expected_total_uncompressed_size += os.path.getsize(file)
+        self.assertEqual(second_uncompressed_file_size, expected_total_uncompressed_size)
 
         self._assert_archive_created(second_archive)
 

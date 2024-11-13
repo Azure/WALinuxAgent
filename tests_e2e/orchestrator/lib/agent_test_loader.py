@@ -83,12 +83,34 @@ class VmImageInfo(object):
     def __str__(self):
         return self.urn
 
+class CustomImage(object):
+
+    # Images from a gallery are given as  "<image_gallery>/<image_definition>/<image_version>".
+    _IMAGE_FROM_GALLERY = re.compile(r"(?P<gallery>[^/]+)/(?P<image>[^/]+)/(?P<version>[^/]+)")
+
+    @staticmethod
+    def _is_image_from_gallery(image: str) -> bool:
+        """
+        Verifies if image is from shared gallery
+        """
+        return CustomImage._IMAGE_FROM_GALLERY.match(image) is not None
+
+    @staticmethod
+    def _get_name_of_image_from_gallery(image: str) -> str:
+        """
+        Get image name from shared gallery
+        """
+        match = CustomImage._IMAGE_FROM_GALLERY.match(image)
+        if match is None:
+            raise Exception(f"Invalid image from gallery: {image}")
+        return match.group('image')
+
 
 class AgentTestLoader(object):
     """
     Loads a given set of test suites from the YAML configuration files.
     """
-    def __init__(self, test_suites: str, cloud: str):
+    def __init__(self, test_suites: List[str], cloud: str):
         """
         Loads the specified 'test_suites', which are given as a string of comma-separated suite names or a YAML description
         of a single test_suite.
@@ -134,6 +156,7 @@ class AgentTestLoader(object):
         """
         Performs some basic validations on the data loaded from the YAML description files
         """
+
         def _parse_image(image: str) -> str:
             """
             Parses a reference to an image or image set and returns the name of the image or image set
@@ -147,8 +170,11 @@ class AgentTestLoader(object):
             # Validate that the images the suite must run on are in images.yml
             for image in suite.images:
                 image = _parse_image(image)
+                # skip validation if suite image from gallery image
+                if CustomImage._is_image_from_gallery(image):
+                    continue
                 if image not in self.images:
-                    raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml")
+                    raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {image} in images.yml or image from a shared gallery")
 
             # If the suite specifies a cloud and it's location<cloud:location>, validate that location string is start with <cloud:> and then validate that the images it uses are available in that location
             for suite_location in suite.locations:
@@ -158,6 +184,9 @@ class AgentTestLoader(object):
                     continue
                 for suite_image in suite.images:
                     suite_image = _parse_image(suite_image)
+                    # skip validation if suite image from gallery image
+                    if CustomImage._is_image_from_gallery(suite_image):
+                        continue
                     for image in self.images[suite_image]:
                         # If the image has a location restriction, validate that it is available on the location the suite must run on
                         if image.locations:
@@ -175,25 +204,9 @@ class AgentTestLoader(object):
                 if suite_skip_image not in self.images:
                     raise Exception(f"Invalid image reference in test suite {suite.name}: Can't find {suite_skip_image} in images.yml")
 
-
     @staticmethod
-    def _load_test_suites(test_suites: str) -> List[TestSuiteInfo]:
-        #
-        # Attempt to parse 'test_suites' as the YML description of a single suite
-        #
-        parsed = yaml.safe_load(test_suites)
-
-        #
-        # A comma-separated list (e.g. "foo", "foo, bar", etc.) is valid YAML, but it is parsed as a string. An actual test suite would
-        # be parsed as a dictionary. If it is a dict, take is as the YML description of a single test suite
-        #
-        if isinstance(parsed, dict):
-            return [AgentTestLoader._load_test_suite(parsed)]
-
-        #
-        # If test_suites is not YML, then it should be a comma-separated list of description files
-        #
-        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/f"{t.strip()}.yml" for t in test_suites.split(',')]
+    def _load_test_suites(test_suites: List[str]) -> List[TestSuiteInfo]:
+        description_files: List[Path] = [AgentTestLoader._SOURCE_CODE_ROOT/"test_suites"/f"{t}.yml" for t in test_suites]
         return [AgentTestLoader._load_test_suite(f) for f in description_files]
 
     @staticmethod
@@ -224,8 +237,8 @@ class AgentTestLoader(object):
                           rest of the tests in the suite will not be executed). By default, a failure on a test does not stop execution of
                           the test suite.
         * images   - A string, or a list of strings, specifying the images on which the test suite must be executed. Each value
-                     can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed"). The
-                     names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
+                     can be the name of a single image (e.g."ubuntu_2004"), or the name of an image set (e.g. "endorsed") or shared gallery image(e.g. "gallery/wait-cloud-init/1.0.2").
+                     The names for images and image sets are defined in WALinuxAgent/tests_e2e/tests_suites/images.yml.
         * locations - [Optional; string or list of strings] If given, the test suite must be executed on that cloud location(e.g. "AzureCloud:eastus2euap").
                      If not specified, or set to an empty string, the test suite will be executed in the default location. This is useful
                      for test suites that exercise a feature that is enabled only in certain regions.

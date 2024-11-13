@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import json  # pylint: disable=unused-import
 import os
 import tempfile
 from datetime import datetime, timedelta
@@ -49,6 +48,7 @@ class TestLogger(AgentTestCase):
         AgentTestCase.tearDown(self)
         logger.reset_periodic()
         logger.DEFAULT_LOGGER.appenders *= 0
+        logger.set_prefix(None)
         fileutil.rm_dirs(self.event_dir)
 
     @patch('azurelinuxagent.common.logger.Logger.verbose')

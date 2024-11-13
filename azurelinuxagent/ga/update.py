@@ -31,7 +31,6 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.agent_supported_feature import get_supported_feature_by_name, SupportedFeatureNames, \
     get_agent_supported_features_list_for_crp
@@ -395,7 +394,7 @@ class UpdateHandler(object):
                 self._check_daemon_running(debug)
                 self._check_threads_running(all_thread_handlers)
                 self._process_goal_state(exthandlers_handler, remote_access_handler, agent_update_handler)
-                self._send_heartbeat_telemetry(protocol)
+                self._send_heartbeat_telemetry(protocol, agent_update_handler)
                 self._check_agent_memory_usage()
                 time.sleep(self._goal_state_period)
 
@@ -411,7 +410,7 @@ class UpdateHandler(object):
             logger.warn(textutil.format_exception(error))
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
-            return
+            return  # pylint: disable=unreachable
 
         self._shutdown()
         sys.exit(0)
@@ -474,25 +473,6 @@ class UpdateHandler(object):
                 logger.error(message)
                 add_event(op=WALAEventOperation.CloudInit, message=message, is_success=False, log_event=False)
             self._cloud_init_completed = True  # Mark as completed even on error since we will proceed to execute extensions
-
-    def _get_vm_size(self, protocol):
-        """
-        Including VMSize is meant to capture the architecture of the VM (i.e. arm64 VMs will
-        have arm64 included in their vmsize field and amd64 will have no architecture indicated).
-        """
-        if self._vm_size is None:
-
-            imds_client = get_imds_client(protocol.get_endpoint())
-
-            try:
-                imds_info = imds_client.get_compute()
-                self._vm_size = imds_info.vmSize
-            except Exception as e:
-                err_msg = "Attempts to retrieve VM size information from IMDS are failing: {0}".format(textutil.format_exception(e))
-                logger.periodic_warn(logger.EVERY_SIX_HOURS, "[PERIODIC] {0}".format(err_msg))
-                return "unknown"
-
-        return self._vm_size
 
     def _get_vm_arch(self):
         return platform.machine()
@@ -896,7 +876,7 @@ class UpdateHandler(object):
         pid_file = conf.get_agent_pid_file_path()
         pid_dir = os.path.dirname(pid_file)
         pid_name = os.path.basename(pid_file)
-        pid_re = re.compile("(\d+)_{0}".format(re.escape(pid_name)))  # pylint: disable=W1401
+        pid_re = re.compile(r"(\d+)_{0}".format(re.escape(pid_name)))
         return pid_dir, pid_name, pid_re
 
     def _get_pid_files(self):
@@ -1036,27 +1016,27 @@ class UpdateHandler(object):
 
         return pid_files, pid_file
 
-    def _send_heartbeat_telemetry(self, protocol):
+    def _send_heartbeat_telemetry(self, protocol, agent_update_handler):
         if self._last_telemetry_heartbeat is None:
             self._last_telemetry_heartbeat = datetime.utcnow() - UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD
 
         if datetime.utcnow() >= (self._last_telemetry_heartbeat + UpdateHandler.TELEMETRY_HEARTBEAT_PERIOD):
             dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.get_endpoint())
-            auto_update_enabled = 1 if conf.get_autoupdate_enabled() else 0
+            auto_update_enabled = 1 if conf.get_auto_update_to_latest_version() else 0
+            update_mode = agent_update_handler.get_current_update_mode()
 
-            telemetry_msg = "{0};{1};{2};{3};{4}".format(self._heartbeat_counter, self._heartbeat_id, dropped_packets,
-                                                         self._heartbeat_update_goal_state_error_count,
-                                                         auto_update_enabled)
-            debug_log_msg = "[DEBUG HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
-                            "UpdateGSErrors: {3};AutoUpdate: {4}]".format(self._heartbeat_counter,
+            # Note: When we add new values to the heartbeat message, please add a semicolon at the end of the value.
+            # This helps to parse the message easily in kusto queries with regex
+            heartbeat_msg = "HeartbeatCounter: {0};HeartbeatId: {1};DroppedPackets: {2};" \
+                            "UpdateGSErrors: {3};AutoUpdate: {4};UpdateMode: {5};".format(self._heartbeat_counter,
                                                                           self._heartbeat_id, dropped_packets,
                                                                           self._heartbeat_update_goal_state_error_count,
-                                                                          auto_update_enabled)
+                                                                          auto_update_enabled, update_mode)
 
             # Write Heartbeat events/logs
             add_event(name=AGENT_NAME, version=CURRENT_VERSION, op=WALAEventOperation.HeartBeat, is_success=True,
-                      message=telemetry_msg, log_event=False)
-            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent {1}", CURRENT_AGENT, debug_log_msg)
+                      message=heartbeat_msg, log_event=False)
+            logger.info(u"[HEARTBEAT] Agent {0} is running as the goal state agent [DEBUG {1}]", CURRENT_AGENT, heartbeat_msg)
 
             # Update/Reset the counters
             self._heartbeat_counter += 1

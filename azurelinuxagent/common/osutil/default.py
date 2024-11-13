@@ -16,6 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import array
 import base64
 import datetime
 import errno
@@ -26,15 +27,26 @@ import multiprocessing
 import os
 import platform
 import pwd
+import random
 import re
 import shutil
 import socket
+import string
 import struct
 import sys
 import time
 from pwd import getpwall
 
-import array
+from azurelinuxagent.common.exception import OSUtilError
+# 'crypt' was removed in Python 3.13; use legacycrypt instead
+if sys.version_info[0] == 3 and sys.version_info[1] >= 13 or sys.version_info[0] > 3:
+    try:
+        from legacycrypt import crypt
+    except ImportError:
+        def crypt(password, salt):
+            raise OSUtilError("Please install the legacycrypt Python module to use this feature.")
+else:
+    from crypt import crypt  # pylint: disable=deprecated-module
 
 from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
@@ -42,7 +54,6 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils import textutil
 
-from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr, array_to_bytes
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -58,7 +69,7 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-_IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")  # pylint: disable=W1401
+_IPTABLES_VERSION_PATTERN = re.compile(r"^[^\d\.]*([\d\.]+).*$")
 _IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
 
@@ -106,7 +117,7 @@ def get_firewall_delete_conntrack_drop_command(wait, destination):
                       "--ctstate", "INVALID,NEW", "-j", "DROP"])
 
 
-PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"  # pylint: disable=W1401
+PACKET_PATTERN = r"^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
 ALL_MEMS_REGEX = re.compile('^Mem.*')
 
@@ -123,7 +134,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')  # pylint: disable=W1401
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
 
 STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
@@ -433,10 +444,20 @@ class DefaultOSUtil(object):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
-        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
+        passwd_hash = DefaultOSUtil.gen_password_hash(password, crypt_id, salt_len)
 
         self._run_command_raising_OSUtilError(["usermod", "-p", passwd_hash, username],
                                               err_msg="Failed to set password for {0}".format(username))
+
+    @staticmethod
+    def gen_password_hash(password, crypt_id, salt_len):
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(crypt_id, salt)
+        if sys.version_info[0] == 2:
+            # if python 2.*, encode to type 'str' to prevent Unicode Encode Error from crypt.crypt
+            password = password.encode('utf-8')
+        return crypt(password, salt)
 
     def get_users(self):
         return getpwall()
@@ -1138,7 +1159,7 @@ class DefaultOSUtil(object):
         Add specified route 
         """
         try:
-            cmd = ["ip", "route", "add", net, "via", gateway]
+            cmd = ["ip", "route", "add", str(net), "via", gateway]
             return shellutil.run_command(cmd)
         except CommandError:
             return ""

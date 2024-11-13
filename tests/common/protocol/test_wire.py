@@ -95,11 +95,11 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
                 protocol.get_goal_state().fetch_extension_manifest(ext_handler.name, ext_handler.manifest_uris)
 
             crt1 = os.path.join(self.tmp_dir,
-                                '38B85D88F03D1A8E1C671EB169274C09BC4D4703.crt')
+                                '8979F1AC8C4215827BF3B5A403E6137B504D02A4.crt')
             crt2 = os.path.join(self.tmp_dir,
-                                'BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F.crt')
+                                'F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9.crt')
             prv2 = os.path.join(self.tmp_dir,
-                                'BD447EF71C3ADDF7C837E84D630F3FAC22CCD22F.prv')
+                                'F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9.prv')
             if certsMustBePresent:
                 self.assertTrue(os.path.isfile(crt1))
                 self.assertTrue(os.path.isfile(crt2))
@@ -478,6 +478,28 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
         client.report_event(self._get_telemetry_events_generator(event_list))
 
         self.assertEqual(patch_send_event.call_count, 0)
+
+    def test_get_header_for_cert_should_use_triple_des(self, *_):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            headers = protocol.client.get_header_for_cert()
+            self.assertIn("x-ms-cipher-name", headers)
+            self.assertEqual(headers["x-ms-cipher-name"], "DES_EDE3_CBC", "Unexpected x-ms-cipher-name")
+
+    def test_get_header_for_remote_access_should_use_aes128(self, *_):
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+            headers = protocol.client.get_header_for_remote_access()
+            self.assertIn("x-ms-cipher-name", headers)
+            self.assertEqual(headers["x-ms-cipher-name"], "AES128_CBC", "Unexpected x-ms-cipher-name")
+
+    def test_detect_should_handle_inconsistent_goal_state_errors(self, *_):
+        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS  # Certificates are checked only on FastTrack goal states
+        data_file['certs'] = "wire/certs-2.xml"  # Change the certificates to force a GoalStateInconsistentError
+        with mock_wire_protocol(data_file, detect_protocol=False) as protocol:
+            with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+                protocol.detect()
+                self.assertTrue(
+                    any(len(args) == 2 and  args[1].startswith("[GoalStateInconsistentError]") for args, _ in mock_warn.call_args_list),
+                    "Did not find any warnings about an GoalStateInconsistentError: {0}".format(mock_warn.call_args_list))
 
 
 class TestWireClient(HttpRequestPredicates, AgentTestCase):

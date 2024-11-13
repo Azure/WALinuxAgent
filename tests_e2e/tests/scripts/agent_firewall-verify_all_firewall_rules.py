@@ -91,7 +91,8 @@ def delete_iptable_rules(commands: List[List[str]] = None) -> None:
         cmd = None
         for command in commands:
             cmd = command
-            retry(lambda: execute_cmd(cmd=cmd), attempts=3)
+            # W0640: Cell variable cmd defined in loop (cell-var-from-loop)
+            retry(lambda: execute_cmd(cmd=cmd), attempts=3)  # pylint: disable=W0640
     except Exception as e:
         raise Exception("Error -- Failed to Delete the ip table rule set {0}".format(e))
 

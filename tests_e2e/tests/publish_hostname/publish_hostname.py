@@ -26,6 +26,7 @@
 
 import datetime
 import re
+from typing import List, Dict, Any
 
 from assertpy import fail
 from time import sleep
@@ -105,7 +106,7 @@ class PublishHostname(AgentVmTest):
                                                                               self._context.username,
                                                                               self._vm_password))
 
-    def retry_ssh_if_connection_reset(self, command: str, use_sudo=False):
+    def retry_ssh_if_connection_reset(self, command: str, use_sudo=False):  # pylint: disable=inconsistent-return-statements
         # The agent may bring the network down and back up to publish the hostname, which can reset the ssh connection.
         # Adding retry here for connection reset.
         retries = 3
@@ -203,6 +204,21 @@ class PublishHostname(AgentVmTest):
                 if e.exit_code == 255 and ("Connection timed out" in e.stderr or "Connection refused" in e.stderr):
                     self.check_agent_reports_status()
                 raise
+
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        ignore_rules = [
+            #
+            # We may see temporary network unreachable warnings since we are bringing the network interface down
+            #
+            # 2024-02-16T09:27:14.114569Z WARNING MonitorHandler ExtHandler Error in SendHostPluginHeartbeat: [HttpError] [HTTP Failed] GET http://168.63.129.16:32526/health -- IOError [Errno 101] Network is unreachable -- 1 attempts made --- [NOTE: Will not log the same error for the next hour]
+            # 2024-02-28T05:37:55.562065Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] GET vmSettings [correlation ID: 28de1093-ecb5-4515-ba8e-2ed0c7778e34 eTag: 4648629460326038775]: Request failed: [Errno 101] Network is unreachable
+            # 2024-02-29T09:30:40.702293Z ERROR ExtHandler ExtHandler Error fetching the goal state: [ProtocolError] [Wireserver Exception] [HttpError] [HTTP Failed] GET http://168.63.129.16/machine/ -- IOError [Errno 101] Network is unreachable -- 6 attempts made
+            #
+            {
+                'message': r"GET (http://168.63.129.16:32526/health|vmSettings|http://168.63.129.16/machine).*\[Errno 101\] Network is unreachable",
+            }
+        ]
+        return ignore_rules
 
 
 if __name__ == "__main__":

@@ -964,7 +964,7 @@ Match host 192.168.1.2\n\
 
                 self.assertFalse(osutil._enable_firewall)
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     def test_get_nic_state(self):
         state = osutil.DefaultOSUtil().get_nic_state()
         self.assertNotEqual(state, {})
@@ -1110,6 +1110,15 @@ class TestGetPublishedHostname(AgentTestCase):
         expected = "a-sample-set-hostname"
         self.assertEqual(expected, actual, "get_hostname_record returned an incorrect hostname")
         self.assertEqual(expected, self.__get_published_hostname_contents(), "get_hostname_record returned an incorrect hostname")
+
+    def test_get_password_hash(self):
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test_passwords.txt'), 'rb') as in_file:
+            for data in in_file:
+                # Remove bom on bytes data before it is converted into string.
+                data = textutil.remove_bom(data)
+                data = ustr(data, encoding='utf-8')
+                password_hash = osutil.DefaultOSUtil.gen_password_hash(data, 6, 10)
+                self.assertNotEqual(None, password_hash)
 
 
 if __name__ == '__main__':

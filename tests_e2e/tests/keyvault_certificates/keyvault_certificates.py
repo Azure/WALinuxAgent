@@ -20,6 +20,9 @@
 #
 # This test verifies that the Agent can download and extract KeyVault certificates that use different encryption algorithms (currently EC and RSA).
 #
+import datetime
+import time
+
 from assertpy import fail
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
@@ -82,13 +85,23 @@ class KeyvaultCertificates(AgentVmTest):
             log.info("Reapplying the goal state to ensure the test certificates are downloaded.")
             self._context.vm.reapply()
 
-        try:
-            output = ssh_client.run_command(f"ls {expected_certificates}", use_sudo=True)
-            log.info("Found all the expected certificates:\n%s", output)
-        except CommandError as error:
-            if error.stdout != "":
-                log.info("Found some of the expected certificates:\n%s", error.stdout)
-            fail(f"Failed to find certificates\n{error.stderr}")
+        # If the goal state includes only the certificates, but no extensions, the update/reapply operations may complete before the Agent has downloaded the certificates
+        # so we retry for a few minutes to ensure the certificates are downloaded.
+        timed_out = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+        while True:
+            try:
+                output = ssh_client.run_command(f"ls {expected_certificates}", use_sudo=True)
+                log.info("Found all the expected certificates:\n%s", output)
+                break
+            except CommandError as error:
+                if error.stdout == "":
+                    if datetime.datetime.utcnow() < timed_out:
+                        log.info("The certificates have not been downloaded yet, will retry after a short delay.")
+                        time.sleep(30)
+                        continue
+                else:
+                    log.info("Found some of the expected certificates:\n%s", error.stdout)
+                fail(f"Failed to find certificates\n{error.stderr}")
 
 
 if __name__ == "__main__":

@@ -61,7 +61,6 @@ elif sys.version_info[0] == 2:
     range = xrange
     int = long
 
-
     if sys.version_info[1] >= 7:
         from collections import OrderedDict  # For Py 2.7+
     else:

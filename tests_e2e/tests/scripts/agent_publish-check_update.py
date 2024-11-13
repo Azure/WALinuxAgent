@@ -1,5 +1,5 @@
 #!/usr/bin/env pypy3
-
+import argparse
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -67,7 +67,7 @@ _UPDATE_PATTERN_04 = re.compile(r'Current Agent (\S*) completed all update check
 _RUNNING_PATTERN_00 = re.compile(r'.*Agent\sWALinuxAgent-(\S*)\sis running as the goal state agent')
 
 
-def verify_agent_update_from_log():
+def verify_agent_update_from_log(published_version: str) -> bool:
 
     exit_code = 0
     detected_update = False
@@ -83,13 +83,14 @@ def verify_agent_update_from_log():
         for p in [_UPDATE_PATTERN_00, _UPDATE_PATTERN_01, _UPDATE_PATTERN_02, _UPDATE_PATTERN_03, _UPDATE_PATTERN_04]:
             update_match = re.match(p, record.message)
             if update_match:
-                detected_update = True
                 update_version = update_match.groups()[2]
-                log.info('found the agent update log: %s', record.text)
-                break
+                if update_version == published_version:
+                    detected_update = True
+                    log.info('found the agent update log: %s', record.text)
+                    break
 
         if detected_update:
-            running_match = re.match(_RUNNING_PATTERN_00, record.text)
+            running_match = re.match(_RUNNING_PATTERN_00, record.message)
             if running_match and update_version == running_match.groups()[0]:
                 update_successful = True
                 log.info('found the agent started new version log: %s', record.text)
@@ -102,7 +103,7 @@ def verify_agent_update_from_log():
             log.warning('update was not successful')
             exit_code = 1
     else:
-        log.warning('update was not detected')
+        log.warning('update was not detected for version: %s', published_version)
         exit_code = 1
 
     return exit_code == 0
@@ -110,7 +111,10 @@ def verify_agent_update_from_log():
 
 # This method will trace agent update messages in the agent log and determine if the update was successful or not.
 def main():
-    found: bool = retry_if_false(verify_agent_update_from_log)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--published-version', required=True)
+    args = parser.parse_args()
+    found: bool = retry_if_false(lambda: verify_agent_update_from_log(args.published_version))
     if not found:
         fail('update was not found in the logs')
 

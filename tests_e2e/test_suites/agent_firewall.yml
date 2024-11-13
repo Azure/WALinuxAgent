@@ -13,3 +13,6 @@ images:
   - "endorsed"
   - "endorsed-arm64"
 owns_vm: true  # This vm cannot be shared with other tests because it modifies the firewall rules and agent status.
+skip_on_images:
+  - "ubuntu_2204_minimal" # TODO: Currently Ubuntu minimal does not include the 'iptables' command. Remove it once this has been addressed.
+  - "ubuntu_2404_minimal"

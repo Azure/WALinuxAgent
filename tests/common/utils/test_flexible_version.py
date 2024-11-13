@@ -1,8 +1,8 @@
-import random  # pylint: disable=unused-import
 import re
 import unittest
 
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+
 
 class TestFlexibleVersion(unittest.TestCase):
 

@@ -1,5 +1,10 @@
 #
-# This test verifies that the Agent can download and extract KeyVault certificates that use different encryption algorithms
+# This test verifies that the Agent can download and extract KeyVault certificates that use different encryption
+# algorithms (currently RSA and EC).
+#
+# The test needs exclusive use of the VM because support for EC certificates was added on version 2.10. Daemons
+# older than that version will fail to parse the certificates, and go on an infinite loop when fetching the goal
+# state.
 #
 name: "KeyvaultCertificates"
 tests:
@@ -7,3 +12,4 @@ tests:
 images:
   - "endorsed"
   - "endorsed-arm64"
+owns_vm: true

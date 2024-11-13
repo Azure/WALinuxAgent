@@ -29,7 +29,7 @@ import tempfile
 import time
 import unittest
 from functools import wraps
-from threading import currentThread
+from threading import current_thread
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.event as event
@@ -42,9 +42,6 @@ import tests
 
 try:
     from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock  # pylint: disable=unused-import
-
-    # Import mock module for Python2 and Python3
-    from bin.waagent2 import Agent  # pylint: disable=unused-import
 except ImportError:
     from mock import Mock, patch, MagicMock, ANY, DEFAULT, call, PropertyMock
 
@@ -156,8 +153,6 @@ class AgentTestCase(unittest.TestCase):
             cls.assertIsNone = cls.emulate_assertIsNone
         if not hasattr(cls, "assertIsNotNone"):
             cls.assertIsNotNone = cls.emulate_assertIsNotNone
-        if hasattr(cls, "assertRaisesRegexp"):
-            cls.assertRaisesRegex = cls.assertRaisesRegexp
         if not hasattr(cls, "assertRaisesRegex"):
             cls.assertRaisesRegex = cls.emulate_raises_regex
         if not hasattr(cls, "assertListEqual"):
@@ -449,22 +444,6 @@ class AgentTestCase(unittest.TestCase):
         os.chmod(script_file, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
 
-class AgentTestCaseWithGetVmSizeMock(AgentTestCase):
-    
-    def setUp(self):
-        
-        self._get_vm_size_patch = patch('azurelinuxagent.ga.update.UpdateHandler._get_vm_size', return_value="unknown")
-        self._get_vm_size_patch.start()
-        
-        super(AgentTestCaseWithGetVmSizeMock, self).setUp()
-
-    def tearDown(self):
-
-        if self._get_vm_size_patch:
-            self._get_vm_size_patch.stop()
-
-        super(AgentTestCaseWithGetVmSizeMock, self).tearDown()
-
 def load_data(name):
     """Load test data"""
     path = os.path.join(data_dir, name)
@@ -543,6 +522,6 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
 def clear_singleton_instances(cls):
     # Adding this lock to avoid any race conditions
     with cls._lock:
-        obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
+        obj_name = "%s__%s" % (cls.__name__, current_thread().name)  # Object Name = className__threadName
         if obj_name in cls._instances:
             del cls._instances[obj_name]

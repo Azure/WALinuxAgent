@@ -35,7 +35,7 @@ class ConfigurationProvider(object):
     """
 
     def __init__(self):
-        self.values = dict()
+        self.values = {}
 
     def load(self, content):
         if not content:
@@ -146,7 +146,8 @@ __SWITCH_OPTIONS__ = {
     "Debug.CgroupDisableOnQuotaCheckFailure": True,
     "Debug.EnableAgentMemoryUsageCheck": False,
     "Debug.EnableFastTrack": True,
-    "Debug.EnableGAVersioning": True
+    "Debug.EnableGAVersioning": True,
+    "Debug.EnableCgroupV2ResourceLimiting": False
 }
 
 
@@ -200,7 +201,8 @@ __INTEGER_OPTIONS__ = {
     "Debug.EtpCollectionPeriod": 300,
     "Debug.AutoUpdateHotfixFrequency": 14400,
     "Debug.AutoUpdateNormalFrequency": 86400,
-    "Debug.FirewallRulesLogPeriod": 86400
+    "Debug.FirewallRulesLogPeriod": 86400,
+    "Debug.LogCollectorInitialDelay": 5 * 60
 }
 
 
@@ -670,7 +672,7 @@ def get_enable_ga_versioning(conf=__conf__):
     If True, the agent looks for rsm updates(checking requested version in GS) otherwise it will fall back to self-update and finds the highest version from PIR.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableGAVersioning", False)
+    return conf.get_switch("Debug.EnableGAVersioning", True)
 
 
 def get_firewall_rules_log_period(conf=__conf__):
@@ -680,3 +682,20 @@ def get_firewall_rules_log_period(conf=__conf__):
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
     return conf.get_int("Debug.FirewallRulesLogPeriod", 86400)
+
+
+def get_enable_cgroup_v2_resource_limiting(conf=__conf__):
+    """
+    If True, the agent will enable resource monitoring and enforcement for the log collector on machines using cgroup v2.
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_switch("Debug.EnableCgroupV2ResourceLimiting", False)
+
+
+def get_log_collector_initial_delay(conf=__conf__):
+    """
+    Determine the initial delay at service start before the first periodic log collection.
+
+    NOTE: This option is experimental and may be removed in later versions of the Agent.
+    """
+    return conf.get_int("Debug.LogCollectorInitialDelay", 5 * 60)

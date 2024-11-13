@@ -38,7 +38,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
 from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
-    GoalStateProperties
+    GoalStateProperties, GoalStateInconsistentError
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
@@ -86,7 +86,22 @@ class WireProtocol(DataContract):
         # Initialize the goal state, including all the inner properties
         if init_goal_state:
             logger.info('Initializing goal state during protocol detection')
-            self.client.reset_goal_state(save_to_history=save_to_history)
+            #
+            # TODO: Currently protocol detection retrieves the entire goal state. This is not needed; in particular, retrieving the Extensions goal state
+            #       is not needed. However, the goal state is cached in self.client._goal_state and other components, including the Extension Handler,
+            #       depend on this cached value. This has been a long-standing issue that causes multiple problems. Before removing the cached goal state,
+            #       though, a careful review of these dependencies is needed.
+            #
+            #       One of the problems of fetching the full goal state is that issues while retrieving it can block protocol detection and make the
+            #       Agent go into a retry loop that can last 1 full hour. One particular error, GoalStateInconsistentError, can arise if the certificates
+            #       needed by extensions are missing from the goal state; for example, if a FastTrack goal state is out of sync with the corresponding
+            #       Fabric goal state that contains the certificates, or if decryption of the certificates fais (and hence, the certificate list is
+            #       empty). The try/except below handles only this one particular problem.
+            #
+            try:
+                self.client.reset_goal_state(save_to_history=save_to_history)
+            except GoalStateInconsistentError as error:
+                logger.warn("{0}", ustr(error))
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -682,8 +697,8 @@ class WireClient(object):
             if os.path.exists(target_directory):
                 try:
                     shutil.rmtree(target_directory)
-                except Exception as exception:
-                    logger.warn("Cannot delete {0}: {1}", target_directory, ustr(exception))
+                except Exception as rmtree_exception:
+                    logger.warn("Cannot delete {0}: {1}", target_directory, ustr(rmtree_exception))
             raise
         finally:
             try:
@@ -886,11 +901,11 @@ class WireClient(object):
                              message=msg,
                              log_event=True)
                 return ret
-            except (ResourceGoneError, InvalidContainerError) as error:
+            except (ResourceGoneError, InvalidContainerError) as host_error:
                 msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
                       "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
                       "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
-                                                    new_role_config_name, type(error).__name__)
+                                                    new_role_config_name, type(host_error).__name__)
                 add_periodic(delta=logger.EVERY_SIX_HOURS,
                              name=AGENT_NAME,
                              version=CURRENT_VERSION,
@@ -1126,6 +1141,12 @@ class WireClient(object):
         }
 
     def get_header_for_cert(self):
+        return self._get_header_for_encrypted_request("DES_EDE3_CBC")
+
+    def get_header_for_remote_access(self):
+        return self._get_header_for_encrypted_request("AES128_CBC")
+
+    def _get_header_for_encrypted_request(self, cypher):
         trans_cert_file = os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME)
         try:
             content = fileutil.read_file(trans_cert_file)
@@ -1136,7 +1157,7 @@ class WireClient(object):
         return {
             "x-ms-agent-name": "WALinuxAgent",
             "x-ms-version": PROTOCOL_VERSION,
-            "x-ms-cipher-name": "DES_EDE3_CBC",
+            "x-ms-cipher-name": cypher,
             "x-ms-guest-agent-public-x509-cert": cert
         }
 

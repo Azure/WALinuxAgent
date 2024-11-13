@@ -22,7 +22,7 @@ import threading
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.networkutil as networkutil
-from azurelinuxagent.ga.cgroup import MetricValue, MetricsCategory, MetricsCounter
+from azurelinuxagent.ga.cgroupcontroller import MetricValue, MetricsCategory, MetricsCounter
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
@@ -216,10 +216,10 @@ class SendImdsHeartbeat(PeriodicOperation):
     Periodic operation to report the IDMS's health. The signal is 'Healthy' when we have successfully called and validated
     a response in the last _IMDS_HEALTH_PERIOD.
     """
-    def __init__(self, protocol_util, health_service):
+    def __init__(self, health_service):
         super(SendImdsHeartbeat, self).__init__(SendImdsHeartbeat._IMDS_HEARTBEAT_PERIOD)
         self.health_service = health_service
-        self.imds_client = get_imds_client(protocol_util.get_wireserver_endpoint())
+        self.imds_client = get_imds_client()
         self.imds_error_state = ErrorState(min_timedelta=SendImdsHeartbeat._IMDS_HEALTH_PERIOD)
 
     _IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
@@ -281,8 +281,8 @@ class MonitorHandler(ThreadHandlerInterface):
 
     def start(self):
         self.monitor_thread = threading.Thread(target=self.daemon)
-        self.monitor_thread.setDaemon(True)
-        self.monitor_thread.setName(self.get_thread_name())
+        self.monitor_thread.daemon = True
+        self.monitor_thread.name = self.get_thread_name()
         self.monitor_thread.start()
 
     def daemon(self):
@@ -298,7 +298,7 @@ class MonitorHandler(ThreadHandlerInterface):
                 PollResourceUsage(),
                 PollSystemWideResourceUsage(),
                 SendHostPluginHeartbeat(protocol, health_service),
-                SendImdsHeartbeat(protocol_util, health_service)
+                SendImdsHeartbeat(health_service)
             ]
 
             report_network_configuration_changes = ReportNetworkConfigurationChanges()
