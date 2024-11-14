@@ -27,7 +27,6 @@ import stat
 import tempfile
 import time
 import zipfile
-from distutils.version import LooseVersion
 from collections import defaultdict
 from functools import partial
 
@@ -2258,7 +2257,7 @@ class HandlerManifest(object):
         This is not effective after nov 30th.
         """
         if ExtHandlerInstance.is_azuremonitorlinuxagent(extension_name):
-            if LooseVersion(str_version) < LooseVersion("1.12"):
+            if FlexibleVersion(str_version) < FlexibleVersion("1.12"):
                 test_man = {
                     "resourceLimits": {
                         "services": [

@@ -340,7 +340,7 @@ class TestSendTelemetryEventsHandler(AgentTestCase, HttpRequestPredicates):
             with patch("os.path.getmtime", return_value=test_mtime):
                 with patch('os.getpid', return_value=test_eventpid):
                     with patch("threading.Thread.ident", new_callable=PropertyMock(return_value=test_eventtid)):
-                        with patch("threading.Thread.getName", return_value=test_taskname):
+                        with patch("threading.Thread.name", new_callable=PropertyMock(return_value=test_taskname)):
                             monitor_handler.run()
 
             TestSendTelemetryEventsHandler._stop_handler(telemetry_handler)

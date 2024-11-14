@@ -246,7 +246,7 @@ class RDMADeviceHandler(object):
             return
         retcode, out = shellutil.run_get_output("modinfo %s" % module_name)
         if retcode == 0:
-            version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)  # pylint: disable=W1401
+            version = re.search(r"version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
             if version:
                 v1 = int(version.groups(0)[0])
                 v2 = int(version.groups(0)[1])
@@ -368,10 +368,6 @@ class RDMADeviceHandler(object):
         count = 0
 
         for nic in nics:
-            # look for IBoIP interface of format ibXXX
-            if not re.match(r"ib\w+", nic):
-                continue
-
             mac_addr = None
             with open(os.path.join(net_dir, nic, "address")) as address_file:
                 mac_addr = address_file.read()
@@ -382,7 +378,11 @@ class RDMADeviceHandler(object):
 
             mac_addr = mac_addr.upper()
 
-            match = re.match(r".+(\w\w):(\w\w):(\w\w):\w\w:\w\w:(\w\w):(\w\w):(\w\w)\n", mac_addr)
+            # if this is an IB interface, match IB-specific regex
+            if re.match(r"ib\w+", nic):
+                match = re.match(r".+(\w\w):(\w\w):(\w\w):\w\w:\w\w:(\w\w):(\w\w):(\w\w)\n", mac_addr)
+            else:
+                match = re.match(r"^(\w\w):(\w\w):(\w\w):(\w\w):(\w\w):(\w\w)$", mac_addr)
             if not match:
                 logger.error("RDMA: failed to parse address for device {0} address {1}".format(nic, mac_addr))
                 continue
@@ -473,7 +473,7 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def replace_dat_conf_contents(cfg, ipv4_addr):
-        old = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\S+ 0\""  # pylint: disable=W1401
+        old = r"ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\S+ 0\""
         new = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"{0} 0\"".format(
             ipv4_addr)
         return re.sub(old, new, cfg)

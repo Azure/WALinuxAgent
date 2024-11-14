@@ -77,7 +77,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user, "
                                "will not set password.").format(username))
-        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
+        passwd_hash = DefaultOSUtil.gen_password_hash(password, crypt_id, salt_len)
         self._run_command_raising_OSUtilError(['pw', 'usermod', username, '-H', '0'], cmd_input=passwd_hash,
                                               err_msg="Failed to set password for {0}".format(username))
 
@@ -150,7 +150,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             route_header_line = output_lines.index("Internet:") + 1
             # Parse the file structure and left justify the routes
             route_start_line = route_header_line + 1
-            route_line_length = max([len(line) for line in output_lines[route_header_line:]])
+            route_line_length = max(len(line) for line in output_lines[route_header_line:])
             netstat_route_list = [line.ljust(route_line_length) for line in output_lines[route_start_line:]]
             # Parse the headers
             _route_headers = output_lines[route_header_line].split()
@@ -551,7 +551,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         err, output = shellutil.run_get_output(cmd_search_blkvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)  # pylint: disable=W1401
+            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \\( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):
@@ -562,7 +562,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         err, output = shellutil.run_get_output(cmd_search_storvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)  # pylint: disable=W1401
+            cmd_search_dev = "camcontrol devlist | grep {0} | awk -F \\( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
                 for possible in output.rstrip().split(','):

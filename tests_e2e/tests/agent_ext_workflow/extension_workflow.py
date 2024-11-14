@@ -114,7 +114,7 @@ class ExtensionWorkflow(AgentVmTest):
         def assert_data_in_instance_view(self, instance_view: VirtualMachineExtensionInstanceView):
             log.info("Asserting extension status ...")
             status_message = instance_view.statuses[0].message
-            log.info("Status message: %s" % status_message)
+            log.info("Status message: %s", status_message)
 
             with soft_assertions():
                 expected_ext_version = "%s-%s" % (self.name, self.version)

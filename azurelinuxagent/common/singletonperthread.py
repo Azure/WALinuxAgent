@@ -1,4 +1,4 @@
-from threading import Lock, currentThread
+from threading import Lock, current_thread
 
 
 class _SingletonPerThreadMetaClass(type):
@@ -8,7 +8,8 @@ class _SingletonPerThreadMetaClass(type):
 
     def __call__(cls, *args, **kwargs):
         with cls._lock:
-            obj_name = "%s__%s" % (cls.__name__, currentThread().getName())  # Object Name = className__threadName
+            # Object Name = className__threadName
+            obj_name = "%s__%s" % (cls.__name__, current_thread().name)
             if obj_name not in cls._instances:
                 cls._instances[obj_name] = super(_SingletonPerThreadMetaClass, cls).__call__(*args, **kwargs)
             return cls._instances[obj_name]

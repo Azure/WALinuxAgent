@@ -20,6 +20,8 @@ import zipfile
 
 from datetime import datetime, timedelta
 from threading import current_thread
+
+from azurelinuxagent.ga.agent_update_handler import INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, \
     AGENT_ERROR_FILE
 from tests.common.osutil.test_default import TestOSUtil
@@ -52,7 +54,7 @@ from azurelinuxagent.ga.update import  \
 from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
-from tests.lib.tools import AgentTestCase, AgentTestCaseWithGetVmSizeMock, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
+from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
     clear_singleton_instances, is_python_version_26_or_34, skip_if_predicate_true
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
@@ -119,7 +121,7 @@ def _get_update_handler(iterations=1, test_data=None, protocol=None, autoupdate_
                 yield update_handler, protocol
 
 
-class UpdateTestCase(AgentTestCaseWithGetVmSizeMock):
+class UpdateTestCase(AgentTestCase):
     _test_suite_tmp_dir = None
     _agent_zip_dir = None
 
@@ -1037,7 +1039,7 @@ class TestUpdate(UpdateTestCase):
             "Not setting up persistent firewall rules as OS.EnableFirewall=False" == args[0] for (args, _) in
             patch_info.call_args_list), "Info not logged properly, got: {0}".format(patch_info.call_args_list))
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     def test_it_should_setup_persistent_firewall_rules_on_startup(self):
         iterations = 1
         executed_commands = []
@@ -1200,7 +1202,8 @@ class TestUpdate(UpdateTestCase):
     @contextlib.contextmanager
     def _setup_test_for_ext_event_dirs_retention(self):
         try:
-            with _get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT, autoupdate_enabled=False) as (update_handler, protocol):
+            # In _get_update_handler() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+            with _get_update_handler(test_data=DATA_FILE_MULTIPLE_EXT, autoupdate_enabled=False) as (update_handler, protocol):  # pylint: disable=contextmanager-generator-missing-cleanup
                 with patch("azurelinuxagent.common.agent_supported_feature._ETPFeature.is_supported", True):
                     update_handler.run(debug=True)
                     expected_events_dirs = glob.glob(os.path.join(conf.get_ext_log_dir(), "*", EVENTS_DIRECTORY))
@@ -1280,6 +1283,9 @@ class TestUpdate(UpdateTestCase):
                                                  patch_warn.call_args_list))
 
                         protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
+
+                        # mocking first agent update attempted
+                        open(os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE), "a").close()
 
                         # Case 1: rsm version missing in GS when vm opt-in for rsm upgrades; report missing rsm version error
                         protocol.mock_wire_data.set_extension_config("wire/ext_conf_version_missing_in_agent_family.xml")
@@ -1480,11 +1486,14 @@ class TestAgentUpgrade(UpdateTestCase):
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None,
-                             reload_conf=None, autoupdate_frequency=0.001, hotfix_frequency=1.0, normal_frequency=2.0):
+                             reload_conf=None, autoupdate_frequency=0.001, hotfix_frequency=1.0, normal_frequency=2.0, initial_update_attempted=True):
+
+        if initial_update_attempted:
+            open(os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE), "a").close()
 
         test_data = DATA_FILE if test_data is None else test_data
-
-        with _get_update_handler(iterations, test_data) as (update_handler, protocol):
+        # In _get_update_handler() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with _get_update_handler(iterations, test_data) as (update_handler, protocol):  # pylint: disable=contextmanager-generator-missing-cleanup
 
             protocol.aggregate_status = None
 
@@ -1927,7 +1936,7 @@ class TestAgentUpgrade(UpdateTestCase):
 @patch('azurelinuxagent.ga.update.get_collect_logs_handler')
 @patch('azurelinuxagent.ga.update.get_monitor_handler')
 @patch('azurelinuxagent.ga.update.get_env_handler')
-class MonitorThreadTest(AgentTestCaseWithGetVmSizeMock):
+class MonitorThreadTest(AgentTestCase):
     def setUp(self):
         super(MonitorThreadTest, self).setUp()
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
@@ -1955,7 +1964,7 @@ class MonitorThreadTest(AgentTestCaseWithGetVmSizeMock):
                         with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                             with patch('azurelinuxagent.ga.agent_update_handler.get_agent_update_handler'):
                                 with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters'):
-                                    with patch('azurelinuxagent.ga.cgroupapi.CGroupsApi.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=False):  # skip all cgroup stuff
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                             with patch('time.sleep'):
                                                 with patch('sys.exit'):
@@ -2440,11 +2449,11 @@ class HeartbeatTestCase(AgentTestCase):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as mock_protocol:
             update_handler = get_update_handler()
-
+            agent_update_handler = Mock()
             update_handler.last_telemetry_heartbeat = datetime.utcnow() - timedelta(hours=1)
-            update_handler._send_heartbeat_telemetry(mock_protocol)
+            update_handler._send_heartbeat_telemetry(mock_protocol, agent_update_handler)
             self.assertEqual(1, patch_add_event.call_count)
-            self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent {1}"
+            self.assertTrue(any(call_args[0] == "[HEARTBEAT] Agent {0} is running as the goal state agent [DEBUG {1}]"
                             for call_args in patch_info.call_args), "The heartbeat was not written to the agent's log")
 
 

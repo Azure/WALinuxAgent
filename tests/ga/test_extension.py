@@ -63,10 +63,6 @@ SLEEP = time.sleep
 SUCCESS_CODE_FROM_STATUS_FILE = 1
 
 
-def do_not_run_test():
-    return True
-
-
 def raise_system_exception():
     raise Exception
 

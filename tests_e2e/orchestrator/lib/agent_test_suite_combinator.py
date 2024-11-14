@@ -22,7 +22,7 @@ from lisa.combinator import Combinator  # pylint: disable=E0401
 from lisa.messages import TestStatus, TestResultMessage  # pylint: disable=E0401
 from lisa.util import field_metadata  # pylint: disable=E0401
 
-from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo
+from tests_e2e.orchestrator.lib.agent_test_loader import AgentTestLoader, VmImageInfo, TestSuiteInfo, CustomImage
 from tests_e2e.tests.lib.logging import set_thread_name
 from tests_e2e.tests.lib.virtual_machine_client import VirtualMachineClient
 from tests_e2e.tests.lib.virtual_machine_scale_set_client import VirtualMachineScaleSetClient
@@ -46,6 +46,7 @@ class AgentTestSuitesCombinatorSchema(schema.Combinator):
     resource_group_name: str = field(default_factory=str, metadata=field_metadata(required=True))
     subscription_id: str = field(default_factory=str, metadata=field_metadata(required=True))
     test_suites: str = field(default_factory=str, metadata=field_metadata(required=True))
+    default_test_suites: List[str] = field(default_factory=list, metadata=field_metadata(required=True))
     user: str = field(default_factory=str, metadata=field_metadata(required=True))
     vm_name: str = field(default_factory=str, metadata=field_metadata(required=True))
     vm_size: str = field(default_factory=str, metadata=field_metadata(required=True))
@@ -81,20 +82,25 @@ class AgentTestSuitesCombinator(Combinator):
             if self.runbook.resource_group_name == '':
                 raise Exception("Invalid runbook parameters: The 'vmss_name' parameter indicates an existing VMSS, a 'resource_group_name' must be specified.")
 
+        if self.runbook.test_suites != "":
+            test_suites = [t.strip() for t in self.runbook.test_suites.split(',')]
+        else:
+            test_suites = self.runbook.default_test_suites
+
         self._log: logging.Logger = logging.getLogger("lisa")
 
         with set_thread_name("AgentTestSuitesCombinator"):
             if self.runbook.vm_name != '':
-                self._environments = [self.create_existing_vm_environment()]
+                self._environments = [self.create_existing_vm_environment(test_suites)]
             elif self.runbook.vmss_name != '':
-                self._environments = [self.create_existing_vmss_environment()]
+                self._environments = [self.create_existing_vmss_environment(test_suites)]
             else:
-                self._environments = self.create_environment_list()
+                self._environments = self.create_environment_list(test_suites)
             self._index = 0
 
     @classmethod
     def type_name(cls) -> str:
-        return "agent_test_suites"
+        return "agent_test_suite_combinator"
 
     @classmethod
     def type_schema(cls) -> Type[schema.TypedSchema]:
@@ -125,7 +131,7 @@ class AgentTestSuitesCombinator(Combinator):
         "AzureUSGovernment": "usgovarizona",
     }
 
-    def create_environment_list(self) -> List[Dict[str, Any]]:
+    def create_environment_list(self, test_suites: List[str]) -> List[Dict[str, Any]]:
         """
         Examines the test_suites specified in the runbook and returns a list of the environments (i.e. test VMs or scale sets) that need to be
         created in order to execute these suites.
@@ -136,7 +142,7 @@ class AgentTestSuitesCombinator(Combinator):
         environments: List[Dict[str, Any]] = []
         shared_environments: Dict[str, Dict[str, Any]] = {}  # environments shared by multiple test suites
 
-        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
+        loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
         runbook_images = self._get_runbook_images(loader)
 
@@ -165,10 +171,10 @@ class AgentTestSuitesCombinator(Combinator):
                     vhd = image.urn
                     image_name = urllib.parse.urlparse(vhd).path.split('/')[-1]  # take the last fragment of the URL's path (e.g. "RHEL_8_Standard-8.3.202006170423.vhd")
                     shared_gallery = ""
-                elif self._is_image_from_gallery(image.urn):
+                elif CustomImage._is_image_from_gallery(image.urn):
                     marketplace_image = ""
                     vhd = ""
-                    image_name = self._get_name_of_image_from_gallery(image.urn)
+                    image_name = CustomImage._get_name_of_image_from_gallery(image.urn)
                     shared_gallery = image.urn
                 else:
                     marketplace_image = image.urn
@@ -260,8 +266,8 @@ class AgentTestSuitesCombinator(Combinator):
 
         return environments
 
-    def create_existing_vm_environment(self) -> Dict[str, Any]:
-        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
+    def create_existing_vm_environment(self, test_suites: List[str]) -> Dict[str, Any]:
+        loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
         vm: VirtualMachineClient = VirtualMachineClient(
             cloud=self.runbook.cloud,
@@ -300,8 +306,8 @@ class AgentTestSuitesCombinator(Combinator):
             "c_test_suites": loader.test_suites,
         }
 
-    def create_existing_vmss_environment(self) -> Dict[str, Any]:
-        loader = AgentTestLoader(self.runbook.test_suites, self.runbook.cloud)
+    def create_existing_vmss_environment(self, test_suites: List[str]) -> Dict[str, Any]:
+        loader = AgentTestLoader(test_suites, self.runbook.cloud)
 
         vmss = VirtualMachineScaleSetClient(
             cloud=self.runbook.cloud,
@@ -445,7 +451,7 @@ class AgentTestSuitesCombinator(Combinator):
             return images
 
         # If it is not image or image set, it must be a URN, VHD, or an image from a gallery
-        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image) and not self._is_image_from_gallery(self.runbook.image):
+        if not self._is_urn(self.runbook.image) and not self._is_vhd(self.runbook.image) and not CustomImage._is_image_from_gallery(self.runbook.image):
             raise Exception(f"The 'image' parameter must be an image, image set name, urn, vhd, or an image from a shared gallery: {self.runbook.image}")
 
         i = VmImageInfo()
@@ -466,7 +472,15 @@ class AgentTestSuitesCombinator(Combinator):
         for image in suite.images:
             match = AgentTestLoader.RANDOM_IMAGES_RE.match(image)
             if match is None:
-                image_list = loader.images[image]
+                # Added this condition for galley image as they don't have definition in images.yml
+                if CustomImage._is_image_from_gallery(image):
+                    i = VmImageInfo()
+                    i.urn = image
+                    i.locations = []
+                    i.vm_sizes = []
+                    image_list = [i]
+                else:
+                    image_list = loader.images[image]
             else:
                 count = match.group('count')
                 if count is None:
@@ -559,20 +573,6 @@ class AgentTestSuitesCombinator(Combinator):
         # VHDs are given as URIs to storage; do some basic validation, not intending to be exhaustive.
         parsed = urllib.parse.urlparse(vhd)
         return parsed.scheme == 'https' and parsed.netloc != "" and parsed.path != ""
-
-    # Images from a gallery are given as  "<image_gallery>/<image_definition>/<image_version>".
-    _IMAGE_FROM_GALLERY = re.compile(r"(?P<gallery>[^/]+)/(?P<image>[^/]+)/(?P<version>[^/]+)")
-
-    @staticmethod
-    def _is_image_from_gallery(image: str) -> bool:
-        return AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image) is not None
-
-    @staticmethod
-    def _get_name_of_image_from_gallery(image: str) -> bool:
-        match = AgentTestSuitesCombinator._IMAGE_FROM_GALLERY.match(image)
-        if match is None:
-            raise Exception(f"Invalid image from gallery: {image}")
-        return match.group('image')
 
     @staticmethod
     def _report_test_result(

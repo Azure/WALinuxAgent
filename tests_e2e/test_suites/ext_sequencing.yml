@@ -8,3 +8,6 @@ tests:
 images: "endorsed"
 # This scenario is executed on instances of a scaleset created by the agent test suite.
 executes_on_scale_set: true
+skip_on_images:  # TODO: AzureMonitorLinuxAgent, used by this test, currently does not work on Azure Linux 3. Remove this once it is fixed.
+  - "azure-linux_3"
+  - "azure-linux_3_arm64"

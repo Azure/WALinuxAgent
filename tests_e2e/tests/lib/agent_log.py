@@ -367,7 +367,37 @@ class AgentLog(object):
             {
                 'message': r"AutoUpdate.Enabled property is \*\*Deprecated\*\* now but it's set to different value from AutoUpdate.UpdateToLatestVersion",
                 'if': lambda r: r.prefix == 'ExtHandler' and r.thread == 'ExtHandler'
-            }
+            },
+            #
+            # TODO: Currently Ubuntu minimal does not include the 'iptables' command. Remove this rule once this has been addressed.
+            #
+            # We don't have an easy way to distinguish Ubuntu minimal, so this rule suppresses for any Ubuntu. This is OK; if 'iptables' was missing from the regular Ubuntu images, the firewall tests would fail.
+            #
+            # 2024-03-27T16:12:35.666460Z ERROR ExtHandler ExtHandler Unable to setup the persistent firewall rules: Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
+            # 2024-03-27T16:12:35.667253Z WARNING ExtHandler ExtHandler Unable to determine version of iptables: [Errno 2] No such file or directory: 'iptables'
+            #
+            {
+                'message': r"Unable to determine version of iptables: \[Errno 2\] No such file or directory: 'iptables'",
+                'if': lambda r: DISTRO_NAME == 'ubuntu'
+            },
+            #
+            # TODO: The Daemon has not been updated on Azure Linux 3; remove this message when it is.
+            #
+            # 2024-08-05T14:36:48.004865Z WARNING Daemon Daemon Unable to load distro implementation for azurelinux. Using default distro implementation instead.
+            #
+            {
+                'message': r"Unable to load distro implementation for azurelinux. Using default distro implementation instead.",
+                'if': lambda r: DISTRO_NAME == 'azurelinux' and r.prefix == 'Daemon' and r.level == 'WARNING'
+            },
+            #
+            # TODO: The OMS extension does not support Azure Linux 3; remove this message when it does.
+            #
+            # 2024-08-12T17:40:48.375193Z ERROR ExtHandler ExtHandler Event: name=Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 51, /var/lib/waagent/Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux-1.19.0/omsagent_shim.sh -install
+            #
+            {
+                'message': r"name=Microsoft\.EnterpriseCloud\.Monitoring\.OmsAgentForLinux.+Non-zero exit code: 51",
+                'if': lambda r: DISTRO_NAME == 'azurelinux' and DISTRO_VERSION == '3.0'
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:

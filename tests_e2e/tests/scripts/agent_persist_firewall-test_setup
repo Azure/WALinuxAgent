@@ -25,6 +25,6 @@ if [[ $# -ne 1 ]]; then
     exit 1
 fi
 
-echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver > /tmp/reboot-cron-root.log 2>&1" | crontab -u root -
-echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver > /tmp/reboot-cron-$1.log 2>&1" | crontab -u $1 -
+echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver $1 > /tmp/reboot-cron-root.log 2>&1" | crontab -u root -
+echo "@reboot /home/$1/bin/agent_persist_firewall-access_wireserver $1 > /tmp/reboot-cron-$1.log 2>&1" | crontab -u $1 -
 update-waagent-conf OS.EnableFirewall=y

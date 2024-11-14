@@ -35,9 +35,9 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.ga.periodic_operation import PeriodicOperation
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),  # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),  # pylint: disable=W1401
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)  # pylint: disable=W1401
+    re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
 MAXIMUM_CACHED_FILES = 50
@@ -244,8 +244,8 @@ class EnvHandler(ThreadHandlerInterface):
 
     def start(self):
         self.env_thread = threading.Thread(target=self.daemon)
-        self.env_thread.setDaemon(True)
-        self.env_thread.setName(self.get_thread_name())
+        self.env_thread.daemon = True
+        self.env_thread.name = self.get_thread_name()
         self.env_thread.start()
 
     def daemon(self):

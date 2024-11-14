@@ -304,27 +304,31 @@ class LogCollector(object):
         final_files_to_collect = []
 
         while priority_file_queue:
-            file_path = heappop(priority_file_queue)[1]  # (priority, file_path)
-            file_size = min(os.path.getsize(file_path), _FILE_SIZE_LIMIT)
+            try:
+                file_path = heappop(priority_file_queue)[1]  # (priority, file_path)
+                file_size = min(os.path.getsize(file_path), _FILE_SIZE_LIMIT)
 
-            if total_uncompressed_size + file_size > _UNCOMPRESSED_ARCHIVE_SIZE_LIMIT:
-                _LOGGER.warning("Archive too big, done with adding files.")
-                break
+                if total_uncompressed_size + file_size > _UNCOMPRESSED_ARCHIVE_SIZE_LIMIT:
+                    _LOGGER.warning("Archive too big, done with adding files.")
+                    break
 
-            if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
-                final_files_to_collect.append(file_path)
-                _LOGGER.info("Adding file %s, size %s b", file_path, file_size)
-            else:
-                truncated_file_path = self._truncate_large_file(file_path)
-                if truncated_file_path:
-                    _LOGGER.info("Adding truncated file %s, size %s b", truncated_file_path, file_size)
-                    final_files_to_collect.append(truncated_file_path)
-
-            total_uncompressed_size += file_size
+                if os.path.getsize(file_path) <= _FILE_SIZE_LIMIT:
+                    final_files_to_collect.append(file_path)
+                    total_uncompressed_size += file_size
+                    _LOGGER.info("Adding file %s, size %s b", file_path, file_size)
+                else:
+                    truncated_file_path = self._truncate_large_file(file_path)
+                    if truncated_file_path:
+                        _LOGGER.info("Adding truncated file %s, size %s b", truncated_file_path, file_size)
+                        final_files_to_collect.append(truncated_file_path)
+                        total_uncompressed_size += file_size
+            except IOError as e:
+                if e.errno == 2:    # [Errno 2] No such file or directory
+                    _LOGGER.warning("File %s does not exist, skipping collection for this file", file_path)
 
         _LOGGER.info("Uncompressed archive size is %s b", total_uncompressed_size)
 
-        return final_files_to_collect
+        return final_files_to_collect, total_uncompressed_size
 
     def _create_list_of_files_to_collect(self):
         # The final list of files to be collected by zip is created in three steps:
@@ -334,8 +338,8 @@ class LogCollector(object):
         #    the size limit.
         parsed_file_paths = self._process_manifest_file()
         prioritized_file_paths = self._get_priority_files_list(parsed_file_paths)
-        files_to_collect = self._get_final_list_for_archive(prioritized_file_paths)
-        return files_to_collect
+        files_to_collect, total_uncompressed_size = self._get_final_list_for_archive(prioritized_file_paths)
+        return files_to_collect, total_uncompressed_size
 
     def collect_logs_and_get_archive(self):
         """
@@ -343,6 +347,7 @@ class LogCollector(object):
         :return: Returns the path of the collected compressed archive
         """
         files_to_collect = []
+        total_uncompressed_size = 0
 
         try:
             # Clear previous run's output and create base directories if they don't exist already.
@@ -352,26 +357,37 @@ class LogCollector(object):
             _LOGGER.info("Starting log collection at %s", start_time.strftime("%Y-%m-%dT%H:%M:%SZ"))
             _LOGGER.info("Using log collection mode %s", "full" if self._is_full_mode else "normal")
 
-            files_to_collect = self._create_list_of_files_to_collect()
+            files_to_collect, total_uncompressed_size = self._create_list_of_files_to_collect()
             _LOGGER.info("### Creating compressed archive ###")
 
             compressed_archive = None
+
+            def handle_add_file_to_archive_error(error_count, max_errors, file_to_collect, exception):
+                error_count += 1
+                if error_count >= max_errors:
+                    raise Exception("Too many errors, giving up. Last error: {0}".format(ustr(exception)))
+                else:
+                    _LOGGER.warning("Failed to add file %s to the archive: %s", file_to_collect, ustr(exception))
+                return error_count
 
             try:
                 compressed_archive = zipfile.ZipFile(COMPRESSED_ARCHIVE_PATH, "w", compression=zipfile.ZIP_DEFLATED)
 
                 max_errors = 8
                 error_count = 0
+
                 for file_to_collect in files_to_collect:
                     try:
                         archive_file_name = LogCollector._convert_file_name_to_archive_name(file_to_collect)
                         compressed_archive.write(file_to_collect.encode("utf-8"), arcname=archive_file_name)
-                    except Exception as e:
-                        error_count += 1
-                        if error_count >= max_errors:
-                            raise Exception("Too many errors, giving up. Last error: {0}".format(ustr(e)))
+                    except IOError as e:
+                        if e.errno == 2:    # [Errno 2] No such file or directory
+                            _LOGGER.warning("File %s does not exist, skipping collection for this file",
+                                            file_to_collect)
                         else:
-                            _LOGGER.warning("Failed to add file %s to the archive: %s", file_to_collect, ustr(e))
+                            error_count = handle_add_file_to_archive_error(error_count, max_errors, file_to_collect, e)
+                    except Exception as e:
+                        error_count = handle_add_file_to_archive_error(error_count, max_errors, file_to_collect, e)
 
                 compressed_archive_size = os.path.getsize(COMPRESSED_ARCHIVE_PATH)
                 _LOGGER.info("Successfully compressed files. Compressed archive size is %s b", compressed_archive_size)
@@ -387,7 +403,7 @@ class LogCollector(object):
                 if compressed_archive is not None:
                     compressed_archive.close()
 
-            return COMPRESSED_ARCHIVE_PATH
+            return COMPRESSED_ARCHIVE_PATH, total_uncompressed_size
         except Exception as e:
             msg = "Failed to collect logs: {0}".format(ustr(e))
             _LOGGER.error(msg)

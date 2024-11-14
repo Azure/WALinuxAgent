@@ -26,20 +26,18 @@ import tempfile
 import time
 import threading
 
-from nose.plugins.attrib import attr
-
 from azurelinuxagent.common import conf
-from azurelinuxagent.ga.cgroup import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory, CpuCgroup
+from azurelinuxagent.ga.cgroupcontroller import AGENT_NAME_TELEMETRY, MetricsCounter, MetricValue, MetricsCategory
 from azurelinuxagent.ga.cgroupconfigurator import CGroupConfigurator, DisableCgroups
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes, \
-    AgentMemoryExceededException
+from azurelinuxagent.common.exception import CGroupsException, AgentMemoryExceededException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil, fileutil
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1
 from tests.lib.mock_environment import MockCommand
-from tests.lib.mock_cgroup_environment import mock_cgroup_environment, UnitFilePaths
-from tests.lib.tools import AgentTestCase, patch, mock_sleep, i_am_root, data_dir, is_python_version_26_or_34, skip_if_predicate_true
+from tests.lib.mock_cgroup_environment import mock_cgroup_v1_environment, UnitFilePaths, mock_cgroup_v2_environment
+from tests.lib.tools import AgentTestCase, patch, mock_sleep, data_dir, is_python_version_26_or_34, skip_if_predicate_true
 from tests.lib.miscellaneous_tools import format_processes, wait_for
 
 
@@ -49,12 +47,16 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         CGroupConfigurator._instance = None
         AgentTestCase.tearDownClass()
 
+    def tearDown(self):
+        CGroupConfigurator._instance = None
+        AgentTestCase.tearDown(self)
+
     @contextlib.contextmanager
     def _get_cgroup_configurator(self, initialize=True, enable=True, mock_commands=None):
         CGroupConfigurator._instance = None
         configurator = CGroupConfigurator.get_instance()
         CGroupsTelemetry.reset()
-        with mock_cgroup_environment(self.tmp_dir) as mock_environment:
+        with mock_cgroup_v1_environment(self.tmp_dir) as mock_environment:
             if mock_commands is not None:
                 for command in mock_commands:
                     mock_environment.add_command(command)
@@ -67,9 +69,40 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     configurator.initialize()
             yield configurator
 
-    def test_initialize_should_enable_cgroups(self):
+    @contextlib.contextmanager
+    def _get_cgroup_configurator_v2(self, initialize=True, enable=True, mock_commands=None):
+        CGroupConfigurator._instance = None
+        configurator = CGroupConfigurator.get_instance()
+        CGroupsTelemetry.reset()
+        with mock_cgroup_v2_environment(self.tmp_dir) as mock_environment:
+            if mock_commands is not None:
+                for command in mock_commands:
+                    mock_environment.add_command(command)
+            configurator.mocks = mock_environment
+            if initialize:
+                if not enable:
+                    with patch.object(configurator, "enable"):
+                        configurator.initialize()
+                else:
+                    configurator.initialize()
+            yield configurator
+
+    def test_initialize_should_enable_cgroups_v1(self):
         with self._get_cgroup_configurator() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
+
+    def test_initialize_should_not_enable_cgroups_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertFalse(configurator.enabled(), "cgroups were enabled")
+
+    def test_initialize_should_not_enable_when_cgroup_api_cannot_be_determined(self):
+        # Mock cgroup api to raise CGroupsException
+        def mock_get_cgroup_api():
+            raise CGroupsException("")
+
+        with patch('azurelinuxagent.ga.cgroupconfigurator.get_cgroup_api', side_effect=mock_get_cgroup_api):
+            with self._get_cgroup_configurator() as configurator:
+                self.assertFalse(configurator.enabled(), "cgroups were enabled")
 
     def test_initialize_should_start_tracking_the_agent_cgroups(self):
         with self._get_cgroup_configurator() as configurator:
@@ -82,18 +115,18 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                 "The Agent's Memory is not being tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present(self):
-        command_mocks = [MockCommand(r"^mount -t cgroup$",
-'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpu,cpuacct)
-cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+        command_mocks = [MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/cpu,cpuacct      cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpu,cpuacct
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 ''')]
         with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
             tracked = CGroupsTelemetry._tracked
@@ -103,17 +136,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 "The Agent's memory should not be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present(self):
-        command_mocks = [MockCommand(r"^mount -t cgroup$",
-'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+        command_mocks = [MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 ''')]
         with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
             tracked = CGroupsTelemetry._tracked
@@ -122,17 +155,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
 
     def test_initialize_should_not_enable_cgroups_when_the_agent_is_not_in_the_system_slice(self):
-        command_mocks = [MockCommand(r"^mount -t cgroup$",
-'''cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,name=systemd)
-cgroup on /sys/fs/cgroup/rdma type cgroup (rw,nosuid,nodev,noexec,relatime,rdma)
-cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
-cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_cls,net_prio)
-cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
-cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
-cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
-cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
-cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
-cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+        command_mocks = [MockCommand(r"^findmnt -t cgroup --noheadings$",
+'''/sys/fs/cgroup/systemd          cgroup cgroup rw,nosuid,nodev,noexec,relatime,xattr,name=systemd*
+/sys/fs/cgroup/devices          cgroup cgroup rw,nosuid,nodev,noexec,relatime,devices
+/sys/fs/cgroup/rdma             cgroup cgroup rw,nosuid,nodev,noexec,relatime,rdma
+/sys/fs/cgroup/perf_event       cgroup cgroup rw,nosuid,nodev,noexec,relatime,perf_event
+/sys/fs/cgroup/net_cls,net_prio cgroup cgroup rw,nosuid,nodev,noexec,relatime,net_cls,net_prio
+/sys/fs/cgroup/blkio            cgroup cgroup rw,nosuid,nodev,noexec,relatime,blkio
+/sys/fs/cgroup/cpuset           cgroup cgroup rw,nosuid,nodev,noexec,relatime,cpuset
+/sys/fs/cgroup/freezer          cgroup cgroup rw,nosuid,nodev,noexec,relatime,freezer
+/sys/fs/cgroup/hugetlb          cgroup cgroup rw,nosuid,nodev,noexec,relatime,hugetlb
+/sys/fs/cgroup/pids             cgroup cgroup rw,nosuid,nodev,noexec,relatime,pids
 ''')]
 
         with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
@@ -188,26 +221,20 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             self.assertTrue(os.path.exists(agent_drop_in_file_cpu_accounting), "{0} was not created".format(agent_drop_in_file_cpu_accounting))
             self.assertTrue(os.path.exists(agent_drop_in_file_memory_accounting), "{0} was not created".format(agent_drop_in_file_memory_accounting))
 
-    def test_initialize_should_update_logcollector_memorylimit(self):
+    def test_initialize_should_clear_logcollector_slice(self):
         with self._get_cgroup_configurator(initialize=False) as configurator:
             log_collector_unit_file = configurator.mocks.get_mapped_path(UnitFilePaths.logcollector)
-            original_memory_limit = "MemoryLimit=30M"
 
-            # The mock creates the slice unit file with memory limit
+            # The mock creates the slice unit file
             configurator.mocks.add_data_file(os.path.join(data_dir, 'init', "azure-walinuxagent-logcollector.slice"),
                                              UnitFilePaths.logcollector)
-            if not os.path.exists(log_collector_unit_file):
-                raise Exception("{0} should have been created during test setup".format(log_collector_unit_file))
-            if not fileutil.findre_in_file(log_collector_unit_file, original_memory_limit):
-                raise Exception("MemoryLimit was not set correctly. Expected: {0}. Got:\n{1}".format(
-                    original_memory_limit, fileutil.read_file(log_collector_unit_file)))
+
+            self.assertTrue(os.path.exists(log_collector_unit_file), "{0} was not created".format(log_collector_unit_file))
 
             configurator.initialize()
 
-            # initialize() should update the unit file to remove the memory limit
-            self.assertFalse(fileutil.findre_in_file(log_collector_unit_file, original_memory_limit),
-                             "Log collector slice unit file was not updated correctly. Expected no memory limit. Got:\n{0}".format(
-                                 fileutil.read_file(log_collector_unit_file)))
+            # initialize() should remove the unit file
+            self.assertFalse(os.path.exists(log_collector_unit_file), "{0} should not have been created".format(log_collector_unit_file))
 
     def test_setup_extension_slice_should_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
@@ -240,7 +267,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
                                           'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuCgroup('Microsoft.CPlat.Extension',
+                    CpuControllerV1('Microsoft.CPlat.Extension',
                               '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
                 configurator.remove_extension_slice(extension_name="Microsoft.CPlat.Extension")
@@ -289,6 +316,17 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
             self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked")
 
+    def test_enable_should_not_track_throttled_time_when_cgroups_v2_enabled(self):
+        with self._get_cgroup_configurator_v2(initialize=False) as configurator:
+            if CGroupsTelemetry.get_track_throttled_time():
+                raise Exception("Test setup should not start tracking Throttle Time")
+
+            configurator.mocks.add_file(UnitFilePaths.cpu_quota, Exception("A TEST EXCEPTION"))
+
+            configurator.initialize()
+
+            self.assertFalse(CGroupsTelemetry.get_track_throttled_time(), "Throttle time should not be tracked when using cgroups v2")
+
     def test_disable_should_reset_cpu_quota(self):
         with self._get_cgroup_configurator() as configurator:
             if len(CGroupsTelemetry._tracked) == 0:
@@ -326,10 +364,10 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 configurator.setup_extension_slice(extension_name=extension_name, cpu_quota=5)
                 configurator.set_extension_services_cpu_memory_quota(service_list)
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/' \
                                           'azure-vmextensions-Microsoft.CPlat.Extension.slice'] = \
-                    CpuCgroup('Microsoft.CPlat.Extension',
+                    CpuControllerV1('Microsoft.CPlat.Extension',
                               '/sys/fs/cgroup/cpu,cpuacct/azure.slice/azure-vmextensions.slice/azure-vmextensions-Microsoft.CPlat.Extension.slice')
 
                 configurator.disable("UNIT TEST", DisableCgroups.ALL)
@@ -379,7 +417,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                 self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_use_systemd_run_when_cgroups_are_enabled(self, _):
+    def test_start_extension_command_should_use_systemd_run_when_cgroups_v1_are_enabled(self, _):
         with self._get_cgroup_configurator() as configurator:
             with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                 configurator.start_extension_command(
@@ -448,13 +486,41 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
                     self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_not_use_systemd_when_cgroup_v2_enabled(self, _):
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertFalse(configurator.enabled())
+
+            with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.start_extension_command") as v2_extension_start_command:
+                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
+                    configurator.start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="date",
+                        cmd_name="test",
+                        timeout=300,
+                        shell=False,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
+
+                    command_calls = [args[0] for args, _ in patcher.call_args_list if
+                                     len(args) > 0 and "date" in args[0]]
+                    self.assertFalse(v2_extension_start_command.called)
+                    self.assertEqual(len(command_calls), 1,
+                                     "The test command should have been called exactly once [{0}]".format(
+                                         command_calls))
+                    self.assertNotIn("systemd-run", command_calls[0],
+                                     "The command should not have been invoked using systemd")
+                    self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
         with self._get_cgroup_configurator() as configurator:
 
             configurator.mocks.add_command(MockCommand("systemd-run", return_value=1, stdout='', stderr='Failed to start transient scope unit: syntax error'))
 
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as output_file:
-                with patch("azurelinuxagent.ga.cgroupconfigurator.add_event") as mock_add_event:
+                with patch("azurelinuxagent.ga.cgroupapi.add_event") as mock_add_event:
                     with patch("subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
                         CGroupsTelemetry.reset()
 
@@ -526,112 +592,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
 
                         self.assertEqual(len(CGroupsTelemetry._tracked), 0, "No cgroups should have been created")
 
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
-    @attr('requires_sudo')
-    @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        with self._get_cgroup_configurator() as configurator:
-            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
-
-        command = "ls folder_does_not_exist"
-
-        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
-            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
-                    with self.assertRaises(ExtensionError) as context_manager:
-                        configurator.start_extension_command(
-                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                            command=command,
-                            cmd_name="test",
-                            timeout=300,
-                            shell=True,
-                            cwd=self.tmp_dir,
-                            env={},
-                            stdout=stdout,
-                            stderr=stderr)
-
-                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if command in args[0]]
-
-                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                    self.assertIn("systemd-run", extension_calls[0],
-                                  "The first call to the extension should have used systemd")
-
-                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
-                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
-                    # The scope name should appear in the process output since systemd-run was invoked and stderr
-                    # wasn't truncated.
-                    self.assertIn("Running scope as unit", ustr(context_manager.exception))
-
-    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4 for now. Need to revisit to fix it")
-    @attr('requires_sudo')
-    @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    @patch("azurelinuxagent.ga.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN", 5)
-    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails_with_long_output(self, *args):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        with self._get_cgroup_configurator() as configurator:
-            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
-
-        long_output = "a"*20  # large enough to ensure both stdout and stderr are truncated
-        long_stdout_stderr_command = "echo {0} && echo {0} >&2 && ls folder_does_not_exist".format(long_output)
-
-        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
-            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
-                    with self.assertRaises(ExtensionError) as context_manager:
-                        configurator.start_extension_command(
-                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                            command=long_stdout_stderr_command,
-                            cmd_name="test",
-                            timeout=300,
-                            shell=True,
-                            cwd=self.tmp_dir,
-                            env={},
-                            stdout=stdout,
-                            stderr=stderr)
-
-                    extension_calls = [args[0] for (args, _) in popen_patch.call_args_list if long_stdout_stderr_command in args[0]]
-
-                    self.assertEqual(1, len(extension_calls), "The extension should have been invoked exactly once")
-                    self.assertIn("systemd-run", extension_calls[0],
-                                  "The first call to the extension should have used systemd")
-
-                    self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
-                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
-                    # stdout and stderr should have been truncated, so the scope name doesn't appear in stderr
-                    # even though systemd-run ran
-                    self.assertNotIn("Running scope as unit", ustr(context_manager.exception))
-
-    @attr('requires_sudo')
-    def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args):  # pylint: disable=unused-argument
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        with self._get_cgroup_configurator() as configurator:
-            pass  # release the mocks used to create the test CGroupConfigurator so that they do not conflict the mock Popen below
-
-        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
-            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.ga.extensionprocessutil.wait_for_process_completion_or_timeout",
-                           return_value=[True, None, 0]):
-                    with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
-                               return_value=False):
-                        with self.assertRaises(ExtensionError) as context_manager:
-                            configurator.start_extension_command(
-                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                                command="date",
-                                cmd_name="test",
-                                timeout=300,
-                                shell=True,
-                                cwd=self.tmp_dir,
-                                env={},
-                                stdout=stdout,
-                                stderr=stderr)
-
-                        self.assertEqual(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
-                        self.assertIn("Timeout", ustr(context_manager.exception))
-
+    @skip_if_predicate_true(is_python_version_26_or_34, "Disabled on Python 2.6 and 3.4, they run on containers where the OS commands needed by the test are not present.")
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_capture_only_the_last_subprocess_output(self, _):
         with self._get_cgroup_configurator() as configurator:
@@ -644,11 +605,13 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             
             # Popen can accept both strings and lists, handle both here.
             if isinstance(command, str):
-                systemd_command = command.replace('systemd-run', 'systemd-run syntax_error')
+                command = command.replace('systemd-run', 'systemd-run syntax_error')
             elif isinstance(command, list) and command[0] == 'systemd-run':
-                systemd_command = ['systemd-run', 'syntax_error'] + command[1:]
+                command = ['systemd-run', 'syntax_error'] + command[1:]
+            elif command == ['systemctl', 'daemon-reload']:
+                command = ['echo', 'systemctl', 'daemon-reload']
 
-            return original_popen(systemd_command, *args, **kwargs)
+            return original_popen(command, *args, **kwargs)
 
         expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
@@ -749,7 +712,8 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
         with self._get_cgroup_configurator() as configurator:
             with patch("os.path.exists") as mock_path:
                 mock_path.return_value = True
-                CGroupsTelemetry.track_cgroup(CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
+                CGroupsTelemetry.track_cgroup_controller(
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'))
                 configurator.stop_tracking_extension_services_cgroups(service_list)
 
                 tracked = CGroupsTelemetry._tracked
@@ -808,7 +772,7 @@ cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blki
             with patch("os.path.exists") as mock_path:
                 mock_path.side_effect = side_effect
                 CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
-                    CpuCgroup('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
+                    CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 configurator.stop_tracking_unit_cgroups("extension.service")
 
                 tracked = CGroupsTelemetry._tracked
@@ -943,7 +907,7 @@ exit 0
             agent_processes = [os.getppid(), os.getpid()] + agent_command_processes + [start_extension.systemd_run_pid]
             other_processes = [1, get_completed_process()] + extension_processes
 
-            with patch("azurelinuxagent.ga.cgroupconfigurator.CGroupsApi.get_processes_in_cgroup", return_value=agent_processes + other_processes):
+            with patch("azurelinuxagent.ga.cgroupapi.CgroupV1.get_processes", return_value=agent_processes + other_processes):
                 with self.assertRaises(CGroupsException) as context_manager:
                     configurator._check_processes_in_agent_cgroup()
 
@@ -987,7 +951,7 @@ exit 0
                         patchers.append(p)
                         p.start()
 
-                    with patch("azurelinuxagent.ga.cgroupconfigurator.add_event") as add_event:
+                    with patch("azurelinuxagent.ga.cgroupapi.add_event") as add_event:
                         configurator.enable()
 
                         tracked_metrics = [
@@ -1011,14 +975,48 @@ exit 0
                     for p in patchers:
                         p.stop()
 
+    @patch('azurelinuxagent.ga.cgroupconfigurator.CGroupConfigurator._Impl._check_processes_in_agent_cgroup', side_effect=CGroupsException("Test"))
+    @patch('azurelinuxagent.ga.cgroupapi.add_event')
+    def test_agent_should_not_enable_cgroups_if_unexpected_process_already_in_agent_cgroups(self, add_event, _):
+        command_mocks = [MockCommand(r"^systemctl show walinuxagent\.service --property Slice",
+'''Slice=azure.slice
+''')]
+        original_read_file = fileutil.read_file
+
+        def mock_read_file(filepath, **args):
+            if filepath == "/proc/self/cgroup":
+                filepath = os.path.join(data_dir, "cgroups", "proc_self_cgroup_azure_slice")
+            return original_read_file(filepath, **args)
+
+        with self._get_cgroup_configurator(initialize=False, mock_commands=command_mocks) as configurator:
+            with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=mock_read_file):
+                configurator.initialize()
+
+                self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
+                disable_events = [kwargs for _, kwargs in add_event.call_args_list if kwargs["op"] == WALAEventOperation.CGroupsDisabled]
+                self.assertTrue(
+                    len(disable_events) == 1,
+                    "Exactly 1 event should have been emitted. Got: {0}".format(disable_events))
+                self.assertIn(
+                    "Found unexpected processes in the agent cgroup before agent enable cgroups",
+                    disable_events[0]["message"],
+                    "The error message is not correct when process check failed")
+
     def test_check_agent_memory_usage_should_raise_a_cgroups_exception_when_the_limit_is_exceeded(self):
         metrics = [MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.TOTAL_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1),
                    MetricValue(MetricsCategory.MEMORY_CATEGORY, MetricsCounter.SWAP_MEM_USAGE, AGENT_NAME_TELEMETRY, conf.get_agent_memory_quota() + 1)]
 
         with self.assertRaises(AgentMemoryExceededException) as context_manager:
             with self._get_cgroup_configurator() as configurator:
-                with patch("azurelinuxagent.ga.cgroup.MemoryCgroup.get_tracked_metrics") as tracked_metrics:
+                with patch("azurelinuxagent.ga.memorycontroller.MemoryControllerV1.get_tracked_metrics") as tracked_metrics:
                     tracked_metrics.return_value = metrics
                     configurator.check_agent_memory_usage()
 
         self.assertIn("The agent memory limit {0} bytes exceeded".format(conf.get_agent_memory_quota()), ustr(context_manager.exception), "An incorrect exception was raised")
+
+    def test_get_log_collector_properties_should_return_correct_props(self):
+        with self._get_cgroup_configurator() as configurator:
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%"])
+
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertEqual(configurator.get_logcollector_unit_properties(), ["--property=CPUAccounting=yes", "--property=MemoryAccounting=yes", "--property=CPUQuota=5%", "--property=MemoryHigh=170M"])

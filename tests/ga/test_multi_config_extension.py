@@ -41,7 +41,7 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
             self.version = version
             self.state = state
             self.is_invalid_setting = False
-            self.settings = dict()
+            self.settings = {}
 
     class _TestExtensionObject:
         def __init__(self, name, seq_no, dependency_level="0", state="enabled"):
@@ -94,12 +94,11 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
     def test_it_should_parse_multi_config_settings_properly(self):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA, "ext_conf_with_multi_config.xml")
 
-        rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=2)
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=2,
-                                                                      dependency_level="3")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
-                                                                     dependency_level="4")
+        rc_extensions = {
+            "firstRunCommand": self._TestExtensionObject(name="firstRunCommand", seq_no=2),
+            "secondRunCommand": self._TestExtensionObject(name="secondRunCommand", seq_no=2, dependency_level="3"),
+            "thirdRunCommand": self._TestExtensionObject(name="thirdRunCommand", seq_no=1, dependency_level="4")
+        }
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
@@ -115,12 +114,11 @@ class TestMultiConfigExtensionsConfigParsing(AgentTestCase):
         self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
                                                   "ext_conf_with_disabled_multi_config.xml")
 
-        rc_extensions = dict()
-        rc_extensions["firstRunCommand"] = self._TestExtensionObject(name="firstRunCommand", seq_no=3)
-        rc_extensions["secondRunCommand"] = self._TestExtensionObject(name="secondRunCommand", seq_no=3,
-                                                                      dependency_level="1")
-        rc_extensions["thirdRunCommand"] = self._TestExtensionObject(name="thirdRunCommand", seq_no=1,
-                                                                     dependency_level="4", state="disabled")
+        rc_extensions = {
+            "firstRunCommand": self._TestExtensionObject(name="firstRunCommand", seq_no=3),
+            "secondRunCommand": self._TestExtensionObject(name="secondRunCommand", seq_no=3, dependency_level="1"),
+            "thirdRunCommand": self._TestExtensionObject(name="thirdRunCommand", seq_no=1, dependency_level="4", state="disabled")
+        }
 
         vmaccess_extensions = {
             "Microsoft.Compute.VMAccessAgent": self._TestExtensionObject(name="Microsoft.Compute.VMAccessAgent",
@@ -286,7 +284,8 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
         third_ext = extension_emulator(name="OSTCExtensions.ExampleHandlerLinux.thirdExtension")
         fourth_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
 
-        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
+        # In _setup_test_env() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):  # pylint: disable=contextmanager-generator-missing-cleanup
             with enable_invocations(first_ext, second_ext, third_ext, fourth_ext) as invocation_record:
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
@@ -1072,7 +1071,8 @@ class TestMultiConfigExtensionSequencing(_MultiConfigBaseTestClass):
         dependent_sc_ext = extension_emulator(name="Microsoft.Powershell.ExampleExtension")
         independent_sc_ext = extension_emulator(name="Microsoft.Azure.Geneva.GenevaMonitoring", version="1.1.0")
 
-        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):
+        # In _setup_test_env() contextmanager, yield is used inside an if-else block and that's creating a false positive pylint warning
+        with self._setup_test_env() as (exthandlers_handler, protocol, no_of_extensions):  # pylint: disable=contextmanager-generator-missing-cleanup
             yield exthandlers_handler, protocol, no_of_extensions, first_ext, second_ext, third_ext, dependent_sc_ext, independent_sc_ext
 
     def test_it_should_process_dependency_chain_extensions_properly(self):

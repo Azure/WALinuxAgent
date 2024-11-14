@@ -17,13 +17,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from distutils import version  # pylint: disable=no-name-in-module
 import re
 
 
-class FlexibleVersion(version.Version):
+class FlexibleVersion(object):
     """
-    A more flexible implementation of distutils.version.StrictVersion
+    A more flexible implementation of distutils.version.StrictVersion.
+
+    NOTE: Use this class for generic version comparisons, e.g. extension and Agent
+          versions. Distro versions can be very arbitrary and should be handled
+          using the DistroVersion class.
 
     The implementation allows to specify:
     - an arbitrary number of version numbers:
@@ -41,8 +44,6 @@ class FlexibleVersion(version.Version):
     """
 
     def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):
-        version.Version.__init__(self) 
-
         if sep is None:
             sep = '.'
         if prerel_tags is None:
@@ -195,7 +196,7 @@ class FlexibleVersion(version.Version):
         if self.prerel_tags:
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
             self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
-            release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(  # pylint: disable=W1401
+            release_re = r'(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
                         prerel_sep=self._re_prerel_sep, 
                         tags=tags, 
                         tn=self._nn_prerel_tag, 

@@ -10,7 +10,8 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses
 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME
-from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
+from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler, INITIAL_UPDATE_STATE_FILE, \
+    RSM_UPDATE_STATE_FILE
 from azurelinuxagent.ga.guestagent import GuestAgent
 from tests.ga.test_update import UpdateTestCase
 from tests.lib.http_request_predicates import HttpRequestPredicates
@@ -28,7 +29,7 @@ class TestAgentUpdate(UpdateTestCase):
         clear_singleton_instances(ProtocolUtil)
 
     @contextlib.contextmanager
-    def _get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, protocol_get_error=False, mock_get_header=None, mock_put_header=None):
+    def _get_agent_update_handler(self, test_data=None, autoupdate_frequency=0.001, autoupdate_enabled=True, initial_update_attempted=True, protocol_get_error=False, mock_get_header=None, mock_put_header=None):
         # Default to DATA_FILE of test_data parameter raises the pylint warning
         # W0102: Dangerous default value DATA_FILE (builtins.dict) as argument (dangerous-default-value)
         test_data = DATA_FILE if test_data is None else test_data
@@ -56,6 +57,9 @@ class TestAgentUpdate(UpdateTestCase):
             http_put_handler = mock_put_header if mock_put_header else put_handler
 
             protocol.set_http_handlers(http_get_handler=http_get_handler, http_put_handler=http_put_handler)
+
+            if initial_update_attempted:
+                open(os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE), "a").close()
 
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
@@ -407,6 +411,29 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
             self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
 
+    def test_it_should_not_report_error_status_if_new_rsm_version_is_same_as_current_after_last_update_attempt_failed(self):
+        data_file = DATA_FILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_rsm_version.xml"
+
+        with self._get_agent_update_handler(test_data=data_file, protocol_get_error=True) as (agent_update_handler, _):
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(VMAgentUpdateStatuses.Error, vm_agent_update_status.status)
+            self.assertEqual(1, vm_agent_update_status.code)
+            self.assertEqual("9.9.9.10", vm_agent_update_status.expected_version)
+            self.assertIn("Failed to download agent package from all URIs", vm_agent_update_status.message)
+
+            # Send same version GS after last update attempt failed
+            agent_update_handler._protocol.mock_wire_data.set_version_in_agent_family(
+                str(CURRENT_VERSION))
+            agent_update_handler._protocol.mock_wire_data.set_incarnation(2)
+            agent_update_handler._protocol.client.update_goal_state()
+            agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            vm_agent_update_status = agent_update_handler.get_vmagent_update_status()
+            self.assertEqual(VMAgentUpdateStatuses.Success, vm_agent_update_status.status)
+            self.assertEqual(0, vm_agent_update_status.code)
+            self.assertEqual(str(CURRENT_VERSION), vm_agent_update_status.expected_version)
+
     def test_it_should_report_update_status_with_missing_rsm_version_error(self):
         data_file = DATA_FILE.copy()
         data_file['ext_conf'] = "wire/ext_conf_version_missing_in_agent_family.xml"
@@ -452,7 +479,7 @@ class TestAgentUpdate(UpdateTestCase):
             with self.assertRaises(AgentUpgradeExitException):
                 agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
 
-            state_file = os.path.join(conf.get_lib_dir(), "rsm_update.json")
+            state_file = os.path.join(conf.get_lib_dir(), RSM_UPDATE_STATE_FILE)
             self.assertTrue(os.path.exists(state_file), "The rsm state file was not saved (can't find {0})".format(state_file))
 
             # check if state gets updated if most recent goal state has different values
@@ -535,3 +562,36 @@ class TestAgentUpdate(UpdateTestCase):
             self.assertEqual(1, len([kwarg['message'] for _, kwarg in mock_telemetry.call_args_list if
                                      "Downloaded agent package: WALinuxAgent-9.9.9.10 is missing agent handler manifest file" in kwarg['message'] and kwarg[
                                          'op'] == WALAEventOperation.AgentUpgrade]), "Agent update should fail")
+
+    def test_it_should_use_self_update_for_first_update_always(self):
+        self.prepare_agents(count=1)
+
+        # mock the goal state as vm enrolled into RSM
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf_rsm_version.xml"
+        with self._get_agent_update_handler(test_data=data_file, initial_update_attempted=False) as (agent_update_handler, mock_telemetry):
+            with self.assertRaises(AgentUpgradeExitException) as context:
+                agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+            # Verifying agent used self-update for initial update
+            self._assert_update_discovered_from_agent_manifest(mock_telemetry, version="99999.0.0.0")
+            self._assert_agent_directories_exist_and_others_dont_exist(versions=[str(CURRENT_VERSION), "99999.0.0.0"])
+            self._assert_agent_exit_process_telemetry_emitted(ustr(context.exception.reason))
+
+        state_file = os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE)
+        self.assertTrue(os.path.exists(state_file),
+                        "The first update state file was not saved (can't find {0})".format(state_file))
+
+    def test_it_should_honor_any_update_type_after_first_update(self):
+        self.prepare_agents(count=1)
+
+        data_file = DATA_FILE.copy()
+        data_file['ext_conf'] = "wire/ext_conf_rsm_version.xml"
+        # mocking initial update attempt as true
+        with self._get_agent_update_handler(test_data=data_file, initial_update_attempted=True) as (agent_update_handler, mock_telemetry):
+            with self.assertRaises(AgentUpgradeExitException) as context:
+                agent_update_handler.run(agent_update_handler._protocol.get_goal_state(), True)
+
+            # Verifying agent honored RSM update
+            self._assert_agent_rsm_version_in_goal_state(mock_telemetry, version="9.9.9.10")
+            self._assert_agent_directories_exist_and_others_dont_exist(versions=["9.9.9.10", str(CURRENT_VERSION)])
+            self._assert_agent_exit_process_telemetry_emitted(ustr(context.exception.reason))

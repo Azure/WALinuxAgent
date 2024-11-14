@@ -27,6 +27,7 @@ from tests_e2e.tests.lib.cgroup_helpers import BASE_CGROUP, AGENT_CONTROLLERS, g
     verify_agent_cgroup_assigned_correctly
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.remote_test import run_remote_test
+from tests_e2e.tests.lib.retry import retry_if_false
 
 
 def verify_if_cgroup_controllers_are_mounted():
@@ -60,22 +61,26 @@ def verify_agent_cgroup_created_on_file_system():
     """
     log.info("===== Verifying the agent cgroup paths exist on file system")
     agent_cgroup_mount_path = get_agent_cgroup_mount_path()
-    all_agent_cgroup_controllers_path_exist = True
+    log.info("expected agent cgroup mount path: %s", agent_cgroup_mount_path)
+
     missing_agent_cgroup_controllers_path = []
     verified_agent_cgroup_controllers_path = []
 
-    log.info("expected agent cgroup mount path: %s", agent_cgroup_mount_path)
+    def is_agent_cgroup_controllers_path_exist():
+        all_controllers_path_exist = True
 
-    for controller in AGENT_CONTROLLERS:
-        agent_controller_path = os.path.join(BASE_CGROUP, controller, agent_cgroup_mount_path[1:])
+        for controller in AGENT_CONTROLLERS:
+            agent_controller_path = os.path.join(BASE_CGROUP, controller, agent_cgroup_mount_path[1:])
 
-        if not os.path.exists(agent_controller_path):
-            all_agent_cgroup_controllers_path_exist = False
-            missing_agent_cgroup_controllers_path.append(agent_controller_path)
-        else:
-            verified_agent_cgroup_controllers_path.append(agent_controller_path)
+            if not os.path.exists(agent_controller_path):
+                all_controllers_path_exist = False
+                missing_agent_cgroup_controllers_path.append(agent_controller_path)
+            else:
+                verified_agent_cgroup_controllers_path.append(agent_controller_path)
+        return all_controllers_path_exist
 
-    if not all_agent_cgroup_controllers_path_exist:
+    # Test check can happen before agent setup cgroup configuration. So, retrying the check for few times
+    if not retry_if_false(is_agent_cgroup_controllers_path_exist):
         fail("Agent's cgroup paths couldn't be found on file system. Missing agent cgroups path :{0}.\n Verified agent cgroups path:{1}".format(missing_agent_cgroup_controllers_path, verified_agent_cgroup_controllers_path))
 
     log.info('Verified all agent cgroup paths are present.\n {0}'.format(verified_agent_cgroup_controllers_path))
@@ -90,14 +95,21 @@ def verify_agent_cgroups_tracked():
     tracking_agent_cgroup_message_re = r'Started tracking cgroup [^\s]+\s+\[(?P<path>[^\s]+)\]'
     tracked_cgroups = []
 
-    for record in AgentLog().read():
-        match = re.search(tracking_agent_cgroup_message_re, record.message)
-        if match is not None:
-            tracked_cgroups.append(match.group('path'))
+    def is_agent_tracking_cgroup():
+        tracked_cgroups.clear()
+        for record in AgentLog().read():
+            match = re.search(tracking_agent_cgroup_message_re, record.message)
+            if match is not None:
+                tracked_cgroups.append(match.group('path'))
 
-    for controller in AGENT_CONTROLLERS:
-        if not any(AGENT_SERVICE_NAME in cgroup_path and controller in cgroup_path for cgroup_path in tracked_cgroups):
-            fail('Agent {0} is not being tracked. Tracked cgroups:{1}'.format(controller, tracked_cgroups))
+        for controller in AGENT_CONTROLLERS:
+            if not any(AGENT_SERVICE_NAME in cgroup_path and controller in cgroup_path for cgroup_path in tracked_cgroups):
+                return False
+        return True
+    # Test check can happen before agent starts tracking cgroups. So, retrying the check for few times
+    found = retry_if_false(is_agent_tracking_cgroup)
+    if not found:
+        fail('Agent {0} is not being tracked. Tracked cgroups:{1}'.format(AGENT_CONTROLLERS, tracked_cgroups))
 
     log.info("Agent is tracking cgroups correctly.\n%s", tracked_cgroups)
 
