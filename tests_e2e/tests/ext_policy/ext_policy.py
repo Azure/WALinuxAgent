@@ -88,7 +88,7 @@ class ExtPolicy(AgentVmTest):
             fail(f"The agent should have reported an error trying to {operation} {extension_case.extension.__str__()} "
                  f"because the extension is disallowed by policy.")
         except Exception as error:
-            assert_that("Extension is disallowed by agent policy and will not be processed" in str(error)) \
+            assert_that("Extension will not be processed" in str(error)) \
                 .described_as(
                 f"Error message should communicate that extension is disallowed by policy, but actual error "
                 f"was: {error}").is_true()
@@ -109,11 +109,6 @@ class ExtPolicy(AgentVmTest):
                                           resource_name="RunCommandHandler"),
             {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
         )
-        azure_monitor = ExtPolicy.TestCase(
-            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-                                          resource_name="AzureMonitorLinuxAgent"),
-            None
-        )
         unique2 = str(uuid.uuid4())
         test_file2 = f"waagent-test.{unique2}"
         run_command_2 = ExtPolicy.TestCase(
@@ -121,13 +116,18 @@ class ExtPolicy(AgentVmTest):
                                           resource_name="RunCommandHandler2"),
             {'source': {'script': f"echo '{unique2}' > /tmp/{test_file2}"}}
         )
+        azure_monitor = ExtPolicy.TestCase(
+            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
+                                          resource_name="AzureMonitorLinuxAgent"),
+            None
+        )
 
         # Enable policy via conf
         log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
-        # Test case 1: should only enable allowlisted extensions
-        # CustomScript should be enabled, RunCommand and AzureMonitor should fail.
+        # Only allowlisted extensions should be processed.
+        # We only allowlist CustomScript: CustomScript should be enabled, RunCommand and AzureMonitor should fail.
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -145,8 +145,8 @@ class ExtPolicy(AgentVmTest):
         if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
             self._operation_should_fail("enable", azure_monitor)
 
-        # Test case 2: turn allowlist off
-        # RunCommand should be successfully enabled and then deleted.
+        # When allowlist is turned off, all extensions should be processed.
+        # RunCommand and AzureMonitorLinuxAgent should be successfully enabled and then deleted.
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -163,8 +163,8 @@ class ExtPolicy(AgentVmTest):
             self._operation_should_succeed("enable", azure_monitor)
             self._operation_should_succeed("delete", azure_monitor)
 
-        # Test case 3: uninstall should fail when disallowed
-        # Remove CustomScript from allowlist and try to uninstall, should fail.
+        # Should not uninstall disallowed extensions.
+        # CustomScript is removed from the allowlist: delete operation should fail.
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -175,15 +175,29 @@ class ExtPolicy(AgentVmTest):
                 }
             }
         self._create_policy_file(policy)
-
         # Known CRP issue - delete/uninstall operation times out instead of reporting an error.
         # TODO: uncomment this test case after issue is resolved
         # self._operation_should_fail("delete", custom_script)
 
-        # Test case 4: both instances in a multiconfig extension should fail, if disallowed.
-        # Disallow RunCommand and try to install two instances, both should fail fast.
+        # If a multiconfig extension is disallowed, no instances should be processed.
+        # RunCommand is not allowed - if we try to enable two instances, both should fail fast.
         self._operation_should_fail("enable", run_command)
         self._operation_should_fail("enable", run_command_2)
+
+        # If single-config extension is initially blocked, and policy is updated to allow it, extension should be
+        # successfully enabled and report status correctly.
+        self._operation_should_fail("enable", custom_script)
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": False,
+                    "signatureRequired": False,
+                    "extensions": {}
+                }
+            }
+        self._create_policy_file(policy)
+        self._operation_should_succeed("enable", custom_script)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
@@ -198,10 +212,10 @@ class ExtPolicy(AgentVmTest):
             {
                 'message': r"Skipping processing of extensions since execution of dependent extension .* failed"
             },
-            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension is disallowed by agent policy and will not be processed: failed to enable extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because extension is not specified in allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
+            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension will not be processed: failed to enable extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because extension is not specified in allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
             # We intentionally block extensions with policy and expect this failure message
             {
-                'message': r"Extension is disallowed by agent policy and will not be processed"
+                'message': r"Extension will not be processed"
             }
         ]
         return ignore_rules

@@ -49,9 +49,8 @@ class ExtensionPolicyError(ExtensionError):
     """
     Error raised during agent extension policy enforcement.
     """
-    # TODO: when CRP adds terminal error code for policy-related extension failures, set that as the default code.
-    def __init__(self, msg, inner=None, code=-1):
-        msg = "Extension is disallowed by agent policy and will not be processed: {0}".format(msg)
+    def __init__(self, msg, code, inner=None):
+        msg = "Extension will not be processed: {0}".format(msg)
         super(ExtensionPolicyError, self).__init__(msg, inner, code)
 
 

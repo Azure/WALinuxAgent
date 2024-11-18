@@ -269,10 +269,10 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             {
                 'message': r"Skipping processing of extensions since execution of dependent extension .* failed"
             },
-            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension is disallowed by agent policy and will not be processed: failed to enable extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because extension is not specified in allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
+            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension will not be processed: failed to enable extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because extension is not specified in allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
             # We intentionally block extensions with policy and expect this failure message
             {
-                'message': r"Extension is disallowed by agent policy and will not be processed"
+                'message': r"Extension will not be processed"
             }
         ]
         return ignore_rules
