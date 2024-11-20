@@ -500,10 +500,13 @@ class ExtHandlersHandler(object):
             # behalf of the extension.
             policy_err_map = {
                 ExtensionRequestedState.Enabled: ('enable', ExtensionErrorCodes.PluginEnableProcessingFailed),
-                # TODO: CRP does not currently have a terminal error code for uninstall. Once CRP adds
-                # an error code for uninstall or for policy, use this code instead of PluginDisableProcessingFailed
-                # Note that currently, CRP waits for 90 minutes to time out for a failed uninstall operation, instead of
-                # failing fast.
+                # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
+                # report status for that extension, or until timeout is reached. In the case of a policy error, the
+                # agent reports failed status on behalf of the extension, which will cause CRP to  for the full timeout,
+                # instead of failing fast.
+                #
+                # TODO: CRP does not currently have a terminal error code for uninstall. Once this code is added, use
+                # it instead of PluginDisableProcessingFailed below.
                 ExtensionRequestedState.Uninstall: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
                 ExtensionRequestedState.Disabled: ('disable', ExtensionErrorCodes.PluginDisableProcessingFailed),
             }
@@ -736,14 +739,20 @@ class ExtHandlersHandler(object):
 
     @staticmethod
     def __handle_and_report_policy_error(ext_handler_i, error, report_op, message, report=True, extension=None):
-        # TODO: Consider merging this function with __handle_and_report_ext_handler_errors() above.
+        # TODO: Consider merging this function with __handle_and_report_ext_handler_errors() above, after investigating
+        # the impact of this change.
+        #
+        # CRP will poll for extension status for extensions with settings until timeout. In the case of policy errors,
+        # extensions are not processed so no extension status file is created. Extensions should still fail fast, so the
+        # agent should write a .status file on behalf of any extension with settings.
+        # __handle_and_report_ext_handler_errors() does not create the file for single-config extensions, but changing
+        # it will require additional testing/investigation. As a temporary workaround, this separate function was created
+        # to write a status file for single-config extensions.
         
-        # Set handler status for all extensions
+        # Set handler status for all extensions (with and without settings)
         ext_handler_i.set_handler_status(message=message, code=error.code)
 
-        # Create status file for only extensions with settings. Since extensions are not processed in the case of
-        # policy-related failures, no extension status file is created. For CRP to report status, we need to create the
-        # file with failure on behalf of the extension. This should be done for both multi-config and single-config extensions.
+        # Create status file for extensions with settings (single and multi config).
         if extension is not None:
             ext_handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=error.code,
                                                           operation=report_op, message=message)
