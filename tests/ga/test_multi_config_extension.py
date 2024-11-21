@@ -630,7 +630,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 }
                 self._assert_extension_status(sc_handler, expected_extensions)
 
-    def test_it_should_handle_and_report_disallowed_extensions_properly(self):
+    def test_it_should_handle_and_report_extensions_disallowed_by_policy_properly(self):
         """If multiconfig extension is disallowed by policy, all instances should be blocked."""
         policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
         patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)).start()
@@ -693,6 +693,34 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                                                               "message": None}
                 }
                 self._assert_extension_status(sc_handler, expected_extensions)
+
+
+    def test_it_should_handle_and_report_extensions_allowed_by_policy_properly(self):
+        """If multiconfig extension is allowed by policy, all instances should be allowed."""
+        policy_path = os.path.join(self.tmp_dir, "waagent_policy.json")
+        patch('azurelinuxagent.common.conf.get_policy_file_path', return_value=str(policy_path)).start()
+        patch('azurelinuxagent.ga.policy.policy_engine.conf.get_extension_policy_enabled',
+              return_value=True).start()
+        policy = \
+            {
+                "policyVersion": "0.0.1",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": True,
+                    "extensions": {
+                        "OSTCExtensions.ExampleHandlerLinux": {},
+                        "Microsoft.Powershell.ExampleExtension": {}
+                    }
+                }
+            }
+        with open(policy_path, mode='w') as policy_file:
+            json.dump(policy, policy_file, indent=4)
+            policy_file.flush()
+
+        self.test_data['ext_conf'] = os.path.join(self._MULTI_CONFIG_TEST_DATA,
+                                                  "ext_conf_multi_config_no_dependencies.xml")
+        with self._setup_test_env(mock_manifest=True) as (exthandlers_handler, protocol, no_of_extensions):
+            self.__run_and_assert_generic_case(exthandlers_handler, protocol, no_of_extensions)
 
     def test_it_should_cleanup_extension_state_on_disable(self):
 

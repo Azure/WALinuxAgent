@@ -3536,7 +3536,7 @@ class TestExtensionPolicy(TestExtensionBase):
                 policy_file.write(policy)
             policy_file.flush()
 
-    def _test_policy_failure(self, policy, op, expected_status_code, expected_handler_status,
+    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count=0,
                              expected_status_msg=None):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
@@ -3554,7 +3554,8 @@ class TestExtensionPolicy(TestExtensionBase):
 
             report_vm_status = protocol.report_vm_status
             self.assertTrue(report_vm_status.called)
-            self._assert_handler_status(report_vm_status, expected_handler_status, 0, "1.0.0", 'OSTCExtensions.ExampleHandlerLinux',
+            self._assert_handler_status(report_vm_status, expected_handler_status, expected_ext_count=expected_ext_count,
+                                        version="1.0.0", expected_handler_name='OSTCExtensions.ExampleHandlerLinux',
                                         expected_msg=expected_status_msg, expected_code=expected_status_code)
 
     def test_should_fail_enable_if_extension_disallowed(self):
@@ -3566,7 +3567,7 @@ class TestExtensionPolicy(TestExtensionBase):
                }
             }
         expected_msg = "failed to enable extension 'OSTCExtensions.ExampleHandlerLinux' because extension is not specified in allowlist."
-        self._test_policy_failure(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                           expected_handler_status='NotReady', expected_status_msg=expected_msg)
 
     def test_should_fail_enable_for_invalid_policy(self):
@@ -3578,7 +3579,7 @@ class TestExtensionPolicy(TestExtensionBase):
                 }
             }
         expected_msg = "attribute 'extensionPolicies.allowListedExtensionsOnly'; must be 'boolean'"
-        self._test_policy_failure(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                           expected_handler_status='NotReady', expected_status_msg=expected_msg)
 
     def test_should_fail_extension_if_error_thrown_during_policy_engine_init(self):
@@ -3589,7 +3590,7 @@ class TestExtensionPolicy(TestExtensionBase):
         with patch('azurelinuxagent.ga.policy.policy_engine.ExtensionPolicyEngine.__init__',
                    side_effect=Exception("mock exception")):
             expected_msg = "Extension will not be processed: \nInner error: mock exception"
-            self._test_policy_failure(policy=policy, op=ExtensionRequestedState.Enabled,
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
                                       expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                                       expected_handler_status='NotReady', expected_status_msg=expected_msg)
 
@@ -3604,7 +3605,7 @@ class TestExtensionPolicy(TestExtensionBase):
                 },
             }
         expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because extension is not specified in allowlist."
-        self._test_policy_failure(policy=policy, op=ExtensionRequestedState.Uninstall, expected_status_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
+        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Uninstall, expected_status_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                                   expected_handler_status='NotReady', expected_status_msg=expected_msg)
 
     def test_should_fail_enable_if_dependent_extension_disallowed(self):
@@ -3647,6 +3648,18 @@ class TestExtensionPolicy(TestExtensionBase):
                                      handler.name == dep_ext_level_1.name).settings[0].dependencyLevel)
             self.assertEqual(2, next(handler for handler in exthandlers_handler.ext_handlers if
                                      handler.name == dep_ext_level_2.name).settings[0].dependencyLevel)
+
+    def test_enable_should_succeed_if_extension_allowed(self):
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": False,
+                }
+            }
+        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
+                                  expected_status_code=0,
+                                  expected_handler_status='Ready', expected_ext_count=1)
 
 
 if __name__ == '__main__':

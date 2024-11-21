@@ -88,7 +88,7 @@ class ExtPolicy(AgentVmTest):
             fail(f"The agent should have reported an error trying to {operation} {extension_case.extension.__str__()} "
                  f"because the extension is disallowed by policy.")
         except Exception as error:
-            assert_that("Extension will not be processed" in str(error)) \
+            assert_that("[ExtensionPolicyError] Extension will not be processed" in str(error)) \
                 .described_as(
                 f"Error message should communicate that extension is disallowed by policy, but actual error "
                 f"was: {error}").is_true()
@@ -96,14 +96,19 @@ class ExtPolicy(AgentVmTest):
 
     def run(self):
 
-        # Prepare extensions to test
+        # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
+        # without settings have different status reporting logic, so we should test all cases.
         unique = str(uuid.uuid4())
         test_file = f"waagent-test.{unique}"
+
+        # CustomScript is a single-config extension.
         custom_script = ExtPolicy.TestCase(
             VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
                                           resource_name="CustomScript"),
             {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
         )
+
+        # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
         run_command = ExtPolicy.TestCase(
             VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                           resource_name="RunCommandHandler"),
@@ -116,6 +121,8 @@ class ExtPolicy(AgentVmTest):
                                           resource_name="RunCommandHandler2"),
             {'source': {'script': f"echo '{unique2}' > /tmp/{test_file2}"}}
         )
+
+        # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
         azure_monitor = ExtPolicy.TestCase(
             VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
                                           resource_name="AzureMonitorLinuxAgent"),
@@ -128,6 +135,7 @@ class ExtPolicy(AgentVmTest):
 
         # Only allowlisted extensions should be processed.
         # We only allowlist CustomScript: CustomScript should be enabled, RunCommand and AzureMonitor should fail.
+        # (Note that CustomScript blocked by policy is tested in a later test case.)
         policy = \
             {
                 "policyVersion": "0.1.0",
