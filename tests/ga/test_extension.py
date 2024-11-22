@@ -3650,16 +3650,26 @@ class TestExtensionPolicy(TestExtensionBase):
                                      handler.name == dep_ext_level_2.name).settings[0].dependencyLevel)
 
     def test_enable_should_succeed_if_extension_allowed(self):
-        policy = \
+        policy_cases = [
             {
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": False,
                 }
+            },
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "extensions": {
+                        "OSTCExtensions.ExampleHandlerLinux": {}
+                    }
+                }
             }
-        self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
-                                  expected_status_code=0,
-                                  expected_handler_status='Ready', expected_ext_count=1)
+        ]
+        for policy in policy_cases:
+            self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
+                                   expected_handler_status='Ready', expected_ext_count=1)
 
 
 if __name__ == '__main__':
