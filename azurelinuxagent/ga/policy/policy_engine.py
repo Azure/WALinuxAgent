@@ -60,7 +60,7 @@ class _PolicyEngine(object):
     """
     def __init__(self):
         # Set defaults for policy
-        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
+        self._policy_enforcement_enabled = self.get_policy_enforcement_enabled()
         if not self.policy_enforcement_enabled:
             return
 
@@ -79,7 +79,7 @@ class _PolicyEngine(object):
             add_event(op=op, message=msg, is_success=is_success, log_event=False)
 
     @staticmethod
-    def __get_policy_enforcement_enabled():
+    def get_policy_enforcement_enabled():
         """
         Policy will be enabled if (1) policy file exists at the expected location and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
         """

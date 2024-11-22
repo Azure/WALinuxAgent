@@ -513,7 +513,7 @@ class ExtHandlersHandler(object):
             policy_op, policy_err_code = policy_err_map.get(ext_handler.state)
             if policy_error is not None:
                 err = ExtensionPolicyError(msg="", inner=policy_error, code=policy_err_code)
-                self.__handle_and_report_ext_handler_errors(handler_i, err, report_op=handler_i.operation, message=ustr(err),
+                self.__handle_and_report_policy_error(handler_i, err, report_op=handler_i.operation, message=ustr(err),
                                                       extension=extension, report=True)
                 continue
 
@@ -524,7 +524,7 @@ class ExtHandlersHandler(object):
                                                                                              ext_handler.name,
                                                                                              conf.get_policy_file_path())
                 err = ExtensionPolicyError(msg, code=policy_err_code)
-                self.__handle_and_report_ext_handler_errors(handler_i, err, report_op=handler_i.operation, message=ustr(err),
+                self.__handle_and_report_policy_error(handler_i, err, report_op=handler_i.operation, message=ustr(err),
                                                       extension=extension, report=True)
 
             # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
@@ -728,6 +728,32 @@ class ExtHandlersHandler(object):
         # file with failure since the extensions wont be called where they can create their status files.
         # This way we guarantee reporting back to CRP
         if ext_handler_i.should_perform_multi_config_op(extension):
+            ext_handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=error.code,
+                                                          operation=report_op, message=message)
+
+        if report:
+            name = ext_handler_i.get_extension_full_name(extension)
+            handler_version = ext_handler_i.ext_handler.version
+            add_event(name=name, version=handler_version, op=report_op, is_success=False, log_event=True,
+                      message=message)
+
+    @staticmethod
+    def __handle_and_report_policy_error(ext_handler_i, error, report_op, message, report=True, extension=None):
+        # TODO: Consider merging this function with __handle_and_report_ext_handler_errors() above, after investigating
+        # the impact of this change.
+        #
+        # If extension status is present, CRP will ignore handler status and report extension status. In the case of policy errors,
+        # extensions are not processed, so collect_ext_status() reports transitioning status on behalf of the extension.
+        # However, extensions blocked by policy should fail fast, so agent should write a .status file for policy failures.
+        # Note that __handle_and_report_ext_handler_errors() does not create the file for single-config extensions, but changing
+        # it will require additional testing/investigation. As a temporary workaround, this separate function was created
+        # to write a status file for single-config extensions.
+
+        # Set handler status for all extensions (with and without settings)
+        ext_handler_i.set_handler_status(message=message, code=error.code)
+
+        # Create status file for extensions with settings (single and multi config).
+        if extension is not None:
             ext_handler_i.create_status_file_if_not_exist(extension, status=ExtensionStatusValue.error, code=error.code,
                                                           operation=report_op, message=message)
 
@@ -1035,7 +1061,10 @@ class ExtHandlersHandler(object):
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
         # We also need to report extension status for an uninstalled handler if extensions are disabled because CRP
         # waits for extension runtime status before failing the extension operation.
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
+        # In the case of policy failures, we want to report extension status with a terminal code so CRP fails fast. If
+        # extension status is not present, collect_ext_status() will set a default transitioning status, and CRP will
+        # wait for timeout.
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled() or ExtensionPolicyEngine.get_policy_enforcement_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.

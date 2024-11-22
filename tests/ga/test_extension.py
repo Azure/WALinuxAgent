@@ -3536,7 +3536,7 @@ class TestExtensionPolicy(TestExtensionBase):
                 policy_file.write(policy)
             policy_file.flush()
 
-    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count=0,
+    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count=1,
                              expected_status_msg=None):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
@@ -3669,7 +3669,7 @@ class TestExtensionPolicy(TestExtensionBase):
         ]
         for policy in policy_cases:
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
-                                   expected_handler_status='Ready', expected_ext_count=1)
+                                   expected_handler_status='Ready')
 
 
 if __name__ == '__main__':
