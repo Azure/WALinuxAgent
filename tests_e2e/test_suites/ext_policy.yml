@@ -4,5 +4,5 @@
 name: "ExtensionPolicy"
 tests:
   - "ext_policy/ext_policy.py"
-images: "random(endorsed)"
+images: "endorsed"
 owns_vm: true

@@ -4,7 +4,7 @@
 name: "ExtPolicyWithDependencies"
 tests:
   - "ext_policy/ext_policy_with_dependencies.py"
-images: "random(endorsed)"
+images: "endorsed"
 executes_on_scale_set: true
 # This test should run on its own VMSS, because other tests may leave behind extensions
 # that are disallowed by policy and affect results.
