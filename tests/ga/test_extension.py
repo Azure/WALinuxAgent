@@ -3630,12 +3630,12 @@ class TestExtensionPolicy(TestExtensionBase):
 
             # OtherExampleHandlerLinux should be disallowed by policy, ExampleHandlerLinux should be skipped because
             # dependent extension failed
-            self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                         expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
                                         expected_msg=("failed to enable extension 'OSTCExtensions.OtherExampleHandlerLinux' "
                                                       "because extension is not specified in allowlist."))
 
-            self._assert_handler_status(protocol.report_vm_status, "NotReady", 0, "1.0.0",
+            self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                         expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
                                         expected_msg="Skipping processing of extensions since execution of dependent "
                                                      "extension OSTCExtensions.OtherExampleHandlerLinux failed")
@@ -3670,6 +3670,43 @@ class TestExtensionPolicy(TestExtensionBase):
         for policy in policy_cases:
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
                                    expected_handler_status='Ready')
+
+    def test_uninstall_should_succeed_if_extension_allowed(self):
+        policy_cases = [
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": False,
+                }
+            },
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "extensions": {
+                        "OSTCExtensions.ExampleHandlerLinux": {}
+                    }
+                }
+            }
+        ]
+        for policy in policy_cases:
+            with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+                protocol.mock_wire_data.set_incarnation(2)
+                protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
+                protocol.client.update_goal_state()
+                protocol.aggregate_status = None
+                protocol.report_vm_status = MagicMock()
+                exthandlers_handler = get_exthandlers_handler(protocol)
+
+                self._create_policy_file(policy)
+                exthandlers_handler.run()
+                exthandlers_handler.report_ext_handlers_status()
+
+                report_vm_status = protocol.report_vm_status
+                self.assertTrue(report_vm_status.called)
+                args, kw = report_vm_status.call_args  # pylint: disable=unused-variable
+                vm_status = args[0]
+                self.assertEqual(0, len(vm_status.vmAgent.extensionHandlers))
 
 
 if __name__ == '__main__':
