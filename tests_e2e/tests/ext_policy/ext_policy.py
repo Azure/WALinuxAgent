@@ -149,30 +149,30 @@ class ExtPolicy(AgentVmTest):
             }
         self._create_policy_file(policy)
         self._operation_should_succeed("enable", custom_script)
-        # self._operation_should_fail("enable", run_command)
-        # if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
-        #     self._operation_should_fail("enable", azure_monitor)
-        #
-        # # When allowlist is turned off, all extensions should be processed.
-        # # RunCommand and AzureMonitorLinuxAgent should be successfully enabled and then deleted.
-        # policy = \
-        #     {
-        #         "policyVersion": "0.1.0",
-        #         "extensionPolicies": {
-        #             "allowListedExtensionsOnly": False,
-        #             "signatureRequired": False,
-        #             "extensions": {}
-        #         }
-        #     }
-        # self._create_policy_file(policy)
-        # self._operation_should_succeed("enable", run_command)
-        # self._operation_should_succeed("delete", run_command)
-        # if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
-        #     self._operation_should_succeed("enable", azure_monitor)
-        #     self._operation_should_succeed("delete", azure_monitor)
-        #
-        # # Should not uninstall disallowed extensions.
-        # # CustomScript is removed from the allowlist: delete operation should fail.
+        self._operation_should_fail("enable", run_command)
+        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+            self._operation_should_fail("enable", azure_monitor)
+
+        # When allowlist is turned off, all extensions should be processed.
+        # RunCommand and AzureMonitorLinuxAgent should be successfully enabled and then deleted.
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": False,
+                    "signatureRequired": False,
+                    "extensions": {}
+                }
+            }
+        self._create_policy_file(policy)
+        self._operation_should_succeed("enable", run_command)
+        self._operation_should_succeed("delete", run_command)
+        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+            self._operation_should_succeed("enable", azure_monitor)
+            self._operation_should_succeed("delete", azure_monitor)
+
+        # Should not uninstall disallowed extensions.
+        # CustomScript is removed from the allowlist: delete operation should fail.
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -186,11 +186,11 @@ class ExtPolicy(AgentVmTest):
         # # Known CRP issue - delete/uninstall operation times out instead of reporting an error.
         # # TODO: uncomment this test case after issue is resolved
         # # self._operation_should_fail("delete", custom_script)
-        #
-        # # If a multiconfig extension is disallowed, no instances should be processed.
-        # # RunCommand is not allowed - if we try to enable two instances, both should fail fast.
-        # self._operation_should_fail("enable", run_command)
-        # self._operation_should_fail("enable", run_command_2)
+
+        # If a multiconfig extension is disallowed, no instances should be processed.
+        # RunCommand is not allowed - if we try to enable two instances, both should fail fast.
+        self._operation_should_fail("enable", run_command)
+        self._operation_should_fail("enable", run_command_2)
 
         # If single-config extension is initially blocked, and policy is updated to allow it, extension should be
         # successfully enabled and report status correctly.
