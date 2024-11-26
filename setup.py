@@ -320,10 +320,11 @@ class install(_install):  # pylint: disable=C0103
 #   will be removed from Python 3.
 # * In version 3.13 of Python, the crypt module was removed and legacycrypt is
 #   required instead.
-requires = [
-    "distro;python_version>='3.8'",
-    "legacycrypt;python_version>='3.13'",
-]
+requires = []
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 8:
+    requires.append('distro')
+if sys.version_info[0] >= 3 and sys.version_info[1] >= 13:
+    requires.append('legacycrypt')
 
 modules = []  # pylint: disable=invalid-name
 
