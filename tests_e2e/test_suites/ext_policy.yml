@@ -4,5 +4,5 @@
 name: "ExtensionPolicy"
 tests:
   - "ext_policy/ext_policy.py"
-images: "mariner_2"
+images: "endorsed"
 owns_vm: true
