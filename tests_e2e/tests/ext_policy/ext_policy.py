@@ -68,7 +68,8 @@ class ExtPolicy(AgentVmTest):
                 if instance_view_extensions is not None and any(
                         e.name == extension_case.extension._resource_name for e in instance_view_extensions):
                     raise Exception(
-                        "extension {0} still in instance view after attempting to delete".format(extension_case.extension._resource_nam))
+                        "extension {0} still in instance view after attempting to delete".format(
+                            extension_case.extension._resource_nam))
             log.info(f"Operation '{operation}' for {extension_case.extension.__str__()} succeeded as expected.")
         except Exception as error:
             fail(
@@ -94,48 +95,49 @@ class ExtPolicy(AgentVmTest):
                 f"was: {error}").is_true()
             log.info(f"{extension_case.extension.__str__()} {operation} failed as expected")
 
-    def run(self):
-
-        # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
-        # without settings have different status reporting logic, so we should test all cases.
+    def _run_extension_test_case(self, extension_id):
+        # Set up test case for the specified extension ID
         unique = str(uuid.uuid4())
         test_file = f"waagent-test.{unique}"
+        ext_case_instances = []
 
-        # CustomScript is a single-config extension.
-        custom_script = ExtPolicy.TestCase(
-            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                          resource_name="CustomScript"),
-            {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
-        )
+        if extension_id == VmExtensionIds.CustomScript:
+            ext_case = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
+                                              resource_name="CustomScript"),
+                {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
+            )
+            ext_case_instances.append(ext_case)
+        elif extension_id == VmExtensionIds.RunCommandHandler:
+            # For multiconfig extension, we want to test all behavior for more than one instance, so we set up two
+            # test cases, and append to ext_case_instances.
+            ext_case = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="RunCommandHandler"),
+                {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
+            )
+            ext_case_instances.append(ext_case)
 
-        # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
-        run_command = ExtPolicy.TestCase(
-            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandler"),
-            {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
-        )
-        unique2 = str(uuid.uuid4())
-        test_file2 = f"waagent-test.{unique2}"
-        run_command_2 = ExtPolicy.TestCase(
-            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandler2"),
-            {'source': {'script': f"echo '{unique2}' > /tmp/{test_file2}"}}
-        )
+            unique2 = str(uuid.uuid4())
+            test_file2 = f"waagent-test.{unique}"
+            ext_case_2 = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="RunCommandHandler2"),
+                {'source': {'script': f"echo '{unique2}' > /tmp/{test_file2}"}}
+            )
+            ext_case_instances.append(ext_case_2)
+        elif extension_id == VmExtensionIds.AzureMonitorLinuxAgent:
+            # Skip test case if distro does not support AzureMonitorLinuxAgent
+            if not VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+                return
+            ext_case = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
+                                              resource_name="AzureMonitorLinuxAgent"),
+                None
+            )
+            ext_case_instances.append(ext_case)
 
-        # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
-        azure_monitor = ExtPolicy.TestCase(
-            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-                                          resource_name="AzureMonitorLinuxAgent"),
-            None
-        )
-
-        # Enable policy via conf
-        log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
-        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
-
-        # Only allowlisted extensions should be processed.
-        # We only allowlist CustomScript: CustomScript should be enabled, RunCommand and AzureMonitor should fail.
-        # (Note that CustomScript blocked by policy is tested in a later test case.)
+        # Extension enable operation succeeds when extension is in the allowlist
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -143,36 +145,31 @@ class ExtPolicy(AgentVmTest):
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
                     "extensions": {
-                        "Microsoft.Azure.Extensions.CustomScript": {}
+                        str(extension_id): {}
                     }
                 }
             }
         self._create_policy_file(policy)
-        self._operation_should_succeed("enable", custom_script)
-        self._operation_should_fail("enable", run_command)
-        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
-            self._operation_should_fail("enable", azure_monitor)
+        for ext_case in ext_case_instances:
+            self._operation_should_succeed("enable", ext_case)
 
-        # When allowlist is turned off, all extensions should be processed.
-        # RunCommand and AzureMonitorLinuxAgent should be successfully enabled and then deleted.
+        # Extension uninstall operation succeeds when extension is in the allowlist
         policy = \
             {
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
-                    "allowListedExtensionsOnly": False,
+                    "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
-                    "extensions": {}
+                    "extensions": {
+                        str(extension_id): {}
+                    }
                 }
             }
         self._create_policy_file(policy)
-        self._operation_should_succeed("enable", run_command)
-        self._operation_should_succeed("delete", run_command)
-        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
-            self._operation_should_succeed("enable", azure_monitor)
-            self._operation_should_succeed("delete", azure_monitor)
+        for ext_case in ext_case_instances:
+            self._operation_should_succeed("uninstall", ext_case)
 
-        # Should not uninstall disallowed extensions.
-        # CustomScript is removed from the allowlist: delete operation should fail.
+        # Extension enable operation fails when extension is disallowed (NOT in the allowlist)
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -183,29 +180,174 @@ class ExtPolicy(AgentVmTest):
                 }
             }
         self._create_policy_file(policy)
-        # # Known CRP issue - delete/uninstall operation times out instead of reporting an error.
-        # # TODO: uncomment this test case after issue is resolved
-        # # self._operation_should_fail("delete", custom_script)
+        for ext_case in ext_case_instances:
+            self._operation_should_fail("enable", ext_case)
 
-        # If a multiconfig extension is disallowed, no instances should be processed.
-        # RunCommand is not allowed - if we try to enable two instances, both should fail fast.
-        self._operation_should_fail("enable", run_command)
-        self._operation_should_fail("enable", run_command_2)
-
-        # If single-config extension is initially blocked, and policy is updated to allow it, extension should be
-        # successfully enabled and report status correctly.
-        self._operation_should_fail("enable", custom_script)
+        # Extension enable operation succeeds when allowlist is turned off
         policy = \
             {
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
-                    "allowListedExtensionsOnly": False,
-                    "signatureRequired": False,
-                    "extensions": {}
+                    "allowListedExtensionsOnly": False
                 }
             }
         self._create_policy_file(policy)
-        self._operation_should_succeed("enable", custom_script)
+        for ext_case in ext_case_instances:
+            self._operation_should_succeed("enable", ext_case)
+
+        # # Extension uninstall operation fails when extension is disallowed (NOT in the allowlist)
+        # policy = \
+        #     {
+        #         "policyVersion": "0.1.0",
+        #         "extensionPolicies": {
+        #             "allowListedExtensionsOnly": True,
+        #             "signatureRequired": False,
+        #             "extensions": {}
+        #         }
+        #     }
+        # self._create_policy_file(policy)
+        # for ext_case in ext_case_instances:
+        #     self._operation_should_fail("uninstall", ext_case)
+
+        # Clean up extensions for next test case
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": False
+                }
+            }
+        self._create_policy_file(policy)
+        for ext_case in ext_case_instances:
+            self._operation_should_succeed("uninstall", ext_case)
+
+    def run(self):
+        # Enable policy on VM via conf file
+        log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
+        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
+
+        # Run test cases
+        ext_to_test = [
+            # VmExtensionIds.CustomScript, # single-config extension
+            # VmExtensionIds.RunCommandHandler, # multi-config extension
+            VmExtensionIds.AzureMonitorLinuxAgent # no-config extension
+        ]
+        for ext in ext_to_test:
+            self._run_extension_test_case(ext)
+
+        # # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
+        # # without settings have different status reporting logic, so we should test all cases.
+        #
+        # unique = str(uuid.uuid4())
+        # test_file = f"waagent-test.{unique}"
+        #
+        # # CustomScript is a single-config extension.
+        # custom_script = ExtPolicy.TestCase(
+        #     VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
+        #                                   resource_name="CustomScript"),
+        #     {'commandToExecute': f"echo '{unique}' > /tmp/{test_file}"}
+        # )
+        #
+        # # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
+        # run_command = ExtPolicy.TestCase(
+        #     VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+        #                                   resource_name="RunCommandHandler"),
+        #     {'source': {'script': f"echo '{unique}' > /tmp/{test_file}"}}
+        # )
+        # unique2 = str(uuid.uuid4())
+        # test_file2 = f"waagent-test.{unique2}"
+        # run_command_2 = ExtPolicy.TestCase(
+        #     VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+        #                                   resource_name="RunCommandHandler2"),
+        #     {'source': {'script': f"echo '{unique2}' > /tmp/{test_file2}"}}
+        # )
+        #
+        # # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
+        # azure_monitor = ExtPolicy.TestCase(
+        #     VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
+        #                                   resource_name="AzureMonitorLinuxAgent"),
+        #     None
+        # )
+        #
+        # # Enable policy via conf
+        # log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
+        # self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
+        #
+        # # Only allowlisted extensions should be processed.
+        # # We only allowlist CustomScript: CustomScript should be enabled, RunCommand and AzureMonitor should fail.
+        # # (Note that CustomScript blocked by policy is tested in a later test case.)
+        # policy = \
+        #     {
+        #         "policyVersion": "0.1.0",
+        #         "extensionPolicies": {
+        #             "allowListedExtensionsOnly": True,
+        #             "signatureRequired": False,
+        #             "extensions": {
+        #                 "Microsoft.Azure.Extensions.CustomScript": {}
+        #             }
+        #         }
+        #     }
+        # self._create_policy_file(policy)
+        # self._operation_should_succeed("enable", custom_script)
+        # self._operation_should_fail("enable", run_command)
+        # if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(
+        #         (self._ssh_client.run_command("get_distro.py").rstrip())):
+        #     self._operation_should_fail("enable", azure_monitor)
+        #
+        # # When allowlist is turned off, all extensions should be processed.
+        # # RunCommand and AzureMonitorLinuxAgent should be successfully enabled and then deleted.
+        # policy = \
+        #     {
+        #         "policyVersion": "0.1.0",
+        #         "extensionPolicies": {
+        #             "allowListedExtensionsOnly": False,
+        #             "signatureRequired": False,
+        #             "extensions": {}
+        #         }
+        #     }
+        # self._create_policy_file(policy)
+        # self._operation_should_succeed("enable", run_command)
+        # self._operation_should_succeed("delete", run_command)
+        # if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(
+        #         (self._ssh_client.run_command("get_distro.py").rstrip())):
+        #     self._operation_should_succeed("enable", azure_monitor)
+        #     self._operation_should_succeed("delete", azure_monitor)
+        #
+        # # Should not uninstall disallowed extensions.
+        # # CustomScript is removed from the allowlist: delete operation should fail.
+        # policy = \
+        #     {
+        #         "policyVersion": "0.1.0",
+        #         "extensionPolicies": {
+        #             "allowListedExtensionsOnly": True,
+        #             "signatureRequired": False,
+        #             "extensions": {}
+        #         }
+        #     }
+        # self._create_policy_file(policy)
+        # # # Known CRP issue - delete/uninstall operation times out instead of reporting an error.
+        # # # TODO: uncomment this test case after issue is resolved
+        # # # self._operation_should_fail("delete", custom_script)
+        #
+        # # If a multiconfig extension is disallowed, no instances should be processed.
+        # # RunCommand is not allowed - if we try to enable two instances, both should fail fast.
+        # self._operation_should_fail("enable", run_command)
+        # self._operation_should_fail("enable", run_command_2)
+        #
+        # # If single-config extension is initially blocked, and policy is updated to allow it, extension should be
+        # # successfully enabled and report status correctly.
+        # self._operation_should_fail("enable", custom_script)
+        # policy = \
+        #     {
+        #         "policyVersion": "0.1.0",
+        #         "extensionPolicies": {
+        #             "allowListedExtensionsOnly": False,
+        #             "signatureRequired": False,
+        #             "extensions": {}
+        #         }
+        #     }
+        # self._create_policy_file(policy)
+        # self._operation_should_succeed("enable", custom_script)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
