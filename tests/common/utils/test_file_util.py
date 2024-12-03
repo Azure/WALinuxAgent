@@ -80,7 +80,7 @@ class TestFileOperations(AgentTestCase):
         os.remove(test_file)
 
     def test_findre_in_file(self):
-        fp = tempfile.mktemp()
+        fp = os.path.join(self.tmp_dir, "test_findre_in_file")
         with open(fp, 'w') as f:
             f.write(
 '''
@@ -107,7 +107,7 @@ Third line with more words
             fileutil.findre_in_file(fp, "^Do not match.*"))
 
     def test_findstr_in_file(self):
-        fp = tempfile.mktemp()
+        fp = os.path.join(self.tmp_dir, "test_findstr_in_file")
         with open(fp, 'w') as f:
             f.write(
 '''
