@@ -17,7 +17,6 @@
 
 import os
 import re
-import tempfile
 import unittest
 
 import azurelinuxagent.common.conf as conf
