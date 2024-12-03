@@ -602,6 +602,30 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             cmd = 'systemctl set-property extension.service {0} {1} {2} --runtime'.format(expected_cpu_accounting, expected_memory_accounting, expected_cpu_quota_percentage)
             self.assertIn(cmd, configurator.mocks.commands_call_list, "The command to set the CPU quota was not called")
 
+    def test_it_should_not_update_quota_when_quota_is_not_changed(self):
+        command_mocks = [MockCommand(r"^systemctl show extension\.service --property CPUQuotaPerSecUSec",
+                                     '''CPUQuotaPerSecUSec=50ms
+                                     '''),
+                         MockCommand(r"^systemctl show extension\.service --property CPUAccounting",
+                                     '''CPUAccounting=yes
+                                     '''),
+                         MockCommand(r"^systemctl show extension\.service --property MemoryAccounting",
+                                     '''MemoryAccounting=yes
+                                     ''')]
+        service_list = [
+            {
+                "name": "extension.service",
+                "cpuQuotaPercentage": 5
+            }
+        ]
+
+        with self._get_cgroup_configurator(mock_commands=command_mocks) as configurator:
+            configurator.set_extension_services_cpu_memory_quota(service_list)
+            cmd = 'systemctl set-property extension.service'
+            commands_list = configurator.mocks.commands_call_list
+            for command in commands_list:
+                self.assertNotIn(cmd, command, "The command to set CPU quota was called")
+
     def test_it_should_set_extension_services_when_quotas_not_defined(self):
         service_list = [
             {

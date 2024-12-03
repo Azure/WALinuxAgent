@@ -428,7 +428,7 @@ class CGroupConfigurator(object):
 
                 # Calculate CPU percentage
                 cpu_percentage = (cpu_quota_us / 1000000) * 100
-                return "{0}%".format(cpu_percentage)
+                return "{:g}%".format(cpu_percentage)  # :g Removes trailing zeros after decimal point
             except Exception as e:
                 log_cgroup_warning("Error parsing current CPUQuotaPerSecUSec: {0}".format(ustr(e)))
                 return "unknown"
