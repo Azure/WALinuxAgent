@@ -677,7 +677,7 @@ class TestMultiConfigExtensions(_MultiConfigBaseTestClass):
                 mc_handlers = self._assert_and_get_handler_status(aggregate_status=protocol.aggregate_status,
                                                                   handler_name="OSTCExtensions.ExampleHandlerLinux",
                                                                   expected_count=3, status="NotReady")
-                msg = "failed to enable extension 'OSTCExtensions.ExampleHandlerLinux' because extension is not specified in allowlist"
+                msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified in the allowlist"
                 expected_extensions = {
                     "firstExtension": {"status": ExtensionStatusValue.error, "seq_no": 1, "message": msg},
                     "secondExtension": {"status": ExtensionStatusValue.error, "seq_no": 2, "message": msg},

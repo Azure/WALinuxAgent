@@ -3566,7 +3566,7 @@ class TestExtensionPolicy(TestExtensionBase):
                     "allowListedExtensionsOnly": True,
                }
             }
-        expected_msg = "failed to enable extension 'OSTCExtensions.ExampleHandlerLinux' because extension is not specified in allowlist."
+        expected_msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified in the allowlist."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                           expected_handler_status='NotReady', expected_status_msg=expected_msg)
 
@@ -3589,7 +3589,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         with patch('azurelinuxagent.ga.policy.policy_engine.ExtensionPolicyEngine.__init__',
                    side_effect=Exception("mock exception")):
-            expected_msg = "Extension will not be processed: \nInner error: mock exception"
+            expected_msg = "Extension will not be processed: mock exception"
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
                                       expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                                       expected_handler_status='NotReady', expected_status_msg=expected_msg)
@@ -3604,7 +3604,7 @@ class TestExtensionPolicy(TestExtensionBase):
                     "extensions": {}
                 },
             }
-        expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because extension is not specified in allowlist."
+        expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified in the allowlist."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Uninstall, expected_status_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                                   expected_handler_status='NotReady', expected_status_msg=expected_msg)
 
@@ -3632,8 +3632,8 @@ class TestExtensionPolicy(TestExtensionBase):
             # dependent extension failed
             self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                         expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
-                                        expected_msg=("failed to enable extension 'OSTCExtensions.OtherExampleHandlerLinux' "
-                                                      "because extension is not specified in allowlist."))
+                                        expected_msg=("failed to run extension 'OSTCExtensions.OtherExampleHandlerLinux' "
+                                                      "because it is not specified in the allowlist."))
 
             self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
                                         expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
