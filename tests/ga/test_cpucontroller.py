@@ -168,9 +168,6 @@ class TestCpuControllerV1(AgentTestCase):
             return [m for m in metrics if m.counter == MetricsCounter.THROTTLED_TIME]
 
         found = find_throttled_time(controller.get_tracked_metrics())
-        self.assertTrue(len(found) == 0, "get_tracked_metrics should not fetch the throttled time by default. Found: {0}".format(found))
-
-        found = find_throttled_time(controller.get_tracked_metrics(track_throttled_time=True))
         self.assertTrue(len(found) == 1, "get_tracked_metrics should have fetched the throttled time by default. Found: {0}".format(found))
 
 
@@ -307,7 +304,4 @@ class TestCpuControllerV2(AgentTestCase):
             return [m for m in metrics if m.counter == MetricsCounter.THROTTLED_TIME]
 
         found = find_throttled_time(controller.get_tracked_metrics())
-        self.assertTrue(len(found) == 0, "get_tracked_metrics should not fetch the throttled time by default. Found: {0}".format(found))
-
-        found = find_throttled_time(controller.get_tracked_metrics(track_throttled_time=True))
         self.assertTrue(len(found) == 1, "get_tracked_metrics should have fetched the throttled time by default. Found: {0}".format(found))

@@ -66,7 +66,7 @@ class LogCollector(AgentVmTest):
         expected = [
             r'.*Starting log collection',
             r'.*Using cgroup v\d for resource enforcement and monitoring',
-            r'.*cpu(,cpuacct)? controller for cgroup: azure-walinuxagent-logcollector \[\/sys\/fs\/cgroup(\/cpu,cpuacct)?\/azure.slice\/azure-walinuxagent.slice\/azure-walinuxagent\-logcollector.slice\/collect\-logs.scope\]',
+            r'.*cpu controller for cgroup: azure-walinuxagent-logcollector \[\/sys\/fs\/cgroup(\/cpu,cpuacct)?\/azure.slice\/azure-walinuxagent.slice\/azure-walinuxagent\-logcollector.slice\/collect\-logs.scope\]',
             r'.*memory controller for cgroup: azure-walinuxagent-logcollector \[\/sys\/fs\/cgroup(\/memory)?\/azure.slice\/azure-walinuxagent.slice\/azure-walinuxagent\-logcollector.slice\/collect\-logs.scope\]',
             r'.*Log collection successfully completed',
             r'.*Successfully collected logs',

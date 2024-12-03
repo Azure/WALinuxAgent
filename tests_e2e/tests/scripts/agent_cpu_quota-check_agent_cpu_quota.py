@@ -20,14 +20,12 @@
 import datetime
 import os
 import re
-import shutil
 import time
 
 from assertpy import fail
 
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.ga.cgroupconfigurator import _DROP_IN_FILE_CPU_QUOTA
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, \
     get_agent_cpu_quota, check_log_message
@@ -145,7 +143,6 @@ def wait_for_log_message(message, timeout=datetime.timedelta(minutes=5)):
         time.sleep(30)
     fail("The agent did not find [{0}] in its log within the allowed timeout".format(message))
 
-
 def verify_throttling_time_check_on_agent_cgroups():
     """
     This method checks agent disables its CPUQuota when it exceeds its throttling limit
@@ -154,11 +151,6 @@ def verify_throttling_time_check_on_agent_cgroups():
     # Now disable the check on unexpected processes and enable the check on throttledtime and verify that the agent disables its CPUQuota when it exceeds its throttling limit
     if check_agent_quota_disabled():
         fail("The agent's CPUQuota is not enabled: {0}".format(get_agent_cpu_quota()))
-    quota_drop_in = os.path.join(systemd.get_agent_drop_in_path(), _DROP_IN_FILE_CPU_QUOTA)
-    quota_drop_in_backup = quota_drop_in + ".bk"
-    log.info("Backing up %s to %s...", quota_drop_in, quota_drop_in_backup)
-    shutil.copy(quota_drop_in, quota_drop_in_backup)
-    shellutil.run_command(["systemctl", "daemon-reload"])
     shellutil.run_command(["update-waagent-conf", "Debug.CgroupDisableOnProcessCheckFailure=n", "Debug.CgroupDisableOnQuotaCheckFailure=y", "Debug.AgentCpuThrottledTimeThreshold=5"])
 
     # The log message indicating the check failed is similar to
@@ -172,7 +164,6 @@ def verify_throttling_time_check_on_agent_cgroups():
         "Disabling resource usage monitoring. Reason: Check on cgroups failed:.+The agent has been throttled",
         timeout=datetime.timedelta(minutes=10))
     wait_for_log_message("Stopped tracking cgroup walinuxagent.service", timeout=datetime.timedelta(minutes=10))
-    wait_for_log_message("Executing systemctl daemon-reload...", timeout=datetime.timedelta(minutes=5))
     disabled: bool = retry_if_false(check_agent_quota_disabled)
     if not disabled:
         fail("The agent did not disable its CPUQuota: {0}".format(get_agent_cpu_quota()))

@@ -336,7 +336,7 @@ class LogCollectorMonitorHandler(ThreadHandlerInterface):
     def _poll_resource_usage(self):
         metrics = []
         for controller in self.controllers:
-            metrics.extend(controller.get_tracked_metrics(track_throttled_time=True))
+            metrics.extend(controller.get_tracked_metrics())
 
         for metric in metrics:
             current_max = self.max_recorded_metrics.get(metric.counter)

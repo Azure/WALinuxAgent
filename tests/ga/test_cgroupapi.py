@@ -83,7 +83,7 @@ class CGroupUtilTestCase(AgentTestCase):
 
         for (distro, supported) in test_cases:
             with patch("azurelinuxagent.ga.cgroupapi.get_distro", return_value=distro):
-                self.assertEqual(CGroupUtil.cgroups_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
+                self.assertEqual(CGroupUtil.distro_supported(), supported, "cgroups_supported() failed on {0}".format(distro))
 
                 
 class SystemdCgroupsApiTestCase(AgentTestCase):
