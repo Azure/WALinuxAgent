@@ -352,6 +352,7 @@ class CGroupConfigurator(object):
             try:
                 # since we don't use daemon-reload and drop-files for accounting, so it will be enabled with systemctl set-property
                 accounting_properties = ["CPUAccounting=yes", "MemoryAccounting=yes"]
+                log_cgroup_info("Enabling accounting properties for the agent: {0}".format(accounting_properties))
                 systemd.set_unit_properties_run_time(unit_name, accounting_properties)
             except Exception as exception:
                 log_cgroup_warning("Failed to set accounting properties for the agent: {0}".format(ustr(exception)))
