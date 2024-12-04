@@ -124,7 +124,7 @@ class ResourceDiskHandler(object):
                                     "{0}: {1}".format(device, ret[1]))
 
         force_option = 'F'
-        if self.fs == 'xfs':
+        if self.fs in ('btrfs', 'xfs'):
             force_option = 'f'
         mkfs_string = "mkfs.{0} -{2} {1}".format(
             self.fs, partition, force_option)
