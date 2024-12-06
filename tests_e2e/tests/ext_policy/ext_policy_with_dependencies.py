@@ -54,7 +54,7 @@ class ExtPolicyWithDependencies(AgentVmssTest):
     _test_cases = [
         _should_fail_single_config_depends_on_disallowed_no_config,
         _should_fail_single_config_depends_on_disallowed_single_config,
-        # TODO: RunCommand is unable to be installed properly, so these tests are currently disabled. Investigate the
+        # TODO: RunCommandHandler is unable to be uninstalled properly, so these tests are currently disabled. Investigate the
         # issue and enable these 3 tests.
         # _should_fail_single_config_depends_on_disallowed_multi_config,
         # _should_fail_multi_config_depends_on_disallowed_single_config,
@@ -82,6 +82,14 @@ class ExtPolicyWithDependencies(AgentVmssTest):
         ssh_clients: Dict[str, SshClient] = {}
         for instance in instances_ip_address:
             ssh_clients[instance.instance_name] = SshClient(ip_address=instance.ip_address, username=self._context.username, identity_file=self._context.identity_file)
+
+        # Cleanup any extensions left behind by other tests, as they may be blocked by policy and erroneously cause failures.
+        instance_view_ext = self._context.vmss.get_instance_view().extensions
+        if instance_view_ext is not None and len(instance_view_ext) > 0:
+            for ex in instance_view_ext:
+                self._context.vmss.delete_extension(ex.name)
+
+        # Enable policy via conf file.
         for ssh_client in ssh_clients.values():
             ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
@@ -121,7 +129,6 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             # to generate a new sequence number each time
             test_guid = str(uuid.uuid4())
             policy, extensions, expected_errors, deletion_order = case()
-
             for ext in extensions:
                 ext["properties"].update({
                     "forceUpdateTag": test_guid
@@ -174,23 +181,23 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                     for phrase in expected_errors:
                         if phrase not in error_message:
                             fail("Extension template deployment failed as expected, but with an unexpected error. Error expected to contain message '{0}'. Actual error: {1}".format(phrase, e))
-                log.info("Extensions failed as expected")
+                log.info("Extensions failed as expected. Expected errors: '{0}'. Actual errors: '{1}'.".format(expected_errors, e))
                 log.info("")
 
             # After each test, clean up failed extensions to leave VMSS in a good state for the next test.
             # If there are leftover failed extensions, CRP will attempt to uninstall them in the next test, but uninstall
             # will be disallowed by policy. Since CRP waits for a 90 minute timeout for uninstall, the operation will
-            # timeout and fail without an appropriate error message (known issue), and the whole test case will fail.
+            # timeout and fail without an appropriate error message, and the whole test case will fail.
             # To clean up, we first update the policy to allow all, then remove the extensions.
             log.info("Starting cleanup for test case...")
-            for ssh_client in ssh_clients.values():
-                allow_all_policy = \
-                    {
-                        "policyVersion": "0.1.0",
-                        "extensionPolicies": {
-                            "allowListedExtensionsOnly": False
-                        }
+            allow_all_policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": False
                     }
+                }
+            for ssh_client in ssh_clients.values():
                 self._create_policy_file(ssh_client, allow_all_policy)
 
             for ext_to_delete in deletion_order:
@@ -269,7 +276,7 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             {
                 'message': r"Skipping processing of extensions since execution of dependent extension .* failed"
             },
-            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension will not be processed: failed to enable extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because extension is not specified in allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
+            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=Extension will not be processed: failed to enable extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because extension is not specified in allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
             # We intentionally block extensions with policy and expect this failure message
             {
                 'message': r"Extension will not be processed"

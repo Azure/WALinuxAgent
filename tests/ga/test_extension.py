@@ -3536,7 +3536,7 @@ class TestExtensionPolicy(TestExtensionBase):
                 policy_file.write(policy)
             policy_file.flush()
 
-    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count=1,
+    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count=0,
                              expected_status_msg=None):
 
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
@@ -3630,13 +3630,13 @@ class TestExtensionPolicy(TestExtensionBase):
 
             # OtherExampleHandlerLinux should be disallowed by policy, ExampleHandlerLinux should be skipped because
             # dependent extension failed
-            self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
-                                        expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
+            self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=0,
+                                        version="1.0.0", expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
                                         expected_msg=("failed to run extension 'OSTCExtensions.OtherExampleHandlerLinux' "
                                                       "because it is not specified in the allowlist."))
 
-            self._assert_handler_status(protocol.report_vm_status, "NotReady", 1, "1.0.0",
-                                        expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
+            self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=0,
+                                        version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
                                         expected_msg="Skipping processing of extensions since execution of dependent "
                                                      "extension OSTCExtensions.OtherExampleHandlerLinux failed")
 
@@ -3669,7 +3669,7 @@ class TestExtensionPolicy(TestExtensionBase):
         ]
         for policy in policy_cases:
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=0,
-                                   expected_handler_status='Ready')
+                                   expected_handler_status='Ready', expected_ext_count=1)
 
     def test_uninstall_should_succeed_if_extension_allowed(self):
         policy_cases = [
