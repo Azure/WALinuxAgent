@@ -8,18 +8,18 @@
     <ExpectHealthReport>FALSE</ExpectHealthReport>
   </Machine>
   <Container>
-    <ContainerId>7db6ecb6-9933-4da4-8587-b589f98d1261</ContainerId>
+    <ContainerId>7db6ecb6-9933-4da4-8587</ContainerId>
     <RoleInstanceList>
       <RoleInstance>
         <InstanceId>00abac64-f426-4653-baa6-0ed70cdcca87._cpmaerskvm03</InstanceId>
         <State>Started</State>
         <Configuration>
-          <HostingEnvironmentConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587-b589f98d1261/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=3</HostingEnvironmentConfig>
-          <SharedConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587-b589f98d1261/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=sharedConfig&amp;incarnation=3</SharedConfig>
-          <ExtensionsConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587-b589f98d1261/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=extensionsConfig&amp;incarnation=3</ExtensionsConfig>
-          <FullConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587-b589f98d1261/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=fullConfig&amp;incarnation=3</FullConfig>
-          <Certificates>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587-b589f98d1261/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=certificates&amp;incarnation=3</Certificates>
-          <ConfigName>00abac64-f426-4653-baa6-0ed70cdcca87.2.00abac64-f426-4653-baa6-0ed70cdcca87.3._cpmaerskvm03.1.xml</ConfigName>
+          <HostingEnvironmentConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=3</HostingEnvironmentConfig>
+          <SharedConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=sharedConfig&amp;incarnation=3</SharedConfig>
+          <ExtensionsConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=extensionsConfig&amp;incarnation=3</ExtensionsConfig>
+          <FullConfig>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=config&amp;type=fullConfig&amp;incarnation=3</FullConfig>
+          <Certificates>http://168.63.129.16:80/machine/7db6ecb6-9933-4da4-8587/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fcpmaerskvm03?comp=certificates&amp;incarnation=3</Certificates>
+          <ConfigName>00abac64-f426-4653-baa6-0ed70cdcca87.2.00abac64-f426-4653-baa6-0ed70cdcca87.3._1.xml</ConfigName>
         </Configuration>
       </RoleInstance>
     </RoleInstanceList>

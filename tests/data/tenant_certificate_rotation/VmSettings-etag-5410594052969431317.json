@@ -7,7 +7,7 @@
     "extensionGoalStatesSource": "FastTrack",
     "statusUploadBlob": {
         "statusBlobType": "PageBlob",
-        "value": "https://md-k2npnlw3m5b2.z16.blob.storage.azure.net/$system/cpmaerskvm03.dd6ea3d2-be72-4f28-a67c-15b576b88462.status?sv=2018-03-28&sr=b&sk=system-1&sig=FV8ltBI9f2oU3Z5CVZvCWZj3RILexvF8pV%2bPZYm%2bKMw%3d&se=9999-01-01T00%3a00%3a00Z&sp=rw"
+        "value": "https://md.z16.blob.storage.azure.net/$system/-a67c-15b576b88462.status"
     },
     "gaFamilies": [
         {
@@ -18,25 +18,6 @@
             "uris": [
                 "https://umsaqhczvcnhlz0kplll.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
                 "https://umsannq1fthghhbj40ml.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsal4z5pqr2dx3g5zdd.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsasvdz0hgqp25wbldc.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsahpcjwbbmcm5j034x.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsagxbfcnkp2gcgbktm.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsafxxnhhpbmc0hwbmp.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsaz2pjjf2m3xn2hpzz.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsaw4hwnmtr1chclv42.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsac44fqpt2lbfsgksz.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsahptsm5jzvq2pczs0.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsaqblfwqtqnprnhrpl.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsajn0hmvqj2ccpdpnw.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsaczmlqhh3dxhsm4xn.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsaxm3jqxbxqm4xtr4r.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsaft2xzgffnkbxxslg.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsarnnfvjl3bbcrdndk.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsavq3r0szsqptncs4x.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsalwnw1x3vrch5vmdl.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsambnrwtv24zxhkrdr.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
-                "https://umsas2lcxxb22k1050cv.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml"
             ]
         }
     ],
