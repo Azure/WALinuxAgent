@@ -101,12 +101,6 @@ if [ $started == false ]; then
   exit 1
 fi
 
-#
-# Install the package
-#
-echo "========== Installing Agent =========="
-echo "Installing $package as version $version..."
-unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
 python=$(get-agent-python)
 # Ensure that AutoUpdate is enabled. some distros, e.g. Flatcar have a waagent.conf in different path
@@ -162,13 +156,20 @@ if [[ $(uname -a) == *"flatcar"* ]]; then
 fi
 
 #
-# Restart the service
+# Install the package
 #
-echo "Restarting service..."
+echo "========== Installing Agent =========="
+
 agent-service stop
 
 # Rename the previous log to ensure the new log starts with the agent we just installed
 mv /var/log/waagent.log /var/log/waagent."$(date --iso-8601=seconds)".log
+
+echo "Cleaning up the existing agents"
+rm -rfv /var/lib/waagent/WALinuxAgent-*
+
+echo "Installing $package as version $version..."
+unzip.py "$package" "/var/lib/waagent/WALinuxAgent-$version"
 
 agent-service start
 
