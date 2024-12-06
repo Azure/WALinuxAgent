@@ -23,7 +23,7 @@ from threading import current_thread
 from azurelinuxagent.ga.agent_update_handler import INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.logger import DEFAULT_LOGGER
+from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
     ExitException, AgentMemoryExceededException
@@ -1971,23 +1971,6 @@ class TimeMock(Mock):
         return current_time
 
 
-@contextlib.contextmanager
-def capture_log_messages():
-    class ListAppender():
-        def __init__(self):
-            self.messages = []
-
-        def write(self, _, msg):
-            self.messages.append(msg)
-
-    appender = ListAppender()
-    DEFAULT_LOGGER.appenders.append(appender)
-    try:
-        yield appender.messages
-    finally:
-        DEFAULT_LOGGER.appenders = [appender for appender in DEFAULT_LOGGER.appenders if not isinstance(appender, ListAppender)]
-
-
 class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
     """
     Tests for UpdateHandler._try_update_goal_state()
@@ -2085,15 +2068,19 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             @contextlib.contextmanager
             def create_log_and_telemetry_mocks():
-                with capture_log_messages() as log_messages:
+                messages = []
+                with patch("azurelinuxagent.common.logger.Logger.log", side_effect=lambda level, fmt, *args: messages.append("{0} {1}".format(LogLevel.STRINGS[level], fmt.format(*args)))):
                     with patch("azurelinuxagent.common.event.add_event") as add_event_patcher:
-                        yield log_messages, add_event_patcher
+                        yield messages, add_event_patcher
 
             # E0601: Using variable 'log_messages' before assignment (used-before-assignment)
-            logger_messages = lambda regex: [m for m in log_messages if re.match(regex, m)]  # pylint: disable=used-before-assignment
-            errors = lambda: logger_messages('.+ ERROR .*Error fetching the goal state.*')
-            periodic_errors = lambda: logger_messages(r'.+ ERROR .*Fetching the goal state is still failing*')
-            success_messages = lambda: logger_messages(r'.+ INFO .*Fetching the goal state recovered from previous errors.*')
+            filter_log_messages = lambda regex: [m for m in log_messages if re.match(regex, m)]  # pylint: disable=used-before-assignment
+            errors = lambda: filter_log_messages('ERROR Error fetching the goal state.*')
+            periodic_errors = lambda: filter_log_messages(r'ERROR Fetching the goal state is still failing*')
+            success_messages = lambda: filter_log_messages(r'INFO Fetching the goal state recovered from previous errors.*')
+
+            # E0601: Using variable 'log_messages' before assignment (used-before-assignment)
+            format_assert_message = lambda msg: "{0}\n*** Log: ***\n{1}".format(msg, "\n".join(log_messages))  # pylint: disable=used-before-assignment
 
             #
             # Initially calls to retrieve the goal state are successful...
@@ -2103,7 +2090,7 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             with create_log_and_telemetry_mocks() as (log_messages, add_event):
                 update_handler._try_update_goal_state(protocol)
 
-                self.assertTrue(len(log_messages) == 0, "A successful call should not produce any log messages: [{0}]".format(log_messages))
+                self.assertTrue(len(log_messages) == 0, format_assert_message("A successful call should not produce any log messages."))
                 self.assertTrue(add_event.call_count == 0, "A successful call should not produce any telemetry events: [{0}]".format(add_event.call_args_list))
 
             #
@@ -2116,8 +2103,9 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
                 e = errors()
                 pe = periodic_errors()
-                # self.assertEqual(3, len(e), "Only 3 errors should have been reported: [{0}]".format(log_messages))
-                # self.assertEqual(1, len(pe), "Only 1 periodic error should have been reported: [{0}]".format(log_messages))
+                self.assertEqual(3, len(e), format_assert_message("Exactly 3 errors should have been reported."))
+                self.assertEqual(1, len(pe), format_assert_message("Exactly 1 periodic error should have been reported."))
+                self.assertEqual(4, len(log_messages), format_assert_message("A total of 4 messages should have been logged."))
                 self.assertEqual(4, add_event.call_count, "Each of 4 errors should have produced a telemetry event. Got: [{0}]".format(add_event.call_args_list))
 
             #
@@ -2130,8 +2118,9 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
                 e = errors()
                 pe = periodic_errors()
-                self.assertEqual(0, len(e), "No errors should have been reported: [{0}]".format(log_messages))
-                self.assertEqual(5, len(pe), "All 5 errors should have been reported periodically: [{0}]".format(log_messages))
+                self.assertEqual(0, len(e), format_assert_message("No errors should have been reported."))
+                self.assertEqual(5, len(pe), format_assert_message("All 5 errors should have been reported periodically."))
+                self.assertEqual(5, len(log_messages), format_assert_message("A total of 5 messages should have been logged."))
                 self.assertEqual(5, add_event.call_count, "Each of the 5 errors should have produced a telemetry event. Got: [{0}]".format(add_event.call_args_list))
 
             #
@@ -2144,8 +2133,9 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
                 s = success_messages()
                 e = errors()
                 pe = periodic_errors()
-                self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(log_messages))
-                self.assertTrue(len(e) == 0 and len(pe) == 0, "Recovering after failures should have not produced any errors: [{0}]".format(log_messages))
+                self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format("\n".join(log_messages)))
+                self.assertTrue(len(e) == 0 and len(pe) == 0, "Recovering after failures should have not produced any errors: [{0}]".format("\n".join(log_messages)))
+                self.assertEqual(1, len(log_messages), format_assert_message("A total of 1 message should have been logged."))
                 self.assertTrue(add_event.call_count == 1 and add_event.call_args_list[0][1]['is_success'] == True, "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(add_event.call_args_list))
 
 
