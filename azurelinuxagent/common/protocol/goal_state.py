@@ -224,9 +224,6 @@ class GoalState(object):
                 self._restore_wire_server_goal_state(incarnation, xml_text, xml_doc, exception)
                 return
 
-        if vm_settings is not None and vm_settings.etag == '3088605666898631000':
-            vm_settings.extensions[0].settings[0].certificateThumbprint = 'AAAA9A223A97DADE9DBF3B297334DE93BE15AAAA'
-
         if vm_settings_updated:
             self.logger.info('')
             message = "Fetched new vmSettings [HostGAPlugin correlation ID: {0} eTag: {1} source: {2}]".format(vm_settings.hostga_plugin_correlation_id, vm_settings.etag, vm_settings.source)
