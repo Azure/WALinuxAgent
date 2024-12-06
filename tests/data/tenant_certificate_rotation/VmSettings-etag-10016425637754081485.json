@@ -1,0 +1,122 @@
+{
+    "hostGAPluginVersion": "1.0.8.151",
+    "activityId": "ec144e92-ebf0-4512-8e1c-288ad24794c7",
+    "correlationId": "165ed993-7252-4716-b959-4769254defb9",
+    "inSvdSeqNo": 6,
+    "extensionsLastModifiedTickCount": 638479963767702408,
+    "extensionGoalStatesSource": "FastTrack",
+    "statusUploadBlob": {
+        "statusBlobType": "PageBlob",
+        "value": "https://md-k2npnlw3m5b2.z16.blob.storage.azure.net/$system/cpmaerskvm03.dd6ea3d2-be72-4f28-a67c-15b576b88462.status?sv=2018-03-28&sr=b&sk=system-1&sig=FV8ltBI9f2oU3Z5CVZvCWZj3RILexvF8pV%2bPZYm%2bKMw%3d&se=9999-01-01T00%3a00%3a00Z&sp=rw"
+    },
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "version": "2.10.0.8",
+            "isVersionFromRSM": false,
+            "isVMEnabledForRSMUpgrades": false,
+            "uris": [
+                "https://umsal4z5pqr2dx3g5zdd.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsac44fqpt2lbfsgksz.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsahpcjwbbmcm5j034x.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsalwnw1x3vrch5vmdl.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaczmlqhh3dxhsm4xn.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsasvdz0hgqp25wbldc.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsas2lcxxb22k1050cv.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaqblfwqtqnprnhrpl.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaxm3jqxbxqm4xtr4r.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsafxxnhhpbmc0hwbmp.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaft2xzgffnkbxxslg.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsahptsm5jzvq2pczs0.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaqhczvcnhlz0kplll.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaw4hwnmtr1chclv42.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsarnnfvjl3bbcrdndk.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsannq1fthghhbj40ml.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsagxbfcnkp2gcgbktm.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsajn0hmvqj2ccpdpnw.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsambnrwtv24zxhkrdr.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsavq3r0szsqptncs4x.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsaz2pjjf2m3xn2hpzz.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml"
+            ]
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
+            "version": "1.30.2",
+            "location": "https://umsaqhczvcnhlz0kplll.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml",
+            "failoverLocation": "https://umsagxbfcnkp2gcgbktm.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml",
+            "additionalLocations": [
+                "https://umsasvdz0hgqp25wbldc.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false
+        },
+        {
+            "name": "Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux",
+            "version": "1.19.0",
+            "location": "https://umsabqklp10vpdkxgq4j.blob.core.windows.net/68216624-9f0f-fb7d-0436-37bcbd666b7a/68216624-9f0f-fb7d-0436-37bcbd666b7a_manifest.xml",
+            "failoverLocation": "https://umsaf43ddrq5xnhgg4c4.blob.core.windows.net/68216624-9f0f-fb7d-0436-37bcbd666b7a/68216624-9f0f-fb7d-0436-37bcbd666b7a_manifest.xml",
+            "additionalLocations": [
+                "https://umsasd5j21tzwwhv2ndw.blob.core.windows.net/68216624-9f0f-fb7d-0436-37bcbd666b7a/68216624-9f0f-fb7d-0436-37bcbd666b7a_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9",
+                    "protectedSettings": "*** REDACTED ***",
+                    "publicSettings": "{\"workspaceId\":\"bfa91352-6f5c-4e59-9793-388f7b1e0e09\"}"
+                }
+            ]
+        },
+        {
+            "name": "Microsoft.OSTCExtensions.VMAccessForLinux",
+            "version": "1.5.18",
+            "location": "https://umsambj0h5gkjvp2jtlj.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "failoverLocation": "https://umsam0fgqtswdxrxl3k3.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "additionalLocations": [
+                "https://umsafrz2ts5fqvdzx4fh.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml"
+            ],
+            "state": "uninstall",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false
+        },
+        {
+            "name": "Microsoft.Azure.Extensions.CustomScript",
+            "version": "2.0.7",
+            "location": "https://umsavdddshpjtvhw3xdl.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "failoverLocation": "https://umsarc5lgv0zfkdmmhn0.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "additionalLocations": [
+                "https://umsav50t2vsvqhbjfw52.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": false,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9",
+                    "protectedSettings": "*** REDACTED ***"
+                }
+            ]
+        }
+    ]
+}

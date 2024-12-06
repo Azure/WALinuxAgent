@@ -37,8 +37,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation, report_e
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError, ExtensionErrorCodes
 from azurelinuxagent.common.future import httpclient, bytebuffer, ustr
-from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, \
-    GoalStateProperties, GoalStateInconsistentError
+from azurelinuxagent.common.protocol.goal_state import GoalState, TRANSPORT_CERT_FILE_NAME, TRANSPORT_PRV_FILE_NAME, GoalStateProperties
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import DataContract, ProvisionStatus, VMInfo, VMStatus
 from azurelinuxagent.common.telemetryevent import GuestAgentExtensionEventsSchema
@@ -92,18 +91,10 @@ class WireProtocol(DataContract):
             # TODO: Currently protocol detection retrieves the entire goal state. This is not needed; in particular, retrieving the Extensions goal state
             #       is not needed. However, the goal state is cached in self.client._goal_state and other components, including the Extension Handler,
             #       depend on this cached value. This has been a long-standing issue that causes multiple problems. Before removing the cached goal state,
-            #       though, a careful review of these dependencies is needed.
+            #       though, a careful review of these dependencies is needed. One of the problems of fetching the full goal state is that issues while
+            #       retrieving it can block protocol detection and make the Agent go into a retry loop that can last 1 full hour.
             #
-            #       One of the problems of fetching the full goal state is that issues while retrieving it can block protocol detection and make the
-            #       Agent go into a retry loop that can last 1 full hour. One particular error, GoalStateInconsistentError, can arise if the certificates
-            #       needed by extensions are missing from the goal state; for example, if a FastTrack goal state is out of sync with the corresponding
-            #       Fabric goal state that contains the certificates, or if decryption of the certificates fais (and hence, the certificate list is
-            #       empty). The try/except below handles only this one particular problem.
-            #
-            try:
-                self.client.reset_goal_state(save_to_history=save_to_history)
-            except GoalStateInconsistentError as error:
-                logger.warn("{0}", ustr(error))
+            self.client.reset_goal_state(save_to_history=save_to_history)
 
     def update_host_plugin_from_goal_state(self):
         self.client.update_host_plugin_from_goal_state()
@@ -794,7 +785,7 @@ class WireClient(object):
             self._host_plugin.update_container_id(container_id)
             self._host_plugin.update_role_config_name(role_config_name)
 
-    def update_goal_state(self, silent=False, save_to_history=False):
+    def update_goal_state(self, force_update=False, silent=False, save_to_history=False):
         """
         Updates the goal state if the incarnation or etag changed
         """
@@ -802,7 +793,7 @@ class WireClient(object):
             if self._goal_state is None:
                 self._goal_state = GoalState(self, silent=silent, save_to_history=save_to_history)
             else:
-                self._goal_state.update(silent=silent)
+                self._goal_state.update(force_update=force_update, silent=silent)
 
         except ProtocolError:
             raise

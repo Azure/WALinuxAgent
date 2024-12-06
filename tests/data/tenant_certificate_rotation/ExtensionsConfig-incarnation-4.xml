@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Extensions version="1.0.0.0" goalStateIncarnation="4"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <GAFamilies>
+    <GAFamily>
+      <IsVMEnabledForRSMUpgrades>false</IsVMEnabledForRSMUpgrades>
+      <IsVersionFromRSM>false</IsVersionFromRSM>
+      <Name>Prod</Name>
+      <Uris>
+        <Uri>https://umsajn0hmvqj2ccpdpnw.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsavq3r0szsqptncs4x.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsambnrwtv24zxhkrdr.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaz2pjjf2m3xn2hpzz.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsalwnw1x3vrch5vmdl.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsal4z5pqr2dx3g5zdd.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaxm3jqxbxqm4xtr4r.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsasvdz0hgqp25wbldc.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsahpcjwbbmcm5j034x.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsas2lcxxb22k1050cv.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsannq1fthghhbj40ml.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsahptsm5jzvq2pczs0.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaqhczvcnhlz0kplll.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsac44fqpt2lbfsgksz.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaqblfwqtqnprnhrpl.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsagxbfcnkp2gcgbktm.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaft2xzgffnkbxxslg.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaczmlqhh3dxhsm4xn.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsafxxnhhpbmc0hwbmp.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaw4hwnmtr1chclv42.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsarnnfvjl3bbcrdndk.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+      </Uris>
+      <Version>2.11.1.4</Version>
+    </GAFamily>
+  </GAFamilies>
+  <Location>westeurope</Location>
+  <ServiceName>CRP</ServiceName>
+</GuestAgentExtension>
+<StatusUploadBlob statusBlobType="PageBlob">https://md-k2npnlw3m5b2.z16.blob.storage.azure.net/$system/cpmaerskvm03.dd6ea3d2-be72-4f28-a67c-15b576b88462.status?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=FV8ltBI9f2oU3Z5CVZvCWZj3RILexvF8pV%2bPZYm%2bKMw%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=rw</StatusUploadBlob>
+<Plugins>
+  <Plugin name="Microsoft.Azure.Monitor.AzureMonitorLinuxAgent" version="1.27.2" location="https://umsaz2pjjf2m3xn2hpzz.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsaqhczvcnhlz0kplll.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.0.7" location="https://umsa43gvk0ql05p2ck5m.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://umsat3g3q5tnlnzhjkq3.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+</Plugins>
+<PluginSettings>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.0.7">
+    <RuntimeSettings seqNo="0">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "C0EDFF1B408001B0FD14F8F615E567F7833822D0",
+        "protectedSettings": "*** REDACTED ***"
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+</PluginSettings>
+<SecureIdentity>
+  <IdentityClientId>6f012265-a83e-4d03-a532-2fba74970d55</IdentityClientId>
+  <IdentityClientTenantId>05d75c05-fa1a-42e7-9cf1-eb416c396f2d</IdentityClientTenantId>
+  <IdentityObjectId p2:nil="true" xmlns:p2="http://www.w3.org/2001/XMLSchema-instance" />
+  <IdentitySecretUrl>https://control-westeurope.identity.azure.net/subscriptions/b1819ab7-1f76-42f4-9004-38aeaa967498/resourcegroups/rgpazewpgcdc006cddc/providers/Microsoft.Compute/virtualMachines/cpmaerskvm03/credentials/v2/systemassigned?arpid=c4ee6166-f138-4a88-b7f2-e2b6bfa61c4a&amp;keyid=09db69e0-7f87-4b4f-b6f1-ee10034836aa&amp;said=6f012265-a83e-4d03-a532-2fba74970d55&amp;sigver=1.0&amp;tid=05d75c05-fa1a-42e7-9cf1-eb416c396f2d&amp;sig=Gc0oNl2cOjUEunHToA6d4-oIJZrnTS2JGsSJsGMxf-o</IdentitySecretUrl>
+  <IdentityInternalId>c4ee6166-f138-4a88-b7f2-e2b6bfa61c4a</IdentityInternalId>
+  <IdentityTag>eb98ad1b-27f0-4208-bf0e-f504dcdfc0e6</IdentityTag>
+</SecureIdentity>
+<VaultSecrets>
+  <VaultCertificates />
+</VaultSecrets>
+<InVMArtifactsProfileBlob>https://md-k2npnlw3m5b2.z16.blob.storage.azure.net/$system/cpmaerskvm03.dd6ea3d2-be72-4f28-a67c-15b576b88462.vmSettings?sv=2018-03-28&amp;sr=b&amp;sk=system-1&amp;sig=BCiYy9pJwnB3HzvEw6q9ohYYuYVd6%2bRP1wbq0utWBJg%3d&amp;se=9999-01-01T00%3a00%3a00Z&amp;sp=r</InVMArtifactsProfileBlob>
+<InVMGoalStateMetaData inSvdSeqNo="6" createdOnTicks="638267389998354169" activityId="96306223-5825-43df-9ddf-55674d40b4a6" correlationId="7fd0d67e-9b4f-42c4-9048-7f524ba22087" /></Extensions>
