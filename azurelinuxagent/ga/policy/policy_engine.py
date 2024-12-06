@@ -22,7 +22,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.exception import AgentError
+from azurelinuxagent.common.exception import AgentError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import _CaseFoldedDict
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
@@ -36,12 +36,6 @@ _DEFAULT_EXTENSIONS = {}
 _MAX_SUPPORTED_POLICY_VERSION = "0.1.0"
 
 
-class PolicyError(AgentError):
-    """
-    Error raised during agent policy enforcement.
-    """
-
-
 class InvalidPolicyError(AgentError):
     """
     Error raised if user-provided policy is invalid.
@@ -50,14 +44,13 @@ class InvalidPolicyError(AgentError):
         msg = "Customer-provided policy file ('{0}') is invalid, please correct the following error: {1}".format(conf.get_policy_file_path(), msg)
         super(InvalidPolicyError, self).__init__(msg, inner)
 
-
 class _PolicyEngine(object):
     """
     Implements base policy engine API.
     """
     def __init__(self):
         # Set defaults for policy
-        self._policy_enforcement_enabled = self.__get_policy_enforcement_enabled()
+        self._policy_enforcement_enabled = self.get_policy_enforcement_enabled()
         if not self.policy_enforcement_enabled:
             return
 
@@ -76,7 +69,7 @@ class _PolicyEngine(object):
             add_event(op=op, message=msg, is_success=is_success, log_event=False)
 
     @staticmethod
-    def __get_policy_enforcement_enabled():
+    def get_policy_enforcement_enabled():
         """
         Policy will be enabled if (1) policy file exists at the expected location and (2) the conf flag "Debug.EnableExtensionPolicy" is true.
         """

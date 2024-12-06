@@ -1,0 +1,11 @@
+#
+# The test suite verifies that disallowed extensions are not processed, but the agent should still report status.
+#
+name: "ExtPolicyWithDependencies"
+tests:
+  - "ext_policy/ext_policy_with_dependencies.py"
+images: "endorsed"
+executes_on_scale_set: true
+# This test should run on its own VMSS, because other tests may leave behind extensions
+# that are disallowed by policy and affect results.
+owns_vm: true
