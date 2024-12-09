@@ -105,12 +105,12 @@ class ExtPolicy(AgentVmTest):
                 log.info(f"{extension_case.extension} {operation} failed as expected")
 
         elif operation == "delete":
-            # Delete is a best effort operation and should not fail, so CRP will wait for the full timeout instead
-            # instead of reporting an error for the operation. We set a short timeout limit, swallow the error, and
-            # assert that the extension is still in the instance view to confirm that the delete failed.
+            # Delete is a best effort operation and should not fail, so CRP will timeout instead of reporting the
+            # appropriate error. We swallow the timeout error, and instead, assert that the extension is still in the
+            # instance view and that the expected error is in the agent log to confirm that deletion failed.
+            delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
-                delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
-                extension_case.extension.delete(timeout=(1 * 60))
+                extension_case.extension.delete(timeout=(15 * 60))
                 fail(f"The agent should have reported a timeout error when attempting to delete {extension_case.extension} "
                      f"because the extension is disallowed by policy.")
             except TimeoutError:
@@ -125,15 +125,20 @@ class ExtPolicy(AgentVmTest):
 
                 # Confirm that expected error message is in the agent log
                 expected_msg = "Extension will not be processed: failed to uninstall extension"
-                result = self._ssh_client.run_command(
+                self._ssh_client.run_command(
                     f"agent_ext_workflow-check_data_in_agent_log.py --data '{expected_msg}' --after-timestamp '{delete_start_time}'",
                     use_sudo=True)
 
     def run(self):
 
+        # The full CRP timeout period for extension operation failure is 90 minutes. For efficiency, we reduce the
+        # timeout limit to 15 minutes here. We expect "delete" operations on disallowed VMs to reach timeout instead of
+        # failing fast, because delete is a best effort operation by-design and should not fail.
+        self._context.vm.update({"extensionsTimeBudget": "PT15M"})
+
+
         # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
         # without settings have different status reporting logic, so we should test all cases.
-
         # CustomScript is a single-config extension.
         custom_script = ExtPolicy.TestCase(
             VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
@@ -166,7 +171,7 @@ class ExtPolicy(AgentVmTest):
         for ext in ext_to_cleanup:
             ext.extension.delete()
 
-        # Enable policy via conf
+        # Enable policy via conf file
         log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
@@ -234,9 +239,6 @@ class ExtPolicy(AgentVmTest):
             }
         self._create_policy_file(policy)
         self._operation_should_fail("delete", custom_script)
-
-        # If a multiconfig extension is disallowed, no instances should be processed.
-        # RunCommand is not allowed - if we try to enable two instances, both should fail fast.
         self._operation_should_fail("enable", run_command)
         self._operation_should_fail("enable", run_command_2)
         self._operation_should_fail("enable", custom_script)

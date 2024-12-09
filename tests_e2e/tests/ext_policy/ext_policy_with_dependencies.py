@@ -206,14 +206,12 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                     self._context.vmss.delete_extension(ext_name_to_delete)
                 except Exception as crp_err:
                     # Known issue - CRP returns stale status in cases of dependency failures. Even if the deletion succeeds,
-                    # CRP may return a failure here. We swallow the error, and instead, check that the logs for uninstall
-                    # are present in the agent log (after the start time of this test case).
+                    # CRP may return a failure. We swallow the error and instead, verify that the agent does not report
+                    # status for the uninstalled extension.
                     log.info("CRP returned an error for deletion operation, may be a false error. Checking agent log to determine if operation succeeded. Exception: {0}".format(crp_err))
                     try:
                         for ssh_client in ssh_clients.values():
-                            msg = ("Remove the extension slice: {0}".format(str(ext_to_delete)))
-                            result = ssh_client.run_command(f"agent_ext_workflow-check_data_in_agent_log.py --data '{msg}' --after-timestamp '{test_case_start}'", use_sudo=True)
-                            log.info(result)
+                            ssh_client.run_command(f"agent_ext_policy-verify_uninstall_success.py --extension-name '{ext_to_delete}'")
                     except Exception as agent_err:
                         fail("Unable to successfully uninstall extension {0}. Exception: {1}".format(ext_name_to_delete, agent_err))
                 log.info("Successfully uninstalled extension {0}".format(ext_name_to_delete))
