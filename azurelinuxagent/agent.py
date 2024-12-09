@@ -226,6 +226,8 @@ class Agent(object):
 
             log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
             tracked_controllers = log_collector_cgroup.get_controllers()
+            for controller in tracked_controllers:
+                logger.info("{0} controller for cgroup: {1}".format(controller.get_controller_type(), controller))
 
             if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
                 event.warn(WALAEventOperation.LogCollection, "At least one required controller is missing. The following controllers are required for the log collector to run: {0}", log_collector_cgroup.get_supported_controller_names())

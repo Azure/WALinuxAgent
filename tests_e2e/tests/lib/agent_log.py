@@ -400,6 +400,11 @@ class AgentLog(object):
                 'message': r"name=Microsoft\.EnterpriseCloud\.Monitoring\.OmsAgentForLinux.+Non-zero exit code: 51",
                 'if': lambda r: DISTRO_NAME == 'azurelinux' and DISTRO_VERSION == '3.0'
             },
+
+            # Ubuntu 16 has an issue representing no quota as infinity, instead it outputs weird values. https://github.com/systemd/systemd/issues/5965, so ignoring in ubuntu 16
+            # 2024-11-26T00:07:38.716162Z INFO ExtHandler ExtHandler [CGW] Error parsing current CPUQuotaPerSecUSec: could not convert string to float: '584542y 2w 2d 20h 1min 49.549568'
+            {'message': r"Error parsing current CPUQuotaPerSecUSec: could not convert string to float",
+             'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION == '16.04'}
         ]
 
         def is_error(r: AgentLogRecord) -> bool:

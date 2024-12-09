@@ -25,16 +25,7 @@ class CGroupsTelemetry(object):
     """
     """
     _tracked = {}
-    _track_throttled_time = False
     _rlock = threading.RLock()
-
-    @staticmethod
-    def set_track_throttled_time(value):
-        CGroupsTelemetry._track_throttled_time = value
-
-    @staticmethod
-    def get_track_throttled_time():
-        return CGroupsTelemetry._track_throttled_time
 
     @staticmethod
     def track_cgroup_controller(cgroup_controller):
@@ -79,7 +70,7 @@ class CGroupsTelemetry(object):
         with CGroupsTelemetry._rlock:
             for controller in CGroupsTelemetry._tracked.values():
                 try:
-                    metrics.extend(controller.get_tracked_metrics(track_throttled_time=CGroupsTelemetry._track_throttled_time))
+                    metrics.extend(controller.get_tracked_metrics())
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
@@ -99,4 +90,3 @@ class CGroupsTelemetry(object):
     def reset():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked.clear()  # emptying the dictionary
-            CGroupsTelemetry._track_throttled_time = False
