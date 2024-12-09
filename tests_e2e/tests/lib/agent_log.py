@@ -104,50 +104,6 @@ class AgentLog(object):
         #
         ignore_rules = [
             #
-            # NOTE: This list was taken from the older agent tests and needs to be cleaned up. Feel free to un-comment rules as new tests are added.
-            #
-            # # The following message is expected to log an error if systemd is not enabled on it
-            # {
-            #     'message': r"Did not detect Systemd, unable to set wa(|linux)agent-network-setup.service",
-            #     'if': lambda _: not self._is_systemd()
-            # },
-            # #
-            # # Journalctl in Debian 8.11 does not have the --utc option by default.
-            # # Ignoring this error for Deb 8 as its not a blocker and since Deb 8 is old and not widely used
-            # {
-            #     'message': r"journalctl: unrecognized option '--utc'",
-            #     'if': lambda r: re.match(r"(debian8\.11)\D*", DISTRO_NAME, flags=re.IGNORECASE) is not None and r.level == "WARNING"
-            # },
-            # # Sometimes it takes the Daemon some time to identify primary interface and the route to Wireserver,
-            # # ignoring those errors if they come from the Daemon.
-            # {
-            #     'message': r"(No route exists to \d+\.\d+\.\d+\.\d+|"
-            #                r"Could not determine primary interface, please ensure \/proc\/net\/route is correct|"
-            #                r"Contents of \/proc\/net\/route:|Primary interface examination will retry silently)",
-            #     'if': lambda r: r.prefix == "Daemon"
-            # },
-            #
-            # # This happens in CENTOS and RHEL when waagent attempt to format and mount the error while cloud init is already doing it
-            # # 2021-09-20T06:45:57.253801Z WARNING Daemon Daemon Could not mount resource disk: mount: /dev/sdb1 is already mounted or /mnt/resource busy
-            # # /dev/sdb1 is already mounted on /mnt/resource
-            # {
-            #     'message': r"Could not mount resource disk: mount: \/dev\/sdb1 is already mounted or \/mnt\/resource busy",
-            #     'if': lambda r:
-            #     re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
-            #     and r.level == "WARNING"
-            #     and r.prefix == "Daemon"
-            # },
-            # #
-            # # 2021-09-20T06:45:57.246593Z ERROR Daemon Daemon Command: [mkfs.ext4 -F /dev/sdb1], return code: [1], result: [mke2fs 1.42.9 (28-Dec-2013)
-            # # /dev/sdb1 is mounted; will not make a filesystem here!
-            # {
-            #     'message': r"Command: \[mkfs.ext4 -F \/dev\/sdb1\], return code: \[1\]",
-            #     'if': lambda r:
-            #     re.match(r"((centos7\.8)|(redhat7\.8)|(redhat7\.6)|(redhat8\.2))\D*", DISTRO_NAME, flags=re.IGNORECASE)
-            #     and r.level == "ERROR"
-            #     and r.prefix == "Daemon"
-            # },
-            #
             # 2023-06-28T09:31:38.903835Z WARNING EnvHandler ExtHandler Move rules file 75-persistent-net-generator.rules to /var/lib/waagent/75-persistent-net-generator.rules
             #  The environment thread performs this operation periodically
             #
@@ -399,6 +355,20 @@ class AgentLog(object):
             {
                 'message': r"name=Microsoft\.EnterpriseCloud\.Monitoring\.OmsAgentForLinux.+Non-zero exit code: 51",
                 'if': lambda r: DISTRO_NAME == 'azurelinux' and DISTRO_VERSION == '3.0'
+            },
+            #
+            # 2024-12-08T06:28:34.480675Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 126, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 9.0.
+            # Linux distribution is Red Hat.
+            # + /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension install
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim: line 211: /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: cannot execute binary file: Exec format error
+            #
+            #
+            # [stderr]
+            # , duration=0
+            {
+                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: 126.*Exec format error",
             },
         ]
 
