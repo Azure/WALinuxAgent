@@ -63,10 +63,11 @@ class GAVersionUpdater(object):
         """
         raise NotImplementedError
 
-    def is_retrieved_version_allowed_to_update(self, agent_family):
+    def is_retrieved_version_allowed_to_update(self, agent_family, initial_update):
         """
         Checks all base condition if new version allow to update.
         @param agent_family: agent family
+        @param initial_update: True if it's initial update else False
         @return: True if allowed to update else False
         """
         raise NotImplementedError

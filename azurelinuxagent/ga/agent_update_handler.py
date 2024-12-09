@@ -214,7 +214,8 @@ class AgentUpdateHandler(object):
 
             # Always agent uses self-update for initial update regardless vm enrolled into RSM or not
             # So ignoring the check for updater switch for the initial goal state/update
-            if not self._is_initial_update():
+            initial_update = self._is_initial_update()
+            if not initial_update:
 
                 # Updater will return True or False if we need to switch the updater
                 # If self-updater receives RSM update enabled, it will switch to RSM updater
@@ -243,7 +244,7 @@ class AgentUpdateHandler(object):
 
             self._updater.retrieve_agent_version(agent_family, goal_state)
 
-            if not self._updater.is_retrieved_version_allowed_to_update(agent_family):
+            if not self._updater.is_retrieved_version_allowed_to_update(agent_family, initial_update):
                 return
             self._updater.log_new_agent_update_message()
             agent = self._updater.download_and_get_new_agent(self._protocol, agent_family, goal_state)
