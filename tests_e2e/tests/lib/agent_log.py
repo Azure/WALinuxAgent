@@ -357,6 +357,8 @@ class AgentLog(object):
                 'if': lambda r: DISTRO_NAME == 'azurelinux' and DISTRO_VERSION == '3.0'
             },
             #
+            # TODO: Currently GuestConfiguration does not support ARM; remove this message when it does.
+            #
             # 2024-12-08T06:28:34.480675Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 126, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
             # [stdout]
             # Linux distribution version is 9.0.
