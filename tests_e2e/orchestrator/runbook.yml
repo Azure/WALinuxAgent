@@ -45,6 +45,8 @@ variable:
       - agent_update
       - ext_cgroups
       - extensions_disabled
+      - ext_policy
+      - ext_policy_with_dependencies
       - ext_sequencing
       - ext_telemetry_pipeline
       - fips
