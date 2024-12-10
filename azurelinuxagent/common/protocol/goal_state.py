@@ -267,8 +267,6 @@ class GoalState(object):
                 most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
             else:
                 most_recent = extensions_config
-        elif goal_state_updated:
-            most_recent = extensions_config
         else:  # vm_settings_updated
             most_recent = vm_settings
 
