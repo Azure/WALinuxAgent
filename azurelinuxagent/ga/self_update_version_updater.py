@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import datetime
+import random
 
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -38,7 +39,8 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
     def __init__(self, gs_id):
         super(SelfUpdateVersionUpdater, self).__init__(gs_id)
         self._last_attempted_manifest_download_time = datetime.datetime.min
-        self._last_attempted_self_update_time = datetime.datetime.min
+        self._next_update_time = datetime.datetime.min
+        self._update_time_refreshed = False
 
     @staticmethod
     def _get_largest_version(agent_manifest):
@@ -61,34 +63,36 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         return SelfUpdateType.Regular
 
     @staticmethod
-    def _get_next_process_time(last_val, frequency, now):
+    def _get_next_process_time(upgrade_type, now):
         """
-        Get the next upgrade time
+        Returns random time in between 0 to 24hrs(regular) or 6hrs(hotfix) from now
         """
-        return now if last_val == datetime.datetime.min else last_val + datetime.timedelta(seconds=frequency)
+        if upgrade_type == SelfUpdateType.Hotfix:
+            frequency = conf.get_self_update_hotfix_frequency()
+        else:
+            frequency = conf.get_self_update_regular_frequency()
+        return now + datetime.timedelta(seconds=random.randint(0, frequency))
 
-    def _is_new_agent_allowed_update(self):
+    def _new_agent_allowed_now_to_update(self):
         """
-        This method ensure that update is allowed only once per (hotfix/Regular) upgrade frequency
+        This method called when new update detected and computes random time for next update.
+        If the current time on or after upgrade time, we allow the update.
+
+        Note: After we allow the update, and it's not successful, the next update time will be recalculated.
         """
         now = datetime.datetime.utcnow()
         upgrade_type = self._get_agent_upgrade_type(self._version)
-        if upgrade_type == SelfUpdateType.Hotfix:
-            next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
-                                                           conf.get_self_update_hotfix_frequency(), now)
-        else:
-            next_update_time = self._get_next_process_time(self._last_attempted_self_update_time,
-                                                           conf.get_self_update_regular_frequency(), now)
 
-        if self._version > CURRENT_VERSION:
-            message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
-                upgrade_type, str(self._version), next_update_time.strftime(logger.Logger.LogTimeFormatInUTC))
-            logger.info(message)
-            add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
+        if not self._update_time_refreshed:
+            self._next_update_time = self._get_next_process_time(upgrade_type, now)
+            self._update_time_refreshed = True
+        message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
+            upgrade_type, str(self._version), self._next_update_time.strftime(logger.Logger.LogTimeFormatInUTC))
+        logger.info(message)
+        add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
 
-        if next_update_time <= now:
-            # Update the last upgrade check time even if no new agent is available for upgrade
-            self._last_attempted_self_update_time = now
+        if self._next_update_time <= now:
+            self._update_time_refreshed = False
             return True
         return False
 
@@ -148,16 +152,24 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         largest_version = self._get_largest_version(self._agent_manifest)
         self._version = largest_version
 
-    def is_retrieved_version_allowed_to_update(self, agent_family):
+    def is_retrieved_version_allowed_to_update(self, agent_family, initial_update):
         """
-        checks update is spread per (as specified in the conf.get_self_update_hotfix_frequency() or conf.get_self_update_regular_frequency())
-        or if version below than current version
-        return false when we don't allow updates.
+        we don't allow new version update, if
+            1) The version is not greater than current version
+            2) if current time is before next update time
+
+        Allow the update, if
+            1) Initial update
+            2) If current time is on or after next update time
         """
-        if not self._is_new_agent_allowed_update():
+        if self._version <= CURRENT_VERSION:
             return False
 
-        if self._version <= CURRENT_VERSION:
+        # very first update need to proceed without any delay
+        if initial_update:
+            return True
+
+        if not self._new_agent_allowed_now_to_update():
             return False
 
         return True
