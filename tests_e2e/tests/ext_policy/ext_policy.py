@@ -110,7 +110,8 @@ class ExtPolicy(AgentVmTest):
             # instance view and that the expected error is in the agent log to confirm that deletion failed.
             delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
-                extension_case.extension.delete(timeout=(15 * 60))
+                timeout = (16 * 60) # We want to wait for CRP timeout, which is 15 minutes.
+                extension_case.extension.delete(timeout)
                 fail(f"The agent should have reported a timeout error when attempting to delete {extension_case.extension} "
                      f"because the extension is disallowed by policy.")
             except TimeoutError:
@@ -167,6 +168,7 @@ class ExtPolicy(AgentVmTest):
 
         # Another e2e test may have left behind an extension we want to test here. Cleanup any leftovers so that they
         # do not affect the test results.
+        log.info("Cleaning up existing extensions on the test VM [%s]", self._context.vm.name)
         ext_to_cleanup = [custom_script, run_command, run_command_2, azure_monitor]
         for ext in ext_to_cleanup:
             ext.extension.delete()
@@ -187,7 +189,9 @@ class ExtPolicy(AgentVmTest):
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
                     "extensions": {
-                        "Microsoft.Azure.Extensions.CustomScript": {}
+                        "Microsoft.Azure.Extensions.CustomScript": {},
+                        # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                        "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                     }
                 }
             }
@@ -225,26 +229,27 @@ class ExtPolicy(AgentVmTest):
             self._operation_should_succeed("delete", azure_monitor)
 
         # This policy tests the following scenarios:
-        # - disallow a previously-enabled single-config extension (CustomScript), then delete -> should fail fast
-        # - enable two instances of a multi-config extension (RunCommandHandler) when disallowed by policy -> should fail fast
-        # - enable single-config extension (CustomScript) when disallowed by policy -> should fail fast
+        # - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast
+        # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should fail fast
         policy = \
             {
                 "policyVersion": "0.1.0",
                 "extensionPolicies": {
                     "allowListedExtensionsOnly": True,
                     "signatureRequired": False,
-                    "extensions": {}
+                    "extensions": {
+                        # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                        "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                    }
                 }
             }
         self._create_policy_file(policy)
-        self._operation_should_fail("delete", custom_script)
-        self._operation_should_fail("enable", run_command)
-        self._operation_should_fail("enable", run_command_2)
         self._operation_should_fail("enable", custom_script)
+        self._operation_should_fail("delete", custom_script)
 
         # This policy tests the following scenario:
-        # - allow a previously-disallowed single-config extension (CSE), then enable -> should succeed
+        # - allow a previously-disallowed single-config extension (CustomScript), then delete -> should succeed
+        # - allow a previously-disallowed single-config extension (CustomScript), then enable -> should succeed
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -255,6 +260,9 @@ class ExtPolicy(AgentVmTest):
                 }
             }
         self._create_policy_file(policy)
+        # Since CustomScript is marked for deletion by previous test case, we can only retry the delete operation (enable
+        # is not allowed by CRP). So we first delete successfully, and then re-install/enable CustomScript.
+        self._operation_should_succeed("delete", custom_script)
         self._operation_should_succeed("enable", custom_script)
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:

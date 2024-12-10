@@ -208,7 +208,7 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                     # Known issue - CRP returns stale status in cases of dependency failures. Even if the deletion succeeds,
                     # CRP may return a failure. We swallow the error and instead, verify that the agent does not report
                     # status for the uninstalled extension.
-                    log.info("CRP returned an error for deletion operation, may be a false error. Checking agent log to determine if operation succeeded. Exception: {0}".format(crp_err))
+                    log.info("CRP returned an error for deletion operation, may be a false error. Checking agent status file to determine if operation succeeded. Exception: {0}".format(crp_err))
                     try:
                         for ssh_client in ssh_clients.values():
                             ssh_client.run_command(f"agent_ext_policy-verify_uninstall_success.py --extension-name '{ext_to_delete}'")

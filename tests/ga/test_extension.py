@@ -3539,6 +3539,9 @@ class TestExtensionPolicy(TestExtensionBase):
     def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count=0,
                              expected_status_msg=None):
 
+        # Set up a mock protocol instance. In the case of uninstall, we need to update the goal state to test uninstall.
+        # update_goal_state() only updates the goal state if incarnation has changed, so we increment the incarnation
+        # number.
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             if op == ExtensionRequestedState.Uninstall:
                 protocol.mock_wire_data.set_incarnation(2)
@@ -3548,10 +3551,12 @@ class TestExtensionPolicy(TestExtensionBase):
             protocol.report_vm_status = MagicMock()
             exthandlers_handler = get_exthandlers_handler(protocol)
 
+            # Create policy file and process extensions.
             self._create_policy_file(policy)
             exthandlers_handler.run()
             exthandlers_handler.report_ext_handlers_status()
 
+            # Assert that agent is reporting the expected handler status
             report_vm_status = protocol.report_vm_status
             self.assertTrue(report_vm_status.called)
             self._assert_handler_status(report_vm_status, expected_handler_status, expected_ext_count=expected_ext_count,
@@ -3691,6 +3696,10 @@ class TestExtensionPolicy(TestExtensionBase):
         ]
         for policy in policy_cases:
             with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
+                # Set up a mock protocol instance, which instantiates a goal state with incarnation number 1.
+                # We then change the goal state to test uninstall, and need to update the goal state with this change.
+                # update_goal_state() only updates the goal state if the incarnation has changed, so we increment the
+                # incarnation number to 2.
                 protocol.mock_wire_data.set_incarnation(2)
                 protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
                 protocol.client.update_goal_state()
@@ -3698,10 +3707,12 @@ class TestExtensionPolicy(TestExtensionBase):
                 protocol.report_vm_status = MagicMock()
                 exthandlers_handler = get_exthandlers_handler(protocol)
 
+                # Create policy file and process extensions.
                 self._create_policy_file(policy)
                 exthandlers_handler.run()
                 exthandlers_handler.report_ext_handlers_status()
 
+                # Assert that no status is being reported for the extension, to confirm that uninstall was successful.
                 report_vm_status = protocol.report_vm_status
                 self.assertTrue(report_vm_status.called)
                 args, kw = report_vm_status.call_args  # pylint: disable=unused-variable

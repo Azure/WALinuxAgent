@@ -52,6 +52,8 @@ def _should_fail_single_config_depends_on_disallowed_single_config():
                 "allowListedExtensionsOnly": True,
                 "extensions": {
                     "Microsoft.Azure.Extensions.CustomScript": {},
+                    # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                    "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                 }
             }
         }
@@ -75,7 +77,9 @@ def _should_fail_single_config_depends_on_disallowed_no_config():
             "extensionPolicies": {
                 "allowListedExtensionsOnly": True,
                 "extensions": {
-                    "Microsoft.Azure.Extensions.CustomScript": {}
+                    "Microsoft.Azure.Extensions.CustomScript": {},
+                    # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                    "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                 }
             }
         }
@@ -98,7 +102,9 @@ def _should_fail_single_config_depends_on_disallowed_multi_config():
             "extensionPolicies": {
                 "allowListedExtensionsOnly": True,
                 "extensions": {
-                    "Microsoft.Azure.Extensions.CustomScript": {}
+                    "Microsoft.Azure.Extensions.CustomScript": {},
+                    # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                    "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                 }
             }
         }
@@ -121,7 +127,9 @@ def _should_fail_multi_config_depends_on_disallowed_single_config():
             "extensionPolicies": {
                 "allowListedExtensionsOnly": True,
                 "extensions": {
-                    "Microsoft.CPlat.Core.RunCommandHandlerLinux": {}
+                    "Microsoft.CPlat.Core.RunCommandHandlerLinux": {},
+                    # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                    "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                 }
             }
         }
@@ -144,7 +152,9 @@ def _should_fail_multi_config_depends_on_disallowed_no_config():
             "extensionPolicies": {
                 "allowListedExtensionsOnly": True,
                 "extensions": {
-                    "Microsoft.CPlat.Core.RunCommandHandlerLinux": {}
+                    "Microsoft.CPlat.Core.RunCommandHandlerLinux": {},
+                    # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                    "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                 }
             }
         }
@@ -169,7 +179,9 @@ def _should_succeed_single_config_depends_on_no_config():
                 "allowListedExtensionsOnly": True,
                 "extensions": {
                     "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent": {},
-                    "Microsoft.Azure.Extensions.CustomScript": {}
+                    "Microsoft.Azure.Extensions.CustomScript": {},
+                    # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                    "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                 }
             }
         }
@@ -190,7 +202,9 @@ def _should_succeed_single_config_depends_on_single_config():
                 "allowListedExtensionsOnly": True,
                 "extensions": {
                     "Microsoft.Azure.Extensions.CustomScript": {},
-                    "Microsoft.OSTCExtensions.VMAccessForLinux": {}
+                    "Microsoft.OSTCExtensions.VMAccessForLinux": {},
+                    # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                    "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
                 }
             }
         }
