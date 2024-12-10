@@ -515,7 +515,7 @@ class UpdateHandler(object):
             #
             # For new Fast Track goal states, we check the certificates and, if an inconsistency is detected,  re-fetch the entire goal state
             # (update_goal_state(force_update=True). We re-fetch 2 times, one without waiting (to address scenarios like hibernation) and one with
-            # a delay (to address situation in which the HGAP and the WireServer are temporarily out of sync).
+            # a delay (to address situations in which the HGAP and the WireServer are temporarily out of sync).
             #
             for attempt in range(3):
                 protocol.client.update_goal_state(force_update=attempt > 0, silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
@@ -532,8 +532,9 @@ class UpdateHandler(object):
                     break
 
                 if attempt == 0:
-                    pass  # retry without waiting
+                    event.info(WALAEventOperation.FetchGoalState, "The extensions are out of sync with the tenant cert. Will refresh the goal state.")
                 elif attempt == 1:
+                    event.info(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will refresh the goal state one more time after a short delay.")
                     time.sleep(conf.get_goal_state_period())
                 else:
                     event.warn(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will continue execution, but some extensions may fail.")
