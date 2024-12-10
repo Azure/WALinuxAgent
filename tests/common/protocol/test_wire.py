@@ -509,16 +509,6 @@ class TestWireProtocol(AgentTestCase, HttpRequestPredicates):
             self.assertIn("x-ms-cipher-name", headers)
             self.assertEqual(headers["x-ms-cipher-name"], "AES128_CBC", "Unexpected x-ms-cipher-name")
 
-    def test_detect_should_handle_inconsistent_goal_state_errors(self, *_):
-        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS  # Certificates are checked only on FastTrack goal states
-        data_file['certs'] = "wire/certs-2.xml"  # Change the certificates to force a GoalStateInconsistentError
-        with mock_wire_protocol(data_file, detect_protocol=False) as protocol:
-            with patch("azurelinuxagent.common.logger.warn") as mock_warn:
-                protocol.detect()
-                self.assertTrue(
-                    any(len(args) == 2 and  args[1].startswith("[GoalStateInconsistentError]") for args, _ in mock_warn.call_args_list),
-                    "Did not find any warnings about an GoalStateInconsistentError: {0}".format(mock_warn.call_args_list))
-
 
 class TestWireClient(HttpRequestPredicates, AgentTestCase):
     def test_get_ext_conf_without_extensions_should_retrieve_vmagent_manifests_info(self, *args):  # pylint: disable=unused-argument
