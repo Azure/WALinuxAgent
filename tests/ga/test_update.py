@@ -1360,7 +1360,7 @@ class TestAgentUpgrade(UpdateTestCase):
             def _mock_random_update_time(a, b):
                 if mock_random_update_time:
                     return 0
-                if b == 1:  # if normal/hotfix frequency is 1 second, return 0.001 to simulate the update time
+                if b == 1:  # some tests mock normal/hotfix frequency to 1 second, return 0.001 to avoid long delay and still test the logic
                     return 0.001
                 return original_randint(a, b)
 
