@@ -25,7 +25,7 @@ from azurelinuxagent.common import conf
 from azurelinuxagent.common import logger
 from azurelinuxagent.ga.cgroupcontroller import AGENT_NAME_TELEMETRY, MetricsCounter
 from azurelinuxagent.ga.cgroupapi import SystemdRunError, EXTENSION_SLICE_PREFIX, CGroupUtil, SystemdCgroupApiv2, \
-    log_cgroup_info, log_cgroup_warning, get_cgroup_api, InvalidCgroupMountpointException
+    log_cgroup_info, log_cgroup_warning, create_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.ga.cpucontroller import _CpuController
 from azurelinuxagent.ga.memorycontroller import _MemoryController
@@ -148,19 +148,21 @@ class CGroupConfigurator(object):
                 # We check the agent unit 'Slice' property before setting up azure.slice. This check is done first
                 # because the agent's Slice unit property will be 'azure.slice' if the slice drop-in file exists, even
                 # though systemd has not moved the agent to azure.slice yet. Systemd will only move the agent to
-                # azure.slice after a service restart.
+                # azure.slice after a vm restart.
                 agent_unit_name = systemd.get_agent_unit_name()
                 agent_slice = systemd.get_unit_property(agent_unit_name, "Slice")
                 if agent_slice not in (AZURE_SLICE, "system.slice"):
                     log_cgroup_warning("The agent is within an unexpected slice: {0}".format(agent_slice))
                     return
 
+                # Before agent setup, cleanup the old agent setup (drop-in files) since new agent uses different approach(systemctl) to setup cgroups.
+                self._cleanup_old_agent_setup()
+
                 # Notes about slice setup:
                 #   For machines where daemon version did not already create azure.slice, the
                 #   agent creates azure.slice and the agent unit Slice drop-in file(without daemon-reload), but systemd does not move the agent
                 #   unit to azure.slice until vm restart. It is ok to enable cgroup usage in this case if agent is
                 #   running in system.slice.
-
                 self._setup_azure_slice()
 
                 # Log mount points/root paths for cgroup controllers
@@ -198,20 +200,20 @@ class CGroupConfigurator(object):
         def _check_cgroups_supported(self):
             distro_supported = CGroupUtil.distro_supported()
             if not distro_supported:
-                log_cgroup_info("Cgroup monitoring is not supported on {0}".format(get_distro()), send_event=True)
+                log_cgroup_info("Cgroups is not currently supported on {0}".format(get_distro()), send_event=True)
                 return False
 
             if not systemd.is_systemd():
                 log_cgroup_warning("systemd was not detected on {0}".format(get_distro()), send_event=True)
+                log_cgroup_info("Cgroups won't be supported on non-systemd systems", send_event=True)
                 return False
 
-            log_cgroup_info("systemd version: {0}".format(systemd.get_version()))
-
             if not self._check_no_legacy_cgroups():
+                log_cgroup_warning("The daemon's PID was added to a legacy cgroup; will not enable cgroups.", send_event=True)
                 return False
 
             try:
-                self._cgroups_api = get_cgroup_api()
+                self._cgroups_api = create_cgroup_api()
             except InvalidCgroupMountpointException as e:
                 # Systemd mounts the cgroup file system at '/sys/fs/cgroup'. Previously, the agent supported cgroup
                 # usage if a user mounted the cgroup filesystem elsewhere. The agent no longer supports that
@@ -227,9 +229,11 @@ class CGroupConfigurator(object):
                 return False
 
             if self.using_cgroup_v2():
-                log_cgroup_info("Agent and extensions resource monitoring is not currently supported on cgroup v2", send_event=True)
+                log_cgroup_info("Using cgroup v2 for resource enforcement and monitoring")
+                log_cgroup_info("Agent and extensions resource enforcement and monitoring is not currently supported on cgroup v2", send_event=True)
                 return False
-
+            else:
+                log_cgroup_info("Using cgroup v1 for resource enforcement and monitoring")
             return True
 
         @staticmethod
@@ -240,9 +244,35 @@ class CGroupConfigurator(object):
             """
             legacy_cgroups = CGroupUtil.cleanup_legacy_cgroups()
             if legacy_cgroups > 0:
-                log_cgroup_warning("The daemon's PID was added to a legacy cgroup; will not monitor resource usage.")
                 return False
             return True
+
+        @staticmethod
+        def _cleanup_old_agent_setup():
+            """
+            New agent switching to use systemctl cmd instead of drop-files for desired configuration. So, cleaning up the old drop-in files.
+            We will keep cleanup code for few agents, until we determine all vms moved to new agent version.
+            """
+
+            # Older agents used to create this slice, but it was never used. Cleanup the file.
+            CGroupConfigurator._Impl._cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
+
+            unit_file_install_path = systemd.get_unit_file_install_path()
+            logcollector_slice = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
+            agent_drop_in_path = systemd.get_agent_drop_in_path()
+            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_ACCOUNTING)
+            agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path, _DROP_IN_FILE_MEMORY_ACCOUNTING)
+            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
+
+            # New agent will setup limits for scope instead slice, so removing existing logcollector slice.
+            CGroupConfigurator._Impl._cleanup_unit_file(logcollector_slice)
+
+            # Cleanup the old drop-in files, new agent will use systemdctl set-property to enable accounting and limits
+            CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
+
+            CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_memory_accounting)
+
+            CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_quota)
 
         @staticmethod
         def _setup_azure_slice():
@@ -264,26 +294,14 @@ class CGroupConfigurator(object):
 
             This method ensures that the "azure" and "vmextensions" slices are created. Setup should create those slices
             under /lib/systemd/system; but if they do not exist, __ensure_azure_slices_exist will create them.
-
-            Lastly, the method also cleans up unit files left over from previous versions of the agent.
-
-            Note: New agent switching to use systemctl cmd instead of drop-files for desired configuration. So, cleaning up the old drop-in files.
-            We will keep cleanup code for few agents, until we determine all vms moved to new agent version.
             """
-
-            # Older agents used to create this slice, but it was never used. Cleanup the file.
-            CGroupConfigurator._Impl._cleanup_unit_file("/etc/systemd/system/system-walinuxagent.extensions.slice")
 
             unit_file_install_path = systemd.get_unit_file_install_path()
             azure_slice = os.path.join(unit_file_install_path, AZURE_SLICE)
             vmextensions_slice = os.path.join(unit_file_install_path, _VMEXTENSIONS_SLICE)
-            logcollector_slice = os.path.join(unit_file_install_path, LOGCOLLECTOR_SLICE)
             agent_unit_file = systemd.get_agent_unit_file()
             agent_drop_in_path = systemd.get_agent_drop_in_path()
             agent_drop_in_file_slice = os.path.join(agent_drop_in_path, _AGENT_DROP_IN_FILE_SLICE)
-            agent_drop_in_file_cpu_accounting = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_ACCOUNTING)
-            agent_drop_in_file_memory_accounting = os.path.join(agent_drop_in_path, _DROP_IN_FILE_MEMORY_ACCOUNTING)
-            agent_drop_in_file_cpu_quota = os.path.join(agent_drop_in_path, _DROP_IN_FILE_CPU_QUOTA)
 
             files_to_create = []
 
@@ -298,16 +316,6 @@ class CGroupConfigurator(object):
             else:
                 if not os.path.exists(agent_drop_in_file_slice):
                     files_to_create.append((agent_drop_in_file_slice, _AGENT_DROP_IN_FILE_SLICE_CONTENTS))
-
-            # New agent will setup limits for scope instead slice, so removing existing logcollector slice.
-            CGroupConfigurator._Impl._cleanup_unit_file(logcollector_slice)
-
-            # Cleanup the old drop-in files, new agent will use systemdctl set-property to enable accounting and limits
-            CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_accounting)
-
-            CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_memory_accounting)
-
-            CGroupConfigurator._Impl._cleanup_unit_file(agent_drop_in_file_cpu_quota)
 
             if len(files_to_create) > 0:
                 # create the unit files, but if 1 fails remove all and return
@@ -351,9 +359,10 @@ class CGroupConfigurator(object):
             """
             try:
                 # since we don't use daemon-reload and drop-files for accounting, so it will be enabled with systemctl set-property
-                accounting_properties = ["CPUAccounting=yes", "MemoryAccounting=yes"]
+                accounting_properties = ("CPUAccounting", "MemoryAccounting")
+                values = ("yes", "yes")
                 log_cgroup_info("Enabling accounting properties for the agent: {0}".format(accounting_properties))
-                systemd.set_unit_properties_run_time(unit_name, accounting_properties)
+                systemd.set_unit_run_time_properties(unit_name, accounting_properties, values)
             except Exception as exception:
                 log_cgroup_warning("Failed to set accounting properties for the agent: {0}".format(ustr(exception)))
 
@@ -400,9 +409,9 @@ class CGroupConfigurator(object):
                 return
 
         @staticmethod
-        def _calculate_current_cpu_quota(cpu_quota_per_sec_usec):
+        def _get_current_cpu_quota(unit_name):
             """
-            Calculate the CPU percentage from CPUQuotaPerSecUSec.
+            Calculate the CPU percentage from CPUQuotaPerSecUSec for given unit.
             Params:
                 cpu_quota_per_sec_usec (str): The value of CPUQuotaPerSecUSec (e.g., "1s", "500ms", "500us", or "infinity").
 
@@ -410,9 +419,9 @@ class CGroupConfigurator(object):
                 str: CPU percentage, or empty if 'infinity'.
             """
             try:
-                cpu_quota_per_sec_usec = cpu_quota_per_sec_usec.strip().lower()
+                cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec").strip().lower()
                 if cpu_quota_per_sec_usec == "infinity":
-                    return ""  # No limit on CPU usage
+                    return cpu_quota_per_sec_usec  # No limit on CPU usage
 
                 # Parse the value based on the suffix
                 elif cpu_quota_per_sec_usec.endswith("us"):
@@ -488,7 +497,7 @@ class CGroupConfigurator(object):
             over this setting.
             """
             quota_percentage = "{0}%".format(quota)
-            log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}".format(unit_name, quota_percentage))
+            log_cgroup_info("Setting {0}'s CPUQuota is {1}".format(unit_name, quota_percentage))
             CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, quota_percentage)
 
         @staticmethod
@@ -500,18 +509,18 @@ class CGroupConfigurator(object):
             over this setting.
             """
             log_cgroup_info("Resetting {0}'s CPUQuota".format(unit_name), send_event=False)
-            CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, '')  # setting an empty value resets to the default (infinity)
+            CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, "infinity") # systemd expresses no-quota as infinity, following the same convention
             log_cgroup_info('Current CPUQuota: {0}'.format(systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")))
 
         # W0238: Unused private member `_Impl.__try_set_cpu_quota(quota)` (unused-private-member)
         @staticmethod
         def _try_set_cpu_quota(unit_name, quota):  # pylint: disable=unused-private-member
             try:
-                cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")
-                current_cpu_quota = CGroupConfigurator._Impl._calculate_current_cpu_quota(cpu_quota_per_sec_usec)
+                current_cpu_quota = CGroupConfigurator._Impl._get_current_cpu_quota(unit_name)
                 if current_cpu_quota == quota:
                     return
-                systemd.set_unit_property_run_time(unit_name, "CPUQuota", quota)
+                quota = quota if quota != "infinity" else ""  # no-quota expressed as empty string while setting property
+                systemd.set_unit_run_time_property(unit_name, "CPUQuota", quota)
             except Exception as exception:
                 log_cgroup_warning('Failed to set CPUQuota: {0}'.format(ustr(exception)))
 
@@ -528,7 +537,7 @@ class CGroupConfigurator(object):
                 return False
             try:
                 log_cgroup_info("Checking for unexpected processes in the agent's cgroup before enabling cgroups")
-                self._check_processes_in_agent_cgroup(check_before_enable=True)
+                self._check_processes_in_agent_cgroup(True)
             except CGroupsException as exception:
                 log_cgroup_warning(ustr(exception))
                 return True
@@ -545,7 +554,7 @@ class CGroupConfigurator(object):
 
                 process_check_success = False
                 try:
-                    self._check_processes_in_agent_cgroup()
+                    self._check_processes_in_agent_cgroup(False)
                     process_check_success = True
                 except CGroupsException as exception:
                     errors.append(exception)
@@ -568,7 +577,7 @@ class CGroupConfigurator(object):
             finally:
                 self._check_cgroups_lock.release()
 
-        def _check_processes_in_agent_cgroup(self, check_before_enable=False):
+        def _check_processes_in_agent_cgroup(self, report_immediately):
             """
             Verifies that the agent's cgroup includes only the current process, its parent, commands started using shellutil and instances of systemd-run
             (those processes correspond, respectively, to the extension handler, the daemon, commands started by the extension handler, and the systemd-run
@@ -578,7 +587,7 @@ class CGroupConfigurator(object):
 
             Raises a CGroupsException only when current unexpected process seen last time.
 
-            check_before_enable - flag to switch to old behavior when we are checking before enable cgroups.
+            report_immediately - flag to switch to old behavior and report immediately if any unexpected process found.
 
             Note: Process check was added as conservative approach before cgroups feature stable. Now it's producing noise due to race issues, some of those issues are extra process before systemd move to new cgroup or process about to die.
             So now changing the behavior to raise an issue only when we see the same unexpected process on last check. Later we will remove the check if no issues reported.
@@ -619,7 +628,7 @@ class CGroupConfigurator(object):
                     # If so, consider it as valid process in agent cgroup.
                     if current == 0 and not (self._is_process_descendant_of_the_agent(process) or self._is_zombie_process(process)):
                         current_unexpected[process] = self._format_process(process)
-                if check_before_enable:
+                if report_immediately:
                     report = [current_unexpected[process] for process in current_unexpected]
                 else:
                     for process in current_unexpected:
@@ -846,18 +855,23 @@ class CGroupConfigurator(object):
             """
             Check if the cgroups setup is completed for the unit and return the properties that need an update.
             """
-            properties_to_update = []
+            properties_to_update = ()
+            properties_values = ()
             cpu_accounting = systemd.get_unit_property(unit_name, "CPUAccounting")
             if cpu_accounting != "yes":
-                properties_to_update.append("CPUAccounting=yes")
+                properties_to_update += ("CPUAccounting",)
+                properties_values += ("yes",)
             memory_accounting = systemd.get_unit_property(unit_name, "MemoryAccounting")
             if memory_accounting != "yes":
-                properties_to_update.append("MemoryAccounting=yes")
-            cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec")
-            current_cpu_quota = CGroupConfigurator._Impl._calculate_current_cpu_quota(cpu_quota_per_sec_usec)
+                properties_to_update += ("MemoryAccounting",)
+                properties_values += ("yes",)
+            current_cpu_quota = CGroupConfigurator._Impl._get_current_cpu_quota(unit_name)
             if current_cpu_quota != cpu_quota:
-                properties_to_update.append("CPUQuota={0}".format(cpu_quota))
-            return properties_to_update
+                properties_to_update += ("CPUQuota",)
+                # no-quota expressed as empty string while setting property
+                cpu_quota = cpu_quota if cpu_quota != "infinity" else ""
+                properties_values += (cpu_quota,)
+            return properties_to_update, properties_values
 
         def setup_extension_slice(self, extension_name, cpu_quota):
             """
@@ -883,17 +897,17 @@ class CGroupConfigurator(object):
                         CGroupConfigurator._Impl._cleanup_unit_file(old_extension_slice_path)
 
                     cpu_quota = "{0}%".format(
-                        cpu_quota) if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
-                    properties_to_update = self._get_unit_properties_requiring_update(extension_slice, cpu_quota)
+                        cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
+                    properties_to_update, properties_values = self._get_unit_properties_requiring_update(extension_slice, cpu_quota)
 
                     if len(properties_to_update) > 0:
-                        if cpu_quota == "":
+                        if cpu_quota == "infinity":
                             log_cgroup_info("CPUQuota not set for {0}".format(extension_name))
                         else:
-                            log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}".format(extension_name, cpu_quota))
+                            log_cgroup_info("Setting {0}'s CPUQuota is {1}".format(extension_name, cpu_quota))
 
                         log_cgroup_info("Setting up the resource properties: {0} for {1}".format(properties_to_update, extension_slice))
-                        systemd.set_unit_properties_run_time(extension_slice, properties_to_update)
+                        systemd.set_unit_run_time_properties(extension_slice, properties_to_update, properties_values)
 
                 except Exception as exception:
                     log_cgroup_warning("Failed to set the extension {0} slice and quotas: {1}".format(extension_slice,
@@ -936,16 +950,17 @@ class CGroupConfigurator(object):
                         self._cleanup_all_files(files_to_remove)
 
                         cpu_quota = service.get('cpuQuotaPercentage')
-                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None else ""  # setting an empty value resets to the default (infinity)
-                        properties_to_update = self._get_unit_properties_requiring_update(service_name, cpu_quota)
+                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
+                        properties_to_update, properties_values = self._get_unit_properties_requiring_update(service_name, cpu_quota)
+                        # If systemd is unaware of extension services and not loaded in the system yet, we get error while setting quotas. Hence, added unit loaded check.
                         if systemd.is_unit_loaded(service_name) and len(properties_to_update) > 0:
-                            if cpu_quota != "":
-                                log_cgroup_info("Ensuring the {0}'s CPUQuota is {1}".format(service_name, cpu_quota))
+                            if cpu_quota != "infinity":
+                                log_cgroup_info("Setting {0}'s CPUQuota is {1}".format(service_name, cpu_quota))
                             else:
                                 log_cgroup_info("CPUQuota not set for {0}".format(service_name))
                             log_cgroup_info("Setting up resource properties: {0} for {1}" .format(properties_to_update, service_name))
                             try:
-                                systemd.set_unit_properties_run_time(service_name, properties_to_update)
+                                systemd.set_unit_run_time_properties(service_name, properties_to_update, properties_values)
                             except Exception as exception:
                                 log_cgroup_warning("Failed to set the quotas for {0}: {1}".format(service_name, ustr(exception)))
 

@@ -176,6 +176,6 @@ class _CgroupController(object):
 
     def get_controller_type(self):
         """
-        Returns the name of the controller.
+        Returns the type of the controller. Example: CPU, Memory, etc.
         """
         raise NotImplementedError()

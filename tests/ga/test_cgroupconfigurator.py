@@ -97,10 +97,10 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
 
     def test_initialize_should_not_enable_when_cgroup_api_cannot_be_determined(self):
         # Mock cgroup api to raise CGroupsException
-        def mock_get_cgroup_api():
+        def mock_create_cgroup_api():
             raise CGroupsException("")
 
-        with patch('azurelinuxagent.ga.cgroupconfigurator.get_cgroup_api', side_effect=mock_get_cgroup_api):
+        with patch('azurelinuxagent.ga.cgroupconfigurator.create_cgroup_api', side_effect=mock_create_cgroup_api):
             with self._get_cgroup_configurator() as configurator:
                 self.assertFalse(configurator.enabled(), "cgroups were enabled")
 
@@ -872,9 +872,9 @@ exit 0
 
             with patch("azurelinuxagent.ga.cgroupapi.CgroupV1.get_processes", return_value=agent_processes + other_processes):
                 with self.assertRaises(CGroupsException) as context_manager:
-                    configurator._check_processes_in_agent_cgroup()
+                    configurator._check_processes_in_agent_cgroup(False)
                     # will raise an exception if the processes are not as expected in the second call
-                    configurator._check_processes_in_agent_cgroup()
+                    configurator._check_processes_in_agent_cgroup(False)
 
                 # The list of processes in the message is an array of strings: "['foo', ..., 'bar']"
                 message = ustr(context_manager.exception)

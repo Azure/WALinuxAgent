@@ -7,7 +7,7 @@ from assertpy import assert_that, fail
 from azurelinuxagent.common.osutil import systemd
 from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api, SystemdCgroupApiv1
+from azurelinuxagent.ga.cgroupapi import create_cgroup_api, SystemdCgroupApiv1
 from azurelinuxagent.ga.cpucontroller import CpuControllerV1, CpuControllerV2
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
@@ -168,7 +168,7 @@ def get_unit_cgroup_proc_path(unit_name, controller):
     """
     Returns the cgroup.procs path for the given unit and controller.
     """
-    cgroups_api = get_cgroup_api()
+    cgroups_api = create_cgroup_api()
     unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
     if isinstance(cgroups_api, SystemdCgroupApiv1):
         return unit_cgroup.get_controller_procs_path(controller=controller)
@@ -179,7 +179,7 @@ def get_unit_cgroup_cpu_quota_disabled(unit_name):
     """
     Returns True if cpu quota not set for the given unit cgroup
     """
-    cgroups_api = get_cgroup_api()
+    cgroups_api = create_cgroup_api()
     unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
     controllers = unit_cgroup.get_controllers()
     for controller in controllers:

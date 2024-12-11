@@ -85,7 +85,7 @@ def get_unit_property(unit_name, property_name):
     return match.group('value')
 
 
-def set_unit_property_run_time(unit_name, property_name, value):
+def set_unit_run_time_property(unit_name, property_name, value):
     """
     Set a property of a unit at runtime
 
@@ -98,12 +98,17 @@ def set_unit_property_run_time(unit_name, property_name, value):
         raise ValueError("Can't set property {0} of {1}: {2}".format(property_name, unit_name, e))
 
 
-def set_unit_properties_run_time(unit_name, properties):
+def set_unit_run_time_properties(unit_name, property_names, values):
     """
     Set multiple properties of a unit at runtime
 
     Note: --runtime settings only apply until the next reboot
     """
+    if len(property_names) != len(values):
+        raise ValueError("The number of property names:{0} and values:{1} must be the same".format(property_names, values))
+
+    properties = ["{0}={1}".format(name, value) for name, value in zip(property_names, values)]
+
     try:
         # Ex: systemctl set-property foobar.service CPUWeight=200 MemoryMax=2G IPAccounting=yes --runtime
         shellutil.run_command(["systemctl", "set-property", unit_name] + properties + ["--runtime"])

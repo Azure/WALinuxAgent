@@ -149,7 +149,7 @@ class InvalidCgroupMountpointException(CGroupsException):
         super(InvalidCgroupMountpointException, self).__init__(msg)
 
 
-def get_cgroup_api():
+def create_cgroup_api():
     """
     Determines which version of Cgroup should be used for resource enforcement and monitoring by the Agent and returns
     the corresponding Api.
@@ -172,7 +172,6 @@ def get_cgroup_api():
     root_hierarchy_mode = shellutil.run_command(["stat", "-f", "--format=%T", CGROUP_FILE_SYSTEM_ROOT]).rstrip()
 
     if root_hierarchy_mode == "cgroup2fs":
-        log_cgroup_info("Using cgroup v2 for resource enforcement and monitoring")
         return SystemdCgroupApiv2()
 
     elif root_hierarchy_mode == "tmpfs":
@@ -192,7 +191,6 @@ def get_cgroup_api():
         # mounted in a location other than the systemd default, raise Exception.
         if not cgroup_api_v1.are_mountpoints_systemd_created():
             raise InvalidCgroupMountpointException("Expected cgroup controllers to be mounted at '{0}', but at least one is not. v1 mount points: \n{1}".format(CGROUP_FILE_SYSTEM_ROOT, json.dumps(cgroup_api_v1.get_controller_mountpoints())))
-        log_cgroup_info("Using cgroup v1 for resource enforcement and monitoring")
         return cgroup_api_v1
 
     raise CGroupsException("{0} has an unexpected file type: {1}".format(CGROUP_FILE_SYSTEM_ROOT, root_hierarchy_mode))
