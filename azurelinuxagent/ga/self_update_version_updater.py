@@ -40,7 +40,6 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         super(SelfUpdateVersionUpdater, self).__init__(gs_id)
         self._last_attempted_manifest_download_time = datetime.datetime.min
         self._next_update_time = datetime.datetime.min
-        self._update_time_refreshed = False
 
     @staticmethod
     def _get_largest_version(agent_manifest):
@@ -75,24 +74,23 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
 
     def _new_agent_allowed_now_to_update(self):
         """
-        This method called when new update detected and computes random time for next update.
-        If the current time on or after upgrade time, we allow the update.
-
-        Note: After we allow the update, and it's not successful, the next update time will be recalculated.
+        This method is called when a new update is detected and computes a random time for the next update on the first call.
+        Since the method is called periodically until we reach the next update time, we shouldn't refresh or recompute the next update time on every call.
+        We use default value(datetime.datetime.min) to ensure the computation happens only once. This next_update_time will reset to default value when agent allowed to update.
+        So that, in case the update fails due to an issue, such as a package download error, the same default value used to recompute the next update time.
         """
         now = datetime.datetime.utcnow()
         upgrade_type = self._get_agent_upgrade_type(self._version)
 
-        if not self._update_time_refreshed:
+        if self._next_update_time == datetime.datetime.min:
             self._next_update_time = self._get_next_process_time(upgrade_type, now)
-            self._update_time_refreshed = True
         message = "Self-update discovered new {0} upgrade WALinuxAgent-{1}; Will upgrade on or after {2}".format(
             upgrade_type, str(self._version), self._next_update_time.strftime(logger.Logger.LogTimeFormatInUTC))
         logger.info(message)
         add_event(op=WALAEventOperation.AgentUpgrade, message=message, log_event=False)
 
         if self._next_update_time <= now:
-            self._update_time_refreshed = False
+            self._next_update_time = datetime.datetime.min
             return True
         return False
 
