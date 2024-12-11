@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
+  <Version>2012-11-30</Version>
+  <Incarnation>4</Incarnation>
+  <Machine>
+    <ExpectedState>Started</ExpectedState>
+    <StopRolesDeadlineHint>300000</StopRolesDeadlineHint>
+    <LBProbePorts>
+      <Port>16001</Port>
+    </LBProbePorts>
+    <ExpectHealthReport>FALSE</ExpectHealthReport>
+  </Machine>
+  <Container>
+    <ContainerId>7db6fcb6-9911-4da4-8687</ContainerId>
+    <RoleInstanceList>
+      <RoleInstance>
+        <InstanceId>00abac54-f426-4653-bcc6-0ed70cddda87._kvm03</InstanceId>
+        <State>Started</State>
+        <Configuration>
+          <HostingEnvironmentConfig>http://168.63.129.16:80/machine/7db6fcb6-9911-4da4-8687/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fkvm03?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=4</HostingEnvironmentConfig>
+          <SharedConfig>http://168.63.129.16:80/machine/7db6fcb6-9911-4da4-8687/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fkvm03?comp=config&amp;type=sharedConfig&amp;incarnation=4</SharedConfig>
+          <ExtensionsConfig>http://168.63.129.16:80/machine/7db6fcb6-9911-4da4-8687/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fkvm03?comp=config&amp;type=extensionsConfig&amp;incarnation=4</ExtensionsConfig>
+          <FullConfig>http://168.63.129.16:80/machine/7db6fcb6-9911-4da4-8687/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fkvm03?comp=config&amp;type=fullConfig&amp;incarnation=4</FullConfig>
+          <Certificates>http://168.63.129.16:80/machine/7db6fcb6-9911-4da4-8687/00abac64%2Df426%2D4653%2Dbaa6%2D0ed70cdcca87.%5Fkvm03?comp=certificates&amp;incarnation=4</Certificates>
+          <ConfigName>00abac54-f426-4653-bcc6-0ed70cddda87.3.00abac54-f426-4653-bcc6-0ed70cddda87.4._1.xml</ConfigName>
+        </Configuration>
+      </RoleInstance>
+    </RoleInstanceList>
+  </Container>
+</GoalState>

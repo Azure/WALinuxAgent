@@ -1,0 +1,80 @@
+{
+    "hostGAPluginVersion": "1.0.8.151",
+    "activityId": "ec144e92-ebf0-4512-8e1c-288ad24794c7",
+    "correlationId": "165ed993-7252-4716-b959-4769254defb9",
+    "inSvdSeqNo": 6,
+    "extensionsLastModifiedTickCount": 638479963767702408,
+    "extensionGoalStatesSource": "FastTrack",
+    "statusUploadBlob": {
+        "statusBlobType": "PageBlob",
+        "value": "https://z16.blob.storage.azure.net/$system/15b576b88462.status"
+    },
+    "gaFamilies": [
+        {
+            "name": "Prod",
+            "version": "2.10.0.8",
+            "isVersionFromRSM": false,
+            "isVMEnabledForRSMUpgrades": false,
+            "uris": [
+                "https://umsal4z5pqr2dx3g5zdd.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml",
+                "https://umsac44fqpt2lbfsgksz.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml"
+            ]
+        }
+    ],
+    "extensionGoalStates": [
+        {
+            "name": "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent",
+            "version": "1.30.2",
+            "location": "https://umsaqhczvcnhlz0kplll.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml",
+            "failoverLocation": "https://umsagxbfcnkp2gcgbktm.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml",
+            "additionalLocations": [
+                "https://umsasvdz0hgqp25wbldc.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false
+        },
+        {
+            "name": "Microsoft.OSTCExtensions.VMAccessForLinux",
+            "version": "1.5.18",
+            "location": "https://umsambj0h5gkjvp2jtlj.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "failoverLocation": "https://umsam0fgqtswdxrxl3k3.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml",
+            "additionalLocations": [
+                "https://umsafrz2ts5fqvdzx4fh.blob.core.windows.net/2bbece4f-0283-d415-b034-cc0adc6997a1/2bbece4f-0283-d415-b034-cc0adc6997a1_manifest.xml"
+            ],
+            "state": "uninstall",
+            "autoUpgrade": true,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false
+        },
+        {
+            "name": "Microsoft.Azure.Extensions.CustomScript",
+            "version": "2.0.7",
+            "location": "https://umsavdddshpjtvhw3xdl.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "failoverLocation": "https://umsarc5lgv0zfkdmmhn0.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml",
+            "additionalLocations": [
+                "https://umsav50t2vsvqhbjfw52.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml"
+            ],
+            "state": "enabled",
+            "autoUpgrade": false,
+            "runAsStartupTask": false,
+            "isJson": true,
+            "useExactVersion": true,
+            "settingsSeqNo": 0,
+            "isMultiConfig": false,
+            "settings": [
+                {
+                    "protectedSettingsCertThumbprint": "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9",
+                    "protectedSettings": "*** REDACTED ***"
+                }
+            ]
+        }
+    ]
+}

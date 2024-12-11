@@ -61,14 +61,6 @@ class GoalStateProperties(object):
     All = RoleConfig | HostingEnv | SharedConfig | ExtensionsGoalState | Certificates | RemoteAccessInfo
 
 
-class GoalStateInconsistentError(ProtocolError):
-    """
-    Indicates an inconsistency in the goal state (e.g. missing tenant certificate)
-    """
-    def __init__(self, msg, inner=None):
-        super(GoalStateInconsistentError, self).__init__(msg, inner)
-
-
 class GoalState(object):
     def __init__(self, wire_client, goal_state_properties=GoalStateProperties.All, silent=False, save_to_history=False):
         """
@@ -201,26 +193,12 @@ class GoalState(object):
         # Fetching the goal state updates the HostGAPlugin so simply trigger the request
         GoalState._fetch_goal_state(wire_client)
 
-    def update(self, silent=False):
+    def update(self, force_update=False, silent=False):
         """
         Updates the current GoalState instance fetching values from the WireServer/HostGAPlugin as needed
         """
         self.logger.silent = silent
 
-        try:
-            self._update(force_update=False)
-        except GoalStateInconsistentError as e:
-            message = "Detected an inconsistency in the goal state: {0}".format(ustr(e))
-            self.logger.warn(message)
-            add_event(op=WALAEventOperation.GoalState, is_success=False, log_event=False, message=message)
-
-            self._update(force_update=True)
-
-            message = "The goal state is consistent"
-            self.logger.info(message)
-            add_event(op=WALAEventOperation.GoalState, message=message)
-
-    def _update(self, force_update):
         #
         # Fetch the goal state from both the HGAP and the WireServer
         #
@@ -282,10 +260,13 @@ class GoalState(object):
         #
         # Lastly, decide whether to use the vmSettings or extensionsConfig for the extensions goal state
         #
-        if goal_state_updated and vm_settings_updated:
-            most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
-        elif goal_state_updated:
-            most_recent = extensions_config
+        if goal_state_updated:
+            # On rotation of the tenant certificate the vmSettings and extensionsConfig are not updated. However, the incarnation of the WS goal state is update so 'goal_state_updated' will be True.
+            # In this case, we should use the most recent of vmSettigns and extensionsConfig.
+            if vm_settings is not None:
+                most_recent = vm_settings if vm_settings.created_on_timestamp > extensions_config.created_on_timestamp else extensions_config
+            else:
+                most_recent = extensions_config
         else:  # vm_settings_updated
             most_recent = vm_settings
 
@@ -293,28 +274,12 @@ class GoalState(object):
             self._extensions_goal_state = most_recent
 
         #
-        # For Fast Track goal states, verify that the required certificates are in the goal state.
-        #
-        # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
-        # tenant certificate is re-generated when the VM is restarted) *without* the incarnation necessarily changing (e.g. if the incarnation
-        # is 1 before the hibernation; on resume the incarnation is set to 1 even though the goal state has a new certificate). If a Fast
-        # Track goal state comes after that, the extensions will need the new certificate. The Agent needs to refresh the goal state in that
-        # case, to ensure it fetches the new certificate.
+        # Ensure all certificates are downloaded on Fast Track goal states in order to maintain backwards compatibility with previous
+        # versions of the Agent, which used to download certificates from the WireServer on every goal state. Some customer applications
+        # depend on this behavior (see https://github.com/Azure/WALinuxAgent/issues/2750).
         #
         if self._extensions_goal_state.source == GoalStateSource.FastTrack and self._goal_state_properties & GoalStateProperties.Certificates:
-            self._check_certificates()
             self._check_and_download_missing_certs_on_disk()
-
-    def _check_certificates(self):
-        # Check that certificates needed by extensions are in goal state certs.summary
-        for extension in self.extensions_goal_state.extensions:
-            for settings in extension.settings:
-                if settings.protectedSettings is None:
-                    continue
-                certificates = self.certs.summary
-                if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
-                    message = "Certificate {0} needed by {1} is missing from the goal state".format(settings.certificateThumbprint, extension.name)
-                    raise GoalStateInconsistentError(message)
 
     def _download_certificates(self, certs_uri):
         xml_text = self._wire_client.fetch_config(certs_uri, self._wire_client.get_header_for_cert())
@@ -524,7 +489,7 @@ class GoalState(object):
             self.logger.warn("Fetching the goal state failed: {0}", ustr(exception))
             raise ProtocolError(msg="Error fetching goal state", inner=exception)
         finally:
-            message = 'Fetch goal state completed'
+            message = 'Fetch goal state from WireServer completed'
             self.logger.info(message)
             add_event(op=WALAEventOperation.GoalState, message=message)
 

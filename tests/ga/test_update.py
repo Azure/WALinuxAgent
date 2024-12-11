@@ -23,6 +23,7 @@ from threading import current_thread
 from azurelinuxagent.ga.agent_update_handler import INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE
 from azurelinuxagent.common import conf
+from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
     ExitException, AgentMemoryExceededException
@@ -47,7 +48,7 @@ from tests.lib.mock_update_handler import mock_update_handler
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse
 from tests.lib.wire_protocol_data import DATA_FILE, DATA_FILE_MULTIPLE_EXT, DATA_FILE_VM_SETTINGS
 from tests.lib.tools import AgentTestCase, data_dir, DEFAULT, patch, load_bin_data, Mock, MagicMock, \
-    clear_singleton_instances, skip_if_predicate_true
+    clear_singleton_instances, skip_if_predicate_true, load_data, mock_sleep
 from tests.lib import wire_protocol_data
 from tests.lib.http_request_predicates import HttpRequestPredicates
 
@@ -2008,7 +2009,54 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
             update_handler._try_update_goal_state(protocol)
             self.assertEqual(update_handler._goal_state.incarnation, '6789', "The goal state was not updated (received unexpected incarnation)")
 
-    def test_it_should_log_errors_only_when_the_error_state_changes(self):
+    def test_it_should_retry_fetching_the_goal_state_when_the_tenant_certificate_is_incorrect(self):
+        #
+        # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
+        # tenant certificate is re-generated when the VM is restarted) *without* the incarnation changing. If a Fast Track goal state
+        # comes after that, the extensions will need the new certificate. This test simulates that scenario by mocking the certificates
+        # request and returning first a set of certificates (certs-2.xml) that do not match those needed by the extensions, and then a
+        # set (certs.xml) that does match. The test then ensures that the goal state was refreshed and the correct certificates were
+        # fetched.
+        #
+        def http_get_handler(url, *_, **__):
+            if HttpRequestPredicates.is_certificates_request(url):
+                http_get_handler.certificate_requests += 1
+                if http_get_handler.certificate_requests <= 2:  # _try_update_goal_state() tries 3 times; return the wrong certs the first 2 times
+                    data_file = "wire/certs-2.xml"
+                else:
+                    data_file = "wire/certs.xml"
+                return MockHttpResponse(status=200, body=load_data(data_file).encode('utf-8'))
+            return None
+        http_get_handler.certificate_requests = 0
+
+        update_handler = get_update_handler()
+        # Protocol detection fetches the goal state; disable it for the mock protocol
+        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS, detect_protocol=False) as protocol:
+            protocol.set_http_handlers(http_get_handler=http_get_handler)
+
+            with patch.object(protocol.client, "update_goal_state", wraps=protocol.client.update_goal_state) as update_goal_state_patcher:
+                with patch('time.sleep', side_effect=lambda _: mock_sleep()):  # _try_update_goal_state() sleeps before the second retry
+                    update_handler._try_update_goal_state(protocol)
+
+            self.assertEqual(3, http_get_handler.certificate_requests, "There should have been exactly 3 requests for the goal state certificates (original + 2 retries)")
+            self.assertEqual(3, protocol.mock_wire_data.call_counts["extensionsConfig"], "There should have been exactly 3 requests for extensionsConfig (original + 2 retries)")
+            self.assertEqual(3, protocol.mock_wire_data.call_counts["vm_settings"], "There should have been exactly 3 requests for vmSettings (original + 2 retries)")
+            self.assertEqual(3, update_goal_state_patcher.call_count, "There should have been exactly 3 calls to WireClient.update_goal_state (original + 2 retries)")
+            self.assertFalse(update_goal_state_patcher.call_args_list[0][1]["force_update"], "The first call to WireClient.update_goal_state should not refresh (force-update) the goal state ")
+            self.assertTrue(update_goal_state_patcher.call_args_list[1][1]["force_update"], "The second call to WireClient.update_goal_state should refresh (force-update) the goal state ")
+            self.assertTrue(update_goal_state_patcher.call_args_list[2][1]["force_update"], "The third call to WireClient.update_goal_state should refresh (force-update) the goal state ")
+
+            # Double check the certificates are correct
+            goal_state = protocol.get_goal_state()
+
+            thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
+
+            for extension in goal_state.extensions_goal_state.extensions:
+                for settings in extension.settings:
+                    if settings.protectedSettings is not None:
+                        self.assertIn(settings.certificateThumbprint, thumbprints, "The tenant certificate is missing from the goal state.")
+
+    def test_it_should_limit_the_number_of_errors_output_to_the_local_log_and_telemetry(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             def http_get_handler(url, *_, **__):
                 if self.is_goal_state_request(url):
@@ -2020,77 +2068,75 @@ class TryUpdateGoalStateTestCase(HttpRequestPredicates, AgentTestCase):
 
             @contextlib.contextmanager
             def create_log_and_telemetry_mocks():
-                with patch("azurelinuxagent.ga.update.logger", autospec=True) as logger_patcher:
-                    with patch("azurelinuxagent.ga.update.add_event") as add_event_patcher:
-                        yield logger_patcher, add_event_patcher
+                messages = []
+                with patch("azurelinuxagent.common.logger.Logger.log", side_effect=lambda level, fmt, *args: messages.append("{0} {1}".format(LogLevel.STRINGS[level], fmt.format(*args)))):
+                    with patch("azurelinuxagent.common.event.add_event") as add_event_patcher:
+                        yield messages, add_event_patcher
 
-            calls_to_strings = lambda calls: (str(c) for c in calls)
-            filter_calls = lambda calls, regex=None: (c for c in calls_to_strings(calls) if regex is None or re.match(regex, c))
-            logger_calls = lambda regex=None: [m for m in filter_calls(logger.method_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
-            errors = lambda: logger_calls(r'call.error\(.*Error fetching the goal state.*')
-            periodic_errors = lambda: logger_calls(r'call.error\(.*Fetching the goal state is still failing*')
-            success_messages = lambda: logger_calls(r'call.info\(.*Fetching the goal state recovered from previous errors.*')
-            telemetry_calls = lambda regex=None: [m for m in filter_calls(add_event.mock_calls, regex)]  # pylint: disable=used-before-assignment,unnecessary-comprehension
-            goal_state_events = lambda: telemetry_calls(r".*op='FetchGoalState'.*")
+            # E0601: Using variable 'log_messages' before assignment (used-before-assignment)
+            filter_log_messages = lambda regex: [m for m in log_messages if re.match(regex, m)]  # pylint: disable=used-before-assignment
+            errors = lambda: filter_log_messages('ERROR Error fetching the goal state.*')
+            periodic_errors = lambda: filter_log_messages(r'ERROR Fetching the goal state is still failing*')
+            success_messages = lambda: filter_log_messages(r'INFO Fetching the goal state recovered from previous errors.*')
+
+            # E0601: Using variable 'log_messages' before assignment (used-before-assignment)
+            format_assert_message = lambda msg: "{0}\n*** Log: ***\n{1}".format(msg, "\n".join(log_messages))  # pylint: disable=used-before-assignment
 
             #
             # Initially calls to retrieve the goal state are successful...
             #
             update_handler = get_update_handler()
             fail_goal_state_request = False
-            with create_log_and_telemetry_mocks() as (logger, add_event):
+            with create_log_and_telemetry_mocks() as (log_messages, add_event):
                 update_handler._try_update_goal_state(protocol)
 
-                lc = logger_calls()
-                self.assertTrue(len(lc) == 0, "A successful call should not produce any log messages: [{0}]".format(lc))
-
-                tc = telemetry_calls()
-                self.assertTrue(len(tc) == 0, "A successful call should not produce any telemetry events: [{0}]".format(tc))
+                self.assertTrue(len(log_messages) == 0, format_assert_message("A successful call should not produce any log messages."))
+                self.assertTrue(add_event.call_count == 0, "A successful call should not produce any telemetry events: [{0}]".format(add_event.call_args_list))
 
             #
-            # ... then an error happens...
+            # ... then errors start happening, and we report the first few only...
             #
             fail_goal_state_request = True
-            with create_log_and_telemetry_mocks() as (logger, add_event):
-                update_handler._try_update_goal_state(protocol)
-
-                e = errors()
-                self.assertEqual(1, len(e), "A failure should have produced an error: [{0}]".format(e))
-
-                gs = goal_state_events()
-                self.assertTrue(len(gs) == 1 and 'is_success=False' in gs[0], "A failure should produce a telemetry event (success=false): [{0}]".format(gs))
-
-            #
-            # ... and errors continue happening...
-            #
-            with create_log_and_telemetry_mocks() as (logger, add_event):
-                for _ in range(5):
-                    update_handler._update_goal_state_last_error_report = datetime.now() + timedelta(days=1)
+            with create_log_and_telemetry_mocks() as (log_messages, add_event):
+                for _ in range(10):
                     update_handler._try_update_goal_state(protocol)
 
                 e = errors()
                 pe = periodic_errors()
-                self.assertEqual(2, len(e), "Two additional errors should have been reported: [{0}]".format(e))
-                self.assertEqual(len(pe), 3, "Subsequent failures should produce periodic errors: [{0}]".format(pe))
-
-                tc = telemetry_calls()
-                self.assertTrue(len(tc) == 5, "The failures should have produced telemetry events. Got: [{0}]".format(tc))
+                self.assertEqual(3, len(e), format_assert_message("Exactly 3 errors should have been reported."))
+                self.assertEqual(1, len(pe), format_assert_message("Exactly 1 periodic error should have been reported."))
+                self.assertEqual(4, len(log_messages), format_assert_message("A total of 4 messages should have been logged."))
+                self.assertEqual(4, add_event.call_count, "Each of 4 errors should have produced a telemetry event. Got: [{0}]".format(add_event.call_args_list))
 
             #
-            # ... until we finally succeed
+            # ... if errors continue happening we report them only periodically ...
+            #
+            with create_log_and_telemetry_mocks() as (log_messages, add_event):
+                for _ in range(5):
+                    update_handler._update_goal_state_next_error_report = datetime.now()  # force the reporting period to elapse
+                    update_handler._try_update_goal_state(protocol)
+
+                e = errors()
+                pe = periodic_errors()
+                self.assertEqual(0, len(e), format_assert_message("No errors should have been reported."))
+                self.assertEqual(5, len(pe), format_assert_message("All 5 errors should have been reported periodically."))
+                self.assertEqual(5, len(log_messages), format_assert_message("A total of 5 messages should have been logged."))
+                self.assertEqual(5, add_event.call_count, "Each of the 5 errors should have produced a telemetry event. Got: [{0}]".format(add_event.call_args_list))
+
+            #
+            # ... when the errors stop happening we report a recovery message
             #
             fail_goal_state_request = False
-            with create_log_and_telemetry_mocks() as (logger, add_event):
+            with create_log_and_telemetry_mocks() as (log_messages, add_event):
                 update_handler._try_update_goal_state(protocol)
 
                 s = success_messages()
                 e = errors()
                 pe = periodic_errors()
-                self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format(s))
-                self.assertTrue(len(e) == 0 and len(pe) == 0, "Recovering after failures should have not produced any errors: [{0}] [{1}]".format(e, pe))
-
-                gs = goal_state_events()
-                self.assertTrue(len(gs) == 1 and 'is_success=True' in gs[0], "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(gs))
+                self.assertEqual(len(s), 1, "Recovering after failures should have produced an info message: [{0}]".format("\n".join(log_messages)))
+                self.assertTrue(len(e) == 0 and len(pe) == 0, "Recovering after failures should have not produced any errors: [{0}]".format("\n".join(log_messages)))
+                self.assertEqual(1, len(log_messages), format_assert_message("A total of 1 message should have been logged."))
+                self.assertTrue(add_event.call_count == 1 and add_event.call_args_list[0][1]['is_success'] == True, "Recovering after failures should produce a telemetry event (success=true): [{0}]".format(add_event.call_args_list))
 
 
 def _create_update_handler():

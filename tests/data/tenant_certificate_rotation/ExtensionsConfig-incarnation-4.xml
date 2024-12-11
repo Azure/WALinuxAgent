@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Extensions version="1.0.0.0" goalStateIncarnation="4"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <GAFamilies>
+    <GAFamily>
+      <IsVMEnabledForRSMUpgrades>false</IsVMEnabledForRSMUpgrades>
+      <IsVersionFromRSM>false</IsVersionFromRSM>
+      <Name>Prod</Name>
+      <Uris>
+        <Uri>https://umsafxxnhhpbmc0hwbmp.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+        <Uri>https://umsaqhczvcnhlz0kplll.blob.core.windows.net/568bb00f-455e-32b8-8deb-0e1bf1636254/568bb00f-455e-32b8-8deb-0e1bf1636254_manifest.xml</Uri>
+      </Uris>
+      <Version>2.11.1.4</Version>
+    </GAFamily>
+  </GAFamilies>
+  <Location>westeurope</Location>
+  <ServiceName>CRP</ServiceName>
+</GuestAgentExtension>
+<StatusUploadBlob statusBlobType="PageBlob">https://z16.blob.storage.azure.net/$system/15b576b88462.status</StatusUploadBlob>
+<Plugins>
+  <Plugin name="Microsoft.Azure.Monitor.AzureMonitorLinuxAgent" version="1.27.2" location="https://umsaz2pjjf2m3xn2hpzz.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml" state="enabled" autoUpgrade="true" failoverlocation="https://umsaqhczvcnhlz0kplll.blob.core.windows.net/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8/bab0cbee-153b-ca2c-b8ec-eea35f48a1e8_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.0.7" location="https://umsa43gvk0ql05p2ck5m.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" state="enabled" autoUpgrade="false" failoverlocation="https://umsat3g3q5tnlnzhjkq3.blob.core.windows.net/5237dd14-0aad-f051-0fad-1e33e1b63091/5237dd14-0aad-f051-0fad-1e33e1b63091_manifest.xml" runAsStartupTask="false" isJson="true" useExactVersion="true" />
+</Plugins>
+<PluginSettings>
+  <Plugin name="Microsoft.Azure.Extensions.CustomScript" version="2.0.7">
+    <RuntimeSettings seqNo="0">{
+  "runtimeSettings": [
+    {
+      "handlerSettings": {
+        "protectedSettingsCertThumbprint": "C0EDFF1B408001B0FD14F8F615E567F7833822D0",
+        "protectedSettings": "*** REDACTED ***"
+      }
+    }
+  ]
+}</RuntimeSettings>
+  </Plugin>
+</PluginSettings>
+<InVMArtifactsProfileBlob>https://z16.blob.storage.azure.net/$system/15b576b88462.vmSettings</InVMArtifactsProfileBlob>
+<InVMGoalStateMetaData inSvdSeqNo="6" createdOnTicks="638267389998354169" activityId="96306223-5825-43df-9ddf-55674d40b4a6" correlationId="7fd0d67e-9b4f-42c4-9048-7f524ba22087" /></Extensions>

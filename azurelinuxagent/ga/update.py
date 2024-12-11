@@ -43,6 +43,7 @@ from azurelinuxagent.ga.firewall_manager import FirewallManager, FirewallStateEr
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil, systemd
 from azurelinuxagent.ga.persist_firewall_rules import PersistFirewallRulesHandler
+from azurelinuxagent.common.protocol.goal_state import GoalStateSource
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, VmSettingsNotSupported
 from azurelinuxagent.common.protocol.restapi import VERSION_0
 from azurelinuxagent.common.protocol.util import get_protocol_util
@@ -154,7 +155,7 @@ class UpdateHandler(object):
         # these members are used to avoid reporting errors too frequently
         self._heartbeat_update_goal_state_error_count = 0
         self._update_goal_state_error_count = 0
-        self._update_goal_state_last_error_report = datetime.min
+        self._update_goal_state_next_error_report = datetime.min
         self._report_status_last_failed_goal_state = None
 
         # incarnation of the last goal state that has been fully processed
@@ -440,8 +441,10 @@ class UpdateHandler(object):
         #
         # Block until we can fetch the first goal state (self._try_update_goal_state() does its own logging and error handling).
         #
+        event.info(WALAEventOperation.GoalState, "Initializing the goal state...")
         while not self._try_update_goal_state(protocol):
             time.sleep(conf.get_goal_state_period())
+        event.info(WALAEventOperation.GoalState, "Goal state initialization completed.")
 
         #
         # If FastTrack is disabled we need to check if the current goal state (which will be retrieved using the WireServer and
@@ -453,7 +456,9 @@ class UpdateHandler(object):
                 egs = protocol.client.get_goal_state().extensions_goal_state
                 if egs.created_on_timestamp < last_fast_track_timestamp:
                     egs.is_outdated = True
-                    logger.info("The current Fabric goal state is older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}",
+                    event.info(
+                        WALAEventOperation.GoalState,
+                       "The current Fabric goal state is older than the most recent FastTrack goal state; will skip it.\nFabric:    {0}\nFastTrack: {1}",
                         egs.created_on_timestamp, last_fast_track_timestamp)
 
     def _wait_for_cloud_init(self):
@@ -495,18 +500,51 @@ class UpdateHandler(object):
         """
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
         """
-        try:
-            max_errors_to_log = 3
+        max_errors_to_log = 3
 
-            protocol.client.update_goal_state(silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
+        try:
+            #
+            # For Fast Track goal states we need to ensure that the tenant certificate is in the goal state.
+            #
+            # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
+            # tenant certificate is re-generated when the VM is restarted) *without* the incarnation necessarily changing (e.g. if the incarnation
+            # is 1 before the hibernation; on resume the incarnation is set to 1 even though the goal state has a new certificate). If a Fast
+            # Track goal state comes after that, the extensions will need the new certificate.
+            #
+            # For new Fast Track goal states, we check the certificates and, if an inconsistency is detected,  re-fetch the entire goal state
+            # (update_goal_state(force_update=True). We re-fetch 2 times, one without waiting (to address scenarios like hibernation) and one with
+            # a delay (to address situations in which the HGAP and the WireServer are temporarily out of sync).
+            #
+            for attempt in range(3):
+                protocol.client.update_goal_state(force_update=attempt > 0, silent=self._update_goal_state_error_count >= max_errors_to_log, save_to_history=True)
+
+                goal_state = protocol.get_goal_state()
+                new_goal_state = self._goal_state is None or self._goal_state.extensions_goal_state.id != goal_state.extensions_goal_state.id
+
+                if not new_goal_state or goal_state.extensions_goal_state.source != GoalStateSource.FastTrack:
+                    break
+
+                if self._check_certificates(goal_state):
+                    if attempt > 0:
+                        event.info(WALAEventOperation.FetchGoalState, "The extensions goal state is now in sync with the tenant cert.")
+                    break
+
+                if attempt == 0:
+                    event.info(WALAEventOperation.FetchGoalState, "The extensions are out of sync with the tenant cert. Will refresh the goal state.")
+                elif attempt == 1:
+                    event.info(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will refresh the goal state one more time after a short delay.")
+                    time.sleep(conf.get_goal_state_period())
+                else:
+                    event.warn(WALAEventOperation.FetchGoalState, "The extensions are still out of sync with the tenant cert. Will continue execution, but some extensions may fail.")
+                    break
 
             self._goal_state = protocol.get_goal_state()
 
             if self._update_goal_state_error_count > 0:
-                message = u"Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})".format(
+                event.info(
+                    WALAEventOperation.FetchGoalState,
+                    "Fetching the goal state recovered from previous errors. Fetched {0} (certificates: {1})",
                     self._goal_state.extensions_goal_state.id, self._goal_state.certs.summary)
-                add_event(AGENT_NAME, op=WALAEventOperation.FetchGoalState, version=CURRENT_VERSION, is_success=True, message=message, log_event=False)
-                logger.info(message)
                 self._update_goal_state_error_count = 0
 
             try:
@@ -514,22 +552,36 @@ class UpdateHandler(object):
             except VmSettingsNotSupported:
                 self._supports_fast_track = False
 
+            return True
+
         except Exception as e:
             self._update_goal_state_error_count += 1
             self._heartbeat_update_goal_state_error_count += 1
             if self._update_goal_state_error_count <= max_errors_to_log:
-                message = u"Error fetching the goal state: {0}".format(textutil.format_exception(e))
-                logger.error(message)
-                add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
-                self._update_goal_state_last_error_report = datetime.now()
+                # Report up to 'max_errors_to_log' immediately
+                self._update_goal_state_next_error_report = datetime.now()
+                event.error(WALAEventOperation.FetchGoalState, "Error fetching the goal state: {0}", textutil.format_exception(e))
             else:
-                if self._update_goal_state_last_error_report + timedelta(hours=6) > datetime.now():
-                    self._update_goal_state_last_error_report = datetime.now()
-                    message = u"Fetching the goal state is still failing: {0}".format(textutil.format_exception(e))
-                    logger.error(message)
-                    add_event(op=WALAEventOperation.FetchGoalState, is_success=False, message=message, log_event=False)
+                # Report one single periodic error every 6 hours
+                if datetime.now() >= self._update_goal_state_next_error_report:
+                    self._update_goal_state_next_error_report = datetime.now() + timedelta(hours=6)
+                    event.error(WALAEventOperation.FetchGoalState, "Fetching the goal state is still failing: {0}", textutil.format_exception(e))
             return False
 
+    @staticmethod
+    def _check_certificates(goal_state):
+        # Check that the certificates needed by extensions are in the goal state certificates summary
+        for extension in goal_state.extensions_goal_state.extensions:
+            for settings in extension.settings:
+                if settings.protectedSettings is None:
+                    continue
+                certificates = goal_state.certs.summary
+                if not any(settings.certificateThumbprint == c['thumbprint'] for c in certificates):
+                    event.warn(
+                        WALAEventOperation.FetchGoalState,
+                        "The extensions goal state is out of sync with the tenant cert. Certificate {0}, needed by {1}, is missing.",
+                        settings.certificateThumbprint, extension.name)
+                    return False
         return True
 
     def _processing_new_incarnation(self):
