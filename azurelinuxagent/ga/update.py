@@ -496,8 +496,6 @@ class UpdateHandler(object):
                 logger.warn("{0} thread died, restarting".format(thread_handler.get_thread_name()))
                 thread_handler.start()
 
-    errors = 0
-
     def _try_update_goal_state(self, protocol):
         """
         Attempts to update the goal state and returns True on success or False on failure, sending telemetry events about the failures.
