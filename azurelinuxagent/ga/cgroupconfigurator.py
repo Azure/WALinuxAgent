@@ -416,7 +416,7 @@ class CGroupConfigurator(object):
                 cpu_quota_per_sec_usec (str): The value of CPUQuotaPerSecUSec (e.g., "1s", "500ms", "500us", or "infinity").
 
             Returns:
-                str: CPU percentage, or empty if 'infinity'.
+                str: CPU percentage, or 'infinity' or 'unknown' if we can't determine the value.
             """
             try:
                 cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec").strip().lower()
