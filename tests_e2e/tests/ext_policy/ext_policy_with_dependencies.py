@@ -219,6 +219,11 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             log.info("Successfully removed all extensions from VMSS")
             log.info("---------------------------------------------")
 
+        # Disable policy via conf file.
+        for ssh_client in ssh_clients.values():
+            ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+
+
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts
         if self._scenario_start == datetime.min:

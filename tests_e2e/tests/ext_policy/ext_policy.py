@@ -143,35 +143,33 @@ class ExtPolicy(AgentVmTest):
         # CustomScript is a single-config extension.
         custom_script = ExtPolicy.TestCase(
             VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                          resource_name="CustomScript"),
+                                          resource_name="CustomScriptPolicy"),
             {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
         )
 
         # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
         run_command = ExtPolicy.TestCase(
             VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandler"),
+                                          resource_name="RunCommandHandlerPolicy"),
             {'source': f"echo '{str(uuid.uuid4())}'"}
         )
         run_command_2 = ExtPolicy.TestCase(
             VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandler2"),
+                                          resource_name="RunCommandHandlerPolicy2"),
             {'source': f"echo '{str(uuid.uuid4())}'"}
         )
 
         # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
         azure_monitor = ExtPolicy.TestCase(
             VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-                                          resource_name="AzureMonitorLinuxAgent"),
+                                          resource_name="AzureMonitorLinuxAgentPolicy"),
             None
         )
 
         # Another e2e test may have left behind an extension we want to test here. Cleanup any leftovers so that they
         # do not affect the test results.
         log.info("Cleaning up existing extensions on the test VM [%s]", self._context.vm.name)
-        ext_to_cleanup = [custom_script, run_command, run_command_2, azure_monitor]
-        for ext in ext_to_cleanup:
-            ext.extension.delete()
+        self._context.vm.delete_all_extensions()
 
         # Enable policy via conf file
         log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
@@ -264,6 +262,11 @@ class ExtPolicy(AgentVmTest):
         # is not allowed by CRP). So we first delete successfully, and then re-install/enable CustomScript.
         self._operation_should_succeed("delete", custom_script)
         self._operation_should_succeed("enable", custom_script)
+
+        # Disable policy via conf file
+        log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
+        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [

@@ -108,6 +108,22 @@ class VirtualMachineClient(AzureSdkClient):
                 resource_group_name=self.resource_group,
                 vm_name=self.name))
 
+    def delete_all_extensions(self, timeout: int = AzureSdkClient._DEFAULT_TIMEOUT) -> None:
+        """
+        Delete all extensions installed on the virtual machine
+        """
+        extensions_to_delete = self.get_extensions().value
+        for ext in extensions_to_delete:
+            ext_name = ext.name
+            log.info(f"Deleting extension {ext_name} from {self.name}")
+            self._execute_async_operation(
+                lambda: self._compute_client.virtual_machine_extensions.begin_delete(
+                    self.resource_group,
+                    self.name,
+                    ext_name),
+                operation_name=f"Delete extension {ext_name}",
+                timeout=timeout)
+
     def update(self, properties: Dict[str, Any], timeout: int = AzureSdkClient._DEFAULT_TIMEOUT) -> None:
         """
         Updates a set of properties on the virtual machine
