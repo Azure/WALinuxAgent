@@ -15,7 +15,6 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-import os
 
 from azurelinuxagent.common import conf, logger
 from azurelinuxagent.common.event import add_event, WALAEventOperation
