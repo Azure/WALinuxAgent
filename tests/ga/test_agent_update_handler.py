@@ -12,9 +12,8 @@ from azurelinuxagent.common.protocol.restapi import VMAgentUpdateStatuses
 
 from azurelinuxagent.common.protocol.util import ProtocolUtil
 from azurelinuxagent.common.version import CURRENT_VERSION, AGENT_NAME
-from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler, INITIAL_UPDATE_STATE_FILE, \
-    RSM_UPDATE_STATE_FILE
-from azurelinuxagent.ga.guestagent import GuestAgent
+from azurelinuxagent.ga.agent_update_handler import get_agent_update_handler
+from azurelinuxagent.ga.guestagent import GuestAgent, INITIAL_UPDATE_STATE_FILE, RSM_UPDATE_STATE_FILE
 from tests.ga.test_update import UpdateTestCase
 from tests.lib.http_request_predicates import HttpRequestPredicates
 from tests.lib.mock_wire_protocol import mock_wire_protocol, MockHttpResponse

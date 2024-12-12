@@ -25,6 +25,7 @@ from azurelinuxagent.common.exception import AgentUpgradeExitException, AgentUpd
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.ga_version_updater import GAVersionUpdater
+from azurelinuxagent.ga.guestagent import GuestAgentUpdateUtil
 
 
 class SelfUpdateType(object):
@@ -150,7 +151,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         largest_version = self._get_largest_version(self._agent_manifest)
         self._version = largest_version
 
-    def is_retrieved_version_allowed_to_update(self, agent_family, initial_update):
+    def is_retrieved_version_allowed_to_update(self, agent_family):
         """
         we don't allow new version update, if
             1) The version is not greater than current version
@@ -164,7 +165,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
             return False
 
         # very first update need to proceed without any delay
-        if initial_update:
+        if GuestAgentUpdateUtil.is_initial_update():
             return True
 
         if not self._new_agent_allowed_now_to_update():

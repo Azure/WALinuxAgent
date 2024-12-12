@@ -84,7 +84,7 @@ class RSMVersionUpdater(GAVersionUpdater):
         """
         self._version = FlexibleVersion(agent_family.version)
 
-    def is_retrieved_version_allowed_to_update(self, agent_family, initial_update):
+    def is_retrieved_version_allowed_to_update(self, agent_family):
         """
         Once version retrieved from goal state, we check if we allowed to update for that version
         allow update If new version not same as current version, not below than daemon version and if version is from rsm request

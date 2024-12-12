@@ -21,8 +21,7 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import current_thread
 
-from azurelinuxagent.ga.agent_update_handler import INITIAL_UPDATE_STATE_FILE
-from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE
+from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
 from azurelinuxagent.common.exception import HttpError, \
