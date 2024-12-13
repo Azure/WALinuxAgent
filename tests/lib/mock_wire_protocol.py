@@ -15,7 +15,9 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import contextlib
-from azurelinuxagent.common.protocol.wire import WireProtocol
+import os
+from azurelinuxagent.common import conf
+from azurelinuxagent.common.protocol.wire import WireProtocol, TRANSPORT_PRV_FILE_NAME, TRANSPORT_CERT_FILE_NAME
 from azurelinuxagent.common.utils import restutil
 from tests.lib.tools import patch
 from tests.lib import wire_protocol_data
@@ -151,6 +153,9 @@ def mock_wire_protocol(mock_wire_data_file, http_get_handler=None, http_post_han
         protocol.start()
         if detect_protocol:
             protocol.detect(save_to_history=save_to_history)
+        else:
+            # the transport certificate is generated during protocol detection; if we skip detection we still need to generate it
+            protocol.mock_wire_data.mock_gen_trans_cert(os.path.join(conf.get_lib_dir(), TRANSPORT_PRV_FILE_NAME), os.path.join(conf.get_lib_dir(), TRANSPORT_CERT_FILE_NAME))
         yield protocol
     finally:
         protocol.stop()
