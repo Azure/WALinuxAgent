@@ -503,9 +503,8 @@ class ExtHandlersHandler(object):
         depends_on_err_msg = None
         extensions_enabled = conf.get_extensions_enabled()
 
-        # Instantiate policy engine, and use same engine to handle all extension handlers.
-        # If an error is thrown during policy engine initialization, we block all extensions and report the error via handler/extension status for
-        # each extension.
+        # Instantiate policy engine, and use same engine to handle all extension handlers. If an error is thrown during
+        # policy engine initialization, we block all extensions and report the error via handler status for each extension.
         policy_error = None
         try:
             policy_engine = ExtensionPolicyEngine()
@@ -537,11 +536,10 @@ class ExtHandlersHandler(object):
 
             # If an error was thrown during policy engine initialization, skip further processing of the extension.
             # CRP is still waiting for status, so we report error status here.
-            # of the extension.
-            policy_op, policy_err_code = _POLICY_ERROR_MAP.get(ext_handler.state)
+            operation, error_code = _POLICY_ERROR_MAP.get(ext_handler.state)
             if policy_error is not None:
                 msg = "Extension will not be processed: {0}".format(ustr(policy_error))
-                self.__report_policy_error(ext_handler_i=handler_i, error_code=policy_err_code,
+                self.__report_policy_error(ext_handler_i=handler_i, error_code=error_code,
                                            report_op=handler_i.operation, message=msg,
                                            extension=extension)
                 continue
@@ -567,20 +565,18 @@ class ExtHandlersHandler(object):
 
                 continue
 
-            # Invoke policy engine to determine if extension is allowed. If disallowed, report an error on behalf of
-            # the extension and do not process the extension. Dependent extensions will also be blocked.
+            # Invoke policy engine to determine if extension is allowed.
+            # - if allowed: process the extension and get if it was successfully executed or not
+            # - if disallowed: do not process the handler and report an error on behalf of the extension, dependent
+            #                  extensions will also be blocked.
             extension_allowed = policy_engine.should_allow_extension(ext_handler.name)
             if not extension_allowed:
                 msg = (
                     "Extension will not be processed: failed to {0} extension '{1}' because it is not specified "
-                    "in the allowlist. To {0}, add the extension to the allowed list in the policy file ('{2}')."
-                ).format(policy_op, ext_handler.name, conf.get_policy_file_path())
-                self.__report_policy_error(handler_i, policy_err_code, report_op=handler_i.operation,
+                    "in the allowlist. To {0}, add the extension to the list of allowed extensions in the policy file ('{2}')."
+                ).format(operation, ext_handler.name, conf.get_policy_file_path())
+                self.__report_policy_error(handler_i, error_code, report_op=handler_i.operation,
                                            message=msg, extension=extension)
-
-            # Process extensions and get if it was successfully executed or not
-            # If extension was blocked by policy, treat the extension as failed and do not process the handler.
-            if not extension_allowed:
                 extension_success = False
             else:
                 extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
@@ -749,7 +745,7 @@ class ExtHandlersHandler(object):
                       message=message)
 
     @staticmethod
-    def __report_policy_error(ext_handler_i, error_code, report_op, message, extension=None):
+    def __report_policy_error(ext_handler_i, error_code, report_op, message, extension):
         # TODO: Consider merging this function with __handle_and_report_ext_handler_errors() above, after investigating
         # the impact of this change.
         #
@@ -760,13 +756,16 @@ class ExtHandlersHandler(object):
         # it will require additional testing/investigation. As a temporary workaround, this separate function was created
         # to write a status file for single-config extensions.
 
-        # Set handler status for all extensions (with and without settings)
+        # Set handler status for all extensions (with and without settings). We report the same error at both the
+        # handler and extension status level.
         ext_handler_i.set_handler_status(message=message, code=error_code)
 
         # Create status file for extensions with settings (single and multi config).
         # If status file already exists, overwrite it. If an extension was previously reporting status and is now
         # blocked by a policy error, we should report the policy error.
         if extension is not None:
+            # TODO: if extension is reporting a heartbeat, it overwrites status. Consider overwriting heartbeat, if
+            # it exists.
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error_code,
                                              operation=report_op, message=message, overwrite=True)
 
@@ -1071,8 +1070,8 @@ class ExtHandlersHandler(object):
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
-        # We also need to report extension status for an uninstalled handler if extensions are disabled, or if the extension
-        # failed due to policy, because CRP waits for extension runtime status before failing the extension operation.
+        # We also need to report extension status for an uninstalled handler if extensions are disabled, because CRP
+        # waits for extension runtime status before failing the extension operation.
         if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.

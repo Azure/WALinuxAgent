@@ -3536,14 +3536,13 @@ class TestExtensionPolicy(TestExtensionBase):
                 policy_file.write(policy)
             policy_file.flush()
 
-    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count=0,
+    def _test_policy_case(self, policy, op, expected_status_code, expected_handler_status, expected_ext_count,
                              expected_status_msg=None):
 
-        # Set up a mock protocol instance. In the case of uninstall, we need to update the goal state to test uninstall.
-        # update_goal_state() only updates the goal state if incarnation has changed, so we increment the incarnation
-        # number.
+        # Set up a mock protocol instance.
         with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
             if op == ExtensionRequestedState.Uninstall:
+                # Generate a new mock goal state to uninstall the extension - increment the incarnation
                 protocol.mock_wire_data.set_incarnation(2)
                 protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
                 protocol.client.update_goal_state()
@@ -3573,7 +3572,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         expected_msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified in the allowlist."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                          expected_handler_status='NotReady', expected_status_msg=expected_msg)
+                          expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
 
     def test_should_fail_enable_for_invalid_policy(self):
         policy = \
@@ -3585,7 +3584,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         expected_msg = "attribute 'extensionPolicies.allowListedExtensionsOnly'; must be 'boolean'"
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                          expected_handler_status='NotReady', expected_status_msg=expected_msg)
+                          expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
 
     def test_should_fail_extension_if_error_thrown_during_policy_engine_init(self):
         policy = \
@@ -3597,7 +3596,7 @@ class TestExtensionPolicy(TestExtensionBase):
             expected_msg = "Extension will not be processed: mock exception"
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
                                       expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                                      expected_handler_status='NotReady', expected_status_msg=expected_msg)
+                                      expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
 
     def test_should_fail_uninstall_if_extension_disallowed(self):
         policy = \
@@ -3611,7 +3610,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified in the allowlist."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Uninstall, expected_status_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
-                                  expected_handler_status='NotReady', expected_status_msg=expected_msg)
+                                  expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
 
     def test_should_fail_enable_if_dependent_extension_disallowed(self):
         self._create_policy_file({
@@ -3696,10 +3695,7 @@ class TestExtensionPolicy(TestExtensionBase):
         ]
         for policy in policy_cases:
             with mock_wire_protocol(wire_protocol_data.DATA_FILE) as protocol:
-                # Set up a mock protocol instance, which instantiates a goal state with incarnation number 1.
-                # We then change the goal state to test uninstall, and need to update the goal state with this change.
-                # update_goal_state() only updates the goal state if the incarnation has changed, so we increment the
-                # incarnation number to 2.
+                # Generate a new mock goal state to uninstall the extension - increment the incarnation
                 protocol.mock_wire_data.set_incarnation(2)
                 protocol.mock_wire_data.set_extensions_config_state(ExtensionRequestedState.Uninstall)
                 protocol.client.update_goal_state()

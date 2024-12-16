@@ -30,6 +30,8 @@ from tests_e2e.tests.lib.logging import log
 def extension_found_in_agent_status_file(ext_name: str) -> bool:
     # Check if the provided extension name is present in the agent status file, under handlerAggregateStatus.
     # If the name is not present, the uninstall operation was successful.
+    # TODO: a new status file is created for each goal state. To make this a reliable check, make sure to correlate
+    # the status file to the goal state being checked. Alternatively, consider checking waagent.log.
     agent_status_file = "/var/lib/waagent/history/*/waagent_status.json"
     file_paths = glob.glob(agent_status_file, recursive=True)
     for file in file_paths:

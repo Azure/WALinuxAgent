@@ -18,9 +18,12 @@
 #
 
 #
-# This test adds extensions with multiple dependencies to a VMSS using the 'provisionAfterExtensions' property and
-# validates they are enabled in order of dependencies.
+# This test adds extensions with multiple dependencies to a VMSS and checks that extensions fail and report status
+# as expected when blocked by extension policy.
+# Note that this test is currently disabled in daily automation due to status reporting errors that need further investigation.
+# TODO: re-enable this test in daily automation after investigating test failures
 #
+
 import copy
 import json
 import random
@@ -41,6 +44,8 @@ from tests_e2e.tests.ext_policy.policy_dependencies_cases import _should_fail_si
         _should_fail_single_config_depends_on_disallowed_single_config, \
         _should_succeed_single_config_depends_on_no_config, \
         _should_succeed_single_config_depends_on_single_config
+        # TODO: RunCommandHandler is unable to be uninstalled properly, so these tests are currently disabled. Uncomment
+        # the below imports after re-enabling the test.
         # _should_fail_single_config_depends_on_disallowed_multi_config,
         # _should_fail_multi_config_depends_on_disallowed_single_config,
         # _should_fail_multi_config_depends_on_disallowed_no_config,
