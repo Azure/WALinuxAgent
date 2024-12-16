@@ -65,7 +65,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
     @staticmethod
     def _get_next_process_time(upgrade_type, now):
         """
-        Returns random time in between 0 to 24hrs(regular) or 6hrs(hotfix) from now
+        Returns random time in between 0 to 24hrs(regular) or 4hrs(hotfix) from now
         """
         if upgrade_type == SelfUpdateType.Hotfix:
             frequency = conf.get_self_update_hotfix_frequency()
@@ -77,7 +77,7 @@ class SelfUpdateVersionUpdater(GAVersionUpdater):
         """
         This method is called when a new update is detected and computes a random time for the next update on the first call.
         Since the method is called periodically until we reach the next update time, we shouldn't refresh or recompute the next update time on every call.
-        We use default value(datetime.datetime.min) to ensure the computation happens only once. This next_update_time will reset to default value when agent allowed to update.
+        We use default value(datetime.datetime.min) to ensure the computation happens only once. This next_update_time will reset to default value(datetime.min) when agent allowed to update.
         So that, in case the update fails due to an issue, such as a package download error, the same default value used to recompute the next update time.
         """
         now = datetime.datetime.utcnow()
