@@ -1420,11 +1420,10 @@ class ExtHandlerInstance(object):
         # setup the resource limits for extension operations and it's services.
         man = self.load_manifest()
         resource_limits = man.get_resource_limits()
-        if not CGroupConfigurator.get_instance().is_extension_resource_limits_setup_completed(extension_name,
-                                                                                              cpu_quota=resource_limits.get_extension_slice_cpu_quota()):
-            CGroupConfigurator.get_instance().setup_extension_slice(
-                extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
-            CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
+
+        CGroupConfigurator.get_instance().setup_extension_slice(
+            extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
+        CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
     def create_status_file(self, extension, status, code, operation, message, overwrite):
         # Create status file for specified extension. If overwrite is true, overwrite any existing status file. If
@@ -1561,7 +1560,7 @@ class ExtHandlerInstance(object):
         resource_limits = man.get_resource_limits()
         CGroupConfigurator.get_instance().stop_tracking_extension_services_cgroups(
             resource_limits.get_service_list())
-        CGroupConfigurator.get_instance().remove_extension_services_drop_in_files(
+        CGroupConfigurator.get_instance().reset_extension_services_quota(
             resource_limits.get_service_list())
 
         uninstall_cmd = man.get_uninstall_command()
@@ -1587,8 +1586,9 @@ class ExtHandlerInstance(object):
 
                 shutil.rmtree(base_dir, onerror=on_rmtree_error)
 
+            CGroupConfigurator.get_instance().stop_tracking_extension_cgroups(self.get_full_name())
             self.logger.info("Remove the extension slice: {0}".format(self.get_full_name()))
-            CGroupConfigurator.get_instance().remove_extension_slice(
+            CGroupConfigurator.get_instance().reset_extension_quota(
                 extension_name=self.get_full_name())
 
         except IOError as e:

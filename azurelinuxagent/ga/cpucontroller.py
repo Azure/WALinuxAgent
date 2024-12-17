@@ -108,7 +108,7 @@ class _CpuController(_CgroupController):
         """
         raise NotImplementedError()
 
-    def get_tracked_metrics(self, **kwargs):
+    def get_tracked_metrics(self):
         # Note: If the current cpu usage is less than the previous usage (metric is negative), then an empty array will
         # be returned and the agent won't track the metrics.
         tracked = []
@@ -116,15 +116,17 @@ class _CpuController(_CgroupController):
         if cpu_usage >= float(0):
             tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.PROCESSOR_PERCENT_TIME, self.name, cpu_usage))
 
-        if 'track_throttled_time' in kwargs and kwargs['track_throttled_time']:
-            throttled_time = self.get_cpu_throttled_time()
-            if cpu_usage >= float(0) and throttled_time >= float(0):
-                tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
+        throttled_time = self.get_cpu_throttled_time()
+        if cpu_usage >= float(0) and throttled_time >= float(0):
+            tracked.append(MetricValue(MetricsCategory.CPU_CATEGORY, MetricsCounter.THROTTLED_TIME, self.name, throttled_time))
 
         return tracked
 
     def get_unit_properties(self):
         return ["CPUAccounting", "CPUQuotaPerSecUSec"]
+
+    def get_controller_type(self):
+        return "cpu"
 
 
 class CpuControllerV1(_CpuController):

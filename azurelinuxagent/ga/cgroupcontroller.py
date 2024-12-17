@@ -162,7 +162,7 @@ class _CgroupController(object):
                                  ' Internal error: {1}'.format(self.path, ustr(e)))
         return False
 
-    def get_tracked_metrics(self, **_):
+    def get_tracked_metrics(self):
         """
         Retrieves the current value of the metrics tracked for this controller/cgroup and returns them as an array.
         """
@@ -171,5 +171,11 @@ class _CgroupController(object):
     def get_unit_properties(self):
         """
         Returns a list of the unit properties to collect for the controller.
+        """
+        raise NotImplementedError()
+
+    def get_controller_type(self):
+        """
+        Returns the type of the controller. Example: CPU, Memory, etc.
         """
         raise NotImplementedError()

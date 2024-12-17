@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Microsoft Azure Linux Agent
 #
 # Copyright 2018 Microsoft Corporation
@@ -16,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import threading
 from subprocess import Popen, PIPE
 from typing import Any
 
@@ -46,9 +46,16 @@ def run_command(command: Any, shell=False) -> str:
     NOTE: The command's stdout and stderr are read as text streams.
     """
     process = Popen(command, stdout=PIPE, stderr=PIPE, shell=shell, text=True)
+    timer = threading.Timer(15 * 60, process.kill)  # Kill process after timeout
+    timer.start()
+    try:
+        stdout, stderr = process.communicate()
+    finally:
+        timer.cancel()
 
-    stdout, stderr = process.communicate()
-
+    if process.returncode == -9:
+        stderr =  "The process was killed due to command timeout\n" + stderr
+        raise CommandError(command, process.returncode, stdout, stderr)
     if process.returncode != 0:
         raise CommandError(command, process.returncode, stdout, stderr)
 

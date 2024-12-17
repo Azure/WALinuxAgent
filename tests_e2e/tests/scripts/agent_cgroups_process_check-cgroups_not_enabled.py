@@ -22,7 +22,7 @@
 from assertpy import fail
 
 from azurelinuxagent.common.utils import shellutil
-from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, check_log_message
+from tests_e2e.tests.lib.cgroup_helpers import check_agent_quota_disabled, check_log_message, get_agent_cpu_quota
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
 
@@ -48,7 +48,8 @@ def verify_agent_cgroups_not_enabled():
 
     disabled: bool = retry_if_false(check_agent_quota_disabled)
     if not disabled:
-        fail("The agent failed to disable its CPUQuota when cgroups were not enabled")
+        fail("The agent failed to disable its CPUQuota when cgroups were not enabled. Current CPUQuota: {0}".format(get_agent_cpu_quota()))
+
 
 
 def main():

@@ -66,7 +66,7 @@ class Cgroupv2Disabled(AgentVmTest):
         # Verify that the agent does not support cgroup v2
         log.info("")
         log.info("Checking that the agent does not use cgroup v2 for resource enforcement and monitoring...")
-        self.check_agent_log_contains('Agent and extensions resource monitoring is not currently supported on cgroup v2',
+        self.check_agent_log_contains('Agent and extensions resource enforcement and monitoring is not currently supported on cgroup v2',
                                       'The agent should not attempt to use cgroup v2 for resource enforcement and monitoring')
         self.check_agent_log_contains('Agent cgroups enabled: False',
                                       'The agent should not enable cgroups when system is using v2')

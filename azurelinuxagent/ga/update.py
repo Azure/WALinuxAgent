@@ -324,6 +324,7 @@ class UpdateHandler(object):
                 u"Python: {py_major}.{py_minor}.{py_micro}; "\
                 u"Arch: {vm_arch}; "\
                 u"systemd: {systemd}; "\
+                u"systemd_version: {systemd_version}; "\
                 u"LISDrivers: {lis_ver}; "\
                 u"logrotate: {has_logrotate};".format(
                     dist_name=DISTRO_NAME, dist_ver=DISTRO_VERSION,
@@ -331,6 +332,7 @@ class UpdateHandler(object):
                     service_name=self.osutil.service_name,
                     py_major=PY_VERSION_MAJOR, py_minor=PY_VERSION_MINOR,
                     py_micro=PY_VERSION_MICRO, vm_arch=vm_arch, systemd=systemd.is_systemd(),
+                    systemd_version=systemd.get_version(),
                     lis_ver=get_lis_version(), has_logrotate=has_logrotate()
                 )
             logger.info(os_info_msg)

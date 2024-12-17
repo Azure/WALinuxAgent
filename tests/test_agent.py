@@ -310,13 +310,13 @@ class TestAgent(AgentTestCase):
             mock_log_collector.run = Mock()
 
             # Mock cgroup api to raise CGroupsException
-            def mock_get_cgroup_api():
+            def mock_create_cgroup_api():
                 raise CGroupsException("")
 
             def raise_on_sys_exit(*args):
                 raise RuntimeError(args[0] if args else "Exiting")
 
-            with patch("azurelinuxagent.agent.get_cgroup_api", side_effect=mock_get_cgroup_api):
+            with patch("azurelinuxagent.agent.create_cgroup_api", side_effect=mock_create_cgroup_api):
                 agent = Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
 
                 with patch("sys.exit", side_effect=raise_on_sys_exit) as mock_exit:
@@ -398,7 +398,7 @@ class TestAgent(AgentTestCase):
         finally:
             CollectLogsHandler.disable_monitor_cgroups_check()
 
-    @patch('azurelinuxagent.agent.get_cgroup_api', side_effect=InvalidCgroupMountpointException("Test"))
+    @patch('azurelinuxagent.agent.create_cgroup_api', side_effect=InvalidCgroupMountpointException("Test"))
     @patch("azurelinuxagent.agent.LogCollector")
     def test_doesnt_call_collect_logs_on_non_systemd_cgroups_v1_mountpoints(self, mock_log_collector, _):
         try:

@@ -43,7 +43,13 @@ def get_version():
     #    systemd 245 (245.4-4ubuntu3)
     #    +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP etc
     #
-    return shellutil.run_command(['systemctl', '--version'])
+    # return fist line systemd 245 (245.4-4ubuntu3)
+    try:
+        output = shellutil.run_command(['systemctl', '--version'])
+        version = output.split('\n')[0]
+        return version
+    except Exception:
+        return "unknown"
 
 
 def get_unit_file_install_path():
@@ -84,3 +90,44 @@ def get_unit_property(unit_name, property_name):
         raise ValueError("Can't find property {0} of {1}".format(property_name, unit_name))
     return match.group('value')
 
+
+def set_unit_run_time_property(unit_name, property_name, value):
+    """
+    Set a property of a unit at runtime
+
+    Note: --runtime settings only apply until the next reboot
+    """
+    try:
+        # Ex: systemctl set-property foobar.service CPUWeight=200 --runtime
+        shellutil.run_command(["systemctl", "set-property", unit_name, "{0}={1}".format(property_name, value), "--runtime"])
+    except shellutil.CommandError as e:
+        raise ValueError("Can't set property {0} of {1}: {2}".format(property_name, unit_name, e))
+
+
+def set_unit_run_time_properties(unit_name, property_names, values):
+    """
+    Set multiple properties of a unit at runtime
+
+    Note: --runtime settings only apply until the next reboot
+    """
+    if len(property_names) != len(values):
+        raise ValueError("The number of property names:{0} and values:{1} must be the same".format(property_names, values))
+
+    properties = ["{0}={1}".format(name, value) for name, value in zip(property_names, values)]
+
+    try:
+        # Ex: systemctl set-property foobar.service CPUWeight=200 MemoryMax=2G IPAccounting=yes --runtime
+        shellutil.run_command(["systemctl", "set-property", unit_name] + properties + ["--runtime"])
+    except shellutil.CommandError as e:
+        raise ValueError("Can't set properties {0} of {1}: {2}".format(properties, unit_name, e))
+
+
+def is_unit_loaded(unit_name):
+    """
+    Determine if a unit is loaded
+    """
+    try:
+        value = get_unit_property(unit_name, "LoadState")
+        return value.lower() == "loaded"
+    except shellutil.CommandError:
+        return False

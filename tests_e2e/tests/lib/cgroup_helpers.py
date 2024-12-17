@@ -5,9 +5,10 @@ import re
 from assertpy import assert_that, fail
 
 from azurelinuxagent.common.osutil import systemd
-from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils import shellutil, fileutil
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api, SystemdCgroupApiv1
+from azurelinuxagent.ga.cgroupapi import create_cgroup_api, SystemdCgroupApiv1
+from azurelinuxagent.ga.cpucontroller import CpuControllerV1, CpuControllerV2
 from tests_e2e.tests.lib.agent_log import AgentLog
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.retry import retry_if_false
@@ -138,9 +139,10 @@ def check_agent_quota_disabled():
     Returns True if the cpu quota is infinity
     """
     cpu_quota = get_agent_cpu_quota()
+    log.info(cpu_quota)
     # the quota can be expressed as seconds (s) or milliseconds (ms); no quota is expressed as "infinity"
-    return cpu_quota == 'infinity'
-
+    # Ubuntu 16 has an issue in expressing no quota as "infinity" https://github.com/systemd/systemd/issues/5965, so we are directly checking the quota value in cpu controller
+    return cpu_quota == 'infinity' or get_unit_cgroup_cpu_quota_disabled(AGENT_SERVICE_NAME)
 
 def check_cgroup_disabled_with_unknown_process():
     """
@@ -166,10 +168,31 @@ def get_unit_cgroup_proc_path(unit_name, controller):
     """
     Returns the cgroup.procs path for the given unit and controller.
     """
-    cgroups_api = get_cgroup_api()
+    cgroups_api = create_cgroup_api()
     unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
     if isinstance(cgroups_api, SystemdCgroupApiv1):
         return unit_cgroup.get_controller_procs_path(controller=controller)
     else:
         return unit_cgroup.get_procs_path()
 
+def get_unit_cgroup_cpu_quota_disabled(unit_name):
+    """
+    Returns True if cpu quota not set for the given unit cgroup
+    """
+    cgroups_api = create_cgroup_api()
+    unit_cgroup = cgroups_api.get_unit_cgroup(unit_name=unit_name, cgroup_name="test cgroup")
+    controllers = unit_cgroup.get_controllers()
+    for controller in controllers:
+        if isinstance(controller, CpuControllerV1):
+            path = os.path.join(controller.path, "cpu.cfs_quota_us")
+            log.info("Checking cpu.cfs_quota_us file: {0}".format(path))
+            val = fileutil.read_file(path).strip()
+            return val == "-1" # -1 means no quota
+        elif isinstance(controller, CpuControllerV2):
+            # /sys/fs/cgroup/system.slice/cron.service$ cat cpu.max
+            # max 100000
+            path = os.path.join(controller.path, "cpu.max")
+            log.info("Checking cpu.cfs_quota_us file: {0}".format(path))
+            val = fileutil.read_file(path).split()[0]
+            return val == "max" # max means no quota
+    return False

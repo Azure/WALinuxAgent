@@ -59,7 +59,7 @@ class CGroupUtil(object):
     Cgroup utility methods which are independent of systemd cgroup api.
     """
     @staticmethod
-    def cgroups_supported():
+    def distro_supported():
         distro_info = get_distro()
         distro_name = distro_info[0]
         try:
@@ -149,7 +149,7 @@ class InvalidCgroupMountpointException(CGroupsException):
         super(InvalidCgroupMountpointException, self).__init__(msg)
 
 
-def get_cgroup_api():
+def create_cgroup_api():
     """
     Determines which version of Cgroup should be used for resource enforcement and monitoring by the Agent and returns
     the corresponding Api.
@@ -172,7 +172,6 @@ def get_cgroup_api():
     root_hierarchy_mode = shellutil.run_command(["stat", "-f", "--format=%T", CGROUP_FILE_SYSTEM_ROOT]).rstrip()
 
     if root_hierarchy_mode == "cgroup2fs":
-        log_cgroup_info("Using cgroup v2 for resource enforcement and monitoring")
         return SystemdCgroupApiv2()
 
     elif root_hierarchy_mode == "tmpfs":
@@ -192,7 +191,6 @@ def get_cgroup_api():
         # mounted in a location other than the systemd default, raise Exception.
         if not cgroup_api_v1.are_mountpoints_systemd_created():
             raise InvalidCgroupMountpointException("Expected cgroup controllers to be mounted at '{0}', but at least one is not. v1 mount points: \n{1}".format(CGROUP_FILE_SYSTEM_ROOT, json.dumps(cgroup_api_v1.get_controller_mountpoints())))
-        log_cgroup_info("Using cgroup v1 for resource enforcement and monitoring")
         return cgroup_api_v1
 
     raise CGroupsException("{0} has an unexpected file type: {1}".format(CGROUP_FILE_SYSTEM_ROOT, root_hierarchy_mode))
@@ -205,6 +203,12 @@ class _SystemdCgroupApi(object):
     def __init__(self):
         self._systemd_run_commands = []
         self._systemd_run_commands_lock = threading.RLock()
+
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return NotImplementedError()
 
     def get_systemd_run_commands(self):
         """
@@ -296,6 +300,12 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
                 if controller is not None and path is not None and controller in CgroupV1.get_supported_controller_names():
                     mount_points[controller] = path
         return mount_points
+
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return "v1"
 
     def get_controller_mountpoints(self):
         """
@@ -479,6 +489,12 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                     return root_cgroup_path
         return ""
 
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return "v2"
+
     def get_root_cgroup_path(self):
         """
         Returns the unified cgroup mountpoint.
@@ -650,8 +666,6 @@ class CgroupV1(Cgroup):
                 controller = MemoryControllerV1(self._cgroup_name, controller_path)
 
             if controller is not None:
-                msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
-                log_cgroup_info(msg)
                 controllers.append(controller)
 
         return controllers
@@ -729,8 +743,6 @@ class CgroupV2(Cgroup):
                 controller = MemoryControllerV2(self._cgroup_name, self._cgroup_path)
 
             if controller is not None:
-                msg = "{0} controller for cgroup: {1}".format(supported_controller_name, controller)
-                log_cgroup_info(msg)
                 controllers.append(controller)
 
         return controllers

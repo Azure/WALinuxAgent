@@ -7,6 +7,7 @@ import contextlib
 import glob
 import json
 import os
+import random
 import re
 import shutil
 import stat
@@ -20,8 +21,7 @@ import zipfile
 from datetime import datetime, timedelta
 from threading import current_thread
 
-from azurelinuxagent.ga.agent_update_handler import INITIAL_UPDATE_STATE_FILE
-from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE
+from azurelinuxagent.ga.guestagent import GuestAgent, GuestAgentError, AGENT_ERROR_FILE, INITIAL_UPDATE_STATE_FILE
 from azurelinuxagent.common import conf
 from azurelinuxagent.common.logger import LogLevel
 from azurelinuxagent.common.event import EVENTS_DIRECTORY, WALAEventOperation
@@ -1327,7 +1327,7 @@ class TestAgentUpgrade(UpdateTestCase):
 
     @contextlib.contextmanager
     def __get_update_handler(self, iterations=1, test_data=None,
-                             reload_conf=None, autoupdate_frequency=0.001, hotfix_frequency=1.0, normal_frequency=2.0, initial_update_attempted=True):
+                             reload_conf=None, autoupdate_frequency=0.001, hotfix_frequency=10, normal_frequency=10, initial_update_attempted=True, mock_random_update_time=True):
 
         if initial_update_attempted:
             open(os.path.join(conf.get_lib_dir(), INITIAL_UPDATE_STATE_FILE), "a").close()
@@ -1355,11 +1355,22 @@ class TestAgentUpgrade(UpdateTestCase):
                 protocol.aggregate_status = json.loads(args[0])
                 return MockHttpResponse(status=201)
 
+            original_randint = random.randint
+
+            def _mock_random_update_time(a, b):
+                if mock_random_update_time:
+                    return 0
+                if b == 1:  # some tests mock normal/hotfix frequency to 1 second, return 0.001 to avoid long delay and still test the logic
+                    return 0.001
+                return original_randint(a, b)
+
             protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
             with self.create_conf_mocks(autoupdate_frequency, hotfix_frequency, normal_frequency):
-                with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
-                    update_handler._protocol = protocol
-                    yield update_handler, mock_telemetry
+                with patch("azurelinuxagent.ga.self_update_version_updater.random.randint",
+                           side_effect=_mock_random_update_time):
+                    with patch("azurelinuxagent.common.event.EventLogger.add_event") as mock_telemetry:
+                        update_handler._protocol = protocol
+                        yield update_handler, mock_telemetry
 
     def __assert_exit_code_successful(self, update_handler):
         self.assertEqual(0, update_handler.get_exit_code(), "Exit code should be 0")
@@ -1606,8 +1617,7 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file = wire_protocol_data.DATA_FILE.copy()
         # This is to fail the agent update at first attempt so that agent doesn't go through update
         data_file["ga_manifest"] = "wire/ga_manifest_no_uris.xml"
-        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
-                                       hotfix_frequency=10, normal_frequency=10) as (update_handler, _):
+        with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf, mock_random_update_time=False) as (update_handler, _):
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1646,7 +1656,7 @@ class TestAgentUpgrade(UpdateTestCase):
         data_file = wire_protocol_data.DATA_FILE.copy()
         data_file["ga_manifest"] = "wire/ga_manifest_no_uris.xml"
         with self.__get_update_handler(iterations=no_of_iterations, test_data=data_file, reload_conf=reload_conf,
-                                       hotfix_frequency=0.001, normal_frequency=0.001) as (update_handler, mock_telemetry):
+                                       hotfix_frequency=1, normal_frequency=1, mock_random_update_time=False) as (update_handler, mock_telemetry):
             update_handler._protocol.mock_wire_data.set_incarnation(2)
             update_handler.run(debug=True)
 
@@ -1805,7 +1815,7 @@ class MonitorThreadTest(AgentTestCase):
                         with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                             with patch('azurelinuxagent.ga.agent_update_handler.get_agent_update_handler'):
                                 with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters_and_protocol'):
-                                    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.distro_supported', return_value=False):  # skip all cgroup stuff
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                             with patch('time.sleep'):
                                                 with patch('sys.exit'):
