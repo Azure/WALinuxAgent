@@ -214,6 +214,7 @@ class CGroupConfigurator(object):
 
             try:
                 self._cgroups_api = create_cgroup_api()
+                log_cgroup_info("Using cgroup {0} for resource enforcement and monitoring".format(self._cgroups_api.get_cgroup_version()))
             except InvalidCgroupMountpointException as e:
                 # Systemd mounts the cgroup file system at '/sys/fs/cgroup'. Previously, the agent supported cgroup
                 # usage if a user mounted the cgroup filesystem elsewhere. The agent no longer supports that
@@ -229,11 +230,9 @@ class CGroupConfigurator(object):
                 return False
 
             if self.using_cgroup_v2():
-                log_cgroup_info("Using cgroup v2 for resource enforcement and monitoring")
                 log_cgroup_info("Agent and extensions resource enforcement and monitoring is not currently supported on cgroup v2", send_event=True)
                 return False
-            else:
-                log_cgroup_info("Using cgroup v1 for resource enforcement and monitoring")
+
             return True
 
         @staticmethod

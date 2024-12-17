@@ -217,6 +217,7 @@ class Agent(object):
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
             try:
                 cgroup_api = create_cgroup_api()
+                logger.info("Using cgroup {0} for resource enforcement and monitoring".format(cgroup_api.get_cgroup_version()))
             except InvalidCgroupMountpointException as e:
                 event.warn(WALAEventOperation.LogCollection, "The agent does not support cgroups if the default systemd mountpoint is not being used: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)

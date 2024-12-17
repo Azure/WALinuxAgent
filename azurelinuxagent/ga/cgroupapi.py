@@ -204,6 +204,12 @@ class _SystemdCgroupApi(object):
         self._systemd_run_commands = []
         self._systemd_run_commands_lock = threading.RLock()
 
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return NotImplementedError()
+
     def get_systemd_run_commands(self):
         """
         Returns a list of the systemd-run commands currently running (given as PIDs)
@@ -294,6 +300,12 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
                 if controller is not None and path is not None and controller in CgroupV1.get_supported_controller_names():
                     mount_points[controller] = path
         return mount_points
+
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return "v1"
 
     def get_controller_mountpoints(self):
         """
@@ -476,6 +488,12 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
                 if root_cgroup_path is not None:
                     return root_cgroup_path
         return ""
+
+    def get_cgroup_version(self):
+        """
+        Returns the version of the cgroup hierarchy in use.
+        """
+        return "v2"
 
     def get_root_cgroup_path(self):
         """
