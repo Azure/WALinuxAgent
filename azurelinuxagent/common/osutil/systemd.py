@@ -17,7 +17,6 @@
 #
 import os
 import re
-from logging import exception
 
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
@@ -49,7 +48,7 @@ def get_version():
         output = shellutil.run_command(['systemctl', '--version'])
         version = output.split('\n')[0]
         return version
-    except:
+    except Exception:
         return "unknown"
 
 
