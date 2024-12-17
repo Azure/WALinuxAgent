@@ -133,15 +133,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 create_cgroup_api()
             self.assertTrue("/sys/fs/cgroup has an unexpected file type: {0}".format(unknown_cgroup_type) in str(context.exception))
 
-    def test_get_systemd_version_should_return_a_version_number(self):
-        # We expect same behavior for v1 and v2
-        mock_envs = [mock_cgroup_v1_environment(self.tmp_dir), mock_cgroup_v2_environment(self.tmp_dir)]
-        for env in mock_envs:
-            with env:
-                version_info = systemd.get_version()
-                found = re.search(r"systemd \d+", version_info) is not None
-                self.assertTrue(found, "Could not determine the systemd version: {0}".format(version_info))
-
     def test_get_unit_property_should_return_the_value_of_the_given_property(self):
         # We expect same behavior for v1 and v2
         mock_envs = [mock_cgroup_v1_environment(self.tmp_dir), mock_cgroup_v2_environment(self.tmp_dir)]

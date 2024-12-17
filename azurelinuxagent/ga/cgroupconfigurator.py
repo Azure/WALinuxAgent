@@ -497,7 +497,7 @@ class CGroupConfigurator(object):
             over this setting.
             """
             quota_percentage = "{0}%".format(quota)
-            log_cgroup_info("Setting {0}'s CPUQuota is {1}".format(unit_name, quota_percentage))
+            log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(unit_name, quota_percentage))
             CGroupConfigurator._Impl._try_set_cpu_quota(unit_name, quota_percentage)
 
         @staticmethod
@@ -629,7 +629,7 @@ class CGroupConfigurator(object):
                     if current == 0 and not (self._is_process_descendant_of_the_agent(process) or self._is_zombie_process(process)):
                         current_unexpected[process] = self._format_process(process)
                 if report_immediately:
-                    report = [current_unexpected[process] for process in current_unexpected]
+                    report = current_unexpected.values()
                 else:
                     for process in current_unexpected:
                         if process in self._unexpected_processes:
@@ -904,7 +904,7 @@ class CGroupConfigurator(object):
                         if cpu_quota == "infinity":
                             log_cgroup_info("CPUQuota not set for {0}".format(extension_name))
                         else:
-                            log_cgroup_info("Setting {0}'s CPUQuota is {1}".format(extension_name, cpu_quota))
+                            log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(extension_name, cpu_quota))
 
                         log_cgroup_info("Setting up the resource properties: {0} for {1}".format(properties_to_update, extension_slice))
                         systemd.set_unit_run_time_properties(extension_slice, properties_to_update, properties_values)
@@ -955,7 +955,7 @@ class CGroupConfigurator(object):
                         # If systemd is unaware of extension services and not loaded in the system yet, we get error while setting quotas. Hence, added unit loaded check.
                         if systemd.is_unit_loaded(service_name) and len(properties_to_update) > 0:
                             if cpu_quota != "infinity":
-                                log_cgroup_info("Setting {0}'s CPUQuota is {1}".format(service_name, cpu_quota))
+                                log_cgroup_info("Setting {0}'s CPUQuota to {1}".format(service_name, cpu_quota))
                             else:
                                 log_cgroup_info("CPUQuota not set for {0}".format(service_name))
                             log_cgroup_info("Setting up resource properties: {0} for {1}" .format(properties_to_update, service_name))

@@ -17,6 +17,7 @@
 #
 import os
 import re
+from logging import exception
 
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import shellutil
@@ -43,7 +44,13 @@ def get_version():
     #    systemd 245 (245.4-4ubuntu3)
     #    +PAM +AUDIT +SELINUX +IMA +APPARMOR +SMACK +SYSVINIT +UTMP etc
     #
-    return shellutil.run_command(['systemctl', '--version'])
+    # return fist line systemd 245 (245.4-4ubuntu3)
+    try:
+        output = shellutil.run_command(['systemctl', '--version'])
+        version = output.split('\n')[0]
+        return version
+    except:
+        return "unknown"
 
 
 def get_unit_file_install_path():

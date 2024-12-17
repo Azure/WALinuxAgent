@@ -47,9 +47,8 @@ def run_command(command: Any, shell=False) -> str:
     """
     process = Popen(command, stdout=PIPE, stderr=PIPE, shell=shell, text=True)
     timer = threading.Timer(15 * 60, process.kill)  # Kill process after timeout
-
+    timer.start()
     try:
-        timer.start()
         stdout, stderr = process.communicate()
     finally:
         timer.cancel()
