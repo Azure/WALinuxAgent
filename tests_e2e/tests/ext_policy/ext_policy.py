@@ -148,6 +148,8 @@ class ExtPolicy(AgentVmTest):
         )
 
         # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
+        # We append the resource name with "Policy" because agent_bvt/run_command.py leaves behind a "RunCommandHandler"
+        # that cannot be deleted via extensions API.
         run_command = ExtPolicy.TestCase(
             VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
                                           resource_name="RunCommandHandlerPolicy"),
@@ -243,7 +245,7 @@ class ExtPolicy(AgentVmTest):
             }
         self._create_policy_file(policy)
         self._operation_should_fail("enable", custom_script)
-        # self._operation_should_fail("delete", custom_script)
+        self._operation_should_fail("delete", custom_script)
 
         # This policy tests the following scenario:
         # - allow a previously-disallowed single-config extension (CustomScript), then delete -> should succeed
@@ -264,9 +266,9 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("enable", custom_script)
 
         # Cleanup after test: delete leftover extensions and disable policy enforcement in conf file.
-        self._operation_should_succeed("delete", custom_script)
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+        self._context.vm.delete_all_extensions()
 
 
 
