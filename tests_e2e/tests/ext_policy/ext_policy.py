@@ -84,9 +84,9 @@ class ExtPolicy(AgentVmTest):
 
     def _operation_should_fail(self, operation, extension_case):
         log.info("")
-        log.info(f"Attempting to {operation} {extension_case.extension}, should fail fast.")
         if operation == "enable":
             try:
+                log.info(f"Attempting to enable {extension_case.extension}, should fail fast.")
                 timeout = (6 * 60)  # Fail fast.
                 # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
                 if type(extension_case.extension) == VirtualMachineRunCommandClient:
@@ -108,6 +108,7 @@ class ExtPolicy(AgentVmTest):
             # Delete is a best effort operation and should not fail, so CRP will timeout instead of reporting the
             # appropriate error. We swallow the timeout error, and instead, assert that the extension is still in the
             # instance view and that the expected error is in the agent log to confirm that deletion failed.
+            log.info(f"Attempting to delete {extension_case.extension}, should reach timeout.")
             delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
                 # TODO: consider checking the agent's log asynchronously to confirm that the uninstall failed instead of
@@ -171,6 +172,7 @@ class ExtPolicy(AgentVmTest):
         # Another e2e test may have left behind an extension we want to test here. Cleanup any leftovers so that they
         # do not affect the test results.
         log.info("Cleaning up existing extensions on the test VM [%s]", self._context.vm.name)
+        # TODO: Consider deleting only extensions used by this test instead of all extensions.
         self._context.vm.delete_all_extensions()
 
         # Enable policy via conf file
@@ -199,8 +201,7 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("enable", custom_script)
         self._operation_should_fail("enable", run_command)
         self._operation_should_fail("enable", run_command_2)
-        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
-            self._operation_should_fail("enable", azure_monitor)
+        self._operation_should_fail("enable", azure_monitor)
 
         # This policy tests the following scenarios:
         # - enable two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed
@@ -268,6 +269,7 @@ class ExtPolicy(AgentVmTest):
         # Cleanup after test: delete leftover extensions and disable policy enforcement in conf file.
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+        # TODO: Consider deleting only extensions used by this test instead of all extensions.
         self._context.vm.delete_all_extensions()
 
 
@@ -277,7 +279,7 @@ class ExtPolicy(AgentVmTest):
             # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension will not be processed: failed to run extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because it is not specified in the allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
             # We intentionally block extensions with policy and expect this failure message
             {
-                'message': r"Extension will not be processed: failed to .* extension .* because it is not specified in the allowlist"
+                'message': r"Extension will not be processed: failed to .* extension .* because it is not specified as an allowed extension"
             }
         ]
         return ignore_rules

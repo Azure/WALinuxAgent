@@ -531,7 +531,8 @@ class ExtHandlersHandler(object):
                                              status=ExtensionStatusValue.error,
                                              code=-1,
                                              operation=handler_i.operation,
-                                             message=msg)
+                                             message=msg,
+                                             overwrite=False)
                 continue
 
             # If an error was thrown during policy engine initialization, skip further processing of the extension.
@@ -540,7 +541,7 @@ class ExtHandlersHandler(object):
             if policy_error is not None:
                 msg = "Extension will not be processed: {0}".format(ustr(policy_error))
                 self.__report_policy_error(ext_handler_i=handler_i, error_code=error_code,
-                                           report_op=handler_i.operation, message=msg,
+                                           report_op=WALAEventOperation.ExtensionPolicy, message=msg,
                                            extension=extension)
                 continue
 
@@ -557,7 +558,7 @@ class ExtHandlersHandler(object):
 
                     handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=-1,
                                                  operation=WALAEventOperation.ExtensionProcessing,
-                                                 message=depends_on_err_msg)
+                                                 message=depends_on_err_msg, overwrite=False)
 
                 # For SC extensions, overwrite the HandlerStatus with the relevant message
                 else:
@@ -573,9 +574,9 @@ class ExtHandlersHandler(object):
             if not extension_allowed:
                 msg = (
                     "Extension will not be processed: failed to {0} extension '{1}' because it is not specified "
-                    "in the allowlist. To {0}, add the extension to the list of allowed extensions in the policy file ('{2}')."
+                    "as an allowed extension. To {0}, add the extension to the list of allowed extensions in the policy file ('{2}')."
                 ).format(operation, ext_handler.name, conf.get_policy_file_path())
-                self.__report_policy_error(handler_i, error_code, report_op=handler_i.operation,
+                self.__report_policy_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy,
                                            message=msg, extension=extension)
                 extension_success = False
             else:
@@ -695,7 +696,7 @@ class ExtHandlersHandler(object):
             # Since these are maintained by the extensions, the expectation here is that they would update their status files appropriately with their errors.
             # The extensions should already have a placeholder status file, but incase they dont, setting one here to fail fast.
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error.code,
-                                             operation=ext_handler_i.operation, message=err_msg)
+                                             operation=ext_handler_i.operation, message=err_msg, overwrite=False)
             add_event(name=ext_name, version=ext_handler_i.ext_handler.version, op=ext_handler_i.operation,
                       is_success=False, log_event=True, message=err_msg)
         except ExtensionsGoalStateError as error:
@@ -736,7 +737,7 @@ class ExtHandlersHandler(object):
         # This way we guarantee reporting back to CRP
         if ext_handler_i.should_perform_multi_config_op(extension):
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error.code,
-                                             operation=report_op, message=message)
+                                             operation=report_op, message=message, overwrite=False)
 
         if report:
             name = ext_handler_i.get_extension_full_name(extension)
@@ -1425,7 +1426,7 @@ class ExtHandlerInstance(object):
                 extension_name=extension_name, cpu_quota=resource_limits.get_extension_slice_cpu_quota())
             CGroupConfigurator.get_instance().set_extension_services_cpu_memory_quota(resource_limits.get_service_list())
 
-    def create_status_file(self, extension, status, code, operation, message, overwrite=False):
+    def create_status_file(self, extension, status, code, operation, message, overwrite):
         # Create status file for specified extension. If overwrite is true, overwrite any existing status file. If
         # false, create a status file only if it does not already exist.
         _, status_path = self.get_status_file_path(extension)

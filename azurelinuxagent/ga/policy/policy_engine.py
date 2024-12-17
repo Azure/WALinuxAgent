@@ -54,6 +54,7 @@ class _PolicyEngine(object):
         if not self.policy_enforcement_enabled:
             return
 
+        _PolicyEngine._log_policy_event("Policy enforcement is enabled.")
         self._policy = self._parse_policy(self.__read_policy())
 
     @staticmethod
@@ -91,8 +92,10 @@ class _PolicyEngine(object):
         with open(conf.get_policy_file_path(), 'r') as f:
             try:
                 contents = f.read()
+                # TODO: Consider copying the policy file contents to the history folder, and only log the policy locally
+                # in the case of policy-related failure.
                 _PolicyEngine._log_policy_event(
-                    "Policy enforcement is enabled. Enforcing policy using policy file found at '{0}'. File contents:\n{1}"
+                    "Enforcing policy using policy file found at '{0}'. File contents:\n{1}"
                     .format(conf.get_policy_file_path(), contents))
                 # json.loads will raise error if file contents are not a valid json (including empty file).
                 custom_policy = json.loads(contents)

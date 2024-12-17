@@ -3570,7 +3570,7 @@ class TestExtensionPolicy(TestExtensionBase):
                     "allowListedExtensionsOnly": True,
                }
             }
-        expected_msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified in the allowlist."
+        expected_msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
                           expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
 
@@ -3608,7 +3608,7 @@ class TestExtensionPolicy(TestExtensionBase):
                     "extensions": {}
                 },
             }
-        expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified in the allowlist."
+        expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Uninstall, expected_status_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
                                   expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
 
@@ -3637,7 +3637,7 @@ class TestExtensionPolicy(TestExtensionBase):
             self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=0,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
                                         expected_msg=("failed to run extension 'OSTCExtensions.OtherExampleHandlerLinux' "
-                                                      "because it is not specified in the allowlist."))
+                                                      "because it is not specified as an allowed extension."))
 
             self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=0,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.ExampleHandlerLinux",
