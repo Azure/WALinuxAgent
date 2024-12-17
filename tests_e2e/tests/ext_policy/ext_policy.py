@@ -150,12 +150,12 @@ class ExtPolicy(AgentVmTest):
         # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
         run_command = ExtPolicy.TestCase(
             VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandler"),
+                                          resource_name="RunCommandHandlerPolicy"),
             {'source': f"echo '{str(uuid.uuid4())}'"}
         )
         run_command_2 = ExtPolicy.TestCase(
             VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandler2"),
+                                          resource_name="RunCommandHandlerPolicy2"),
             {'source': f"echo '{str(uuid.uuid4())}'"}
         )
 
@@ -168,10 +168,8 @@ class ExtPolicy(AgentVmTest):
 
         # Another e2e test may have left behind an extension we want to test here. Cleanup any leftovers so that they
         # do not affect the test results.
-        extensions_to_test = [custom_script, run_command, run_command_2, azure_monitor]
         log.info("Cleaning up existing extensions on the test VM [%s]", self._context.vm.name)
-        for ext_case in extensions_to_test:
-            ext_case.extension.delete()
+        self._context.vm.delete_all_extensions()
 
         # Enable policy via conf file
         log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
@@ -265,12 +263,11 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("delete", custom_script)
         self._operation_should_succeed("enable", custom_script)
 
-        # Cleanup after test: disable policy enforcement in conf file, and delete any leftover extensions.
+        # Cleanup after test: delete leftover extensions and disable policy enforcement in conf file.
+        self._operation_should_succeed("delete", custom_script)
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
-        log.info("Test completed. Cleaning up leftover extensions on the test VM [%s]", self._context.vm.name)
-        for ext_case in extensions_to_test:
-            ext_case.extension.delete()
+
 
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
