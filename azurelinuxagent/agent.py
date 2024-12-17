@@ -34,7 +34,7 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.ga import logcollector, cgroupconfigurator
 from azurelinuxagent.ga.cgroupcontroller import AGENT_LOG_COLLECTOR
 from azurelinuxagent.ga.cpucontroller import _CpuController
-from azurelinuxagent.ga.cgroupapi import get_cgroup_api, InvalidCgroupMountpointException
+from azurelinuxagent.ga.cgroupapi import create_cgroup_api, InvalidCgroupMountpointException
 from azurelinuxagent.ga.firewall_manager import FirewallManager
 
 import azurelinuxagent.common.conf as conf
@@ -216,7 +216,8 @@ class Agent(object):
         tracked_controllers = []
         if CollectLogsHandler.is_enabled_monitor_cgroups_check():
             try:
-                cgroup_api = get_cgroup_api()
+                cgroup_api = create_cgroup_api()
+                logger.info("Using cgroup {0} for resource enforcement and monitoring".format(cgroup_api.get_cgroup_version()))
             except InvalidCgroupMountpointException as e:
                 event.warn(WALAEventOperation.LogCollection, "The agent does not support cgroups if the default systemd mountpoint is not being used: {0}", ustr(e))
                 sys.exit(logcollector.INVALID_CGROUPS_ERRCODE)
@@ -226,6 +227,8 @@ class Agent(object):
 
             log_collector_cgroup = cgroup_api.get_process_cgroup(process_id="self", cgroup_name=AGENT_LOG_COLLECTOR)
             tracked_controllers = log_collector_cgroup.get_controllers()
+            for controller in tracked_controllers:
+                logger.info("{0} controller for cgroup: {1}".format(controller.get_controller_type(), controller))
 
             if len(tracked_controllers) != len(log_collector_cgroup.get_supported_controller_names()):
                 event.warn(WALAEventOperation.LogCollection, "At least one required controller is missing. The following controllers are required for the log collector to run: {0}", log_collector_cgroup.get_supported_controller_names())

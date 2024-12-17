@@ -1815,7 +1815,7 @@ class MonitorThreadTest(AgentTestCase):
                         with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler'):
                             with patch('azurelinuxagent.ga.agent_update_handler.get_agent_update_handler'):
                                 with patch('azurelinuxagent.ga.update.initialize_event_logger_vminfo_common_parameters_and_protocol'):
-                                    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.cgroups_supported', return_value=False):  # skip all cgroup stuff
+                                    with patch('azurelinuxagent.ga.cgroupapi.CGroupUtil.distro_supported', return_value=False):  # skip all cgroup stuff
                                         with patch('azurelinuxagent.ga.update.is_log_collection_allowed', return_value=True):
                                             with patch('time.sleep'):
                                                 with patch('sys.exit'):
