@@ -14,8 +14,7 @@ from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSourc
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
 from azurelinuxagent.common.protocol import hostplugin
-from azurelinuxagent.common.protocol.goal_state import GoalState, GoalStateInconsistentError, \
-    _GET_GOAL_STATE_MAX_ATTEMPTS, GoalStateProperties
+from azurelinuxagent.common.protocol.goal_state import GoalState, _GET_GOAL_STATE_MAX_ATTEMPTS, GoalStateProperties
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import ARCHIVE_DIRECTORY_NAME
@@ -381,20 +380,6 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertEqual(initial_timestamp, goal_state.extensions_goal_state.created_on_timestamp, "The timestamp of the updated goal state is incorrect")
             self.assertTrue(goal_state.extensions_goal_state.is_outdated, "The updated goal state should be marked as outdated")
 
-    def test_it_should_raise_when_the_tenant_certificate_is_missing(self):
-        data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
-
-        with mock_wire_protocol(data_file) as protocol:
-            data_file["vm_settings"] = "hostgaplugin/vm_settings-missing_cert.json"
-            protocol.mock_wire_data.reload()
-            protocol.mock_wire_data.set_etag(888)
-
-            with self.assertRaises(GoalStateInconsistentError) as context:
-                _ = GoalState(protocol.client)
-
-            expected_message = "Certificate 59A10F50FFE2A0408D3F03FE336C8FD5716CF25C needed by Microsoft.OSTCExtensions.VMAccessForLinux is missing from the goal state"
-            self.assertIn(expected_message, str(context.exception))
-
     def test_it_should_download_certs_on_a_new_fast_track_goal_state(self):
         data_file = wire_protocol_data.DATA_FILE_VM_SETTINGS.copy()
 
@@ -444,45 +429,6 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             goal_state.update()
             self.assertTrue(os.path.isfile(crt_path))
 
-    def test_it_should_refresh_the_goal_state_when_it_is_inconsistent(self):
-        #
-        # Some scenarios can produce inconsistent goal states. For example, during hibernation/resume, the Fabric goal state changes (the
-        # tenant certificate is re-generated when the VM is restarted) *without* the incarnation changing. If a Fast Track goal state
-        # comes after that, the extensions will need the new certificate. This test simulates that scenario by mocking the certificates
-        # request and returning first a set of certificates (certs-2.xml) that do not match those needed by the extensions, and then a
-        # set (certs.xml) that does match. The test then ensures that the goal state was refreshed and the correct certificates were
-        # fetched.
-        #
-        data_files = [
-            "wire/certs-2.xml",
-            "wire/certs.xml"
-        ]
-
-        def http_get_handler(url, *_, **__):
-            if HttpRequestPredicates.is_certificates_request(url):
-                http_get_handler.certificate_requests += 1
-                if http_get_handler.certificate_requests < len(data_files):
-                    data = load_data(data_files[http_get_handler.certificate_requests - 1])
-                    return MockHttpResponse(status=200, body=data.encode('utf-8'))
-            return None
-        http_get_handler.certificate_requests = 0
-
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-            protocol.mock_wire_data.reset_call_counts()
-
-            goal_state = GoalState(protocol.client)
-
-            self.assertEqual(2, protocol.mock_wire_data.call_counts['goalstate'], "There should have been exactly 2 requests for the goal state (original + refresh)")
-            self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
-
-            thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
-
-            for extension in goal_state.extensions_goal_state.extensions:
-                for settings in extension.settings:
-                    if settings.protectedSettings is not None:
-                        self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
-
     def test_goal_state_should_contain_empty_certs_when_it_is_fails_to_decrypt_certs(self):
         #  This test simulates that scenario by mocking the goal state request is fabric, and it contains incorrect certs(incorrect-certs.xml)
 
@@ -506,39 +452,6 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self.assertEqual(0, len(goal_state.certs.summary), "Cert list should be empty")
             self.assertEqual(1, http_get_handler.certificate_requests, "There should have been exactly 1 requests for the goal state certificates")
 
-    def test_it_should_refresh_the_goal_state_when_it_is_fails_to_decrypt_cert(self):
-        # This test simulates that scenario by mocking the certificates request and returning first a set of certificates (incorrect-certs.xml) that will fail while decrypting, and then a
-        # set (certs.xml) that does match with what extensions are needed. The test then ensures that the goal state was refreshed and the correct certificates were fetched.
-
-        data_files = [
-            "wire/incorrect-certs.xml",
-            "wire/certs.xml"
-        ]
-
-        def http_get_handler(url, *_, **__):
-            if HttpRequestPredicates.is_certificates_request(url):
-                http_get_handler.certificate_requests += 1
-                if http_get_handler.certificate_requests < len(data_files):
-                    data = load_data(data_files[http_get_handler.certificate_requests - 1])
-                    return MockHttpResponse(status=200, body=data.encode('utf-8'))
-            return None
-        http_get_handler.certificate_requests = 0
-
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
-            protocol.set_http_handlers(http_get_handler=http_get_handler)
-            protocol.mock_wire_data.reset_call_counts()
-
-            goal_state = GoalState(protocol.client)
-
-            self.assertEqual(2, protocol.mock_wire_data.call_counts['goalstate'], "There should have been exactly 2 requests for the goal state (original + refresh)")
-            self.assertEqual(2, http_get_handler.certificate_requests, "There should have been exactly 2 requests for the goal state certificates (original + refresh)")
-
-            thumbprints = [c.thumbprint for c in goal_state.certs.cert_list.certificates]
-
-            for extension in goal_state.extensions_goal_state.extensions:
-                for settings in extension.settings:
-                    if settings.protectedSettings is not None:
-                        self.assertIn(settings.certificateThumbprint, thumbprints, "Certificate is missing from the goal state.")
 
     def test_it_should_raise_when_goal_state_properties_not_initialized(self):
         with GoalStateTestCase._create_protocol_ws_and_hgap_in_sync() as protocol:
@@ -610,3 +523,56 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
 
             expected_message = "HostingEnvironment is not in goal state properties"
             self.assertIn(expected_message, str(context.exception))
+
+    def test_it_should_pick_up_most_recent_goal_state_when_the_tenant_certificate_is_rotated(self):
+        #
+        # During rotation of the tenant certificate a new Fabric goal state is generated; however, neither the vmSettings nor the extensionsConfig change. In that case, the agent should pick up the most recent of
+        # vmSettings and extensionsConfig. The test data below comes from an actual incident, in which the tenant certificate was rotated on incarnation 4.
+        #
+        goal_state_data = wire_protocol_data.DATA_FILE.copy()
+        goal_state_data.update({
+            "goal_state": "tenant_certificate_rotation/GoalState-incarnation-3.xml",
+            "certs": "tenant_certificate_rotation/Certificates-incarnation-3.xml",
+            "ext_conf": "tenant_certificate_rotation/ExtensionsConfig-incarnation-3.xml",
+            "vm_settings": "tenant_certificate_rotation/VmSettings-etag-10016425637754081485.json",
+            "trans_cert": "tenant_certificate_rotation/TransportCert.pem",
+            "trans_prv": "tenant_certificate_rotation/TransportPrivate.pem",
+            "ETag": "10016425637754081485"
+        })
+
+        with mock_wire_protocol(goal_state_data) as protocol:
+            # Verify the test setup. Protocol detection should initialize the goal state to incarnation 3
+            goal_state = protocol.client.get_goal_state()
+            if goal_state.incarnation != '3':
+                raise Exception("Incarnation 3 should have been picked up during protocol detection. Got {0}".format(goal_state.incarnation))
+            if goal_state.extensions_goal_state.source != "FastTrack":
+                raise Exception("The Fast Track goal state should have picked up on initialization, since it is the most recent goal state. Got {0}".format(goal_state.extensions_goal_state.source))
+            if all(c["thumbprint"] != "F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9" for c in goal_state.certs.summary):
+                raise Exception("The tenant certificate on incarnation 3, 'F6ABAA61098A301EBB8A571C3C7CF77F355F7FA9', is missing from the goal state. Certificates: {0}".format(goal_state.certs.summary))
+
+            # Update the test data to incarnation 4, which has the newly rotated tenant certificate
+            goal_state_data.update({
+                "goal_state": "tenant_certificate_rotation/GoalState-incarnation-4.xml",
+                "certs": "tenant_certificate_rotation/Certificates-incarnation-4.xml",
+                "ext_conf": "tenant_certificate_rotation/ExtensionsConfig-incarnation-4.xml",
+            })
+            protocol.mock_wire_data.reload()
+
+            # The incarnation in the test data changed, but not the ETag; even so, the goal state should pick up the Fast Track extensions, since that is the most recent goal state. This needs to be
+            # verified for 3 scenarios: initializing a new goal state, force-updating the goal state, and updating the goal state.
+            def assert_fast_track(test_case):
+                self.assertEqual('4', goal_state.incarnation, "Incarnation 4 should have been picked up on {0}".format(test_case))
+                self.assertEqual("FastTrack", goal_state.extensions_goal_state.source, "The Fast Track goal state should have picked up on {0}, since it is the most recent goal state".format(test_case))
+                self.assertTrue(
+                    any(c["thumbprint"] == "C0EDFF1B408001B0FD14F8F615E567F7833822D0" for c in goal_state.certs.summary),
+                    "The tenant certificate on incarnation 4, 'C0EDFF1B408001B0FD14F8F615E567F7833822D0', is missing from the goal state. Certificates: {0}".format(goal_state.certs.summary))
+
+            goal_state = GoalState(protocol.client)
+            assert_fast_track("initialization")
+
+            goal_state.update(force_update=True)
+            assert_fast_track("force-update")
+
+            goal_state.update()
+            assert_fast_track("update")
+
