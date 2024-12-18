@@ -117,10 +117,10 @@ class VirtualMachineClient(AzureSdkClient):
             ext_name = ext.name
             log.info(f"Deleting extension {ext_name} from {self.name}")
             self._execute_async_operation(
-                lambda: self._compute_client.virtual_machine_extensions.begin_delete(
+                lambda extension_name=ext_name: self._compute_client.virtual_machine_extensions.begin_delete(
                     self.resource_group,
                     self.name,
-                    ext_name),
+                    extension_name),
                 operation_name=f"Delete extension {ext_name}",
                 timeout=timeout)
 

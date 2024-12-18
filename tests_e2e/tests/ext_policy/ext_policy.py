@@ -137,6 +137,8 @@ class ExtPolicy(AgentVmTest):
         # The full CRP timeout period for extension operation failure is 90 minutes. For efficiency, we reduce the
         # timeout limit to 15 minutes here. We expect "delete" operations on disallowed VMs to reach timeout instead of
         # failing fast, because delete is a best effort operation by-design and should not fail.
+        log.info("*** Begin test setup")
+        log.info("Set CRP timeout to 15 minutes")
         self._context.vm.update({"extensionsTimeBudget": "PT15M"})
 
         # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
@@ -178,12 +180,19 @@ class ExtPolicy(AgentVmTest):
         # Enable policy via conf file
         log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
+        log.info("Test setup complete.")
 
         # This policy tests the following scenarios:
         # - enable a single-config extension (CustomScript) that is allowed by policy -> should succeed
         # - enable a no-config extension (AzureMonitorLinuxAgent) that is disallowed by policy -> should fail fast
         # - enable two instances of a multi-config extension (RunCommandHandler) that is disallowed by policy -> both should fail fast
         # (Note that CustomScript disallowed by policy is tested in a later test case.)
+        log.info("")
+        log.info("*** Begin test case 1")
+        log.info("This policy tests the following scenarios:")
+        log.info(" - enable a single-config extension (CustomScript) that is allowed by policy -> should succeed")
+        log.info(" - enable a no-config extension (AzureMonitorLinuxAgent) that is disallowed by policy -> should fail fast")
+        log.info(" - enable two instances of a multi-config extension (RunCommandHandler) that is disallowed by policy -> both should fail fast")
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -208,6 +217,13 @@ class ExtPolicy(AgentVmTest):
         # - delete two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed
         # - enable no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed
         # - delete no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed
+        log.info("")
+        log.info("*** Begin test case 2")
+        log.info("This policy tests the following scenarios:")
+        log.info(" - enable two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed")
+        log.info(" - delete two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed")
+        log.info(" - enable no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed")
+        log.info(" - delete no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed")
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -232,6 +248,11 @@ class ExtPolicy(AgentVmTest):
         # This policy tests the following scenarios:
         # - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast
         # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should fail fast
+        log.info("")
+        log.info("*** Begin test case 3")
+        log.info("This policy tests the following scenarios:")
+        log.info(" - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast")
+        log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -251,6 +272,11 @@ class ExtPolicy(AgentVmTest):
         # This policy tests the following scenario:
         # - allow a previously-disallowed single-config extension (CustomScript), then delete -> should succeed
         # - allow a previously-disallowed single-config extension (CustomScript), then enable -> should succeed
+        log.info("")
+        log.info("*** Begin test case 4")
+        log.info("This policy tests the following scenario:")
+        log.info(" - allow a previously-disallowed single-config extension (CustomScript), then delete -> should succeed")
+        log.info(" - allow a previously-disallowed single-config extension (CustomScript), then enable -> should succeed")
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -267,10 +293,14 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("enable", custom_script)
 
         # Cleanup after test: delete leftover extensions and disable policy enforcement in conf file.
+        log.info("")
+        log.info("*** Begin test cleanup")
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
         # TODO: Consider deleting only extensions used by this test instead of all extensions.
         self._context.vm.delete_all_extensions()
+        log.info("*** Test cleanup complete.")
+
 
 
 
