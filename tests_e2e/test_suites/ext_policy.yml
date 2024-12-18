@@ -1,0 +1,8 @@
+#
+# The test suite verifies that disallowed extensions are not processed, but the agent should still report status.
+#
+name: "ExtensionPolicy"
+tests:
+  - "ext_policy/ext_policy.py"
+images: "endorsed"
+owns_vm: false

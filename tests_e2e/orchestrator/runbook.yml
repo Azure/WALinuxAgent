@@ -45,6 +45,9 @@ variable:
       - agent_update
       - ext_cgroups
       - extensions_disabled
+      - ext_policy
+# TODO: re-enable ext_policy_with_dependencies after investigating status reporting failures
+#      - ext_policy_with_dependencies
       - ext_sequencing
       - ext_telemetry_pipeline
       - fips
