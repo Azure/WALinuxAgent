@@ -35,10 +35,10 @@ class LogCollector(AgentVmTest):
 
         # Rename the agent log file so that the test does not pick up any incomplete log collector runs that started
         # before the config is updated
-        # Enable Cgroup v2 resource limiting and reduce log collector iniital delay via config
+        # Reduce log collector initial delay via config
         log.info("Renaming agent log file and modifying log collector conf flags")
         setup_script = ("agent-service stop &&  mv /var/log/waagent.log /var/log/waagent.$(date --iso-8601=seconds).log && "
-            "update-waagent-conf Logs.Collect=y Debug.EnableCgroupV2ResourceLimiting=y Debug.LogCollectorInitialDelay=60")
+            "update-waagent-conf Logs.Collect=y Debug.LogCollectorInitialDelay=60")
         ssh_client.run_command(f"sh -c '{setup_script}'", use_sudo=True)
         log.info('Renamed log file and updated log collector config flags')
 

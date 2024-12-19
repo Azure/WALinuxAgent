@@ -682,7 +682,7 @@ def get_enable_cgroup_v2_resource_limiting(conf=__conf__):
     If True, the agent will enable resource monitoring and enforcement for the log collector on machines using cgroup v2.
     NOTE: This option is experimental and may be removed in later versions of the Agent.
     """
-    return conf.get_switch("Debug.EnableCgroupV2ResourceLimiting", False)
+    return conf.get_switch("Debug.EnableCgroupV2ResourceLimiting", True)
 
 
 def get_log_collector_initial_delay(conf=__conf__):
