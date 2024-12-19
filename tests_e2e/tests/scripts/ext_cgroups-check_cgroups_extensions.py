@@ -213,7 +213,7 @@ def main():
 try:
     main()
 except Exception as e:
-    # It is possible that agent cgroup can be disabled and reset the quotas if extension failed start using systemd-run. In that case, we should ignore the validation
+    # It is possible that agent cgroup can be disabled and reset the quotas if the extension failed to start using systemd-run. In that case, we should ignore the validation
     if check_cgroup_disabled_due_to_systemd_error() and retry_if_false(check_agent_quota_disabled):
         log.info("Cgroup is disabled due to systemd error while invoking the extension, ignoring ext cgroups validations")
     else:
