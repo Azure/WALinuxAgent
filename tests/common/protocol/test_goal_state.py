@@ -9,7 +9,7 @@ import re
 import time
 
 from azurelinuxagent.common import conf
-from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.future import httpclient, urlparse
 from azurelinuxagent.common.protocol.extensions_goal_state import GoalStateSource, GoalStateChannel
 from azurelinuxagent.common.protocol.extensions_goal_state_from_extensions_config import ExtensionsGoalStateFromExtensionsConfig
 from azurelinuxagent.common.protocol.extensions_goal_state_from_vm_settings import ExtensionsGoalStateFromVmSettings
@@ -162,40 +162,80 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
             self._assert_directory_contents(
                 self._find_history_subdirectory("234-987"), ["VmSettings.json"])
 
-    def test_it_should_redact_the_protected_settings_when_saving_to_the_history_directory(self):
-        with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
-            protocol.mock_wire_data.set_incarnation(888)
-            protocol.mock_wire_data.set_etag(888)
+    def test_it_should_redact_extensions_config(self):
+        data_file = wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE.copy()
+        data_file["ext_conf"] = "wire/ext_conf_redact.xml"
+        with mock_wire_protocol(data_file, detect_protocol=False) as protocol:
+            protocol.mock_wire_data.set_incarnation(888)  # set the incarnation to a known value that we can use to find the history directory
 
             goal_state = GoalState(protocol.client, save_to_history=True)
 
-            extensions_goal_state = goal_state.extensions_goal_state
-            protected_settings = []
-            for ext_handler in extensions_goal_state.extensions:
-                for extension in ext_handler.settings:
-                    if extension.protectedSettings is not None:
-                        protected_settings.append(extension.protectedSettings)
+            if goal_state.extensions_goal_state.source != GoalStateSource.Fabric:
+                raise Exception("The test goal state should be Fabric (it is {0})".format(goal_state.extensions_goal_state.source))
+
+            protected_settings = [s.protectedSettings for s in [e.settings[0] for e in goal_state.extensions_goal_state.extensions]]
             if len(protected_settings) == 0:
                 raise Exception("The test goal state does not include any protected settings")
 
-            history_directory = self._find_history_subdirectory("888-888")
-            extensions_config_file = os.path.join(history_directory, "ExtensionsConfig.xml")
-            vm_settings_file = os.path.join(history_directory, "VmSettings.json")
-            for file_name in extensions_config_file, vm_settings_file:
-                with open(file_name, "r") as stream:
-                    file_contents = stream.read()
+            history_directory = self._find_history_subdirectory("888")
+            extensions_config = os.path.join(history_directory, "ExtensionsConfig.xml")
+            with open(extensions_config, "r") as f:
+                history_contents = f.read()
 
-                    for settings in protected_settings:
-                        self.assertNotIn(
-                            settings,
-                            file_contents,
-                            "The protectedSettings should not have been saved to {0}".format(file_name))
+            vmap_blob = re.sub(r'(?s)(.*<InVMArtifactsProfileBlob.*>)(.*)(</InVMArtifactsProfileBlob>.*)', r'\2', goal_state.extensions_goal_state._text)
+            query = urlparse(vmap_blob).query
+            redacted = vmap_blob.replace(query, "***REDACTED***")
+            self.assertNotIn(query, history_contents, "The VMAP query string was not redacted from the history")
+            self.assertNotIn(vmap_blob, history_contents, "The VMAP URL was not redacted in the history")
+            self.assertIn(redacted, history_contents, "Could not find the redacted VMAP URL in the history")
 
-                    matches = re.findall(r'"protectedSettings"\s*:\s*"\*\*\* REDACTED \*\*\*"', file_contents)
-                    self.assertEqual(
-                        len(matches),
-                        len(protected_settings),
-                        "Could not find the expected number of redacted settings in {0}.\nExpected {1}.\n{2}".format(file_name, len(protected_settings), file_contents))
+            status_blob = re.sub(r'(?s)(.*<StatusUploadBlob.*>)(.*)(</StatusUploadBlob>.*)', r'\2', goal_state.extensions_goal_state._text)
+            query = urlparse(status_blob).query
+            redacted = status_blob.replace(query, "***REDACTED***")
+            self.assertNotIn(query, history_contents, "The Status query string was not redacted from the history")
+            self.assertNotIn(status_blob, history_contents, "The Status URL was not redacted in the history")
+            self.assertIn(redacted, history_contents, "Could not find the redacted Status URL in the history")
+
+            for s in protected_settings:
+                self.assertNotIn(s, history_contents, "The protected settings were not redacted from the history")
+            matches = re.findall(r'"protectedSettings"\s*:\s*"\*\*\*REDACTED\*\*\*"', history_contents)
+            self.assertEqual(len(matches), len(protected_settings),
+                "Could not find the expected number of redacted settings in {0}.\nExpected {1}.\n{2}".format(extensions_config, len(protected_settings), history_contents))
+
+    def test_it_should_redact_vm_settings(self):
+        # NOTE: vm_settings-redact_formatted.json is the same as vm_settings-redact.json, but formatted for easier reading
+        for test_file in ["hostgaplugin/vm_settings-redact.json", "hostgaplugin/vm_settings-redact_formatted.json"]:
+            data_file = wire_protocol_data.DATA_FILE_IN_VM_ARTIFACTS_PROFILE.copy()
+            data_file["vm_settings"] = test_file
+            data_file["ETag"] = "123"
+            with mock_wire_protocol(data_file, detect_protocol=False) as protocol:
+                goal_state = GoalState(protocol.client, save_to_history=True)
+
+                if goal_state.extensions_goal_state.source != GoalStateSource.FastTrack:
+                    raise Exception("The test goal state should be FastTrack (it is {0}) [test: {1}]".format(goal_state.extensions_goal_state.source, test_file))
+
+                protected_settings = [s.protectedSettings for s in [e.settings[0] for e in goal_state.extensions_goal_state.extensions]]
+                if len(protected_settings) == 0:
+                    raise Exception("The test goal state does not include any protected settings [test: {0}]".format(test_file))
+
+                history_directory = self._find_history_subdirectory("*-123")
+                vm_settings = os.path.join(history_directory, "VmSettings.json")
+                with open(vm_settings, "r") as f:
+                    history_contents = f.read()
+
+                status_blob = goal_state.extensions_goal_state.status_upload_blob
+                query = urlparse(status_blob).query
+                redacted = status_blob.replace(query, "***REDACTED***")
+                self.assertNotIn(query, history_contents, "The Status query string was not redacted from the history [test: {0}]".format(test_file))
+                self.assertNotIn(status_blob, history_contents, "The Status URL was not redacted in the history [test: {0}]".format(test_file))
+                self.assertIn(redacted, history_contents, "Could not find the redacted Status URL in the history [test: {0}]".format(test_file))
+
+                for s in protected_settings:
+                    self.assertNotIn(s, history_contents, "The protected settings were not redacted from the history [test: {0}]".format(test_file))
+
+                matches = re.findall(r'"protectedSettings"\s*:\s*"\*\*\*REDACTED\*\*\*"', history_contents)
+                self.assertEqual(len(matches), len(protected_settings),
+                    "Could not find the expected number of redacted settings in {0} [test {1}].\nExpected {2}.\n{3}".format(vm_settings, test_file, len(protected_settings), history_contents))
 
     def test_it_should_save_vm_settings_on_parse_errors(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
