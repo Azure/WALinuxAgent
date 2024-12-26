@@ -26,7 +26,7 @@ from azurelinuxagent.common.future import ustr, urlparse
 from azurelinuxagent.common.protocol.extensions_goal_state import ExtensionsGoalState, GoalStateChannel, GoalStateSource
 from azurelinuxagent.common.protocol.restapi import ExtensionSettings, Extension, VMAgentFamily, ExtensionState, InVMGoalStateMetaData
 from azurelinuxagent.common.utils.textutil import parse_doc, parse_json, findall, find, findtext, getattrib, gettext, \
-    format_exception, is_str_none_or_whitespace, is_str_empty, hasattrib
+    format_exception, is_str_none_or_whitespace, is_str_empty, hasattrib, gettextxml
 
 
 class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
@@ -190,9 +190,10 @@ class ExtensionsGoalStateFromExtensionsConfig(ExtensionsGoalState):
 
     def get_redacted_text(self):
         def redact_url(unredacted, xml_node, name):
-            if xml_node is None:
+            text_xml = gettextxml(xml_node)  # Note that we need to redact the raw XML text (which may contain escape sequences)
+            if text_xml is None:
                 return unredacted
-            parsed = urlparse(xml_node.toxml())  # Note that we need to redact the raw XML text (which may contain escape sequences)
+            parsed = urlparse(text_xml)
             redacted = unredacted.replace(parsed.query, "***REDACTED***")
             if redacted == unredacted:
                 raise Exception('Could not redact {0}'.format(name))
