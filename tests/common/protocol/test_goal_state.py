@@ -6,6 +6,7 @@ import datetime
 import glob
 import os
 import re
+import shutil
 import time
 
 from azurelinuxagent.common import conf
@@ -236,6 +237,8 @@ class GoalStateTestCase(AgentTestCase, HttpRequestPredicates):
                 matches = re.findall(r'"protectedSettings"\s*:\s*"\*\*\*REDACTED\*\*\*"', history_contents)
                 self.assertEqual(len(matches), len(protected_settings),
                     "Could not find the expected number of redacted settings in {0} [test {1}].\nExpected {2}.\n{3}".format(vm_settings, test_file, len(protected_settings), history_contents))
+
+            shutil.rmtree(history_directory)  # clean up the history directory in-between test cases to avoid stale history files
 
     def test_it_should_save_vm_settings_on_parse_errors(self):
         with mock_wire_protocol(wire_protocol_data.DATA_FILE_VM_SETTINGS) as protocol:
