@@ -378,6 +378,19 @@ class AgentLog(object):
             {
                 'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: 126.*Exec format error",
             },
+            #
+            # 2024-12-26T06:35:24.233438Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 51, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 4081.2.1.
+            #
+            #
+            # [stderr]
+            # [2024-12-26T06:35:22+0000]: Unexpected Linux distribution. Expected Linux distributions include only Ubuntu, Red Hat, SUSE, CentOS, Debian or Mariner.
+            # , duration=0
+            #
+            {
+                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Unexpected Linux distribution",
+            },
         ]
 
         def is_error(r: AgentLogRecord) -> bool:
