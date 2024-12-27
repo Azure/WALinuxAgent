@@ -75,6 +75,19 @@ def gettext(node):
     return None
 
 
+def gettextxml(node):
+    """
+    Get the raw XML of a text node
+    """
+    if node is None:
+        return None
+
+    for child in node.childNodes:
+        if child.nodeType == child.TEXT_NODE:
+            return child.toxml()
+    return None
+
+
 def findtext(root, tag, namespace=None):
     """
     Get text of node by tag and namespace under Node root.
