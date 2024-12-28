@@ -330,13 +330,14 @@ class AgentLog(object):
             # 2024-08-02T21:44:44.330727Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['ACCEPT DNS']
             # 2024-08-08T22:05:26.561896Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS']. Will reset it.
             # 2024-09-16T15:50:12.473500Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS']), will reset them.
-            #
+            # 2024-12-27T19:42:03.895387Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS'] due to: ['']), will reset them.
+            # 2024-12-27T19:38:14.093727Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS'] due to: ['iptables: Bad rule (does a matching rule exist in that chain?).\n']. Will reset it.
             {
                 'message': r"(The firewall rules for Azure Fabric are not setup correctly \(the environment thread will fix it\): The following rules are missing: \['ACCEPT DNS'\])"
                            "|"
-                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT DNS'\]. Will reset it.)"
+                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT DNS'\].* Will reset it.)"
                            "|"
-                           r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \['ACCEPT DNS'\]\), will reset them.",
+                           r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \['ACCEPT DNS'\]\).* will reset them.",
                 'if': lambda r: r.level == "WARNING"
             },
             # TODO: The Daemon has not been updated on Azure Linux 3; remove this message when it is.
