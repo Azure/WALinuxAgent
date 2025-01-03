@@ -59,7 +59,4 @@ docker run --rm \
 || EXIT_CODE=$(($EXIT_CODE || $?))
 set +x
 
-# Re-take ownership of the logs directory
-find "$LOGS_DIRECTORY" -exec chown "$USER" {} \;
-
 exit "$EXIT_CODE"
