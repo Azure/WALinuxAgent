@@ -2,15 +2,17 @@
 
 set -euo pipefail
 
-if [ "$#" -ne 1 ]; then
-  echo "Usage: execute_tests.sh <python-version>"
+if [[ "$#" -ne 1 || ! "$1" =~ ^2\.6|3\.4$ ]]; then
+  echo "Usage: execute_tests.sh 2.6|3.4"
   exit 1
 fi
-PYTHON_VERSION=$1
 
-if [[ ! "$PYTHON_VERSION" =~ ^2\.6|3\.4$  ]]; then
-  echo "Only versions 2.6 and 3.4 are supported"
-fi
+EXIT_CODE=0
+PYTHON_VERSION=$1
+CONTAINER_IMAGE="waagenttests.azurecr.io/python$PYTHON_VERSION"
+CONTAINER_LOGS_DIRECTORY="/home/waagent/logs"
+CONTAINER_SOURCES_DIRECTORY="/home/waagent/WALinuxAgent"
+NOSETESTS_OPTIONS="--verbose --with-xunit"
 
 #
 # Give ownership of the logs directory to 'waagent' (UID 1000)
@@ -26,17 +28,11 @@ newgrp docker < /dev/null
 #
 # Pull the container image and execute the tests
 #
-CONTAINER_IMAGE="waagenttests.azurecr.io/python$PYTHON_VERSION"
-CONTAINER_LOGS_DIRECTORY="/home/waagent/logs"
-CONTAINER_SOURCES_DIRECTORY="/home/waagent/WALinuxAgent"
-NOSETESTS_OPTIONS="--verbose --with-xunit"
-
-
 az acr login --name waagenttests --username "$CR_USER" --password "$CR_SECRET"
 
 docker pull "$CONTAINER_IMAGE"
 
-echo "***************************************** Running tests for Python $PYTHON_VERSION *****************************************"
+printf "\n***************************************** Running tests for Python $PYTHON_VERSION *****************************************\n\n"
 
 TEST_SUITE_OPTIONS="--xunit-testsuite-name='Python $PYTHON_VERSION' --xunit-file=$CONTAINER_LOGS_DIRECTORY/waagent-$PYTHON_VERSION.junit.xml"
 
@@ -45,12 +41,13 @@ docker run --rm \
     --volume "$BUILD_SOURCESDIRECTORY":"$CONTAINER_SOURCES_DIRECTORY" \
     --volume "$LOGS_DIRECTORY":"$CONTAINER_LOGS_DIRECTORY" \
     "$CONTAINER_IMAGE" \
-    bash --login -c "nosetests $NOSETESTS_OPTIONS $TEST_SUITE_OPTIONS --ignore-files test_cgroupconfigurator_sudo.py $CONTAINER_SOURCES_DIRECTORY/tests"
+    bash --login -c "nosetests $NOSETESTS_OPTIONS $TEST_SUITE_OPTIONS --ignore-files test_cgroupconfigurator_sudo.py $CONTAINER_SOURCES_DIRECTORY/tests" \
+|| EXIT_CODE=$(($EXIT_CODE || $?))
 set +x
 
-echo "************************************** Running tests for Python $PYTHON_VERSION [sudo] **************************************"
+printf "\n************************************** Running tests for Python $PYTHON_VERSION [sudo] **************************************\n\n"
 
-TEST_SUITE_OPTIONS="--xunit-testsuite-name='Python $PYTHON_VERSION [sudo]' --xunit-file=$CONTAINER_LOGS_DIRECTORY//waagent-sudo-$PYTHON_VERSION.junit.xml"
+TEST_SUITE_OPTIONS="--xunit-testsuite-name='Python $PYTHON_VERSION [sudo]' --xunit-file=$CONTAINER_LOGS_DIRECTORY/waagent-sudo-$PYTHON_VERSION.junit.xml"
 
 set -x
 docker run --rm \
@@ -58,5 +55,11 @@ docker run --rm \
     --volume "$BUILD_SOURCESDIRECTORY":"$CONTAINER_SOURCES_DIRECTORY" \
     --volume "$LOGS_DIRECTORY":"$CONTAINER_LOGS_DIRECTORY" \
     "$CONTAINER_IMAGE" \
-    bash --login -c "nosetests $NOSETESTS_OPTIONS $TEST_SUITE_OPTIONS $CONTAINER_SOURCES_DIRECTORY/tests/ga/test_cgroupconfigurator_sudo.py"
+    bash --login -c "nosetests $NOSETESTS_OPTIONS $TEST_SUITE_OPTIONS $CONTAINER_SOURCES_DIRECTORY/tests/ga/test_cgroupconfigurator_sudo.py"\
+|| EXIT_CODE=$(($EXIT_CODE || $?))
 set +x
+
+# Re-take ownership of the logs directory
+find "$LOGS_DIRECTORY" -exec chown "$USER" {} \;
+
+exit "$EXIT_CODE"
