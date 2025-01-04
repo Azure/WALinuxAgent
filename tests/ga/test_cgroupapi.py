@@ -301,7 +301,7 @@ class SystemdCgroupsApiv1TestCase(AgentTestCase):
                         shell=True,
                         timeout=300,
                         cwd=self.tmp_dir,
-                        env={},
+                        env={}.update(os.environ),
                         stdout=output_file,
                         stderr=output_file)
 
@@ -317,7 +317,7 @@ class SystemdCgroupsApiv1TestCase(AgentTestCase):
                 shell=False,
                 timeout=300,
                 cwd=self.tmp_dir,
-                env={},
+                env={}.update(os.environ),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
@@ -344,7 +344,7 @@ class SystemdCgroupsApiv1TestCase(AgentTestCase):
                     timeout=300,
                     shell=True,
                     cwd=self.tmp_dir,
-                    env={},
+                    env={}.update(os.environ),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
 

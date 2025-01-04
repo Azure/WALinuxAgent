@@ -46,10 +46,11 @@ RUN \
     sed -i 's/mesg n || true/tty -s \&\& mesg n/' ~/.profile && \
     :
 
-# TODO: Some unit tests have a dependency on Python 3; this needs to be fixed, but installing Python 3 is a workaround for now.
+#
+# TODO: Some unit tests create helper scripts that use 'python3' as shebang; we should probably port them to Bash, but installing Python 3 as a workaround for now.
+#
 RUN \
     if [[ "${PYTHON_VERSION}" == "2.6" ]]; then \
-      apt-get update && \
       apt-get -y install python3; \
     fi
 
