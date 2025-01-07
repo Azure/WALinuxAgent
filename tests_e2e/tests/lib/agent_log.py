@@ -364,7 +364,7 @@ class AgentLog(object):
              'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION == '16.04'
              },
             #
-            # TODO: Currently GuestConfiguration does not support ARM; remove this message when it does.
+            # GuestConfiguration produces a lot of errors in test runs due to issues in the extension. Some samples:
             #
             # 2024-12-08T06:28:34.480675Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 126, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
             # [stdout]
@@ -372,25 +372,33 @@ class AgentLog(object):
             # Linux distribution is Red Hat.
             # + /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension install
             # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim: line 211: /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: cannot execute binary file: Exec format error
-            #
-            #
             # [stderr]
-            # , duration=0
-            {
-                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: 126.*Exec format error",
-            },
             #
             # 2024-12-26T06:35:24.233438Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 51, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
             # [stdout]
             # Linux distribution version is 4081.2.1.
-            #
-            #
             # [stderr]
             # [2024-12-26T06:35:22+0000]: Unexpected Linux distribution. Expected Linux distributions include only Ubuntu, Red Hat, SUSE, CentOS, Debian or Mariner.
-            # , duration=0
+            #
+            # 2025-01-07T11:32:28.121056Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 1, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 12.5.
+            # Linux distribution is SUSE.
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension install
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim: line 211:
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: Text file busy
+            # [stderr]
+            #
+            # Also, enable not always completes before the new goal state is received
+            #
+            # 2025-01-07T13:33:25.636847Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed:
+            # [('Microsoft.Azure.Extensions.CustomScript', 'success'), ('Microsoft.GuestConfiguration.ConfigurationforLinux', 'transitioning'), ('RunCommandHandler', 'success')]
             #
             {
-                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Unexpected Linux distribution",
+                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*Text file busy|51.*Unexpected Linux distribution|126.*Exec format error)",
+            },
+            {
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+'transitioning'",
             },
         ]
 
