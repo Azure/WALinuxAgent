@@ -412,7 +412,7 @@ class AgentLog(object):
             # Failed to start transient scope unit: Message recipient disconnected from message bus without replying
             #
             {
-                'message': r"Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer)",
+                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer)",
             },
         ]
 
@@ -476,7 +476,7 @@ class AgentLog(object):
         """
         Returns True if the given 'record' matches any of the 'ignore_rules'
         """
-        return any(re.search(rule['message'], record.message, flags=re.DOTALL) is not None and ('if' not in rule or rule['if'](record)) for rule in ignore_rules)
+        return any(re.search(rule['message'], record.message) is not None and ('if' not in rule or rule['if'](record)) for rule in ignore_rules)
 
     # The format of the log has changed over time and the current log may include records from different sources. Most records are single-line, but some of them
     # can span across multiple lines. We will assume records always start with a line similar to the examples below; any other lines will be assumed to be part
