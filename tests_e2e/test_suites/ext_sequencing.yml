@@ -8,3 +8,5 @@ tests:
 images: "endorsed"
 # This scenario is executed on instances of a scaleset created by the agent test suite.
 executes_on_scale_set: true
+skip_on_images:
+  - "alma_9"  # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.
