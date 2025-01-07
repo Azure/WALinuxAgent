@@ -266,9 +266,33 @@ class RedhatOSModernUtil(RedhatOSUtil):
         # TODO: Implement and test a way to recover the network interface for RedhatOSModernUtil
         pass
 
-    def publish_hostname(self, hostname, recover_nic=False):
-        # RedhatOSUtil was updated to conditionally run NetworkManager restart in response to a race condition between
-        # NetworkManager restart and the agent restarting the network interface during publish_hostname. Keeping the
-        # NetworkManager restart in RedhatOSModernUtil because the issue was not reproduced on these versions.
-        shellutil.run("service NetworkManager restart")
-        DefaultOSUtil.publish_hostname(self, hostname)
+    def set_dhcp_hostname(self, hostname):
+        """
+        RHEL8+ distributions use NetworkManager to configure network interfaces, set DHCP hostname
+        in NM device and connection settings.
+        """
+        ifname = self.get_if_name()
+        retry_limit = 4
+        wait = 5
+
+        ret, con = shellutil.run_get_output("nmcli -g GENERAL.CONNECTION device show '{0}'".format(ifname))
+        if ret != 0:
+            logger.error("failed to get NetworkManager connection for {0}: return code {1}".format(ifname, ret))
+            return
+        else:
+            con = con.split('\n')[0]
+            logger.verbose("Using NetworkManager connection '{0}' for {1}".format(con, ifname))
+
+        ret = shellutil.run("nmcli connection modify '{0}' ipv4.dhcp-hostname '{1}' ipv6.dhcp-hostname '{1}'".format(con, hostname))
+        if ret != 0:
+            logger.error("failed to persist DHCP hostname for interface {0}: return code {1}".format(ifname, ret))
+
+        for attempt in range(1, retry_limit):
+            ret = shellutil.run("nmcli device modify '{0}' ipv4.dhcp-hostname '{1}' ipv6.dhcp-hostname '{1}'".format(ifname, hostname))
+            if ret == 0:
+                return
+            logger.warn("failed to modify DHCP hostname for interface {0}: return code {1}".format(ifname, ret))
+            logger.info("retrying in {0} seconds".format(wait))
+            time.sleep(wait)
+
+        logger.error("failed to modify DHCP hostname for interface {0}: no more tries".format(ifname))
