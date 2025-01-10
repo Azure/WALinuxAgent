@@ -100,7 +100,7 @@ class AgentFirewall:
             if succeeded:
                 raise Exception(f"Error -- unprivileged user:({current_user}) could connect to wireserver port 53, make sure the firewall rules are set correctly")
             else:
-                raise Exception(f"Cannot issue a DNS request as user '{current_user}'), make sure the firewall rules are set correctly {e}")
+                raise Exception(f"Cannot issue a DNS request as user '{current_user}'), make sure the firewall rules are set correctly [DNS request timed out]")
 
     @staticmethod
     def _verify_http_request_to_wireserver(should_succeed: bool) -> None:
