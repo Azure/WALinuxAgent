@@ -15,9 +15,9 @@ CONTAINER_SOURCES_DIRECTORY="/home/waagent/WALinuxAgent"
 NOSETESTS_OPTIONS="--verbose --with-xunit"
 
 #
-# Give ownership of the logs directory to 'waagent' (UID 1000)
+# Give ownership of the logs directory to 'waagent' (UID 1001)
 #
-sudo chown 1000 "$LOGS_DIRECTORY"
+sudo chown 1001 "$LOGS_DIRECTORY"
 
 #
 # Give the current user access to the Docker daemon
