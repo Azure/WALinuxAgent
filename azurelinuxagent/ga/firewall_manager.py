@@ -186,6 +186,7 @@ class _FirewallManagerMultipleRules(FirewallManager):
     def check(self):
         missing_rules = []
         existing_rules = []
+        missing_rules_reasons = []
 
         for rule, command in self._get_commands(self._get_check_command_option()):
             try:
@@ -194,6 +195,10 @@ class _FirewallManagerMultipleRules(FirewallManager):
             except CommandError as e:
                 if e.returncode == 1:  # rule does not exist
                     missing_rules.append(rule)
+                    # Issue: Even though the drop rule exists, the agent perceives it as missing when checking all rules.
+                    # This might occur because we mark the rule as missing due to the same error code being returned for other reasons.
+                    # So logging the error message to understand the reason for the rule being marked as missing.
+                    missing_rules_reasons.append(e.stderr)
                 else:
                     raise
 
@@ -201,7 +206,7 @@ class _FirewallManagerMultipleRules(FirewallManager):
             return True
 
         if len(existing_rules) > 0:  # some rules are present, but not all
-            raise FirewallStateError("The following rules are missing: {0}".format(missing_rules))
+            raise FirewallStateError("The following rules are missing: {0} due to: {1}".format(missing_rules, missing_rules_reasons))
 
         return False
 

@@ -1151,7 +1151,7 @@ class UpdateHandler(object):
                     firewall_manager.setup()
                     event.info(WALAEventOperation.Firewall, "Created firewall rules for Azure Fabric:\n{0}", firewall_manager.get_state())
             except FirewallStateError as e:
-                event.warn(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}", ustr(e))
+                event.warn(WALAEventOperation.Firewall, "The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): {0}. Current state:\n{1}", ustr(e), firewall_manager.get_state())
 
             #
             # Ensure firewall rules are persisted across reboots

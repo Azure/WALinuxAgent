@@ -101,7 +101,7 @@ image-sets:
 #
 images:
    alma_9:
-      urn: "almalinux almalinux 9-gen2 latest"
+      urn: "almalinux almalinux-x86_64 9-gen2 latest"
       locations:
          AzureChinaCloud: []
    azure-linux_3:

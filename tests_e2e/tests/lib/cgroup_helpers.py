@@ -144,12 +144,18 @@ def check_agent_quota_disabled():
     # Ubuntu 16 has an issue in expressing no quota as "infinity" https://github.com/systemd/systemd/issues/5965, so we are directly checking the quota value in cpu controller
     return cpu_quota == 'infinity' or get_unit_cgroup_cpu_quota_disabled(AGENT_SERVICE_NAME)
 
-def check_cgroup_disabled_with_unknown_process():
+def check_cgroup_disabled_due_to_systemd_error():
     """
-    Returns True if the cgroup is disabled with unknown process
-    """
-    return check_log_message("Disabling resource usage monitoring. Reason: Check on cgroups failed:.+UNKNOWN")
+    Returns True if the cgroup is disabled due to systemd error (Connection reset by peer)
 
+    Ex:
+    2024-12-18T06:43:23.867711Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.Edp.GATestExtGo-1.2.0.0 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
+
+    [stderr]
+    Warning! D-Bus connection terminated.
+    Failed to start transient scope unit: Connection reset by peer
+    """
+    return check_log_message("Failed to start.+using systemd-run, will try invoking the extension directly.+[SystemdRunError].+Connection reset by peer")
 
 def check_log_message(message, after_timestamp=datetime.datetime.min):
     """

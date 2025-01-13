@@ -330,13 +330,14 @@ class AgentLog(object):
             # 2024-08-02T21:44:44.330727Z WARNING ExtHandler ExtHandler The firewall rules for Azure Fabric are not setup correctly (the environment thread will fix it): The following rules are missing: ['ACCEPT DNS']
             # 2024-08-08T22:05:26.561896Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS']. Will reset it.
             # 2024-09-16T15:50:12.473500Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS']), will reset them.
-            #
+            # 2024-12-27T19:42:03.895387Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS'] due to: ['']), will reset them.
+            # 2024-12-27T19:38:14.093727Z WARNING EnvHandler ExtHandler The firewall is not configured correctly. The following rules are missing: ['ACCEPT DNS'] due to: ['iptables: Bad rule (does a matching rule exist in that chain?).\n']. Will reset it.
             {
                 'message': r"(The firewall rules for Azure Fabric are not setup correctly \(the environment thread will fix it\): The following rules are missing: \['ACCEPT DNS'\])"
                            "|"
-                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT DNS'\]. Will reset it.)"
+                           r"(The firewall is not configured correctly. The following rules are missing: \['ACCEPT DNS'\].* Will reset it.)"
                            "|"
-                           r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \['ACCEPT DNS'\]\), will reset them.",
+                           r"The permanent firewall rules for Azure Fabric are not setup correctly \(The following rules are missing: \['ACCEPT DNS'\]\).* will reset them.",
                 'if': lambda r: r.level == "WARNING"
             },
             # TODO: The Daemon has not been updated on Azure Linux 3; remove this message when it is.
@@ -363,7 +364,7 @@ class AgentLog(object):
              'if': lambda r: DISTRO_NAME == 'ubuntu' and DISTRO_VERSION == '16.04'
              },
             #
-            # TODO: Currently GuestConfiguration does not support ARM; remove this message when it does.
+            # GuestConfiguration produces a lot of errors in test runs due to issues in the extension. Some samples:
             #
             # 2024-12-08T06:28:34.480675Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 126, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
             # [stdout]
@@ -371,12 +372,55 @@ class AgentLog(object):
             # Linux distribution is Red Hat.
             # + /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension install
             # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim: line 211: /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: cannot execute binary file: Exec format error
+            # [stderr]
+            #
+            # 2024-12-26T06:35:24.233438Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 51, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 4081.2.1.
+            # [stderr]
+            # [2024-12-26T06:35:22+0000]: Unexpected Linux distribution. Expected Linux distributions include only Ubuntu, Red Hat, SUSE, CentOS, Debian or Mariner.
+            #
+            # 2025-01-07T11:32:28.121056Z ERROR ExtHandler ExtHandler Event: name=Microsoft.GuestConfiguration.ConfigurationforLinux, op=Install, message=[ExtensionOperationError] Non-zero exit code: 1, /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim install
+            # [stdout]
+            # Linux distribution version is 12.5.
+            # Linux distribution is SUSE.
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension install
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-shim: line 211:
+            # /var/lib/waagent/Microsoft.GuestConfiguration.ConfigurationforLinux-1.26.79/bin/guest-configuration-extension: Text file busy
+            # [stderr]
+            #
+            # Also, enable not always completes before the new goal state is received
+            #
+            # 2025-01-07T13:33:25.636847Z WARNING ExtHandler ExtHandler A new goal state was received, but not all the extensions in the previous goal state have completed:
+            # [('Microsoft.Azure.Extensions.CustomScript', 'success'), ('Microsoft.GuestConfiguration.ConfigurationforLinux', 'transitioning'), ('RunCommandHandler', 'success')]
+            #
+            {
+                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: (1.*Text file busy|51.*Unexpected Linux distribution|126.*Exec format error)",
+            },
+            {
+                'message': r"A new goal state was received, but not all the extensions in the previous goal state have completed.*'Microsoft.GuestConfiguration.ConfigurationforLinux',\s+'transitioning'",
+            },
+            #
+            # Below systemd errors are transient and will not block extension execution
+            #
+            # 2025-01-05T09:38:44.046292Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice slice and quotas:
+            # 'systemctl show azure-vmextensions-Microsoft.CPlat.Core.RunCommandHandlerLinux.slice --property CPUAccounting' failed: 1 (Failed to get properties: Message recipient disconnected from message bus without replying)
+            #
+            # 2025-01-06T09:32:42.594033Z INFO ExtHandler ExtHandler [CGW] Failed to set the extension azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice slice and quotas:
+            # 'systemctl show azure-vmextensions-Microsoft.Azure.Extensions.CustomScript.slice --property CPUAccounting' failed: 1 (Failed to get properties: Connection reset by peer)
+            #
+            {
+                'message': r"Failed to set the extension.*systemctl show.*--property.*failed: 1.*(Message recipient disconnected from message bus without replying|Connection reset by peer)",
+            },
+            #
+            # 2025-01-06T09:32:44.641948Z INFO ExtHandler ExtHandler [CGW] Disabling resource usage monitoring. Reason: Failed to start Microsoft.Azure.Extensions.CustomScript-2.1.10 using systemd-run, will try invoking the extension directly. Error: [SystemdRunError] Systemd process exited with code 1 and output [stdout]
             #
             #
             # [stderr]
-            # , duration=0
+            # Failed to start transient scope unit: Message recipient disconnected from message bus without replying
+            #
             {
-                'message': r"(?s)name=Microsoft.GuestConfiguration.ConfigurationforLinux.*op=Install.*Non-zero exit code: 126.*Exec format error",
+                'message': r"(?s)Disabling resource usage monitoring. Reason: Failed to start.*using systemd-run, will try invoking the extension directly. Error: \[SystemdRunError\].*Failed to start transient scope unit: (Message recipient disconnected from message bus without replying|Connection reset by peer)",
             },
         ]
 
