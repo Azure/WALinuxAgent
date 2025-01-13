@@ -7,3 +7,5 @@ tests:
 images: "endorsed"
 executes_on_scale_set: true
 owns_vm: false
+skip_on_images:
+  - "alma_9"  # TODO: Currently AlmaLinux is not available for scale sets; enable this image when it is available.

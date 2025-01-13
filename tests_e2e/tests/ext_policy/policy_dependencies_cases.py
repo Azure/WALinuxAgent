@@ -58,7 +58,7 @@ def _should_fail_single_config_depends_on_disallowed_single_config():
             }
         }
     expected_errors = [
-        "Extension will not be processed: failed to run extension 'Microsoft.OSTCExtensions.VMAccessForLinux' because it is not specified in the allowlist",
+        "Extension will not be processed: failed to run extension 'Microsoft.OSTCExtensions.VMAccessForLinux' because it is not specified as an allowed extension",
         "'CustomScript' is marked as failed since it depends upon the VM Extension 'VMAccessForLinux' which has failed"
     ]
     deletion_order = [VmExtensionIds.CustomScript, VmExtensionIds.VmAccess]
@@ -69,7 +69,6 @@ def _should_fail_single_config_depends_on_disallowed_no_config():
     template = [
         __get_extension_template(VmExtensionIds.AzureMonitorLinuxAgent),
         __get_extension_template(VmExtensionIds.CustomScript, depends_on=["AzureMonitorLinuxAgent"])
-
     ]
     policy = \
         {
@@ -84,7 +83,7 @@ def _should_fail_single_config_depends_on_disallowed_no_config():
             }
         }
     expected_errors = [
-        "Extension will not be processed: failed to run extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because it is not specified in the allowlist",
+        "Extension will not be processed: failed to run extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because it is not specified as an allowed extension",
         "'CustomScript' is marked as failed since it depends upon the VM Extension 'AzureMonitorLinuxAgent' which has failed"
     ]
     deletion_order = [VmExtensionIds.CustomScript, VmExtensionIds.AzureMonitorLinuxAgent]
@@ -109,7 +108,7 @@ def _should_fail_single_config_depends_on_disallowed_multi_config():
             }
         }
     expected_errors = [
-        "Extension will not be processed: failed to run extension 'Microsoft.CPlat.Core.RunCommandHandlerLinux' because it is not specified in the allowlist",
+        "Extension will not be processed: failed to run extension 'Microsoft.CPlat.Core.RunCommandHandlerLinux' because it is not specified as an allowed extension",
         "'CustomScript' is marked as failed since it depends upon the VM Extension 'RunCommandHandlerLinux' which has failed"
     ]
     deletion_order = [VmExtensionIds.CustomScript, VmExtensionIds.RunCommandHandler]
@@ -134,7 +133,7 @@ def _should_fail_multi_config_depends_on_disallowed_single_config():
             }
         }
     expected_errors = [
-        "Extension will not be processed: failed to run extension 'Microsoft.Azure.Extensions.CustomScript' because it is not specified in the allowlist",
+        "Extension will not be processed: failed to run extension 'Microsoft.Azure.Extensions.CustomScript' because it is not specified as an allowed extension",
         "VM has reported a failure when processing extension 'RunCommandHandlerLinux' (publisher 'Microsoft.CPlat.Core' and type 'RunCommandHandlerLinux'). Error message: 'Skipping processing of extensions since execution of dependent extension Microsoft.Azure.Extensions.CustomScript failed'."
     ]
     deletion_order = [VmExtensionIds.RunCommandHandler, VmExtensionIds.CustomScript]
@@ -159,7 +158,7 @@ def _should_fail_multi_config_depends_on_disallowed_no_config():
             }
         }
     expected_errors = [
-        "Extension will not be processed: failed to run extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because it is not specified in the allowlist",
+        "Extension will not be processed: failed to run extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because it is not specified as an allowed extension",
         "VM has reported a failure when processing extension 'RunCommandHandlerLinux' (publisher 'Microsoft.CPlat.Core' and type 'RunCommandHandlerLinux'). Error message: 'Skipping processing of extensions since execution of dependent extension Microsoft.Azure.Monitor.AzureMonitorLinuxAgent failed'."
     ]
     deletion_order = [VmExtensionIds.RunCommandHandler, VmExtensionIds.AzureMonitorLinuxAgent]

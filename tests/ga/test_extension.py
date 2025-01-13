@@ -3572,7 +3572,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         expected_msg = "failed to run extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                          expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
+                          expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
 
     def test_should_fail_enable_for_invalid_policy(self):
         policy = \
@@ -3584,7 +3584,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         expected_msg = "attribute 'extensionPolicies.allowListedExtensionsOnly'; must be 'boolean'"
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled, expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                          expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
+                          expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
 
     def test_should_fail_extension_if_error_thrown_during_policy_engine_init(self):
         policy = \
@@ -3596,7 +3596,7 @@ class TestExtensionPolicy(TestExtensionBase):
             expected_msg = "Extension will not be processed: mock exception"
             self._test_policy_case(policy=policy, op=ExtensionRequestedState.Enabled,
                                       expected_status_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
-                                      expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
+                                      expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
 
     def test_should_fail_uninstall_if_extension_disallowed(self):
         policy = \
@@ -3610,7 +3610,7 @@ class TestExtensionPolicy(TestExtensionBase):
             }
         expected_msg = "failed to uninstall extension 'OSTCExtensions.ExampleHandlerLinux' because it is not specified as an allowed extension."
         self._test_policy_case(policy=policy, op=ExtensionRequestedState.Uninstall, expected_status_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
-                                  expected_handler_status='NotReady', expected_ext_count=0, expected_status_msg=expected_msg)
+                                  expected_handler_status='NotReady', expected_ext_count=1, expected_status_msg=expected_msg)
 
     def test_should_fail_enable_if_dependent_extension_disallowed(self):
         self._create_policy_file({
@@ -3634,7 +3634,7 @@ class TestExtensionPolicy(TestExtensionBase):
 
             # OtherExampleHandlerLinux should be disallowed by policy, ExampleHandlerLinux should be skipped because
             # dependent extension failed
-            self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=0,
+            self._assert_handler_status(protocol.report_vm_status, expected_status="NotReady", expected_ext_count=1,
                                         version="1.0.0", expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux",
                                         expected_msg=("failed to run extension 'OSTCExtensions.OtherExampleHandlerLinux' "
                                                       "because it is not specified as an allowed extension."))

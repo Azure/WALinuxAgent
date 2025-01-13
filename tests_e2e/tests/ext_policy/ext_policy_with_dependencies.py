@@ -20,15 +20,14 @@
 #
 # This test adds extensions with multiple dependencies to a VMSS and checks that extensions fail and report status
 # as expected when blocked by extension policy.
-# Note that this test is currently disabled in daily automation due to status reporting errors that need further investigation.
-# TODO: re-enable this test in daily automation after investigating test failures
-#
 
 import copy
 import json
 import random
 import re
+import os
 import uuid
+import time
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -57,20 +56,23 @@ class ExtPolicyWithDependencies(AgentVmssTest):
 
     # Cases to test different dependency scenarios
     _test_cases = [
-        _should_fail_single_config_depends_on_disallowed_no_config,
         _should_fail_single_config_depends_on_disallowed_single_config,
+        _should_fail_single_config_depends_on_disallowed_no_config,
         # TODO: RunCommandHandler is unable to be uninstalled properly, so these tests are currently disabled. Investigate the
         # issue and enable these 3 tests.
         # _should_fail_single_config_depends_on_disallowed_multi_config,
         # _should_fail_multi_config_depends_on_disallowed_single_config,
         # _should_fail_multi_config_depends_on_disallowed_no_config,
-        _should_succeed_single_config_depends_on_no_config,
-        _should_succeed_single_config_depends_on_single_config
+        _should_succeed_single_config_depends_on_single_config,
+        _should_succeed_single_config_depends_on_no_config
     ]
 
     @staticmethod
     def _create_policy_file(ssh_client, policy):
-        with open("waagent_policy.json", mode='w') as policy_file:
+        # Generate a unique file name to avoid conflicts with any other tests running in parallel.
+        unique_id = uuid.uuid4()
+        file_path = "/tmp/waagent_policy_{0}.json".format(unique_id)
+        with open(file_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
             policy_file.flush()
 
@@ -79,6 +81,7 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             ssh_client.copy_to_node(local_path=local_path, remote_path=remote_path)
             policy_file_final_dest = "/etc/waagent_policy.json"
             ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
+        os.remove(file_path)
 
     def run(self):
 
@@ -124,7 +127,7 @@ class ExtPolicyWithDependencies(AgentVmssTest):
 
         for case in self._test_cases:
             log.info("")
-            log.info("Test case: {0}".format(case.__name__.replace('_', ' ')))
+            log.info("*** Test case: {0}".format(case.__name__.replace('_', ' ')))
             test_case_start = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
             if self._scenario_start == datetime.min:
                 self._scenario_start = test_case_start
@@ -189,11 +192,10 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                 log.info("Extensions failed as expected. Expected errors: '{0}'. Actual errors: '{1}'.".format(expected_errors, e))
                 log.info("")
 
-            # After each test, clean up failed extensions to leave VMSS in a good state for the next test.
-            # If there are leftover failed extensions, CRP will attempt to uninstall them in the next test, but uninstall
-            # will be disallowed by policy. Since CRP waits for a 90 minute timeout for uninstall, the operation will
-            # timeout and fail without an appropriate error message, and the whole test case will fail.
-            # To clean up, we first update the policy to allow all, then remove the extensions.
+            # Clean up failed extensions to leave VMSS in a good state for the next test. CRP will attempt to uninstall
+            # leftover extensions in the next test, but uninstall will be disallowed and reach timeout unexpectedly.
+            # CRP also won't allow deletion of an extension that is dependent on another failed extension, so we first
+            # update policy to allow all, re-enable all extensions, and then delete them.
             log.info("Starting cleanup for test case...")
             allow_all_policy = \
                 {
@@ -205,20 +207,41 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             for ssh_client in ssh_clients.values():
                 self._create_policy_file(ssh_client, allow_all_policy)
 
+            log.info("Trying to re-enable before deleting extensions...")
+            for ext in extensions:
+                ext["properties"].update({
+                    "forceUpdateTag": str(uuid.uuid4())
+                })
+            ext_template['resources'][0]['properties']['virtualMachineProfile']['extensionProfile'][
+                'extensions'] = extensions
+            enable_start_time = random.choice(list(ssh_clients.values())).run_command("date '+%Y-%m-%d %T'").rstrip()
+            try:
+                rg_client.deploy_template(template=ext_template)
+            except Exception as err:
+                # Known issue - CRP returns a stale status for no-config extensions, because it does not wait for a new
+                # sequence number. AzureMonitorLinuxAgent is the only no-config extension we test. For this extension
+                # only, swallow the CRP error and check agent log instead to confirm that extensions were enabled
+                # successfully.
+                if VmExtensionIds.AzureMonitorLinuxAgent in deletion_order:
+                    log.info("CRP returned error when re-enabling extensions after allowing. Checking agent log to see if enable succeeded. "
+                             "Error: {0}".format(err))
+                    time.sleep(60)  # Give extensions some time to finish processing.
+                    extension_list = ' '.join([str(e) for e in deletion_order])
+                    command = (f"agent_ext_policy-verify_operation_success.py --after-timestamp '{enable_start_time}' "
+                               f"--operation 'enable' --extension-list {extension_list}")
+                    for ssh_client in ssh_clients.values():
+                        ssh_client.run_command(command, use_sudo=True)
+                    log.info("Agent reported successful status for all extensions, enable succeeded.")
+                else:
+                    fail("Failed to re-enable extensions after allowing with policy.")
+
+            # Delete all extensions in dependency order.
             for ext_to_delete in deletion_order:
                 ext_name_to_delete = ext_to_delete.type
                 try:
                     self._context.vmss.delete_extension(ext_name_to_delete)
                 except Exception as crp_err:
-                    # Known issue - CRP returns stale status in cases of dependency failures. Even if the deletion succeeds,
-                    # CRP may return a failure. We swallow the error and instead, verify that the agent does not report
-                    # status for the uninstalled extension.
-                    log.info("CRP returned an error for deletion operation, may be a false error. Checking agent status file to determine if operation succeeded. Exception: {0}".format(crp_err))
-                    try:
-                        for ssh_client in ssh_clients.values():
-                            ssh_client.run_command(f"agent_ext_policy-verify_uninstall_success.py --extension-name '{ext_to_delete}'")
-                    except Exception as agent_err:
-                        fail("Unable to successfully uninstall extension {0}. Exception: {1}".format(ext_name_to_delete, agent_err))
+                    fail("Failed to uninstall extension {0}. Exception: {1}".format(ext_name_to_delete, crp_err))
                 log.info("Successfully uninstalled extension {0}".format(ext_name_to_delete))
 
             log.info("Successfully removed all extensions from VMSS")
@@ -227,7 +250,6 @@ class ExtPolicyWithDependencies(AgentVmssTest):
         # Disable policy via conf file.
         for ssh_client in ssh_clients.values():
             ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
-
 
     def get_ignore_errors_before_timestamp(self) -> datetime:
         # Ignore errors in the agent log before the first test case starts

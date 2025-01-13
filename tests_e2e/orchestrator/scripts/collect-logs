@@ -19,7 +19,8 @@ tar --exclude='journal/*' --exclude='omsbundle' --exclude='omsagent' --exclude='
     -czf "$logs_file_name" \
     /var/log \
     /var/lib/waagent/ \
-    $waagent_conf
+    $waagent_conf \
+    /etc/waagent_policy.json
 
 set -euxo pipefail
 

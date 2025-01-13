@@ -18,6 +18,7 @@
 #
 import json
 import uuid
+import os
 from typing import List, Dict, Any
 from assertpy import assert_that, fail
 
@@ -44,9 +45,12 @@ class ExtPolicy(AgentVmTest):
         """
         Create policy json file and copy to /etc/waagent_policy.json on test machine.
         """
-        with open("waagent_policy.json", mode='w') as policy_file:
+        unique_id = uuid.uuid4()
+        file_path = "/tmp/waagent_policy_{0}.json".format(unique_id)
+        with open(file_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
             policy_file.flush()
+            log.info("Policy file contents: {0}".format(json.dumps(policy, indent=4)))
 
             remote_path = "/tmp/waagent_policy.json"
             local_path = policy_file.name
@@ -54,6 +58,7 @@ class ExtPolicy(AgentVmTest):
             policy_file_final_dest = "/etc/waagent_policy.json"
             log.info("Copying policy file to test VM [%s]", self._context.vm.name)
             self._ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
+        os.remove(file_path)
 
     def _operation_should_succeed(self, operation, extension_case):
         log.info("")
@@ -234,6 +239,7 @@ class ExtPolicy(AgentVmTest):
                 }
             }
         self._create_policy_file(policy)
+        self._operation_should_succeed("enable", custom_script)
         # Update settings to force an update to the seq no
         run_command.settings = {'source': f"echo '{str(uuid.uuid4())}'"}
         run_command_2.settings = {'source': f"echo '{str(uuid.uuid4())}'"}

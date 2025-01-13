@@ -297,6 +297,8 @@ class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
         self.ext_handlers = None
+        # Maintain a list of extensions that are disallowed, and always report extension status for disallowed extensions.
+        self.disallowed_ext_handlers = []
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on goal state change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
@@ -519,6 +521,7 @@ class ExtHandlersHandler(object):
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
             # here with an error message.
             if not extensions_enabled:
+                self.disallowed_ext_handlers.append(ext_handler)
                 agent_conf_file_path = get_osutil().agent_conf_file_path
                 msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '{0}'".format(agent_conf_file_path)
@@ -745,28 +748,25 @@ class ExtHandlersHandler(object):
             add_event(name=name, version=handler_version, op=report_op, is_success=False, log_event=True,
                       message=message)
 
-    @staticmethod
-    def __report_policy_error(ext_handler_i, error_code, report_op, message, extension):
-        # TODO: Consider merging this function with __handle_and_report_ext_handler_errors() above, after investigating
-        # the impact of this change.
-        #
-        # If extension status is present, CRP will ignore handler status and report extension status. In the case of policy errors,
-        # extensions are not processed, so collect_ext_status() reports transitioning status on behalf of the extension.
-        # However, extensions blocked by policy should fail fast, so agent should write a .status file for policy failures.
-        # Note that __handle_and_report_ext_handler_errors() does not create the file for single-config extensions, but changing
-        # it will require additional testing/investigation. As a temporary workaround, this separate function was created
-        # to write a status file for single-config extensions.
+    def __report_policy_error(self, ext_handler_i, error_code, report_op, message, extension):
+        # TODO: __handle_and_report_ext_handler_errors() does not create a status file for single-config extensions, this
+        # function was created as a temporary workaround. Consider merging the two functions function after assessing its impact.
 
-        # Set handler status for all extensions (with and without settings). We report the same error at both the
-        # handler and extension status level.
+        # If extension status exists, CRP ignores handler status and reports extension status. In the case of policy errors,
+        # we write a .status file to force CRP to fail fast - the agent will otherwise report a transitioning status.
+        # - For extensions without settings or uninstall errors: report at the handler level.
+        # - For extensions with settings (install/enable errors): report at both handler and extension levels.
+
+        # Keep a list of disallowed extensions so that report_ext_handler_status() can report status for them.
+        self.disallowed_ext_handlers.append(ext_handler_i.ext_handler)
+
+        # Set handler status for all extensions (with and without settings).
         ext_handler_i.set_handler_status(message=message, code=error_code)
 
-        # Create status file for extensions with settings (single and multi config).
-        # If status file already exists, overwrite it. If an extension was previously reporting status and is now
-        # blocked by a policy error, we should report the policy error.
-        if extension is not None:
-            # TODO: if extension is reporting a heartbeat, it overwrites status. Consider overwriting heartbeat, if
-            # it exists.
+        # For extensions with settings (install/enable errors), also update extension-level status.
+        # Overwrite any existing status file to reflect policy failures accurately.
+        if extension is not None and ext_handler_i.ext_handler.state == ExtensionRequestedState.Enabled:
+            # TODO: if extension is reporting heartbeat, it overwrites status. Consider overwriting heartbeat here
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error_code,
                                              operation=report_op, message=message, overwrite=True)
 
@@ -1068,12 +1068,13 @@ class ExtHandlersHandler(object):
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_statuses = []
+        ext_disallowed = ext_handler in self.disallowed_ext_handlers
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)
-        # We also need to report extension status for an uninstalled handler if extensions are disabled, because CRP
-        # waits for extension runtime status before failing the extension operation.
-        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or not conf.get_extensions_enabled():
+        # We also need to report extension status for an uninstalled handler if the extension is disallowed (due to
+        # policy failure, extensions disabled, etc.) because CRP waits for extension runtime status before failing the operation.
+        if handler_state != ExtHandlerState.NotInstalled or ext_handler.supports_multi_config or ext_disallowed:
 
             # Since we require reading the Manifest for reading the heartbeat, this would fail if HandlerManifest not found.
             # Only try to read heartbeat if HandlerState != NotInstalled.
