@@ -215,7 +215,10 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("enable", custom_script)
         self._operation_should_fail("enable", run_command)
         self._operation_should_fail("enable", run_command_2)
-        self._operation_should_fail("enable", azure_monitor)
+        # Only call enable on AMA if supported. The agent will try to re-enable AMA as a part of the next goal state, when
+        # policy is changed to allow all. This will cause errors on an unsupported distro.
+        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+            self._operation_should_fail("enable", azure_monitor)
 
         # This policy tests the following scenarios:
         # - enable two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed
@@ -250,6 +253,7 @@ class ExtPolicy(AgentVmTest):
         if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
             self._operation_should_succeed("enable", azure_monitor)
             self._operation_should_succeed("delete", azure_monitor)
+
 
         # This policy tests the following scenarios:
         # - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast
