@@ -411,8 +411,12 @@ class AgentTestCase(unittest.TestCase):
         diffMsg = '\n' + '\n'.join(
             difflib.ndiff(pprint.pformat(seq1).splitlines(),
                           pprint.pformat(seq2).splitlines()))
-        standardMsg = self._truncateMessage(standardMsg, diffMsg)
-        msg = self._formatMessage(msg, standardMsg)
+        # _truncateMessage and _formatMessage are not defined on Python 2.6; output the entire diff in that case
+        if sys.version_info < (2, 7):
+            msg = standardMsg + "\n****************************************\n" +  diffMsg
+        else:
+            standardMsg = self._truncateMessage(standardMsg, diffMsg)
+            msg = self._formatMessage(msg, standardMsg)
         self.fail(msg)
 
     def emulate_assertIsInstance(self, obj, object_type, msg=None):

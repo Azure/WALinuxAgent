@@ -1,0 +1,7 @@
+This directory contains a DevOps Azure Pipeline to execute the unit tests for Python 2.6 and 3.4.
+
+Currently those tests are executed using Github Actions, using .github/workflows/ci_pr.yml. The
+setup done by ci_pr.yml is practically identical to the setup done by this Dockerfile, with minor
+differences to account for the behavior of Github Actions and Azure Pipelines.
+
+NOTE: ci_pr.yml also depends on the patch_python_venv.sh script.
