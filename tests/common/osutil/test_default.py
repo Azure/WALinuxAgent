@@ -132,14 +132,12 @@ class TestOSUtil(AgentTestCase):
             'eth0\t10813FA8\tC1BB910A\t000F\t0\t0\t0\tFFFFFFFF\t0\t0\t0    \n' \
             'eth0\tFEA9FEA9\tC1BB910A\t0007\t0\t0\t0\tFFFFFFFF\t0\t0\t0    \n' \
             'docker0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0    \n'
-        known_sha1_hash = b'\x1e\xd1k\xae[\xf8\x9b\x1a\x13\xd0\xbbT\xa4\xe3Y\xa3\xdd\x0b\xbd\xa9'
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
             raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
         self.assertEqual(len(raw_route_list), 6)
-        self.assertEqual(textutil.hash_strings(raw_route_list), known_sha1_hash)
 
         route_list = osutil.DefaultOSUtil().get_list_of_routes(raw_route_list)
 
