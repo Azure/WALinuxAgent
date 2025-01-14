@@ -1,0 +1,63 @@
+parameters:
+  - name: python_2_6
+    displayName: Python 2.6
+    type: boolean
+    default: true
+  - name: python_3_4
+    displayName: Python 3.4
+    type: boolean
+    default: true
+
+pool:
+  name: waagent-pool
+
+jobs:
+  - job: SelectPythonVersions
+    displayName: "Select Python versions"
+    steps:
+      - bash: |
+          # Create the test matrix, which is a JSON object with the selected Python versions, e.g. { "Python_2_6":{"VERSION":"2.6"}, "Python_3_4":{"VERSION":"3.4"} }
+          declare -a PYTHON_VERSIONS=()
+          if [ ${{ parameters.python_2_6 }} == "True" ]; then
+            PYTHON_VERSIONS+=('"Python_2_6":{"VERSION":"2.6"}')
+          fi
+          if [ ${{ parameters.python_3_4 }} == "True" ]; then
+            PYTHON_VERSIONS+=('"Python_3_4": {"VERSION":"3.4"}')
+          fi
+          PYTHON_VERSIONS=$(echo ${PYTHON_VERSIONS[@]} | sed 's/ /, /' | sed 's/.*/{ \0 }/')
+          echo "Python versions: $PYTHON_VERSIONS"
+          echo "##vso[task.setvariable variable=PYTHON_VERSIONS;isOutput=true]$PYTHON_VERSIONS"
+        name: "SetPythonVersions"
+
+  - job: "ExecuteTests"
+    displayName: "Execute tests"
+    dependsOn: SelectPythonVersions
+    timeoutInMinutes: 15
+    strategy:
+      matrix: $[ dependencies.SelectPythonVersions.outputs['SetPythonVersions.PYTHON_VERSIONS'] ]
+    steps:
+      - task: AzureKeyVault@2
+        displayName: "Fetch connection info"
+        inputs:
+          azureSubscription: $(connection_info)
+          KeyVaultName: 'waagenttests'
+          SecretsFilter: 'CR-USER, CR-SECRET'
+
+      - bash: |
+          mkdir $(Agent.TempDirectory)/logs
+          $(Build.SourcesDirectory)/tests/python_eol/execute_tests.sh $(VERSION)
+        displayName: "Execute tests"
+        continueOnError: true
+        env:
+          CR_USER: $(CR-USER)
+          CR_SECRET: $(CR-SECRET)
+          LOGS_DIRECTORY: $(Agent.TempDirectory)/logs
+
+      - task: PublishTestResults@2
+        displayName: 'Publish test results'
+        condition: always()
+        inputs:
+          testResultsFormat: 'JUnit'
+          testResultsFiles: 'waagent*.junit.xml'
+          searchFolder: $(Agent.TempDirectory)/logs
+          failTaskOnFailedTests: true
