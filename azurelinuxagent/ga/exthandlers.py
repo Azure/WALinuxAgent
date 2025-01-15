@@ -87,12 +87,12 @@ _STATUS_FILE_RETRY_DELAY = 2  # seconds
 # This is the default sequence number we use when there are no settings available for Handlers
 _DEFAULT_SEQ_NO = "0"
 
-# For policy-related errors, this mapping is used to generate user-friendly error messages and determine the appropriate
-# terminal error code based on the blocked operation.
+# For extension disallowed errors (e.g. blocked by policy, extensions disabled), this mapping is used to generate
+# user-friendly error messages and determine the appropriate terminal error code based on the blocked operation.
 # Format: {<ExtensionRequestedState>: (<str>, <ExtensionErrorCodes>)}
 # - The first element of the tuple is a user-friendly operation name included in error messages.
 # - The second element of the tuple is the CRP terminal error code for the operation.
-_POLICY_ERROR_MAP = \
+_EXT_DISALLOWED_ERROR_MAP = \
     {
         ExtensionRequestedState.Enabled: ('run', ExtensionErrorCodes.PluginEnableProcessingFailed),
         # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
@@ -297,8 +297,9 @@ class ExtHandlersHandler(object):
     def __init__(self, protocol):
         self.protocol = protocol
         self.ext_handlers = None
-        # Maintain a list of extensions that are disallowed, and always report extension status for disallowed extensions.
-        self.disallowed_ext_handlers = []
+        # Maintain a list of extension handler objects that are disallowed (e.g. blocked by policy, extensions disabled, etc.).
+        # Extension status is always reported for the extensions in this list. List is reset for each goal state.
+        self.__disallowed_ext_handlers = []
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on goal state change, we need to maintain its state.
         # Setting the status to None here. This would be overridden as soon as the first GoalState is processed
@@ -513,39 +514,35 @@ class ExtHandlersHandler(object):
         except Exception as ex:
             policy_error = ex
 
+        self.__disallowed_ext_handlers = []
+
         for extension, ext_handler in all_extensions:
 
             handler_i = ExtHandlerInstance(ext_handler, self.protocol, extension=extension)
+
+            # Get user-friendly operation name and terminal error code to use in status messages if extension is disallowed
+            operation, error_code = _EXT_DISALLOWED_ERROR_MAP.get(ext_handler.state)
 
             # In case of extensions disabled, we skip processing extensions. But CRP is still waiting for some status
             # back for the skipped extensions. In order to propagate the status back to CRP, we will report status back
             # here with an error message.
             if not extensions_enabled:
-                self.disallowed_ext_handlers.append(ext_handler)
-                agent_conf_file_path = get_osutil().agent_conf_file_path
-                msg = "Extension will not be processed since extension processing is disabled. To enable extension " \
-                      "processing, set Extensions.Enabled=y in '{0}'".format(agent_conf_file_path)
                 ext_full_name = handler_i.get_extension_full_name(extension)
-                logger.info('')
-                logger.info("{0}: {1}".format(ext_full_name, msg))
-                add_event(op=WALAEventOperation.ExtensionProcessing, message="{0}: {1}".format(ext_full_name, msg))
-                handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=msg, code=-1)
-                handler_i.create_status_file(extension,
-                                             status=ExtensionStatusValue.error,
-                                             code=-1,
-                                             operation=handler_i.operation,
-                                             message=msg,
-                                             overwrite=False)
+                agent_conf_file_path = get_osutil().agent_conf_file_path
+                msg = "Extension '{0}' will not be processed since extension processing is disabled. To enable extension " \
+                      "processing, set Extensions.Enabled=y in '{1}'".format(ext_full_name, agent_conf_file_path)
+                # logger.info(msg)
+                self.__handle_ext_disallowed_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionProcessing,
+                                                   message=msg, extension=extension)
                 continue
 
             # If an error was thrown during policy engine initialization, skip further processing of the extension.
             # CRP is still waiting for status, so we report error status here.
-            operation, error_code = _POLICY_ERROR_MAP.get(ext_handler.state)
             if policy_error is not None:
                 msg = "Extension will not be processed: {0}".format(ustr(policy_error))
-                self.__report_policy_error(ext_handler_i=handler_i, error_code=error_code,
-                                           report_op=WALAEventOperation.ExtensionPolicy, message=msg,
-                                           extension=extension)
+                self.__handle_ext_disallowed_error(ext_handler_i=handler_i, error_code=error_code,
+                                                   report_op=WALAEventOperation.ExtensionPolicy, message=msg,
+                                                   extension=extension)
                 continue
 
             # In case of depends-on errors, we skip processing extensions if there was an error processing dependent extensions.
@@ -579,8 +576,8 @@ class ExtHandlersHandler(object):
                     "Extension will not be processed: failed to {0} extension '{1}' because it is not specified "
                     "as an allowed extension. To {0}, add the extension to the list of allowed extensions in the policy file ('{2}')."
                 ).format(operation, ext_handler.name, conf.get_policy_file_path())
-                self.__report_policy_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy,
-                                           message=msg, extension=extension)
+                self.__handle_ext_disallowed_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionPolicy,
+                                                   message=msg, extension=extension)
                 extension_success = False
             else:
                 extension_success = self.handle_ext_handler(handler_i, extension, goal_state_id)
@@ -748,27 +745,28 @@ class ExtHandlersHandler(object):
             add_event(name=name, version=handler_version, op=report_op, is_success=False, log_event=True,
                       message=message)
 
-    def __report_policy_error(self, ext_handler_i, error_code, report_op, message, extension):
-        # TODO: __handle_and_report_ext_handler_errors() does not create a status file for single-config extensions, this
-        # function was created as a temporary workaround. Consider merging the two functions function after assessing its impact.
-
+    def __handle_ext_disallowed_error(self, ext_handler_i, error_code, report_op, message, extension):
+        # Report error for disallowed extensions (extensions blocked by policy or extensions disabled via config).
         # If extension status exists, CRP ignores handler status and reports extension status. In the case of policy errors,
         # we write a .status file to force CRP to fail fast - the agent will otherwise report a transitioning status.
         # - For extensions without settings or uninstall errors: report at the handler level.
         # - For extensions with settings (install/enable errors): report at both handler and extension levels.
+        #
+        # TODO: __handle_and_report_ext_handler_errors() does not create a status file for single-config extensions, this
+        # function was created as a temporary workaround. Consider merging the two functions function after assessing the impact.
 
         # Keep a list of disallowed extensions so that report_ext_handler_status() can report status for them.
-        self.disallowed_ext_handlers.append(ext_handler_i.ext_handler)
+        self.__disallowed_ext_handlers.append(ext_handler_i.ext_handler)
 
         # Set handler status for all extensions (with and without settings).
-        ext_handler_i.set_handler_status(message=message, code=error_code)
+        ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
 
         # For extensions with settings (install/enable errors), also update extension-level status.
         # Overwrite any existing status file to reflect policy failures accurately.
         if extension is not None and ext_handler_i.ext_handler.state == ExtensionRequestedState.Enabled:
             # TODO: if extension is reporting heartbeat, it overwrites status. Consider overwriting heartbeat here
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error_code,
-                                             operation=report_op, message=message, overwrite=True)
+                                             operation=ext_handler_i.operation, message=message, overwrite=True)
 
         name = ext_handler_i.get_extension_full_name(extension)
         handler_version = ext_handler_i.ext_handler.version
@@ -1068,7 +1066,7 @@ class ExtHandlersHandler(object):
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_statuses = []
-        ext_disallowed = ext_handler in self.disallowed_ext_handlers
+        ext_disallowed = ext_handler in self.__disallowed_ext_handlers
         # For MultiConfig, we need to report status per extension even for Handler level failures.
         # If we have HandlerStatus for a MultiConfig handler and GS is requesting for it, we would report status per
         # extension even if HandlerState == NotInstalled (Sample scenario: ExtensionsGoalStateError, DecideVersionError, etc)

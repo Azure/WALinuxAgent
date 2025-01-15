@@ -88,7 +88,7 @@ class ExtensionsDisabled(AgentVmTest):
                 assert_that("VMExtensionProvisioningError" in str(error)) \
                     .described_as(f"Expected a VMExtensionProvisioningError error, but actual error was: {error}") \
                     .is_true()
-                assert_that("Extension will not be processed since extension processing is disabled" in str(error)) \
+                assert_that("will not be processed since extension processing is disabled" in str(error)) \
                     .described_as(
                     f"Error message should communicate that extension will not be processed, but actual error "
                     f"was: {error}").is_true()

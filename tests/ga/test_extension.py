@@ -1652,13 +1652,13 @@ class TestExtension_Deprecated(TestExtensionBase):
         vm_status = args[0]
         self.assertEqual(1, len(vm_status.vmAgent.extensionHandlers))
         exthandler = vm_status.vmAgent.extensionHandlers[0]
-        self.assertEqual(-1, exthandler.code)
+        self.assertEqual(ExtensionErrorCodes.PluginEnableProcessingFailed, exthandler.code)
         self.assertEqual('NotReady', exthandler.status)
-        self.assertEqual("Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", exthandler.message)
+        self.assertEqual("Extension 'OSTCExtensions.ExampleHandlerLinux' will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", exthandler.message)
         ext_status = exthandler.extension_status
-        self.assertEqual(-1, ext_status.code)
+        self.assertEqual(ExtensionErrorCodes.PluginEnableProcessingFailed, ext_status.code)
         self.assertEqual('error', ext_status.status)
-        self.assertEqual("Extension will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", ext_status.message)
+        self.assertEqual("Extension 'OSTCExtensions.ExampleHandlerLinux' will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf'", ext_status.message)
 
     def test_extensions_deleted(self, *args):
         # Ensure initial enable is successful
