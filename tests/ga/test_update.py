@@ -1358,11 +1358,11 @@ class TestAgentUpgrade(UpdateTestCase):
             original_randint = random.randint
 
             def _mock_random_update_time(a, b):
-                if mock_random_update_time:
+                if mock_random_update_time:  # update should occur immediately
                     return 0
-                if b == 1:  # some tests mock normal/hotfix frequency to 1 second, return 0.001 to avoid long delay and still test the logic
+                if b == 1:  # handle tests where the normal or hotfix frequency is mocked to be very short (e.g., 1 second). Returning a very small delay (0.001 seconds) ensures the logic is tested without introducing significant waiting time
                     return 0.001
-                return original_randint(a, b)
+                return original_randint(a, b) + 10  # If none of the above conditions are met, the function returns additional 10-seconds delay. This might represent a normal delay for updates in scenarios where updates are not expected immediately
 
             protocol.set_http_handlers(http_get_handler=get_handler, http_put_handler=put_handler)
             with self.create_conf_mocks(autoupdate_frequency, hotfix_frequency, normal_frequency):
