@@ -65,12 +65,11 @@ class TestAgentUpdate(UpdateTestCase):
             original_randint = random.randint
 
             def _mock_random_update_time(a, b):
-                if mock_random_update_time:
+                if mock_random_update_time:  # update should occur immediately
                     return 0
-                # some tests mock normal/hotfix frequency to 1 second, return 0.001 to avoid long delay and still test the logic
-                if b == 1:
+                if b == 1:  # handle tests where the normal or hotfix frequency is mocked to be very short (e.g., 1 second). Returning a very small delay (0.001 seconds) ensures the logic is tested without introducing significant waiting time
                     return 0.001
-                return original_randint(a, b)
+                return original_randint(a, b) + 10  # If none of the above conditions are met, the function returns additional 10-seconds delay. This might represent a normal delay for updates in scenarios where updates are not expected immediately
 
             with patch("azurelinuxagent.common.conf.get_autoupdate_enabled", return_value=autoupdate_enabled):
                 with patch("azurelinuxagent.common.conf.get_autoupdate_frequency", return_value=autoupdate_frequency):
