@@ -142,7 +142,7 @@ class ExtensionsDisabled(AgentVmTest):
             # 2025-01-15T20:45:13.359784Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Extensions.CustomScript, op=ExtensionProcessing, message=Extension 'Microsoft.Azure.Extensions.CustomScript' will not be processed since extension processing is disabled. To enable extension processing, set Extensions.Enabled=y in '/etc/waagent.conf', duration=0
             # We expect this error message when we disable extension processing via conf
             {
-                'message': r"Extension .*  will not be processed since extension processing is disabled"
+                'message': r"Extension .* will not be processed since extension processing is disabled"
             }
         ]
         return ignore_rules

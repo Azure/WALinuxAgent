@@ -119,7 +119,8 @@ class ExtPolicy(AgentVmTest):
             # For efficiency, we asynchronously check the instance view and agent log to confirm that deletion failed,
             # and do not wait for a response from CRP.
             #
-            # Note: CRP will only allow another 'delete' call during this waiting period, 'enable' will fail. Make sure
+            # Note: CRP will not allow an 'enable' request until deletion succeeds or times out. The next call must be
+            # a delete operation allowed by policy.
             log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
             delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
