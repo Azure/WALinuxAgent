@@ -531,7 +531,6 @@ class ExtHandlersHandler(object):
                 agent_conf_file_path = get_osutil().agent_conf_file_path
                 msg = "Extension '{0}' will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '{1}'".format(ext_full_name, agent_conf_file_path)
-                # logger.info(msg)
                 self.__handle_ext_disallowed_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionProcessing,
                                                    message=msg, extension=extension)
                 continue
@@ -746,19 +745,23 @@ class ExtHandlersHandler(object):
                       message=message)
 
     def __handle_ext_disallowed_error(self, ext_handler_i, error_code, report_op, message, extension):
-        # Report error for disallowed extensions (extensions blocked by policy or extensions disabled via config).
-        # If extension status exists, CRP ignores handler status and reports extension status. In the case of policy errors,
-        # we write a .status file to force CRP to fail fast - the agent will otherwise report a transitioning status.
+        # Handle and report error for disallowed extensions (extensions blocked by policy or disabled via config).
+        # Note: CRP may pick up stale statuses when not polling for sequence number. If extension status exists, CRP
+        # prioritizes it over handler status and polls for seq no. To work around the issue, we report extension status
+        # for extensions with settings:
         # - For extensions without settings or uninstall errors: report at the handler level.
         # - For extensions with settings (install/enable errors): report at both handler and extension levels.
         #
         # TODO: __handle_and_report_ext_handler_errors() does not create a status file for single-config extensions, this
-        # function was created as a temporary workaround. Consider merging the two functions function after assessing the impact.
+        # function is a temporary workaround. Consider merging the two functions function after assessing the impact.
 
         # Keep a list of disallowed extensions so that report_ext_handler_status() can report status for them.
         self.__disallowed_ext_handlers.append(ext_handler_i.ext_handler)
 
         # Set handler status for all extensions (with and without settings).
+        # Install errors should always be reported at the handler level. While install errors for any extension should
+        # ideally be reported ONLY at the handler level, we also report at the ext status level for extensions with settings
+        # as a workaround for the stale status issue.
         ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
 
         # For extensions with settings (install/enable errors), also update extension-level status.

@@ -17,6 +17,7 @@
 # limitations under the License.
 #
 import json
+import re
 import uuid
 import os
 from typing import List, Dict, Any
@@ -62,7 +63,7 @@ class ExtPolicy(AgentVmTest):
 
     def _operation_should_succeed(self, operation, extension_case):
         log.info("")
-        log.info(f"Attempting to {operation} {extension_case.extension.__str__()}, expected to succeed ")
+        log.info(f"Attempting to {operation} {extension_case.extension.__str__()}, expected to succeed")
         # Attempt operation. If enabling, assert that the extension is present in instance view.
         # If deleting, assert that the extension is not present in instance view.
         try:
@@ -91,10 +92,10 @@ class ExtPolicy(AgentVmTest):
         log.info("")
         if operation == "enable":
             try:
-                log.info(f"Attempting to enable {extension_case.extension}, should fail fast.")
+                log.info(f"Attempting to enable {extension_case.extension}, should fail fast due to policy.")
                 timeout = (6 * 60)  # Fail fast.
                 # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
-                if type(extension_case.extension) == VirtualMachineRunCommandClient:
+                if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
                     extension_case.extension.enable(settings=extension_case.settings, timeout=timeout)
                 else:
                     extension_case.extension.enable(settings=extension_case.settings, force_update=True,
@@ -103,27 +104,32 @@ class ExtPolicy(AgentVmTest):
                     f"The agent should have reported an error trying to {operation} {extension_case.extension} "
                     f"because the extension is disallowed by policy.")
             except Exception as error:
-                expected_msg = "Extension will not be processed: failed to run extension"
-                assert_that(expected_msg in str(error)) \
+                # We exclude the extension name from regex because CRP sometimes installs test extensions with different
+                # names (ex: Microsoft.Azure.Extensions.Edp.RunCommandHandlerLinuxTest instead of Microsoft.CPlat.Core.RunCommandHandlerLinux)
+                pattern = r".*Extension will not be processed: failed to run extension .* because it is not specified as an allowed extension.*"
+                assert_that(re.search(pattern, str(error))) \
                     .described_as(
-                    f"Error message is expected to contain '{expected_msg}', but actual error message was '{error}'").is_true()
-                log.info(f"{extension_case.extension} {operation} failed as expected")
+                    f"Error message is expected to contain '{pattern}', but actual error message was '{error}'").is_not_none()
+                log.info(f"{extension_case.extension} {operation} failed as expected due to policy")
 
         elif operation == "delete":
-            # Delete is a best effort operation and should not fail, so CRP will timeout instead of reporting the
-            # appropriate error. We swallow the timeout error, and instead, assert that the extension is still in the
-            # instance view and that the expected error is in the agent log to confirm that deletion failed.
-            log.info(f"Attempting to delete {extension_case.extension}, should reach timeout.")
+            # For delete operations, CRP polls until the agent stops reporting status for the extension, or until timeout is
+            # reached, because delete is a best-effort operation and is not expected to fail. However, when delete is called
+            # on a disallowed extension, the agent reports failure status, so CRP will continue to poll until timeout.
+            # For efficiency, we asynchronously check the instance view and agent log to confirm that deletion failed,
+            # and do not wait for a response from CRP.
+            #
+            # Note: CRP will only allow another 'delete' call during this waiting period, 'enable' will fail. Make sure
+            log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
             delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
-                # TODO: consider checking the agent's log asynchronously to confirm that the uninstall failed instead of
-                # waiting for the full CRP timeout.
-                extension_case.extension.delete()
-                fail(f"CRP should have reported a timeout error when attempting to delete {extension_case.extension} "
+                timeout = (3 * 60)  # Allow agent some time to process goal state, but do not wait for full timeout.
+                extension_case.extension.delete(timeout=timeout)
+                fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
                      f"because the extension is disallowed by policy and agent should have reported a policy failure.")
             except TimeoutError:
-                log.info("Reported a timeout error when attempting to delete extension, as expected. Checking instance view "
-                         "and agent log to confirm that delete operation failed.")
+                log.info("Delete operation did not complete, as expected. Checking instance view "
+                         "and agent log to confirm that delete operation failed due to policy.")
                 # Confirm that extension is still present in instance view
                 instance_view_extensions = self._context.vm.get_instance_view().extensions
                 if instance_view_extensions is not None and not any(
@@ -131,20 +137,16 @@ class ExtPolicy(AgentVmTest):
                     fail(f"Delete operation is disallowed by policy and should have failed, but extension "
                          f"{extension_case.extension} is no longer present in the instance view.")
 
-                # Confirm that expected error message is in the agent log
-                expected_msg = "Extension will not be processed: failed to uninstall extension"
+                # Confirm that agent log contains error message that uninstall was blocked due to policy
+                # The script will check for a log message such as "Extension will not be processed: failed to uninstall
+                # extension 'Microsoft.Azure.Extensions.CustomScript' because it is not specified as an allowed extension"
                 self._ssh_client.run_command(
-                    f"agent_ext_workflow-check_data_in_agent_log.py --data '{expected_msg}' --after-timestamp '{delete_start_time}'",
-                    use_sudo=True)
+                    f"agent_ext_policy-verify_operation_disallowed.py --extension-name '{extension_case.extension._identifier}' "
+                    f"--after-timestamp '{delete_start_time}' --operation 'uninstall'", use_sudo = True)
 
     def run(self):
 
-        # The full CRP timeout period for extension operation failure is 90 minutes. For efficiency, we reduce the
-        # timeout limit to 15 minutes here. We expect "delete" operations on disallowed VMs to reach timeout instead of
-        # failing fast, because delete is a best effort operation by-design and should not fail.
         log.info("*** Begin test setup")
-        log.info("Set CRP timeout to 15 minutes")
-        self._context.vm.update({"extensionsTimeBudget": "PT15M"})
 
         # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
         # without settings have different status reporting logic, so we should test all cases.
@@ -215,8 +217,10 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("enable", custom_script)
         self._operation_should_fail("enable", run_command)
         self._operation_should_fail("enable", run_command_2)
-        # Only call enable on AMA if supported. The agent will try to re-enable AMA as a part of the next goal state, when
-        # policy is changed to allow all. This will cause errors on an unsupported distro.
+        # We only enable AMA on supported distros.
+        # If we were to enable AMA on an unsupported distro, the operation would initially be blocked by policy as
+        # expected. However, after changing the policy to allow all with the next goal state, the agent would attempt to
+        # re-enable AMA on an unsupported distro, causing errors.
         if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
             self._operation_should_fail("enable", azure_monitor)
 
@@ -302,21 +306,17 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("delete", custom_script)
         self._operation_should_succeed("enable", custom_script)
 
-        # Cleanup after test: delete leftover extensions and disable policy enforcement in conf file.
+        # Cleanup after test: disable policy enforcement in conf file.
         log.info("")
         log.info("*** Begin test cleanup")
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
-        # TODO: Consider deleting only extensions used by this test instead of all extensions.
-        self._context.vm.delete_all_extensions()
         log.info("*** Test cleanup complete.")
-
-
 
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
-            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension will not be processed: failed to run extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because it is not specified in the allowlist. To enable, add extension to the allowed list in the policy file ('/etc/waagent_policy.json')., duration=0
+            # 2024-10-24T17:34:20.808235Z ERROR ExtHandler ExtHandler Event: name=Microsoft.Azure.Monitor.AzureMonitorLinuxAgent, op=None, message=[ExtensionPolicyError] Extension will not be processed: failed to run extension 'Microsoft.Azure.Monitor.AzureMonitorLinuxAgent' because it is not specified as an allowed extension. To enable, add the extension to the list of allowed extensions in the policy file ('/etc/waagent_policy.json')., duration=0
             # We intentionally block extensions with policy and expect this failure message
             {
                 'message': r"Extension will not be processed: failed to .* extension .* because it is not specified as an allowed extension"

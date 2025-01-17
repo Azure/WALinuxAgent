@@ -152,8 +152,11 @@ class ExtPolicyWithDependencies(AgentVmssTest):
             for ext in extensions:
                 provisioned_after = ext['properties'].get('provisionAfterExtensions')
                 depends_on = provisioned_after if provisioned_after else []
-                dependency_list = "-" if not depends_on else ' and '.join(depends_on)
-                log.info("{0} depends on {1}".format(ext['name'], dependency_list))
+                if depends_on:
+                    dependency_list = ' and '.join(depends_on)
+                    log.info("{0} depends on {1}".format(ext['name'], dependency_list))
+                else:
+                    log.info("{0} does not depend on any extension".format(ext['name']))
 
             # Copy policy file to each VM instance
             log.info("Updating policy file with new policy: {0}".format(policy))
@@ -189,13 +192,21 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                     for phrase in expected_errors:
                         if phrase not in error_message:
                             fail("Extension template deployment failed as expected, but with an unexpected error. Error expected to contain message '{0}'. Actual error: {1}".format(phrase, e))
-                log.info("Extensions failed as expected. Expected errors: '{0}'. Actual errors: '{1}'.".format(expected_errors, e))
+
+                log.info("Extensions failed as expected.")
                 log.info("")
+                log.info("Expected errors:")
+                for expected_error in expected_errors:
+                    log.info(" - {0}".format(expected_error))
+                log.info("")
+                log.info("")
+                log.info("Actual errors:")
+                log.info(str(e))
 
             # Clean up failed extensions to leave VMSS in a good state for the next test. CRP will attempt to uninstall
             # leftover extensions in the next test, but uninstall will be disallowed and reach timeout unexpectedly.
             # CRP also won't allow deletion of an extension that is dependent on another failed extension, so we first
-            # update policy to allow all, re-enable all extensions, and then delete them.
+            # update policy to allow all, re-enable all extensions, and then delete them in dependency order.
             log.info("Starting cleanup for test case...")
             allow_all_policy = \
                 {
@@ -219,13 +230,15 @@ class ExtPolicyWithDependencies(AgentVmssTest):
                 rg_client.deploy_template(template=ext_template)
             except Exception as err:
                 # Known issue - CRP returns a stale status for no-config extensions, because it does not wait for a new
-                # sequence number. AzureMonitorLinuxAgent is the only no-config extension we test. For this extension
-                # only, swallow the CRP error and check agent log instead to confirm that extensions were enabled
-                # successfully.
-                if VmExtensionIds.AzureMonitorLinuxAgent in deletion_order:
+                # sequence number. Only for cases testing no-config extension dependencies, swallow the CRP error and
+                # check agent log instead to confirm that extensions were enabled successfully.
+                test_cases_to_work_around = [
+                    _should_fail_single_config_depends_on_disallowed_no_config
+                ]
+                if case in test_cases_to_work_around:
                     log.info("CRP returned error when re-enabling extensions after allowing. Checking agent log to see if enable succeeded. "
                              "Error: {0}".format(err))
-                    time.sleep(60)  # Give extensions some time to finish processing.
+                    time.sleep(2 * 60)  # Give extensions some time to finish processing.
                     extension_list = ' '.join([str(e) for e in deletion_order])
                     command = (f"agent_ext_policy-verify_operation_success.py --after-timestamp '{enable_start_time}' "
                                f"--operation 'enable' --extension-list {extension_list}")
