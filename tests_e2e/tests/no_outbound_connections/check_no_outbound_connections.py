@@ -17,11 +17,14 @@
 # limitations under the License.
 #
 from assertpy import fail
+from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
+
+from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
 
 
 class CheckNoOutboundConnections(AgentVmTest):
@@ -53,6 +56,22 @@ exit(1)
             else:
                 raise Exception(f"Unexpected error while checking outbound connectivity on the test VM: {e}")
 
+    def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
+        return [
+            #
+            # RHEL 8.2 uses a very old Daemon (2.3.0.2) that does not create the 'ACCEPT DNS' rule. Even with auto-update enabled, the rule is not created for this test, since outbound connectivity is disabled
+            # and attempts to get the VM Artifacts Profile blob fail after a long timeout (which prevents the self-update Agent to create the rule before the test starts running). Then, this message is
+            # expected and should be ignored.
+            #
+            #   2025-01-16T09:30:54.048522Z WARNING ExtHandler ExtHandler The permanent firewall rules for Azure Fabric are not setup correctly (The following rules are missing: ['ACCEPT DNS'] due to: ['']), will reset them. Current state:
+            #   ipv4 -t security -A OUTPUT -d 168.63.129.16 -p tcp -m owner --uid-owner 0 -j ACCEPT
+            #   ipv4 -t security -A OUTPUT -d 168.63.129.16 -p tcp -m conntrack --ctstate INVALID,NEW -j DROP
+            #
+            {
+                'message': r"The permanent firewall rules for Azure Fabric are not setup correctly.*The following rules are missing: \['ACCEPT DNS'\]",
+                'if': lambda r: DISTRO_NAME == 'redhat' and DISTRO_VERSION == '8.2'
+            }
+        ]
 
 if __name__ == "__main__":
     CheckNoOutboundConnections.run_from_command_line()
