@@ -124,10 +124,6 @@ def is_python_version_34():
     return sys.version_info[0] == 3 and sys.version_info[1] == 4
 
 
-def is_python_version_26_or_34():
-    return is_python_version_26() or is_python_version_34()
-
-
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
