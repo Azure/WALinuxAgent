@@ -26,12 +26,7 @@ fi
 PYTHON_VERSION=$1
 
 if [[ "${PYTHON_VERSION}" =~ ^2\.6|2\.7$ ]]; then
-  if [[ "${PYTHON_VERSION}" == "2.6" ]]; then
-    file_to_patch="/opt/python/2.6.9/lib/python2.6/httplib.py"
-  else
-    file_to_patch="/opt/python/2.7.16/lib/python2.7/httplib.py"
-  fi
-  cat >> "$file_to_patch" << ...
+  cat >> /opt/python/${PYTHON_VERSION}/lib/python${PYTHON_VERSION}/httplib.py << ...
 
 # Added by WALinuxAgent dev team to work around the lack of OpenSSL 1.0 shared libraries
 class HTTPSConnection(HTTPConnection):
