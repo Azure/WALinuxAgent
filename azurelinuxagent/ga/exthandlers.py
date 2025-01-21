@@ -95,13 +95,13 @@ _DEFAULT_SEQ_NO = "0"
 _EXT_DISALLOWED_ERROR_MAP = \
     {
         ExtensionRequestedState.Enabled: ('run', ExtensionErrorCodes.PluginEnableProcessingFailed),
-        # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
-        # report status for that extension, or until timeout is reached. In the case of a policy error, the
-        # agent reports failed status on behalf of the extension, which will cause CRP to poll for the full
-        # timeout, instead of failing fast.
-        #
         # TODO: CRP does not currently have a terminal error code for uninstall. Once this code is added, use
-        # it instead of PluginDisableProcessingFailed below.
+        #       it instead of PluginDisableProcessingFailed below.
+        #
+        # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
+        #       report status for that extension, or until timeout is reached. In the case of a policy error, the
+        #       agent reports failed status on behalf of the extension, which will cause CRP to poll for the full
+        #       timeout, instead of failing fast.
         ExtensionRequestedState.Uninstall: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
         # "Disable" is an internal operation, users are unaware of it. We surface the term "uninstall" instead.
         ExtensionRequestedState.Disabled: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
@@ -745,15 +745,28 @@ class ExtHandlersHandler(object):
                       message=message)
 
     def __handle_ext_disallowed_error(self, ext_handler_i, error_code, report_op, message, extension):
-        # Handle and report error for disallowed extensions (extensions blocked by policy or disabled via config).
-        # Note: CRP may pick up stale statuses when not polling for sequence number. If extension status exists, CRP
-        # prioritizes it over handler status and polls for seq no. To work around the issue, we report extension status
-        # for extensions with settings:
-        # - For extensions without settings or uninstall errors: report at the handler level.
-        # - For extensions with settings (install/enable errors): report at both handler and extension levels.
         #
-        # TODO: __handle_and_report_ext_handler_errors() does not create a status file for single-config extensions, this
-        # function is a temporary workaround. Consider merging the two functions function after assessing the impact.
+        # Handle and report errors for disallowed extensions (e.g. extensions blocked by policy or disabled via config).
+        #
+        # TODO: __handle_and_report_ext_handler_errors() is also used to report extension errors, but it does not create
+        #       a status file for single-config extensions (see below as to why this is important). This function,
+        #       __handle_ext_disallowed_error, implements what we believe is the correct behavior, but at this point we
+        #       use it only for disallowed extensions scenarios. In a future release, consider merging the two functions
+        #       after assessing any impact.
+        #
+        # Note: When CRP polls for extension status, it first looks at handler status and then looks for any extension
+        #       status. If extension status is present, CRP uses it instead of the handler status, ensuring that the
+        #       sequence number for the extension settings match the sequence number in the reported status. CRP polls
+        #       asynchronously to the Agent and, on a new goal state, it can check the status blob before the Agent has
+        #       reported status for that goal state, effectively checking the status of the previous goal state. This is
+        #       not an issue when the extension reports status at the extension level, since CRP wil wait for the status
+        #       for the correct sequence number. However, when the extension reports status *only* at the handler level
+        #       (e.g if the extension has no settings, during install errors, if extension is disallowed, etc.) CRP can
+        #       end up picking up a stale status. There is not a good solution for extensions with no settings, and CRP
+        #       can report an error from a previous goal state. For install errors of extensions with settings, though,
+        #       we work around this issue by reporting the error *both* at the handler level and at the extension level
+        #       (although reporting at the handler level *should* be sufficient). By reporting at the extension level,
+        #       CRP will enforce a match on the sequence number for the settings, and skip stale status blobs.
 
         # Keep a list of disallowed extensions so that report_ext_handler_status() can report status for them.
         self.__disallowed_ext_handlers.append(ext_handler_i.ext_handler)
@@ -764,10 +777,9 @@ class ExtHandlersHandler(object):
         # as a workaround for the stale status issue.
         ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
 
-        # For extensions with settings (install/enable errors), also update extension-level status.
-        # Overwrite any existing status file to reflect policy failures accurately.
         if extension is not None and ext_handler_i.ext_handler.state == ExtensionRequestedState.Enabled:
-            # TODO: if extension is reporting heartbeat, it overwrites status. Consider overwriting heartbeat here
+            # TODO: if extension is reporting heartbeat, it overwrites status. Consider overwriting heartbeat here.
+            # Overwrite any existing status file to reflect the failure accurately.
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error_code,
                                              operation=ext_handler_i.operation, message=message, overwrite=True)
 
