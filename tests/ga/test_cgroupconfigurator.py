@@ -560,7 +560,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
                 with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                     with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", side_effect=mock_popen):
-                        # We expect this call to fail because of the syntax errors
+                        # We expect this call to fail because of the syntax error
                         process_output = configurator.start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command="echo 'very specific test message'",
