@@ -99,8 +99,8 @@ _EXT_DISALLOWED_ERROR_MAP = \
         #       it instead of PluginDisableProcessingFailed below.
         #
         # Note: currently, when uninstall is requested for an extension, CRP polls until the agent does not
-        #       report status for that extension, or until timeout is reached. In the case of a policy error, the
-        #       agent reports failed status on behalf of the extension, which will cause CRP to poll for the full
+        #       report status for that extension, or until timeout is reached. In the case of an extension disallowed
+        #       error, agent reports failed status on behalf of the extension, which will cause CRP to poll for the full
         #       timeout, instead of failing fast.
         ExtensionRequestedState.Uninstall: ('uninstall', ExtensionErrorCodes.PluginDisableProcessingFailed),
         # "Disable" is an internal operation, users are unaware of it. We surface the term "uninstall" instead.
@@ -298,7 +298,7 @@ class ExtHandlersHandler(object):
         self.protocol = protocol
         self.ext_handlers = None
         # Maintain a list of extension handler objects that are disallowed (e.g. blocked by policy, extensions disabled, etc.).
-        # Extension status is always reported for the extensions in this list. List is reset for each goal state.
+        # Extension status, if it exists, is always reported for the extensions in this list. List is reset for each goal state.
         self.__disallowed_ext_handlers = []
         # The GoalState Aggregate status needs to report the last status of the GoalState. Since we only process
         # extensions on goal state change, we need to maintain its state.
@@ -528,7 +528,7 @@ class ExtHandlersHandler(object):
             # here with an error message.
             if not extensions_enabled:
                 ext_full_name = handler_i.get_extension_full_name(extension)
-                agent_conf_file_path = get_osutil().agent_conf_file_path
+                agent_conf_file_path = get_osutil().get_agent_conf_file_path()
                 msg = "Extension '{0}' will not be processed since extension processing is disabled. To enable extension " \
                       "processing, set Extensions.Enabled=y in '{1}'".format(ext_full_name, agent_conf_file_path)
                 self.__handle_ext_disallowed_error(handler_i, error_code, report_op=WALAEventOperation.ExtensionProcessing,
@@ -771,12 +771,10 @@ class ExtHandlersHandler(object):
         # Keep a list of disallowed extensions so that report_ext_handler_status() can report status for them.
         self.__disallowed_ext_handlers.append(ext_handler_i.ext_handler)
 
-        # Set handler status for all extensions (with and without settings).
-        # Install errors should always be reported at the handler level. While install errors for any extension should
-        # ideally be reported ONLY at the handler level, we also report at the ext status level for extensions with settings
-        # as a workaround for the stale status issue.
         ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
 
+        # Only report extension status for install errors of extensions with settings. Disable/uninstall errors are
+        # reported at the handler status level only.
         if extension is not None and ext_handler_i.ext_handler.state == ExtensionRequestedState.Enabled:
             # TODO: if extension is reporting heartbeat, it overwrites status. Consider overwriting heartbeat here.
             # Overwrite any existing status file to reflect the failure accurately.
