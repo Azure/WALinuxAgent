@@ -126,7 +126,7 @@ class ExtPolicy(AgentVmTest):
         # If deleting, assert that the extension is not present in instance view.
         try:
             if operation == "enable":
-               ExtPolicy.__enable_extension(extension_case)
+                ExtPolicy.__enable_extension(extension_case)
             elif operation == "delete":
                 extension_case.extension.delete()
                 instance_view_extensions = self._context.vm.get_instance_view().extensions
