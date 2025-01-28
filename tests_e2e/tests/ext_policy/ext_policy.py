@@ -26,7 +26,6 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from assertpy import assert_that, fail
 
-
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
 from tests_e2e.tests.lib.logging import log
@@ -41,17 +40,6 @@ class ExtPolicy(AgentVmTest):
         def __init__(self, extension, settings: Any):
             self.extension = extension
             self.settings = settings
-
-    # Set up custom handler to direct messages from Azure SDK logger to log.info
-    class LogDebugHandler(logging.Handler):
-        # Custom handler to redirect messages from Azure SDK logger to log.info
-        # TODO: Remove this after debugging intermittent test failures
-        def emit(self, record):
-            log.info("")
-            log.info("Azure SDK debug information: ")
-            message = self.format(record)
-            log.info(message)
-            log.info("")
 
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
@@ -79,51 +67,57 @@ class ExtPolicy(AgentVmTest):
             self._ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
         os.remove(file_path)
 
+    @staticmethod
+    def __retry_operation(operation, max_duration_minutes=15, retry_on_error="ResourceNotFound"):
+        """
+        Retry the given operation until it succeeds or the timeout is reached. Only retry if the message specified
+        by retry_on_error is present in the error.
+        """
+        start_time = datetime.now()
+        end_time = start_time + timedelta(minutes=max_duration_minutes)
+        last_exc = None
+        while datetime.now() < end_time:
+            try:
+                return operation()
+            except Exception as e:
+                last_exc = e
+                if retry_on_error in str(e):  # Retry only for specified error
+                    log.info(f"Error: {e}. Retrying...")
+                    time.sleep(30)
+                else:
+                    raise e
+        raise Exception(f"Enable operation failed after retrying for {max_duration_minutes} minutes. Error: {last_exc}")
 
-    def _retry_enable(self, extension_case):
+    @staticmethod
+    def __enable_extension(extension_case):
         """
         Temporary helper function to retry "enable" operation, while intermittent failures are investigated.
-        TODO: remove after failures are fixed
+        TODO: remove retry logic after the issue is resolved
 
-        Azure SDK / ARM occasionally returns a ResourceNotFound error for an enable operation that should
-        succeed. This is only seen when enable is called immediately after retrying a blocked delete:
-            Ex: block CSE with policy -> delete CSE, fails -> allow CSE with policy -> delete CSE, succeeds -> enable
-        The enable operation completes successfully at the agent/CRP level, but ARM/SDK returns an error that the
-        extension is not found.
-            Error: (ResourceNotFound) The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
+        The Azure SDK/ARM occasionally returns a 'ResourceNotFound' error for an "enable" operation,
+        even though the operation succeeds at the agent/CRP level. This issue is observed when enable is called
+        immediately after retrying a blocked delete operation. For example:
+            1. Block CSE with policy -> delete CSE (fails)
+            2. Allow CSE with policy -> delete CSE (succeeds)
+            3. Enable CSE -> ARM returns ResourceNotFound error, but operation succeeds in agent
+
+            Error details:
+            (ResourceNotFound) The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
             Code: ResourceNotFound
             Message: The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix!
 
-        The exact cause is not yet understood. For debugging purposes, we retry the operation until it succeeds
-        or until a 15 minute timeout is reached, and log debug messages from the SDK.
+        To debug this issue, the "enable" operation is retried until it succeeds or a 15-minute timeout is reached, and
+        debug logs from the SDK are recorded for further investigation.
         """
-        def __enable_operation():
+        def operation():
             if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
-                # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
                 extension_case.extension.enable(settings=extension_case.settings)
             else:
                 extension_case.extension.enable(settings=extension_case.settings, force_update=True)
             extension_case.extension.assert_instance_view()
+            raise Exception("ResourceNotFound")
 
-        def __retry_operation(operation, max_duration_minutes=15):
-            # Retries the given operation for a maximum duration.
-            start_time = datetime.now()
-            end_time = start_time + timedelta(minutes=max_duration_minutes)
-            last_exc = None
-            while datetime.now() < end_time:
-                try:
-                    return operation()
-                except Exception as e:
-                    last_exc = e
-                    if "ResourceNotFound" in str(e):  # Retry only for ResourceNotFound error
-                        log.info(f"ResourceNotFound error: {e}. Retrying...")
-                        time.sleep(5)
-                    else:
-                        raise e
-
-            raise Exception(f"Enable operation failed after retrying for {max_duration_minutes} minutes. Error: {last_exc}")
-
-        __retry_operation(__enable_operation)
+        ExtPolicy.__retry_operation(operation)
 
     def _operation_should_succeed(self, operation, extension_case):
         log.info("")
@@ -132,7 +126,7 @@ class ExtPolicy(AgentVmTest):
         # If deleting, assert that the extension is not present in instance view.
         try:
             if operation == "enable":
-                self._retry_enable(extension_case)
+               ExtPolicy.__enable_extension(extension_case)
             elif operation == "delete":
                 extension_case.extension.delete()
                 instance_view_extensions = self._context.vm.get_instance_view().extensions
@@ -389,6 +383,7 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("enable", custom_script)
 
         # Cleanup after test: disable policy enforcement in conf file.
+        log.info("")
         log.info("*** Begin test cleanup")
         self._cleanup_test()
         log.info("*** Test cleanup complete.")
