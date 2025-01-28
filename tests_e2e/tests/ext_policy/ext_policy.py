@@ -16,12 +16,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import logging
 import json
 import re
 import uuid
 import os
+import time
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from assertpy import assert_that, fail
+
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
 from tests_e2e.tests.lib.vm_extension_identifier import VmExtensionIds
@@ -32,15 +36,42 @@ from tests_e2e.tests.lib.virtual_machine_runcommand_client import VirtualMachine
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 
 
+# Set up custom handler to direct messages from Azure SDK logger to log.info
+class LogDebugHandler(logging.Handler):
+    # Custom handler to direct messages from Azure SDK logger to log.info
+    # TODO: Remove this after debugging intermittent test failures
+    def emit(self, record):
+        log.info("")
+        log.info("Azure SDK debug information: ")
+        message = self.format(record)
+        log.info(message)
+
+
 class ExtPolicy(AgentVmTest):
     class TestCase:
         def __init__(self, extension, settings: Any):
             self.extension = extension
             self.settings = settings
 
+    # Set up custom handler to direct messages from Azure SDK logger to log.info
+    class LogDebugHandler(logging.Handler):
+        # Custom handler to redirect messages from Azure SDK logger to log.info
+        # TODO: Remove this after debugging intermittent test failures
+        def emit(self, record):
+            log.info("")
+            log.info("Azure SDK debug information: ")
+            message = self.format(record)
+            log.info(message)
+            log.info("")
+
     def __init__(self, context: AgentVmTestContext):
         super().__init__(context)
         self._ssh_client: SshClient = self._context.create_ssh_client()
+
+        # TODO: this logger is for debugging Azure SDK errors, remove after debugging intermittent test failures.
+        self._sdk_logger = logging.getLogger('azure')
+        self._sdk_log_handler = LogDebugHandler()
+        self._sdk_logger.addHandler(self._sdk_log_handler)
 
     def _create_policy_file(self, policy):
         """
@@ -61,6 +92,52 @@ class ExtPolicy(AgentVmTest):
             self._ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
         os.remove(file_path)
 
+
+    def _retry_enable(self, extension_case):
+        """
+        Temporary helper function to retry "enable" operation, while intermittent failures are investigated.
+        TODO: remove after failures are fixed
+
+        Azure SDK / ARM occasionally returns a ResourceNotFound error for an enable operation that should
+        succeed. This is only seen when enable is called immediately after retrying a blocked delete:
+            Ex: block CSE with policy -> delete CSE, fails -> allow CSE with policy -> delete CSE, succeeds -> enable
+        The enable operation completes successfully at the agent/CRP level, but ARM/SDK returns an error that the
+        extension is not found.
+            Error: (ResourceNotFound) The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
+            Code: ResourceNotFound
+            Message: The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix!
+
+        The exact cause is not yet understood. For debugging purposes, we retry the operation until it succeeds
+        or until a 15 minute timeout is reached, and log debug messages from the SDK.
+        """
+        def __enable_operation():
+            if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
+                # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
+                extension_case.extension.enable(settings=extension_case.settings)
+            else:
+                extension_case.extension.enable(settings=extension_case.settings, force_update=True)
+            extension_case.extension.assert_instance_view()
+
+        def __retry_operation(operation, max_duration_minutes=15):
+            # Retries the given operation for a maximum duration.
+            start_time = datetime.now()
+            end_time = start_time + timedelta(minutes=max_duration_minutes)
+            last_exc = None
+            while datetime.now() < end_time:
+                try:
+                    return operation()
+                except Exception as e:
+                    last_exc = e
+                    if "ResourceNotFound" in str(e):  # Retry only for ResourceNotFound error
+                        log.info(f"ResourceNotFound error: {e}. Retrying...")
+                        time.sleep(5)
+                    else:
+                        raise e
+
+            raise Exception(f"Enable operation failed after retrying for {max_duration_minutes} minutes. Error: {last_exc}")
+
+        __retry_operation(__enable_operation)
+
     def _operation_should_succeed(self, operation, extension_case):
         log.info("")
         log.info(f"Attempting to {operation} {extension_case.extension.__str__()}, expected to succeed")
@@ -68,12 +145,7 @@ class ExtPolicy(AgentVmTest):
         # If deleting, assert that the extension is not present in instance view.
         try:
             if operation == "enable":
-                # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
-                if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
-                    extension_case.extension.enable(settings=extension_case.settings)
-                else:
-                    extension_case.extension.enable(settings=extension_case.settings, force_update=True)
-                extension_case.extension.assert_instance_view()
+                self._retry_enable(extension_case)
             elif operation == "delete":
                 extension_case.extension.delete()
                 instance_view_extensions = self._context.vm.get_instance_view().extensions
@@ -83,7 +155,7 @@ class ExtPolicy(AgentVmTest):
                         "extension {0} still in instance view after attempting to delete".format(extension_case.extension))
             log.info(f"Operation '{operation}' for {extension_case.extension.__str__()} succeeded as expected.")
         except Exception as error:
-            fail(
+            self._fail_test(
                 f"Unexpected error while trying to {operation} {extension_case.extension.__str__()}. "
                 f"Extension is allowed by policy so this operation should have completed successfully.\n"
                 f"Error: {error}")
@@ -100,7 +172,7 @@ class ExtPolicy(AgentVmTest):
                 else:
                     extension_case.extension.enable(settings=extension_case.settings, force_update=True,
                                                     timeout=timeout)
-                fail(
+                self._fail_test(
                     f"The agent should have reported an error trying to {operation} {extension_case.extension} "
                     f"because the extension is disallowed by policy.")
             except Exception as error:
@@ -126,8 +198,9 @@ class ExtPolicy(AgentVmTest):
             try:
                 timeout = (3 * 60)  # Allow agent some time to process goal state, but do not wait for full timeout.
                 extension_case.extension.delete(timeout=timeout)
-                fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
-                     f"because the extension is disallowed by policy and agent should have reported a policy failure.")
+                self._fail_test(
+                    f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
+                    f"because the extension is disallowed by policy and agent should have reported a policy failure.")
             except TimeoutError:
                 log.info("Delete operation did not complete, as expected. Checking instance view "
                          "and agent log to confirm that delete operation failed due to policy.")
@@ -135,8 +208,9 @@ class ExtPolicy(AgentVmTest):
                 instance_view_extensions = self._context.vm.get_instance_view().extensions
                 if instance_view_extensions is not None and not any(
                         e.name == extension_case.extension._resource_name for e in instance_view_extensions):
-                    fail(f"Delete operation is disallowed by policy and should have failed, but extension "
-                         f"{extension_case.extension} is no longer present in the instance view.")
+                    self._fail_test(
+                        f"Delete operation is disallowed by policy and should have failed, but extension "
+                        f"{extension_case.extension} is no longer present in the instance view.")
 
                 # Confirm that agent log contains error message that uninstall was blocked due to policy
                 # The script will check for a log message such as "Extension will not be processed: failed to uninstall
@@ -144,6 +218,23 @@ class ExtPolicy(AgentVmTest):
                 self._ssh_client.run_command(
                     f"agent_ext_policy-verify_operation_disallowed.py --extension-name '{extension_case.extension._identifier}' "
                     f"--after-timestamp '{delete_start_time}' --operation 'uninstall'", use_sudo = True)
+
+    def _cleanup_test(self):
+        # Disable policy on the test machine and reset logging
+        log.info("Stopping Azure SDK debug logging", self._context.vm.name)
+        self._sdk_logger.setLevel(logging.INFO)
+        self._sdk_logger.removeHandler(self._sdk_log_handler)
+        log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
+        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+
+    def _fail_test(self, message):
+        # Wrapper function that cleans up test machine before failing the test.
+        # This function should be used instead of fail().
+        log.info("Test failed, begin cleanup...")
+        self._cleanup_test()
+        log.info("Cleanup complete.")
+        fail(message)
+
 
     def run(self):
 
@@ -281,6 +372,7 @@ class ExtPolicy(AgentVmTest):
                 }
             }
         self._create_policy_file(policy)
+        self._sdk_logger.setLevel(logging.DEBUG)
         self._operation_should_fail("enable", custom_script)
         self._operation_should_fail("delete", custom_script)
 
@@ -308,10 +400,8 @@ class ExtPolicy(AgentVmTest):
         self._operation_should_succeed("enable", custom_script)
 
         # Cleanup after test: disable policy enforcement in conf file.
-        log.info("")
         log.info("*** Begin test cleanup")
-        log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
-        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+        self._cleanup_test()
         log.info("*** Test cleanup complete.")
 
 
