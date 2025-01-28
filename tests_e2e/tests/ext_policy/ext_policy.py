@@ -36,17 +36,6 @@ from tests_e2e.tests.lib.virtual_machine_runcommand_client import VirtualMachine
 from tests_e2e.tests.lib.agent_test_context import AgentVmTestContext
 
 
-# Set up custom handler to direct messages from Azure SDK logger to log.info
-class LogDebugHandler(logging.Handler):
-    # Custom handler to direct messages from Azure SDK logger to log.info
-    # TODO: Remove this after debugging intermittent test failures
-    def emit(self, record):
-        log.info("")
-        log.info("Azure SDK debug information: ")
-        message = self.format(record)
-        log.info(message)
-
-
 class ExtPolicy(AgentVmTest):
     class TestCase:
         def __init__(self, extension, settings: Any):
@@ -70,8 +59,6 @@ class ExtPolicy(AgentVmTest):
 
         # TODO: this logger is for debugging Azure SDK errors, remove after debugging intermittent test failures.
         self._sdk_logger = logging.getLogger('azure')
-        self._sdk_log_handler = LogDebugHandler()
-        self._sdk_logger.addHandler(self._sdk_log_handler)
 
     def _create_policy_file(self, policy):
         """
@@ -221,9 +208,9 @@ class ExtPolicy(AgentVmTest):
 
     def _cleanup_test(self):
         # Disable policy on the test machine and reset logging
-        log.info("Stopping Azure SDK debug logging", self._context.vm.name)
+        log.info("Stopping Azure SDK debug logging")
         self._sdk_logger.setLevel(logging.INFO)
-        self._sdk_logger.removeHandler(self._sdk_log_handler)
+        self._sdk_logger.removeHandler(log._handler)
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
 
@@ -235,10 +222,12 @@ class ExtPolicy(AgentVmTest):
         log.info("Cleanup complete.")
         fail(message)
 
-
     def run(self):
 
         log.info("*** Begin test setup")
+
+        # Direct Azure SDK logging to log file
+        self._sdk_logger.addHandler(log._handler)
 
         # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
         # without settings have different status reporting logic, so we should test all cases.
@@ -352,12 +341,12 @@ class ExtPolicy(AgentVmTest):
 
 
         # This policy tests the following scenarios:
-        # - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast
+        # - disallow a previously-enabled single-config extension (CustomScript), then try to enable again -> should fail fast
         # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should fail fast
         log.info("")
         log.info("*** Begin test case 3")
         log.info("This policy tests the following scenarios:")
-        log.info(" - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast")
+        log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to enable again -> should fail fast")
         log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
         policy = \
             {
