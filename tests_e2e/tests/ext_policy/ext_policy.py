@@ -210,7 +210,7 @@ class ExtPolicy(AgentVmTest):
         # Disable policy on the test machine and reset logging
         log.info("Stopping Azure SDK debug logging")
         self._sdk_logger.setLevel(logging.INFO)
-        self._sdk_logger.removeHandler(log._handler)
+        self._sdk_logger.handlers.clear()
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
 
@@ -225,9 +225,6 @@ class ExtPolicy(AgentVmTest):
     def run(self):
 
         log.info("*** Begin test setup")
-
-        # Direct Azure SDK logging to log file
-        self._sdk_logger.addHandler(log._handler)
 
         # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
         # without settings have different status reporting logic, so we should test all cases.
@@ -361,7 +358,13 @@ class ExtPolicy(AgentVmTest):
                 }
             }
         self._create_policy_file(policy)
+        # Set up Azure SDK logger and send all logs to log file
+        log_file = log.get_current_thread_log()
+        file_handler = logging.FileHandler(str(log_file))
+        self._sdk_logger.handlers.clear()
         self._sdk_logger.setLevel(logging.DEBUG)
+        self._sdk_logger.addHandler(file_handler)
+        self._sdk_logger.propagate = False
         self._operation_should_fail("enable", custom_script)
         self._operation_should_fail("delete", custom_script)
 
