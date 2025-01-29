@@ -18,6 +18,7 @@
 #
 import json
 import re
+import time
 import uuid
 import os
 from typing import List, Dict, Any
@@ -61,6 +62,50 @@ class ExtPolicy(AgentVmTest):
             self._ssh_client.run_command(f"mv {remote_path} {policy_file_final_dest}", use_sudo=True)
         os.remove(file_path)
 
+    @staticmethod
+    def _enable_extension_with_retry(extension_case, retry_on_error, retries=5):
+        """
+        Attempts the 'enable' operation, retrying after a short delay if the error message contains the
+        specified string 'retry_on_error'. This method was created to work around an intermittent test failure:
+
+        The Azure SDK/ARM occasionally returns a 'ResourceNotFound' error for an 'enable' operation, even though the
+        operation succeeds at the agent and CRP level. This issue has been observed in the following case (test case 4):
+            1. Block CSE with policy -> delete CSE (waits for timeout)
+            2. Allow CSE with policy -> delete CSE (succeeds)
+            3. Enable CSE -> ARM returns ResourceNotFound error
+            
+            Error details:
+            (ResourceNotFound) The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
+            Code: ResourceNotFound
+            Message: The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
+
+        The suspected cause is that ARM receives the enable request (#3) before the second delete operation (#2) has completed, leading to a conflict.
+        When the first delete operation (#1) fails, the agent reports a failure status for the extension, but CRP continues to wait for the agent to stop reporting status.
+        Once the second delete operation (#2) succeeds, the agent stops reporting status, so CRP/ARM reports success for the *first* delete operation and reports that the second delete is still in progress.
+        Consequently, the enable request (#3) is accepted by ARM but conflicts with the ongoing delete operation (#2), resulting in the ResourceNotFound error.
+
+        To work around this issue, we retry 'enable' only if the string 'ResourceNotFound' is found in the error message.
+        """
+        error = None
+        for attempt in range(retries):
+            try:
+                # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
+                if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
+                    extension_case.extension.enable(settings=extension_case.settings)
+                else:
+                    extension_case.extension.enable(settings=extension_case.settings, force_update=True)
+                extension_case.extension.assert_instance_view()
+                return
+            except Exception as e:
+                error = e
+                # Only retry if the specified string is found in the error message.
+                if retry_on_error in str(e):
+                    log.warning(f"Operation 'enable' failed with a {retry_on_error} error on attempt {attempt + 1}, retrying in 30 secs. Error: {e}")
+                    time.sleep(30)
+                else:
+                    raise e
+        raise Exception(f"Enable operation failed after retrying: {error}")
+
     def _operation_should_succeed(self, operation, extension_case):
         log.info("")
         log.info(f"Attempting to {operation} {extension_case.extension.__str__()}, expected to succeed")
@@ -68,12 +113,7 @@ class ExtPolicy(AgentVmTest):
         # If deleting, assert that the extension is not present in instance view.
         try:
             if operation == "enable":
-                # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
-                if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
-                    extension_case.extension.enable(settings=extension_case.settings)
-                else:
-                    extension_case.extension.enable(settings=extension_case.settings, force_update=True)
-                extension_case.extension.assert_instance_view()
+                ExtPolicy._enable_extension_with_retry(extension_case=extension_case, retry_on_error="ResourceNotFound")
             elif operation == "delete":
                 extension_case.extension.delete()
                 instance_view_extensions = self._context.vm.get_instance_view().extensions
