@@ -76,12 +76,19 @@ class ExtPolicy(AgentVmTest):
         start_time = datetime.now()
         end_time = start_time + timedelta(minutes=max_duration_minutes)
         last_exc = None
+        first_attempt = True
+
         while datetime.now() < end_time:
             try:
-                return operation()
+                result = operation()
+                if not first_attempt:
+                    raise Exception("Operation succeeded, but retries were required. Marking as failure.")
+                return result
             except Exception as e:
                 last_exc = e
                 if retry_on_error in str(e):  # Retry only for specified error
+                    if first_attempt:
+                        first_attempt = False
                     log.info(f"Error: {e}. Retrying...")
                     time.sleep(30)
                 else:
@@ -115,7 +122,6 @@ class ExtPolicy(AgentVmTest):
             else:
                 extension_case.extension.enable(settings=extension_case.settings, force_update=True)
             extension_case.extension.assert_instance_view()
-            raise Exception("ResourceNotFound")
 
         ExtPolicy.__retry_operation(operation)
 
