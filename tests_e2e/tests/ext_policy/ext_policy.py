@@ -68,8 +68,8 @@ class ExtPolicy(AgentVmTest):
         Attempts the 'enable' operation, retrying after a short delay if the error message contains the
         specified string 'retry_on_error'. This method was created to work around an intermittent test failure:
 
-        The Azure SDK/ARM occasionally returns a 'ResourceNotFound' error for an 'enable' operation, even though the
-        operation succeeds at the agent and CRP level. This issue has been observed in the following case (test case 4):
+        On test case 4,  the Azure SDK/ARM occasionally returns a 'ResourceNotFound' error for the 'enable' operation (#3),
+        even though all 3 operations in the test case succeed at the agent and CRP level.
             1. Block CSE with policy -> delete CSE (ARM/CRP continues polling until timeout, test moves to next operation)
             2. Allow CSE with policy -> delete CSE (succeeds)
             3. Enable CSE -> SDK returns ResourceNotFound error
@@ -80,11 +80,12 @@ class ExtPolicy(AgentVmTest):
             Message: The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
 
         The suspected cause is that ARM receives the enable request (#3) before the second delete operation (#2) has
-        completed, leading to a conflict. When the first delete operation (#1) fails, the agent reports a failure status
-        for the extension, but CRP continues to wait for the agent to stop reporting status. Once the second delete
-        operation (#2) succeeds, the agent stops reporting status, so ARM reports success for the *first* delete
-        operation and reports that the second delete is still in progress. Consequently, the enable request (#3) is accepted
-        by ARM but conflicts with the ongoing delete operation (#2), causing the SDK to report a ResourceNotFound error.
+        completed at the ARM level, leading to a conflict. When the first delete operation (#1) fails, the agent reports
+        a failure status for the extension, but CRP continues to wait for the agent to stop reporting status for that
+        extension. Once the second delete operation (#2) succeeds, the agent stops reporting status for that extension,
+        so ARM reports success for the *first* delete operation and reports that the second delete is still in progress.
+        Consequently, the enable request (#3) is accepted by ARM but conflicts with the ongoing delete operation (#2),
+        causing the SDK to report a ResourceNotFound error.
 
         To work around this issue, we retry 'enable' a few times if the string 'ResourceNotFound' is found in the error message.
         If the issue continues after retrying, another possible workaround is to wait for the full CRP timeout for delete #1.
