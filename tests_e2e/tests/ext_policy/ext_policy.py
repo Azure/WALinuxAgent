@@ -48,11 +48,11 @@ class ExtPolicy(AgentVmTest):
         Create policy json file and copy to /etc/waagent_policy.json on test machine.
         """
         unique_id = uuid.uuid4()
-        file_path = "/tmp/waagent_policy_{0}.json".format(unique_id)
+        file_path = f"/tmp/waagent_policy_{unique_id}.json"
         with open(file_path, mode='w') as policy_file:
             json.dump(policy, policy_file, indent=4)
             policy_file.flush()
-            log.info("Policy file contents: {0}".format(json.dumps(policy, indent=4)))
+            log.info(f"Policy file contents: {json.dumps(policy, indent=4)}")
 
             remote_path = "/tmp/waagent_policy.json"
             local_path = policy_file.name
@@ -63,10 +63,26 @@ class ExtPolicy(AgentVmTest):
         os.remove(file_path)
 
     @staticmethod
-    def _enable_extension_with_retry(extension_case, retry_on_error, retries=5):
+    def __enable_extension(extension_case, timeout=None):
+        """Helper to call 'enable' with appropriate parameters."""
+        args = {"settings": extension_case.settings}
+
+        # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
+        # For all other extensions, always set force_update to true.
+        if not isinstance(extension_case.extension, VirtualMachineRunCommandClient):
+            args["force_update"] = True
+
+        # Add timeout only if specified, else use default
+        if timeout is not None:
+            args["timeout"] = timeout
+
+        extension_case.extension.enable(**args)
+
+    @staticmethod
+    def _enable_should_succeed_with_retry(extension_case, retry_on_error, retries=2):
         """
-        Attempts the 'enable' operation, retrying after a short delay if the error message contains the
-        specified string 'retry_on_error'. This method was created to work around an intermittent test failure:
+        This method was created to work around an intermittent failure for test case 4. Attempts the 'enable' operation,
+        retrying after a short delay if the error message contains the specified string 'retry_on_error'.
 
         On test case 4,  the Azure SDK/ARM occasionally returns a 'ResourceNotFound' error for the 'enable' operation (#3),
         even though all 3 operations in the test case succeed at the agent and CRP level.
@@ -90,16 +106,16 @@ class ExtPolicy(AgentVmTest):
         To work around this issue, we retry 'enable' a few times if the string 'ResourceNotFound' is found in the error message.
         If the issue continues after retrying, another possible workaround is to wait for the full CRP timeout for delete #1.
         """
+        log.info("")
+        log.info(f"Attempting to enable {extension_case.extension}, expected to succeed")
         error = None
         for attempt in range(retries):
             try:
-                # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
-                if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
-                    extension_case.extension.enable(settings=extension_case.settings)
-                else:
-                    extension_case.extension.enable(settings=extension_case.settings, force_update=True)
+                ExtPolicy.__enable_extension(extension_case)
                 extension_case.extension.assert_instance_view()
+                log.info(f"Operation 'enable' for {extension_case.extension} succeeded.")
                 return
+
             except Exception as e:
                 error = e
                 # Only retry if the specified string is found in the error message.
@@ -107,28 +123,35 @@ class ExtPolicy(AgentVmTest):
                     log.warning(f"Operation 'enable' failed with a {retry_on_error} error on attempt {attempt + 1}, retrying in 30 secs. Error: {e}")
                     time.sleep(30)
                 else:
-                    raise e
-        raise Exception(f"Enable operation failed after retrying: {error}")
+                    fail(
+                        f"Unexpected error while trying to enable {extension_case.extension}. "
+                        f"Extension is allowed by policy so this operation should have completed successfully.\n"
+                        f"Error: {e}")
+
+        fail(f"Enable {extension_case.extension} failed after {retries} retries. Last error: {error}")
 
     def _operation_should_succeed(self, operation, extension_case):
         log.info("")
-        log.info(f"Attempting to {operation} {extension_case.extension.__str__()}, expected to succeed")
+        log.info(f"Attempting to {operation} {extension_case.extension}, expected to succeed")
         # Attempt operation. If enabling, assert that the extension is present in instance view.
         # If deleting, assert that the extension is not present in instance view.
         try:
             if operation == "enable":
-                ExtPolicy._enable_extension_with_retry(extension_case=extension_case, retry_on_error="ResourceNotFound")
+                ExtPolicy.__enable_extension(extension_case)
+                extension_case.extension.assert_instance_view()
+
             elif operation == "delete":
                 extension_case.extension.delete()
                 instance_view_extensions = self._context.vm.get_instance_view().extensions
                 if instance_view_extensions is not None and any(
                         e.name == extension_case.extension._resource_name for e in instance_view_extensions):
-                    raise Exception(
-                        "extension {0} still in instance view after attempting to delete".format(extension_case.extension))
-            log.info(f"Operation '{operation}' for {extension_case.extension.__str__()} succeeded as expected.")
+                    raise Exception(f"extension {extension_case.extension} still in instance view after attempting to delete")
+
+            log.info(f"Operation '{operation}' for {extension_case.extension} succeeded as expected.")
+
         except Exception as error:
             fail(
-                f"Unexpected error while trying to {operation} {extension_case.extension.__str__()}. "
+                f"Unexpected error while trying to {operation} {extension_case.extension}. "
                 f"Extension is allowed by policy so this operation should have completed successfully.\n"
                 f"Error: {error}")
 
@@ -138,15 +161,11 @@ class ExtPolicy(AgentVmTest):
             try:
                 log.info(f"Attempting to enable {extension_case.extension}, should fail fast due to policy.")
                 timeout = (6 * 60)  # Fail fast.
-                # VirtualMachineRunCommandClient (and VirtualMachineRunCommand) does not take force_update_tag as a parameter.
-                if isinstance(extension_case.extension, VirtualMachineRunCommandClient):
-                    extension_case.extension.enable(settings=extension_case.settings, timeout=timeout)
-                else:
-                    extension_case.extension.enable(settings=extension_case.settings, force_update=True,
-                                                    timeout=timeout)
+                ExtPolicy.__enable_extension(extension_case, timeout)
                 fail(
                     f"The agent should have reported an error trying to {operation} {extension_case.extension} "
                     f"because the extension is disallowed by policy.")
+
             except Exception as error:
                 # We exclude the extension name from regex because CRP sometimes installs test extensions with different
                 # names (ex: Microsoft.Azure.Extensions.Edp.RunCommandHandlerLinuxTest instead of Microsoft.CPlat.Core.RunCommandHandlerLinux)
@@ -172,6 +191,7 @@ class ExtPolicy(AgentVmTest):
                 extension_case.extension.delete(timeout=timeout)
                 fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
                      f"because the extension is disallowed by policy and agent should have reported a policy failure.")
+
             except TimeoutError:
                 log.info("Delete operation did not complete, as expected. Checking instance view "
                          "and agent log to confirm that delete operation failed due to policy.")
@@ -349,7 +369,7 @@ class ExtPolicy(AgentVmTest):
         # Since CustomScript is marked for deletion by previous test case, we can only retry the delete operation (enable
         # is not allowed by CRP). So we first delete successfully, and then re-install/enable CustomScript.
         self._operation_should_succeed("delete", custom_script)
-        self._operation_should_succeed("enable", custom_script)
+        self._enable_should_succeed_with_retry(extension_case=custom_script, retry_on_error="ResourceNotFound")
 
         # Cleanup after test: disable policy enforcement in conf file.
         log.info("")
@@ -357,7 +377,6 @@ class ExtPolicy(AgentVmTest):
         log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
         self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
         log.info("*** Test cleanup complete.")
-
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
