@@ -17,7 +17,6 @@
 
 import os
 import re
-import tempfile
 import unittest
 
 import azurelinuxagent.common.conf as conf
@@ -55,8 +54,7 @@ class TestProvision(AgentTestCase):
 
     def test_customdata(self):
         base64data = 'Q3VzdG9tRGF0YQ=='
-        data = DefaultOSUtil().decode_customdata(base64data)
-        fileutil.write_file(tempfile.mktemp(), data)
+        DefaultOSUtil().decode_customdata(base64data)
 
     @patch('azurelinuxagent.common.conf.get_provision_enabled',
         return_value=False)
