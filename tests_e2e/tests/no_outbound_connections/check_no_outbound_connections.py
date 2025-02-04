@@ -20,17 +20,25 @@ from assertpy import fail
 from typing import Any, Dict, List
 
 from tests_e2e.tests.lib.agent_test import AgentVmTest
+from tests_e2e.tests.lib.agent_test_context import AgentTestContext
 from tests_e2e.tests.lib.logging import log
 from tests_e2e.tests.lib.shell import CommandError
 from tests_e2e.tests.lib.ssh_client import SshClient
-
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
-
 
 class CheckNoOutboundConnections(AgentVmTest):
     """
     Verifies that there is no outbound connectivity on the test VM.
     """
+    def __init__(self, context: AgentTestContext):
+        super().__init__(context)
+        self.__distro: str = None
+
+    @property
+    def distro(self) -> str:
+        if self.__distro is None:
+            raise Exception("The distro has not been initialized")
+        return self.__distro
+
     def run(self):
         # This script is executed on the test VM. It tries to connect to a well-known DNS server (DNS is on port 53).
         script: str = """
@@ -46,6 +54,13 @@ print("There is outbound connectivity [unexpected: the custom ARM template shoul
 exit(1)
 """
         ssh_client: SshClient = self._context.create_ssh_client()
+        try:
+            self.__distro = ssh_client.get_distro()
+            log.info("Distro: %s", self.distro)
+        except Exception as e:
+            log.warning("Could not determine the distro (setting to UNKNOWN): %s", e)
+            self.__distro = "UNKNOWN"
+
         try:
             log.info("Verifying that there is no outbound connectivity on the test VM")
             ssh_client.run_command("pypy3 -c '{0}'".format(script.replace('"', '\"')))
@@ -69,7 +84,7 @@ exit(1)
             #
             {
                 'message': r"The permanent firewall rules for Azure Fabric are not setup correctly.*The following rules are missing: \['ACCEPT DNS'\]",
-                'if': lambda r: DISTRO_NAME == 'redhat' and DISTRO_VERSION == '8.2'
+                'if': lambda _: self.distro == 'redhat_82'
             }
         ]
 

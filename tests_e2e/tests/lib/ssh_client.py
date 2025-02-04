@@ -65,6 +65,9 @@ class SshClient(object):
     def get_architecture(self):
         return self.run_command("uname -m").rstrip()
 
+    def get_distro(self):
+        return self.run_command("get_distro.py").rstrip()
+
     def copy_to_node(self, local_path: Path, remote_path: Path, recursive: bool = False, attempts: int = ATTEMPTS, attempt_delay: int = ATTEMPT_DELAY) -> None:
         """
         File copy to a remote node
