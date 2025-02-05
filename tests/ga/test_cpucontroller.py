@@ -151,9 +151,13 @@ class TestCpuControllerV1(AgentTestCase):
 
     def test_get_throttled_time_v1_should_return_the_value_since_its_last_invocation(self):
         test_file = os.path.join(self.tmp_dir, "cpu.stat")
-        shutil.copyfile(os.path.join(data_dir, "cgroups", "v1", "cpu.stat_t0"), test_file)  # throttled_time = 50
         controller = CpuControllerV1("test", self.tmp_dir)
         controller.initialize_cpu_usage()
+        controller.track_throttle_time(True)
+
+        shutil.copyfile(os.path.join(data_dir, "cgroups", "v1", "cpu.stat_t0"), test_file)  # throttled_time = 50
+        controller.get_cpu_throttled_time()
+
         shutil.copyfile(os.path.join(data_dir, "cgroups", "v1", "cpu.stat_t1"), test_file)  # throttled_time = 2075541442327
 
         throttled_time = controller.get_cpu_throttled_time()
@@ -163,6 +167,7 @@ class TestCpuControllerV1(AgentTestCase):
     def test_get_tracked_metrics_v1_should_return_the_throttled_time(self):
         controller = CpuControllerV1("test", os.path.join(data_dir, "cgroups", "v1"))
         controller.initialize_cpu_usage()
+        controller.track_throttle_time(True)
 
         def find_throttled_time(metrics):
             return [m for m in metrics if m.counter == MetricsCounter.THROTTLED_TIME]
@@ -286,10 +291,14 @@ class TestCpuControllerV2(AgentTestCase):
             cpu_usage = controller.get_cpu_usage()  # pylint: disable=unused-variable
 
     def test_get_throttled_time_v2_should_return_the_value_since_its_last_invocation(self):
-        test_file = os.path.join(self.tmp_dir, "cpu.stat")
-        shutil.copyfile(os.path.join(data_dir, "cgroups", "v2", "cpu.stat_t0"), test_file)  # throttled_time = 15735198706
         controller = CpuControllerV2("test", self.tmp_dir)
         controller.initialize_cpu_usage()
+        controller.track_throttle_time(True)
+
+        test_file = os.path.join(self.tmp_dir, "cpu.stat")
+        shutil.copyfile(os.path.join(data_dir, "cgroups", "v2", "cpu.stat_t0"), test_file)  # throttled_time = 15735198706
+        controller.get_cpu_throttled_time()
+
         shutil.copyfile(os.path.join(data_dir, "cgroups", "v2", "cpu.stat_t1"), test_file)  # throttled_usec = 15796563650
 
         throttled_time = controller.get_cpu_throttled_time()
@@ -299,6 +308,7 @@ class TestCpuControllerV2(AgentTestCase):
     def test_get_tracked_metrics_v2_should_return_the_throttled_time(self):
         controller = CpuControllerV2("test", os.path.join(data_dir, "cgroups", "v2"))
         controller.initialize_cpu_usage()
+        controller.track_throttle_time(True)
 
         def find_throttled_time(metrics):
             return [m for m in metrics if m.counter == MetricsCounter.THROTTLED_TIME]

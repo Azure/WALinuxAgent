@@ -53,7 +53,7 @@ variable:
       - no_outbound_connections
       - publish_hostname
       - recover_network_interface
-      - cgroup_v2_disabled
+      - cgroup_v2_enabled
       - log_collector
 
   #
