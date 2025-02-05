@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/ksh
 
 daemon="python2.7 /usr/local/sbin/waagent -start"
 
