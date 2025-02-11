@@ -229,13 +229,15 @@ class ExtPolicy(AgentVmTest):
             # Azure Policy automatically installs the GuestConfig extension on test machines, which may occur
             # during the CRP timeout wait (test case 5), inadvertently resetting the timeout period.
             # To prevent this, manually install GuestConfig if not already present.
-            guest_config_resource_name = "AzurePolicyforLinux"
-            if guest_config_resource_name not in extension_names_on_vm:
-                log.info("")
-                log.info("Installing GuestConfig extension.")
-                guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig,
-                                                             resource_name=guest_config_resource_name)
-                guest_config.enable(auto_upgrade_minor_version=True)
+            distro = self._ssh_client.run_command("get_distro.py").rstrip()
+            if VmExtensionIds.GuestConfig.supports_distro(distro):
+                guest_config_resource_name = "AzurePolicyforLinux"
+                if guest_config_resource_name not in extension_names_on_vm:
+                    log.info("")
+                    log.info("Installing GuestConfig extension.")
+                    guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig,
+                                                                 resource_name=guest_config_resource_name)
+                    guest_config.enable(auto_upgrade_minor_version=True)
 
             log.info("")
             log.info("Test setup complete.")
