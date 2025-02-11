@@ -45,6 +45,8 @@ variable:
       - agent_update
       - ext_cgroups
       - extensions_disabled
+      - ext_policy
+      - ext_policy_with_dependencies
       - ext_sequencing
       - ext_telemetry_pipeline
       - fips
@@ -55,8 +57,6 @@ variable:
       - recover_network_interface
       - cgroup_v2_disabled
       - log_collector
-      - ext_policy
-      - ext_policy_with_dependencies
 
   #
   # Additional arguments pass to the test suites

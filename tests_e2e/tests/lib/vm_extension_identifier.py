@@ -66,3 +66,4 @@ class VmExtensionIds(object):
     GuestAgentDcrTestExtension: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.TestExtensions.Edp', ext_type='GuestAgentDcrTest', version='1.0')
     AzureMonitorLinuxAgent: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Monitor', ext_type='AzureMonitorLinuxAgent', version="1.5")
     GATestExtension: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.Azure.Extensions.Edp', ext_type='GATestExtGo', version="1.2")
+    GuestConfig: VmExtensionIdentifier = VmExtensionIdentifier(publisher='Microsoft.GuestConfiguration', ext_type='ConfigurationforLinux', version="1.0")

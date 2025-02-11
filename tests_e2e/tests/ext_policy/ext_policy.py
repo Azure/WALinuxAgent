@@ -18,7 +18,6 @@
 #
 import json
 import re
-import time
 import uuid
 import os
 from typing import List, Dict, Any
@@ -77,58 +76,6 @@ class ExtPolicy(AgentVmTest):
             args["timeout"] = timeout
 
         extension_case.extension.enable(**args)
-
-    @staticmethod
-    def _enable_should_succeed_with_retry(extension_case, retry_on_error, retries=2):
-        """
-        This method was created to work around an intermittent failure for test case 4. Attempts the 'enable' operation,
-        retrying after a short delay if the error message contains the specified string 'retry_on_error'.
-
-        On test case 4,  the Azure SDK/ARM occasionally returns a 'ResourceNotFound' error for the 'enable' operation (#3),
-        even though all 3 operations in the test case succeed at the agent and CRP level.
-            1. Block CSE with policy -> delete CSE (ARM/CRP continues polling until timeout, test moves to next operation)
-            2. Allow CSE with policy -> delete CSE (succeeds)
-            3. Enable CSE -> SDK returns ResourceNotFound error
-            
-            Error details:
-            (ResourceNotFound) The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
-            Code: ResourceNotFound
-            Message: The Resource 'Microsoft.Compute/virtualMachines/lisa-WALinuxAgent-20250124-090654-780-e56-n0/extensions/CustomScript' under resource group 'lisa-WALinuxAgent-20250124-090654-780-e56' was not found. For more details please go to https://aka.ms/ARMResourceNotFoundFix
-
-        The suspected cause is that ARM receives the enable request (#3) before the second delete operation (#2) has
-        completed at the ARM level, leading to a conflict. When the first delete operation (#1) fails, the agent reports
-        a failure status for the extension, but CRP continues to wait for the agent to stop reporting status for that
-        extension. Once the second delete operation (#2) succeeds, the agent stops reporting status for that extension,
-        so ARM reports success for the *first* delete operation and reports that the second delete is still in progress.
-        Consequently, the enable request (#3) is accepted by ARM but conflicts with the ongoing delete operation (#2),
-        causing the SDK to report a ResourceNotFound error.
-
-        To work around this issue, we retry 'enable' a few times if the string 'ResourceNotFound' is found in the error message.
-        If the issue continues after retrying, another possible workaround is to wait for the full CRP timeout for delete #1.
-        """
-        log.info("")
-        log.info(f"Attempting to enable {extension_case.extension}, expected to succeed")
-        error = None
-        for attempt in range(retries):
-            try:
-                ExtPolicy.__enable_extension(extension_case)
-                extension_case.extension.assert_instance_view()
-                log.info(f"Operation 'enable' for {extension_case.extension} succeeded.")
-                return
-
-            except Exception as e:
-                error = e
-                # Only retry if the specified string is found in the error message.
-                if retry_on_error in str(e):
-                    log.warning(f"Operation 'enable' failed with a {retry_on_error} error on attempt {attempt + 1}, retrying in 30 secs. Error: {e}")
-                    time.sleep(30)
-                else:
-                    fail(
-                        f"Unexpected error while trying to enable {extension_case.extension}. "
-                        f"Extension is allowed by policy so this operation should have completed successfully.\n"
-                        f"Error: {e}")
-
-        fail(f"Enable {extension_case.extension} failed after {retries} retries. Last error: {error}")
 
     def _operation_should_succeed(self, operation, extension_case):
         log.info("")
@@ -198,7 +145,7 @@ class ExtPolicy(AgentVmTest):
             delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
                 # Wait long enough for CRP timeout (15 min) and confirm that a timeout error was thrown.
-                timeout = (30 * 60)
+                timeout = (20 * 60)
                 extension_case.extension.delete(timeout=timeout)
                 fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
                      f"because the extension is disallowed by policy and agent should have reported a policy failure.")
@@ -221,189 +168,225 @@ class ExtPolicy(AgentVmTest):
 
     def run(self):
 
-        log.info("*** Begin test setup")
+        try:
+            log.info("*** Begin test setup")
 
-        #  We expect "delete" operations on disallowed VMs to reach timeout, because delete is a best effort operation
-        #  by-design and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
-        log.info("Update CRP timeout period to 15 minutes.")
-        self._context.vm.update({"extensionsTimeBudget": "PT15M"})
+            #  We expect "delete" operations on disallowed VMs to reach timeout, because delete is a best effort operation
+            #  by-design and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
+            log.info("Update CRP timeout period to 15 minutes.")
+            self._context.vm.update({"extensionsTimeBudget": "PT15M"})
 
-        # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
-        # without settings have different status reporting logic, so we should test all cases.
-        # CustomScript is a single-config extension.
-        custom_script = ExtPolicy.TestCase(
-            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
-                                          resource_name="CustomScript"),
-            {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
-        )
+            # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
+            # without settings have different status reporting logic, so we should test all cases.
+            # CustomScript is a single-config extension.
+            custom_script = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.CustomScript,
+                                              resource_name="CustomScript"),
+                {'commandToExecute': f"echo '{str(uuid.uuid4())}'"}
+            )
 
-        # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
-        # We append the resource name with "Policy" because agent_bvt/run_command.py leaves behind a "RunCommandHandler"
-        # that cannot be deleted via extensions API.
-        run_command = ExtPolicy.TestCase(
-            VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandlerPolicy"),
-            {'source': f"echo '{str(uuid.uuid4())}'"}
-        )
-        run_command_2 = ExtPolicy.TestCase(
-            VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
-                                          resource_name="RunCommandHandlerPolicy2"),
-            {'source': f"echo '{str(uuid.uuid4())}'"}
-        )
+            # RunCommandHandler is a multi-config extension, so we set up two instances (configurations) here and test both.
+            # We append the resource name with "Policy" because agent_bvt/run_command.py leaves behind a "RunCommandHandler"
+            # that cannot be deleted via extensions API.
+            run_command = ExtPolicy.TestCase(
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="RunCommandHandlerPolicy"),
+                {'source': f"echo '{str(uuid.uuid4())}'"}
+            )
+            run_command_2 = ExtPolicy.TestCase(
+                VirtualMachineRunCommandClient(self._context.vm, VmExtensionIds.RunCommandHandler,
+                                              resource_name="RunCommandHandlerPolicy2"),
+                {'source': f"echo '{str(uuid.uuid4())}'"}
+            )
 
-        # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
-        azure_monitor = ExtPolicy.TestCase(
-            VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
-                                          resource_name="AzureMonitorLinuxAgent"),
-            None
-        )
+            # AzureMonitorLinuxAgent is a no-config extension (extension without settings).
+            azure_monitor = ExtPolicy.TestCase(
+                VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.AzureMonitorLinuxAgent,
+                                              resource_name="AzureMonitorLinuxAgent"),
+                None
+            )
 
-        # Another e2e test may have left behind an extension we want to test here. Cleanup any leftovers so that they
-        # do not affect the test results.
-        log.info("Cleaning up existing extensions on the test VM [%s]", self._context.vm.name)
-        # TODO: Consider deleting only extensions used by this test instead of all extensions.
-        self._context.vm.delete_all_extensions()
+            # Another e2e test may have left behind an extension we want to test here. Cleanup any leftovers so that they
+            # do not affect the test results.
+            log.info("Cleaning up existing extensions on the test VM [%s]", self._context.vm.name)
+            # TODO: Consider deleting only extensions used by this test instead of all extensions.
+            self._context.vm.delete_all_extensions()
 
-        # Enable policy via conf file
-        log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
-        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
-        log.info("Test setup complete.")
+            # Enable policy via conf file
+            log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
+            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
-        # This policy tests the following scenarios:
-        # - enable a single-config extension (CustomScript) that is allowed by policy -> should succeed
-        # - enable a no-config extension (AzureMonitorLinuxAgent) that is disallowed by policy -> should fail fast
-        # - enable two instances of a multi-config extension (RunCommandHandler) that is disallowed by policy -> both should fail fast
-        # (Note that CustomScript disallowed by policy is tested in a later test case.)
-        log.info("")
-        log.info("*** Begin test case 1")
-        log.info("This policy tests the following scenarios:")
-        log.info(" - enable a single-config extension (CustomScript) that is allowed by policy -> should succeed")
-        log.info(" - enable a no-config extension (AzureMonitorLinuxAgent) that is disallowed by policy -> should fail fast")
-        log.info(" - enable two instances of a multi-config extension (RunCommandHandler) that is disallowed by policy -> both should fail fast")
-        policy = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": False,
-                    "extensions": {
-                        "Microsoft.Azure.Extensions.CustomScript": {},
-                        # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
-                        "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+            # Azure policy installs GuestConfig extension automatically on test machines. This can happen in the middle of
+            # waiting for CRP timeout (test case 5), causing the timeout to reset and extending the total test runtime.
+            # To avoid this, manually install GuestConfig.
+            log.info("Installing GuestConfig extension.")
+            guest_config = VirtualMachineExtensionClient(self._context.vm, VmExtensionIds.GuestConfig, resource_name="AzurePolicyforLinux")
+            guest_config.enable(auto_upgrade_minor_version=True)
+            log.info("Test setup complete.")
+
+            # This policy tests the following scenarios:
+            # - enable a single-config extension (CustomScript) that is allowed by policy -> should succeed
+            # - enable a no-config extension (AzureMonitorLinuxAgent) that is disallowed by policy -> should fail fast
+            # - enable two instances of a multi-config extension (RunCommandHandler) that is disallowed by policy -> both should fail fast
+            # (Note that CustomScript disallowed by policy is tested in a later test case.)
+            log.info("")
+            log.info("*** Begin test case 1")
+            log.info("This policy tests the following scenarios:")
+            log.info(" - enable a single-config extension (CustomScript) that is allowed by policy -> should succeed")
+            log.info(" - enable a no-config extension (AzureMonitorLinuxAgent) that is disallowed by policy -> should fail fast")
+            log.info(" - enable two instances of a multi-config extension (RunCommandHandler) that is disallowed by policy -> both should fail fast")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": False,
+                        "extensions": {
+                            "Microsoft.Azure.Extensions.CustomScript": {},
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                        }
                     }
                 }
-            }
-        self._create_policy_file(policy)
-        self._operation_should_succeed("enable", custom_script)
-        self._operation_should_fail("enable", run_command)
-        self._operation_should_fail("enable", run_command_2)
-        # We only enable AMA on supported distros.
-        # If we were to enable AMA on an unsupported distro, the operation would initially be blocked by policy as
-        # expected. However, after changing the policy to allow all with the next goal state, the agent would attempt to
-        # re-enable AMA on an unsupported distro, causing errors.
-        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
-            self._operation_should_fail("enable", azure_monitor)
+            self._create_policy_file(policy)
+            self._operation_should_succeed("enable", custom_script)
+            self._operation_should_fail("enable", run_command)
+            self._operation_should_fail("enable", run_command_2)
+            # We only enable AMA on supported distros.
+            # If we were to enable AMA on an unsupported distro, the operation would initially be blocked by policy as
+            # expected. However, after changing the policy to allow all with the next goal state, the agent would attempt to
+            # re-enable AMA on an unsupported distro, causing errors.
+            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+                self._operation_should_fail("enable", azure_monitor)
 
-        # This policy tests the following scenarios:
-        # - enable two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed
-        # - delete two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed
-        # - enable no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed
-        # - delete no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed
-        log.info("")
-        log.info("*** Begin test case 2")
-        log.info("This policy tests the following scenarios:")
-        log.info(" - enable two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed")
-        log.info(" - delete two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed")
-        log.info(" - enable no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed")
-        log.info(" - delete no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed")
-        policy = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": False,
-                    "signatureRequired": False,
-                    "extensions": {}
-                }
-            }
-        self._create_policy_file(policy)
-        self._operation_should_succeed("enable", custom_script)
-        # Update settings to force an update to the seq no
-        run_command.settings = {'source': f"echo '{str(uuid.uuid4())}'"}
-        run_command_2.settings = {'source': f"echo '{str(uuid.uuid4())}'"}
-        self._operation_should_succeed("enable", run_command)
-        self._operation_should_succeed("enable", run_command_2)
-        self._operation_should_succeed("delete", run_command)
-        self._operation_should_succeed("delete", run_command_2)
-        if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
-            self._operation_should_succeed("enable", azure_monitor)
-            self._operation_should_succeed("delete", azure_monitor)
-
-        # This policy tests the following scenario:
-        # - disallow a previously-enabled single-config extension (CustomScript), then try to enable again -> should fail fast
-        log.info("")
-        log.info("*** Begin test case 3")
-        log.info("This policy tests the following scenario:")
-        log.info(" - disallow a previously-enabled single-config extension (CustomScript), then enable again -> should fail fast")
-        policy = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": False,
-                    "extensions": {
-                        # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
-                        "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+            # This policy tests the following scenarios:
+            # - enable two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed
+            # - delete two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed
+            # - enable no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed
+            # - delete no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed
+            log.info("")
+            log.info("*** Begin test case 2")
+            log.info("This policy tests the following scenarios:")
+            log.info(" - enable two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed")
+            log.info(" - delete two instances of a multi-config extension (RunCommandHandler) when allowed by policy -> should succeed")
+            log.info(" - enable no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed")
+            log.info(" - delete no-config extension (AzureMonitorLinuxAgent) when allowed by policy -> should succeed")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": False,
+                        "signatureRequired": False,
+                        "extensions": {}
                     }
                 }
-            }
-        self._create_policy_file(policy)
-        self._operation_should_fail("enable", custom_script)
+            self._create_policy_file(policy)
+            self._operation_should_succeed("enable", custom_script)
+            # Update settings to force an update to the seq no
+            run_command.settings = {'source': f"echo '{str(uuid.uuid4())}'"}
+            run_command_2.settings = {'source': f"echo '{str(uuid.uuid4())}'"}
+            self._operation_should_succeed("enable", run_command)
+            self._operation_should_succeed("enable", run_command_2)
+            self._operation_should_succeed("delete", run_command)
+            self._operation_should_succeed("delete", run_command_2)
+            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+                self._operation_should_succeed("enable", azure_monitor)
+                self._operation_should_succeed("delete", azure_monitor)
 
-        # This policy tests the following scenario:
-        # - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed
-        log.info("")
-        log.info("*** Begin test case 4")
-        log.info("This policy tests the following scenario:")
-        log.info(" - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed")
-        policy = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": False,
-                    "signatureRequired": False,
-                    "extensions": {}
-                }
-            }
-        self._create_policy_file(policy)
-        self._operation_should_succeed("enable", custom_script)
-
-        # This policy tests the following scenarios:
-        # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout
-        log.info("")
-        log.info("*** Begin test case 5")
-        log.info("This policy tests the following scenarios:")
-        log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
-        policy = \
-            {
-                "policyVersion": "0.1.0",
-                "extensionPolicies": {
-                    "allowListedExtensionsOnly": True,
-                    "signatureRequired": False,
-                    "extensions": {
-                        # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
-                        "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+            # This policy tests the following scenario:
+            # - disallow a previously-enabled single-config extension (CustomScript), then try to enable again -> should fail fast
+            log.info("")
+            log.info("*** Begin test case 3")
+            log.info("This policy tests the following scenario:")
+            log.info(" - disallow a previously-enabled single-config extension (CustomScript), then enable again -> should fail fast")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": False,
+                        "extensions": {
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                        }
                     }
                 }
-            }
-        self._create_policy_file(policy)
-        self._operation_should_fail("delete", custom_script)
+            self._create_policy_file(policy)
+            self._operation_should_fail("enable", custom_script)
 
-        # Cleanup after test: disable policy enforcement in conf file.
-        log.info("")
-        log.info("*** Begin test cleanup")
-        log.info("Disabling policy via conf file on the test VM [%s]", self._context.vm.name)
-        self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
-        log.info("*** Test cleanup complete.")
+            # This policy tests the following scenario:
+            # - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed
+            log.info("")
+            log.info("*** Begin test case 4")
+            log.info("This policy tests the following scenario:")
+            log.info(" - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": False,
+                        "extensions": {
+                            "Microsoft.Azure.Extensions.CustomScript": {},
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                        }
+                    }
+                }
+            self._create_policy_file(policy)
+            self._operation_should_succeed("enable", custom_script)
+
+            # This policy tests the following scenarios:
+            # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout
+            log.info("")
+            log.info("*** Begin test case 5")
+            log.info("This policy tests the following scenarios:")
+            log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": False,
+                        "extensions": {
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                        }
+                    }
+                }
+            self._create_policy_file(policy)
+            self._operation_should_fail("delete", custom_script)
+
+            # This policy tests the following scenarios:
+            # - allow a previously-disallowed single-config extension (CustomScript), then try to delete again -> should succeed
+            log.info("")
+            log.info("*** Begin test case 6")
+            log.info("This policy tests the following scenarios:")
+            log.info("- allow a previously-disallowed single-config extension (CustomScript), then retry delete -> should succeed")
+            policy = \
+                {
+                    "policyVersion": "0.1.0",
+                    "extensionPolicies": {
+                        "allowListedExtensionsOnly": True,
+                        "signatureRequired": False,
+                        "extensions": {
+                            "Microsoft.Azure.Extensions.CustomScript": {},
+                            # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                            "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                        }
+                    }
+                }
+            self._create_policy_file(policy)
+            self._operation_should_succeed("delete", custom_script)
+
+        finally:
+            # Cleanup after test: disable policy enforcement via conf and delete policy file
+            log.info("")
+            log.info("*** Begin test cleanup")
+            self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=n", use_sudo=True)
+            self._ssh_client.run_command("rm -f /etc/waagent_policy.json", use_sudo=True)
+            log.info("Successfully disabled policy via config (Debug.EnableExtensionPolicy=n) and removed policy file at /etc/waagent_policy.json")
+            log.info("*** Test cleanup complete.")
 
     def get_ignore_error_rules(self) -> List[Dict[str, Any]]:
         ignore_rules = [
