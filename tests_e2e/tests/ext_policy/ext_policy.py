@@ -209,8 +209,9 @@ class ExtPolicy(AgentVmTest):
             # Another e2e test may have left behind an extension we want to test here. Cleanup any leftovers so that they
             # do not affect the test results.
             log.info("Cleaning up existing extensions on the test VM [%s]", self._context.vm.name)
-            # TODO: Consider deleting only extensions used by this test instead of all extensions.
-            self._context.vm.delete_all_extensions()
+            ext_to_delete = [custom_script, run_command, run_command_2, azure_monitor]
+            for ext in ext_to_delete:
+                ext.extension.delete()
 
             # Enable policy via conf file
             log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
