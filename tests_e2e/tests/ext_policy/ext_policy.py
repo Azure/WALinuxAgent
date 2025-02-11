@@ -179,28 +179,38 @@ class ExtPolicy(AgentVmTest):
             # For delete operations, CRP polls until the agent stops reporting status for the extension, or until timeout is
             # reached, because delete is a best-effort operation and is not expected to fail. However, when delete is called
             # on a disallowed extension, the agent reports failure status, so CRP will continue to poll until timeout.
-            # For efficiency, we asynchronously check the instance view and agent log to confirm that deletion failed,
-            # and do not wait for a response from CRP.
+            # We wait for the full timeout period (set to 15 minutes), verify that CRP returns a timeout error, and
+            # check the agent log to confirm that delete was blocked by policy.
             #
-            # Note: CRP will not allow an 'enable' request until deletion succeeds or times out. The next call must be
-            # a delete operation allowed by policy.
+            # Note: this scenario is currently executed only once. If it must be run multiple times in the future,
+            # avoid waiting for CRP timeout and asynchronously check agent log to confirm delete failure.
+            # This solution may run into some issues:
+            #   - while CRP is waiting for the delete operation to timeout, enable requests on the extension will fail, only
+            #     delete can be retried.
+            #   - if a second delete operation is requested while the first is still running, CRP will merge the goal states
+            #     and not send a new goal state to the agent.
+            # Use the following steps as a workaround:
+            #   1. asynchronously check the agent log to confirm delete failure
+            #   2. force a new goal state by enabling a different extension
+            #   3. allow extension with policy and send another delete request (should succeed).
+            #
             log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
             delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
-                timeout = (3 * 60)  # Allow agent some time to process goal state, but do not wait for full timeout.
+                # Wait long enough for CRP timeout (15 min) and confirm that a timeout error was thrown.
+                timeout = (30 * 60)
                 extension_case.extension.delete(timeout=timeout)
                 fail(f"CRP should not have successfully completed the delete operation for {extension_case.extension} "
                      f"because the extension is disallowed by policy and agent should have reported a policy failure.")
 
-            except TimeoutError:
-                log.info("Delete operation did not complete, as expected. Checking instance view "
-                         "and agent log to confirm that delete operation failed due to policy.")
-                # Confirm that extension is still present in instance view
-                instance_view_extensions = self._context.vm.get_instance_view().extensions
-                if instance_view_extensions is not None and not any(
-                        e.name == extension_case.extension._resource_name for e in instance_view_extensions):
-                    fail(f"Delete operation is disallowed by policy and should have failed, but extension "
-                         f"{extension_case.extension} is no longer present in the instance view.")
+            except Exception as error:
+                assert_that("VMExtensionProvisioningTimeout" in str(error)) \
+                    .described_as(f"Expected a VMExtensionProvisioningTimeout error, but actual error was: {error}") \
+                    .is_true()
+                log.info("Delete operation timed out, as expected. Error:")
+                log.info(error)
+                log.info("")
+                log.info("Checking agent log to confirm that delete operation failed due to policy.")
 
                 # Confirm that agent log contains error message that uninstall was blocked due to policy
                 # The script will check for a log message such as "Extension will not be processed: failed to uninstall
@@ -212,6 +222,11 @@ class ExtPolicy(AgentVmTest):
     def run(self):
 
         log.info("*** Begin test setup")
+
+        #  We expect "delete" operations on disallowed VMs to reach timeout, because delete is a best effort operation
+        #  by-design and should not fail. For efficiency, we reduce the timeout limit to the minimum allowed (15 minutes).
+        log.info("Update CRP timeout period to 15 minutes.")
+        self._context.vm.update({"extensionsTimeBudget": "PT15M"})
 
         # Prepare no-config, single-config, and multi-config extension to test. Extensions with settings and extensions
         # without settings have different status reporting logic, so we should test all cases.
@@ -323,15 +338,12 @@ class ExtPolicy(AgentVmTest):
             self._operation_should_succeed("enable", azure_monitor)
             self._operation_should_succeed("delete", azure_monitor)
 
-
-        # This policy tests the following scenarios:
-        # - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast
-        # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should fail fast
+        # This policy tests the following scenario:
+        # - disallow a previously-enabled single-config extension (CustomScript), then try to enable again -> should fail fast
         log.info("")
         log.info("*** Begin test case 3")
-        log.info("This policy tests the following scenarios:")
-        log.info(" - disallow a previously-enabled single-config extension (CustomScript, then try to enable again -> should fail fast")
-        log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
+        log.info("This policy tests the following scenario:")
+        log.info(" - disallow a previously-enabled single-config extension (CustomScript), then enable again -> should fail fast")
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -346,16 +358,13 @@ class ExtPolicy(AgentVmTest):
             }
         self._create_policy_file(policy)
         self._operation_should_fail("enable", custom_script)
-        self._operation_should_fail("delete", custom_script)
 
         # This policy tests the following scenario:
-        # - allow a previously-disallowed single-config extension (CustomScript), then delete -> should succeed
-        # - allow a previously-disallowed single-config extension (CustomScript), then enable -> should succeed
+        # - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed
         log.info("")
         log.info("*** Begin test case 4")
         log.info("This policy tests the following scenario:")
-        log.info(" - allow a previously-disallowed single-config extension (CustomScript), then delete -> should succeed")
-        log.info(" - allow a previously-disallowed single-config extension (CustomScript), then enable -> should succeed")
+        log.info(" - allow a previously-disallowed single-config extension (CustomScript), then enable again -> should succeed")
         policy = \
             {
                 "policyVersion": "0.1.0",
@@ -366,10 +375,28 @@ class ExtPolicy(AgentVmTest):
                 }
             }
         self._create_policy_file(policy)
-        # Since CustomScript is marked for deletion by previous test case, we can only retry the delete operation (enable
-        # is not allowed by CRP). So we first delete successfully, and then re-install/enable CustomScript.
-        self._operation_should_succeed("delete", custom_script)
-        self._enable_should_succeed_with_retry(extension_case=custom_script, retry_on_error="ResourceNotFound")
+        self._operation_should_succeed("enable", custom_script)
+
+        # This policy tests the following scenarios:
+        # - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout
+        log.info("")
+        log.info("*** Begin test case 5")
+        log.info("This policy tests the following scenarios:")
+        log.info(" - disallow a previously-enabled single-config extension (CustomScript), then try to delete -> should reach timeout")
+        policy = \
+            {
+                "policyVersion": "0.1.0",
+                "extensionPolicies": {
+                    "allowListedExtensionsOnly": True,
+                    "signatureRequired": False,
+                    "extensions": {
+                        # GuestConfiguration is added to all VMs for security requirements, so we always allow it.
+                        "Microsoft.GuestConfiguration.ConfigurationforLinux": {}
+                    }
+                }
+            }
+        self._create_policy_file(policy)
+        self._operation_should_fail("delete", custom_script)
 
         # Cleanup after test: disable policy enforcement in conf file.
         log.info("")
