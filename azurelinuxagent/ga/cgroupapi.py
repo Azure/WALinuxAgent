@@ -294,10 +294,11 @@ class _SystemdCgroupApi(object):
         """
         raise NotImplementedError()
 
-    def get_enabled_controllers_at_root(self):
+    def get_controllers_enabled_at_root(self):
         """
         Cgroup version specific. Returns the controllers enabled at the root path
         """
+        raise NotImplementedError()
 
     def start_extension_command(self, extension_name, command, cmd_name, timeout, shell, cwd, env, stdout, stderr,
                                 error_code=ExtensionErrorCodes.PluginUnknownFailure):
@@ -502,7 +503,7 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
             else:
                 log_cgroup_info("The {0} controller is mounted at {1}".format(controller, mount_point))
 
-    def get_enabled_controllers_at_root(self):
+    def get_controllers_enabled_at_root(self):
         return list(self._cgroup_mountpoints.keys())
 
 
@@ -617,7 +618,7 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
             else:
                 log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller))
 
-    def get_enabled_controllers_at_root(self):
+    def get_controllers_enabled_at_root(self):
         return self._controllers_enabled_at_root
 
 

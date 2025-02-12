@@ -361,7 +361,7 @@ class CGroupConfigurator(object):
             if controller == "cpu":
                 if self.using_cgroup_v2():
                     return False
-                elif "cpu,cpuacct" in self._cgroups_api.get_enabled_controllers_at_root():
+                elif "cpu,cpuacct" in self._cgroups_api.get_controllers_enabled_at_root():
                     return True
             elif controller == "memory":
                 return False

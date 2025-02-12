@@ -164,7 +164,7 @@ class _CgroupController(object):
                 return True
 
             # In v2, the cgroup.procs file is present in the scope cgroup for extensions
-            for cgroup_file in glob.iglob(os.path.join(self.path, "*/cgroup.procs")):
+            for cgroup_file in glob.iglob(os.path.join(self.path, "*.scope/cgroup.procs")):
                 if _found_cgroup_procs(cgroup_file):
                     return True
         except Exception as e:
