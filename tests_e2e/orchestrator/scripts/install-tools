@@ -79,7 +79,7 @@ else
   alma_linux="/etc/almalinux-release"
   #cat /etc/almalinux-release
   #AlmaLinux release 8.10 (Cerulean Leopard)
-  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* ||  ]] || ([[ -f $alma_linux ]] && grep -qiE "AlmaLinux.*8\." "$alma_linux"); then
+  if [[ "$uname" == *~18*-Ubuntu* || "$uname" == *~16*-Ubuntu* ]] || ([[ -f $alma_linux ]] && grep -qiE "AlmaLinux.*8\." "$alma_linux"); then
     echo "Copying the system's platform module to Pypy"
     pypy_platform=$(pypy3 -c 'import platform; print(platform.__file__)')
     python_platform=$($python -c 'import platform; print(platform.__file__)')
