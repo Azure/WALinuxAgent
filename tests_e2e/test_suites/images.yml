@@ -9,6 +9,7 @@ image-sets:
 #
 #      - "debian_8"
 #
+      - "alma_8"
       - "alma_9"
       - "centos_79"
       - "centos_82"
@@ -100,6 +101,8 @@ image-sets:
 # '<Publisher>:<Offer>:<Sku>:<Version>'
 #
 images:
+   alma_8:
+      urn: "almalinux almalinux-x86_64 8-gen2 latest"
    alma_9:
       urn: "almalinux almalinux-x86_64 9-gen2 latest"
       locations:
