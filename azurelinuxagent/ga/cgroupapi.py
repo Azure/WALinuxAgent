@@ -294,9 +294,9 @@ class _SystemdCgroupApi(object):
         """
         raise NotImplementedError()
 
-    def get_controllers_enabled_at_root(self):
+    def can_enforce_cpu(self):
         """
-        Cgroup version specific. Returns the controllers enabled at the root path
+        Cgroup version specific. Returns if controller can be used for enforcement
         """
         raise NotImplementedError()
 
@@ -503,8 +503,8 @@ class SystemdCgroupApiv1(_SystemdCgroupApi):
             else:
                 log_cgroup_info("The {0} controller is mounted at {1}".format(controller, mount_point))
 
-    def get_controllers_enabled_at_root(self):
-        return list(self._cgroup_mountpoints.keys())
+    def can_enforce_cpu(self):
+        return CgroupV1.CPU_CONTROLLER in self._cgroup_mountpoints
 
 
 class SystemdCgroupApiv2(_SystemdCgroupApi):
@@ -618,8 +618,8 @@ class SystemdCgroupApiv2(_SystemdCgroupApi):
             else:
                 log_cgroup_info("The {0} controller is not enabled at the root cgroup".format(controller))
 
-    def get_controllers_enabled_at_root(self):
-        return self._controllers_enabled_at_root
+    def can_enforce_cpu(self):
+        return False
 
 
 class Cgroup(object):

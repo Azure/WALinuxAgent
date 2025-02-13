@@ -185,7 +185,7 @@ class CGroupConfigurator(object):
                 for controller in agent_controllers:
                     for prop in controller.get_unit_properties():
                         log_cgroup_info('Agent {0} unit property value: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
-                    if isinstance(controller, _CpuController) and self._can_use_controller("cpu"):
+                    if isinstance(controller, _CpuController) and self._cgroups_api.can_enforce_cpu():
                         self._set_cpu_quota(agent_unit_name, conf.get_agent_cpu_quota())
                         controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
                     elif isinstance(controller, _MemoryController):
@@ -350,22 +350,6 @@ class CGroupConfigurator(object):
 
             except Exception as err:
                 logger.warn("Error while resetting the quotas: {0}".format(err))
-
-        def _can_use_controller(self, controller):
-            """
-            Check if controller can be used for enforcement
-
-            :param controller: the controller to check, possible values are "CPU" and "Memory"
-            :return: True if the quota can be set, False otherwise
-            """
-            if controller == "cpu":
-                if self.using_cgroup_v2():
-                    return False
-                elif "cpu,cpuacct" in self._cgroups_api.get_controllers_enabled_at_root():
-                    return True
-            elif controller == "memory":
-                return False
-            return False
 
         @staticmethod
         def _enable_accounting(unit_name):
@@ -880,7 +864,7 @@ class CGroupConfigurator(object):
                         CGroupConfigurator._Impl._cleanup_unit_file(old_extension_slice_path)
 
                     cpu_quota = "{0}%".format(
-                        cpu_quota) if cpu_quota is not None and self._can_use_controller("cpu") else "infinity"  # following systemd convention for no-quota (infinity)
+                        cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
                     properties_to_update, properties_values = self._get_unit_properties_requiring_update(extension_slice, cpu_quota)
 
                     if len(properties_to_update) > 0:
@@ -933,7 +917,7 @@ class CGroupConfigurator(object):
                         self._cleanup_all_files(files_to_remove)
 
                         cpu_quota = service.get('cpuQuotaPercentage')
-                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None and self._can_use_controller("cpu") else "infinity"  # following systemd convention for no-quota (infinity)
+                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
                         properties_to_update, properties_values = self._get_unit_properties_requiring_update(service_name, cpu_quota)
                         # If systemd is unaware of extension services and not loaded in the system yet, we get error while setting quotas. Hence, added unit loaded check.
                         if systemd.is_unit_loaded(service_name) and len(properties_to_update) > 0:
