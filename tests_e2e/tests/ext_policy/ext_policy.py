@@ -131,16 +131,18 @@ class ExtPolicy(AgentVmTest):
             #
             # Note: this scenario is currently executed only once. If it must be run multiple times in the future,
             # avoid waiting for CRP timeout and asynchronously check agent log to confirm delete failure.
-            # This solution may run into some issues:
+            # This solution may run into issues (the following issues are known, but there are likely others):
             #   - while CRP is waiting for the delete operation to timeout, enable requests on the extension will fail, only
             #     delete can be retried.
             #   - if a second delete operation is requested while the first is still running, CRP will merge the goal states
             #     and not send a new goal state to the agent.
+            #   - if an enable request is sent while a delete operation is still in progress, the SDK may occasionally throw a
+            #     "ResourceNotFound" error
+            #
             # Use the following steps as a workaround:
             #   1. asynchronously check the agent log to confirm delete failure
             #   2. force a new goal state by enabling a different extension
-            #   3. allow extension with policy and send another delete request (should succeed).
-            #
+            #   3. allow extension with policy and send another delete request (should succeed)
             log.info(f"Attempting to delete {extension_case.extension}, should fail due to policy.")
             delete_start_time = self._ssh_client.run_command("date '+%Y-%m-%d %T'").rstrip()
             try:
@@ -227,8 +229,8 @@ class ExtPolicy(AgentVmTest):
             self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
             # Azure Policy automatically installs the GuestConfig extension on test machines, which may occur
-            # during the CRP timeout wait (test case 5), inadvertently resetting the timeout period.
-            # To prevent this, manually install GuestConfig if not already present.
+            # during the CRP timeout wait (test case 5) and restart the 15 minute timeout period. This would increase
+            # the overall test runtime. As a workaround, manually install GuestConfig if not already present.
             distro = self._ssh_client.run_command("get_distro.py").rstrip()
             if VmExtensionIds.GuestConfig.supports_distro(distro):
                 guest_config_resource_name = "AzurePolicyforLinux"
@@ -274,7 +276,7 @@ class ExtPolicy(AgentVmTest):
             # If we were to enable AMA on an unsupported distro, the operation would initially be blocked by policy as
             # expected. However, after changing the policy to allow all with the next goal state, the agent would attempt to
             # re-enable AMA on an unsupported distro, causing errors.
-            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
                 self._operation_should_fail("enable", azure_monitor)
 
             # This policy tests the following scenarios:
@@ -307,7 +309,7 @@ class ExtPolicy(AgentVmTest):
             self._operation_should_succeed("enable", run_command_2)
             self._operation_should_succeed("delete", run_command)
             self._operation_should_succeed("delete", run_command_2)
-            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro((self._ssh_client.run_command("get_distro.py").rstrip())):
+            if VmExtensionIds.AzureMonitorLinuxAgent.supports_distro(distro):
                 self._operation_should_succeed("enable", azure_monitor)
                 self._operation_should_succeed("delete", azure_monitor)
 
@@ -373,6 +375,7 @@ class ExtPolicy(AgentVmTest):
                     }
                 }
             self._create_policy_file(policy)
+            # Because this request marks CSE for deletion, the next operation must be a delete retry (enable will fail).
             self._operation_should_fail("delete", custom_script)
 
             # This policy tests the following scenarios:
