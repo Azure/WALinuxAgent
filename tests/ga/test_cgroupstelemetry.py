@@ -108,6 +108,7 @@ class TestCGroupsTelemetry(AgentTestCase):
     def _track_new_extension_cgroup_controllers(num_extensions):
         for i in range(num_extensions):
             dummy_cpu_controller = CpuControllerV1("dummy_extension_{0}".format(i), "dummy_cpu_path_{0}".format(i))
+            dummy_cpu_controller.track_throttle_time(True)
             CGroupsTelemetry.track_cgroup_controller(dummy_cpu_controller)
 
             dummy_memory_controller = MemoryControllerV1("dummy_extension_{0}".format(i), "dummy_memory_path_{0}".format(i))
@@ -115,8 +116,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
     def _assert_cgroup_controllers_are_tracked(self, num_extensions):
         for i in range(num_extensions):
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
+            self.assertTrue(CGroupsTelemetry.is_tracked("cpu:dummy_cpu_path_{0}".format(i)))
+            self.assertTrue(CGroupsTelemetry.is_tracked("memory:dummy_memory_path_{0}".format(i)))
 
     def _assert_polled_metrics_equal(self, metrics, cpu_processor_metric_value, cpu_throttled_metric_value, current_total_memory_metric_value, current_anon_memory_metric_value, current_cache_memory_metric_value, max_memory_metric_value, swap_memory_value):
         for metric in metrics:
@@ -415,6 +416,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         cpu_throttled_values = [random.randint(0, 60 * 60) for _ in range(num_polls)]
 
         dummy_cpu_cgroup = CpuControllerV1("dummy_extension_name", "dummy_cpu_path")
+        dummy_cpu_cgroup.track_throttle_time(True)
         CGroupsTelemetry.track_cgroup_controller(dummy_cpu_cgroup)
         self.assertEqual(1, len(CGroupsTelemetry._tracked))
 

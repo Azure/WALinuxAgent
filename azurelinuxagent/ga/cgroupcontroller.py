@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import errno
+import glob
 import os
 from datetime import timedelta
 
@@ -142,21 +143,31 @@ class _CgroupController(object):
     def is_active(self):
         """
         Returns True if any processes belong to the cgroup. In v1, cgroup.procs returns a list of the thread group IDs
-         belong to the cgroup. In v2, cgroup.procs returns a list of the process IDs belonging to the cgroup.
+        belong to the cgroup. In v2, cgroup.procs returns a list of the process IDs belonging to the cgroup.
         """
         try:
-            procs = self._get_parameters("cgroup.procs")
-            if procs:
-                return len(procs) != 0
-        except (IOError, OSError) as e:
-            if e.errno == errno.ENOENT:
-                # only suppressing file not found exceptions.
-                pass
-            else:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                     'Could not get list of procs from "cgroup.procs" file in the cgroup: {0}.'
-                                     ' Internal error: {1}'.format(self.path, ustr(e)))
-        except CGroupsException as e:
+            def _found_cgroup_procs(file):
+                try:
+                    procs = fileutil.read_file(file).splitlines()
+                    if len(procs) > 0:
+                        return True
+                except (IOError, OSError) as e:
+                    if e.errno == errno.ENOENT:
+                        # only suppressing file not found exceptions.
+                        pass
+                    else:
+                        raise
+                return False
+
+            # In v1, the cgroup.procs file is present in the service/slice cgroup directory.
+            if _found_cgroup_procs(os.path.join(self.path, "cgroup.procs")):
+                return True
+
+            # In v2, the cgroup.procs file is present in the scope cgroup for extensions
+            for cgroup_file in glob.iglob(os.path.join(self.path, "*/cgroup.procs")):
+                if _found_cgroup_procs(cgroup_file):
+                    return True
+        except Exception as e:
             logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                  'Could not get list of procs from "cgroup.procs" file in the cgroup: {0}.'
                                  ' Internal error: {1}'.format(self.path, ustr(e)))

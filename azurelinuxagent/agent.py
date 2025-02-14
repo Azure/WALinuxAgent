@@ -247,6 +247,7 @@ class Agent(object):
                 for controller in tracked_controllers:
                     if isinstance(controller, _CpuController):
                         controller.initialize_cpu_usage()
+                        controller.track_throttle_time(True)
                         break
                 log_collector_monitor = get_log_collector_monitor_handler(tracked_controllers)
                 log_collector_monitor.run()
