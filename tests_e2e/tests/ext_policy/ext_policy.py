@@ -228,9 +228,11 @@ class ExtPolicy(AgentVmTest):
             log.info("Enabling policy via conf file on the test VM [%s]", self._context.vm.name)
             self._ssh_client.run_command("update-waagent-conf Debug.EnableExtensionPolicy=y", use_sudo=True)
 
-            # Azure Policy automatically installs the GuestConfig extension on test machines, which may occur
-            # during the CRP timeout wait (test case 5) and restart the 15 minute timeout period. This would increase
-            # the overall test runtime. As a workaround, manually install GuestConfig if not already present.
+            # Azure Policy automatically installs the GuestConfig extension on test machines, which may occur while CRP
+            # is waiting for a disallowed delete request to time out (test case 5). In this case, the GuestConfig enable
+            # request would be merged with the delete request into a new goal state. CRP would report success for GuestConfig
+            # enable, but continue to poll for delete for another full timeout period (15 minutes), extending the total
+            # test runtime. As a workaround, we manually install GuestConfig if not already present.
             distro = self._ssh_client.run_command("get_distro.py").rstrip()
             if VmExtensionIds.GuestConfig.supports_distro(distro):
                 guest_config_resource_name = "AzurePolicyforLinux"
