@@ -773,10 +773,27 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.set_handler_status(status=ExtHandlerStatusValue.not_ready, message=message, code=error_code)
 
+        # If extension is reporting heartbeat, overwrite the heartbeat file with error message.
+        heartbeat_file = os.path.join(conf.get_lib_dir(), ext_handler_i.get_heartbeat_file())
+        if os.path.isfile(heartbeat_file):
+            heartbeat = [
+                {
+                    "version": 1.0,
+                    "heartbeat": {
+                        "status": "notready",
+                        "code": error_code,
+                        "formattedMessage": {
+                            "lang": "en-US",
+                            "message": message
+                        }
+                    }
+                }
+            ]
+            fileutil.write_file(heartbeat_file, json.dumps(heartbeat))
+
         # Only report extension status for install errors of extensions with settings. Disable/uninstall errors are
         # reported at the handler status level only.
         if extension is not None and ext_handler_i.ext_handler.state == ExtensionRequestedState.Enabled:
-            # TODO: if extension is reporting heartbeat, it overwrites status. Consider overwriting heartbeat here.
             # Overwrite any existing status file to reflect the failure accurately.
             ext_handler_i.create_status_file(extension, status=ExtensionStatusValue.error, code=error_code,
                                              operation=ext_handler_i.operation, message=message, overwrite=True)
