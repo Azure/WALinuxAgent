@@ -57,6 +57,10 @@ class _PolicyEngine(object):
         _PolicyEngine._log_policy_event("Policy enforcement is enabled.")
         self._policy = self._parse_policy(self.__read_policy())
 
+    @property
+    def policy(self):
+        return self._policy
+
     @staticmethod
     def _log_policy_event(msg, is_success=True, op=WALAEventOperation.Policy, send_event=True):
         """
@@ -92,18 +96,19 @@ class _PolicyEngine(object):
         with open(conf.get_policy_file_path(), 'r') as f:
             try:
                 contents = f.read()
-                # TODO: Consider copying the policy file contents to the history folder, and only log the policy locally
-                # in the case of policy-related failure.
                 _PolicyEngine._log_policy_event(
-                    "Enforcing policy using policy file found at '{0}'. File contents:\n{1}"
-                    .format(conf.get_policy_file_path(), contents))
+                    "Enforcing policy using policy file found at '{0}'.".format(conf.get_policy_file_path()))
                 # json.loads will raise error if file contents are not a valid json (including empty file).
                 custom_policy = json.loads(contents)
             except ValueError as ex:
-                msg = "policy file does not conform to valid json syntax"
+                msg = "policy file does not conform to valid json syntax."
+                if contents is not None:
+                    msg += " File contents: {0}".format(contents)
                 raise InvalidPolicyError(msg=msg, inner=ex)
             except Exception as ex:
-                msg = "unable to read policy file"
+                msg = "unable to read or load policy file."
+                if contents is not None:
+                    msg += " File contents: {0}".format(contents)
                 raise InvalidPolicyError(msg=msg, inner=ex)
 
             return custom_policy

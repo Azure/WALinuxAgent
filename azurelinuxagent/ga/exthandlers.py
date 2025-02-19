@@ -508,9 +508,13 @@ class ExtHandlersHandler(object):
 
         # Instantiate policy engine, and use same engine to handle all extension handlers. If an error is thrown during
         # policy engine initialization, we block all extensions and report the error via handler status for each extension.
+        # Save policy to history folder.
         policy_error = None
         try:
             policy_engine = ExtensionPolicyEngine()
+            gs_history = self.protocol.get_goal_state().history
+            if gs_history is not None:
+                gs_history.save_policy(json.dumps(policy_engine.policy))
         except Exception as ex:
             policy_error = ex
 
