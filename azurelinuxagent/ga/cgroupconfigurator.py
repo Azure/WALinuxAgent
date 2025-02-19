@@ -185,8 +185,9 @@ class CGroupConfigurator(object):
                 for controller in agent_controllers:
                     for prop in controller.get_unit_properties():
                         log_cgroup_info('Agent {0} unit property value: {1}'.format(prop, systemd.get_unit_property(systemd.get_agent_unit_name(), prop)))
-                    if isinstance(controller, _CpuController):
+                    if isinstance(controller, _CpuController) and self._cgroups_api.can_enforce_cpu():
                         self._set_cpu_quota(agent_unit_name, conf.get_agent_cpu_quota())
+                        controller.track_throttle_time(True)  # CPU controller track the throttle time only when CPU quota is set
                     elif isinstance(controller, _MemoryController):
                         self._agent_memory_metrics = controller
                     CGroupsTelemetry.track_cgroup_controller(controller)
@@ -230,8 +231,7 @@ class CGroupConfigurator(object):
                 return False
 
             if self.using_cgroup_v2():
-                log_cgroup_info("Agent and extensions resource enforcement and monitoring is not currently supported on cgroup v2", send_event=True)
-                return False
+                log_cgroup_info("Only resource monitoring is currently supported on cgroup v2", send_event=True)
 
             return True
 
@@ -407,41 +407,6 @@ class CGroupConfigurator(object):
                     CGroupConfigurator._Impl._cleanup_unit_file(unit_file)
                 return
 
-        @staticmethod
-        def _get_current_cpu_quota(unit_name):
-            """
-            Calculate the CPU percentage from CPUQuotaPerSecUSec for given unit.
-            Params:
-                cpu_quota_per_sec_usec (str): The value of CPUQuotaPerSecUSec (e.g., "1s", "500ms", "500us", or "infinity").
-
-            Returns:
-                str: CPU percentage, or 'infinity' or 'unknown' if we can't determine the value.
-            """
-            try:
-                cpu_quota_per_sec_usec = systemd.get_unit_property(unit_name, "CPUQuotaPerSecUSec").strip().lower()
-                if cpu_quota_per_sec_usec == "infinity":
-                    return cpu_quota_per_sec_usec  # No limit on CPU usage
-
-                # Parse the value based on the suffix
-                elif cpu_quota_per_sec_usec.endswith("us"):
-                    # Directly use the microseconds value
-                    cpu_quota_us = float(cpu_quota_per_sec_usec[:-2])
-                elif cpu_quota_per_sec_usec.endswith("ms"):
-                    # Convert milliseconds to microseconds
-                    cpu_quota_us = float(cpu_quota_per_sec_usec[:-2]) * 1000
-                elif cpu_quota_per_sec_usec.endswith("s"):
-                    # Convert seconds to microseconds
-                    cpu_quota_us = float(cpu_quota_per_sec_usec[:-1]) * 1000000
-                else:
-                    raise ValueError("Invalid format. Expected 's', 'ms', 'us', or 'infinity'.")
-
-                # Calculate CPU percentage
-                cpu_percentage = (cpu_quota_us / 1000000) * 100
-                return "{0:g}%".format(cpu_percentage)  # :g Removes trailing zeros after decimal point
-            except Exception as e:
-                log_cgroup_warning("Error parsing current CPUQuotaPerSecUSec: {0}".format(ustr(e)))
-                return "unknown"
-
         def supported(self):
             return self._cgroups_supported
 
@@ -515,7 +480,7 @@ class CGroupConfigurator(object):
         @staticmethod
         def _try_set_cpu_quota(unit_name, quota):  # pylint: disable=unused-private-member
             try:
-                current_cpu_quota = CGroupConfigurator._Impl._get_current_cpu_quota(unit_name)
+                current_cpu_quota = CGroupUtil.get_current_cpu_quota(unit_name)
                 if current_cpu_quota == quota:
                     return
                 quota = quota if quota != "infinity" else ""  # no-quota expressed as empty string while setting property
@@ -786,7 +751,10 @@ class CGroupConfigurator(object):
                     cgroup = self._cgroups_api.get_unit_cgroup(unit_name, unit_name)
                     controllers = cgroup.get_controllers()
 
+                    has_cpu_quota = CGroupUtil.has_cpu_quota(unit_name)
                     for controller in controllers:
+                        if isinstance(controller, _CpuController) and has_cpu_quota:
+                            controller.track_throttle_time(True) # CPU controller track the throttle time only when CPU quota is set
                         CGroupsTelemetry.track_cgroup_controller(controller)
 
                 except Exception as exception:
@@ -864,7 +832,7 @@ class CGroupConfigurator(object):
             if memory_accounting != "yes":
                 properties_to_update += ("MemoryAccounting",)
                 properties_values += ("yes",)
-            current_cpu_quota = CGroupConfigurator._Impl._get_current_cpu_quota(unit_name)
+            current_cpu_quota = CGroupUtil.get_current_cpu_quota(unit_name)
             if current_cpu_quota != cpu_quota:
                 properties_to_update += ("CPUQuota",)
                 # no-quota expressed as empty string while setting property
@@ -896,7 +864,7 @@ class CGroupConfigurator(object):
                         CGroupConfigurator._Impl._cleanup_unit_file(old_extension_slice_path)
 
                     cpu_quota = "{0}%".format(
-                        cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
+                        cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
                     properties_to_update, properties_values = self._get_unit_properties_requiring_update(extension_slice, cpu_quota)
 
                     if len(properties_to_update) > 0:
@@ -949,7 +917,7 @@ class CGroupConfigurator(object):
                         self._cleanup_all_files(files_to_remove)
 
                         cpu_quota = service.get('cpuQuotaPercentage')
-                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None else "infinity"  # following systemd convention for no-quota (infinity)
+                        cpu_quota = "{0}%".format(cpu_quota) if cpu_quota is not None and self._cgroups_api.can_enforce_cpu() else "infinity"  # following systemd convention for no-quota (infinity)
                         properties_to_update, properties_values = self._get_unit_properties_requiring_update(service_name, cpu_quota)
                         # If systemd is unaware of extension services and not loaded in the system yet, we get error while setting quotas. Hence, added unit loaded check.
                         if systemd.is_unit_loaded(service_name) and len(properties_to_update) > 0:

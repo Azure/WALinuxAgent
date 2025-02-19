@@ -28,6 +28,13 @@ class CGroupsTelemetry(object):
     _rlock = threading.RLock()
 
     @staticmethod
+    def _get_tracking_id(cgroup_controller):
+        controller_type = cgroup_controller.get_controller_type()
+        # Since the path is same for all controllers in v2, we need to differentiate to track them separately
+        tracking_id = "{0}:{1}".format(controller_type, cgroup_controller.path)
+        return tracking_id
+
+    @staticmethod
     def track_cgroup_controller(cgroup_controller):
         """
         Adds the given item to the dictionary of tracked cgroup controllers
@@ -37,9 +44,10 @@ class CGroupsTelemetry(object):
             cgroup_controller.initialize_cpu_usage()
 
         with CGroupsTelemetry._rlock:
-            if not CGroupsTelemetry.is_tracked(cgroup_controller.path):
-                CGroupsTelemetry._tracked[cgroup_controller.path] = cgroup_controller
-                logger.info("Started tracking cgroup {0}", cgroup_controller)
+            tracking_id = CGroupsTelemetry._get_tracking_id(cgroup_controller)
+            if not CGroupsTelemetry.is_tracked(tracking_id):
+                CGroupsTelemetry._tracked[tracking_id] = cgroup_controller
+                logger.info("Started tracking {0} cgroup {1}", cgroup_controller.get_controller_type(), cgroup_controller)
 
     @staticmethod
     def is_tracked(path):
@@ -59,9 +67,10 @@ class CGroupsTelemetry(object):
         Stop tracking the cgroups for the given path
         """
         with CGroupsTelemetry._rlock:
-            if cgroup.path in CGroupsTelemetry._tracked:
-                CGroupsTelemetry._tracked.pop(cgroup.path)
-                logger.info("Stopped tracking cgroup {0}", cgroup)
+            tracking_id = CGroupsTelemetry._get_tracking_id(cgroup)
+            if tracking_id in CGroupsTelemetry._tracked:
+                CGroupsTelemetry._tracked.pop(tracking_id)
+                logger.info("Stopped tracking {0} cgroup {1}", cgroup.get_controller_type(), cgroup)
 
     @staticmethod
     def poll_all_tracked():

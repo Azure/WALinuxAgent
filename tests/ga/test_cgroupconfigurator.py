@@ -91,10 +91,6 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             self.assertTrue(configurator.enabled(), "cgroups were not enabled")
 
-    def test_initialize_should_not_enable_cgroups_v2(self):
-        with self._get_cgroup_configurator_v2() as configurator:
-            self.assertFalse(configurator.enabled(), "cgroups were enabled")
-
     def test_initialize_should_not_enable_when_cgroup_api_cannot_be_determined(self):
         # Mock cgroup api to raise CGroupsException
         def mock_create_cgroup_api():
@@ -175,6 +171,43 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
             self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
             self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
             self.assertFalse(os.path.exists(agent_drop_in_file_cpu_quota), "{0} should not have been created".format(agent_drop_in_file_cpu_quota))
+
+    def test_initialize_should_enable_cgroups_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            self.assertTrue(configurator.enabled(), "cgroups were not enabled")
+
+    def test_initialize_should_start_tracking_the_agent_cgroups_in_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            tracked = CGroupsTelemetry._tracked
+
+            self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
+            self.assertTrue(any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'cpu' in cg),
+                "The Agent's CPU is not being tracked. Tracked: {0}".format(tracked))
+            self.assertTrue(any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'memory' in cg),
+                "The Agent's Memory is not being tracked. Tracked: {0}".format(tracked))
+
+    def test_initialize_should_not_enable_cgroups_when_the_cpu_and_memory_controllers_are_not_present_in_v2(self):
+        with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2._get_controllers_enabled_at_root', return_value=[]):
+            with self._get_cgroup_configurator_v2() as configurator:
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertFalse(configurator.enabled(), "Cgroups should not be enabled")
+                self.assertEqual(len(tracked), 0, "No cgroups should be tracked. Tracked: {0}".format(tracked))
+
+    def test_initialize_should_start_tracking_other_controllers_when_one_is_not_present_in_v2(self):
+        with patch('azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2._get_controllers_enabled_at_root', return_value=['memory']):
+            with self._get_cgroup_configurator_v2() as configurator:
+                tracked = CGroupsTelemetry._tracked
+
+                self.assertTrue(configurator.enabled(), "Cgroups should be enabled")
+                self.assertFalse(
+                    any(cg for cg in tracked if tracked[cg].name == AGENT_NAME_TELEMETRY and 'cpu' in cg),
+                    "The Agent's cpu is being tracked. Tracked: {0}".format(tracked))
+
+    def test_enforcement_not_enabled_in_v2(self):
+        with self._get_cgroup_configurator_v2() as configurator:
+            cmd = 'systemctl set-property walinuxagent.service CPUQuota'
+            self.assertNotIn(cmd, configurator.mocks.commands_call_list, "The command to set CPU quota was called")
 
     def test_initialize_should_not_create_unit_files(self):
         with self._get_cgroup_configurator() as configurator:
@@ -433,32 +466,24 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
                     self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
-    def test_start_extension_command_should_not_use_systemd_when_cgroup_v2_enabled(self, _):
+    def test_start_extension_command_should_use_systemd_when_cgroup_v2_enabled(self, _):
         with self._get_cgroup_configurator_v2() as configurator:
-            self.assertFalse(configurator.enabled())
+            with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as popen_patch:
+                configurator.start_extension_command(
+                    extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                    command="the-test-extension-command",
+                    cmd_name="test",
+                    timeout=300,
+                    shell=False,
+                    cwd=self.tmp_dir,
+                    env={}.update(os.environ),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
 
-            with patch("azurelinuxagent.ga.cgroupapi.SystemdCgroupApiv2.start_extension_command") as v2_extension_start_command:
-                with patch("azurelinuxagent.ga.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) as patcher:
-                    configurator.start_extension_command(
-                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                        command="date",
-                        cmd_name="test",
-                        timeout=300,
-                        shell=False,
-                        cwd=self.tmp_dir,
-                        env={}.update(os.environ),
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE)
+                command_calls = [args[0] for (args, _) in popen_patch.call_args_list if "the-test-extension-command" in args[0]]
 
-                    command_calls = [args[0] for args, _ in patcher.call_args_list if
-                                     len(args) > 0 and "date" in args[0]]
-                    self.assertFalse(v2_extension_start_command.called)
-                    self.assertEqual(len(command_calls), 1,
-                                     "The test command should have been called exactly once [{0}]".format(
-                                         command_calls))
-                    self.assertNotIn("systemd-run", command_calls[0],
-                                     "The command should not have been invoked using systemd")
-                    self.assertEqual(command_calls[0], "date", "The command line should not have been modified")
+                self.assertEqual(len(command_calls), 1, "The test command should have been called exactly once [{0}]".format(command_calls))
+                self.assertIn("systemd-run", command_calls[0], "The extension should have been invoked using systemd")
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_disable_cgroups_and_invoke_the_command_directly_if_systemd_fails(self, _):
@@ -730,7 +755,7 @@ class CGroupConfiguratorSystemdTestCase(AgentTestCase):
         with self._get_cgroup_configurator() as configurator:
             with patch("os.path.exists") as mock_path:
                 mock_path.side_effect = side_effect
-                CGroupsTelemetry._tracked['/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
+                CGroupsTelemetry._tracked['cpu:/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service'] = \
                     CpuControllerV1('extension.service', '/sys/fs/cgroup/cpu,cpuacct/system.slice/extension.service')
                 configurator.stop_tracking_unit_cgroups("extension.service")
 
